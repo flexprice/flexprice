@@ -18,6 +18,8 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.InvoiceFilter) (int, error)
 
 	// Edge-specific operations
+	// TODO: AddLineItems and RemoveLineItems are candidates for future removal
+	// once all callers migrate to LineItemRepository.
 	AddLineItems(ctx context.Context, invoiceID string, items []*InvoiceLineItem) error
 	RemoveLineItems(ctx context.Context, invoiceID string, itemIDs []string) error
 
@@ -43,5 +45,4 @@ type Repository interface {
 	// Dashboard methods
 	GetRevenueTrend(ctx context.Context, windowCount int) ([]types.RevenueTrendWindow, error)
 	GetInvoicePaymentStatus(ctx context.Context) (*types.InvoicePaymentStatus, error)
-	UpdateLineItem(ctx context.Context, item *InvoiceLineItem) error
 }

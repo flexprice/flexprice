@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
@@ -20,7 +21,7 @@ func NewCommunicationPayloadBuilder(services *Services) PayloadBuilder {
 }
 
 // BuildPayload builds the webhook payload for communication events
-func (b *CommunicationPayloadBuilder) BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error) {
+func (b *CommunicationPayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
 	var parsedPayload webhookDto.InternalCommunicationEvent
 
 	err := json.Unmarshal(data, &parsedPayload)

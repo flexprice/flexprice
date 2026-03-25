@@ -88,6 +88,20 @@ func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, peri
 			Mark(ierr.ErrValidation)
 	}
 
+	// For calendar billing with QUARTERLY and HALF_YEARLY periods, the billingAnchor
+	// is set to the start of the next calendar boundary (e.g. April 1 for a
+	// subscription starting mid-Q1). If currentPeriodStart is before the anchor,
+	// we are still in the partial first period and the next billing date IS
+	// the anchor itself. MONTHLY and ANNUAL already handle this correctly via
+	// their own month/year arithmetic.
+	if (period == BILLING_PERIOD_QUARTER || period == BILLING_PERIOD_HALF_YEAR) &&
+		currentPeriodStart.Before(billingAnchor) {
+		if subscriptionEndDate != nil && billingAnchor.After(*subscriptionEndDate) {
+			return *subscriptionEndDate, nil
+		}
+		return billingAnchor, nil
+	}
+
 	// Get the current year and month
 	y, m, _ := currentPeriodStart.Date()
 	// get the time always from anchor because
@@ -308,93 +322,6 @@ func PreviousBillingDate(billingAnchor time.Time, unit int, period BillingPeriod
 // isLeapYear returns true if the given year is a leap year
 func isLeapYear(year int) bool {
 	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
-}
-
-// CalendarDaysBetween returns the number of full calendar days in the interval [start, end).
-// Period end is exclusive (e.g. periodEnd = start of next period). Both are converted to UTC.
-func CalendarDaysBetween(start, end time.Time) int {
-	s := start.UTC()
-	e := end.UTC()
-	if !e.After(s) {
-		return 0
-	}
-	return int(e.Sub(s).Hours() / 24)
-}
-
-// LineItemIntervalDays returns the length in calendar days of one billing interval for a line item,
-// from lineItemStart to the next billing date. Use lineItemStart as the billing anchor so intervals
-// are aligned to the line item's start (e.g. Jan 15 + monthly → Feb 15, Mar 15). Used for mixed-interval billing (F3).
-func LineItemIntervalDays(lineItemStart, billingAnchor time.Time, periodCount int, period BillingPeriod) (int, error) {
-	if periodCount <= 0 {
-		periodCount = 1
-	}
-	intervalEnd, err := NextBillingDate(lineItemStart, billingAnchor, periodCount, period, nil)
-	if err != nil {
-		return 0, err
-	}
-	return CalendarDaysBetween(lineItemStart, intervalEnd), nil
-}
-
-// EffectiveDaysForProration returns the number of calendar days the line item is active within
-// the invoice period (Algorithm C). If lineItemEnd is non-zero and before periodEnd, it clips the end.
-func EffectiveDaysForProration(lineItemStart, periodStart, periodEnd time.Time, lineItemEnd *time.Time) int {
-	start := lineItemStart
-	if periodStart.After(start) {
-		start = periodStart
-	}
-	end := periodEnd
-	if lineItemEnd != nil && !lineItemEnd.IsZero() && lineItemEnd.Before(periodEnd) {
-		end = lo.FromPtr(lineItemEnd)
-	}
-	if end.Before(start) {
-		return 0
-	}
-	return CalendarDaysBetween(start, end)
-}
-
-// IsLineItemIntervalEndInPeriod returns true if any billing interval end for the line item
-// (starting from lineItemStart) falls within the invoice period [periodStart, periodEnd).
-// Period end is exclusive. Use lineItemStart as the billing anchor so intervals align to the line item's start.
-func IsLineItemIntervalEndInPeriod(lineItemStart, billingAnchor time.Time, periodCount int, period BillingPeriod, periodStart, periodEnd time.Time) (bool, error) {
-	_, _, ok, err := LineItemIntervalInInvoicePeriod(lineItemStart, billingAnchor, periodCount, period, periodStart, periodEnd)
-	return ok, err
-}
-
-// LineItemIntervalInInvoicePeriod returns the line item's billing interval whose end falls
-// within the invoice period [periodStart, periodEnd). That interval's start and end become
-// the invoice line's period start and period end (no PreviousBillingDate).
-// Returns (intervalStart, intervalEnd, true, nil) when found; (zero, zero, false, nil) when none; (_, _, _, err) on error.
-func LineItemIntervalInInvoicePeriod(lineItemStart, billingAnchor time.Time, periodCount int, period BillingPeriod, periodStart, periodEnd time.Time) (intervalStart, intervalEnd time.Time, ok bool, err error) {
-	if periodCount <= 0 {
-		periodCount = 1
-	}
-	now := time.Now().UTC()
-	current := lineItemStart
-	for {
-		intervalEnd, err := NextBillingDate(current, billingAnchor, periodCount, period, nil)
-		if err != nil {
-			return time.Time{}, time.Time{}, false, err
-		}
-		intervalEndUTC := intervalEnd.UTC()
-		periodStartUTC := periodStart.UTC()
-		periodEndUTC := periodEnd.UTC()
-		intervalEndSec := intervalEndUTC.Truncate(time.Second)
-		periodStartSec := periodStartUTC.Truncate(time.Second)
-		periodEndSec := periodEndUTC.Truncate(time.Second)
-		// Interval end is in invoice period if >= period start and < period end (exclusive)
-		if !intervalEndSec.Before(periodStartSec) && intervalEndSec.Before(periodEndSec) {
-			return current, intervalEnd, true, nil
-		}
-		if !intervalEndUTC.Before(periodEndUTC) {
-			return time.Time{}, time.Time{}, false, nil
-		}
-		// Only skip future intervals when the invoice period is in the past (avoids excluding
-		// next-period advance charges when billing at period end).
-		if intervalEndUTC.After(now) && !periodEndUTC.After(now) {
-			return time.Time{}, time.Time{}, false, nil
-		}
-		current = intervalEnd
-	}
 }
 
 // CalculatePeriodID determines the appropriate billing period start for an event timestamp

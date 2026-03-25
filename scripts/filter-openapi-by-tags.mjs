@@ -72,7 +72,7 @@ function main() {
 
   const paths = spec.paths || {};
   let kept = 0;
-  let removed = 0;
+  let removedByTag = 0;
 
   for (const pathKey of Object.keys(paths)) {
     const pathItem = paths[pathKey];
@@ -84,11 +84,13 @@ function main() {
       const hasAllowed = tags.some((t) => allowedSet.has(t));
       if (!hasAllowed) {
         delete pathItem[method];
-        removed++;
+        removedByTag++;
       } else {
-        // Force MCP tool name to operationId-only (kebab-case), excluding tag prefix
         const existing = op['x-speakeasy-mcp'] && typeof op['x-speakeasy-mcp'] === 'object' ? op['x-speakeasy-mcp'] : {};
-        op['x-speakeasy-mcp'] = { ...existing, name: toKebab(op.operationId) };
+        op['x-speakeasy-mcp'] = {
+          ...existing,
+          name: toKebab(op.operationId),
+        };
         kept++;
       }
     }
@@ -98,7 +100,9 @@ function main() {
   }
 
   writeFileSync(outPath, JSON.stringify(spec, null, 2), 'utf8');
-  console.log(`Wrote ${outPath}: ${kept} operations kept, ${removed} removed (allowed tags: ${allowedTags.join(', ')})`);
+  console.log(
+    `Wrote ${outPath}: ${kept} operations kept, ${removedByTag} removed by tags (allowed tags: ${allowedTags.join(', ')})`
+  );
 }
 
 main();

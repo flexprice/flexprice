@@ -1,6 +1,9 @@
 package webhookDto
 
-import "github.com/flexprice/flexprice/internal/api/dto"
+import (
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 type InternalFeatureEvent struct {
 	FeatureID string `json:"feature_id"`
@@ -8,10 +11,10 @@ type InternalFeatureEvent struct {
 }
 
 type FeatureWebhookPayload struct {
-	EventType string               `json:"event_type"`
-	Feature   *dto.FeatureResponse `json:"feature"`
+	EventType types.WebhookEventName `json:"event_type"`
+	Feature   *dto.FeatureResponse   `json:"feature"`
 }
 
-func NewFeatureWebhookPayload(feature *dto.FeatureResponse, eventType string) *FeatureWebhookPayload {
+func NewFeatureWebhookPayload(feature *dto.FeatureResponse, eventType types.WebhookEventName) *FeatureWebhookPayload {
 	return &FeatureWebhookPayload{EventType: eventType, Feature: feature}
 }

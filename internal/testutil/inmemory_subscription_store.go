@@ -13,9 +13,10 @@ import (
 // InMemorySubscriptionStore implements subscription.Repository
 type InMemorySubscriptionStore struct {
 	*InMemoryStore[*subscription.Subscription]
-	lineItems map[string][]*subscription.SubscriptionLineItem // map[subscriptionID][]lineItems
-	pauses    map[string][]*subscription.SubscriptionPause    // map[subscriptionID][]pauses
-	pauseByID map[string]*subscription.SubscriptionPause      // map[pauseID]pause
+	lineItems     map[string][]*subscription.SubscriptionLineItem // map[subscriptionID][]lineItems (initial batch from CreateWithLineItems)
+	lineItemStore *InMemorySubscriptionLineItemStore              // optional: when set, GetWithLineItems merges in line items created via SubscriptionLineItemRepo.Create
+	pauses        map[string][]*subscription.SubscriptionPause    // map[subscriptionID][]pauses
+	pauseByID     map[string]*subscription.SubscriptionPause      // map[pauseID]pause
 }
 
 func NewInMemorySubscriptionStore() *InMemorySubscriptionStore {
@@ -302,16 +303,55 @@ func (s *InMemorySubscriptionStore) CreateWithLineItems(ctx context.Context, sub
 	}
 	s.lineItems[sub.ID] = items
 	sub.LineItems = items
+	// Mirror DB behavior: line items must be visible to SubscriptionLineItemRepo (e.g. billing reload).
+	if s.lineItemStore != nil {
+		for _, item := range items {
+			if item == nil {
+				continue
+			}
+			if item.SubscriptionID == "" {
+				item.SubscriptionID = sub.ID
+			}
+			if item.ID == "" {
+				item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+			}
+			if err := s.lineItemStore.Create(ctx, item); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
-// GetWithLineItems gets a subscription with its line items
+// SetLineItemStore sets the line item store so GetWithLineItems can return line items added via SubscriptionLineItemRepo.Create (e.g. AddSubscriptionLineItem).
+func (s *InMemorySubscriptionStore) SetLineItemStore(store *InMemorySubscriptionLineItemStore) {
+	s.lineItemStore = store
+}
+
+// GetWithLineItems gets a subscription with its line items.
+// When lineItemStore is set, line items come from SubscriptionLineItemRepo only (mirrors DB + supports Update).
+// Otherwise returns the batch from CreateWithLineItems.
 func (s *InMemorySubscriptionStore) GetWithLineItems(ctx context.Context, id string) (*subscription.Subscription, []*subscription.SubscriptionLineItem, error) {
 	sub, err := s.Get(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
+	if s.lineItemStore != nil {
+		filter := types.NewNoLimitSubscriptionLineItemFilter()
+		filter.SubscriptionIDs = []string{id}
+		filter.ActiveFilter = true
+		filter.CurrentPeriodStart = &sub.CurrentPeriodStart
+		items, lerr := s.lineItemStore.List(ctx, filter)
+		if lerr != nil {
+			return nil, nil, lerr
+		}
+		sub.LineItems = items
+		return sub, items, nil
+	}
 	items := s.lineItems[id]
+	if items == nil {
+		items = []*subscription.SubscriptionLineItem{}
+	}
 	sub.LineItems = items
 	return sub, items, nil
 }

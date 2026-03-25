@@ -820,6 +820,330 @@ func TestNextBillingDate_Daily_CalendarBilling(t *testing.T) {
 	}
 }
 
+// TestNextBillingDate_Quarterly_Calendar tests quarterly calendar billing period calculations.
+// Calendar billing aligns periods with calendar quarter boundaries (Q1: Jan-Mar, Q2: Apr-Jun, etc.)
+func TestNextBillingDate_Quarterly_Calendar(t *testing.T) {
+	tests := []struct {
+		name          string
+		currentPeriod time.Time
+		billingAnchor time.Time
+		unit          int
+		want          time.Time
+	}{
+		{
+			// Sub starts March 22. Calendar anchor = April 1 (start of Q2).
+			// First period: March 22 → April 1 (partial Q1 tail).
+			name:          "partial first period: mid-Q1 start (Mar 22) → Apr 1",
+			currentPeriod: time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			unit:          1,
+			want:          time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Second full period: April 1 → July 1.
+			name:          "full Q2 period: Apr 1 → Jul 1",
+			currentPeriod: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			unit:          1,
+			want:          time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Third full period: July 1 → October 1.
+			name:          "full Q3 period: Jul 1 → Oct 1",
+			currentPeriod: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			unit:          1,
+			want:          time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Q4 period: October 1 → January 1.
+			name:          "full Q4 period: Oct 1 → Jan 1",
+			currentPeriod: time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			unit:          1,
+			want:          time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Sub starts exactly on a quarter boundary (April 1). Anchor = July 1.
+			// First (full) period: April 1 → July 1.
+			name:          "start exactly on quarter boundary: Apr 1 → Jul 1",
+			currentPeriod: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			unit:          1,
+			want:          time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Anniversary quarterly: anchor = start date. No calendar alignment.
+			name:          "anniversary quarterly: Mar 22, anchor Mar 22 → Jun 22",
+			currentPeriod: time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC),
+			billingAnchor: time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC),
+			unit:          1,
+			want:          time.Date(2026, time.June, 22, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_QUARTER)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNextBillingDate_Quarterly_Calendar_BackwardCompat verifies that existing subscriptions
+// whose first period was calculated with the OLD behavior (e.g. March 22 → June 1 instead of
+// March 22 → April 1) continue to advance consistently and are NOT realigned.
+// We must not break existing subscriptions — only new ones get the corrected calendar alignment.
+func TestNextBillingDate_Quarterly_Calendar_BackwardCompat(t *testing.T) {
+	// Simulate an existing subscription:
+	//   subscriptionStart = March 22 (created before the fix)
+	//   billingAnchor     = April 1  (correctly stored on creation)
+	//   OLD first period  : March 22 → June 1  (was the wrong end date)
+	//
+	// After June 1 the cron advances currentPeriodStart to June 1 and calls
+	// NextBillingDate(June 1, April 1, ...). Since June 1 > April 1 the new
+	// guard does NOT fire; we simply add 3 months → September 1, keeping the
+	// existing cadence intact.
+	tests := []struct {
+		name          string
+		currentPeriod time.Time
+		billingAnchor time.Time
+		unit          int
+		want          time.Time
+	}{
+		{
+			name:          "2nd period of old sub: Jun 1 (old wrong end) → Sep 1",
+			currentPeriod: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+			unit:          1,
+			want:          time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:          "3rd period of old sub: Sep 1 → Dec 1",
+			currentPeriod: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+			unit:          1,
+			want:          time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:          "4th period of old sub: Dec 1 → Mar 1 2027",
+			currentPeriod: time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+			unit:          1,
+			want:          time.Date(2027, time.March, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_QUARTER)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNextBillingDate_HalfYearly_Calendar_BackwardCompat mirrors the quarterly backward-compat
+// test for half-yearly subscriptions created before the fix.
+func TestNextBillingDate_HalfYearly_Calendar_BackwardCompat(t *testing.T) {
+	// Old sub: started March 15, anchor = July 1 (day=1).
+	// OLD first period: March 15 → September 1
+	//   (targetD = billingAnchor.Day() = 1, targetM = March+6 = September)
+	// OLD second period: September 1 → March 1 2027
+	// Since all these currentPeriodStarts are > billingAnchor, the new guard
+	// does NOT fire and the cadence is preserved as-is.
+	tests := []struct {
+		name          string
+		currentPeriod time.Time
+		billingAnchor time.Time
+		unit          int
+		want          time.Time
+	}{
+		{
+			name:          "2nd period of old half-yearly sub: Sep 1 → Mar 1 2027",
+			currentPeriod: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+			unit:          1,
+			want:          time.Date(2027, time.March, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:          "3rd period of old half-yearly sub: Mar 1 2027 → Sep 1 2027",
+			currentPeriod: time.Date(2027, time.March, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+			unit:          1,
+			want:          time.Date(2027, time.September, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_HALF_YEAR)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNextBillingDate_HalfYearly_Calendar tests half-yearly calendar billing period calculations.
+// Calendar billing aligns periods with half-year boundaries (H1: Jan-Jun, H2: Jul-Dec).
+func TestNextBillingDate_HalfYearly_Calendar(t *testing.T) {
+	tests := []struct {
+		name          string
+		currentPeriod time.Time
+		billingAnchor time.Time
+		unit          int
+		want          time.Time
+	}{
+		{
+			// Sub starts March 15. Anchor = July 1 (start of H2).
+			// First period: March 15 → July 1 (partial H1 tail).
+			name:          "partial first period: mid-H1 start (Mar 15) → Jul 1",
+			currentPeriod: time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR),
+			unit:          1,
+			want:          time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Second full period: July 1 → January 1.
+			name:          "full H2 period: Jul 1 → Jan 1",
+			currentPeriod: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR),
+			unit:          1,
+			want:          time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Third full period: January 1 → July 1.
+			name:          "full H1 period: Jan 1 2027 → Jul 1 2027",
+			currentPeriod: time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR),
+			unit:          1,
+			want:          time.Date(2027, time.July, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Sub starts October 5 (H2). Anchor = January 1.
+			// First period: Oct 5 → Jan 1 (partial H2 tail).
+			name:          "partial first period: mid-H2 start (Oct 5) → Jan 1",
+			currentPeriod: time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR),
+			unit:          1,
+			want:          time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Anniversary half-yearly: anchor = start date.
+			name:          "anniversary half-yearly: Mar 15, anchor Mar 15 → Sep 15",
+			currentPeriod: time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+			billingAnchor: time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+			unit:          1,
+			want:          time.Date(2026, time.September, 15, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
+			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_HALF_YEAR)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNextBillingDate_Quarterly_Calendar_EndDateCliff exercises the subscriptionEndDate
+// clamp branch inside the new early-return guard for QUARTERLY calendar billing.
+func TestNextBillingDate_Quarterly_Calendar_EndDateCliff(t *testing.T) {
+	tests := []struct {
+		name    string
+		current time.Time
+		anchor  time.Time
+		endDate time.Time
+		want    time.Time
+	}{
+		{
+			name:    "end date before anchor cliffs to end date",
+			current: time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC),
+			anchor:  time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+			endDate: time.Date(2026, time.March, 28, 0, 0, 0, 0, time.UTC),
+			want:    time.Date(2026, time.March, 28, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:    "end date after anchor returns anchor",
+			current: time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC),
+			anchor:  time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+			endDate: time.Date(2026, time.June, 30, 0, 0, 0, 0, time.UTC),
+			want:    time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NextBillingDate(tt.current, tt.anchor, 1, BILLING_PERIOD_QUARTER, &tt.endDate)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNextBillingDate_HalfYearly_Calendar_EndDateCliff exercises the subscriptionEndDate
+// clamp branch inside the new early-return guard for HALF_YEAR calendar billing.
+func TestNextBillingDate_HalfYearly_Calendar_EndDateCliff(t *testing.T) {
+	tests := []struct {
+		name    string
+		current time.Time
+		anchor  time.Time
+		endDate time.Time
+		want    time.Time
+	}{
+		{
+			name:    "end date before anchor cliffs to end date",
+			current: time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+			anchor:  time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+			endDate: time.Date(2026, time.May, 31, 0, 0, 0, 0, time.UTC),
+			want:    time.Date(2026, time.May, 31, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:    "end date after anchor returns anchor",
+			current: time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+			anchor:  time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+			endDate: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC),
+			want:    time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NextBillingDate(tt.current, tt.anchor, 1, BILLING_PERIOD_HALF_YEAR, &tt.endDate)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // Helper function to check if a string contains another string
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && s[0:len(substr)] == substr
@@ -1748,100 +2072,4 @@ func TestGetNextUsageResetAt_EdgeCases(t *testing.T) {
 // Helper function for creating time pointers in tests
 func timePtr(t time.Time) *time.Time {
 	return &t
-}
-
-func TestCalendarDaysBetween(t *testing.T) {
-	utc := time.UTC
-	tests := []struct {
-		name  string
-		start time.Time
-		end   time.Time
-		want  int
-	}{
-		{
-			name:  "one day interval [start, end) - Feb 22 to Feb 23 exclusive end",
-			start: time.Date(2024, time.February, 22, 0, 0, 0, 0, utc),
-			end:   time.Date(2024, time.February, 23, 0, 0, 0, 0, utc),
-			want:  1,
-		},
-		{
-			name:  "invoice period Feb 22 to Mar 22 exclusive end (non-leap year)",
-			start: time.Date(2025, time.February, 22, 0, 0, 0, 0, utc),
-			end:   time.Date(2025, time.March, 22, 0, 0, 0, 0, utc),
-			want:  28,
-		},
-		{
-			name:  "same start and end returns 0",
-			start: time.Date(2024, time.February, 22, 0, 0, 0, 0, utc),
-			end:   time.Date(2024, time.February, 22, 0, 0, 0, 0, utc),
-			want:  0,
-		},
-		{
-			name:  "end before start returns 0",
-			start: time.Date(2024, time.March, 22, 0, 0, 0, 0, utc),
-			end:   time.Date(2024, time.February, 22, 0, 0, 0, 0, utc),
-			want:  0,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := CalendarDaysBetween(tt.start, tt.end)
-			if got != tt.want {
-				t.Errorf("CalendarDaysBetween() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestLineItemIntervalDays(t *testing.T) {
-	utc := time.UTC
-	tests := []struct {
-		name          string
-		lineItemStart time.Time
-		billingAnchor time.Time
-		periodCount   int
-		period        BillingPeriod
-		wantDays      int
-		wantErr       bool
-	}{
-		{
-			name:          "DAILY periodCount 1 gives 1 day interval",
-			lineItemStart: time.Date(2024, time.February, 22, 0, 0, 0, 0, utc),
-			billingAnchor: time.Date(2024, time.February, 22, 0, 0, 0, 0, utc),
-			periodCount:   1,
-			period:        BILLING_PERIOD_DAILY,
-			wantDays:      1,
-			wantErr:       false,
-		},
-		{
-			name:          "WEEKLY periodCount 1 gives 7 days",
-			lineItemStart: time.Date(2024, time.February, 22, 0, 0, 0, 0, utc),
-			billingAnchor: time.Date(2024, time.February, 22, 0, 0, 0, 0, utc),
-			periodCount:   1,
-			period:        BILLING_PERIOD_WEEKLY,
-			wantDays:      7,
-			wantErr:       false,
-		},
-		{
-			name:          "MONTHLY periodCount 1 gives 29 days for Jan 2024",
-			lineItemStart: time.Date(2024, time.January, 1, 0, 0, 0, 0, utc),
-			billingAnchor: time.Date(2024, time.January, 1, 0, 0, 0, 0, utc),
-			periodCount:   1,
-			period:        BILLING_PERIOD_MONTHLY,
-			wantDays:      31,
-			wantErr:       false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := LineItemIntervalDays(tt.lineItemStart, tt.billingAnchor, tt.periodCount, tt.period)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("LineItemIntervalDays() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.wantDays {
-				t.Errorf("LineItemIntervalDays() = %v, want %v", got, tt.wantDays)
-			}
-		})
-	}
 }

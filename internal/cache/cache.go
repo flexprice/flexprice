@@ -63,6 +63,7 @@ const (
 	PrefixConnection               = "connection:v1:"
 	PrefixSettings                 = "settings:v1:"
 	PrefixSubscriptionLineItem     = "subscription_line_item:v1:"
+	PrefixInvoiceLineItem          = "invoice_line_item:v1:"
 	PrefixWalletAlertThrottle      = "wallet_alert_throttle:v1:"
 	PrefixCostsheet                = "costsheet:v1:"
 	PrefixPriceUnit                = "price_unit:v1:"

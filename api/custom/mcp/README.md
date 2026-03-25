@@ -225,13 +225,92 @@ This reduces tokens per request and can improve tool choice when there are many 
 
 ## Scopes
 
-If the server is configured with scopes (e.g. `read`, `write`), you can limit tools by scope:
+FlexPrice MCP tools are categorized into three permission scopes to allow fine-grained access control:
 
-```bash
-npx @flexprice/mcp-server start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY --scope read
+- **`read`** - Read-only operations (GET requests): list customers, get invoices, view usage, query data
+- **`write`** - Create/update operations (POST/PUT/PATCH): create customers, update subscriptions, modify resources  
+- **`delete`** - Destructive operations (DELETE, finalization): delete resources, finalize invoices, void transactions
+
+### Mounting Specific Scopes
+
+Control which tools are available by specifying scopes at server startup. You can combine multiple scopes or use a single scope for restricted access.
+
+**Read-only access** (safest for exploration and reporting):
+
+```json
+{
+  "mcpServers": {
+    "flexprice-readonly": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read"
+      ]
+    }
+  }
+}
 ```
 
-Use `read` for read-only access when the server defines a `read` scope.
+**Read and write access** (most common for automation):
+
+```json
+{
+  "mcpServers": {
+    "flexprice-full": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
+      ]
+    }
+  }
+}
+```
+
+**Full access** (including destructive operations):
+
+```json
+{
+  "mcpServers": {
+    "flexprice-admin": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write",
+        "--scope",
+        "delete"
+      ]
+    }
+  }
+}
+```
+
+**Note:** Omitting `--scope` entirely will mount all available tools (equivalent to specifying all scopes).
 
 ## Troubleshooting
 

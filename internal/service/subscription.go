@@ -42,6 +42,23 @@ func NewSubscriptionService(params ServiceParams) SubscriptionService {
 	}
 }
 
+// listSubscriptionLineItemsForUsageWindow returns line items for usage metering aligned with the
+// requested window: all published items for lifetime usage; otherwise items active as of usageStartTime
+// (not subscription.CurrentPeriodStart, which may have advanced past historical queries).
+func (s *subscriptionService) listSubscriptionLineItemsForUsageWindow(ctx context.Context, subscriptionID string, usageStartTime time.Time, lifetime bool) ([]*subscription.SubscriptionLineItem, error) {
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{subscriptionID}
+	if lifetime {
+		filter.ActiveFilter = false
+		// applyActiveLineItemFilter normally restricts to published; keep the same when skipping date scope.
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	} else {
+		filter.ActiveFilter = true
+		filter.CurrentPeriodStart = &usageStartTime
+	}
+	return s.SubscriptionLineItemRepo.List(ctx, filter)
+}
+
 func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
 	if req.BillingCycle == "" {
 		req.BillingCycle = types.BillingCycleAnniversary
@@ -71,20 +88,26 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
-	// Handle InvoiceBilling to set InvoicingCustomerID internally
-	// The DTO layer ensures InvoiceBilling is always set (defaults to invoice_to_self)
-	// For invoice_to_self, we don't need to set InvoicingCustomerID as it defaults to subscription customer
-	if lo.FromPtr(req.InvoiceBilling) == types.InvoiceBillingInvoiceToParent {
-		if customer.ParentCustomerID == nil {
-			return nil, ierr.NewError("customer does not have a parent customer").
-				WithHint("The customer must have a parent customer to use invoice_to_parent").
-				WithReportableDetails(map[string]interface{}{"customer_id": req.CustomerID}).
-				Mark(ierr.ErrValidation)
+	// Resolve invoicing customer.
+	// Priority: invoicing_customer_external_id > invoicing_customer_id > deprecated invoice_billing fallback.
+	if req.InvoicingCustomerExternalID != nil && *req.InvoicingCustomerExternalID != "" {
+		// Resolve external ID to internal ID.
+		invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, *req.InvoicingCustomerExternalID)
+		if err != nil {
+			return nil, err
 		}
-		req.InvoicingCustomerID = customer.ParentCustomerID
+		req.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
+	} else if req.InvoicingCustomerID == nil || *req.InvoicingCustomerID == "" {
+		// Deprecated fallback: if invoice_to_parent was specified, attempt to resolve from the
+		// subscription customer's parent. This path exists only for backward compatibility and
+		// will be removed once invoice_billing is fully retired.
+		if lo.FromPtr(req.InvoiceBilling) == types.InvoiceBillingInvoiceToParent && customer.ParentCustomerID != nil {
+			req.InvoicingCustomerID = customer.ParentCustomerID
+		}
+		// If invoice_to_parent is set but no parent exists, silently fall back to invoice_to_self behavior.
 	}
 
-	// Validate that the invoicing customer exists and is active
+	// Validate that the resolved invoicing customer exists and is active.
 	if req.InvoicingCustomerID != nil && *req.InvoicingCustomerID != "" {
 		invoicingCustomer, err := s.CustomerRepo.Get(ctx, *req.InvoicingCustomerID)
 		if err != nil {
@@ -228,7 +251,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			item.PlanDisplayName = plan.Name
 			item.CustomerID = sub.CustomerID
 			item.Currency = sub.Currency
-			item.BillingPeriod = sub.BillingPeriod
+			item.BillingPeriod = price.BillingPeriod
+			item.BillingPeriodCount = price.BillingPeriodCount
 			item.InvoiceCadence = price.InvoiceCadence
 			item.TrialPeriod = price.TrialPeriod
 			// Set phase ID if phases exist
@@ -276,6 +300,11 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	sub.LineItems = lineItems
 
+	// Multi-cadence validations: interval alignment and proration mutual exclusion
+	if err := s.validateMultiCadence(sub); err != nil {
+		return nil, err
+	}
+
 	// Ensure subscription-level and line-item-level commitments don't conflict
 	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
 		return nil, err
@@ -286,7 +315,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		sub.SubscriptionStatus = req.SubscriptionStatus
 	}
 
-	s.Logger.Infow("creating subscription",
+	s.Logger.InfowCtx(ctx, "creating subscription",
 		"customer_id", sub.CustomerID, "plan_id", sub.PlanID, "start_date", sub.StartDate,
 		"billing_anchor", sub.BillingAnchor, "current_period_start", sub.CurrentPeriodStart,
 		"current_period_end", sub.CurrentPeriodEnd, "valid_prices", len(validPrices),
@@ -331,7 +360,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 				return err
 			}
 			if len(planCreditGrants.Items) > 0 {
-				s.Logger.Infow("plan has credit grants", "plan_id", plan.ID, "credit_grants_count", len(planCreditGrants.Items))
+				s.Logger.InfowCtx(ctx, "plan has credit grants", "plan_id", plan.ID, "credit_grants_count", len(planCreditGrants.Items))
 				creditGrantRequests = make([]dto.CreateCreditGrantRequest, 0, len(planCreditGrants.Items))
 				for _, cg := range planCreditGrants.Items {
 					creditGrantRequests = append(creditGrantRequests, dto.CreateCreditGrantRequest{
@@ -369,7 +398,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			sub.BillingCycle == types.BillingCycleCalendar {
 			if err = s.handleEntitlementProration(ctx, sub); err != nil {
 				// Log error but don't fail subscription creation
-				s.Logger.Errorw("failed to create prorated entitlements",
+				s.Logger.ErrorwCtx(ctx, "failed to create prorated entitlements",
 					"error", err,
 					"subscription_id", sub.ID)
 			}
@@ -603,7 +632,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
 
-	s.Logger.Infow("triggering HubSpot deal sync workflow",
+	s.Logger.InfowCtx(ctx, "triggering HubSpot deal sync workflow",
 		"subscription_id", subscriptionID,
 		"customer_id", customerID,
 		"tenant_id", tenantID,
@@ -611,7 +640,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 
 	// Check if HubSpot connection exists and deal outbound sync is enabled
 	if s.ConnectionRepo == nil {
-		s.Logger.Debugw("ConnectionRepo not available, skipping HubSpot deal sync",
+		s.Logger.DebugwCtx(ctx, "ConnectionRepo not available, skipping HubSpot deal sync",
 			"subscription_id", subscriptionID,
 			"customer_id", customerID)
 		return
@@ -619,7 +648,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderHubSpot)
 	if err != nil || conn == nil {
-		s.Logger.Debugw("HubSpot connection not found, skipping deal sync",
+		s.Logger.DebugwCtx(ctx, "HubSpot connection not found, skipping deal sync",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"customer_id", customerID)
@@ -627,7 +656,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 	}
 
 	if !conn.IsDealOutboundEnabled() {
-		s.Logger.Debugw("HubSpot deal outbound sync disabled, skipping deal sync",
+		s.Logger.DebugwCtx(ctx, "HubSpot deal outbound sync disabled, skipping deal sync",
 			"subscription_id", subscriptionID,
 			"customer_id", customerID,
 			"connection_id", conn.ID)
@@ -637,7 +666,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 	// Fetch customer to check for HubSpot deal ID
 	cust, err := s.CustomerRepo.Get(ctx, customerID)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch customer for HubSpot deal sync",
+		s.Logger.ErrorwCtx(ctx, "failed to fetch customer for HubSpot deal sync",
 			"error", err,
 			"customer_id", customerID,
 			"subscription_id", subscriptionID)
@@ -647,7 +676,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 	// Check if customer has HubSpot deal ID in metadata
 	dealID, ok := cust.Metadata["hubspot_deal_id"]
 	if !ok || dealID == "" {
-		s.Logger.Debugw("customer does not have HubSpot deal ID, skipping sync",
+		s.Logger.DebugwCtx(ctx, "customer does not have HubSpot deal ID, skipping sync",
 			"customer_id", customerID,
 			"subscription_id", subscriptionID)
 		return // Not an error - customer might not be from HubSpot
@@ -664,7 +693,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 
 	// Validate input
 	if err := input.Validate(); err != nil {
-		s.Logger.Errorw("invalid workflow input for HubSpot deal sync",
+		s.Logger.ErrorwCtx(ctx, "invalid workflow input for HubSpot deal sync",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"customer_id", customerID,
@@ -675,7 +704,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 	// Get global temporal service
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		s.Logger.Warnw("temporal service not available for HubSpot deal sync",
+		s.Logger.WarnwCtx(ctx, "temporal service not available for HubSpot deal sync",
 			"subscription_id", subscriptionID)
 		return
 	}
@@ -687,7 +716,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 		input,
 	)
 	if err != nil {
-		s.Logger.Errorw("failed to start HubSpot deal sync workflow",
+		s.Logger.ErrorwCtx(ctx, "failed to start HubSpot deal sync workflow",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"customer_id", customerID,
@@ -695,7 +724,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 		return
 	}
 
-	s.Logger.Infow("HubSpot deal sync workflow started successfully",
+	s.Logger.InfowCtx(ctx, "HubSpot deal sync workflow started successfully",
 		"subscription_id", subscriptionID,
 		"workflow_id", workflowRun.GetID())
 }
@@ -706,7 +735,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
 
-	s.Logger.Infow("triggering HubSpot quote sync workflow",
+	s.Logger.InfowCtx(ctx, "triggering HubSpot quote sync workflow",
 		"subscription_id", subscriptionID,
 		"customer_id", customerID,
 		"tenant_id", tenantID,
@@ -714,7 +743,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 
 	// Check if HubSpot connection exists and quote outbound sync is enabled
 	if s.ConnectionRepo == nil {
-		s.Logger.Debugw("ConnectionRepo not available, skipping HubSpot quote sync",
+		s.Logger.DebugwCtx(ctx, "ConnectionRepo not available, skipping HubSpot quote sync",
 			"subscription_id", subscriptionID,
 			"customer_id", customerID)
 		return
@@ -722,7 +751,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderHubSpot)
 	if err != nil || conn == nil {
-		s.Logger.Debugw("HubSpot connection not found, skipping quote sync",
+		s.Logger.DebugwCtx(ctx, "HubSpot connection not found, skipping quote sync",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"customer_id", customerID)
@@ -730,7 +759,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 	}
 
 	if !conn.IsQuoteOutboundEnabled() {
-		s.Logger.Debugw("HubSpot quote outbound sync disabled, skipping quote sync",
+		s.Logger.DebugwCtx(ctx, "HubSpot quote outbound sync disabled, skipping quote sync",
 			"subscription_id", subscriptionID,
 			"customer_id", customerID,
 			"connection_id", conn.ID)
@@ -740,7 +769,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 	// Fetch customer to check for HubSpot deal ID
 	cust, err := s.CustomerRepo.Get(ctx, customerID)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch customer for HubSpot quote sync",
+		s.Logger.ErrorwCtx(ctx, "failed to fetch customer for HubSpot quote sync",
 			"error", err,
 			"customer_id", customerID,
 			"subscription_id", subscriptionID)
@@ -750,7 +779,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 	// Check if customer has HubSpot deal ID in metadata
 	dealID, ok := cust.Metadata["hubspot_deal_id"]
 	if !ok || dealID == "" {
-		s.Logger.Debugw("customer does not have HubSpot deal ID, skipping quote sync",
+		s.Logger.DebugwCtx(ctx, "customer does not have HubSpot deal ID, skipping quote sync",
 			"customer_id", customerID,
 			"subscription_id", subscriptionID)
 		return // Not an error - customer might not be from HubSpot
@@ -767,7 +796,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 
 	// Validate input
 	if err := input.Validate(); err != nil {
-		s.Logger.Errorw("invalid workflow input for HubSpot quote sync",
+		s.Logger.ErrorwCtx(ctx, "invalid workflow input for HubSpot quote sync",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"customer_id", customerID,
@@ -778,7 +807,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 	// Get global temporal service
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		s.Logger.Warnw("temporal service not available for HubSpot quote sync",
+		s.Logger.WarnwCtx(ctx, "temporal service not available for HubSpot quote sync",
 			"subscription_id", subscriptionID)
 		return
 	}
@@ -790,7 +819,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 		input,
 	)
 	if err != nil {
-		s.Logger.Errorw("failed to start HubSpot quote sync workflow",
+		s.Logger.ErrorwCtx(ctx, "failed to start HubSpot quote sync workflow",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"customer_id", customerID,
@@ -798,7 +827,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 		return
 	}
 
-	s.Logger.Infow("HubSpot quote sync workflow started successfully",
+	s.Logger.InfowCtx(ctx, "HubSpot quote sync workflow started successfully",
 		"subscription_id", subscriptionID,
 		"customer_id", customerID,
 		"deal_id", dealID,
@@ -1360,7 +1389,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	couponFilter.SubscriptionIDs = []string{id}
 	couponAssociationsResponse, err := couponAssociationService.ListCouponAssociations(ctx, couponFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get coupon associations for subscription",
+		s.Logger.ErrorwCtx(ctx, "failed to get coupon associations for subscription",
 			"subscription_id", id,
 			"error", err)
 	} else {
@@ -1373,7 +1402,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	phaseFilter.SubscriptionIDs = []string{id}
 	phasesResponse, err := subscriptionPhaseService.GetSubscriptionPhases(ctx, phaseFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get subscription phases for subscription",
+		s.Logger.ErrorwCtx(ctx, "failed to get subscription phases for subscription",
 			"subscription_id", id,
 			"error", err)
 	} else {
@@ -1406,7 +1435,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	creditGrantService := NewCreditGrantService(s.ServiceParams)
 	creditGrantsResponse, err := creditGrantService.GetCreditGrantsBySubscription(ctx, id)
 	if err != nil {
-		s.Logger.Errorw("failed to get credit grants for subscription",
+		s.Logger.ErrorwCtx(ctx, "failed to get credit grants for subscription",
 			"subscription_id", id,
 			"error", err)
 		return nil, err
@@ -1640,12 +1669,39 @@ func (s *subscriptionService) CancelSubscription(
 	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled {
 		return &dto.CancelSubscriptionResponse{
 			SubscriptionID: subscription.ID,
-			Message:         "Subscription is already cancelled",
+			Message:        "Subscription is already cancelled",
 		}, nil
 	}
 
+	// Reject proration for subscriptions with mixed billing periods
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && subscription.HasMixedBillingPeriods() {
+		return nil, ierr.NewError("proration is not supported for subscriptions with mixed billing periods").
+			WithHint("Set proration_behavior to 'none' when cancelling a subscription with different billing periods").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id":    subscriptionID,
+				"proration_behavior": req.ProrationBehavior,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Step 3b: Guard against double-scheduling
+	// Both end_of_period and scheduled_date schedule a future cancellation via cancel_at.
+	// Reject if one is already in place to prevent silent overwrites.
+	if req.CancellationType == types.CancellationTypeScheduledDate ||
+		req.CancellationType == types.CancellationTypeEndOfPeriod {
+		if subscription.CancelAt != nil {
+			return nil, ierr.NewError("subscription is already scheduled to cancel").
+				WithHint("The subscription already has a scheduled cancellation. Cancel the existing schedule before setting a new one.").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id":    subscriptionID,
+					"existing_cancel_at": subscription.CancelAt.Format(time.RFC3339),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Step 4: Determine effective cancellation date
-	effectiveDate, err := s.determineEffectiveDate(subscription, req.CancellationType)
+	effectiveDate, err := s.determineEffectiveDate(subscription, req.CancellationType, req.CancelAt)
 	if err != nil {
 		return nil, err
 	}
@@ -1674,7 +1730,11 @@ func (s *subscriptionService) CancelSubscription(
 		if invoicePolicy == "" {
 			invoicePolicy = types.CancelImmediatelyInvoicePolicySkip
 		}
-		shouldCreateInvoice := req.CancellationType != types.CancellationTypeEndOfPeriod &&
+		// Scheduled cancellations (end_of_period and scheduled_date) do not generate an
+		// immediate invoice — billing continues until the effective date.
+		isScheduled := req.CancellationType == types.CancellationTypeEndOfPeriod ||
+			req.CancellationType == types.CancellationTypeScheduledDate
+		shouldCreateInvoice := !isScheduled &&
 			invoicePolicy == types.CancelImmediatelyInvoicePolicyGenerateInvoice
 		if shouldCreateInvoice {
 			invoiceService := NewInvoiceService(s.ServiceParams)
@@ -1698,9 +1758,10 @@ func (s *subscriptionService) CancelSubscription(
 
 		}
 
-		// Step 6.5: Capture original state BEFORE modification (for end_of_period cancellations)
+		// Step 6.5: Capture original state BEFORE modification (for scheduled cancellations)
 		var originalState *subscriptionOriginalState
-		if req.CancellationType == types.CancellationTypeEndOfPeriod {
+		if req.CancellationType == types.CancellationTypeEndOfPeriod ||
+			req.CancellationType == types.CancellationTypeScheduledDate {
 			originalState = &subscriptionOriginalState{
 				CancelAtPeriodEnd: subscription.CancelAtPeriodEnd,
 				CancelAt:          subscription.CancelAt,
@@ -1714,8 +1775,14 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
-		// Step 7a: Handle scheduling for end_of_period cancellation
-		if req.CancellationType == types.CancellationTypeEndOfPeriod {
+		// Step 7a: Cancel all addons on the subscription (mark associations cancelled, terminate addon line items)
+		if err := s.cancelAddonsForSubscription(ctx, subscription.ID, effectiveDate, req.Reason); err != nil {
+			return err
+		}
+
+		// Step 7b: Handle scheduling for future cancellations (end_of_period and scheduled_date)
+		if req.CancellationType == types.CancellationTypeEndOfPeriod ||
+			req.CancellationType == types.CancellationTypeScheduledDate {
 			// Cancel all pending schedules (especially plan changes) before creating cancellation schedule
 			if err := s.cancelAllPendingSchedules(ctx, subscription.ID); err != nil {
 				logger.Errorw("failed to cancel pending schedules", "error", err)
@@ -1759,7 +1826,7 @@ func (s *subscriptionService) CancelSubscription(
 
 	if !req.SuppressWebhook {
 		// Step 10: Publish events
-		s.publishCancellationEvents(ctx, subscription)
+		s.publishCancellationEvents(ctx, subscription, req.CancellationType)
 	}
 
 	// Step 11: Build response
@@ -1788,7 +1855,7 @@ func (s *subscriptionService) CancelSubscription(
 }
 
 func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
-	s.Logger.Debugw("starting ListSubscriptions",
+	s.Logger.DebugwCtx(ctx, "starting ListSubscriptions",
 		"filter", filter,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx))
@@ -1796,17 +1863,17 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	planService := NewPlanService(s.ServiceParams)
 
 	if filter == nil {
-		s.Logger.Debugw("filter is nil, creating new subscription filter")
+		s.Logger.DebugwCtx(ctx, "filter is nil, creating new subscription filter")
 		filter = types.NewSubscriptionFilter()
 	}
 
 	if filter.GetLimit() == 0 {
-		s.Logger.Debugw("filter limit is 0, setting default limit", "default_limit", types.GetDefaultFilter().Limit)
+		s.Logger.DebugwCtx(ctx, "filter limit is 0, setting default limit", "default_limit", types.GetDefaultFilter().Limit)
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
 
 	if filter.QueryFilter == nil {
-		s.Logger.Debugw("filter.QueryFilter is nil, creating default query filter")
+		s.Logger.DebugwCtx(ctx, "filter.QueryFilter is nil, creating default query filter")
 		filter.QueryFilter = types.NewDefaultQueryFilter()
 	}
 
@@ -1817,12 +1884,12 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 
 	// Resolve external customer ID to internal customer ID if provided
 	if filter.ExternalCustomerID != "" {
-		s.Logger.Debugw("resolving external customer ID",
+		s.Logger.DebugwCtx(ctx, "resolving external customer ID",
 			"external_customer_id", filter.ExternalCustomerID)
 
 		customer, err := s.CustomerRepo.GetByLookupKey(ctx, filter.ExternalCustomerID)
 		if err != nil {
-			s.Logger.Errorw("failed to resolve external customer ID",
+			s.Logger.ErrorwCtx(ctx, "failed to resolve external customer ID",
 				"error", err,
 				"external_customer_id", filter.ExternalCustomerID)
 			return nil, ierr.WithError(err).
@@ -1837,25 +1904,25 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		filter.CustomerID = customer.ID
 		filter.ExternalCustomerID = "" // Clear to avoid confusion
 
-		s.Logger.Debugw("resolved external customer ID to internal customer ID",
+		s.Logger.DebugwCtx(ctx, "resolved external customer ID to internal customer ID",
 			"external_customer_id", filter.ExternalCustomerID,
 			"customer_id", customer.ID)
 	}
 
-	s.Logger.Debugw("calling SubRepo.List",
+	s.Logger.DebugwCtx(ctx, "calling SubRepo.List",
 		"final_filter", filter,
 		"limit", filter.GetLimit(),
 		"offset", filter.GetOffset())
 
 	subscriptions, err := s.SubRepo.List(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to list subscriptions from repository", "error", err, "filter", filter)
+		s.Logger.ErrorwCtx(ctx, "failed to list subscriptions from repository", "error", err, "filter", filter)
 		return nil, err
 	}
 
 	count, err := s.SubRepo.Count(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to count subscriptions from repository", "error", err, "filter", filter)
+		s.Logger.ErrorwCtx(ctx, "failed to count subscriptions from repository", "error", err, "filter", filter)
 		return nil, err
 	}
 
@@ -1872,13 +1939,13 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	planIDMap := make(map[string]*dto.PlanResponse, 0)
 	for _, sub := range subscriptions {
 		if sub.PlanID == "" {
-			s.Logger.Warnw("subscription has empty plan_id", "subscription_id", sub.ID)
+			s.Logger.WarnwCtx(ctx, "subscription has empty plan_id", "subscription_id", sub.ID)
 		}
 		planIDMap[sub.PlanID] = nil
 	}
 
 	uniquePlanIDs := lo.Keys(planIDMap)
-	s.Logger.Debugw("collected unique plan IDs",
+	s.Logger.DebugwCtx(ctx, "collected unique plan IDs",
 		"unique_plan_count", len(uniquePlanIDs),
 		"plan_ids", uniquePlanIDs)
 
@@ -1886,13 +1953,13 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	planFilter := types.NewNoLimitPlanFilter()
 	planFilter.PlanIDs = uniquePlanIDs
 	if filter != nil && filter.Expand != nil {
-		s.Logger.Debugw("passing expand filters to plan service", "expand", filter.Expand)
+		s.Logger.DebugwCtx(ctx, "passing expand filters to plan service", "expand", filter.Expand)
 		planFilter.Expand = filter.Expand // pass on the filters to next layer
 	}
 
 	planResponse, err := planService.GetPlans(ctx, planFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get plans from plan service",
+		s.Logger.ErrorwCtx(ctx, "failed to get plans from plan service",
 			"error", err,
 			"plan_filter", planFilter,
 			"plan_ids", uniquePlanIDs)
@@ -1902,7 +1969,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	// Build plan map for quick lookup
 	for _, plan := range planResponse.Items {
 		if plan.Plan == nil {
-			s.Logger.Warnw("plan response has nil Plan field", "plan_response", plan)
+			s.Logger.WarnwCtx(ctx, "plan response has nil Plan field", "plan_response", plan)
 			continue
 		}
 		planIDMap[plan.Plan.ID] = plan
@@ -1914,13 +1981,13 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		customerIDMap = make(map[string]*dto.CustomerResponse, 0)
 		for _, sub := range subscriptions {
 			if sub.CustomerID == "" {
-				s.Logger.Warnw("subscription has empty customer_id", "subscription_id", sub.ID)
+				s.Logger.WarnwCtx(ctx, "subscription has empty customer_id", "subscription_id", sub.ID)
 			}
 			customerIDMap[sub.CustomerID] = nil
 		}
 
 		uniqueCustomerIDs := lo.Keys(customerIDMap)
-		s.Logger.Debugw("collected unique customer IDs",
+		s.Logger.DebugwCtx(ctx, "collected unique customer IDs",
 			"unique_customer_count", len(uniqueCustomerIDs),
 			"customer_ids", uniqueCustomerIDs)
 
@@ -1931,7 +1998,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 
 		customerResponse, err := customerService.GetCustomers(ctx, customerFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to get customers from customer service",
+			s.Logger.ErrorwCtx(ctx, "failed to get customers from customer service",
 				"error", err,
 				"customer_filter", customerFilter,
 				"customer_ids", uniqueCustomerIDs)
@@ -1941,20 +2008,20 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		// Build customer map for quick lookup
 		for _, customer := range customerResponse.Items {
 			if customer.Customer == nil {
-				s.Logger.Warnw("customer response has nil Customer field", "customer_response", customer)
+				s.Logger.WarnwCtx(ctx, "customer response has nil Customer field", "customer_response", customer)
 				continue
 			}
 			customerIDMap[customer.Customer.ID] = customer
 		}
 
-		s.Logger.Debugw("built customer map", "customer_map_size", len(customerIDMap))
+		s.Logger.DebugwCtx(ctx, "built customer map", "customer_map_size", len(customerIDMap))
 	}
 
 	// Build response with plans and customers
 	for i, sub := range subscriptions {
 		planResp := planIDMap[sub.PlanID]
 		if planResp == nil {
-			s.Logger.Warnw("no plan found for subscription",
+			s.Logger.WarnwCtx(ctx, "no plan found for subscription",
 				"subscription_id", sub.ID,
 				"plan_id", sub.PlanID,
 				"available_plan_ids", lo.Keys(planIDMap))
@@ -1964,7 +2031,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		if customerIDMap != nil {
 			customerResp = customerIDMap[sub.CustomerID]
 			if customerResp == nil {
-				s.Logger.Warnw("no customer found for subscription",
+				s.Logger.WarnwCtx(ctx, "no customer found for subscription",
 					"subscription_id", sub.ID,
 					"customer_id", sub.CustomerID,
 					"available_customer_ids", lo.Keys(customerIDMap))
@@ -1978,9 +2045,9 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		}
 	}
 
-	s.Logger.Debugw("built subscription responses", "response_count", len(response.Items))
+	s.Logger.DebugwCtx(ctx, "built subscription responses", "response_count", len(response.Items))
 
-	s.Logger.Debugw("completed ListSubscriptions successfully",
+	s.Logger.DebugwCtx(ctx, "completed ListSubscriptions successfully",
 		"total_items", len(response.Items),
 		"total_count", count,
 		"pagination", response.Pagination)
@@ -1995,7 +2062,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	priceService := NewPriceService(s.ServiceParams)
 
 	// Get subscription with line items
-	subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
+	subscription, err := s.SubRepo.Get(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2021,6 +2088,13 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		usageStartTime = time.Time{}
 		usageEndTime = time.Now().UTC()
 	}
+
+	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, subscription.ID, usageStartTime, req.LifetimeUsage)
+	if err != nil {
+		return nil, err
+	}
+
+	subscription.LineItems = lineItems
 
 	// Collect all price IDs
 	priceIDs := make([]string, 0, len(lineItems))
@@ -2060,7 +2134,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 	totalCost := decimal.Zero
 
-	s.Logger.Debugw("calculating usage for subscription",
+	s.Logger.DebugwCtx(ctx, "calculating usage for subscription",
 		"subscription_id", req.SubscriptionID,
 		"start_time", usageStartTime,
 		"end_time", usageEndTime,
@@ -2071,7 +2145,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	// 400-500 meters down to only 5-7 that have actual usage
 	distinctEventNames, err := s.EventRepo.GetDistinctEventNames(ctx, customer.ExternalID, usageStartTime, usageEndTime)
 	if err != nil {
-		s.Logger.Warnw("failed to get distinct event names, proceeding without optimization",
+		s.Logger.WarnwCtx(ctx, "failed to get distinct event names, proceeding without optimization",
 			"error", err,
 			"external_customer_id", customer.ExternalID)
 		distinctEventNames = nil // Fallback: process all meters if optimization fails
@@ -2083,7 +2157,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		eventNameExists[eventName] = true
 	}
 
-	s.Logger.Debugw("distinct event names optimization",
+	s.Logger.DebugwCtx(ctx, "distinct event names optimization",
 		"external_customer_id", customer.ExternalID,
 		"total_distinct_events", len(distinctEventNames),
 		"total_line_items", len(lineItems),
@@ -2110,7 +2184,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			// this is a fallback to ensure that we don't process all meters
 			// if the event data is not available
 
-			s.Logger.Debugw("skipping meter as there are no events",
+			s.Logger.DebugwCtx(ctx, "skipping meter as there are no events",
 				"meter_id", lineItem.MeterID,
 				"event_name", meter.EventName,
 				"customer_id", customer.ID,
@@ -2122,7 +2196,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		// Performance optimization: Skip meters that don't have any events for this customer
 		// Only skip if we successfully got distinct event names (not nil) and the event doesn't exist
 		if distinctEventNames != nil && !eventNameExists[meter.EventName] {
-			s.Logger.Debugw("skipping meter with no events",
+			s.Logger.DebugwCtx(ctx, "skipping meter with no events",
 				"meter_id", lineItem.MeterID,
 				"event_name", meter.EventName,
 				"customer_id", customer.ID,
@@ -2148,7 +2222,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		meterUsageRequests = append(meterUsageRequests, usageRequest)
 	}
 
-	s.Logger.Infow("performance optimization results",
+	s.Logger.InfowCtx(ctx, "performance optimization results",
 		"subscription_id", req.SubscriptionID,
 		"external_customer_id", customer.ExternalID,
 		"total_line_items", len(lineItems),
@@ -2157,12 +2231,12 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		"optimization_enabled", distinctEventNames != nil,
 		"meters_skipped", len(priceIDs)-len(meterUsageRequests))
 
-	usageMap, err := eventService.BulkGetUsageByMeter(ctx, meterUsageRequests)
+	usageMap, err := eventService.BulkGetUsageByMeterSync(ctx, meterUsageRequests)
 	if err != nil {
 		return nil, err
 	}
 
-	s.Logger.Debugw("fetched usage for meters",
+	s.Logger.DebugwCtx(ctx, "fetched usage for meters",
 		"meter_ids", lo.Keys(usageMap),
 		"total_usage_count", len(usageMap),
 		"subscription_id", req.SubscriptionID)
@@ -2228,7 +2302,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			cost = priceService.CalculateCost(ctx, priceObj, quantity)
 		}
 
-		s.Logger.Debugw("calculated usage for meter",
+		s.Logger.DebugwCtx(ctx, "calculated usage for meter",
 			"meter_id", meterID,
 			"quantity", quantity,
 			"cost", cost,
@@ -2406,7 +2480,7 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 	const batchSize = 100
 	now := time.Now().UTC()
 
-	s.Logger.Infow("starting billing period updates",
+	s.Logger.InfowCtx(ctx, "starting billing period updates",
 		"current_time", now)
 
 	response := &dto.SubscriptionUpdatePeriodResponse{
@@ -2435,7 +2509,7 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 			return response, err
 		}
 
-		s.Logger.Infow("processing subscription batch",
+		s.Logger.InfowCtx(ctx, "processing subscription batch",
 			"batch_size", len(subs),
 			"offset", offset)
 
@@ -2457,7 +2531,7 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 			}
 			err = s.processSubscriptionPeriod(ctx, sub, now)
 			if err != nil {
-				s.Logger.Errorw("failed to process subscription period",
+				s.Logger.ErrorwCtx(ctx, "failed to process subscription period",
 					"subscription_id", sub.ID,
 					"error", err)
 
@@ -2509,14 +2583,14 @@ func (s *subscriptionService) validateNotDraftSubscription(sub *subscription.Sub
 func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub *subscription.Subscription, now time.Time) error {
 	// Skip processing for draft subscriptions
 	if s.isDraftSubscription(sub) {
-		s.Logger.Infow("skipping period processing for draft subscription",
+		s.Logger.InfowCtx(ctx, "skipping period processing for draft subscription",
 			"subscription_id", sub.ID)
 		return nil
 	}
 
 	// Skip processing for paused subscriptions
 	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
-		s.Logger.Infow("skipping period processing for paused subscription",
+		s.Logger.InfowCtx(ctx, "skipping period processing for paused subscription",
 			"subscription_id", sub.ID)
 		return nil
 	}
@@ -2542,7 +2616,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				return err
 			}
 
-			s.Logger.Infow("activated period-end pause",
+			s.Logger.InfowCtx(ctx, "activated period-end pause",
 				"subscription_id", sub.ID,
 				"pause_id", pause.ID)
 
@@ -2564,7 +2638,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				return err
 			}
 
-			s.Logger.Infow("activated scheduled pause",
+			s.Logger.InfowCtx(ctx, "activated scheduled pause",
 				"subscription_id", sub.ID,
 				"pause_id", pause.ID)
 
@@ -2606,7 +2680,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				return err
 			}
 
-			s.Logger.Infow("auto-resumed subscription",
+			s.Logger.InfowCtx(ctx, "auto-resumed subscription",
 				"subscription_id", sub.ID,
 				"pause_id", pause.ID,
 				"pause_duration", pauseDuration)
@@ -2614,7 +2688,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			// Continue with normal processing
 		} else {
 			// Still paused, skip processing
-			s.Logger.Infow("skipping period processing for paused subscription",
+			s.Logger.InfowCtx(ctx, "skipping period processing for paused subscription",
 				"subscription_id", sub.ID)
 			return nil
 		}
@@ -2651,7 +2725,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		nextStart := currentEnd
 		nextEnd, err := types.NextBillingDate(nextStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
 		if err != nil {
-			s.Logger.Errorw("failed to calculate next billing date",
+			s.Logger.ErrorwCtx(ctx, "failed to calculate next billing date",
 				"subscription_id", sub.ID,
 				"current_end", currentEnd,
 				"process_up_to", now,
@@ -2670,7 +2744,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// in case of end date reached or next end is equal to current end, we break the loop
 		// nextEnd will be equal to currentEnd in case of end date reached
 		if nextEnd.Equal(currentEnd) {
-			s.Logger.Infow("stopped period generation - reached subscription end date",
+			s.Logger.InfowCtx(ctx, "stopped period generation - reached subscription end date",
 				"subscription_id", sub.ID,
 				"end_date", sub.EndDate,
 				"final_period_end", currentEnd)
@@ -2681,7 +2755,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	}
 
 	if len(periods) == 1 {
-		s.Logger.Debugw("no transitions needed for subscription",
+		s.Logger.DebugwCtx(ctx, "no transitions needed for subscription",
 			"subscription_id", sub.ID,
 			"current_period_start", sub.CurrentPeriodStart,
 			"current_period_end", sub.CurrentPeriodEnd,
@@ -2722,7 +2796,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 				// Update the cancellation schedule status to executed
 				if err := s.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
-					s.Logger.Errorw("failed to mark cancellation schedule as executed",
+					s.Logger.ErrorwCtx(ctx, "failed to mark cancellation schedule as executed",
 						"subscription_id", sub.ID,
 						"error", err)
 					// Don't fail the entire operation, just log the error
@@ -2735,7 +2809,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			if sub.EndDate != nil && period.end.Equal(*sub.EndDate) {
 				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 				sub.CancelledAt = sub.EndDate
-				s.Logger.Infow("will cancel subscription at end of this period",
+				s.Logger.InfowCtx(ctx, "will cancel subscription at end of this period",
 					"subscription_id", sub.ID,
 					"period_end", period.end,
 					"end_date", *sub.EndDate)
@@ -2743,7 +2817,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			}
 
 			if inv == nil {
-				s.Logger.Infow("no invoice was created for period",
+				s.Logger.InfowCtx(ctx, "no invoice was created for period",
 					"subscription_id", sub.ID,
 					"period_start", period.start,
 					"period_end", period.end,
@@ -2751,7 +2825,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				continue
 			}
 
-			s.Logger.Infow("created invoice for period",
+			s.Logger.InfowCtx(ctx, "created invoice for period",
 				"subscription_id", sub.ID,
 				"invoice_id", inv.ID,
 				"period_start", period.start,
@@ -2773,7 +2847,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		if sub.EndDate != nil && newPeriod.end.Equal(*sub.EndDate) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 			sub.CancelledAt = sub.EndDate
-			s.Logger.Infow("subscription will be cancelled at new period end (end date reached)",
+			s.Logger.InfowCtx(ctx, "subscription will be cancelled at new period end (end date reached)",
 				"subscription_id", sub.ID,
 				"new_period_end", newPeriod.end,
 				"end_date", *sub.EndDate)
@@ -2787,13 +2861,13 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// Process pending plan changes at period end (only if subscription is still active)
 		if sub.SubscriptionStatus == types.SubscriptionStatusActive {
 			if err := s.processPendingPlanChanges(ctx, sub); err != nil {
-				s.Logger.Errorw("failed to process pending plan changes",
+				s.Logger.ErrorwCtx(ctx, "failed to process pending plan changes",
 					"subscription_id", sub.ID,
 					"error", err)
 			}
 		}
 
-		s.Logger.Infow("completed subscription period processing",
+		s.Logger.InfowCtx(ctx, "completed subscription period processing",
 			"subscription_id", sub.ID,
 			"original_period_start", periods[0].start,
 			"original_period_end", periods[0].end,
@@ -2807,7 +2881,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	})
 
 	if err != nil {
-		s.Logger.Errorw("failed to process subscription period",
+		s.Logger.ErrorwCtx(ctx, "failed to process subscription period",
 			"subscription_id", sub.ID,
 			"error", err)
 		return err
@@ -2944,7 +3018,7 @@ func (s *subscriptionService) cancelAllPendingSchedules(ctx context.Context, sub
 			schedule.UpdatedBy = types.GetUserID(ctx)
 
 			if err := s.SubScheduleRepo.Update(ctx, schedule); err != nil {
-				s.Logger.Errorw("failed to cancel schedule",
+				s.Logger.ErrorwCtx(ctx, "failed to cancel schedule",
 					"schedule_id", schedule.ID,
 					"schedule_type", schedule.ScheduleType,
 					"error", err)
@@ -2952,7 +3026,7 @@ func (s *subscriptionService) cancelAllPendingSchedules(ctx context.Context, sub
 				continue
 			}
 
-			s.Logger.Infow("cancelled pending schedule due to subscription cancellation",
+			s.Logger.InfowCtx(ctx, "cancelled pending schedule due to subscription cancellation",
 				"schedule_id", schedule.ID,
 				"schedule_type", schedule.ScheduleType,
 				"subscription_id", subscriptionID)
@@ -2975,7 +3049,7 @@ func (s *subscriptionService) MarkCancellationScheduleAsExecuted(ctx context.Con
 	}
 
 	if schedule == nil {
-		s.Logger.Warnw("no pending cancellation schedule found",
+		s.Logger.WarnwCtx(ctx, "no pending cancellation schedule found",
 			"subscription_id", subscriptionID)
 		return nil
 	}
@@ -2991,7 +3065,7 @@ func (s *subscriptionService) MarkCancellationScheduleAsExecuted(ctx context.Con
 		return fmt.Errorf("failed to update schedule status: %w", err)
 	}
 
-	s.Logger.Infow("marked cancellation schedule as executed",
+	s.Logger.InfowCtx(ctx, "marked cancellation schedule as executed",
 		"schedule_id", schedule.ID,
 		"subscription_id", subscriptionID,
 		"executed_at", now)
@@ -3017,14 +3091,18 @@ func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost 
 	}
 }
 
-// filterValidPricesForSubscription filters prices that are valid for a subscription
-// This utility function can be used for both plans and addons
+// filterValidPricesForSubscription filters prices that are valid for a subscription.
+// A price is valid when its currency matches and its billing period is equal to or a
+// valid multiple of the subscription billing period (enabling multi-cadence subscriptions).
 func filterValidPricesForSubscription(prices []*dto.PriceResponse, subscription *subscription.Subscription) []*dto.PriceResponse {
 	var validPrices []*dto.PriceResponse
 	for _, p := range prices {
-		if types.IsMatchingCurrency(p.Price.Currency, subscription.Currency) &&
-			p.Price.BillingPeriod == subscription.BillingPeriod &&
-			p.Price.BillingPeriodCount == subscription.BillingPeriodCount {
+		if !types.IsMatchingCurrency(p.Price.Currency, subscription.Currency) {
+			continue
+		}
+		periodOK := p.Price.BillingPeriod == subscription.BillingPeriod ||
+			types.IsBillingPeriodMultiple(p.Price.BillingPeriod, subscription.BillingPeriod)
+		if periodOK {
 			validPrices = append(validPrices, p)
 		}
 	}
@@ -3671,7 +3749,7 @@ func (s *subscriptionService) calculateBillingImpact(
 	return impact, nil
 }
 
-func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, eventName string, subscriptionID string) {
+func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, eventName types.WebhookEventName, subscriptionID string) {
 
 	eventPayload := webhookDto.InternalSubscriptionEvent{
 		SubscriptionID: subscriptionID,
@@ -3681,7 +3759,7 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 	webhookPayload, err := json.Marshal(eventPayload)
 
 	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -3695,7 +3773,7 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
 
@@ -3703,16 +3781,16 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
 	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx)
 	if err != nil {
-		s.Logger.Errorw("failed to list subscriptions due for renewal", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to list subscriptions due for renewal", "error", err)
 		return err
 	}
 
 	if len(subscriptions) == 0 {
-		s.Logger.Infow("no subscriptions due for renewal found")
+		s.Logger.InfowCtx(ctx, "no subscriptions due for renewal found")
 		return nil
 	}
 
-	s.Logger.Infow("found subscriptions due for renewal", "count", len(subscriptions))
+	s.Logger.InfowCtx(ctx, "found subscriptions due for renewal", "count", len(subscriptions))
 
 	for _, sub := range subscriptions {
 		ctx = context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
@@ -4017,6 +4095,129 @@ func (s *subscriptionService) validateEntitlementCompatibility(ctx context.Conte
 	return nil
 }
 
+// cancelAddonsForSubscription marks all active addon associations for the subscription as cancelled
+// and terminates subscription line items where entity type is addon and entity id is the addon id.
+// Called during subscription cancellation (immediate or end_of_period) with the effective cancellation date.
+// Uses the same GetActiveAddonAssociation path as the API so we reliably find all active addons on the subscription.
+func (s *subscriptionService) cancelAddonsForSubscription(ctx context.Context, subscriptionID string, effectiveDate time.Time, reason string) error {
+	logger := s.Logger.With(
+		zap.String("subscription_id", subscriptionID),
+		zap.Time("effective_date", effectiveDate),
+	)
+
+	addonService := NewAddonService(s.ServiceParams)
+	activeAddons, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
+		EntityID:   subscriptionID,
+		EntityType: types.AddonAssociationEntityTypeSubscription,
+	})
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get active addon associations for subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if activeAddons == nil || len(activeAddons.Items) == 0 {
+		logger.Debug("no active addon associations to cancel")
+		return nil
+	}
+
+	logger.Infow("cancelling addon associations for subscription",
+		"subscription_id", subscriptionID,
+		"addon_count", len(activeAddons.Items))
+
+	cancellationReason := "Subscription cancelled"
+	if reason != "" {
+		cancellationReason = fmt.Sprintf("Subscription cancelled: %s", reason)
+	}
+
+	addonIDsToCancel := make(map[string]struct{}, len(activeAddons.Items))
+
+	for _, addonResp := range activeAddons.Items {
+		if addonResp == nil || addonResp.AddonAssociation == nil {
+			continue
+		}
+		association := addonResp.AddonAssociation
+
+		// Skip if already has end date (already scheduled for removal)
+		if association.EndDate != nil && !association.EndDate.IsZero() {
+			logger.Debugw("addon association already has end date, skipping",
+				"addon_association_id", association.ID,
+				"end_date", association.EndDate)
+			continue
+		}
+
+		addonIDsToCancel[association.AddonID] = struct{}{}
+
+		association.AddonStatus = types.AddonStatusCancelled
+		association.CancellationReason = cancellationReason
+		association.CancelledAt = &effectiveDate
+		association.EndDate = &effectiveDate
+
+		if err := s.AddonAssociationRepo.Update(ctx, association); err != nil {
+			logger.Errorw("failed to update addon association",
+				"addon_association_id", association.ID,
+				"error", err)
+			return ierr.WithError(err).
+				WithHintf("Failed to cancel addon association %s", association.ID).
+				Mark(ierr.ErrDatabase)
+		}
+
+		logger.Infow("cancelled addon association",
+			"addon_association_id", association.ID,
+			"addon_id", association.AddonID)
+	}
+
+	if len(addonIDsToCancel) == 0 {
+		return nil
+	}
+
+	addonIDList := lo.Keys(addonIDsToCancel)
+	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	lineItemFilter.SubscriptionIDs = []string{subscriptionID}
+	lineItemFilter.EntityIDs = addonIDList
+	lineItemFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+
+	allLineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	if err != nil {
+		logger.Errorw("failed to list subscription line items for addon termination",
+			"subscription_id", subscriptionID,
+			"error", err)
+		return ierr.WithError(err).
+			WithHint("Failed to list subscription line items for addon termination").
+			Mark(ierr.ErrDatabase)
+	}
+
+	logger.Infow("listed addon line items for termination",
+		"subscription_id", subscriptionID,
+		"entity_ids_filter", addonIDList,
+		"line_items_found", len(allLineItems))
+
+	deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: &effectiveDate}
+	terminated := 0
+	for _, lineItem := range allLineItems {
+		if !lineItem.EndDate.IsZero() {
+			continue
+		}
+		if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+			logger.Errorw("failed to terminate addon line item",
+				"line_item_id", lineItem.ID,
+				"entity_id", lineItem.EntityID,
+				"error", err)
+			return ierr.WithError(err).
+				WithHintf("Failed to terminate line item %s (entity_type=addon, entity_id=%s)", lineItem.ID, lineItem.EntityID).
+				Mark(ierr.ErrDatabase)
+		}
+		terminated++
+	}
+
+	logger.Infow("terminated addon line items for subscription",
+		"subscription_id", subscriptionID,
+		"addon_ids_count", len(addonIDsToCancel),
+		"line_items_terminated", terminated)
+
+	return nil
+}
+
 // RemoveAddonFromSubscription removes an addon from a subscription by addon association ID
 func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error {
 	// Validate request
@@ -4058,6 +4259,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 		endReason = req.Reason
 	}
 
+	association.AddonStatus = types.AddonStatusCancelled
 	association.CancellationReason = endReason
 	association.CancelledAt = effectiveEndDate
 	association.EndDate = effectiveEndDate
@@ -4144,7 +4346,7 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 // ActivateIncompleteSubscription activates a subscription that is in incomplete status
 // after the first invoice has been successfully paid
 func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context, subscriptionID string) error {
-	s.Logger.Infow("activating incomplete subscription", "subscription_id", subscriptionID)
+	s.Logger.InfowCtx(ctx, "activating incomplete subscription", "subscription_id", subscriptionID)
 
 	// Get the subscription
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
@@ -4177,7 +4379,7 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.Infow("successfully activated incomplete subscription",
+	s.Logger.InfowCtx(ctx, "successfully activated incomplete subscription",
 		"subscription_id", subscriptionID,
 		"previous_status", types.SubscriptionStatusIncomplete,
 		"new_status", types.SubscriptionStatusActive)
@@ -4189,7 +4391,7 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 	if err != nil {
 		// Log the error but don't fail the activation
 		// The cron job will pick up these CGAs as a backup
-		s.Logger.Errorw("failed to process pending credit grants during subscription activation",
+		s.Logger.ErrorwCtx(ctx, "failed to process pending credit grants during subscription activation",
 			"subscription_id", subscriptionID,
 			"error", err,
 			"note", "cron job will process these as backup")
@@ -4228,12 +4430,12 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 	}
 
 	if len(applications) == 0 {
-		s.Logger.Infow("no pending credit grant applications found for subscription",
+		s.Logger.InfowCtx(ctx, "no pending credit grant applications found for subscription",
 			"subscription_id", sub.ID)
 		return nil
 	}
 
-	s.Logger.Infow("found pending credit grant applications to process",
+	s.Logger.InfowCtx(ctx, "found pending credit grant applications to process",
 		"subscription_id", sub.ID,
 		"count", len(applications))
 
@@ -4244,7 +4446,7 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 		// Get the credit grant
 		creditGrant, err := creditGrantService.GetCreditGrant(ctx, cga.CreditGrantID)
 		if err != nil {
-			s.Logger.Errorw("failed to get credit grant for application",
+			s.Logger.ErrorwCtx(ctx, "failed to get credit grant for application",
 				"application_id", cga.ID,
 				"grant_id", cga.CreditGrantID,
 				"error", err)
@@ -4256,7 +4458,7 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 		stateHandler := NewSubscriptionStateHandler(sub, creditGrant.CreditGrant)
 		action, err := stateHandler.DetermineCreditGrantAction()
 		if err != nil {
-			s.Logger.Errorw("failed to determine credit grant action",
+			s.Logger.ErrorwCtx(ctx, "failed to determine credit grant action",
 				"application_id", cga.ID,
 				"grant_id", cga.CreditGrantID,
 				"error", err)
@@ -4266,7 +4468,7 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 
 		// Only apply if action is APPLY (subscription is now active)
 		if action != StateActionApply {
-			s.Logger.Infow("skipping credit grant application - action not APPLY",
+			s.Logger.InfowCtx(ctx, "skipping credit grant application - action not APPLY",
 				"application_id", cga.ID,
 				"grant_id", cga.CreditGrantID,
 				"action", action,
@@ -4277,7 +4479,7 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 		// Apply the credit grant to wallet
 		err = creditGrantService.ProcessCreditGrantApplication(ctx, cga.ID)
 		if err != nil {
-			s.Logger.Errorw("failed to apply credit grant to wallet",
+			s.Logger.ErrorwCtx(ctx, "failed to apply credit grant to wallet",
 				"application_id", cga.ID,
 				"grant_id", cga.CreditGrantID,
 				"error", err)
@@ -4285,7 +4487,7 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 			continue
 		}
 
-		s.Logger.Infow("successfully applied credit grant during subscription activation",
+		s.Logger.InfowCtx(ctx, "successfully applied credit grant during subscription activation",
 			"application_id", cga.ID,
 			"grant_id", cga.CreditGrantID,
 			"subscription_id", sub.ID,
@@ -4293,7 +4495,7 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 		successCount++
 	}
 
-	s.Logger.Infow("completed processing pending credit grants",
+	s.Logger.InfowCtx(ctx, "completed processing pending credit grants",
 		"subscription_id", sub.ID,
 		"total", len(applications),
 		"success", successCount,
@@ -4316,21 +4518,21 @@ func (s *subscriptionService) processPendingCreditGrantsForSubscription(ctx cont
 
 // ProcessAutoCancellationSubscriptions processes subscriptions that are eligible for auto-cancellation
 func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
-	s.Logger.Infow("starting auto-cancellation processing")
+	s.Logger.InfowCtx(ctx, "starting auto-cancellation processing")
 
 	// Get all tenant x environment combinations that have auto-cancellation enabled
 	enabledConfigs, err := s.SettingsRepo.GetAllTenantEnvSubscriptionSettings(ctx)
 	if err != nil {
-		s.Logger.Errorw("failed to list subscription configs", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to list subscription configs", "error", err)
 		return err
 	}
 
 	if len(enabledConfigs) == 0 {
-		s.Logger.Infow("no tenants have auto-cancellation enabled, skipping processing")
+		s.Logger.InfowCtx(ctx, "no tenants have auto-cancellation enabled, skipping processing")
 		return nil
 	}
 
-	s.Logger.Infow("found tenants with auto-cancellation enabled",
+	s.Logger.InfowCtx(ctx, "found tenants with auto-cancellation enabled",
 		"tenant_count", len(enabledConfigs))
 
 	totalCanceledCount := 0
@@ -4340,7 +4542,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 	for _, tenantConfig := range enabledConfigs {
 		// Skip if auto-cancellation is not enabled
 		if !tenantConfig.AutoCancellationEnabled {
-			s.Logger.Debugw("auto-cancellation not enabled for tenant",
+			s.Logger.DebugwCtx(ctx, "auto-cancellation not enabled for tenant",
 				"tenant_id", tenantConfig.TenantID,
 				"environment_id", tenantConfig.EnvironmentID)
 			continue
@@ -4350,7 +4552,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenantConfig.TenantID)
 		tenantCtx = context.WithValue(tenantCtx, types.CtxEnvironmentID, tenantConfig.EnvironmentID)
 
-		s.Logger.Debugw("processing tenant",
+		s.Logger.DebugwCtx(ctx, "processing tenant",
 			"tenant_id", tenantConfig.TenantID,
 			"environment_id", tenantConfig.EnvironmentID,
 			"grace_period_days", tenantConfig.GracePeriodDays)
@@ -4367,14 +4569,14 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 		invoices, err := s.InvoiceRepo.List(tenantCtx, invoicesFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to get invoices for tenant",
+			s.Logger.ErrorwCtx(ctx, "failed to get invoices for tenant",
 				"tenant_id", tenantConfig.TenantID,
 				"environment_id", tenantConfig.EnvironmentID,
 				"error", err)
 			continue // Skip this tenant but continue with others
 		}
 
-		s.Logger.Debugw("found unpaid invoices for tenant",
+		s.Logger.DebugwCtx(ctx, "found unpaid invoices for tenant",
 			"tenant_id", tenantConfig.TenantID,
 			"environment_id", tenantConfig.EnvironmentID,
 			"invoice_count", len(invoices))
@@ -4389,7 +4591,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 			// Must have a valid due date
 			if inv.DueDate == nil {
-				s.Logger.Warnw("invoice has invalid due date, skipping",
+				s.Logger.WarnwCtx(ctx, "invoice has invalid due date, skipping",
 					"invoice_id", inv.ID,
 					"subscription_id", *inv.SubscriptionID)
 				return false
@@ -4402,7 +4604,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			isPastGracePeriod := now.After(gracePeriodEndTime)
 
 			if isPastGracePeriod {
-				s.Logger.Debugw("found invoice past grace period",
+				s.Logger.DebugwCtx(ctx, "found invoice past grace period",
 					"invoice_id", inv.ID,
 					"subscription_id", *inv.SubscriptionID,
 					"due_date", inv.DueDate,
@@ -4419,7 +4621,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			return lo.FromPtr(inv.SubscriptionID), inv.SubscriptionID != nil
 		}))
 
-		s.Logger.Debugw("found subscriptions with invoices past grace period",
+		s.Logger.DebugwCtx(ctx, "found subscriptions with invoices past grace period",
 			"tenant_id", tenantConfig.TenantID,
 			"environment_id", tenantConfig.EnvironmentID,
 			"total_invoices", len(invoices),
@@ -4427,7 +4629,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			"subscription_count", len(subscriptionIDs))
 
 		if len(subscriptionIDs) == 0 {
-			s.Logger.Debugw("no subscriptions eligible for auto-cancellation",
+			s.Logger.DebugwCtx(ctx, "no subscriptions eligible for auto-cancellation",
 				"tenant_id", tenantConfig.TenantID,
 				"environment_id", tenantConfig.EnvironmentID)
 			continue
@@ -4441,14 +4643,14 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 		subscriptions, err := s.SubRepo.List(tenantCtx, filter)
 		if err != nil {
-			s.Logger.Errorw("failed to get subscriptions for tenant",
+			s.Logger.ErrorwCtx(ctx, "failed to get subscriptions for tenant",
 				"tenant_id", tenantConfig.TenantID,
 				"environment_id", tenantConfig.EnvironmentID,
 				"error", err)
 			continue // Skip this tenant but continue with others
 		}
 
-		s.Logger.Debugw("found active subscriptions to cancel",
+		s.Logger.DebugwCtx(ctx, "found active subscriptions to cancel",
 			"tenant_id", tenantConfig.TenantID,
 			"environment_id", tenantConfig.EnvironmentID,
 			"subscription_count", len(subscriptions))
@@ -4458,7 +4660,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 		// Cancel all subscriptions - they've already been filtered for eligibility
 		for _, sub := range subscriptions {
-			s.Logger.Infow("auto-cancelling subscription",
+			s.Logger.InfowCtx(ctx, "auto-cancelling subscription",
 				"subscription_id", sub.ID,
 				"tenant_id", tenantConfig.TenantID,
 				"environment_id", tenantConfig.EnvironmentID,
@@ -4470,7 +4672,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			if _, err := s.CancelSubscription(tenantCtx, sub.ID, &dto.CancelSubscriptionRequest{
 				CancellationType: types.CancellationTypeImmediate,
 			}); err != nil {
-				s.Logger.Errorw("failed to auto-cancel subscription",
+				s.Logger.ErrorwCtx(ctx, "failed to auto-cancel subscription",
 					"subscription_id", sub.ID,
 					"tenant_id", tenantConfig.TenantID,
 					"environment_id", tenantConfig.EnvironmentID,
@@ -4482,7 +4684,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			canceledCount++
 
 			// Log audit trail
-			s.Logger.Infow("successfully auto-canceled subscription",
+			s.Logger.InfowCtx(ctx, "successfully auto-canceled subscription",
 				"subscription_id", sub.ID,
 				"reason", "grace_period_expired",
 				"grace_period_days", tenantConfig.GracePeriodDays,
@@ -4491,7 +4693,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 				"environment_id", tenantConfig.EnvironmentID)
 		}
 
-		s.Logger.Infow("completed processing for tenant",
+		s.Logger.InfowCtx(ctx, "completed processing for tenant",
 			"tenant_id", tenantConfig.TenantID,
 			"environment_id", tenantConfig.EnvironmentID,
 			"total_subscriptions", len(subscriptions),
@@ -4502,7 +4704,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 		totalFailedCount += failedCount
 	}
 
-	s.Logger.Infow("completed auto-cancellation processing for all tenants",
+	s.Logger.InfowCtx(ctx, "completed auto-cancellation processing for all tenants",
 		"total_tenants_processed", len(enabledConfigs),
 		"total_canceled", totalCanceledCount,
 		"total_failed", totalFailedCount)
@@ -4512,10 +4714,12 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 // Helper functions for enhanced cancellation
 
-// determineEffectiveDate calculates the actual effective date based on cancellation type
+// determineEffectiveDate calculates the actual effective date based on cancellation type.
+// customDate is used when cancellationType is CancellationTypeScheduledDate.
 func (s *subscriptionService) determineEffectiveDate(
 	subscription *subscription.Subscription,
 	cancellationType types.CancellationType,
+	customDate *time.Time,
 ) (time.Time, error) {
 	now := time.Now().UTC()
 
@@ -4525,6 +4729,14 @@ func (s *subscriptionService) determineEffectiveDate(
 
 	case types.CancellationTypeEndOfPeriod:
 		return subscription.CurrentPeriodEnd, nil
+
+	case types.CancellationTypeScheduledDate:
+		if customDate == nil {
+			return time.Time{}, ierr.NewError("cancel_at is required for scheduled_date").
+				WithHint("Provide a future date in cancel_at").
+				Mark(ierr.ErrValidation)
+		}
+		return customDate.UTC(), nil
 
 	case types.CancellationTypeSandboxSubscriptionCleanup:
 		return now, nil
@@ -4636,11 +4848,11 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 		subscription.CancelAtPeriodEnd = false
 		subscription.EndDate = &effectiveDate
 
-	case types.CancellationTypeEndOfPeriod:
-		// Don't change status immediately - will be cancelled at period end
+	case types.CancellationTypeEndOfPeriod, types.CancellationTypeScheduledDate:
+		// Don't change status immediately — actual cancellation runs when the schedule fires.
+		// EndDate is NOT set here; it will be set by the cancellation schedule processor.
 		subscription.CancelAtPeriodEnd = true
 		subscription.CancelAt = &effectiveDate
-		// EndDate should NOT be set - will be set when actually cancelled at period end
 
 	case types.CancellationTypeSandboxSubscriptionCleanup:
 		subscription.SubscriptionStatus = types.SubscriptionStatusCancelled
@@ -4667,14 +4879,17 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 // publishCancellationEvents publishes webhook events for cancellation
 func (s *subscriptionService) publishCancellationEvents(
 	ctx context.Context,
-	subscription *subscription.Subscription,
+	sub *subscription.Subscription,
+	cancellationType types.CancellationType,
 ) {
-	// Publish standard subscription events
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscription.ID)
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, subscription.ID)
-
+	// Always emit updated — subscription state has changed regardless of cancellation type
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
+	// scheduled_date only schedules a future cancellation; emit cancelled when it actually fires
+	if cancellationType != types.CancellationTypeScheduledDate {
+		s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
+	}
 	s.Logger.Debugw("subscription cancellation events published",
-		"subscription_id", subscription.ID)
+		"subscription_id", sub.ID)
 }
 
 // generateCancellationMessage creates a user-friendly message for the response
@@ -4694,6 +4909,9 @@ func (s *subscriptionService) generateCancellationMessage(
 	case types.CancellationTypeEndOfPeriod:
 		return fmt.Sprintf("Subscription will be cancelled at the end of the current period (%s)",
 			effectiveDate.Format("2006-01-02"))
+
+	case types.CancellationTypeScheduledDate:
+		return fmt.Sprintf("Subscription end date set to %s", effectiveDate.Format("2006-01-02"))
 
 	default:
 		return "Subscription cancelled successfully"
@@ -4759,7 +4977,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	priceService := NewPriceService(s.ServiceParams)
 
 	// Get subscription with line items
-	subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
+	subscription, err := s.SubRepo.Get(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -4784,6 +5002,14 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		usageStartTime = time.Time{}
 		usageEndTime = time.Now().UTC()
 	}
+
+	// Fetch line items for the usage window
+	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, subscription.ID, usageStartTime, req.LifetimeUsage)
+	if err != nil {
+		return nil, err
+	}
+
+	subscription.LineItems = lineItems
 
 	// Collect all price IDs and build meter to price mapping
 	priceIDs := make([]string, 0, len(lineItems))
@@ -4821,7 +5047,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		}
 	}
 
-	s.Logger.Debugw("calculating usage for subscription V2",
+	s.Logger.DebugwCtx(ctx, "calculating usage for subscription V2",
 		"subscription_id", req.SubscriptionID,
 		"start_time", usageStartTime,
 		"end_time", usageEndTime,
@@ -4846,7 +5072,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		return nil, err
 	}
 
-	s.Logger.Debugw("fetched usage for features using V2 query",
+	s.Logger.DebugwCtx(ctx, "fetched usage for features using V2 query",
 		"feature_ids", lo.Keys(usageResults),
 		"total_usage_count", len(usageResults),
 		"subscription_id", req.SubscriptionID)
@@ -4862,7 +5088,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	for subLineItemID, usageResult := range usageResults {
 		meterID := usageResult.MeterID
 		if meterID == "" {
-			s.Logger.Warnw("meter_id not found in usage result, skipping",
+			s.Logger.WarnwCtx(ctx, "meter_id not found in usage result, skipping",
 				"sub_line_item_id", subLineItemID,
 				"subscription_id", req.SubscriptionID)
 			continue
@@ -4872,7 +5098,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		priceObj, priceExists := priceMap[priceID]
 		if !priceExists || priceObj == nil {
-			s.Logger.Warnw("price object not found, skipping",
+			s.Logger.WarnwCtx(ctx, "price object not found, skipping",
 				"price_id", priceID,
 				"subscription_id", req.SubscriptionID)
 			continue
@@ -4880,7 +5106,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		meter := meterMap[meterID]
 		if meter == nil {
-			s.Logger.Warnw("meter not found, skipping",
+			s.Logger.WarnwCtx(ctx, "meter not found, skipping",
 				"sub_line_item_id", subLineItemID,
 				"meter_id", meterID,
 				"subscription_id", req.SubscriptionID)
@@ -4947,7 +5173,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		priceObj, priceExists := priceMap[item.PriceID]
 		if !priceExists || priceObj == nil {
-			s.Logger.Warnw("price object not found for line item, skipping zero charge",
+			s.Logger.WarnwCtx(ctx, "price object not found for line item, skipping zero charge",
 				"line_item_id", item.ID,
 				"price_id", item.PriceID,
 				"subscription_id", req.SubscriptionID)
@@ -4956,7 +5182,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		meter := meterMap[item.MeterID]
 		if meter == nil {
-			s.Logger.Warnw("meter not found for line item, skipping zero charge",
+			s.Logger.WarnwCtx(ctx, "meter not found for line item, skipping zero charge",
 				"line_item_id", item.ID,
 				"meter_id", item.MeterID,
 				"subscription_id", req.SubscriptionID)
@@ -5127,7 +5353,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	response.EndTime = usageEndTime
 	response.Charges = finalCharges
 
-	s.Logger.Infow("subscription usage calculation completed V2",
+	s.Logger.InfowCtx(ctx, "subscription usage calculation completed V2",
 		"subscription_id", req.SubscriptionID,
 		"total_cost", totalCost.InexactFloat64(),
 		"charge_count", len(finalCharges),
@@ -5187,18 +5413,20 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Step 3: Extract unique addon IDs
+	// Step 3: Extract unique addon IDs for bulk fetch
 	addonIDs := lo.Uniq(lo.Map(activeAddons.Items, func(assoc *dto.AddonAssociationResponse, _ int) string {
-		if assoc != nil {
+		if assoc != nil && assoc.AddonID != "" {
 			return assoc.AddonID
 		}
 		return ""
 	}))
+	addonIDs = lo.Filter(addonIDs, func(id string, _ int) bool { return id != "" })
 
-	// Step 4: Fetch addon entitlements if any addons exist
+	// Step 4: Fetch addon entitlements and expand by association count (multi-addon support)
+	// When the same addon is attached multiple times (multiple_instance addon), each association
+	// contributes its entitlement. We expand entitlements so 2x addon A = 2x addon A's limits.
 	var addonEntitlements []*dto.EntitlementResponse
 	if len(addonIDs) > 0 {
-		// Create filter for bulk fetching addon entitlements
 		addonEntFilter := types.NewNoLimitEntitlementFilter().
 			WithEntityIDs(addonIDs).
 			WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_ADDON).
@@ -5209,7 +5437,25 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 		if err != nil {
 			return nil, err
 		}
-		addonEntitlements = addonEntResp.Items
+
+		// Build addonID -> entitlements map for lookup
+		addonEntitlementsByID := make(map[string][]*dto.EntitlementResponse)
+		for _, ent := range addonEntResp.Items {
+			if ent != nil && ent.EntityID != "" {
+				addonEntitlementsByID[ent.EntityID] = append(addonEntitlementsByID[ent.EntityID], ent)
+			}
+		}
+
+		// Expand: add entitlements once per addon association (supports multi-addon)
+		for _, assoc := range activeAddons.Items {
+			if assoc == nil || assoc.AddonID == "" {
+				continue
+			}
+			ents := addonEntitlementsByID[assoc.AddonID]
+			for _, ent := range ents {
+				addonEntitlements = append(addonEntitlements, ent)
+			}
+		}
 	}
 
 	// Step 5: Fetch subscription-scoped entitlement overrides
@@ -5742,7 +5988,7 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 		})
 
 		if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(nextEnd) {
-			s.Logger.Infow("subscription cancelled at period end",
+			s.Logger.InfowCtx(ctx, "subscription cancelled at period end",
 				"subscription_id", sub.ID,
 				"cancel_at", sub.CancelAt,
 				"next_end", nextEnd)
@@ -5752,7 +5998,7 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 		// in case of end date reached or next end is equal to current end, we break the loop
 		// nextEnd will be equal to currentEnd in case of end date reached
 		if nextEnd.Equal(currentEnd) {
-			s.Logger.Infow("stopped period generation - reached subscription end date",
+			s.Logger.InfowCtx(ctx, "stopped period generation - reached subscription end date",
 				"subscription_id", sub.ID,
 				"end_date", sub.EndDate,
 				"final_period_end", currentEnd)
@@ -5890,7 +6136,7 @@ func (s *subscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, s
 	environmentID := types.GetEnvironmentID(ctx)
 	userID := types.GetUserID(ctx)
 
-	s.Logger.Infow("triggering subscription billing workflow",
+	s.Logger.InfowCtx(ctx, "triggering subscription billing workflow",
 		"subscription_id", subscriptionID,
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
@@ -5910,7 +6156,7 @@ func (s *subscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, s
 
 	// Validate workflow input
 	if err := workflowInput.Validate(); err != nil {
-		s.Logger.Errorw("invalid workflow input", "error", err)
+		s.Logger.ErrorwCtx(ctx, "invalid workflow input", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Invalid workflow input").
 			Mark(ierr.ErrValidation)
@@ -5930,7 +6176,7 @@ func (s *subscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, s
 		workflowInput,
 	)
 	if err != nil {
-		s.Logger.Errorw("failed to trigger subscription billing workflow",
+		s.Logger.ErrorwCtx(ctx, "failed to trigger subscription billing workflow",
 			"error", err,
 			"subscription_id", subscriptionID)
 		return nil, ierr.WithError(err).
@@ -5938,7 +6184,7 @@ func (s *subscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, s
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Infow("successfully triggered subscription billing workflow",
+	s.Logger.InfowCtx(ctx, "successfully triggered subscription billing workflow",
 		"subscription_id", subscriptionID,
 		"workflow_id", workflowRun.GetID(),
 		"run_id", workflowRun.GetRunID())

@@ -117,11 +117,12 @@ type KafkaConfig struct {
 }
 
 type ClickHouseConfig struct {
-	Address  string `mapstructure:"address" validate:"required"`
-	TLS      bool   `mapstructure:"tls"`
-	Username string `mapstructure:"username" validate:"required"`
-	Password string `mapstructure:"password" validate:"required"`
-	Database string `mapstructure:"database" validate:"required"`
+	Address        string `mapstructure:"address" validate:"required"`
+	TLS            bool   `mapstructure:"tls"`
+	Username       string `mapstructure:"username" validate:"required"`
+	Password       string `mapstructure:"password" validate:"required"`
+	Database       string `mapstructure:"database" validate:"required"`
+	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
 }
 
 type LoggingConfig struct {
@@ -434,6 +435,11 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 	}
 	if c.TLS {
 		options.TLS = &tls.Config{}
+	}
+
+	maxMemoryUsageBytes := c.MaxMemoryUsage * int64(1024) * int64(1024) * int64(1024)
+	options.Settings = clickhouse.Settings{
+		"max_memory_usage": maxMemoryUsageBytes,
 	}
 	return options
 }

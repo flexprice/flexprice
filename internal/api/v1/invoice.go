@@ -136,6 +136,7 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 // @ID finalizeInvoice
 // @Description Use when locking an invoice for payment (e.g. after review). Once finalized, line items are locked; invoice can be paid or voided.
 // @Tags Invoices
+// @x-scope "delete"
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -598,7 +599,7 @@ func (h *InvoiceHandler) TriggerWebhook(c *gin.Context) {
 		return
 	}
 
-	if err := h.invoiceService.TriggerWebhook(c.Request.Context(), id, eventName); err != nil {
+	if err := h.invoiceService.TriggerWebhook(c.Request.Context(), id, types.WebhookEventName(eventName)); err != nil {
 		h.logger.Errorw("failed to trigger webhook", "error", err, "invoice_id", id, "event_name", eventName)
 		c.Error(err)
 		return

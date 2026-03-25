@@ -82,6 +82,7 @@ type ServiceParams struct {
 	WalletRepo                   wallet.Repository
 	TenantRepo                   tenant.Repository
 	InvoiceRepo                  invoice.Repository
+	InvoiceLineItemRepo          invoice.LineItemRepository
 	FeatureRepo                  feature.Repository
 	EntitlementRepo              entitlement.Repository
 	PaymentRepo                  payment.Repository
@@ -153,6 +154,7 @@ func NewServiceParams(
 	walletRepo wallet.Repository,
 	tenantRepo tenant.Repository,
 	invoiceRepo invoice.Repository,
+	invoiceLineItemRepo invoice.LineItemRepository,
 	featureRepo feature.Repository,
 	creditGrantApplicationRepo creditgrantapplication.Repository,
 	entitlementRepo entitlement.Repository,
@@ -213,6 +215,7 @@ func NewServiceParams(
 		WalletRepo:                   walletRepo,
 		TenantRepo:                   tenantRepo,
 		InvoiceRepo:                  invoiceRepo,
+		InvoiceLineItemRepo:          invoiceLineItemRepo,
 		FeatureRepo:                  featureRepo,
 		EntitlementRepo:              entitlementRepo,
 		PaymentRepo:                  paymentRepo,

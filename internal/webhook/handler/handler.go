@@ -3,8 +3,10 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -54,19 +56,35 @@ func NewHandler(
 }
 
 func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
+	if !h.config.Enabled {
+		h.logger.Info("webhook handler disabled by configuration, skipping registration")
+		return
+	}
+	rateLimit := h.config.RateLimit
+	if rateLimit <= 0 {
+		h.logger.Errorw("webhook rate limit is invalid", "rate_limit", rateLimit)
+		return
+	}
+	throttle := middleware.NewThrottle(rateLimit, time.Second)
 	router.AddNoPublishHandler(
 		"webhook_handler",
 		h.config.Topic,
 		h.pubSub,
 		h.processMessage,
+		throttle.Middleware,
+	)
+	h.logger.Debugw("registered webhook handler",
+		"topic", h.config.Topic,
+		"consumer_group", h.config.ConsumerGroup,
+		"rate_limit", rateLimit,
 	)
 }
 
-// processMessage processes a single webhook message
+// processMessage processes a single webhook message from the system_events topic:
+// 1) unmarshal and verify, 2) call deliverWebhook to send to Svix or native HTTP.
 func (h *handler) processMessage(msg *message.Message) error {
 	ctx := msg.Context()
 
-	// log the context fields like tenant_id, event_name, etc
 	h.logger.Debugw("context",
 		"tenant_id", types.GetTenantID(ctx),
 		"event_name", types.GetRequestID(ctx),
@@ -81,11 +99,18 @@ func (h *handler) processMessage(msg *message.Message) error {
 		return nil // Don't retry on unmarshal errors
 	}
 
-	// set tenant_id in context
 	ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
 
+	h.logger.Debugw("consumed webhook from topic and delivering",
+		"topic", h.config.Topic,
+		"message_uuid", msg.UUID,
+		"event_name", event.EventName,
+		"tenant_id", event.TenantID,
+	)
+
+	// After verify: deliver the webhook (Svix or native endpoint)
 	if h.config.Svix.Enabled {
 		return h.processMessageSvix(ctx, &event, msg.UUID)
 	}

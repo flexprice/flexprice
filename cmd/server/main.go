@@ -146,6 +146,7 @@ func main() {
 			repository.NewTenantRepository,
 			repository.NewEnvironmentRepository,
 			repository.NewInvoiceRepository,
+			repository.NewInvoiceLineItemRepository,
 			repository.NewFeatureRepository,
 			repository.NewEntitlementRepository,
 			repository.NewPaymentRepository,
@@ -332,6 +333,7 @@ func provideHandlers(
 	subscriptionScheduleService service.SubscriptionScheduleService,
 	featureUsageTrackingService service.FeatureUsageTrackingService,
 	rawEventsReprocessingService service.RawEventsReprocessingService,
+	rawEventConsumptionService service.RawEventConsumptionService,
 	alertLogsService service.AlertLogsService,
 	groupService service.GroupService,
 	integrationFactory *integration.Factory,
@@ -345,7 +347,7 @@ func provideHandlers(
 	workflowService service.WorkflowService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -586,10 +588,10 @@ func registerRouterHandlers(
 	cfg *config.Configuration,
 	includeProcessingHandlers bool,
 ) {
-	webhookService.RegisterHandler(router)
-	onboardingService.RegisterHandler(router)
 
 	if includeProcessingHandlers {
+		onboardingService.RegisterHandler(router)
+		webhookService.RegisterHandler(router)
 		eventConsumptionSvc.RegisterHandler(router, cfg)
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		// eventPostProcessingSvc.RegisterHandler(router, cfg)

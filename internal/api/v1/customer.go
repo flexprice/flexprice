@@ -34,6 +34,7 @@ func NewCustomerHandler(
 // @ID createCustomer
 // @Description Use when onboarding a new billing customer (e.g. sign-up or CRM sync). Ideal for linking via external_customer_id to your app's user id.
 // @Tags Customers
+// @x-scope "write"
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -64,6 +65,7 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 // @ID getCustomer
 // @Description Use when you need to load a single customer (e.g. for a billing portal or to attach a subscription).
 // @Tags Customers
+// @x-scope "read"
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Customer ID"
@@ -353,6 +355,7 @@ func (h *CustomerHandler) GetCustomerUsageSummary(c *gin.Context) {
 // @ID queryCustomer
 // @Description Use when listing or searching customers (e.g. admin CRM or reporting). Returns a paginated list; supports filtering and sorting.
 // @Tags Customers
+// @x-scope "read"
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

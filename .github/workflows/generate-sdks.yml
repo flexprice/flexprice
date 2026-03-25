@@ -239,6 +239,27 @@ jobs:
           fi
           echo "Pushed ${{ matrix.lang }} SDK to ${{ env.REPO }}"
 
+      - name: Create Go SDK GitHub release
+        if: matrix.lang == 'go'
+        env:
+          GH_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
+        run: |
+          VERSION="${{ env.VERSION }}"
+          [ -z "$VERSION" ] && VERSION="0.0.0"
+          TAG="v${VERSION}"
+          TITLE="Go SDK ${TAG}"
+          NOTES="Automated release for Go SDK ${TAG}."
+
+          if gh release view "$TAG" --repo "${{ env.REPO }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists in ${{ env.REPO }}; skipping."
+          else
+            gh release create "$TAG" \
+              --repo "${{ env.REPO }}" \
+              --title "$TITLE" \
+              --notes "Automated release for Go SDK ${TAG}."
+            echo "Created release $TAG in ${{ env.REPO }}."
+          fi
+
   # ---------------------------------------------------------------------------
   # Summary (runs once after all publish matrix cells)
   # ---------------------------------------------------------------------------

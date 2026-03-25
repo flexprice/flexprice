@@ -262,14 +262,20 @@ type CreateSubscriptionRequest struct {
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string `json:"external_customer_id"`
 
-	// invoicing_customer_id is the customer ID to use for invoicing
-	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
-	// This field is set internally based on InvoiceBillingConfig and is not exposed in the API
-	InvoicingCustomerID *string `json:"-"`
+	// invoicing_customer_id is the FlexPrice customer ID to use for invoicing.
+	// This can differ from the subscription customer (e.g., a billing entity invoicing on behalf of another customer).
+	// Mutually exclusive with invoicing_customer_external_id.
+	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
 
-	// invoice_billing determines which customer should receive invoices for a subscription
-	// "invoice_to_parent" - Invoices are sent to the parent customer
-	// "invoice_to_self" - Invoices are sent to the subscription's customer
+	// invoicing_customer_external_id is the external ID of the customer to use for invoicing.
+	// Resolved internally to an internal customer ID via external ID lookup.
+	// Mutually exclusive with invoicing_customer_id.
+	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
+
+	// Deprecated: Use invoicing_customer_id or invoicing_customer_external_id instead.
+	// invoice_billing determines which customer should receive invoices for a subscription.
+	// Supported values: "invoice_to_parent" (uses the subscription customer's parent) or "invoice_to_self" (default).
+	// Will be removed in a future version.
 	InvoiceBilling *types.InvoiceBilling `json:"invoice_billing,omitempty"`
 
 	PlanID             string               `json:"plan_id" validate:"required"`
@@ -411,6 +417,10 @@ type CancelSubscriptionRequest struct {
 	// Reason for cancellation (for audit and business intelligence)
 	Reason string `json:"reason,omitempty"`
 
+	// CancelAt is the custom date to cancel the subscription.
+	// Required when CancellationType is "scheduled_date". Must be in the future.
+	CancelAt *time.Time `json:"cancel_at,omitempty"`
+
 	//SuppressWebhook is an internal flag to suppress webhook events during cancellation.
 	SuppressWebhook bool `json:"-,omitempty"`
 }
@@ -452,6 +462,21 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	if err := r.CancellationType.Validate(); err != nil {
 		return err
 	}
+
+	// Validate scheduled_date specific fields
+	if r.CancellationType == types.CancellationTypeScheduledDate {
+		if r.CancelAt == nil {
+			return ierr.NewError("cancel_at is required for scheduled_date cancellation type").
+				WithHint("Provide a future date in cancel_at when using scheduled_date cancellation type").
+				Mark(ierr.ErrValidation)
+		}
+		if !r.CancelAt.After(time.Now().UTC()) {
+			return ierr.NewError("cancel_at must be in the future").
+				WithHint("Provide a future date in cancel_at").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Set default proration behavior if not provided
 	if r.ProrationBehavior == "" {
 		r.ProrationBehavior = types.ProrationBehaviorNone
@@ -543,6 +568,20 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// invoicing_customer_id and invoicing_customer_external_id are mutually exclusive
+	if r.InvoicingCustomerID != nil && r.InvoicingCustomerExternalID != nil {
+		return ierr.NewError("only one of invoicing_customer_id or invoicing_customer_external_id may be provided").
+			WithHint("Send either invoicing_customer_id or invoicing_customer_external_id, but not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// invoice_billing (deprecated) cannot be combined with the new invoicing customer fields
+	if r.InvoiceBilling != nil && (r.InvoicingCustomerID != nil || r.InvoicingCustomerExternalID != nil) {
+		return ierr.NewError("invoice_billing cannot be used together with invoicing_customer_id or invoicing_customer_external_id").
+			WithHint("invoice_billing is deprecated; use invoicing_customer_id or invoicing_customer_external_id instead").
+			Mark(ierr.ErrValidation)
+	}
+
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
@@ -593,11 +632,9 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.PaymentBehavior = &defaultPaymentBehavior
 	}
 
-	// Set default for invoice billing if not provided
-	if r.InvoiceBilling == nil {
-		r.InvoiceBilling = lo.ToPtr(types.InvoiceBillingInvoiceToSelf)
-	} else {
-		// Validate invoice billing if provided
+	// Deprecated: invoice_billing is deprecated in favor of invoicing_customer_id / invoicing_customer_external_id.
+	// Validate the value if it was explicitly provided for backward compatibility.
+	if r.InvoiceBilling != nil {
 		if err := r.InvoiceBilling.Validate(); err != nil {
 			return err
 		}

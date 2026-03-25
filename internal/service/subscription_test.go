@@ -769,6 +769,56 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription() {
 	}
 }
 
+func (s *SubscriptionServiceSuite) TestGetUsageBySubscription_IncludesHistoricalUsageLineItemAfterSubscriptionAdvanced() {
+	ctx := s.GetContext()
+	oldStart := s.testData.subscription.CurrentPeriodStart
+	oldEnd := s.testData.subscription.CurrentPeriodEnd
+
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, filter)
+	s.NoError(err)
+	var apiLI *subscription.SubscriptionLineItem
+	for _, li := range items {
+		if li.PriceID == s.testData.prices.apiCalls.ID {
+			apiLI = li
+			break
+		}
+	}
+	s.NotNil(apiLI)
+	apiLI.EndDate = oldStart.Add(48 * time.Hour)
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, apiLI))
+
+	s.testData.subscription.CurrentPeriodStart = oldEnd
+	s.testData.subscription.CurrentPeriodEnd = oldEnd.Add(30 * 24 * time.Hour)
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, s.testData.subscription))
+
+	_, fromGet, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, s.testData.subscription.ID)
+	s.NoError(err)
+	for _, li := range fromGet {
+		if li.PriceID == s.testData.prices.apiCalls.ID {
+			s.Fail("GetWithLineItems should not return API usage line item after period advance")
+		}
+	}
+
+	req := &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: s.testData.subscription.ID,
+		StartTime:      s.testData.now.Add(-48 * time.Hour),
+		EndTime:        s.testData.now,
+	}
+	resp, err := s.service.GetUsageBySubscription(ctx, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	found := false
+	for _, c := range resp.Charges {
+		if c.MeterDisplayName == s.testData.meters.apiCalls.Name {
+			found = true
+			break
+		}
+	}
+	s.True(found, "usage for historical window should still use ended API line item for meter discovery")
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 	testCases := []struct {
 		name          string
@@ -1471,6 +1521,96 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			s.Equal(activeSub.ID, resp.SubscriptionID, "idempotent path returns subscription id")
 			s.Contains(resp.Message, "already cancelled", "idempotent path returns expected message")
 		})
+	})
+
+	s.Run("TestCancelSubscriptionWithAddons", func() {
+		ctx := s.GetContext()
+		subService := s.service.(*subscriptionService)
+
+		// Create subscription to cancel
+		subWithAddon := &subscription.Subscription{
+			ID:                 "sub_cancel_with_addons",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+			LineItems:          []*subscription.SubscriptionLineItem{},
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, subWithAddon, subWithAddon.LineItems))
+
+		addonID := "addon_cancel_with_sub"
+		priceID := "price_addon_cancel_with_sub"
+		a := &addon.Addon{
+			ID:          addonID,
+			LookupKey:   addonID,
+			Name:        "Addon to cancel",
+			Description: "Addon cancelled with subscription",
+			Type:        types.AddonTypeOnetime,
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(subService.AddonRepo.Create(ctx, a))
+		p := &price.Price{
+			ID:                 priceID,
+			Amount:             decimal.Zero,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+			EntityID:           addonID,
+			Type:               types.PRICE_TYPE_USAGE,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			MeterID:            s.testData.meters.apiCalls.ID,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+		now := time.Now().UTC()
+		_, err := s.service.AddAddonToSubscription(ctx, subWithAddon.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &now,
+		})
+		s.NoError(err)
+
+		_, err = s.service.CancelSubscription(ctx, subWithAddon.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            "test_cancel_addons",
+		})
+		s.NoError(err)
+
+		// Verify addon associations are marked cancelled
+		aaFilter := types.NewNoLimitAddonAssociationFilter()
+		aaFilter.EntityIDs = []string{subWithAddon.ID}
+		aaFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+		associations, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+		s.NoError(err)
+		s.NotEmpty(associations, "should have addon associations")
+		for _, aa := range associations {
+			s.Equal(types.AddonStatusCancelled, aa.AddonStatus, "addon association should be cancelled")
+			s.NotNil(aa.EndDate, "addon association should have end date")
+			s.NotEmpty(aa.CancellationReason, "addon association should have cancellation reason")
+			s.Contains(aa.CancellationReason, "Subscription cancelled", "cancellation reason should mention subscription cancelled")
+		}
+
+		// Verify addon line items are terminated (end_date set)
+		liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+		liFilter.SubscriptionIDs = []string{subWithAddon.ID}
+		liFilter.EntityIDs = []string{addonID}
+		liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+		lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+		s.NoError(err)
+		s.NotEmpty(lineItems, "should have addon line items")
+		for _, li := range lineItems {
+			s.False(li.EndDate.IsZero(), "addon line item should be terminated (end_date set)")
+		}
 	})
 
 	s.Run("TestCancelAtPeriodEnd", func() {
@@ -3389,6 +3529,255 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 	})
 }
 
+func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
+	ctx := s.GetContext()
+	futureDate := s.testData.now.Add(15 * 24 * time.Hour)
+
+	// newActiveSub creates and persists a clean active subscription with no end_date or cancel_at.
+	newActiveSub := func(id string) *subscription.Subscription {
+		sub := &subscription.Subscription{
+			ID:                 id,
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: s.testData.now.Add(-5 * 24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(25 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
+		return sub
+	}
+
+	s.Run("mirrors end_of_period: sets cancel_at, cancel_at_period_end, cancelled_at; status stays active", func() {
+		sub := newActiveSub("sub_sched_basic")
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType: types.CancellationTypeScheduledDate,
+			CancelAt:         &futureDate,
+			Reason:           "downgrade",
+		})
+		s.NoError(err)
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		// Effective date is pinned to the custom cancel_at
+		s.NotNil(updated.CancelAt, "cancel_at must be set to the requested date")
+		s.WithinDuration(futureDate, *updated.CancelAt, time.Second)
+		// Mirrors end_of_period: subscription stays active, cancel_at_period_end flagged
+		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus, "status must stay active")
+		s.True(updated.CancelAtPeriodEnd, "cancel_at_period_end must be true")
+		s.NotNil(updated.CancelledAt, "cancelled_at must be set (time the cancellation was scheduled)")
+		// end_date is NOT set here — the schedule processor sets it when it fires
+		s.Nil(updated.EndDate, "end_date must NOT be set at scheduling time")
+		s.T().Logf("✅ scheduled_date: same fields as end_of_period, effective date = custom cancel_at")
+	})
+
+	s.Run("metadata records cancellation details and cancel_at is set", func() {
+		sub := newActiveSub("sub_sched_metadata")
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType: types.CancellationTypeScheduledDate,
+			CancelAt:         &futureDate,
+			Reason:           "user_request",
+		})
+		s.NoError(err)
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		s.Equal("scheduled_date", updated.Metadata["cancellation_type"])
+		s.Equal("user_request", updated.Metadata["cancellation_reason"])
+		s.NotEmpty(updated.Metadata["effective_date"])
+		s.NotNil(updated.CancelAt, "cancel_at must be set to effective date")
+		s.T().Logf("✅ scheduled_date: metadata recorded, cancel_at set to requested date")
+	})
+
+	s.Run("no invoice created for scheduled_date", func() {
+		sub := newActiveSub("sub_sched_no_invoice")
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:               types.CancellationTypeScheduledDate,
+			CancelAt:                       &futureDate,
+			CancelImmediatelyInvoicePolicy: types.CancelImmediatelyInvoicePolicyGenerateInvoice,
+		})
+		s.NoError(err)
+
+		// Query the invoice store directly — no invoices should exist for this subscription
+		invoiceFilter := types.NewInvoiceFilter()
+		invoiceFilter.SubscriptionID = sub.ID
+		invoicesResp, err := s.GetStores().InvoiceRepo.List(ctx, invoiceFilter)
+		s.NoError(err)
+		s.Empty(invoicesResp, "no invoice should be generated for scheduled_date cancellation")
+		s.T().Logf("✅ scheduled_date: no invoice generated")
+	})
+
+	s.Run("validation rejects missing cancel_at", func() {
+		sub := newActiveSub("sub_sched_missing_date")
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType: types.CancellationTypeScheduledDate,
+			// CancelAt intentionally omitted
+		})
+		s.Error(err)
+		s.True(ierr.IsValidation(err), "expected validation error")
+		s.Contains(err.Error(), "cancel_at")
+		s.T().Logf("✅ scheduled_date: missing cancel_at rejected")
+	})
+
+	s.Run("validation rejects past cancel_at", func() {
+		sub := newActiveSub("sub_sched_past_date")
+		pastDate := s.testData.now.Add(-24 * time.Hour)
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType: types.CancellationTypeScheduledDate,
+			CancelAt:         &pastDate,
+		})
+		s.Error(err)
+		s.True(ierr.IsValidation(err), "expected validation error")
+		s.Contains(err.Error(), "future")
+		s.T().Logf("✅ scheduled_date: past cancel_at rejected")
+	})
+
+	s.Run("errors if subscription is already scheduled to cancel via end_of_period", func() {
+		// Simulates: user first scheduled end_of_period, then tries scheduled_date again.
+		// The guard covers both types, so this must be rejected.
+		existingCancelAt := s.testData.now.Add(5 * 24 * time.Hour)
+		sub := &subscription.Subscription{
+			ID:                 "sub_sched_eop_already_set",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: s.testData.now.Add(-5 * 24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(25 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			CancelAt:           &existingCancelAt,
+			CancelAtPeriodEnd:  true,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType: types.CancellationTypeScheduledDate,
+			CancelAt:         &futureDate,
+		})
+		s.Error(err)
+		s.True(ierr.IsValidation(err), "expected validation error")
+		s.Contains(err.Error(), "already scheduled")
+
+		// Confirm cancel_at was NOT overwritten
+		updated, fetchErr := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(fetchErr)
+		s.WithinDuration(existingCancelAt, *updated.CancelAt, time.Second, "existing cancel_at must not be overwritten")
+		s.T().Logf("✅ scheduled_date: rejects when end_of_period cancel_at is already set")
+	})
+
+	s.Run("errors if subscription is already scheduled to cancel (cancel_at set)", func() {
+		existingCancelAt := s.testData.now.Add(5 * 24 * time.Hour)
+		sub := &subscription.Subscription{
+			ID:                 "sub_sched_already_scheduled",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: s.testData.now.Add(-5 * 24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(25 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			CancelAt:           &existingCancelAt,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType: types.CancellationTypeScheduledDate,
+			CancelAt:         &futureDate,
+		})
+		s.Error(err)
+		s.True(ierr.IsValidation(err), "expected validation error")
+		s.Contains(err.Error(), "already scheduled")
+
+		updated, fetchErr := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(fetchErr)
+		s.WithinDuration(existingCancelAt, *updated.CancelAt, time.Second, "existing cancel_at must not be overwritten")
+		s.T().Logf("✅ scheduled_date: existing cancel_at is protected from overwrite")
+	})
+
+	s.Run("guard also blocks end_of_period when cancel_at is already set", func() {
+		existingCancelAt := s.testData.now.Add(5 * 24 * time.Hour)
+		sub := &subscription.Subscription{
+			ID:                 "sub_eop_already_scheduled",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: s.testData.now.Add(-5 * 24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(25 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			CancelAt:           &existingCancelAt,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeEndOfPeriod,
+			ProrationBehavior: types.ProrationBehaviorNone,
+		})
+		s.Error(err)
+		s.True(ierr.IsValidation(err), "expected validation error")
+		s.Contains(err.Error(), "already scheduled")
+		s.T().Logf("✅ end_of_period: same guard blocks double-scheduling")
+	})
+
+	s.Run("already cancelled subscription is rejected", func() {
+		sub := &subscription.Subscription{
+			ID:                 "sub_sched_already_cancelled",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusCancelled,
+			StartDate:          s.testData.now.Add(-60 * 24 * time.Hour),
+			CurrentPeriodStart: s.testData.now.Add(-5 * 24 * time.Hour),
+			CurrentPeriodEnd:   s.testData.now.Add(25 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
+
+		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType: types.CancellationTypeScheduledDate,
+			CancelAt:         &futureDate,
+		})
+		s.Error(err)
+		s.True(ierr.IsValidation(err), "expected validation error")
+		s.Contains(err.Error(), "already cancelled")
+		s.T().Logf("✅ scheduled_date: already-cancelled subscription rejected")
+	})
+
+	s.Run("response message contains formatted date", func() {
+		sub := newActiveSub("sub_sched_msg")
+
+		resp, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType: types.CancellationTypeScheduledDate,
+			CancelAt:         &futureDate,
+		})
+		s.NoError(err)
+		s.Contains(resp.Message, futureDate.Format("2006-01-02"))
+		s.Equal(futureDate.UTC().Truncate(time.Second), resp.EffectiveDate.UTC().Truncate(time.Second))
+		s.Equal(types.CancellationTypeScheduledDate, resp.CancellationType)
+		s.T().Logf("✅ scheduled_date: response message and fields correct")
+	})
+}
+
 func (s *SubscriptionServiceSuite) TestListSubscriptions() {
 	// Create additional test subscriptions
 	testSubs := []*subscription.Subscription{
@@ -4140,26 +4529,27 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscriptionWithBucketedMaxAggr
 func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
 	// Create billing service
 	billingService := NewBillingService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		SubRepo:          s.GetStores().SubscriptionRepo,
-		PlanRepo:         s.GetStores().PlanRepo,
-		PriceRepo:        s.GetStores().PriceRepo,
-		EventRepo:        s.GetStores().EventRepo,
-		MeterRepo:        s.GetStores().MeterRepo,
-		CustomerRepo:     s.GetStores().CustomerRepo,
-		InvoiceRepo:      s.GetStores().InvoiceRepo,
-		EntitlementRepo:  s.GetStores().EntitlementRepo,
-		EnvironmentRepo:  s.GetStores().EnvironmentRepo,
-		FeatureRepo:      s.GetStores().FeatureRepo,
-		TenantRepo:       s.GetStores().TenantRepo,
-		UserRepo:         s.GetStores().UserRepo,
-		AuthRepo:         s.GetStores().AuthRepo,
-		WalletRepo:       s.GetStores().WalletRepo,
-		PaymentRepo:      s.GetStores().PaymentRepo,
-		EventPublisher:   s.GetPublisher(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		SubRepo:                  s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo: s.GetStores().SubscriptionLineItemRepo,
+		PlanRepo:                 s.GetStores().PlanRepo,
+		PriceRepo:                s.GetStores().PriceRepo,
+		EventRepo:                s.GetStores().EventRepo,
+		MeterRepo:                s.GetStores().MeterRepo,
+		CustomerRepo:             s.GetStores().CustomerRepo,
+		InvoiceRepo:              s.GetStores().InvoiceRepo,
+		EntitlementRepo:          s.GetStores().EntitlementRepo,
+		EnvironmentRepo:          s.GetStores().EnvironmentRepo,
+		FeatureRepo:              s.GetStores().FeatureRepo,
+		TenantRepo:               s.GetStores().TenantRepo,
+		UserRepo:                 s.GetStores().UserRepo,
+		AuthRepo:                 s.GetStores().AuthRepo,
+		WalletRepo:               s.GetStores().WalletRepo,
+		PaymentRepo:              s.GetStores().PaymentRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
 	})
 
 	// Create subscription with end date in the past
@@ -5385,4 +5775,156 @@ func (s *SubscriptionServiceSuite) TestUpdateBillingPeriodsWithInvoicingCustomer
 	s.NoError(err)
 	s.True(updatedSub.CurrentPeriodStart.After(periodStart), "Period start should be updated")
 	s.True(updatedSub.CurrentPeriodEnd.After(periodEnd), "Period end should be updated")
+}
+
+// TestMultiCadence_ProrationMutualExclusion_Creation implements PRD E.3.1: subscription creation with mixed billing periods.
+// Mixed periods + none -> success; mixed periods + create_prorations -> error.
+func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Creation() {
+	ctx := s.GetContext()
+	s.ClearStores()
+	s.setupTestData()
+
+	// Plan with monthly + quarterly fixed prices (multi-cadence)
+	planMQ := &plan.Plan{
+		ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:        "Plan M+Q",
+		Description: "Monthly and Quarterly",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, planMQ))
+
+	priceM := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceM))
+	priceQ := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceQ))
+
+	start := time.Now().UTC().Truncate(time.Millisecond)
+	reqNone := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             planMQ.ID,
+		StartDate:          &start,
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+	}
+	resp, err := s.service.CreateSubscription(ctx, reqNone)
+	s.NoError(err, "E.3.1: mixed periods + none should succeed")
+	s.NotNil(resp)
+	s.NotEmpty(resp.ID)
+
+	// Same plan, create_prorations -> must fail
+	reqProration := reqNone
+	reqProration.ProrationBehavior = types.ProrationBehaviorCreateProrations
+	_, err2 := s.service.CreateSubscription(ctx, reqProration)
+	s.Require().Error(err2, "E.3.1: mixed periods + create_prorations must fail")
+	s.True(ierr.IsValidation(err2), "error should be validation")
+	s.Contains(err2.Error(), "mixed billing periods", "error message should mention mixed billing periods")
+}
+
+// TestMultiCadence_ProrationMutualExclusion_Cancellation implements PRD E.3.2: cancel with mixed periods + create_prorations -> error.
+func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Cancellation() {
+	ctx := s.GetContext()
+	s.ClearStores()
+	s.setupTestData()
+
+	planMQ := &plan.Plan{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:      "Plan M+Q Cancel",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, planMQ))
+	priceM := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceM))
+	priceQ := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceQ))
+
+	start := time.Now().UTC().Truncate(time.Millisecond)
+	createReq := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             planMQ.ID,
+		StartDate:          &start,
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+	}
+	resp, err := s.service.CreateSubscription(ctx, createReq)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+
+	cancelReq := &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	}
+	cancelReq.Validate()
+	_, errCancel := s.service.CancelSubscription(ctx, resp.ID, cancelReq)
+	s.Require().Error(errCancel, "E.3.2: cancel with mixed + create_prorations must fail")
+	s.True(ierr.IsValidation(errCancel))
+	s.Contains(errCancel.Error(), "mixed billing periods")
+
+	// Same sub, cancel with none -> success (need a new sub since we didn't cancel the first with none first - actually first cancel failed so sub is still active)
+	cancelReqNone := &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	}
+	cancelReqNone.Validate()
+	_, errCancelNone := s.service.CancelSubscription(ctx, resp.ID, cancelReqNone)
+	s.NoError(errCancelNone, "E.3.2: cancel with mixed + none should succeed")
 }

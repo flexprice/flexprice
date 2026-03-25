@@ -54,6 +54,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 		Config:                s.GetConfig(),
 		DB:                    s.GetDB(),
 		InvoiceRepo:           stores.InvoiceRepo,
+		InvoiceLineItemRepo:   stores.InvoiceLineItemRepo,
 		CustomerRepo:          stores.CustomerRepo,
 		CouponRepo:            stores.CouponRepo,
 		CouponApplicationRepo: stores.CouponApplicationRepo,
@@ -68,6 +69,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 		Config:                s.GetConfig(),
 		DB:                    s.GetDB(),
 		InvoiceRepo:           stores.InvoiceRepo,
+		InvoiceLineItemRepo:   stores.InvoiceLineItemRepo,
 		CouponRepo:            stores.CouponRepo,
 		CouponApplicationRepo: stores.CouponApplicationRepo,
 	})
@@ -80,6 +82,7 @@ func (s *InvoiceDiscountCreditWorkflowSuite) setupServices() {
 		CustomerRepo:             stores.CustomerRepo,
 		WalletRepo:               stores.WalletRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
+		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
 		SettingsRepo:             stores.SettingsRepo,
 		AlertLogsRepo:            stores.AlertLogsRepo,
 		SubRepo:                  stores.SubscriptionRepo,
@@ -242,6 +245,12 @@ func (s *InvoiceDiscountCreditWorkflowSuite) applyDiscountsAndCredits(inv *invoi
 	if err != nil {
 		return err
 	}
+	// Load line items separately (Get no longer eager-loads them)
+	lineItems, err := s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), reloadedInv.ID)
+	if err != nil {
+		return err
+	}
+	reloadedInv.LineItems = lineItems
 
 	// Apply coupons (mutates line items directly)
 	couponResult, err := s.couponApplicationService.ApplyCouponsToInvoice(s.GetContext(), dto.ApplyCouponsToInvoiceRequest{
@@ -258,6 +267,12 @@ func (s *InvoiceDiscountCreditWorkflowSuite) applyDiscountsAndCredits(inv *invoi
 	if err != nil {
 		return err
 	}
+	// Load line items separately (Get no longer eager-loads them)
+	lineItems, err = s.GetStores().InvoiceLineItemRepo.ListByInvoiceID(s.GetContext(), reloadedInv.ID)
+	if err != nil {
+		return err
+	}
+	reloadedInv.LineItems = lineItems
 
 	// Update invoice with total discount amount
 	reloadedInv.TotalDiscount = couponResult.TotalDiscountAmount
@@ -509,6 +524,8 @@ func (s *InvoiceDiscountCreditWorkflowSuite) TestCascadingDiscounts() {
 	reloadedInv, _ := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
 	reloadedInv.LineItems[0].PriceID = &priceID1
 	s.GetStores().InvoiceRepo.Update(s.GetContext(), reloadedInv)
+	// Also sync to InvoiceLineItemRepo so ListByInvoiceID returns the updated PriceID
+	s.NoError(s.GetStores().InvoiceLineItemRepo.Update(s.GetContext(), reloadedInv.LineItems[0]))
 
 	// Create 10% line discount coupon
 	coupon10PercentLine := s.createCoupon("coupon_10pct_line", types.CouponTypePercentage, lo.ToPtr(decimal.NewFromFloat(10)), nil)

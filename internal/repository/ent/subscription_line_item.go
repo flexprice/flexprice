@@ -37,7 +37,7 @@ func NewSubscriptionLineItemRepository(client postgres.IClient, log *logger.Logg
 }
 
 // applyActiveLineItemFilter applies the filter to ensure only active subscription line items are returned
-// Active line items are those where EndDate > currentPeriodStart or EndDate is nil
+// Active line items are those where EndDate is nil or EndDate >= reference (e.g. billing/usage window start).
 func (o *SubscriptionLineItemQueryOptions) applyActiveLineItemFilter(query *ent.SubscriptionLineItemQuery, currentPeriodStart *time.Time) *ent.SubscriptionLineItemQuery {
 	if currentPeriodStart == nil {
 		return query
@@ -46,7 +46,7 @@ func (o *SubscriptionLineItemQueryOptions) applyActiveLineItemFilter(query *ent.
 	return query.Where(
 		subscriptionlineitem.Status(string(types.StatusPublished)),
 		subscriptionlineitem.Or(
-			subscriptionlineitem.EndDateGT(*currentPeriodStart),
+			subscriptionlineitem.EndDateGTE(*currentPeriodStart),
 			subscriptionlineitem.EndDateIsNil(),
 		),
 	)

@@ -34,29 +34,15 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		return nil, err
 	}
 
-	// Resolve and validate parent customer if provided (by ID or external ID)
+	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+	// Fields are still accepted for backward compatibility; no hierarchy rules are enforced.
+	// Resolve parent_customer_external_id to an internal ID if provided.
 	if req.ParentCustomerExternalID != nil {
 		parent, err := s.CustomerRepo.GetByLookupKey(ctx, *req.ParentCustomerExternalID)
 		if err != nil {
 			return nil, err
 		}
-		if parent.ParentCustomerID != nil {
-			return nil, ierr.NewError("parent customer cannot be a child").
-				WithHint("Choose a parent customer that isn't a child of another").
-				Mark(ierr.ErrInvalidOperation)
-		}
-		// Normalize to internal ID for downstream logic
 		req.ParentCustomerID = lo.ToPtr(parent.ID)
-	} else if req.ParentCustomerID != nil {
-		parentCustomer, err := s.CustomerRepo.Get(ctx, *req.ParentCustomerID)
-		if err != nil {
-			return nil, err
-		}
-		if parentCustomer.ParentCustomerID != nil {
-			return nil, ierr.NewError("parent customer cannot be a child").
-				WithHint("Choose a parent customer that isn't a child of another").
-				Mark(ierr.ErrInvalidOperation)
-		}
 	}
 
 	cust := req.ToCustomer(ctx)
@@ -122,7 +108,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 					// Get Stripe integration
 					stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 					if err != nil {
-						s.Logger.Warnw("failed to get Stripe integration for metadata update",
+						s.Logger.WarnwCtx(ctx, "failed to get Stripe integration for metadata update",
 							"error", err,
 							"customer_id", cust.ID)
 						// Don't fail the entire operation, just log the error
@@ -132,7 +118,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 					// Update Stripe customer metadata with FlexPrice customer information
 					err = stripeIntegration.CustomerSvc.UpdateStripeCustomerMetadata(ctx, mapping.ID, cust)
 					if err != nil {
-						s.Logger.Warnw("failed to update Stripe customer metadata",
+						s.Logger.WarnwCtx(ctx, "failed to update Stripe customer metadata",
 							"error", err,
 							"stripe_customer_id", mapping.ID,
 							"customer_id", cust.ID)
@@ -194,10 +180,10 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 	// This flag is used when a customer is created via a workflow to prevent infinite loops
 	if !req.SkipOnboardingWorkflow {
 		if err := s.handleCustomerOnboarding(ctx, cust); err != nil {
-			s.Logger.Errorw("failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
+			s.Logger.ErrorwCtx(ctx, "failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
 		}
 	} else {
-		s.Logger.Debugw("skipping customer onboarding workflow",
+		s.Logger.DebugwCtx(ctx, "skipping customer onboarding workflow",
 			"customer_id", cust.ID,
 			"external_id", cust.ExternalID,
 			"reason", "skip_onboarding_workflow flag is true")
@@ -302,7 +288,7 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 				parentCustomersByID[pc.ID] = &dto.CustomerResponse{Customer: pc}
 			}
 
-			s.Logger.Debugw("fetched parent customers for customers", "count", len(parentCustomers))
+			s.Logger.DebugwCtx(ctx, "fetched parent customers for customers", "count", len(parentCustomers))
 		}
 	}
 
@@ -354,24 +340,14 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 		return nil, err
 	}
 
+	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+	// The parent_customer_id field is accepted for backward compatibility without enforcing hierarchy rules.
 	if req.ParentCustomerID != nil {
 		newParentID := strings.TrimSpace(*req.ParentCustomerID)
-		currentParentID := ""
-		if cust.ParentCustomerID != nil {
-			currentParentID = strings.TrimSpace(*cust.ParentCustomerID)
-		}
-
-		// Only run validations if the hierarchy is changing
-		if newParentID != currentParentID {
-			if err := s.validateParentCustomerAssignment(ctx, cust, newParentID); err != nil {
-				return nil, err
-			}
-
-			if newParentID == "" {
-				cust.ParentCustomerID = nil
-			} else {
-				cust.ParentCustomerID = lo.ToPtr(newParentID)
-			}
+		if newParentID == "" {
+			cust.ParentCustomerID = nil
+		} else {
+			cust.ParentCustomerID = lo.ToPtr(newParentID)
 		}
 	}
 
@@ -484,7 +460,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 				// Get Stripe integration
 				stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 				if err != nil {
-					s.Logger.Warnw("failed to get Stripe integration for metadata update",
+					s.Logger.WarnwCtx(ctx, "failed to get Stripe integration for metadata update",
 						"error", err,
 						"customer_id", cust.ID)
 					// Don't fail the entire operation, just log the error
@@ -494,7 +470,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 				// Update Stripe customer metadata with FlexPrice customer information
 				err = stripeIntegration.CustomerSvc.UpdateStripeCustomerMetadata(ctx, mapping.ID, cust)
 				if err != nil {
-					s.Logger.Warnw("failed to update Stripe customer metadata",
+					s.Logger.WarnwCtx(ctx, "failed to update Stripe customer metadata",
 						"error", err,
 						"stripe_customer_id", mapping.ID,
 						"customer_id", cust.ID)
@@ -588,70 +564,15 @@ func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey 
 	return &dto.CustomerResponse{Customer: customer}, nil
 }
 
-func (s *customerService) validateParentCustomerAssignment(ctx context.Context, cust *customer.Customer, newParentID string) error {
-	// Do not allow hierarchy changes when customer has non-cancelled subscriptions
-	subFilter := types.NewSubscriptionFilter()
-	subFilter.CustomerID = cust.ID
-	subFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
-	subFilter.Limit = lo.ToPtr(1)
 
-	subs, err := s.SubRepo.List(ctx, subFilter)
-	if err != nil {
-		return err
-	}
-	if len(subs) > 0 {
-		return ierr.NewError("customer hierarchy cannot change with active subscriptions").
-			WithHint("Cancel or transfer subscriptions before updating parent hierarchy").
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	if newParentID == "" {
-		// Resetting parent - nothing else to validate
-		return nil
-	}
-
-	if newParentID == cust.ID {
-		return ierr.NewError("customer cannot be its own parent").
-			WithHint("Please provide a different customer as parent").
-			Mark(ierr.ErrValidation)
-	}
-
-	parentCustomer, err := s.CustomerRepo.Get(ctx, newParentID)
-	if err != nil {
-		return err
-	}
-	if parentCustomer.ParentCustomerID != nil {
-		return ierr.NewError("parent customer cannot have its own parent").
-			WithHint("Nested hierarchies are not supported; pick a top-level customer as parent").
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	// A customer that already has children cannot become a child itself
-	childFilter := types.NewCustomerFilter()
-	childFilter.ParentCustomerIDs = []string{cust.ID}
-	childFilter.Limit = lo.ToPtr(1)
-
-	children, err := s.CustomerRepo.List(ctx, childFilter)
-	if err != nil {
-		return err
-	}
-	if len(children) > 0 {
-		return ierr.NewError("customer already acts as a parent").
-			WithHint("A customer cannot be both parent and child; detach child customers first").
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	return nil
-}
-
-func (s *customerService) publishWebhookEvent(ctx context.Context, eventName string, customerID string) {
+func (s *customerService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, customerID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalCustomerEvent{
 		CustomerID: customerID,
 		TenantID:   types.GetTenantID(ctx),
 	})
 
 	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -665,7 +586,7 @@ func (s *customerService) publishWebhookEvent(ctx context.Context, eventName str
 		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
 
@@ -719,7 +640,7 @@ func (s *customerService) GetUpcomingCreditGrantApplications(ctx context.Context
 }
 
 func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer *customer.Customer) error {
-	s.Logger.Infow("handling customer onboarding", "customer_id", customer.ID)
+	s.Logger.InfowCtx(ctx, "handling customer onboarding", "customer_id", customer.ID)
 
 	// Get customer onboarding workflow config
 	settingsService := &settingsService{
@@ -731,13 +652,13 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 	}
 
 	if workflowConfig == nil {
-		s.Logger.Infow("workflow config is nil, skipping customer onboarding", "customer_id", customer.ID)
+		s.Logger.InfowCtx(ctx, "workflow config is nil, skipping customer onboarding", "customer_id", customer.ID)
 		return nil
 	}
 
 	// If there are no actions, return
 	if len(workflowConfig.Actions) == 0 {
-		s.Logger.Infow("no actions found for customer onboarding", "customer_id", customer.ID)
+		s.Logger.InfowCtx(ctx, "no actions found for customer onboarding", "customer_id", customer.ID)
 		return nil
 	}
 
@@ -746,7 +667,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 	envID := types.GetEnvironmentID(ctx)
 	userID := types.GetUserID(ctx)
 
-	s.Logger.Infow("executing customer onboarding workflow",
+	s.Logger.InfowCtx(ctx, "executing customer onboarding workflow",
 		"customer_id", customer.ID,
 		"tenant_id", tenantID,
 		"environment_id", envID,
@@ -766,7 +687,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 
 	// Validate input
 	if err := input.Validate(); err != nil {
-		s.Logger.Errorw("invalid workflow input for customer onboarding",
+		s.Logger.ErrorwCtx(ctx, "invalid workflow input for customer onboarding",
 			"error", err,
 			"customer_id", customer.ID)
 		return ierr.WithError(err).
@@ -795,7 +716,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		input,
 	)
 	if err != nil {
-		s.Logger.Errorw("failed to start customer onboarding workflow",
+		s.Logger.ErrorwCtx(ctx, "failed to start customer onboarding workflow",
 			"error", err,
 			"customer_id", customer.ID)
 		return ierr.WithError(err).
@@ -806,7 +727,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Infow("customer onboarding workflow started successfully",
+	s.Logger.InfowCtx(ctx, "customer onboarding workflow started successfully",
 		"customer_id", customer.ID,
 		"workflow_id", workflowRun.GetID(),
 		"run_id", workflowRun.GetRunID())

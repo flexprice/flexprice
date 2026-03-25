@@ -140,7 +140,7 @@ func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.Onboard
 	watermillMsg.Metadata.Set("environment_id", types.GetEnvironmentID(ctx))
 	watermillMsg.Metadata.Set("user_id", types.GetUserID(ctx))
 
-	s.Logger.Infow("publishing onboarding events message",
+	s.Logger.InfowCtx(ctx, "publishing onboarding events message",
 		"message_id", messageID,
 		"customer_id", customerID,
 		"feature_id", selectedFeature.ID,
@@ -244,7 +244,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 	numMeters := len(eventMsg.Meters)
 
 	if numMeters == 0 {
-		s.Logger.Warnw("no meters found, skipping event generation",
+		s.Logger.WarnwCtx(ctx, "no meters found, skipping event generation",
 			"customer_id", eventMsg.CustomerID,
 			"feature_id", eventMsg.FeatureID,
 		)
@@ -259,7 +259,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 	successCount := 0
 	errorCount := 0
 
-	s.Logger.Infow("starting event generation",
+	s.Logger.InfowCtx(ctx, "starting event generation",
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"duration", eventMsg.Duration,
@@ -281,7 +281,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 			eventsForThisMeter++ // Give +1 extra event to first 'remainder' meters
 		}
 
-		s.Logger.Infow("generating events for meter",
+		s.Logger.InfowCtx(ctx, "generating events for meter",
 			"meter_index", meterIdx+1,
 			"meter_name", meter.EventName,
 			"events_to_generate", eventsForThisMeter,
@@ -297,7 +297,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 				// Ingest the event
 				if err := eventService.CreateEvent(ctx, &eventReq); err != nil {
 					errorCount++
-					s.Logger.Errorw("failed to create event",
+					s.Logger.ErrorwCtx(ctx, "failed to create event",
 						"error", err,
 						"customer_id", eventMsg.CustomerID,
 						"event_name", meter.EventName,
@@ -309,7 +309,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 				}
 
 				successCount++
-				s.Logger.Infow("created onboarding event",
+				s.Logger.InfowCtx(ctx, "created onboarding event",
 					"customer_id", eventMsg.CustomerID,
 					"event_name", meter.EventName,
 					"event_id", eventReq.EventID,
@@ -318,7 +318,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 					"total_events_for_meter", eventsForThisMeter,
 				)
 			case <-ctx.Done():
-				s.Logger.Warnw("context cancelled, stopping event generation",
+				s.Logger.WarnwCtx(ctx, "context cancelled, stopping event generation",
 					"customer_id", eventMsg.CustomerID,
 					"feature_id", eventMsg.FeatureID,
 					"events_generated", successCount,
@@ -331,7 +331,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 		}
 	}
 
-	s.Logger.Infow("completed generating onboarding events",
+	s.Logger.InfowCtx(ctx, "completed generating onboarding events",
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"duration", eventMsg.Duration,
@@ -474,7 +474,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 
 	// create a db transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		s.Logger.Infow("setting up sandbox environment with generic AI pricing model for hackathon",
+		s.Logger.InfowCtx(ctx, "setting up sandbox environment with generic AI pricing model for hackathon",
 			"tenant_id", tenantID,
 			"user_id", userID,
 			"environment_id", envID,
@@ -510,7 +510,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 			return err
 		}
 
-		s.Logger.Infow("successfully set up sandbox environment with generic AI pricing model",
+		s.Logger.InfowCtx(ctx, "successfully set up sandbox environment with generic AI pricing model",
 			"tenant_id", tenantID,
 			"user_id", userID,
 			"environment_id", envID,
@@ -523,7 +523,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 }
 
 func (s *onboardingService) createDefaultMeters(ctx context.Context) ([]*meter.Meter, error) {
-	s.Logger.Infow("creating AI-focused meters for hackathon environment")
+	s.Logger.InfowCtx(ctx, "creating AI-focused meters for hackathon environment")
 
 	// Create a meter service instance
 	meterService := NewMeterService(s.MeterRepo)
@@ -551,13 +551,13 @@ func (s *onboardingService) createDefaultMeters(ctx context.Context) ([]*meter.M
 	if err != nil {
 		return nil, err
 	}
-	s.Logger.Infow("created LLM usage meter", "meter_id", llmUsageResp.ID)
+	s.Logger.InfowCtx(ctx, "created LLM usage meter", "meter_id", llmUsageResp.ID)
 
 	return []*meter.Meter{llmUsageResp}, nil
 }
 
 func (s *onboardingService) createDefaultFeatures(ctx context.Context, meters []*meter.Meter) ([]*dto.FeatureResponse, error) {
-	s.Logger.Infow("creating simple LLM usage feature for hackathon environment")
+	s.Logger.InfowCtx(ctx, "creating simple LLM usage feature for hackathon environment")
 
 	var llmUsageMeter *meter.Meter
 	for _, m := range meters {
@@ -584,7 +584,7 @@ func (s *onboardingService) createDefaultFeatures(ctx context.Context, meters []
 	if err != nil {
 		return nil, err
 	}
-	s.Logger.Infow("created feature",
+	s.Logger.InfowCtx(ctx, "created feature",
 		"feature_id", resp.ID,
 		"feature_name", resp.Name,
 		"feature_type", resp.Type,
@@ -594,7 +594,7 @@ func (s *onboardingService) createDefaultFeatures(ctx context.Context, meters []
 }
 
 func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*dto.FeatureResponse, meters []*meter.Meter) ([]*dto.CreatePlanResponse, error) {
-	s.Logger.Infow("creating AI-focused plans for hackathon environment")
+	s.Logger.InfowCtx(ctx, "creating AI-focused plans for hackathon environment")
 
 	// Create a plan service instance with all required dependencies
 	planService := NewPlanService(
@@ -627,7 +627,7 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 		if err != nil {
 			return nil, err
 		}
-		s.Logger.Infow("created plan",
+		s.Logger.InfowCtx(ctx, "created plan",
 			"plan_id", resp.ID,
 			"plan_name", resp.Name,
 		)
@@ -647,7 +647,7 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 
 // createDefaultPrices creates prices for plans using the new flow (separate from plan creation)
 func (s *onboardingService) createDefaultPrices(ctx context.Context, planResponses []*dto.CreatePlanResponse, priceService PriceService) error {
-	s.Logger.Infow("creating AI-focused prices for hackathon environment")
+	s.Logger.InfowCtx(ctx, "creating AI-focused prices for hackathon environment")
 
 	// Find plans by name
 	var starterPlan, basicPlan, proPlan *dto.CreatePlanResponse
@@ -738,12 +738,12 @@ func (s *onboardingService) createDefaultPrices(ctx context.Context, planRespons
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.Infow("created prices for all plans")
+	s.Logger.InfowCtx(ctx, "created prices for all plans")
 	return nil
 }
 
 func (s *onboardingService) createDefaultCustomers(ctx context.Context) ([]*dto.CustomerResponse, error) {
-	s.Logger.Infow("creating default customers for Cursor pricing model")
+	s.Logger.InfowCtx(ctx, "creating default customers for Cursor pricing model")
 
 	// Create a customer service instance
 	customerService := NewCustomerService(s.ServiceParams)
@@ -760,7 +760,7 @@ func (s *onboardingService) createDefaultCustomers(ctx context.Context) ([]*dto.
 		return nil, err
 	}
 
-	s.Logger.Infow("created customer",
+	s.Logger.InfowCtx(ctx, "created customer",
 		"customer_id", resp.ID,
 		"customer_name", resp.Name,
 		"customer_email", resp.Email,
@@ -770,7 +770,7 @@ func (s *onboardingService) createDefaultCustomers(ctx context.Context) ([]*dto.
 }
 
 func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, customers []*dto.CustomerResponse, plans []*dto.CreatePlanResponse) error {
-	s.Logger.Infow("creating default subscriptions for Cursor pricing model")
+	s.Logger.InfowCtx(ctx, "creating default subscriptions for Cursor pricing model")
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 
 	// Validate that we have at least one customer
@@ -815,7 +815,7 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 		return err
 	}
 
-	s.Logger.Infow("created subscription",
+	s.Logger.InfowCtx(ctx, "created subscription",
 		"subscription_id", resp.ID,
 		"subscription_status", resp.Status,
 	)
@@ -836,7 +836,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 
 	// Skip if webhook URL is not configured
 	if zapierWebhookURL == "" {
-		s.Logger.Debugw("Zapier webhook URL not configured, skipping webhook")
+		s.Logger.DebugwCtx(ctx, "Zapier webhook URL not configured, skipping webhook")
 		return nil
 	}
 
@@ -848,7 +848,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 	// Marshal payload to JSON
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		s.Logger.Errorw("failed to marshal Zapier webhook payload",
+		s.Logger.ErrorwCtx(ctx, "failed to marshal Zapier webhook payload",
 			"error", err,
 			"email", email,
 		)
@@ -869,13 +869,13 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 	}
 
 	// Send request
-	s.Logger.Infow("sending Zapier webhook",
+	s.Logger.InfowCtx(ctx, "sending Zapier webhook",
 		"email", email,
 	)
 
 	resp, err := httpClient.Send(ctx, req)
 	if err != nil {
-		s.Logger.Errorw("failed to send Zapier webhook",
+		s.Logger.ErrorwCtx(ctx, "failed to send Zapier webhook",
 			"error", err,
 			"email", email,
 		)
@@ -884,7 +884,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 
 	// Check response
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.Logger.Errorw("Zapier webhook request failed with non-2xx status",
+		s.Logger.ErrorwCtx(ctx, "Zapier webhook request failed with non-2xx status",
 			"status_code", resp.StatusCode,
 			"response_body", string(resp.Body),
 			"email", email,
@@ -892,7 +892,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 		return nil // Don't fail onboarding
 	}
 
-	s.Logger.Infow("successfully sent Zapier webhook",
+	s.Logger.InfowCtx(ctx, "successfully sent Zapier webhook",
 		"email", email,
 		"status_code", resp.StatusCode,
 	)

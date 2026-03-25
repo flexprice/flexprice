@@ -1,6 +1,9 @@
 package webhookDto
 
-import "github.com/flexprice/flexprice/internal/api/dto"
+import (
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 type InternalSubscriptionPhaseEvent struct {
 	PhaseID  string `json:"phase_id"`
@@ -8,10 +11,10 @@ type InternalSubscriptionPhaseEvent struct {
 }
 
 type SubscriptionPhaseWebhookPayload struct {
-	EventType string                         `json:"event_type"`
+	EventType types.WebhookEventName         `json:"event_type"`
 	Phase     *dto.SubscriptionPhaseResponse `json:"phase"`
 }
 
-func NewSubscriptionPhaseWebhookPayload(phase *dto.SubscriptionPhaseResponse, eventType string) *SubscriptionPhaseWebhookPayload {
+func NewSubscriptionPhaseWebhookPayload(phase *dto.SubscriptionPhaseResponse, eventType types.WebhookEventName) *SubscriptionPhaseWebhookPayload {
 	return &SubscriptionPhaseWebhookPayload{EventType: eventType, Phase: phase}
 }

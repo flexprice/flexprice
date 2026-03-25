@@ -1,6 +1,9 @@
 package webhookDto
 
-import "github.com/flexprice/flexprice/internal/api/dto"
+import (
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 type InternalPaymentEvent struct {
 	PaymentID string `json:"payment_id"`
@@ -8,10 +11,10 @@ type InternalPaymentEvent struct {
 }
 
 type PaymentWebhookPayload struct {
-	EventType string               `json:"event_type"`
-	Payment   *dto.PaymentResponse `json:"payment"`
+	EventType types.WebhookEventName `json:"event_type"`
+	Payment   *dto.PaymentResponse   `json:"payment"`
 }
 
-func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType string) *PaymentWebhookPayload {
+func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType types.WebhookEventName) *PaymentWebhookPayload {
 	return &PaymentWebhookPayload{EventType: eventType, Payment: payment}
 }

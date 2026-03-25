@@ -12,6 +12,7 @@ import (
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
 	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	nomodwebhook "github.com/flexprice/flexprice/internal/integration/nomod/webhook"
+	paddlewebhook "github.com/flexprice/flexprice/internal/integration/paddle/webhook"
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
@@ -111,19 +112,6 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 	})
 }
 
-// @Summary Handle Stripe webhook events
-// @ID handleStripeWebhook
-// @Description Use as the Stripe webhook endpoint URL. Receives payment and customer events from Stripe to keep FlexPrice in sync (e.g. payment succeeded, customer created).
-// @Tags Webhooks
-// @Accept json
-// @Produce json
-// @Param tenant_id path string true "Tenant ID"
-// @Param environment_id path string true "Environment ID"
-// @Param Stripe-Signature header string true "Stripe webhook signature"
-// @Success 200 {object} map[string]interface{} "Webhook processed successfully"
-// @Failure 400 {object} map[string]interface{} "Bad request - missing parameters or invalid signature"
-// @Failure 500 {object} map[string]interface{} "Internal server error"
-// @Router /webhooks/stripe/{tenant_id}/{environment_id} [post]
 func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	tenantID := c.Param("tenant_id")
 	environmentID := c.Param("environment_id")
@@ -238,17 +226,6 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 	})
 }
 
-// @Summary Handle HubSpot webhook events
-// @ID handleHubspotWebhook
-// @Description Use as the HubSpot webhook endpoint URL. Receives deal and customer events (e.g. deal closed won) to create or update customers in FlexPrice.
-// @Tags Webhooks
-// @Accept json
-// @Produce json
-// @Param tenant_id path string true "Tenant ID"
-// @Param environment_id path string true "Environment ID"
-// @Param X-HubSpot-Signature-v3 header string true "HubSpot webhook signature"
-// @Success 200 {object} map[string]interface{} "Webhook received (always returns 200)"
-// @Router /webhooks/hubspot/{tenant_id}/{environment_id} [post]
 func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	// Always return 200 OK to HubSpot to prevent retries
 	// We log errors internally but don't expose them to HubSpot
@@ -408,17 +385,6 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 		"event_count", len(events))
 }
 
-// @Summary Handle Razorpay webhook events
-// @ID handleRazorpayWebhook
-// @Description Use as the Razorpay webhook endpoint URL. Receives payment capture and failure events to update invoice or payment status in FlexPrice.
-// @Tags Webhooks
-// @Accept json
-// @Produce json
-// @Param tenant_id path string true "Tenant ID"
-// @Param environment_id path string true "Environment ID"
-// @Param X-Razorpay-Signature header string true "Razorpay webhook signature"
-// @Success 200 {object} map[string]interface{} "Webhook received (always returns 200)"
-// @Router /webhooks/razorpay/{tenant_id}/{environment_id} [post]
 func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 	// Always return 200 OK to Razorpay to prevent retries
 	// We log errors internally but don't expose them to Razorpay
@@ -520,20 +486,6 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 		"event_type", event.Event)
 }
 
-// @Summary Handle Chargebee webhook events
-// @ID handleChargebeeWebhook
-// @Description Use as the Chargebee webhook endpoint URL. Receives payment and subscription events from Chargebee to sync status into FlexPrice.
-// @Tags Webhooks
-// @Accept json
-// @Produce json
-// @Param tenant_id path string true "Tenant ID"
-// @Param environment_id path string true "Environment ID"
-// @Param Authorization header string false "Basic Auth credentials"
-// @Success 200 {object} map[string]interface{} "Webhook processed successfully"
-// @Failure 401 {object} map[string]interface{} "Unauthorized"
-// @Failure 400 {object} map[string]interface{} "Bad request"
-// @Failure 500 {object} map[string]interface{} "Internal server error"
-// @Router /webhooks/chargebee/{tenant_id}/{environment_id} [post]
 func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 	// Always return 200 OK to Chargebee to prevent retries
 	// We log errors internally but don't expose them to Chargebee
@@ -660,20 +612,6 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 		"event_type", event.EventType)
 }
 
-// @Summary Handle QuickBooks webhook events
-// @ID handleQuickbooksWebhook
-// @Description Use as the QuickBooks webhook endpoint URL. Receives payment events from QuickBooks to sync payment status into FlexPrice.
-// @Tags Webhooks
-// @Accept json
-// @Produce json
-// @Param tenant_id path string true "Tenant ID"
-// @Param environment_id path string true "Environment ID"
-// @Param intuit-signature header string false "QuickBooks webhook signature"
-// @Success 200 {object} map[string]interface{} "Webhook processed successfully"
-// @Failure 401 {object} map[string]interface{} "Unauthorized - invalid signature"
-// @Failure 400 {object} map[string]interface{} "Bad request"
-// @Failure 500 {object} map[string]interface{} "Internal server error"
-// @Router /webhooks/quickbooks/{tenant_id}/{environment_id} [post]
 func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 	// Always return 200 OK to QuickBooks to prevent retries
 	// We log errors internally but don't expose them to QuickBooks
@@ -764,18 +702,6 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 		"environment_id", environmentID)
 }
 
-// @Summary Handle Nomod webhook events
-// @ID handleNomodWebhook
-// @Description Use as the Nomod webhook endpoint URL. Receives payment and invoice events from Nomod to keep FlexPrice in sync.
-// @Tags Webhooks
-// @Accept json
-// @Produce json
-// @Param tenant_id path string true "Tenant ID"
-// @Param environment_id path string true "Environment ID"
-// @Param X-API-KEY header string false "Nomod webhook secret (if configured)"
-// @Success 200 {object} map[string]interface{} "Webhook processed successfully"
-// @Failure 401 {object} map[string]interface{} "Unauthorized - invalid or missing X-API-KEY"
-// @Router /webhooks/nomod/{tenant_id}/{environment_id} [post]
 func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	tenantID := c.Param("tenant_id")
 	environmentID := c.Param("environment_id")
@@ -913,17 +839,6 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	})
 }
 
-// @Summary Handle Moyasar webhook events
-// @ID handleMoyasarWebhook
-// @Description Use as the Moyasar webhook endpoint URL. Receives payment events from Moyasar to update payment status in FlexPrice.
-// @Tags Webhooks
-// @Accept json
-// @Produce json
-// @Param tenant_id path string true "Tenant ID"
-// @Param environment_id path string true "Environment ID"
-// @Param X-Moyasar-Signature header string false "Moyasar webhook signature"
-// @Success 200 {object} map[string]interface{} "Webhook received (always returns 200)"
-// @Router /webhooks/moyasar/{tenant_id}/{environment_id} [post]
 func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	// Always return 200 OK to Moyasar to prevent retries
 	// We log errors internally but don't expose them to Moyasar
@@ -993,7 +908,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 				"note", "Moyasar must send shared_secret as secret_token in webhook payload when configured")
 			return
 		}
-		
+
 		// Get the decrypted Moyasar config to access the webhook secret
 		moyasarConfig, err := moyasarIntegration.Client.GetDecryptedMoyasarConfig(conn)
 		if err != nil {
@@ -1003,7 +918,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 				"environment_id", environmentID)
 			return
 		}
-		
+
 		// Verify the secret_token matches our configured (decrypted) webhook_secret
 		if event.SecretToken != moyasarConfig.WebhookSecret {
 			h.logger.Errorw("Moyasar webhook secret_token verification failed - rejecting request",
@@ -1013,7 +928,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 				"note", "secret_token in payload does not match configured webhook_secret")
 			return
 		}
-		
+
 		h.logger.Infow("Moyasar webhook secret_token verified successfully",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -1059,4 +974,108 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	h.logger.Infow("successfully processed Moyasar webhook",
 		"environment_id", environmentID,
 		"event_type", event.Type)
+}
+
+// paddleWebhookPayload is a minimal struct to parse event_type from the webhook payload
+type paddleWebhookPayload struct {
+	EventType string `json:"event_type"`
+}
+
+func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
+	handled := false
+	defer func() {
+		if !handled {
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Webhook received",
+			})
+		}
+	}()
+
+	tenantID := c.Param("tenant_id")
+	environmentID := c.Param("environment_id")
+
+	if tenantID == "" || environmentID == "" {
+		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+
+	// Read the raw request body (must be preserved for signature verification)
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.Errorw("failed to read request body", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		handled = true
+		return
+	}
+
+	// Set context with tenant and environment IDs
+	ctx := types.SetTenantID(c.Request.Context(), tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+	c.Request = c.Request.WithContext(ctx)
+
+	// Get Paddle integration
+	paddleIntegration, err := h.integrationFactory.GetPaddleIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Paddle integration", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid configuration"})
+		handled = true
+		return
+	}
+
+	// Get connection and decrypted webhook secret
+	conn, err := paddleIntegration.Client.GetConnection(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Paddle connection", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Paddle not configured"})
+		handled = true
+		return
+	}
+
+	config, err := paddleIntegration.Client.GetDecryptedPaddleConfig(conn)
+	if err != nil {
+		h.logger.Errorw("failed to get decrypted Paddle config", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid configuration"})
+		handled = true
+		return
+	}
+
+	// Verify signature
+	signature := c.GetHeader("Paddle-Signature")
+	if err := paddleIntegration.Client.VerifyWebhookSignature(ctx, body, signature, config.WebhookSecret); err != nil {
+		h.logger.Errorw("Paddle webhook signature verification failed",
+			"error", err,
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid signature"})
+		handled = true
+		return
+	}
+
+	// Parse event_type from payload
+	var payload paddleWebhookPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		h.logger.Errorw("failed to parse Paddle webhook payload", "error", err)
+		return
+	}
+
+	h.logger.Infow("processing Paddle webhook", "event_type", payload.EventType)
+
+	serviceDeps := &paddlewebhook.ServiceDependencies{
+		CustomerService:                 h.customerService,
+		PaymentService:                  h.paymentService,
+		InvoiceService:                  h.invoiceService,
+		PlanService:                     h.planService,
+		SubscriptionService:             h.subscriptionService,
+		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		DB:                              h.db,
+	}
+
+	err = paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.EventType, body, environmentID, serviceDeps)
+	if err != nil {
+		h.logger.Errorw("failed to handle Paddle webhook event",
+			"error", err,
+			"event_type", payload.EventType)
+	}
 }

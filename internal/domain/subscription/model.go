@@ -145,6 +145,26 @@ func (s *Subscription) GetInvoicingCustomerID() string {
 	return s.CustomerID
 }
 
+// HasMixedBillingPeriods returns true when the subscription's line items have more
+// than one distinct BillingPeriod. Safe to call with nil/empty LineItems (returns false).
+func (s *Subscription) HasMixedBillingPeriods() bool {
+	return hasMixedBillingPeriods(s.LineItems)
+}
+
+// hasMixedBillingPeriods is a standalone helper usable before the subscription is persisted.
+func hasMixedBillingPeriods(items []*SubscriptionLineItem) bool {
+	if len(items) <= 1 {
+		return false
+	}
+	first := items[0].BillingPeriod
+	for _, item := range items[1:] {
+		if item.BillingPeriod != first {
+			return true
+		}
+	}
+	return false
+}
+
 // HasCommitment returns true if the subscription has subscription-level commitment configured
 // (commitment amount and overage factor both set and greater than zero/one).
 func (s *Subscription) HasCommitment() bool {
@@ -217,14 +237,14 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		CollectionMethod:       string(sub.CollectionMethod),
 		GatewayPaymentMethodID: lo.ToPtr(sub.GatewayPaymentMethodID),
 
-		LineItems:           lineItems,
-		CouponAssociations:  couponAssociations,
-		Pauses:              pauses,
-		Phases:              phases,
-		CustomerTimezone:    sub.CustomerTimezone,
-		ProrationBehavior:     types.ProrationBehavior(sub.ProrationBehavior),
-		EnableTrueUp:          sub.EnableTrueUp,
-		InvoicingCustomerID:   sub.InvoicingCustomerID,
+		LineItems:            lineItems,
+		CouponAssociations:   couponAssociations,
+		Pauses:               pauses,
+		Phases:               phases,
+		CustomerTimezone:     sub.CustomerTimezone,
+		ProrationBehavior:    types.ProrationBehavior(sub.ProrationBehavior),
+		EnableTrueUp:         sub.EnableTrueUp,
+		InvoicingCustomerID:  sub.InvoicingCustomerID,
 		ParentSubscriptionID: sub.ParentSubscriptionID,
 		PaymentTerms:         sub.PaymentTerms,
 		BaseModel: types.BaseModel{

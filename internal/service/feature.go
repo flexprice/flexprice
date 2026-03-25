@@ -105,7 +105,7 @@ func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatur
 	if featureModel.GroupID != "" {
 		groupService := NewGroupService(s.ServiceParams)
 		if groupResp, err := groupService.GetGroup(ctx, featureModel.GroupID); err != nil {
-			s.Logger.Warnw("failed to fetch group for feature create response", "group_id", featureModel.GroupID, "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch group for feature create response", "group_id", featureModel.GroupID, "error", err)
 		} else {
 			response.Group = groupResp
 		}
@@ -135,7 +135,7 @@ func (s *featureService) GetFeature(ctx context.Context, id string) (*dto.Featur
 		groupService := NewGroupService(s.ServiceParams)
 		groupResp, err := groupService.GetGroup(ctx, feature.GroupID)
 		if err != nil {
-			s.Logger.Warnw("failed to fetch group for feature", "group_id", feature.GroupID, "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch group for feature", "group_id", feature.GroupID, "error", err)
 		} else {
 			response.Group = groupResp
 		}
@@ -204,7 +204,7 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 				metersByID[m.ID] = m
 			}
 
-			s.Logger.Debugw("fetched meters for features", "count", len(meters))
+			s.Logger.DebugwCtx(ctx, "fetched meters for features", "count", len(meters))
 		}
 	}
 
@@ -225,7 +225,7 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 		}
 		groupsResp, err := groupService.ListGroups(ctx, groupFilter)
 		if err != nil {
-			s.Logger.Warnw("failed to fetch groups for features", "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch groups for features", "error", err)
 		} else {
 			for _, g := range groupsResp.Items {
 				groupsByID[g.ID] = g
@@ -371,7 +371,7 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 	if feature.GroupID != "" {
 		groupService := NewGroupService(s.ServiceParams)
 		if groupResp, err := groupService.GetGroup(ctx, feature.GroupID); err != nil {
-			s.Logger.Warnw("failed to fetch group for feature update response", "group_id", feature.GroupID, "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch group for feature update response", "group_id", feature.GroupID, "error", err)
 		} else {
 			response.Group = groupResp
 		}
@@ -424,13 +424,13 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *featureService) publishWebhookEvent(ctx context.Context, eventName string, featureID string) {
+func (s *featureService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, featureID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalFeatureEvent{
 		FeatureID: featureID,
 		TenantID:  types.GetTenantID(ctx),
 	})
 	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -444,6 +444,6 @@ func (s *featureService) publishWebhookEvent(ctx context.Context, eventName stri
 		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }

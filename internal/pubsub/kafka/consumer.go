@@ -22,6 +22,8 @@ type Consumer struct {
 }
 
 func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, error) {
+	// enableDebugLogs allows watermill DEBUG messages in debug mode.
+	// TRACE is never enabled — it logs every individual message sent/received, which is too noisy.
 	enableDebugLogs := cfg.Logging.Level == types.LogLevelDebug
 
 	saramaConfig := GetSaramaConfig(cfg)
@@ -44,7 +46,7 @@ func NewConsumer(cfg *config.Configuration, consumerGroupID string) (*Consumer, 
 			OverwriteSaramaConfig: saramaConfig,
 			ReconnectRetrySleep:   time.Second,
 		},
-		watermill.NewStdLogger(enableDebugLogs, enableDebugLogs),
+		watermill.NewStdLogger(enableDebugLogs, false),
 	)
 	if err != nil {
 		return nil, err

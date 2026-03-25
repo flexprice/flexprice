@@ -2,7 +2,7 @@
   "openapi": "3.0.1",
   "info": {
     "title": "Flexprice API",
-    "description": "Flexprice API provides billing, metering, and subscription management for SaaS and usage-based products. Use it to manage customers, plans, invoices, payments, usage events, and entitlements. Authenticate with an API key in the x-api-key header.",
+    "description": "Flexprice API Service",
     "contact": {
       "name": "API Support"
     },
@@ -14,7 +14,12 @@
   },
   "servers": [
     {
-      "url": "/v1"
+      "url": "https://us.api.flexprice.io/v1",
+      "description": "US Region"
+    },
+    {
+      "url": "https://api.cloud.flexprice.io/v1",
+      "description": "India Region"
     }
   ],
   "paths": {
@@ -94,6 +99,10 @@
         ],
         "x-codegen-request-body-name": "customer",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "update-customer"
         }
       },
@@ -152,8 +161,13 @@
             "ApiKeyAuth": []
           }
         ],
+        "x-scope": "write",
         "x-codegen-request-body-name": "customer",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "create-customer"
         }
       }
@@ -225,6 +239,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-customer-by-external-id"
         }
       }
@@ -285,8 +303,13 @@
             "ApiKeyAuth": []
           }
         ],
+        "x-scope": "read",
         "x-codegen-request-body-name": "filter",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "query-customer"
         }
       }
@@ -389,6 +412,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-customer-usage-summary"
         }
       }
@@ -449,7 +476,12 @@
             "ApiKeyAuth": []
           }
         ],
+        "x-scope": "read",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-customer"
         }
       },
@@ -503,6 +535,11 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "delete"
+          ],
+          "readOnlyHint": false,
+          "destructiveHint": true,
           "name": "delete-customer"
         }
       }
@@ -564,6 +601,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-customer-entitlements"
         }
       }
@@ -635,6 +676,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-customer-upcoming-grants"
         }
       }
@@ -696,6 +741,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-customer-invoice-summary"
         }
       }
@@ -761,6 +810,10 @@
         ],
         "x-codegen-request-body-name": "event",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "ingest-event"
         }
       }
@@ -823,6 +876,10 @@
         ],
         "x-codegen-request-body-name": "request",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "get-usage-analytics"
         }
       }
@@ -888,6 +945,10 @@
         ],
         "x-codegen-request-body-name": "event",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "ingest-events-bulk"
         }
       }
@@ -928,6 +989,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "get-huggingface-inference-data"
         }
       }
@@ -990,6 +1055,10 @@
         ],
         "x-codegen-request-body-name": "request",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "list-raw-events"
         }
       }
@@ -1052,6 +1121,10 @@
         ],
         "x-codegen-request-body-name": "request",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "get-usage-statistics"
         }
       }
@@ -1124,6 +1197,10 @@
         ],
         "x-codegen-request-body-name": "request",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "get-usage-by-meter"
         }
       }
@@ -1185,6 +1262,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-event"
         }
       }
@@ -1247,6 +1328,10 @@
         ],
         "x-codegen-request-body-name": "invoice",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "create-invoice"
         }
       }
@@ -1309,6 +1394,10 @@
         ],
         "x-codegen-request-body-name": "request",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "get-invoice-preview"
         }
       }
@@ -1371,6 +1460,10 @@
         ],
         "x-codegen-request-body-name": "filter",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "query-invoice"
         }
       }
@@ -1453,6 +1546,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-invoice"
         }
       },
@@ -1534,6 +1631,10 @@
         ],
         "x-codegen-request-body-name": "request",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "update-invoice"
         }
       }
@@ -1605,6 +1706,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "trigger-invoice-comms-webhook"
         }
       }
@@ -1665,7 +1770,13 @@
             "ApiKeyAuth": []
           }
         ],
+        "x-scope": "delete",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "delete"
+          ],
+          "readOnlyHint": false,
+          "destructiveHint": true,
           "name": "finalize-invoice"
         }
       }
@@ -1749,6 +1860,10 @@
         ],
         "x-codegen-request-body-name": "request",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "update-invoice-payment-status"
         }
       }
@@ -1820,6 +1935,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "attempt-invoice-payment"
         }
       }
@@ -1900,6 +2019,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-invoice-pdf"
         }
       }
@@ -1909,9 +2032,84 @@
         "tags": [
           "Invoices"
         ],
-        "summary": "Recalculate invoice",
-        "description": "Use when subscription or usage data changed and you need to refresh a draft invoice before finalizing. Optional finalize=true to lock after recalc.",
+        "summary": "Recalculate invoice (voided invoice)",
+        "description": "Starts an async workflow that creates a fresh replacement invoice for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id after completion.",
         "operationId": "recalculateInvoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.TemporalWorkflowResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or invoice already recalculated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "recalculate-invoice"
+        }
+      }
+    },
+    "/invoices/{id}/recalculate-v2": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Recalculate draft invoice (v2)",
+        "description": "Recalculates a draft SUBSCRIPTION invoice in-place (replaces line items, reapplies credits/coupons/taxes). Use when subscription or usage data changed before finalizing.",
+        "operationId": "recalculateInvoiceV2",
         "parameters": [
           {
             "name": "id",
@@ -1979,7 +2177,11 @@
           }
         ],
         "x-speakeasy-mcp": {
-          "name": "recalculate-invoice"
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "recalculate-invoice-v2"
         }
       }
     },
@@ -2040,6 +2242,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "void-invoice"
         }
       }
@@ -2102,6 +2308,10 @@
         ],
         "x-codegen-request-body-name": "plan",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "create-plan"
         }
       }
@@ -2164,6 +2374,10 @@
         ],
         "x-codegen-request-body-name": "filter",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "query-plan"
         }
       }
@@ -2235,6 +2449,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-plan"
         }
       },
@@ -2316,6 +2534,10 @@
         ],
         "x-codegen-request-body-name": "plan",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "update-plan"
         }
       },
@@ -2385,6 +2607,11 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "delete"
+          ],
+          "readOnlyHint": false,
+          "destructiveHint": true,
           "name": "delete-plan"
         }
       }
@@ -2476,7 +2703,12 @@
           }
         ],
         "x-codegen-request-body-name": "request",
-        "x-speakeasy-mcp": {}
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false
+        }
       }
     },
     "/plans/{id}/sync/subscriptions": {
@@ -2556,6 +2788,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "sync-plan-prices"
         }
       }
@@ -2618,6 +2854,10 @@
         ],
         "x-codegen-request-body-name": "price",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "create-price"
         }
       }
@@ -2680,6 +2920,10 @@
         ],
         "x-codegen-request-body-name": "prices",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "create-prices-bulk"
         }
       }
@@ -2741,6 +2985,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-price-by-lookup-key"
         }
       }
@@ -2803,6 +3051,10 @@
         ],
         "x-codegen-request-body-name": "filter",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "query-price"
         }
       }
@@ -2864,6 +3116,10 @@
           }
         ],
         "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
           "name": "get-price"
         }
       },
@@ -2935,6 +3191,10 @@
         ],
         "x-codegen-request-body-name": "price",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
           "name": "update-price"
         }
       },
@@ -3006,7 +3266,1805 @@
         ],
         "x-codegen-request-body-name": "request",
         "x-speakeasy-mcp": {
+          "scopes": [
+            "delete"
+          ],
+          "readOnlyHint": false,
+          "destructiveHint": true,
           "name": "delete-price"
+        }
+      }
+    },
+    "/subscriptions": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Create subscription",
+        "description": "Use when onboarding a customer to a plan or starting a new subscription. Ideal for draft subscriptions (activate later) or active from start.",
+        "operationId": "createSubscription",
+        "requestBody": {
+          "description": "Subscription Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.CreateSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "subscription",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "create-subscription"
+        }
+      }
+    },
+    "/subscriptions/addon": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Add addon to subscription",
+        "description": "Use when adding an optional product or add-on to an existing subscription (e.g. extra storage or support tier).",
+        "operationId": "addSubscriptionAddon",
+        "requestBody": {
+          "description": "Add Addon Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.AddAddonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.AddonAssociationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "add-subscription-addon"
+        }
+      },
+      "delete": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Remove addon from subscription",
+        "description": "Use when removing an add-on from a subscription (e.g. downgrade or opt-out).",
+        "operationId": "removeSubscriptionAddon",
+        "requestBody": {
+          "description": "Remove Addon Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.RemoveAddonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "delete"
+          ],
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "name": "remove-subscription-addon"
+        }
+      }
+    },
+    "/subscriptions/lineitems/{id}": {
+      "put": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Update subscription line item",
+        "description": "Use when changing a subscription line item (e.g. quantity or price). Implemented by ending the current line and creating a new one for clean billing.",
+        "operationId": "updateSubscriptionLineItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Line Item ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Update Line Item Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.UpdateSubscriptionLineItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionLineItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "update-subscription-line-item"
+        }
+      },
+      "delete": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Delete subscription line item",
+        "description": "Use when removing a charge or seat from a subscription (e.g. downgrade). Line item ends; retained for history but no longer billed.",
+        "operationId": "deleteSubscriptionLineItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Line Item ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Delete Line Item Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.DeleteSubscriptionLineItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionLineItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "delete"
+          ],
+          "readOnlyHint": false,
+          "destructiveHint": true,
+          "name": "delete-subscription-line-item"
+        }
+      }
+    },
+    "/subscriptions/search": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Query subscriptions",
+        "description": "Use when listing or searching subscriptions (e.g. admin view or customer subscription list). Returns a paginated list; supports filtering by customer, plan, status.",
+        "operationId": "querySubscription",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.SubscriptionFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.ListSubscriptionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "filter",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "query-subscription"
+        }
+      }
+    },
+    "/subscriptions/usage": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get usage by subscription",
+        "description": "Use when showing usage for a subscription (e.g. in a portal or for overage checks). Supports time range and filters.",
+        "operationId": "getSubscriptionUsage",
+        "requestBody": {
+          "description": "Usage request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.GetUsageBySubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.GetUsageBySubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "get-subscription-usage"
+        }
+      }
+    },
+    "/subscriptions/{id}": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription",
+        "description": "Use when you need to load a single subscription (e.g. for a billing portal or to check status).",
+        "operationId": "getSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "get-subscription"
+        }
+      },
+      "put": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Update subscription",
+        "description": "Use when changing subscription details (e.g. quantity, billing anchor, or parent). Supports partial update; send \"\" to clear parent_subscription_id.",
+        "operationId": "updateSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Update Subscription Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.UpdateSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "update-subscription"
+        }
+      }
+    },
+    "/subscriptions/{id}/activate": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Activate draft subscription",
+        "description": "Use when turning a draft subscription live (e.g. after collecting payment or completing setup). Once activated, billing and entitlements apply.",
+        "operationId": "activateSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Activate Draft Subscription Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.ActivateDraftSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "activate-subscription"
+        }
+      }
+    },
+    "/subscriptions/{id}/addons/associations": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get active addon associations",
+        "description": "Use when listing which add-ons are currently attached to a subscription (e.g. for display or editing).",
+        "operationId": "getSubscriptionAddonAssociations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/dto.AddonAssociationResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "get-subscription-addon-associations"
+        }
+      }
+    },
+    "/subscriptions/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Cancel subscription",
+        "description": "Use when a customer churns or downgrades. Supports immediate or end-of-period cancellation and proration. Ideal for self-serve or support-driven cancellations.",
+        "operationId": "cancelSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Cancel Subscription Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.CancelSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.CancelSubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "cancel-subscription"
+        }
+      }
+    },
+    "/subscriptions/{id}/change/execute": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Execute subscription plan change",
+        "description": "Use when applying a plan change (e.g. upgrade or downgrade). Executes proration and generates invoice or credit as needed.",
+        "operationId": "executeSubscriptionChange",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Subscription change request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.SubscriptionChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionChangeExecuteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "execute-subscription-change"
+        }
+      }
+    },
+    "/subscriptions/{id}/change/preview": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Preview subscription plan change",
+        "description": "Use when showing a customer the cost of a plan change before they confirm (e.g. upgrade/downgrade preview with proration).",
+        "operationId": "previewSubscriptionChange",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Subscription change preview request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.SubscriptionChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionChangePreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "preview-subscription-change"
+        }
+      }
+    },
+    "/subscriptions/{id}/entitlements": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription entitlements",
+        "description": "Use when checking what features or limits a subscription has (e.g. entitlement checks or feature gating). Optional feature_ids to filter.",
+        "operationId": "getSubscriptionEntitlements",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "feature_ids",
+            "in": "query",
+            "description": "Feature IDs to filter by",
+            "style": "form",
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionEntitlementsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "get-subscription-entitlements"
+        }
+      }
+    },
+    "/subscriptions/{id}/grants/upcoming": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get upcoming credit grant applications",
+        "description": "Use when showing upcoming or pending credits for a subscription (e.g. in a portal or for forecasting).",
+        "operationId": "getSubscriptionUpcomingGrants",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.ListCreditGrantApplicationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "get-subscription-upcoming-grants"
+        }
+      }
+    },
+    "/subscriptions/{id}/lineitems": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Create subscription line item",
+        "description": "Use when adding a new charge or seat to a subscription (e.g. extra seat or one-time add). Supports price_id or inline price.",
+        "operationId": "createSubscriptionLineItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Create Line Item Request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.CreateSubscriptionLineItemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionLineItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "create-subscription-line-item"
+        }
+      }
+    },
+    "/subscriptions/{id}/pause": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Pause a subscription",
+        "description": "Use when temporarily stopping a subscription (e.g. customer hold or seasonal pause). Billing and access pause; resume when ready.",
+        "operationId": "pauseSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Pause subscription request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.PauseSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionPauseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "pause-subscription"
+        }
+      }
+    },
+    "/subscriptions/{id}/pauses": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List all pauses for a subscription",
+        "description": "Use when showing pause history for a subscription (e.g. support or audit). Returns all past and future pauses.",
+        "operationId": "listSubscriptionPauses",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/dto.ListSubscriptionPausesResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "list-subscription-pauses"
+        }
+      }
+    },
+    "/subscriptions/{id}/resume": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Resume a paused subscription",
+        "description": "Use when reactivating a paused subscription (e.g. end of hold). Billing and access resume from the resume date.",
+        "operationId": "resumeSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Resume subscription request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.ResumeSubscriptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionPauseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "resume-subscription"
+        }
+      }
+    },
+    "/subscriptions/{id}/v2": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription (V2)",
+        "description": "Use when you need a subscription with related data (line items, prices, plan). Supports expand for detailed payloads without extra round-trips.",
+        "operationId": "getSubscriptionV2",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionResponseV2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "get-subscription-v2"
+        }
+      }
+    },
+    "/v1/subscription-schedules": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List all subscription schedules",
+        "description": "Use when listing or searching scheduled changes across subscriptions (e.g. admin view). Returns schedules with optional filtering.",
+        "operationId": "listAllSubscriptionSchedules",
+        "parameters": [
+          {
+            "name": "pending_only",
+            "in": "query",
+            "description": "Filter to pending schedules only",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "subscription_id",
+            "in": "query",
+            "description": "Filter by subscription ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Limit results",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Offset for pagination",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.GetPendingSchedulesResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "list-all-subscription-schedules"
+        }
+      }
+    },
+    "/v1/subscription-schedules/{id}": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription schedule",
+        "description": "Use when you need to load a single scheduled change (e.g. to show when a plan change or renewal takes effect).",
+        "operationId": "getSubscriptionSchedule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Schedule ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionScheduleResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "get-subscription-schedule"
+        }
+      }
+    },
+    "/v1/subscriptions/schedules/{schedule_id}/cancel": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Cancel subscription schedule",
+        "description": "Use when cancelling a scheduled change (e.g. customer changed mind). Identify by schedule ID in path or by subscription ID + schedule type in body.",
+        "operationId": "cancelSubscriptionSchedule",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "description": "Schedule ID (optional if using request body)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Cancel request (optional if using path parameter)",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.CancelScheduleRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.CancelScheduleResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "write"
+          ],
+          "readOnlyHint": false,
+          "name": "cancel-subscription-schedule"
+        }
+      }
+    },
+    "/v1/subscriptions/{subscription_id}/schedules": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List subscription schedules",
+        "description": "Use when listing scheduled changes for a subscription (e.g. upcoming plan change or renewal). Returns all schedules for that subscription.",
+        "operationId": "listSubscriptionSchedules",
+        "parameters": [
+          {
+            "name": "subscription_id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.GetPendingSchedulesResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-speakeasy-mcp": {
+          "scopes": [
+            "read"
+          ],
+          "readOnlyHint": true,
+          "name": "list-subscription-schedules"
         }
       }
     }
@@ -4618,21 +6676,6 @@
           }
         }
       },
-      "dto.CreateEnvironmentRequest": {
-        "required": [
-          "name",
-          "type"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          }
-        }
-      },
       "dto.CreateFeatureRequest": {
         "required": [
           "name",
@@ -4645,6 +6688,10 @@
           },
           "description": {
             "type": "string"
+          },
+          "group_id": {
+            "type": "string",
+            "description": "GroupID is the id of the group to add the feature to"
           },
           "lookup_key": {
             "type": "string"
@@ -4660,6 +6707,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "reporting_unit": {
+            "$ref": "#/components/schemas/types.ReportingUnit"
           },
           "type": {
             "$ref": "#/components/schemas/types.FeatureType"
@@ -5617,18 +7667,47 @@
       },
       "dto.CreateUserRequest": {
         "required": [
-          "roles",
           "type"
         ],
         "type": "object",
         "properties": {
+          "email": {
+            "type": "string",
+            "description": "Required when type is \"user\""
+          },
           "roles": {
-            "minItems": 1,
             "type": "array",
-            "description": "Roles are required",
+            "description": "Required when type is \"service_account\"",
             "items": {
               "type": "string"
             }
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.UserType"
+          }
+        }
+      },
+      "dto.CreateUserResponse": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Empty for service accounts"
+          },
+          "id": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/dto.TenantResponse"
           },
           "type": {
             "$ref": "#/components/schemas/types.UserType"
@@ -6396,26 +8475,6 @@
           }
         }
       },
-      "dto.EnvironmentResponse": {
-        "type": "object",
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        }
-      },
       "dto.Event": {
         "type": "object",
         "properties": {
@@ -6475,6 +8534,12 @@
           "environment_id": {
             "type": "string"
           },
+          "group": {
+            "$ref": "#/components/schemas/dto.GroupResponse"
+          },
+          "group_id": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -6492,6 +8557,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "reporting_unit": {
+            "$ref": "#/components/schemas/types.ReportingUnit"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -6816,6 +8884,11 @@
         ],
         "type": "object",
         "properties": {
+          "hide_zero_charges_line_items": {
+            "type": "boolean",
+            "description": "hide_zero_charges_line_items indicates whether to hide line items with zero cost",
+            "default": false
+          },
           "period_end": {
             "type": "string",
             "description": "period_end is the optional end date of the period to preview"
@@ -7552,6 +9625,10 @@
           "period_start": {
             "type": "string",
             "description": "period_start is the start date of the billing period covered by this invoice"
+          },
+          "recalculated_invoice_id": {
+            "type": "string",
+            "description": "recalculated_invoice_id is the ID of the replacement invoice created when this invoice was voided and recalculated.\nWhen set, it forms a parent→child link from this (voided) invoice to the new replacement invoice."
           },
           "refunded_amount": {
             "type": "string",
@@ -10007,6 +12084,10 @@
           },
           "quantity": {
             "type": "number"
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "For feature_usage: direct match by sub_line_item_id"
           }
         }
       },
@@ -10635,17 +12716,6 @@
           }
         }
       },
-      "dto.UpdateEnvironmentRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          }
-        }
-      },
       "dto.UpdateFeatureRequest": {
         "type": "object",
         "properties": {
@@ -10661,11 +12731,18 @@
               "$ref": "#/components/schemas/meter.Filter"
             }
           },
+          "group_id": {
+            "type": "string",
+            "description": "GroupID is the id of the group to assign the feature to. Pass empty string to clear."
+          },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
           },
           "name": {
             "type": "string"
+          },
+          "reporting_unit": {
+            "$ref": "#/components/schemas/types.ReportingUnit"
           },
           "unit_plural": {
             "type": "string"
@@ -10775,7 +12852,7 @@
           },
           "group_id": {
             "type": "string",
-            "description": "GroupID is the id of the group to update the price in"
+            "description": "GroupID is the id of the group to update the price in.\nIf not provided (nil), the group will not be changed\nIf provided as empty string (\"\"), the group will be removed (price will be ungrouped)\nIf provided as a group ID, the price will be assigned to that group (must exist and be published)"
           },
           "lookup_key": {
             "type": "string",
@@ -11017,6 +13094,9 @@
           "feature_id": {
             "type": "string"
           },
+          "group": {
+            "$ref": "#/components/schemas/group.Group"
+          },
           "meter": {
             "$ref": "#/components/schemas/meter.Meter"
           },
@@ -11053,6 +13133,9 @@
             },
             "description": "Stores property values for flexible grouping (e.g., org_id -> \"org123\")"
           },
+          "reporting_unit": {
+            "$ref": "#/components/schemas/types.ReportingUnit"
+          },
           "source": {
             "type": "string"
           },
@@ -11079,6 +13162,10 @@
           },
           "total_usage": {
             "type": "string"
+          },
+          "total_usage_display": {
+            "type": "string",
+            "description": "Empty string when feature has no reporting unit; otherwise the value in reporting units"
           },
           "unit": {
             "type": "string"
@@ -11733,6 +13820,12 @@
           "environment_id": {
             "type": "string"
           },
+          "group": {
+            "$ref": "#/components/schemas/group.Group"
+          },
+          "group_id": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -11747,6 +13840,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "reporting_unit": {
+            "$ref": "#/components/schemas/types.ReportingUnit"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -11803,690 +13899,6 @@
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "updated_by": {
-            "type": "string"
-          }
-        }
-      },
-      "github_com_flexprice_flexprice_internal_types.Value": {
-        "type": "object",
-        "properties": {
-          "array": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "boolean": {
-            "type": "boolean"
-          },
-          "date": {
-            "type": "string"
-          },
-          "number": {
-            "type": "number"
-          },
-          "string": {
-            "type": "string"
-          }
-        }
-      },
-      "invoice.InvoiceLineItem": {
-        "type": "object",
-        "properties": {
-          "amount": {
-            "type": "string"
-          },
-          "commitment_info": {
-            "$ref": "#/components/schemas/types.CommitmentInfo"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "currency": {
-            "type": "string"
-          },
-          "customer_id": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "entity_id": {
-            "type": "string"
-          },
-          "entity_type": {
-            "type": "string"
-          },
-          "environment_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "invoice_id": {
-            "type": "string"
-          },
-          "invoice_level_discount": {
-            "type": "string",
-            "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice."
-          },
-          "line_item_discount": {
-            "type": "string",
-            "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item."
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/types.Metadata"
-          },
-          "meter_display_name": {
-            "type": "string"
-          },
-          "meter_id": {
-            "type": "string"
-          },
-          "period_end": {
-            "type": "string"
-          },
-          "period_start": {
-            "type": "string"
-          },
-          "plan_display_name": {
-            "type": "string"
-          },
-          "prepaid_credits_applied": {
-            "type": "string",
-            "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application."
-          },
-          "price_id": {
-            "type": "string"
-          },
-          "price_type": {
-            "type": "string"
-          },
-          "price_unit": {
-            "type": "string"
-          },
-          "price_unit_amount": {
-            "type": "string"
-          },
-          "price_unit_id": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "subscription_id": {
-            "type": "string"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "updated_by": {
-            "type": "string"
-          }
-        }
-      },
-      "meter.Aggregation": {
-        "type": "object",
-        "properties": {
-          "bucket_size": {
-            "$ref": "#/components/schemas/types.WindowSize"
-          },
-          "field": {
-            "type": "string",
-            "description": "Field is the key in $event.properties on which the aggregation is to be applied\nFor ex if the aggregation type is sum for API usage, the field could be \"duration_ms\""
-          },
-          "group_by": {
-            "type": "string",
-            "description": "GroupBy is the property name in event.properties to group by before aggregating.\nCurrently only supported for MAX aggregation with bucket_size.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total."
-          },
-          "multiplier": {
-            "type": "string",
-            "description": "Multiplier is the multiplier for the aggregation\nFor ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000\nto scale up by a factor of 1000. If not provided, it will be null."
-          },
-          "type": {
-            "$ref": "#/components/schemas/types.AggregationType"
-          }
-        }
-      },
-      "meter.Filter": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "Key is the key for the filter from $event.properties\nCurrently we support only first level keys in the properties and not nested keys"
-          },
-          "values": {
-            "type": "array",
-            "description": "Values are the possible values for the filter to be considered for the meter\nFor ex \"model_name\" could have values \"o1-mini\", \"gpt-4o\" etc",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "meter.Meter": {
-        "type": "object",
-        "properties": {
-          "aggregation": {
-            "$ref": "#/components/schemas/meter.Aggregation"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "EnvironmentID is the environment identifier for the meter"
-          },
-          "event_name": {
-            "type": "string",
-            "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation"
-          },
-          "filters": {
-            "type": "array",
-            "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
-            "items": {
-              "$ref": "#/components/schemas/meter.Filter"
-            }
-          },
-          "id": {
-            "type": "string",
-            "description": "ID is the unique identifier for the meter"
-          },
-          "name": {
-            "type": "string",
-            "description": "Name is the display name of the meter"
-          },
-          "reset_usage": {
-            "$ref": "#/components/schemas/types.ResetUsage"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "updated_by": {
-            "type": "string"
-          }
-        }
-      },
-      "models.TemporalWorkflowResult": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "run_id": {
-            "type": "string"
-          },
-          "workflow_id": {
-            "type": "string"
-          }
-        }
-      },
-      "price.JSONBFilters": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "price.JSONBMetadata": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "string"
-        }
-      },
-      "price.JSONBTransformQuantity": {
-        "type": "object",
-        "properties": {
-          "divide_by": {
-            "type": "integer",
-            "description": "Divide quantity by this number"
-          },
-          "round": {
-            "$ref": "#/components/schemas/types.RoundType"
-          }
-        }
-      },
-      "price.Price": {
-        "type": "object",
-        "properties": {
-          "amount": {
-            "type": "string",
-            "description": "Amount stored in main currency units (e.g., dollars, not cents)\nFor USD: 12.50 means $12.50"
-          },
-          "billing_cadence": {
-            "$ref": "#/components/schemas/types.BillingCadence"
-          },
-          "billing_model": {
-            "$ref": "#/components/schemas/types.BillingModel"
-          },
-          "billing_period": {
-            "$ref": "#/components/schemas/types.BillingPeriod"
-          },
-          "billing_period_count": {
-            "type": "integer",
-            "description": "BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12"
-          },
-          "conversion_rate": {
-            "type": "string",
-            "description": "ConversionRate is the conversion rate of the price unit to the fiat currency"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "currency": {
-            "type": "string",
-            "description": "Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp"
-          },
-          "description": {
-            "type": "string",
-            "description": "Description of the price"
-          },
-          "display_amount": {
-            "type": "string",
-            "description": "DisplayAmount is the formatted amount with currency symbol\nFor USD: $12.50"
-          },
-          "display_name": {
-            "type": "string",
-            "description": "DisplayName is the name of the price"
-          },
-          "display_price_unit_amount": {
-            "type": "string",
-            "description": "DisplayPriceUnitAmount is the formatted amount of the price unit"
-          },
-          "end_date": {
-            "type": "string",
-            "description": "EndDate is the end date of the price"
-          },
-          "entity_id": {
-            "type": "string",
-            "description": "EntityID holds the value of the \"entity_id\" field."
-          },
-          "entity_type": {
-            "$ref": "#/components/schemas/types.PriceEntityType"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "EnvironmentID is the environment identifier for the price"
-          },
-          "group_id": {
-            "type": "string",
-            "description": "GroupID references the group this price belongs to"
-          },
-          "id": {
-            "type": "string",
-            "description": "ID uuid identifier for the price"
-          },
-          "invoice_cadence": {
-            "$ref": "#/components/schemas/types.InvoiceCadence"
-          },
-          "lookup_key": {
-            "type": "string",
-            "description": "LookupKey used for looking up the price in the database"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/price.JSONBMetadata"
-          },
-          "meter_id": {
-            "type": "string",
-            "description": "MeterID is the id of the meter for usage based pricing"
-          },
-          "min_quantity": {
-            "type": "string",
-            "description": "MinQuantity is the minimum quantity of the price",
-            "nullable": true
-          },
-          "parent_price_id": {
-            "type": "string",
-            "description": "ParentPriceID references the root price (always set for price lineage tracking)"
-          },
-          "price_unit": {
-            "type": "string",
-            "description": "PriceUnit is the code of the price unit (e.g., 'btc', 'eth')"
-          },
-          "price_unit_amount": {
-            "type": "string",
-            "description": "PriceUnitAmount is the amount of the price unit"
-          },
-          "price_unit_id": {
-            "type": "string",
-            "description": "PriceUnitID is the id of the price unit (for CUSTOM type)"
-          },
-          "price_unit_tiers": {
-            "type": "array",
-            "description": "PriceUnitTiers are the tiers for the price unit when BillingModel is TIERED",
-            "items": {
-              "$ref": "#/components/schemas/price.PriceTier"
-            }
-          },
-          "price_unit_type": {
-            "$ref": "#/components/schemas/types.PriceUnitType"
-          },
-          "start_date": {
-            "type": "string",
-            "description": "StartDate is the start date of the price"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "tier_mode": {
-            "$ref": "#/components/schemas/types.BillingTier"
-          },
-          "tiers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/price.PriceTier"
-            }
-          },
-          "transform_quantity": {
-            "$ref": "#/components/schemas/price.JSONBTransformQuantity"
-          },
-          "trial_period": {
-            "type": "integer",
-            "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)"
-          },
-          "type": {
-            "$ref": "#/components/schemas/types.PriceType"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "updated_by": {
-            "type": "string"
-          }
-        }
-      },
-      "price.PriceTier": {
-        "type": "object",
-        "properties": {
-          "flat_amount": {
-            "type": "string",
-            "description": "flat_amount is the flat amount for the given tier (optional)\nApplied on top of unit_amount*quantity. Useful for cases like \"2.7$ + 5c\""
-          },
-          "unit_amount": {
-            "type": "string",
-            "description": "unit_amount is the amount per unit for the given tier"
-          },
-          "up_to": {
-            "type": "integer",
-            "description": "up_to is the quantity up to which this tier applies. It is null for the last tier.\nIMPORTANT: Tier boundaries are INCLUSIVE.\n- If up_to is 1000, then quantity less than or equal to 1000 belongs to this tier\n- This behavior is consistent across both VOLUME and SLAB tier modes"
-          }
-        }
-      },
-      "price.TransformQuantity": {
-        "type": "object",
-        "properties": {
-          "divide_by": {
-            "type": "integer",
-            "description": "Divide quantity by this number"
-          },
-          "round": {
-            "$ref": "#/components/schemas/types.RoundType"
-          }
-        }
-      },
-      "subscription.SubscriptionLineItem": {
-        "type": "object",
-        "properties": {
-          "billing_period": {
-            "$ref": "#/components/schemas/types.BillingPeriod"
-          },
-          "billing_period_count": {
-            "type": "integer",
-            "description": "from price at create; default 1"
-          },
-          "commitment_amount": {
-            "type": "string",
-            "description": "Commitment fields"
-          },
-          "commitment_duration": {
-            "$ref": "#/components/schemas/types.BillingPeriod"
-          },
-          "commitment_overage_factor": {
-            "type": "string"
-          },
-          "commitment_quantity": {
-            "type": "string"
-          },
-          "commitment_true_up_enabled": {
-            "type": "boolean"
-          },
-          "commitment_type": {
-            "$ref": "#/components/schemas/types.CommitmentType"
-          },
-          "commitment_windowed": {
-            "type": "boolean"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "currency": {
-            "type": "string"
-          },
-          "customer_id": {
-            "type": "string"
-          },
-          "display_name": {
-            "type": "string"
-          },
-          "end_date": {
-            "type": "string"
-          },
-          "entity_id": {
-            "type": "string"
-          },
-          "entity_type": {
-            "$ref": "#/components/schemas/types.SubscriptionLineItemEntityType"
-          },
-          "environment_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "invoice_cadence": {
-            "$ref": "#/components/schemas/types.InvoiceCadence"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "meter_display_name": {
-            "type": "string"
-          },
-          "meter_id": {
-            "type": "string"
-          },
-          "plan_display_name": {
-            "type": "string"
-          },
-          "price": {
-            "$ref": "#/components/schemas/price.Price"
-          },
-          "price_id": {
-            "type": "string"
-          },
-          "price_type": {
-            "$ref": "#/components/schemas/types.PriceType"
-          },
-          "price_unit": {
-            "type": "string"
-          },
-          "price_unit_id": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "string"
-          },
-          "start_date": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "subscription_id": {
-            "type": "string"
-          },
-          "subscription_phase_id": {
-            "type": "string"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "trial_period": {
-            "type": "integer"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "updated_by": {
-            "type": "string"
-          }
-        }
-      },
-      "subscription.SubscriptionPause": {
-        "type": "object",
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "EnvironmentID is the environment identifier for the pause"
-          },
-          "id": {
-            "type": "string",
-            "description": "ID is the unique identifier for the subscription pause"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/types.Metadata"
-          },
-          "original_period_end": {
-            "type": "string",
-            "description": "OriginalPeriodEnd is the end of the billing period when the pause was created"
-          },
-          "original_period_start": {
-            "type": "string",
-            "description": "OriginalPeriodStart is the start of the billing period when the pause was created"
-          },
-          "pause_end": {
-            "type": "string",
-            "description": "PauseEnd is when the pause will end (null for indefinite)"
-          },
-          "pause_mode": {
-            "$ref": "#/components/schemas/types.PauseMode"
-          },
-          "pause_start": {
-            "type": "string",
-            "description": "PauseStart is when the pause actually started"
-          },
-          "pause_status": {
-            "$ref": "#/components/schemas/types.PauseStatus"
-          },
-          "reason": {
-            "type": "string",
-            "description": "Reason is the reason for pausing"
-          },
-          "resume_mode": {
-            "$ref": "#/components/schemas/types.ResumeMode"
-          },
-          "resumed_at": {
-            "type": "string",
-            "description": "ResumedAt is when the pause was actually ended (if manually resumed)"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "subscription_id": {
-            "type": "string",
-            "description": "SubscriptionID is the identifier for the subscription"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "updated_by": {
-            "type": "string"
-          }
-        }
-      },
-      "subscription.SubscriptionPhase": {
-        "type": "object",
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "end_date": {
-            "type": "string",
-            "description": "EndDate is when the phase ends (nil if phase is still active or indefinite)"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "EnvironmentID is the environment identifier for the phase"
-          },
-          "id": {
-            "type": "string",
-            "description": "ID is the unique identifier for the subscription phase"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/types.Metadata"
-          },
-          "start_date": {
-            "type": "string",
-            "description": "StartDate is when the phase starts"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "subscription_id": {
-            "type": "string",
-            "description": "SubscriptionID is the identifier for the subscription"
           },
           "tenant_id": {
             "type": "string"
@@ -13592,7 +15004,7 @@
             "$ref": "#/components/schemas/types.FilterOperatorType"
           },
           "value": {
-            "$ref": "#/components/schemas/github_com_flexprice_flexprice_internal_types.Value"
+            "$ref": "#/components/schemas/types.Value"
           }
         },
         "x-speakeasy-name-override": "FilterCondition"
@@ -13893,28 +15305,6 @@
           "InvoiceTypeCredit"
         ],
         "x-speakeasy-name-override": "InvoiceType"
-      },
-      "types.ListResponse-dto_WalletResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/dto.WalletResponse"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/types.PaginationResponse"
-          }
-        },
-        "x-speakeasy-name-override": "ListResponse-dto_WalletResponse"
-      },
-      "types.Metadata": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "string"
-        },
-        "x-speakeasy-name-override": "Metadata"
       },
       "types.PaginationResponse": {
         "type": "object",
@@ -14872,7 +16262,8 @@
           "CREDIT_EXPIRED",
           "WALLET_TERMINATION",
           "MANUAL_BALANCE_DEBIT",
-          "CREDIT_ADJUSTMENT"
+          "CREDIT_ADJUSTMENT",
+          "INVOICE_VOID_REFUND"
         ],
         "x-enum-varnames": [
           "TransactionReasonInvoicePayment",
@@ -14884,7 +16275,8 @@
           "TransactionReasonCreditExpired",
           "TransactionReasonWalletTermination",
           "TransactionReasonManualBalanceDebit",
-          "TransactionReasonCreditAdjustment"
+          "TransactionReasonCreditAdjustment",
+          "TransactionReasonInvoiceVoidRefund"
         ],
         "x-speakeasy-name-override": "TransactionReason"
       },
@@ -14988,6 +16380,30 @@
           "UserTypeServiceAccount"
         ],
         "x-speakeasy-name-override": "UserType"
+      },
+      "types.Value": {
+        "type": "object",
+        "properties": {
+          "array": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "boolean": {
+            "type": "boolean"
+          },
+          "date": {
+            "type": "string"
+          },
+          "number": {
+            "type": "number"
+          },
+          "string": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "Value"
       },
       "types.WalletConfig": {
         "type": "object",
@@ -15276,6 +16692,767 @@
           }
         },
         "x-speakeasy-name-override": "WorkflowExecutionFilter"
+      },
+      "group.Group": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.GroupEntityType"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "lookup_key": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "invoice.InvoiceLineItem": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "commitment_info": {
+            "$ref": "#/components/schemas/types.CommitmentInfo"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "invoice_level_discount": {
+            "type": "string",
+            "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice."
+          },
+          "line_item_discount": {
+            "type": "string",
+            "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item."
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "meter_display_name": {
+            "type": "string"
+          },
+          "meter_id": {
+            "type": "string"
+          },
+          "period_end": {
+            "type": "string"
+          },
+          "period_start": {
+            "type": "string"
+          },
+          "plan_display_name": {
+            "type": "string"
+          },
+          "prepaid_credits_applied": {
+            "type": "string",
+            "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application."
+          },
+          "price_id": {
+            "type": "string"
+          },
+          "price_type": {
+            "type": "string"
+          },
+          "price_unit": {
+            "type": "string"
+          },
+          "price_unit_amount": {
+            "type": "string"
+          },
+          "price_unit_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "meter.Aggregation": {
+        "type": "object",
+        "properties": {
+          "bucket_size": {
+            "$ref": "#/components/schemas/types.WindowSize"
+          },
+          "expression": {
+            "type": "string",
+            "description": "Expression is an optional CEL expression to compute per-event quantity from event.properties.\nWhen set, it replaces Field-based extraction. Property names are used directly (e.g., token * duration * pixel)."
+          },
+          "field": {
+            "type": "string",
+            "description": "Field is the key in $event.properties on which the aggregation is to be applied\nFor ex if the aggregation type is sum for API usage, the field could be \"duration_ms\"\nIgnored when Expression is set."
+          },
+          "group_by": {
+            "type": "string",
+            "description": "GroupBy is the property name in event.properties to group by before aggregating.\nCurrently only supported for MAX aggregation with bucket_size.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total."
+          },
+          "multiplier": {
+            "type": "string",
+            "description": "Multiplier is the multiplier for the aggregation\nFor ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000\nto scale up by a factor of 1000. If not provided, it will be null."
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.AggregationType"
+          }
+        }
+      },
+      "meter.Filter": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Key is the key for the filter from $event.properties\nCurrently we support only first level keys in the properties and not nested keys"
+          },
+          "values": {
+            "type": "array",
+            "description": "Values are the possible values for the filter to be considered for the meter\nFor ex \"model_name\" could have values \"o1-mini\", \"gpt-4o\" etc",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "meter.Meter": {
+        "type": "object",
+        "properties": {
+          "aggregation": {
+            "$ref": "#/components/schemas/meter.Aggregation"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "EnvironmentID is the environment identifier for the meter"
+          },
+          "event_name": {
+            "type": "string",
+            "description": "EventName is the unique identifier for the event that this meter is tracking\nIt is a mandatory field in the events table and hence being used as the primary matching field\nWe can have multiple meters tracking the same event but with different filters and aggregation"
+          },
+          "filters": {
+            "type": "array",
+            "description": "Filters define the criteria for the meter to be applied on the events before aggregation\nIt also defines the possible values on which later the charges will be applied",
+            "items": {
+              "$ref": "#/components/schemas/meter.Filter"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is the unique identifier for the meter"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name is the display name of the meter"
+          },
+          "reset_usage": {
+            "$ref": "#/components/schemas/types.ResetUsage"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "models.TemporalWorkflowResult": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "workflow_id": {
+            "type": "string"
+          }
+        }
+      },
+      "price.JSONBFilters": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "price.JSONBMetadata": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "price.JSONBTransformQuantity": {
+        "type": "object",
+        "properties": {
+          "divide_by": {
+            "type": "integer",
+            "description": "Divide quantity by this number"
+          },
+          "round": {
+            "$ref": "#/components/schemas/types.RoundType"
+          }
+        }
+      },
+      "price.Price": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Amount stored in main currency units (e.g., dollars, not cents)\nFor USD: 12.50 means $12.50"
+          },
+          "billing_cadence": {
+            "$ref": "#/components/schemas/types.BillingCadence"
+          },
+          "billing_model": {
+            "$ref": "#/components/schemas/types.BillingModel"
+          },
+          "billing_period": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "billing_period_count": {
+            "type": "integer",
+            "description": "BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12"
+          },
+          "conversion_rate": {
+            "type": "string",
+            "description": "ConversionRate is the conversion rate of the price unit to the fiat currency"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "description": "Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the price"
+          },
+          "display_amount": {
+            "type": "string",
+            "description": "DisplayAmount is the formatted amount with currency symbol\nFor USD: $12.50"
+          },
+          "display_name": {
+            "type": "string",
+            "description": "DisplayName is the name of the price"
+          },
+          "display_price_unit_amount": {
+            "type": "string",
+            "description": "DisplayPriceUnitAmount is the formatted amount of the price unit"
+          },
+          "end_date": {
+            "type": "string",
+            "description": "EndDate is the end date of the price"
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "EntityID holds the value of the \"entity_id\" field."
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.PriceEntityType"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "EnvironmentID is the environment identifier for the price"
+          },
+          "group_id": {
+            "type": "string",
+            "description": "GroupID references the group this price belongs to"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID uuid identifier for the price"
+          },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "lookup_key": {
+            "type": "string",
+            "description": "LookupKey used for looking up the price in the database"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/price.JSONBMetadata"
+          },
+          "meter_id": {
+            "type": "string",
+            "description": "MeterID is the id of the meter for usage based pricing"
+          },
+          "min_quantity": {
+            "type": "string",
+            "description": "MinQuantity is the minimum quantity of the price",
+            "nullable": true
+          },
+          "parent_price_id": {
+            "type": "string",
+            "description": "ParentPriceID references the root price (always set for price lineage tracking)"
+          },
+          "price_unit": {
+            "type": "string",
+            "description": "PriceUnit is the code of the price unit (e.g., 'btc', 'eth')"
+          },
+          "price_unit_amount": {
+            "type": "string",
+            "description": "PriceUnitAmount is the amount of the price unit"
+          },
+          "price_unit_id": {
+            "type": "string",
+            "description": "PriceUnitID is the id of the price unit (for CUSTOM type)"
+          },
+          "price_unit_tiers": {
+            "type": "array",
+            "description": "PriceUnitTiers are the tiers for the price unit when BillingModel is TIERED",
+            "items": {
+              "$ref": "#/components/schemas/price.PriceTier"
+            }
+          },
+          "price_unit_type": {
+            "$ref": "#/components/schemas/types.PriceUnitType"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate is the start date of the price"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "tier_mode": {
+            "$ref": "#/components/schemas/types.BillingTier"
+          },
+          "tiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/price.PriceTier"
+            }
+          },
+          "transform_quantity": {
+            "$ref": "#/components/schemas/price.JSONBTransformQuantity"
+          },
+          "trial_period": {
+            "type": "integer",
+            "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.PriceType"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "price.PriceTier": {
+        "type": "object",
+        "properties": {
+          "flat_amount": {
+            "type": "string",
+            "description": "flat_amount is the flat amount for the given tier (optional)\nApplied on top of unit_amount*quantity. Useful for cases like \"2.7$ + 5c\""
+          },
+          "unit_amount": {
+            "type": "string",
+            "description": "unit_amount is the amount per unit for the given tier"
+          },
+          "up_to": {
+            "type": "integer",
+            "description": "up_to is the quantity up to which this tier applies. It is null for the last tier.\nIMPORTANT: Tier boundaries are INCLUSIVE.\n- If up_to is 1000, then quantity less than or equal to 1000 belongs to this tier\n- This behavior is consistent across both VOLUME and SLAB tier modes"
+          }
+        }
+      },
+      "price.TransformQuantity": {
+        "type": "object",
+        "properties": {
+          "divide_by": {
+            "type": "integer",
+            "description": "Divide quantity by this number"
+          },
+          "round": {
+            "$ref": "#/components/schemas/types.RoundType"
+          }
+        }
+      },
+      "subscription.SubscriptionLineItem": {
+        "type": "object",
+        "properties": {
+          "billing_period": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "billing_period_count": {
+            "type": "integer",
+            "description": "from price at create; default 1"
+          },
+          "commitment_amount": {
+            "type": "string",
+            "description": "Commitment fields"
+          },
+          "commitment_duration": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          },
+          "commitment_overage_factor": {
+            "type": "string"
+          },
+          "commitment_quantity": {
+            "type": "string"
+          },
+          "commitment_true_up_enabled": {
+            "type": "boolean"
+          },
+          "commitment_type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "commitment_windowed": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.SubscriptionLineItemEntityType"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "meter_display_name": {
+            "type": "string"
+          },
+          "meter_id": {
+            "type": "string"
+          },
+          "plan_display_name": {
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/price.Price"
+          },
+          "price_id": {
+            "type": "string"
+          },
+          "price_type": {
+            "$ref": "#/components/schemas/types.PriceType"
+          },
+          "price_unit": {
+            "type": "string"
+          },
+          "price_unit_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string"
+          },
+          "subscription_phase_id": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "trial_period": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "subscription.SubscriptionPause": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "EnvironmentID is the environment identifier for the pause"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is the unique identifier for the subscription pause"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "original_period_end": {
+            "type": "string",
+            "description": "OriginalPeriodEnd is the end of the billing period when the pause was created"
+          },
+          "original_period_start": {
+            "type": "string",
+            "description": "OriginalPeriodStart is the start of the billing period when the pause was created"
+          },
+          "pause_end": {
+            "type": "string",
+            "description": "PauseEnd is when the pause will end (null for indefinite)"
+          },
+          "pause_mode": {
+            "$ref": "#/components/schemas/types.PauseMode"
+          },
+          "pause_start": {
+            "type": "string",
+            "description": "PauseStart is when the pause actually started"
+          },
+          "pause_status": {
+            "$ref": "#/components/schemas/types.PauseStatus"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason is the reason for pausing"
+          },
+          "resume_mode": {
+            "$ref": "#/components/schemas/types.ResumeMode"
+          },
+          "resumed_at": {
+            "type": "string",
+            "description": "ResumedAt is when the pause was actually ended (if manually resumed)"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string",
+            "description": "SubscriptionID is the identifier for the subscription"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "subscription.SubscriptionPhase": {
+        "type": "object",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string",
+            "description": "EndDate is when the phase ends (nil if phase is still active or indefinite)"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "EnvironmentID is the environment identifier for the phase"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID is the unique identifier for the subscription phase"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate is when the phase starts"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_id": {
+            "type": "string",
+            "description": "SubscriptionID is the identifier for the subscription"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        }
+      },
+      "types.GroupEntityType": {
+        "type": "string",
+        "enum": [
+          "price",
+          "feature"
+        ],
+        "x-enum-varnames": [
+          "GroupEntityTypePrice",
+          "GroupEntityTypeFeature"
+        ],
+        "x-speakeasy-name-override": "GroupEntityType"
+      },
+      "types.ListResponse-dto_WalletResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/dto.WalletResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        },
+        "x-speakeasy-name-override": "ListResponse-dto_WalletResponse"
+      },
+      "types.Metadata": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "x-speakeasy-name-override": "Metadata"
+      },
+      "types.ReportingUnit": {
+        "type": "object",
+        "properties": {
+          "conversion_rate": {
+            "type": "number",
+            "description": "Multiplier: reporting_unit_value = unit_value * conversion_rate; must be > 0"
+          },
+          "unit_plural": {
+            "type": "string",
+            "description": "Display unit label, plural (e.g. \"seconds\")"
+          },
+          "unit_singular": {
+            "type": "string",
+            "description": "Display unit label, singular (e.g. \"second\")"
+          }
+        },
+        "x-speakeasy-name-override": "ReportingUnit"
       }
     },
     "securitySchemes": {

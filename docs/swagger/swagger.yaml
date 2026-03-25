@@ -1104,12 +1104,15 @@ definitions:
         type: string
       parent_customer_external_id:
         description: |-
-          parent_customer_external_id is the external ID of the parent customer from your system
-          Exactly one of parent_customer_id or parent_customer_external_id may be provided
+          Deprecated: See ParentCustomerID.
+          parent_customer_external_id is the external ID of the parent customer from your system.
+          Exactly one of parent_customer_id or parent_customer_external_id may be provided.
         type: string
       parent_customer_id:
-        description: parent_customer_id is the internal FlexPrice ID of the parent
-          customer
+        description: |-
+          Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+          This field is accepted for backward compatibility but no hierarchy validations are enforced.
+          parent_customer_id is the internal FlexPrice ID of the parent customer.
         type: string
       skip_onboarding_workflow:
         description: |-
@@ -1180,21 +1183,14 @@ definitions:
     - provider_entity_id
     - provider_type
     type: object
-  dto.CreateEnvironmentRequest:
-    properties:
-      name:
-        type: string
-      type:
-        type: string
-    required:
-    - name
-    - type
-    type: object
   dto.CreateFeatureRequest:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
       description:
+        type: string
+      group_id:
+        description: GroupID is the id of the group to add the feature to
         type: string
       lookup_key:
         type: string
@@ -1206,6 +1202,8 @@ definitions:
         type: string
       name:
         type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
       type:
         $ref: '#/definitions/types.FeatureType'
       unit_plural:
@@ -1839,9 +1837,22 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.InvoiceBilling'
         description: |-
-          invoice_billing determines which customer should receive invoices for a subscription
-          "invoice_to_parent" - Invoices are sent to the parent customer
-          "invoice_to_self" - Invoices are sent to the subscription's customer
+          Deprecated: Use invoicing_customer_id or invoicing_customer_external_id instead.
+          invoice_billing determines which customer should receive invoices for a subscription.
+          Supported values: "invoice_to_parent" (uses the subscription customer's parent) or "invoice_to_self" (default).
+          Will be removed in a future version.
+      invoicing_customer_external_id:
+        description: |-
+          invoicing_customer_external_id is the external ID of the customer to use for invoicing.
+          Resolved internally to an internal customer ID via external ID lookup.
+          Mutually exclusive with invoicing_customer_id.
+        type: string
+      invoicing_customer_id:
+        description: |-
+          invoicing_customer_id is the FlexPrice customer ID to use for invoicing.
+          This can differ from the subscription customer (e.g., a billing entity invoicing on behalf of another customer).
+          Mutually exclusive with invoicing_customer_external_id.
+        type: string
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/dto.LineItemCommitmentConfig'
@@ -2022,19 +2033,38 @@ definitions:
     type: object
   dto.CreateUserRequest:
     properties:
+      email:
+        description: Required when type is "user"
+        type: string
       roles:
-        description: Roles are required
+        description: Required when type is "service_account"
         items:
           type: string
-        minItems: 1
         type: array
       type:
         allOf:
         - $ref: '#/definitions/types.UserType'
-        description: Must be "service_account"
+        description: '"user" or "service_account"'
     required:
-    - roles
     - type
+    type: object
+  dto.CreateUserResponse:
+    properties:
+      email:
+        description: Empty for service accounts
+        type: string
+      id:
+        type: string
+      password:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      tenant:
+        $ref: '#/definitions/dto.TenantResponse'
+      type:
+        $ref: '#/definitions/types.UserType'
     type: object
   dto.CreateWalletRequest:
     properties:
@@ -2456,7 +2486,10 @@ definitions:
       parent_customer:
         $ref: '#/definitions/dto.CustomerResponse'
       parent_customer_id:
-        description: ParentCustomerID is the parent customer identifier for the customer
+        description: |-
+          Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+          Retained for backward compatibility; no hierarchy rules are enforced at the service layer.
+          ParentCustomerID is the parent customer identifier for the customer.
         type: string
       status:
         $ref: '#/definitions/types.Status'
@@ -2631,19 +2664,6 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.EnvironmentResponse:
-    properties:
-      created_at:
-        type: string
-      id:
-        type: string
-      name:
-        type: string
-      type:
-        type: string
-      updated_at:
-        type: string
-    type: object
   dto.Event:
     properties:
       customer_id:
@@ -2683,6 +2703,13 @@ definitions:
         type: string
       environment_id:
         type: string
+      group:
+        allOf:
+        - $ref: '#/definitions/dto.GroupResponse'
+        description: Group is the full group object when the feature belongs to a
+          group (populated in response)
+      group_id:
+        type: string
       id:
         type: string
       lookup_key:
@@ -2695,6 +2722,8 @@ definitions:
         type: string
       name:
         type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -2923,6 +2952,11 @@ definitions:
     type: object
   dto.GetPreviewInvoiceRequest:
     properties:
+      hide_zero_charges_line_items:
+        default: false
+        description: hide_zero_charges_line_items indicates whether to hide line items
+          with zero cost
+        type: boolean
       period_end:
         description: period_end is the optional end date of the period to preview
         type: string
@@ -3521,6 +3555,11 @@ definitions:
       period_start:
         description: period_start is the start date of the billing period covered
           by this invoice
+        type: string
+      recalculated_invoice_id:
+        description: |-
+          recalculated_invoice_id is the ID of the replacement invoice created when this invoice was voided and recalculated.
+          When set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.
         type: string
       refunded_amount:
         description: |-
@@ -5886,13 +5925,16 @@ definitions:
         type: string
       parent_customer_external_id:
         description: |-
-          parent_customer_external_id is the external ID of the parent customer from your system
-          Exactly one of parent_customer_id or parent_customer_external_id may be provided
-          If you provide the external ID, the parent customer value will be ignored
+          Deprecated: See ParentCustomerID.
+          parent_customer_external_id is the external ID of the parent customer from your system.
+          Exactly one of parent_customer_id or parent_customer_external_id may be provided.
+          If you provide the external ID, the parent customer value will be ignored.
         type: string
       parent_customer_id:
-        description: parent_customer_id is the internal FlexPrice ID of the parent
-          customer
+        description: |-
+          Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+          This field is accepted for backward compatibility but no hierarchy validations are enforced.
+          parent_customer_id is the internal FlexPrice ID of the parent customer.
         type: string
     type: object
   dto.UpdateEntitlementRequest:
@@ -5908,13 +5950,6 @@ definitions:
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
     type: object
-  dto.UpdateEnvironmentRequest:
-    properties:
-      name:
-        type: string
-      type:
-        type: string
-    type: object
   dto.UpdateFeatureRequest:
     properties:
       alert_settings:
@@ -5925,10 +5960,16 @@ definitions:
         items:
           $ref: '#/definitions/meter.Filter'
         type: array
+      group_id:
+        description: GroupID is the id of the group to assign the feature to. Pass
+          empty string to clear.
+        type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
       unit_plural:
         type: string
       unit_singular:
@@ -6007,7 +6048,11 @@ definitions:
       effective_from:
         type: string
       group_id:
-        description: GroupID is the id of the group to update the price in
+        description: |-
+          GroupID is the id of the group to update the price in.
+          If not provided (nil), the group will not be changed
+          If provided as empty string (""), the group will be removed (price will be ungrouped)
+          If provided as a group ID, the price will be assigned to that group (must exist and be published)
         type: string
       lookup_key:
         description: |-
@@ -6196,6 +6241,10 @@ definitions:
         description: Full feature object (only if expand includes "feature")
       feature_id:
         type: string
+      group:
+        allOf:
+        - $ref: '#/definitions/group.Group'
+        description: Group when the feature belongs to a group (object includes id)
       meter:
         allOf:
         - $ref: '#/definitions/meter.Meter'
@@ -6228,6 +6277,11 @@ definitions:
         description: Stores property values for flexible grouping (e.g., org_id ->
           "org123")
         type: object
+      reporting_unit:
+        allOf:
+        - $ref: '#/definitions/types.ReportingUnit'
+        description: Present when total_usage_display is set (unit_singular, unit_plural,
+          conversion_rate)
       source:
         type: string
       sources:
@@ -6248,6 +6302,10 @@ definitions:
       total_cost:
         type: string
       total_usage:
+        type: string
+      total_usage_display:
+        description: Empty string when feature has no reporting unit; otherwise the
+          value in reporting units
         type: string
       unit:
         type: string
@@ -6691,7 +6749,10 @@ definitions:
         description: Name is the name of the customer
         type: string
       parent_customer_id:
-        description: ParentCustomerID is the parent customer identifier for the customer
+        description: |-
+          Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+          Retained for backward compatibility; no hierarchy rules are enforced at the service layer.
+          ParentCustomerID is the parent customer identifier for the customer.
         type: string
       status:
         $ref: '#/definitions/types.Status'
@@ -6714,6 +6775,13 @@ definitions:
         type: string
       environment_id:
         type: string
+      group:
+        allOf:
+        - $ref: '#/definitions/group.Group'
+        description: Group is populated by the service layer when building responses;
+          repository/FromEnt do not set it.
+      group_id:
+        type: string
       id:
         type: string
       lookup_key:
@@ -6724,6 +6792,8 @@ definitions:
         type: string
       name:
         type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -7555,6 +7625,14 @@ definitions:
     - NOT_IN
     - BEFORE
     - AFTER
+  types.GroupEntityType:
+    enum:
+    - price
+    - feature
+    type: string
+    x-enum-varnames:
+    - GroupEntityTypePrice
+    - GroupEntityTypeFeature
   types.GroupFilter:
     properties:
       end_time:
@@ -7827,12 +7905,14 @@ definitions:
     - razorpay
     - nomod
     - moyasar
+    - paddle
     type: string
     x-enum-varnames:
     - PaymentGatewayTypeStripe
     - PaymentGatewayTypeRazorpay
     - PaymentGatewayTypeNomod
     - PaymentGatewayTypeMoyasar
+    - PaymentGatewayTypePaddle
   types.PaymentMethodType:
     enum:
     - CARD
@@ -8080,6 +8160,19 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.ReportingUnit:
+    properties:
+      conversion_rate:
+        description: 'Multiplier: reporting_unit_value = unit_value * conversion_rate;
+          must be > 0'
+        type: number
+      unit_plural:
+        description: Display unit label, plural (e.g. "seconds")
+        type: string
+      unit_singular:
+        description: Display unit label, singular (e.g. "second")
+        type: string
+    type: object
   types.ResetUsage:
     enum:
     - BILLING_PERIOD
@@ -8216,6 +8309,7 @@ definitions:
     - quickbooks
     - nomod
     - moyasar
+    - paddle
     type: string
     x-enum-varnames:
     - SecretProviderFlexPrice
@@ -8227,6 +8321,7 @@ definitions:
     - SecretProviderQuickBooks
     - SecretProviderNomod
     - SecretProviderMoyasar
+    - SecretProviderPaddle
   types.SecretType:
     enum:
     - private_key
@@ -8458,6 +8553,7 @@ definitions:
     - WALLET_TERMINATION
     - MANUAL_BALANCE_DEBIT
     - CREDIT_ADJUSTMENT
+    - INVOICE_VOID_REFUND
     type: string
     x-enum-varnames:
     - TransactionReasonInvoicePayment
@@ -8470,6 +8566,7 @@ definitions:
     - TransactionReasonWalletTermination
     - TransactionReasonManualBalanceDebit
     - TransactionReasonCreditAdjustment
+    - TransactionReasonInvoiceVoidRefund
   types.TransactionStatus:
     enum:
     - pending
@@ -8691,6 +8788,7 @@ definitions:
     - WalletTypePostPaid
   types.WindowSize:
     enum:
+    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -8701,9 +8799,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
-    - MONTH
     type: string
     x-enum-varnames:
+    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -8714,7 +8812,6 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
-    - DefaultWindowSize
   types.WorkflowExecutionFilter:
     properties:
       end_time:
@@ -8762,6 +8859,35 @@ definitions:
         description: e.g. Running, Completed, Failed
         type: string
       workflow_type:
+        type: string
+    type: object
+  group.Group:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.GroupEntityType'
+      environment_id:
+        type: string
+      id:
+        type: string
+      lookup_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
         type: string
     type: object
   invoice.InvoiceLineItem:
@@ -9303,6 +9429,117 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
+    type: object
+  webhookDto.AlertWebhookPayload:
+    properties:
+      alert_status:
+        type: string
+      alert_type:
+        type: string
+      customer:
+        $ref: '#/definitions/dto.CustomerResponse'
+      event_type:
+        type: string
+      feature:
+        $ref: '#/definitions/dto.FeatureResponse'
+      wallet:
+        $ref: '#/definitions/dto.WalletResponse'
+    type: object
+  webhookDto.CommunicationWebhookPayload:
+    properties:
+      event_type:
+        type: string
+      invoice:
+        $ref: '#/definitions/dto.InvoiceResponse'
+    type: object
+  webhookDto.CreditNoteWebhookPayload:
+    properties:
+      credit_note:
+        $ref: '#/definitions/dto.CreditNoteResponse'
+      event_type:
+        type: string
+    type: object
+  webhookDto.CustomerWebhookPayload:
+    properties:
+      customer:
+        $ref: '#/definitions/dto.CustomerResponse'
+      event_type:
+        type: string
+    type: object
+  webhookDto.EntitlementWebhookPayload:
+    properties:
+      entitlement:
+        $ref: '#/definitions/dto.EntitlementResponse'
+      event_type:
+        type: string
+    type: object
+  webhookDto.FeatureWebhookPayload:
+    properties:
+      event_type:
+        type: string
+      feature:
+        $ref: '#/definitions/dto.FeatureResponse'
+    type: object
+  webhookDto.InvoiceWebhookPayload:
+    properties:
+      event_type:
+        type: string
+      invoice:
+        $ref: '#/definitions/dto.InvoiceResponse'
+    type: object
+  webhookDto.PaymentWebhookPayload:
+    properties:
+      event_type:
+        type: string
+      payment:
+        $ref: '#/definitions/dto.PaymentResponse'
+    type: object
+  webhookDto.SubscriptionPhaseWebhookPayload:
+    properties:
+      event_type:
+        type: string
+      phase:
+        $ref: '#/definitions/dto.SubscriptionPhaseResponse'
+    type: object
+  webhookDto.SubscriptionWebhookPayload:
+    properties:
+      event_type:
+        type: string
+      subscription:
+        $ref: '#/definitions/dto.SubscriptionResponse'
+    type: object
+  webhookDto.TransactionWebhookPayload:
+    properties:
+      event_type:
+        type: string
+      transaction:
+        $ref: '#/definitions/dto.WalletTransactionResponse'
+      wallet:
+        $ref: '#/definitions/dto.WalletResponse'
+    type: object
+  webhookDto.WalletAlertInfo:
+    properties:
+      alert_settings:
+        $ref: '#/definitions/types.AlertSettings'
+      alert_type:
+        type: string
+      credit_balance:
+        type: number
+      current_balance:
+        type: number
+      state:
+        type: string
+    type: object
+  webhookDto.WalletWebhookPayload:
+    properties:
+      alert:
+        $ref: '#/definitions/webhookDto.WalletAlertInfo'
+      customer:
+        $ref: '#/definitions/dto.CustomerResponse'
+      event_type:
+        type: string
+      wallet:
+        $ref: '#/definitions/dto.WalletResponse'
     type: object
 info:
   contact:
@@ -10433,6 +10670,7 @@ paths:
       summary: Create customer
       tags:
       - Customers
+      x-scope: write
     put:
       consumes:
       - application/json
@@ -10535,6 +10773,7 @@ paths:
       summary: Get customer
       tags:
       - Customers
+      x-scope: read
   /customers/{id}/entitlements:
     get:
       description: Use when checking what a customer can access (e.g. feature gating
@@ -10738,6 +10977,7 @@ paths:
       summary: Query customers
       tags:
       - Customers
+      x-scope: read
   /customers/usage:
     get:
       consumes:
@@ -11129,83 +11369,6 @@ paths:
       summary: Delete entity integration mapping
       tags:
       - Entity Integration Mappings
-  /environments:
-    post:
-      consumes:
-      - application/json
-      description: Use when setting up a new environment (e.g. production, staging)
-        for the tenant. Ideal for separating billing or config per environment.
-      operationId: createEnvironment
-      parameters:
-      - description: Environment
-        in: body
-        name: environment
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateEnvironmentRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.EnvironmentResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create environment
-      tags:
-      - Environments
-  /environments/{id}:
-    put:
-      consumes:
-      - application/json
-      description: Use when changing environment name or settings (e.g. renaming or
-        updating metadata).
-      operationId: updateEnvironment
-      parameters:
-      - description: Environment ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Environment
-        in: body
-        name: environment
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateEnvironmentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.EnvironmentResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "404":
-          description: Resource not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update environment
-      tags:
-      - Environments
   /events:
     post:
       consumes:
@@ -11949,6 +12112,7 @@ paths:
       summary: Finalize invoice
       tags:
       - Invoices
+      x-scope: delete
   /invoices/{id}/payment:
     put:
       consumes:
@@ -12068,11 +12232,49 @@ paths:
       - Invoices
   /invoices/{id}/recalculate:
     post:
+      description: Starts an async workflow that creates a fresh replacement invoice
+        for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id
+        and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id
+        after completion.
+      operationId: recalculateInvoice
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/models.TemporalWorkflowResult'
+        "400":
+          description: Invalid request or invoice already recalculated
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Invoice not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Recalculate invoice (voided invoice)
+      tags:
+      - Invoices
+  /invoices/{id}/recalculate-v2:
+    post:
       consumes:
       - application/json
-      description: Use when subscription or usage data changed and you need to refresh
-        a draft invoice before finalizing. Optional finalize=true to lock after recalc.
-      operationId: recalculateInvoice
+      description: Recalculates a draft SUBSCRIPTION invoice in-place (replaces line
+        items, reapplies credits/coupons/taxes). Use when subscription or usage data
+        changed before finalizing.
+      operationId: recalculateInvoiceV2
       parameters:
       - description: Invoice ID
         in: path
@@ -12105,7 +12307,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Recalculate invoice
+      summary: Recalculate draft invoice (v2)
       tags:
       - Invoices
   /invoices/{id}/void:
@@ -15496,12 +15698,13 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when provisioning API access for automation, CI/CD pipelines,
-        or headless integrations that need scoped API keys.
+      description: Create a user account (type=user, email required; returns user
+        + password for login) or a service account (type=service_account, roles required)
+        for API/automation access.
       operationId: createUser
       parameters:
-      - description: Create service account request (type must be 'service_account',
-          roles are required)
+      - description: Create user (email, type=user) or service account (type=service_account,
+          roles)
         in: body
         name: request
         required: true
@@ -15513,7 +15716,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.UserResponse'
+            $ref: '#/definitions/dto.CreateUserResponse'
         "400":
           description: Invalid request
           schema:
@@ -15524,7 +15727,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Create service account
+      summary: Create user or service account
       tags:
       - Users
   /users/me:
@@ -16011,6 +16214,7 @@ paths:
         - WALLET_TERMINATION
         - MANUAL_BALANCE_DEBIT
         - CREDIT_ADJUSTMENT
+        - INVOICE_VOID_REFUND
         in: query
         name: transaction_reason
         type: string
@@ -16025,6 +16229,7 @@ paths:
         - TransactionReasonWalletTermination
         - TransactionReasonManualBalanceDebit
         - TransactionReasonCreditAdjustment
+        - TransactionReasonInvoiceVoidRefund
       - enum:
         - pending
         - completed
@@ -16138,286 +16343,666 @@ paths:
       summary: Query wallet transactions
       tags:
       - Wallets
-  /webhooks/chargebee/{tenant_id}/{environment_id}:
+  /webhook-events/credit_note.created:
     post:
       consumes:
       - application/json
-      description: Use as the Chargebee webhook endpoint URL. Receives payment and
-        subscription events from Chargebee to sync status into FlexPrice.
-      operationId: handleChargebeeWebhook
-      parameters:
-      - description: Tenant ID
-        in: path
-        name: tenant_id
-        required: true
-        type: string
-      - description: Environment ID
-        in: path
-        name: environment_id
-        required: true
-        type: string
-      - description: Basic Auth credentials
-        in: header
-        name: Authorization
-        type: string
+      description: Fired when a new credit note is created. Doc-only for parsing.
       produces:
       - application/json
       responses:
         "200":
-          description: Webhook processed successfully
+          description: Webhook payload
           schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad request
-          schema:
-            additionalProperties: true
-            type: object
-        "401":
-          description: Unauthorized
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Handle Chargebee webhook events
+            $ref: '#/definitions/webhookDto.CreditNoteWebhookPayload'
+      summary: credit_note.created
       tags:
-      - Webhooks
-  /webhooks/hubspot/{tenant_id}/{environment_id}:
+      - Webhook Events
+  /webhook-events/credit_note.updated:
     post:
       consumes:
       - application/json
-      description: Use as the HubSpot webhook endpoint URL. Receives deal and customer
-        events (e.g. deal closed won) to create or update customers in FlexPrice.
-      operationId: handleHubspotWebhook
-      parameters:
-      - description: Tenant ID
-        in: path
-        name: tenant_id
-        required: true
-        type: string
-      - description: Environment ID
-        in: path
-        name: environment_id
-        required: true
-        type: string
-      - description: HubSpot webhook signature
-        in: header
-        name: X-HubSpot-Signature-v3
-        required: true
-        type: string
+      description: Fired when a credit note is updated. Doc-only for parsing.
       produces:
       - application/json
       responses:
         "200":
-          description: Webhook received (always returns 200)
+          description: Webhook payload
           schema:
-            additionalProperties: true
-            type: object
-      summary: Handle HubSpot webhook events
+            $ref: '#/definitions/webhookDto.CreditNoteWebhookPayload'
+      summary: credit_note.updated
       tags:
-      - Webhooks
-  /webhooks/moyasar/{tenant_id}/{environment_id}:
+      - Webhook Events
+  /webhook-events/customer.created:
     post:
       consumes:
       - application/json
-      description: Use as the Moyasar webhook endpoint URL. Receives payment events
-        from Moyasar to update payment status in FlexPrice.
-      operationId: handleMoyasarWebhook
-      parameters:
-      - description: Tenant ID
-        in: path
-        name: tenant_id
-        required: true
-        type: string
-      - description: Environment ID
-        in: path
-        name: environment_id
-        required: true
-        type: string
-      - description: Moyasar webhook signature
-        in: header
-        name: X-Moyasar-Signature
-        type: string
+      description: Fired when a new customer is created. Doc-only for parsing.
       produces:
       - application/json
       responses:
         "200":
-          description: Webhook received (always returns 200)
+          description: Webhook payload
           schema:
-            additionalProperties: true
-            type: object
-      summary: Handle Moyasar webhook events
+            $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
+      summary: customer.created
       tags:
-      - Webhooks
-  /webhooks/nomod/{tenant_id}/{environment_id}:
+      - Webhook Events
+  /webhook-events/customer.deleted:
     post:
       consumes:
       - application/json
-      description: Use as the Nomod webhook endpoint URL. Receives payment and invoice
-        events from Nomod to keep FlexPrice in sync.
-      operationId: handleNomodWebhook
-      parameters:
-      - description: Tenant ID
-        in: path
-        name: tenant_id
-        required: true
-        type: string
-      - description: Environment ID
-        in: path
-        name: environment_id
-        required: true
-        type: string
-      - description: Nomod webhook secret (if configured)
-        in: header
-        name: X-API-KEY
-        type: string
+      description: Fired when a customer is deleted. Doc-only for parsing.
       produces:
       - application/json
       responses:
         "200":
-          description: Webhook processed successfully
+          description: Webhook payload
           schema:
-            additionalProperties: true
-            type: object
-        "401":
-          description: Unauthorized - invalid or missing X-API-KEY
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Handle Nomod webhook events
+            $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
+      summary: customer.deleted
       tags:
-      - Webhooks
-  /webhooks/quickbooks/{tenant_id}/{environment_id}:
+      - Webhook Events
+  /webhook-events/customer.updated:
     post:
       consumes:
       - application/json
-      description: Use as the QuickBooks webhook endpoint URL. Receives payment events
-        from QuickBooks to sync payment status into FlexPrice.
-      operationId: handleQuickbooksWebhook
-      parameters:
-      - description: Tenant ID
-        in: path
-        name: tenant_id
-        required: true
-        type: string
-      - description: Environment ID
-        in: path
-        name: environment_id
-        required: true
-        type: string
-      - description: QuickBooks webhook signature
-        in: header
-        name: intuit-signature
-        type: string
+      description: Fired when a customer is updated. Doc-only for parsing.
       produces:
       - application/json
       responses:
         "200":
-          description: Webhook processed successfully
+          description: Webhook payload
           schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad request
-          schema:
-            additionalProperties: true
-            type: object
-        "401":
-          description: Unauthorized - invalid signature
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Handle QuickBooks webhook events
+            $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
+      summary: customer.updated
       tags:
-      - Webhooks
-  /webhooks/razorpay/{tenant_id}/{environment_id}:
+      - Webhook Events
+  /webhook-events/entitlement.created:
     post:
       consumes:
       - application/json
-      description: Use as the Razorpay webhook endpoint URL. Receives payment capture
-        and failure events to update invoice or payment status in FlexPrice.
-      operationId: handleRazorpayWebhook
-      parameters:
-      - description: Tenant ID
-        in: path
-        name: tenant_id
-        required: true
-        type: string
-      - description: Environment ID
-        in: path
-        name: environment_id
-        required: true
-        type: string
-      - description: Razorpay webhook signature
-        in: header
-        name: X-Razorpay-Signature
-        required: true
-        type: string
+      description: Fired when a new entitlement is created. Doc-only for parsing.
       produces:
       - application/json
       responses:
         "200":
-          description: Webhook received (always returns 200)
+          description: Webhook payload
           schema:
-            additionalProperties: true
-            type: object
-      summary: Handle Razorpay webhook events
+            $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
+      summary: entitlement.created
       tags:
-      - Webhooks
-  /webhooks/stripe/{tenant_id}/{environment_id}:
+      - Webhook Events
+  /webhook-events/entitlement.deleted:
     post:
       consumes:
       - application/json
-      description: Use as the Stripe webhook endpoint URL. Receives payment and customer
-        events from Stripe to keep FlexPrice in sync (e.g. payment succeeded, customer
-        created).
-      operationId: handleStripeWebhook
-      parameters:
-      - description: Tenant ID
-        in: path
-        name: tenant_id
-        required: true
-        type: string
-      - description: Environment ID
-        in: path
-        name: environment_id
-        required: true
-        type: string
-      - description: Stripe webhook signature
-        in: header
-        name: Stripe-Signature
-        required: true
-        type: string
+      description: Fired when an entitlement is deleted. Doc-only for parsing.
       produces:
       - application/json
       responses:
         "200":
-          description: Webhook processed successfully
+          description: Webhook payload
           schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad request - missing parameters or invalid signature
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Handle Stripe webhook events
+            $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
+      summary: entitlement.deleted
       tags:
-      - Webhooks
+      - Webhook Events
+  /webhook-events/entitlement.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an entitlement is updated. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
+      summary: entitlement.updated
+      tags:
+      - Webhook Events
+  /webhook-events/feature.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new feature is created. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
+      summary: feature.created
+      tags:
+      - Webhook Events
+  /webhook-events/feature.deleted:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a feature is deleted. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
+      summary: feature.deleted
+      tags:
+      - Webhook Events
+  /webhook-events/feature.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a feature is updated. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
+      summary: feature.updated
+      tags:
+      - Webhook Events
+  /webhook-events/feature.wallet_balance.alert:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a feature's associated wallet balance crosses an alert
+        threshold. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.AlertWebhookPayload'
+      summary: feature.wallet_balance.alert
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.communication.triggered:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an invoice communication (e.g. email notification) is
+        triggered. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CommunicationWebhookPayload'
+      summary: invoice.communication.triggered
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.create.drafted:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new invoice is created in draft status. Doc-only for
+        parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
+      summary: invoice.create.drafted
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.payment.overdue:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an invoice payment is overdue past the due date. Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
+      summary: invoice.payment.overdue
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.update:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an invoice is updated. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
+      summary: invoice.update
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.update.finalized:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an invoice is finalized and locked for payment. Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
+      summary: invoice.update.finalized
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.update.payment:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an invoice payment status changes. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
+      summary: invoice.update.payment
+      tags:
+      - Webhook Events
+  /webhook-events/invoice.update.voided:
+    post:
+      consumes:
+      - application/json
+      description: Fired when an invoice is voided (e.g. order cancelled or duplicate).
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
+      summary: invoice.update.voided
+      tags:
+      - Webhook Events
+  /webhook-events/payment.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new payment is created. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
+      summary: payment.created
+      tags:
+      - Webhook Events
+  /webhook-events/payment.failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a payment fails. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
+      summary: payment.failed
+      tags:
+      - Webhook Events
+  /webhook-events/payment.pending:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a payment is pending processing. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
+      summary: payment.pending
+      tags:
+      - Webhook Events
+  /webhook-events/payment.success:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a payment succeeds. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
+      summary: payment.success
+      tags:
+      - Webhook Events
+  /webhook-events/payment.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a payment is updated. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
+      summary: payment.updated
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.activated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a draft subscription is activated. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.activated
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription is cancelled (immediately or end-of-period).
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.cancelled
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new subscription is created. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.created
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.draft.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new draft subscription is created (not yet activated).
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.draft.created
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.paused:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription is paused. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.paused
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.phase.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new subscription phase is created. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
+      summary: subscription.phase.created
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.phase.deleted:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription phase is deleted. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
+      summary: subscription.phase.deleted
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.phase.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription phase is updated. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
+      summary: subscription.phase.updated
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.renewal.due:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription renewal is upcoming (cron-driven). Doc-only
+        for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.renewal.due
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.resumed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a paused subscription is resumed. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.resumed
+      tags:
+      - Webhook Events
+  /webhook-events/subscription.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a subscription is updated (e.g. quantity, billing anchor,
+        or metadata changes). Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
+      summary: subscription.updated
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new wallet is created. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.WalletWebhookPayload'
+      summary: wallet.created
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.credit_balance.dropped:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a wallet's credit balance drops below an alert threshold.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.WalletWebhookPayload'
+      summary: wallet.credit_balance.dropped
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.credit_balance.recovered:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a wallet's credit balance recovers above an alert threshold.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.WalletWebhookPayload'
+      summary: wallet.credit_balance.recovered
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.ongoing_balance.dropped:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a wallet's ongoing balance drops below an alert threshold.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.WalletWebhookPayload'
+      summary: wallet.ongoing_balance.dropped
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.ongoing_balance.recovered:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a wallet's ongoing balance recovers above an alert threshold.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.WalletWebhookPayload'
+      summary: wallet.ongoing_balance.recovered
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.terminated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a wallet is terminated. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.WalletWebhookPayload'
+      summary: wallet.terminated
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.transaction.created:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a new wallet transaction is created (top-up, deduction,
+        etc.). Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.TransactionWebhookPayload'
+      summary: wallet.transaction.created
+      tags:
+      - Webhook Events
+  /webhook-events/wallet.updated:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a wallet is updated. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.WalletWebhookPayload'
+      summary: wallet.updated
+      tags:
+      - Webhook Events
   /workflows/search:
     post:
       consumes:

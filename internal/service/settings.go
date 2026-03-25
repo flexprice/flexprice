@@ -240,6 +240,8 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 		return getSettingByKey[types.AlertSettings](s, ctx, key)
 	case types.SettingKeyCustomerPortalConfig:
 		return getSettingByKey[types.CustomerPortalConfig](s, ctx, key)
+	case types.SettingKeyEventIngestionFilter:
+		return getSettingByKey[types.EventIngestionFilterConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -282,6 +284,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[*types.AlertSettings](s, ctx, key, req)
 	case types.SettingKeyCustomerPortalConfig:
 		return updateSettingByKey[types.CustomerPortalConfig](s, ctx, key, req)
+	case types.SettingKeyEventIngestionFilter:
+		return updateSettingByKey[types.EventIngestionFilterConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).

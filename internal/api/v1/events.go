@@ -22,16 +22,18 @@ type EventsHandler struct {
 	eventPostProcessingService   service.EventPostProcessingService
 	featureUsageTrackingService  service.FeatureUsageTrackingService
 	rawEventsReprocessingService service.RawEventsReprocessingService
+	rawEventConsumptionService   service.RawEventConsumptionService
 	config                       *config.Configuration
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
 		eventPostProcessingService:   eventPostProcessingService,
 		featureUsageTrackingService:  featureUsageTrackingService,
 		rawEventsReprocessingService: rawEventsReprocessingService,
+		rawEventConsumptionService:   rawEventConsumptionService,
 		config:                       config,
 		log:                          log,
 	}
@@ -106,6 +108,37 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, gin.H{"message": "Events accepted for processing"})
+}
+
+// BulkIngestRawEvent publishes a batch of raw Bento-format event payloads directly to the
+// raw_events Kafka topic (POST /v1/events/raw/bulk). Intentionally excluded from Swagger/SDK
+// — this is an internal endpoint for testing and backfills, not part of the public API.
+func (h *EventsHandler) BulkIngestRawEvent(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req dto.BulkIngestRawEventRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+
+	if err := h.rawEventConsumptionService.BulkIngestRawEvents(ctx, req.Events); err != nil {
+		h.log.Error("Failed to bulk ingest raw events", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message":    "Raw events accepted for processing",
+		"batch_size": len(req.Events),
+	})
 }
 
 // @Summary Get usage by meter

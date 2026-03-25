@@ -497,6 +497,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildNomodInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalMoyasarInvoiceSyncWorkflow:
 		return s.buildMoyasarInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalPaddleInvoiceSyncWorkflow:
+		return s.buildPaddleInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalCustomerOnboardingWorkflow:
 		return s.buildCustomerOnboardingInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalPrepareProcessedEventsWorkflow:
@@ -728,6 +730,26 @@ func (s *temporalService) buildMoyasarInvoiceSyncInput(_ context.Context, tenant
 
 	return nil, errors.NewError("invalid input for Moyasar invoice sync workflow").
 		WithHint("Provide MoyasarInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildPaddleInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	// If already correct type, just ensure context is set
+	if input, ok := params.(*models.PaddleInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	// Handle value type as well
+	if input, ok := params.(models.PaddleInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Paddle invoice sync workflow").
+		WithHint("Provide PaddleInvoiceSyncWorkflowInput with invoice_id and customer_id").
 		Mark(errors.ErrValidation)
 }
 

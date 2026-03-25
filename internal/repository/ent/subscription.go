@@ -539,6 +539,20 @@ func (o SubscriptionQueryOptions) GetFieldResolver(field string) (string, error)
 	return fieldName, nil
 }
 
+// filtersConstrainSubscriptionStatus reports whether any DSL filter targets subscription_status,
+// so we should not also apply the default "active only" predicate (which would contradict e.g. draft).
+func (o SubscriptionQueryOptions) filtersConstrainSubscriptionStatus(filters []*types.FilterCondition) bool {
+	for _, fc := range filters {
+		if fc == nil || fc.Field == nil {
+			continue
+		}
+		if o.GetFieldName(*fc.Field) == subscription.FieldSubscriptionStatus {
+			return true
+		}
+	}
+	return false
+}
+
 // applyEntityQueryOptions applies subscription-specific filters to the query
 func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.SubscriptionFilter, query SubscriptionQuery) (SubscriptionQuery, error) {
 	var err error
@@ -581,8 +595,8 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		query = query.Where(subscription.SubscriptionStatusIn(f.SubscriptionStatus...))
 	}
 
-	// Default to active subscription if not specified
-	if f.SubscriptionStatus == nil {
+	// Default to active when the client did not constrain subscription_status (neither top-level nor DSL filters).
+	if f.SubscriptionStatus == nil && !o.filtersConstrainSubscriptionStatus(f.Filters) {
 		query = query.Where(subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive))
 	}
 

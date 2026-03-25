@@ -1779,7 +1779,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "write"
             }
         },
         "/customers/external/{external_id}": {
@@ -1884,7 +1885,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "read"
             }
         },
         "/customers/usage": {
@@ -2096,7 +2098,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "read"
             },
             "delete": {
                 "security": [
@@ -2759,123 +2762,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/environments": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when setting up a new environment (e.g. production, staging) for the tenant. Ideal for separating billing or config per environment.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Create environment",
-                "operationId": "createEnvironment",
-                "parameters": [
-                    {
-                        "description": "Environment",
-                        "name": "environment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateEnvironmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/dto.EnvironmentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/environments/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when changing environment name or settings (e.g. renaming or updating metadata).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Update environment",
-                "operationId": "updateEnvironment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Environment",
-                        "name": "environment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateEnvironmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.EnvironmentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4120,7 +4006,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "delete"
             }
         },
         "/invoices/{id}/payment": {
@@ -4307,7 +4194,60 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when subscription or usage data changed and you need to refresh a draft invoice before finalizing. Optional finalize=true to lock after recalc.",
+                "description": "Starts an async workflow that creates a fresh replacement invoice for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id after completion.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Recalculate invoice (voided invoice)",
+                "operationId": "recalculateInvoice",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/models.TemporalWorkflowResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or invoice already recalculated",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Invoice not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/recalculate-v2": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Recalculates a draft SUBSCRIPTION invoice in-place (replaces line items, reapplies credits/coupons/taxes). Use when subscription or usage data changed before finalizing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4317,8 +4257,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Recalculate invoice",
-                "operationId": "recalculateInvoice",
+                "summary": "Recalculate draft invoice (v2)",
+                "operationId": "recalculateInvoiceV2",
                 "parameters": [
                     {
                         "type": "string",
@@ -9373,7 +9313,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when provisioning API access for automation, CI/CD pipelines, or headless integrations that need scoped API keys.",
+                "description": "Create a user account (type=user, email required; returns user + password for login) or a service account (type=service_account, roles required) for API/automation access.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9383,11 +9323,11 @@ const docTemplate = `{
                 "tags": [
                     "Users"
                 ],
-                "summary": "Create service account",
+                "summary": "Create user or service account",
                 "operationId": "createUser",
                 "parameters": [
                     {
-                        "description": "Create service account request (type must be 'service_account', roles are required)",
+                        "description": "Create user (email, type=user) or service account (type=service_account, roles)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -9400,7 +9340,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/dto.UserResponse"
+                            "$ref": "#/definitions/dto.CreateUserResponse"
                         }
                     },
                     "400": {
@@ -10252,7 +10192,8 @@ const docTemplate = `{
                             "CREDIT_EXPIRED",
                             "WALLET_TERMINATION",
                             "MANUAL_BALANCE_DEBIT",
-                            "CREDIT_ADJUSTMENT"
+                            "CREDIT_ADJUSTMENT",
+                            "INVOICE_VOID_REFUND"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -10265,7 +10206,8 @@ const docTemplate = `{
                             "TransactionReasonCreditExpired",
                             "TransactionReasonWalletTermination",
                             "TransactionReasonManualBalanceDebit",
-                            "TransactionReasonCreditAdjustment"
+                            "TransactionReasonCreditAdjustment",
+                            "TransactionReasonInvoiceVoidRefund"
                         ],
                         "name": "transaction_reason",
                         "in": "query"
@@ -10327,9 +10269,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/webhooks/chargebee/{tenant_id}/{environment_id}": {
+        "/webhook-events/credit_note.created": {
             "post": {
-                "description": "Use as the Chargebee webhook endpoint URL. Receives payment and subscription events from Chargebee to sync status into FlexPrice.",
+                "description": "Fired when a new credit note is created. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10337,67 +10279,22 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhooks"
+                    "Webhook Events"
                 ],
-                "summary": "Handle Chargebee webhook events",
-                "operationId": "handleChargebeeWebhook",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID",
-                        "name": "tenant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "environment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Basic Auth credentials",
-                        "name": "Authorization",
-                        "in": "header"
-                    }
-                ],
+                "summary": "credit_note.created",
                 "responses": {
                     "200": {
-                        "description": "Webhook processed successfully",
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.CreditNoteWebhookPayload"
                         }
                     }
                 }
             }
         },
-        "/webhooks/hubspot/{tenant_id}/{environment_id}": {
+        "/webhook-events/credit_note.updated": {
             "post": {
-                "description": "Use as the HubSpot webhook endpoint URL. Receives deal and customer events (e.g. deal closed won) to create or update customers in FlexPrice.",
+                "description": "Fired when a credit note is updated. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10405,47 +10302,22 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhooks"
+                    "Webhook Events"
                 ],
-                "summary": "Handle HubSpot webhook events",
-                "operationId": "handleHubspotWebhook",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID",
-                        "name": "tenant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "environment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "HubSpot webhook signature",
-                        "name": "X-HubSpot-Signature-v3",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
+                "summary": "credit_note.updated",
                 "responses": {
                     "200": {
-                        "description": "Webhook received (always returns 200)",
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.CreditNoteWebhookPayload"
                         }
                     }
                 }
             }
         },
-        "/webhooks/moyasar/{tenant_id}/{environment_id}": {
+        "/webhook-events/customer.created": {
             "post": {
-                "description": "Use as the Moyasar webhook endpoint URL. Receives payment events from Moyasar to update payment status in FlexPrice.",
+                "description": "Fired when a new customer is created. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10453,46 +10325,22 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhooks"
+                    "Webhook Events"
                 ],
-                "summary": "Handle Moyasar webhook events",
-                "operationId": "handleMoyasarWebhook",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID",
-                        "name": "tenant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "environment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Moyasar webhook signature",
-                        "name": "X-Moyasar-Signature",
-                        "in": "header"
-                    }
-                ],
+                "summary": "customer.created",
                 "responses": {
                     "200": {
-                        "description": "Webhook received (always returns 200)",
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.CustomerWebhookPayload"
                         }
                     }
                 }
             }
         },
-        "/webhooks/nomod/{tenant_id}/{environment_id}": {
+        "/webhook-events/customer.deleted": {
             "post": {
-                "description": "Use as the Nomod webhook endpoint URL. Receives payment and invoice events from Nomod to keep FlexPrice in sync.",
+                "description": "Fired when a customer is deleted. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10500,53 +10348,22 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhooks"
+                    "Webhook Events"
                 ],
-                "summary": "Handle Nomod webhook events",
-                "operationId": "handleNomodWebhook",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID",
-                        "name": "tenant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "environment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Nomod webhook secret (if configured)",
-                        "name": "X-API-KEY",
-                        "in": "header"
-                    }
-                ],
+                "summary": "customer.deleted",
                 "responses": {
                     "200": {
-                        "description": "Webhook processed successfully",
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized - invalid or missing X-API-KEY",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.CustomerWebhookPayload"
                         }
                     }
                 }
             }
         },
-        "/webhooks/quickbooks/{tenant_id}/{environment_id}": {
+        "/webhook-events/customer.updated": {
             "post": {
-                "description": "Use as the QuickBooks webhook endpoint URL. Receives payment events from QuickBooks to sync payment status into FlexPrice.",
+                "description": "Fired when a customer is updated. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10554,67 +10371,22 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhooks"
+                    "Webhook Events"
                 ],
-                "summary": "Handle QuickBooks webhook events",
-                "operationId": "handleQuickbooksWebhook",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID",
-                        "name": "tenant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "environment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "QuickBooks webhook signature",
-                        "name": "intuit-signature",
-                        "in": "header"
-                    }
-                ],
+                "summary": "customer.updated",
                 "responses": {
                     "200": {
-                        "description": "Webhook processed successfully",
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized - invalid signature",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.CustomerWebhookPayload"
                         }
                     }
                 }
             }
         },
-        "/webhooks/razorpay/{tenant_id}/{environment_id}": {
+        "/webhook-events/entitlement.created": {
             "post": {
-                "description": "Use as the Razorpay webhook endpoint URL. Receives payment capture and failure events to update invoice or payment status in FlexPrice.",
+                "description": "Fired when a new entitlement is created. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10622,47 +10394,22 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhooks"
+                    "Webhook Events"
                 ],
-                "summary": "Handle Razorpay webhook events",
-                "operationId": "handleRazorpayWebhook",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID",
-                        "name": "tenant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "environment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Razorpay webhook signature",
-                        "name": "X-Razorpay-Signature",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
+                "summary": "entitlement.created",
                 "responses": {
                     "200": {
-                        "description": "Webhook received (always returns 200)",
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.EntitlementWebhookPayload"
                         }
                     }
                 }
             }
         },
-        "/webhooks/stripe/{tenant_id}/{environment_id}": {
+        "/webhook-events/entitlement.deleted": {
             "post": {
-                "description": "Use as the Stripe webhook endpoint URL. Receives payment and customer events from Stripe to keep FlexPrice in sync (e.g. payment succeeded, customer created).",
+                "description": "Fired when an entitlement is deleted. Doc-only for parsing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10670,53 +10417,842 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhooks"
+                    "Webhook Events"
                 ],
-                "summary": "Handle Stripe webhook events",
-                "operationId": "handleStripeWebhook",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Tenant ID",
-                        "name": "tenant_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "environment_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Stripe webhook signature",
-                        "name": "Stripe-Signature",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
+                "summary": "entitlement.deleted",
                 "responses": {
                     "200": {
-                        "description": "Webhook processed successfully",
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.EntitlementWebhookPayload"
                         }
-                    },
-                    "400": {
-                        "description": "Bad request - missing parameters or invalid signature",
+                    }
+                }
+            }
+        },
+        "/webhook-events/entitlement.updated": {
+            "post": {
+                "description": "Fired when an entitlement is updated. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "entitlement.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.EntitlementWebhookPayload"
                         }
-                    },
-                    "500": {
-                        "description": "Internal server error",
+                    }
+                }
+            }
+        },
+        "/webhook-events/feature.created": {
+            "post": {
+                "description": "Fired when a new feature is created. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "feature.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/webhookDto.FeatureWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/feature.deleted": {
+            "post": {
+                "description": "Fired when a feature is deleted. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "feature.deleted",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.FeatureWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/feature.updated": {
+            "post": {
+                "description": "Fired when a feature is updated. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "feature.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.FeatureWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/feature.wallet_balance.alert": {
+            "post": {
+                "description": "Fired when a feature's associated wallet balance crosses an alert threshold. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "feature.wallet_balance.alert",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.AlertWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.communication.triggered": {
+            "post": {
+                "description": "Fired when an invoice communication (e.g. email notification) is triggered. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.communication.triggered",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.CommunicationWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.create.drafted": {
+            "post": {
+                "description": "Fired when a new invoice is created in draft status. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.create.drafted",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.payment.overdue": {
+            "post": {
+                "description": "Fired when an invoice payment is overdue past the due date. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.payment.overdue",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.update": {
+            "post": {
+                "description": "Fired when an invoice is updated. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.update",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.update.finalized": {
+            "post": {
+                "description": "Fired when an invoice is finalized and locked for payment. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.update.finalized",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.update.payment": {
+            "post": {
+                "description": "Fired when an invoice payment status changes. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.update.payment",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.update.voided": {
+            "post": {
+                "description": "Fired when an invoice is voided (e.g. order cancelled or duplicate). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "invoice.update.voided",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/payment.created": {
+            "post": {
+                "description": "Fired when a new payment is created. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "payment.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/payment.failed": {
+            "post": {
+                "description": "Fired when a payment fails. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "payment.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/payment.pending": {
+            "post": {
+                "description": "Fired when a payment is pending processing. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "payment.pending",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/payment.success": {
+            "post": {
+                "description": "Fired when a payment succeeds. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "payment.success",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/payment.updated": {
+            "post": {
+                "description": "Fired when a payment is updated. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "payment.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.activated": {
+            "post": {
+                "description": "Fired when a draft subscription is activated. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.activated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.cancelled": {
+            "post": {
+                "description": "Fired when a subscription is cancelled (immediately or end-of-period). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.created": {
+            "post": {
+                "description": "Fired when a new subscription is created. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.draft.created": {
+            "post": {
+                "description": "Fired when a new draft subscription is created (not yet activated). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.draft.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.paused": {
+            "post": {
+                "description": "Fired when a subscription is paused. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.paused",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.phase.created": {
+            "post": {
+                "description": "Fired when a new subscription phase is created. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.phase.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionPhaseWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.phase.deleted": {
+            "post": {
+                "description": "Fired when a subscription phase is deleted. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.phase.deleted",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionPhaseWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.phase.updated": {
+            "post": {
+                "description": "Fired when a subscription phase is updated. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.phase.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionPhaseWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.renewal.due": {
+            "post": {
+                "description": "Fired when a subscription renewal is upcoming (cron-driven). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.renewal.due",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.resumed": {
+            "post": {
+                "description": "Fired when a paused subscription is resumed. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.resumed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/subscription.updated": {
+            "post": {
+                "description": "Fired when a subscription is updated (e.g. quantity, billing anchor, or metadata changes). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "subscription.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.SubscriptionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/wallet.created": {
+            "post": {
+                "description": "Fired when a new wallet is created. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "wallet.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.WalletWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/wallet.credit_balance.dropped": {
+            "post": {
+                "description": "Fired when a wallet's credit balance drops below an alert threshold. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "wallet.credit_balance.dropped",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.WalletWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/wallet.credit_balance.recovered": {
+            "post": {
+                "description": "Fired when a wallet's credit balance recovers above an alert threshold. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "wallet.credit_balance.recovered",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.WalletWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/wallet.ongoing_balance.dropped": {
+            "post": {
+                "description": "Fired when a wallet's ongoing balance drops below an alert threshold. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "wallet.ongoing_balance.dropped",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.WalletWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/wallet.ongoing_balance.recovered": {
+            "post": {
+                "description": "Fired when a wallet's ongoing balance recovers above an alert threshold. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "wallet.ongoing_balance.recovered",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.WalletWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/wallet.terminated": {
+            "post": {
+                "description": "Fired when a wallet is terminated. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "wallet.terminated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.WalletWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/wallet.transaction.created": {
+            "post": {
+                "description": "Fired when a new wallet transaction is created (top-up, deduction, etc.). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "wallet.transaction.created",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.TransactionWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/wallet.updated": {
+            "post": {
+                "description": "Fired when a wallet is updated. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "wallet.updated",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.WalletWebhookPayload"
                         }
                     }
                 }
@@ -12386,11 +12922,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "parent_customer_external_id": {
-                    "description": "parent_customer_external_id is the external ID of the parent customer from your system\nExactly one of parent_customer_id or parent_customer_external_id may be provided",
+                    "description": "Deprecated: See ParentCustomerID.\nparent_customer_external_id is the external ID of the parent customer from your system.\nExactly one of parent_customer_id or parent_customer_external_id may be provided.",
                     "type": "string"
                 },
                 "parent_customer_id": {
-                    "description": "parent_customer_id is the internal FlexPrice ID of the parent customer",
+                    "description": "Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.\nThis field is accepted for backward compatibility but no hierarchy validations are enforced.\nparent_customer_id is the internal FlexPrice ID of the parent customer.",
                     "type": "string"
                 },
                 "skip_onboarding_workflow": {
@@ -12484,21 +13020,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateEnvironmentRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "type"
-            ],
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.CreateFeatureRequest": {
             "type": "object",
             "required": [
@@ -12510,6 +13031,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.AlertSettings"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "group_id": {
+                    "description": "GroupID is the id of the group to add the feature to",
                     "type": "string"
                 },
                 "lookup_key": {
@@ -12526,6 +13051,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 },
                 "type": {
                     "$ref": "#/definitions/types.FeatureType"
@@ -13344,12 +13872,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "invoice_billing": {
-                    "description": "invoice_billing determines which customer should receive invoices for a subscription\n\"invoice_to_parent\" - Invoices are sent to the parent customer\n\"invoice_to_self\" - Invoices are sent to the subscription's customer",
+                    "description": "Deprecated: Use invoicing_customer_id or invoicing_customer_external_id instead.\ninvoice_billing determines which customer should receive invoices for a subscription.\nSupported values: \"invoice_to_parent\" (uses the subscription customer's parent) or \"invoice_to_self\" (default).\nWill be removed in a future version.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InvoiceBilling"
                         }
                     ]
+                },
+                "invoicing_customer_external_id": {
+                    "description": "invoicing_customer_external_id is the external ID of the customer to use for invoicing.\nResolved internally to an internal customer ID via external ID lookup.\nMutually exclusive with invoicing_customer_id.",
+                    "type": "string"
+                },
+                "invoicing_customer_id": {
+                    "description": "invoicing_customer_id is the FlexPrice customer ID to use for invoicing.\nThis can differ from the subscription customer (e.g., a billing entity invoicing on behalf of another customer).\nMutually exclusive with invoicing_customer_external_id.",
+                    "type": "string"
                 },
                 "line_item_commitments": {
                     "description": "LineItemCommitments allows setting commitment configuration per line item (keyed by price_id)",
@@ -13585,25 +14121,54 @@ const docTemplate = `{
         "dto.CreateUserRequest": {
             "type": "object",
             "required": [
-                "roles",
                 "type"
             ],
             "properties": {
+                "email": {
+                    "description": "Required when type is \"user\"",
+                    "type": "string"
+                },
                 "roles": {
-                    "description": "Roles are required",
+                    "description": "Required when type is \"service_account\"",
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
                 },
                 "type": {
-                    "description": "Must be \"service_account\"",
+                    "description": "\"user\" or \"service_account\"",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.UserType"
                         }
                     ]
+                }
+            }
+        },
+        "dto.CreateUserResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "description": "Empty for service accounts",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tenant": {
+                    "$ref": "#/definitions/dto.TenantResponse"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.UserType"
                 }
             }
         },
@@ -14155,7 +14720,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/dto.CustomerResponse"
                 },
                 "parent_customer_id": {
-                    "description": "ParentCustomerID is the parent customer identifier for the customer",
+                    "description": "Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.\nRetained for backward compatibility; no hierarchy rules are enforced at the service layer.\nParentCustomerID is the parent customer identifier for the customer.",
                     "type": "string"
                 },
                 "status": {
@@ -14418,26 +14983,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.EnvironmentResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.Event": {
             "type": "object",
             "properties": {
@@ -14497,6 +15042,17 @@ const docTemplate = `{
                 "environment_id": {
                     "type": "string"
                 },
+                "group": {
+                    "description": "Group is the full group object when the feature belongs to a group (populated in response)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.GroupResponse"
+                        }
+                    ]
+                },
+                "group_id": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -14514,6 +15070,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -14838,6 +15397,11 @@ const docTemplate = `{
                 "subscription_id"
             ],
             "properties": {
+                "hide_zero_charges_line_items": {
+                    "description": "hide_zero_charges_line_items indicates whether to hide line items with zero cost",
+                    "type": "boolean",
+                    "default": false
+                },
                 "period_end": {
                     "description": "period_end is the optional end date of the period to preview",
                     "type": "string"
@@ -15610,6 +16174,10 @@ const docTemplate = `{
                 },
                 "period_start": {
                     "description": "period_start is the start date of the billing period covered by this invoice",
+                    "type": "string"
+                },
+                "recalculated_invoice_id": {
+                    "description": "recalculated_invoice_id is the ID of the replacement invoice created when this invoice was voided and recalculated.\nWhen set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.",
                     "type": "string"
                 },
                 "refunded_amount": {
@@ -18895,11 +19463,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "parent_customer_external_id": {
-                    "description": "parent_customer_external_id is the external ID of the parent customer from your system\nExactly one of parent_customer_id or parent_customer_external_id may be provided\nIf you provide the external ID, the parent customer value will be ignored",
+                    "description": "Deprecated: See ParentCustomerID.\nparent_customer_external_id is the external ID of the parent customer from your system.\nExactly one of parent_customer_id or parent_customer_external_id may be provided.\nIf you provide the external ID, the parent customer value will be ignored.",
                     "type": "string"
                 },
                 "parent_customer_id": {
-                    "description": "parent_customer_id is the internal FlexPrice ID of the parent customer",
+                    "description": "Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.\nThis field is accepted for backward compatibility but no hierarchy validations are enforced.\nparent_customer_id is the internal FlexPrice ID of the parent customer.",
                     "type": "string"
                 }
             }
@@ -18924,17 +19492,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateEnvironmentRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.UpdateFeatureRequest": {
             "type": "object",
             "properties": {
@@ -18950,11 +19507,18 @@ const docTemplate = `{
                         "$ref": "#/definitions/meter.Filter"
                     }
                 },
+                "group_id": {
+                    "description": "GroupID is the id of the group to assign the feature to. Pass empty string to clear.",
+                    "type": "string"
+                },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
                 "name": {
                     "type": "string"
+                },
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 },
                 "unit_plural": {
                     "type": "string"
@@ -19073,7 +19637,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "group_id": {
-                    "description": "GroupID is the id of the group to update the price in",
+                    "description": "GroupID is the id of the group to update the price in.\nIf not provided (nil), the group will not be changed\nIf provided as empty string (\"\"), the group will be removed (price will be ungrouped)\nIf provided as a group ID, the price will be assigned to that group (must exist and be published)",
                     "type": "string"
                 },
                 "lookup_key": {
@@ -19351,6 +19915,14 @@ const docTemplate = `{
                 "feature_id": {
                     "type": "string"
                 },
+                "group": {
+                    "description": "Group when the feature belongs to a group (object includes id)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/group.Group"
+                        }
+                    ]
+                },
                 "meter": {
                     "description": "Full meter object (only if expand includes \"meter\")",
                     "allOf": [
@@ -19402,6 +19974,14 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "reporting_unit": {
+                    "description": "Present when total_usage_display is set (unit_singular, unit_plural, conversion_rate)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReportingUnit"
+                        }
+                    ]
+                },
                 "source": {
                     "type": "string"
                 },
@@ -19432,6 +20012,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "total_usage": {
+                    "type": "string"
+                },
+                "total_usage_display": {
+                    "description": "Empty string when feature has no reporting unit; otherwise the value in reporting units",
                     "type": "string"
                 },
                 "unit": {
@@ -20057,7 +20641,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "parent_customer_id": {
-                    "description": "ParentCustomerID is the parent customer identifier for the customer",
+                    "description": "Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.\nRetained for backward compatibility; no hierarchy rules are enforced at the service layer.\nParentCustomerID is the parent customer identifier for the customer.",
                     "type": "string"
                 },
                 "status": {
@@ -20092,6 +20676,17 @@ const docTemplate = `{
                 "environment_id": {
                     "type": "string"
                 },
+                "group": {
+                    "description": "Group is populated by the service layer when building responses; repository/FromEnt do not set it.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/group.Group"
+                        }
+                    ]
+                },
+                "group_id": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -20106,6 +20701,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -21245,6 +21843,17 @@ const docTemplate = `{
                 "AFTER"
             ]
         },
+        "types.GroupEntityType": {
+            "type": "string",
+            "enum": [
+                "price",
+                "feature"
+            ],
+            "x-enum-varnames": [
+                "GroupEntityTypePrice",
+                "GroupEntityTypeFeature"
+            ]
+        },
         "types.GroupFilter": {
             "type": "object",
             "properties": {
@@ -21587,13 +22196,15 @@ const docTemplate = `{
                 "stripe",
                 "razorpay",
                 "nomod",
-                "moyasar"
+                "moyasar",
+                "paddle"
             ],
             "x-enum-varnames": [
                 "PaymentGatewayTypeStripe",
                 "PaymentGatewayTypeRazorpay",
                 "PaymentGatewayTypeNomod",
-                "PaymentGatewayTypeMoyasar"
+                "PaymentGatewayTypeMoyasar",
+                "PaymentGatewayTypePaddle"
             ]
         },
         "types.PaymentMethodType": {
@@ -21934,6 +22545,23 @@ const docTemplate = `{
                 }
             }
         },
+        "types.ReportingUnit": {
+            "type": "object",
+            "properties": {
+                "conversion_rate": {
+                    "description": "Multiplier: reporting_unit_value = unit_value * conversion_rate; must be \u003e 0",
+                    "type": "number"
+                },
+                "unit_plural": {
+                    "description": "Display unit label, plural (e.g. \"seconds\")",
+                    "type": "string"
+                },
+                "unit_singular": {
+                    "description": "Display unit label, singular (e.g. \"second\")",
+                    "type": "string"
+                }
+            }
+        },
         "types.ResetUsage": {
             "type": "string",
             "enum": [
@@ -22112,7 +22740,8 @@ const docTemplate = `{
                 "chargebee",
                 "quickbooks",
                 "nomod",
-                "moyasar"
+                "moyasar",
+                "paddle"
             ],
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
@@ -22123,7 +22752,8 @@ const docTemplate = `{
                 "SecretProviderChargebee",
                 "SecretProviderQuickBooks",
                 "SecretProviderNomod",
-                "SecretProviderMoyasar"
+                "SecretProviderMoyasar",
+                "SecretProviderPaddle"
             ]
         },
         "types.SecretType": {
@@ -22435,7 +23065,8 @@ const docTemplate = `{
                 "CREDIT_EXPIRED",
                 "WALLET_TERMINATION",
                 "MANUAL_BALANCE_DEBIT",
-                "CREDIT_ADJUSTMENT"
+                "CREDIT_ADJUSTMENT",
+                "INVOICE_VOID_REFUND"
             ],
             "x-enum-varnames": [
                 "TransactionReasonInvoicePayment",
@@ -22447,7 +23078,8 @@ const docTemplate = `{
                 "TransactionReasonCreditExpired",
                 "TransactionReasonWalletTermination",
                 "TransactionReasonManualBalanceDebit",
-                "TransactionReasonCreditAdjustment"
+                "TransactionReasonCreditAdjustment",
+                "TransactionReasonInvoiceVoidRefund"
             ]
         },
         "types.TransactionStatus": {
@@ -22763,6 +23395,7 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
+                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -22772,10 +23405,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
-                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
+                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -22785,8 +23418,7 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth",
-                "DefaultWindowSize"
+                "WindowSizeMonth"
             ]
         },
         "types.WorkflowExecutionFilter": {
@@ -22853,6 +23485,50 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "workflow_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "group.Group": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.GroupEntityType"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
                     "type": "string"
                 }
             }
@@ -23581,6 +24257,179 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "webhookDto.AlertWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "alert_status": {
+                    "type": "string"
+                },
+                "alert_type": {
+                    "type": "string"
+                },
+                "customer": {
+                    "$ref": "#/definitions/dto.CustomerResponse"
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "feature": {
+                    "$ref": "#/definitions/dto.FeatureResponse"
+                },
+                "wallet": {
+                    "$ref": "#/definitions/dto.WalletResponse"
+                }
+            }
+        },
+        "webhookDto.CommunicationWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string"
+                },
+                "invoice": {
+                    "$ref": "#/definitions/dto.InvoiceResponse"
+                }
+            }
+        },
+        "webhookDto.CreditNoteWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "credit_note": {
+                    "$ref": "#/definitions/dto.CreditNoteResponse"
+                },
+                "event_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.CustomerWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "customer": {
+                    "$ref": "#/definitions/dto.CustomerResponse"
+                },
+                "event_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.EntitlementWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "entitlement": {
+                    "$ref": "#/definitions/dto.EntitlementResponse"
+                },
+                "event_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.FeatureWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string"
+                },
+                "feature": {
+                    "$ref": "#/definitions/dto.FeatureResponse"
+                }
+            }
+        },
+        "webhookDto.InvoiceWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string"
+                },
+                "invoice": {
+                    "$ref": "#/definitions/dto.InvoiceResponse"
+                }
+            }
+        },
+        "webhookDto.PaymentWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string"
+                },
+                "payment": {
+                    "$ref": "#/definitions/dto.PaymentResponse"
+                }
+            }
+        },
+        "webhookDto.SubscriptionPhaseWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string"
+                },
+                "phase": {
+                    "$ref": "#/definitions/dto.SubscriptionPhaseResponse"
+                }
+            }
+        },
+        "webhookDto.SubscriptionWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string"
+                },
+                "subscription": {
+                    "$ref": "#/definitions/dto.SubscriptionResponse"
+                }
+            }
+        },
+        "webhookDto.TransactionWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "type": "string"
+                },
+                "transaction": {
+                    "$ref": "#/definitions/dto.WalletTransactionResponse"
+                },
+                "wallet": {
+                    "$ref": "#/definitions/dto.WalletResponse"
+                }
+            }
+        },
+        "webhookDto.WalletAlertInfo": {
+            "type": "object",
+            "properties": {
+                "alert_settings": {
+                    "$ref": "#/definitions/types.AlertSettings"
+                },
+                "alert_type": {
+                    "type": "string"
+                },
+                "credit_balance": {
+                    "type": "number"
+                },
+                "current_balance": {
+                    "type": "number"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.WalletWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "alert": {
+                    "$ref": "#/definitions/webhookDto.WalletAlertInfo"
+                },
+                "customer": {
+                    "$ref": "#/definitions/dto.CustomerResponse"
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "wallet": {
+                    "$ref": "#/definitions/dto.WalletResponse"
+                }
             }
         }
     },

@@ -134,6 +134,10 @@ func NewInvoiceRepository(p RepositoryParams) invoice.Repository {
 	return entRepo.NewInvoiceRepository(p.EntClient, p.Logger, p.Cache)
 }
 
+func NewInvoiceLineItemRepository(p RepositoryParams) invoice.LineItemRepository {
+	return entRepo.NewInvoiceLineItemRepository(p.EntClient, p.Logger, p.Cache)
+}
+
 func NewFeatureRepository(p RepositoryParams) feature.Repository {
 	return entRepo.NewFeatureRepository(p.EntClient, p.Logger, p.Cache)
 }

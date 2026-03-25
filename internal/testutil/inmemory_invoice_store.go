@@ -15,6 +15,7 @@ import (
 // InMemoryInvoiceStore implements invoice.Repository
 type InMemoryInvoiceStore struct {
 	*InMemoryStore[*invoice.Invoice]
+	lineItemStore *InMemoryInvoiceLineItemStore
 }
 
 // NewInMemoryInvoiceStore creates a new in-memory invoice store
@@ -22,6 +23,11 @@ func NewInMemoryInvoiceStore() *InMemoryInvoiceStore {
 	return &InMemoryInvoiceStore{
 		InMemoryStore: NewInMemoryStore[*invoice.Invoice](),
 	}
+}
+
+// SetLineItemStore wires the line item store for cross-store operations
+func (s *InMemoryInvoiceStore) SetLineItemStore(lineItemStore *InMemoryInvoiceLineItemStore) {
+	s.lineItemStore = lineItemStore
 }
 
 // Helper to copy invoice
@@ -122,7 +128,21 @@ func (s *InMemoryInvoiceStore) Create(ctx context.Context, inv *invoice.Invoice)
 }
 
 func (s *InMemoryInvoiceStore) CreateWithLineItems(ctx context.Context, inv *invoice.Invoice) error {
-	return s.Create(ctx, inv) // In memory store doesn't need special transaction handling
+	if err := s.Create(ctx, inv); err != nil {
+		return err
+	}
+	if s.lineItemStore != nil {
+		for _, item := range inv.LineItems {
+			// Ensure InvoiceID is set on each line item (mirrors real DB behaviour)
+			if item.InvoiceID == "" {
+				item.InvoiceID = inv.ID
+			}
+			if err := s.lineItemStore.Create(ctx, item); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *InMemoryInvoiceStore) AddLineItems(ctx context.Context, invoiceID string, items []*invoice.InvoiceLineItem) error {
@@ -135,6 +155,9 @@ func (s *InMemoryInvoiceStore) AddLineItems(ctx context.Context, invoiceID strin
 		itemCopy := copyInvoice(&invoice.Invoice{LineItems: []*invoice.InvoiceLineItem{item}}).LineItems[0]
 		itemCopy.InvoiceID = invoiceID
 		inv.LineItems = append(inv.LineItems, itemCopy)
+		if s.lineItemStore != nil {
+			_ = s.lineItemStore.Create(ctx, itemCopy)
+		}
 	}
 	return s.Update(ctx, inv)
 }
@@ -370,6 +393,20 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		}
 	}
 
+	// Filter by period_start_gte (periodStart >= value)
+	if f.PeriodStartGTE != nil {
+		if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.PeriodStartGTE) {
+			return false
+		}
+	}
+
+	// Filter by period_end_lte (periodEnd <= value)
+	if f.PeriodEndLTE != nil {
+		if inv.PeriodEnd == nil || inv.PeriodEnd.After(*f.PeriodEndLTE) {
+			return false
+		}
+	}
+
 	return true
 }
 
@@ -511,7 +548,10 @@ func (s *InMemoryInvoiceStore) UpdateLineItem(ctx context.Context, item *invoice
 	return s.Update(ctx, inv)
 }
 
-// Clear removes all invoices from the store
+// Clear removes all invoices from the store, and also clears the associated line item store if set.
 func (s *InMemoryInvoiceStore) Clear() {
 	s.InMemoryStore.Clear()
+	if s.lineItemStore != nil {
+		s.lineItemStore.Clear()
+	}
 }

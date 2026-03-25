@@ -1,6 +1,9 @@
 package webhookDto
 
-import "github.com/flexprice/flexprice/internal/api/dto"
+import (
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/types"
+)
 
 type InternalCommunicationEvent struct {
 	InvoiceID string `json:"invoice_id"`
@@ -8,10 +11,10 @@ type InternalCommunicationEvent struct {
 }
 
 type CommunicationWebhookPayload struct {
-	EventType string               `json:"event_type"`
-	Invoice   *dto.InvoiceResponse `json:"invoice"`
+	EventType types.WebhookEventName `json:"event_type"`
+	Invoice   *dto.InvoiceResponse   `json:"invoice"`
 }
 
-func NewCommunicationWebhookPayload(invoice *dto.InvoiceResponse, eventType string) *CommunicationWebhookPayload {
+func NewCommunicationWebhookPayload(invoice *dto.InvoiceResponse, eventType types.WebhookEventName) *CommunicationWebhookPayload {
 	return &CommunicationWebhookPayload{EventType: eventType, Invoice: invoice}
 }

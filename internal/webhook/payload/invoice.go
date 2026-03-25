@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
@@ -21,7 +22,7 @@ func NewInvoicePayloadBuilder(services *Services) PayloadBuilder {
 }
 
 // BuildPayload builds the webhook payload for invoice events
-func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error) {
+func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
 	var parsedPayload webhookDto.InternalInvoiceEvent
 
 	err := json.Unmarshal(data, &parsedPayload)

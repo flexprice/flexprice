@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
@@ -16,7 +17,7 @@ func NewEntitlementPayloadBuilder(services *Services) PayloadBuilder {
 	return &EntitlementPayloadBuilder{services: services}
 }
 
-func (b *EntitlementPayloadBuilder) BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error) {
+func (b *EntitlementPayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
 	var parsedPayload webhookDto.InternalEntitlementEvent
 
 	err := json.Unmarshal(data, &parsedPayload)

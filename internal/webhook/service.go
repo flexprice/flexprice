@@ -60,11 +60,11 @@ func (s *WebhookService) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the webhook service
+// Stop stops the webhook service.
 func (s *WebhookService) Stop() error {
 	s.logger.Debug("stopping webhook service")
 
-	// Then close the publisher
+	// Close publisher only when using in-memory pubsub (Kafka producer is shared and closed)
 	if err := s.publisher.Close(); err != nil {
 		s.logger.Errorw("failed to close webhook publisher", "error", err)
 		return fmt.Errorf("failed to close webhook publisher: %w", err)

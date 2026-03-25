@@ -60,7 +60,7 @@ func NewTaxService(params ServiceParams) TaxService {
 func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateRequest) (*dto.TaxRateResponse, error) {
 	// Validate the request
 	if err := req.Validate(); err != nil {
-		s.Logger.Warnw("tax rate creation validation failed",
+		s.Logger.WarnwCtx(ctx, "tax rate creation validation failed",
 			"error", err,
 			"name", req.Name,
 			"code", req.Code,
@@ -76,7 +76,7 @@ func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateReq
 
 	// Create the tax rate in the repository
 	if err := s.TaxRateRepo.Create(ctx, taxRate); err != nil {
-		s.Logger.Errorw("failed to create tax rate",
+		s.Logger.ErrorwCtx(ctx, "failed to create tax rate",
 			"error", err,
 			"tax_rate_id", taxRate.ID,
 			"name", taxRate.Name,
@@ -100,7 +100,7 @@ func (s *taxService) GetTaxRate(ctx context.Context, id string) (*dto.TaxRateRes
 	// Get the tax rate from the repository
 	taxRate, err := s.TaxRateRepo.Get(ctx, id)
 	if err != nil {
-		s.Logger.Warnw("failed to get tax rate",
+		s.Logger.WarnwCtx(ctx, "failed to get tax rate",
 			"error", err,
 			"tax_rate_id", id,
 		)
@@ -120,7 +120,7 @@ func (s *taxService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilt
 	// Get tax rates from the repository
 	taxRates, err := s.TaxRateRepo.List(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to list tax rates",
+		s.Logger.ErrorwCtx(ctx, "failed to list tax rates",
 			"error", err,
 			"filter", filter,
 		)
@@ -130,7 +130,7 @@ func (s *taxService) ListTaxRates(ctx context.Context, filter *types.TaxRateFilt
 	// Get the total count of tax rates
 	count, err := s.TaxRateRepo.Count(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to count tax rates",
+		s.Logger.ErrorwCtx(ctx, "failed to count tax rates",
 			"error", err,
 			"filter", filter,
 		)
@@ -167,7 +167,7 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 
 	// Validate the update request
 	if err := req.Validate(); err != nil {
-		s.Logger.Warnw("tax rate update validation failed",
+		s.Logger.WarnwCtx(ctx, "tax rate update validation failed",
 			"error", err,
 			"tax_rate_id", id,
 		)
@@ -180,7 +180,7 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 	taxAssociationFilter.Limit = lo.ToPtr(1)
 	taxAssociations, err := s.TaxAssociationRepo.List(ctx, taxAssociationFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get tax associations for tax rate",
+		s.Logger.ErrorwCtx(ctx, "failed to get tax associations for tax rate",
 			"error", err,
 			"tax_rate_id", id,
 		)
@@ -188,7 +188,7 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 	}
 
 	if len(taxAssociations) > 0 {
-		s.Logger.Warnw("tax rate is being used in tax assignments, cannot update",
+		s.Logger.WarnwCtx(ctx, "tax rate is being used in tax assignments, cannot update",
 			"tax_rate_id", id,
 		)
 		return nil, ierr.NewError("tax rate is being used in tax assignments, cannot update").
@@ -202,7 +202,7 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 	taxAppliedFilter.Limit = lo.ToPtr(1)
 	taxAppliedRecords, err := s.TaxAppliedRepo.List(ctx, taxAppliedFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get tax applied records for tax rate",
+		s.Logger.ErrorwCtx(ctx, "failed to get tax applied records for tax rate",
 			"error", err,
 			"tax_rate_id", id,
 		)
@@ -210,7 +210,7 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 	}
 
 	if len(taxAppliedRecords) > 0 {
-		s.Logger.Warnw("tax rate is being used in tax applied records, cannot update",
+		s.Logger.WarnwCtx(ctx, "tax rate is being used in tax applied records, cannot update",
 			"tax_rate_id", id,
 		)
 		return nil, ierr.NewError("tax rate is being used in tax applied records, cannot update").
@@ -247,14 +247,14 @@ func (s *taxService) UpdateTaxRate(ctx context.Context, id string, req dto.Updat
 
 	// Perform the update in the repository
 	if err := s.TaxRateRepo.Update(ctx, taxRate); err != nil {
-		s.Logger.Errorw("failed to update tax rate",
+		s.Logger.ErrorwCtx(ctx, "failed to update tax rate",
 			"error", err,
 			"tax_rate_id", id,
 		)
 		return nil, err
 	}
 
-	s.Logger.Infow("tax rate updated successfully",
+	s.Logger.InfowCtx(ctx, "tax rate updated successfully",
 		"tax_rate_id", id,
 		"name", taxRate.Name,
 		"code", taxRate.Code,
@@ -276,7 +276,7 @@ func (s *taxService) DeleteTaxRate(ctx context.Context, id string) error {
 	// Get the tax rate to archive
 	taxRate, err := s.TaxRateRepo.Get(ctx, id)
 	if err != nil {
-		s.Logger.Warnw("failed to get tax rate for deletion",
+		s.Logger.WarnwCtx(ctx, "failed to get tax rate for deletion",
 			"error", err,
 			"tax_rate_id", id,
 		)
@@ -285,14 +285,14 @@ func (s *taxService) DeleteTaxRate(ctx context.Context, id string) error {
 
 	// Call the repository's Delete method which handles archiving
 	if err := s.TaxRateRepo.Delete(ctx, taxRate); err != nil {
-		s.Logger.Errorw("failed to delete tax rate",
+		s.Logger.ErrorwCtx(ctx, "failed to delete tax rate",
 			"error", err,
 			"tax_rate_id", id,
 		)
 		return err
 	}
 
-	s.Logger.Infow("tax rate deleted successfully",
+	s.Logger.InfowCtx(ctx, "tax rate deleted successfully",
 		"tax_rate_id", id,
 		"name", taxRate.Name,
 		"code", taxRate.Code,
@@ -312,7 +312,7 @@ func (s *taxService) GetTaxRateByCode(ctx context.Context, code string) (*dto.Ta
 	// Get the tax rate by code from the repository
 	taxRate, err := s.TaxRateRepo.GetByCode(ctx, code)
 	if err != nil {
-		s.Logger.Warnw("failed to get tax rate by code",
+		s.Logger.WarnwCtx(ctx, "failed to get tax rate by code",
 			"error", err,
 			"code", code,
 		)
@@ -327,7 +327,7 @@ func (s *taxService) GetTaxRateByCode(ctx context.Context, code string) (*dto.Ta
 func (s *taxService) CreateTaxApplied(ctx context.Context, req dto.CreateTaxAppliedRequest) (*dto.TaxAppliedResponse, error) {
 	// Validate the request
 	if err := req.Validate(); err != nil {
-		s.Logger.Warnw("tax applied creation validation failed",
+		s.Logger.WarnwCtx(ctx, "tax applied creation validation failed",
 			"error", err,
 			"tax_rate_id", req.TaxRateID,
 			"entity_type", req.EntityType,
@@ -341,7 +341,7 @@ func (s *taxService) CreateTaxApplied(ctx context.Context, req dto.CreateTaxAppl
 
 	// Create the tax applied record in the repository
 	if err := s.TaxAppliedRepo.Create(ctx, taxApplied); err != nil {
-		s.Logger.Errorw("failed to create tax applied record",
+		s.Logger.ErrorwCtx(ctx, "failed to create tax applied record",
 			"error", err,
 			"tax_applied_id", taxApplied.ID,
 			"tax_rate_id", taxApplied.TaxRateID,
@@ -351,7 +351,7 @@ func (s *taxService) CreateTaxApplied(ctx context.Context, req dto.CreateTaxAppl
 		return nil, err
 	}
 
-	s.Logger.Infow("tax applied record created successfully",
+	s.Logger.InfowCtx(ctx, "tax applied record created successfully",
 		"tax_applied_id", taxApplied.ID,
 		"tax_rate_id", taxApplied.TaxRateID,
 		"entity_type", taxApplied.EntityType,
@@ -374,7 +374,7 @@ func (s *taxService) GetTaxApplied(ctx context.Context, id string) (*dto.TaxAppl
 	// Get the tax applied record from the repository
 	taxApplied, err := s.TaxAppliedRepo.Get(ctx, id)
 	if err != nil {
-		s.Logger.Warnw("failed to get tax applied record",
+		s.Logger.WarnwCtx(ctx, "failed to get tax applied record",
 			"error", err,
 			"tax_applied_id", id,
 		)
@@ -393,7 +393,7 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 
 	// Validate the filter
 	if err := filter.Validate(); err != nil {
-		s.Logger.Warnw("tax applied filter validation failed",
+		s.Logger.WarnwCtx(ctx, "tax applied filter validation failed",
 			"error", err,
 			"filter", filter,
 		)
@@ -403,7 +403,7 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 	// Get tax applied records from the repository
 	taxAppliedRecords, err := s.TaxAppliedRepo.List(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to list tax applied records",
+		s.Logger.ErrorwCtx(ctx, "failed to list tax applied records",
 			"error", err,
 			"filter", filter,
 		)
@@ -427,7 +427,7 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 
 		taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to list tax rates for expansion",
+			s.Logger.ErrorwCtx(ctx, "failed to list tax rates for expansion",
 				"error", err,
 				"tax_rate_ids", taxRateIDs)
 			return nil, err
@@ -450,7 +450,7 @@ func (s *taxService) ListTaxApplied(ctx context.Context, filter *types.TaxApplie
 	// Get the total count of tax applied records
 	count, err := s.TaxAppliedRepo.Count(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to count tax applied records",
+		s.Logger.ErrorwCtx(ctx, "failed to count tax applied records",
 			"error", err,
 			"filter", filter,
 		)
@@ -475,7 +475,7 @@ func (s *taxService) DeleteTaxApplied(ctx context.Context, id string) error {
 	// Get the tax applied record to ensure it exists
 	taxApplied, err := s.TaxAppliedRepo.Get(ctx, id)
 	if err != nil {
-		s.Logger.Warnw("failed to get tax applied record for deletion",
+		s.Logger.WarnwCtx(ctx, "failed to get tax applied record for deletion",
 			"error", err,
 			"tax_applied_id", id,
 		)
@@ -484,14 +484,14 @@ func (s *taxService) DeleteTaxApplied(ctx context.Context, id string) error {
 
 	// Delete the tax applied record
 	if err := s.TaxAppliedRepo.Delete(ctx, id); err != nil {
-		s.Logger.Errorw("failed to delete tax applied record",
+		s.Logger.ErrorwCtx(ctx, "failed to delete tax applied record",
 			"error", err,
 			"tax_applied_id", id,
 		)
 		return err
 	}
 
-	s.Logger.Infow("tax applied record deleted successfully",
+	s.Logger.InfowCtx(ctx, "tax applied record deleted successfully",
 		"tax_applied_id", id,
 		"tax_rate_id", taxApplied.TaxRateID,
 		"entity_type", taxApplied.EntityType,
@@ -511,7 +511,7 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	if req.ExternalCustomerID != "" {
 		customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.ExternalCustomerID)
 		if err != nil {
-			s.Logger.Errorw("failed to resolve external customer ID",
+			s.Logger.ErrorwCtx(ctx, "failed to resolve external customer ID",
 				"error", err,
 				"external_customer_id", req.ExternalCustomerID)
 			return nil, ierr.WithError(err).
@@ -524,7 +524,7 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 
 		// If both entity_id and external_customer_id are provided, validate they match
 		if req.EntityID != "" && req.EntityID != customer.ID {
-			s.Logger.Errorw("entity_id and external_customer_id point to different customers",
+			s.Logger.ErrorwCtx(ctx, "entity_id and external_customer_id point to different customers",
 				"entity_id", req.EntityID,
 				"external_customer_id", req.ExternalCustomerID,
 				"resolved_customer_id", customer.ID)
@@ -542,7 +542,7 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 		req.EntityType = types.TaxRateEntityTypeCustomer
 		req.EntityID = customer.ID
 
-		s.Logger.Debugw("resolved external customer ID to internal customer ID",
+		s.Logger.DebugwCtx(ctx, "resolved external customer ID to internal customer ID",
 			"external_customer_id", req.ExternalCustomerID,
 			"customer_id", customer.ID)
 	}
@@ -562,7 +562,7 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	// Convert request to domain model
 	tc := req.ToTaxAssociation(ctx, taxRate.ID)
 
-	s.Logger.Infow("creating tax association",
+	s.Logger.InfowCtx(ctx, "creating tax association",
 		"tax_rate_id", tc.TaxRateID,
 		"entity_type", tc.EntityType,
 		"entity_id", tc.EntityID,
@@ -572,7 +572,7 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	// Create tax config
 	err = s.TaxAssociationRepo.Create(ctx, tc)
 	if err != nil {
-		s.Logger.Errorw("failed to create tax association",
+		s.Logger.ErrorwCtx(ctx, "failed to create tax association",
 			"error", err,
 			"tax_rate_id", tc.TaxRateID,
 			"entity_type", tc.EntityType,
@@ -580,7 +580,7 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 		return nil, err
 	}
 
-	s.Logger.Infow("tax association created successfully",
+	s.Logger.InfowCtx(ctx, "tax association created successfully",
 		"tax_config_id", tc.ID,
 		"tax_rate_id", tc.TaxRateID,
 		"entity_type", tc.EntityType,
@@ -597,11 +597,11 @@ func (s *taxService) GetTaxAssociation(ctx context.Context, id string) (*dto.Tax
 			Mark(ierr.ErrValidation)
 	}
 
-	s.Logger.Debugw("getting tax association", "tax_association_id", id)
+	s.Logger.DebugwCtx(ctx, "getting tax association", "tax_association_id", id)
 
 	tc, err := s.TaxAssociationRepo.Get(ctx, id)
 	if err != nil {
-		s.Logger.Errorw("failed to get tax association",
+		s.Logger.ErrorwCtx(ctx, "failed to get tax association",
 			"error", err,
 			"tax_association_id", id)
 		return nil, err
@@ -649,7 +649,7 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 		existing.Metadata = lo.FromPtr(req.Metadata)
 	}
 
-	s.Logger.Infow("updating tax association",
+	s.Logger.InfowCtx(ctx, "updating tax association",
 		"tax_association_id", id,
 		"tax_rate_id", existing.TaxRateID,
 		"entity_type", existing.EntityType,
@@ -658,13 +658,13 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 	// Update tax config
 	err = s.TaxAssociationRepo.Update(ctx, existing)
 	if err != nil {
-		s.Logger.Errorw("failed to update tax association",
+		s.Logger.ErrorwCtx(ctx, "failed to update tax association",
 			"error", err,
 			"tax_association_id", id)
 		return nil, err
 	}
 
-	s.Logger.Infow("tax association updated successfully",
+	s.Logger.InfowCtx(ctx, "tax association updated successfully",
 		"tax_association_id", id,
 		"tax_rate_id", existing.TaxRateID,
 		"entity_type", existing.EntityType,
@@ -690,7 +690,7 @@ func (s *taxService) DeleteTaxAssociation(ctx context.Context, id string) error 
 	// Delete tax association
 	err = s.TaxAssociationRepo.Delete(ctx, existing)
 	if err != nil {
-		s.Logger.Errorw("failed to delete tax association",
+		s.Logger.ErrorwCtx(ctx, "failed to delete tax association",
 			"error", err,
 			"tax_association_id", id)
 		return err
@@ -714,7 +714,7 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 	if filter.ExternalCustomerID != "" {
 		customer, err := s.CustomerRepo.GetByLookupKey(ctx, filter.ExternalCustomerID)
 		if err != nil {
-			s.Logger.Errorw("failed to resolve external customer ID",
+			s.Logger.ErrorwCtx(ctx, "failed to resolve external customer ID",
 				"error", err,
 				"external_customer_id", filter.ExternalCustomerID)
 			return nil, ierr.WithError(err).
@@ -727,7 +727,7 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 
 		// If both entity_id and external_customer_id are provided, validate they match
 		if filter.EntityID != "" && filter.EntityID != customer.ID {
-			s.Logger.Errorw("entity_id and external_customer_id point to different customers",
+			s.Logger.ErrorwCtx(ctx, "entity_id and external_customer_id point to different customers",
 				"entity_id", filter.EntityID,
 				"external_customer_id", filter.ExternalCustomerID,
 				"resolved_customer_id", customer.ID)
@@ -745,19 +745,19 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 		filter.EntityType = types.TaxRateEntityTypeCustomer
 		filter.EntityID = customer.ID
 
-		s.Logger.Debugw("resolved external customer ID to internal customer ID",
+		s.Logger.DebugwCtx(ctx, "resolved external customer ID to internal customer ID",
 			"external_customer_id", filter.ExternalCustomerID,
 			"customer_id", customer.ID)
 	}
 
-	s.Logger.Debugw("listing tax associations",
+	s.Logger.DebugwCtx(ctx, "listing tax associations",
 		"entity_type", filter.EntityType,
 		"entity_id", filter.EntityID)
 
 	// List tax associations
 	taxAssociations, err := s.TaxAssociationRepo.List(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to list tax associations",
+		s.Logger.ErrorwCtx(ctx, "failed to list tax associations",
 			"error", err,
 			"filter", filter)
 		return nil, err
@@ -789,7 +789,7 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 
 		taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to list tax rates",
+			s.Logger.ErrorwCtx(ctx, "failed to list tax rates",
 				"error", err,
 				"tax_rate_ids", taxRateIDs)
 			return nil, err
@@ -837,7 +837,7 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 			for _, taxOverride := range req.TaxRateOverrides {
 				taxAssociationReq := taxOverride.ToTaxAssociationRequest(ctx, entityID, entityType)
 
-				s.Logger.Infow("creating tax association from override",
+				s.Logger.InfowCtx(ctx, "creating tax association from override",
 					"taxrate_code", taxOverride.TaxRateCode,
 					"entity_type", entityType,
 					"entity_id", entityID,
@@ -850,7 +850,7 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 				}
 			}
 
-			s.Logger.Infow("successfully created tax associations from overrides",
+			s.Logger.InfowCtx(ctx, "successfully created tax associations from overrides",
 				"entity_type", entityType,
 				"entity_id", entityID,
 				"associations_count", len(req.TaxRateOverrides))
@@ -861,7 +861,7 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 				// Get the tax rate to get its code
 				taxRate, err := s.GetTaxRate(ctx, taxAssociation.TaxRateID)
 				if err != nil {
-					s.Logger.Errorw("failed to get tax rate for association",
+					s.Logger.ErrorwCtx(ctx, "failed to get tax rate for association",
 						"error", err,
 						"tax_rate_id", taxAssociation.TaxRateID)
 					return err
@@ -878,7 +878,7 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 					Metadata:    taxAssociation.Metadata,
 				}
 
-				s.Logger.Infow("creating tax association",
+				s.Logger.InfowCtx(ctx, "creating tax association",
 					"taxrate_code", taxRate.Code,
 					"entity_type", entityType,
 					"entity_id", entityID,
@@ -887,7 +887,7 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 				)
 
 				if _, err := s.CreateTaxAssociation(ctx, taxAssociationReq); err != nil {
-					s.Logger.Errorw("failed to create tax association",
+					s.Logger.ErrorwCtx(ctx, "failed to create tax association",
 						"error", err,
 						"taxrate_code", taxRate.Code)
 					return err
@@ -904,7 +904,7 @@ func (s *taxService) LinkTaxRatesToEntity(ctx context.Context, req dto.LinkTaxRa
 // This method handles both tax rate overrides and subscription tax rates
 func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.CreateInvoiceRequest) ([]*dto.TaxRateResponse, error) {
 	if len(req.TaxRateOverrides) > 0 {
-		s.Logger.Infow("processing tax rate overrides for invoice",
+		s.Logger.InfowCtx(ctx, "processing tax rate overrides for invoice",
 			"overrides_count", len(req.TaxRateOverrides))
 
 		taxRateCodes := make([]string, len(req.TaxRateOverrides))
@@ -917,7 +917,7 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 
 		taxRatesResponse, err := s.ListTaxRates(ctx, filter)
 		if err != nil {
-			s.Logger.Errorw("failed to resolve tax rates from overrides",
+			s.Logger.ErrorwCtx(ctx, "failed to resolve tax rates from overrides",
 				"error", err,
 				"tax_rate_codes", taxRateCodes)
 			return nil, err
@@ -934,7 +934,7 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 
 		taxAssociations, err := s.ListTaxAssociations(ctx, filter)
 		if err != nil {
-			s.Logger.Errorw("failed to get tax associations for subscription",
+			s.Logger.ErrorwCtx(ctx, "failed to get tax associations for subscription",
 				"error", err,
 				"subscription_id", lo.FromPtr(req.SubscriptionID),
 			)
@@ -956,7 +956,7 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 
 		taxRatesResponse, err := s.ListTaxRates(ctx, taxRateFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to fetch subscription tax rates",
+			s.Logger.ErrorwCtx(ctx, "failed to fetch subscription tax rates",
 				"error", err,
 				"subscription_id", lo.FromPtr(req.SubscriptionID),
 				"tax_rate_ids", taxRateIDs)
@@ -981,7 +981,7 @@ type TaxCalculationResult struct {
 // Returns calculated tax data instead of directly updating the invoice
 func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoice, taxRates []*dto.TaxRateResponse) (*TaxCalculationResult, error) {
 	if len(taxRates) == 0 {
-		s.Logger.Infow("no tax rates to apply to invoice", "invoice_id", inv.ID)
+		s.Logger.InfowCtx(ctx, "no tax rates to apply to invoice", "invoice_id", inv.ID)
 		return &TaxCalculationResult{
 			TotalTaxAmount:    decimal.Zero,
 			TaxAppliedRecords: []*dto.TaxAppliedResponse{},
@@ -989,7 +989,7 @@ func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoi
 		}, nil
 	}
 
-	s.Logger.Infow("applying taxes to invoice",
+	s.Logger.InfowCtx(ctx, "applying taxes to invoice",
 		"invoice_id", inv.ID,
 		"tax_rates_count", len(taxRates))
 
@@ -1020,7 +1020,7 @@ func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoi
 		taxAppliedRecords = append(taxAppliedRecords, taxAppliedRecord)
 	}
 
-	s.Logger.Infow("successfully calculated taxes for invoice",
+	s.Logger.InfowCtx(ctx, "successfully calculated taxes for invoice",
 		"invoice_id", inv.ID,
 		"total_tax", totalTaxAmount,
 		"tax_rates_processed", len(taxRates))
@@ -1078,7 +1078,7 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 	// Check if tax applied record already exists
 	existingTaxApplied, err := s.TaxAppliedRepo.GetByIdempotencyKey(ctx, idempotencyKey)
 	if err != nil && !ierr.IsNotFound(err) {
-		s.Logger.Errorw("failed to check existing tax applied record",
+		s.Logger.ErrorwCtx(ctx, "failed to check existing tax applied record",
 			"error", err,
 			"tax_rate_id", taxRate.ID,
 			"invoice_id", inv.ID,
@@ -1092,14 +1092,14 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 		existingTaxApplied.AppliedAt = time.Now().UTC()
 
 		if err := s.TaxAppliedRepo.Update(ctx, existingTaxApplied); err != nil {
-			s.Logger.Errorw("failed to update existing tax applied record",
+			s.Logger.ErrorwCtx(ctx, "failed to update existing tax applied record",
 				"error", err,
 				"tax_applied_id", existingTaxApplied.ID,
 				"tax_rate_id", taxRate.ID)
 			return nil, err
 		}
 
-		s.Logger.Infow("updated existing tax applied record",
+		s.Logger.InfowCtx(ctx, "updated existing tax applied record",
 			"tax_applied_id", existingTaxApplied.ID,
 			"tax_rate_id", taxRate.ID,
 			"tax_rate_code", taxRate.Code,
@@ -1125,7 +1125,7 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 
 	// Create the tax applied record
 	if err := s.TaxAppliedRepo.Create(ctx, taxApplied); err != nil {
-		s.Logger.Errorw("failed to create tax applied record",
+		s.Logger.ErrorwCtx(ctx, "failed to create tax applied record",
 			"error", err,
 			"tax_rate_id", taxRate.ID,
 			"invoice_id", inv.ID,
@@ -1133,7 +1133,7 @@ func (s *taxService) processTaxApplication(ctx context.Context, inv *invoice.Inv
 		return nil, err
 	}
 
-	s.Logger.Infow("created new tax applied record",
+	s.Logger.InfowCtx(ctx, "created new tax applied record",
 		"tax_applied_id", taxApplied.ID,
 		"tax_rate_id", taxRate.ID,
 		"tax_rate_code", taxRate.Code,

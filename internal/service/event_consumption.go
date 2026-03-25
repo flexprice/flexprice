@@ -317,7 +317,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(payload, &event); err != nil {
-		s.Logger.Errorw("failed to unmarshal event",
+		s.Logger.ErrorwCtx(ctx, "failed to unmarshal event",
 			"error", err,
 			"payload", string(payload),
 		)
@@ -325,7 +325,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		return fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 
-	s.Logger.Debugw("processing raw event",
+	s.Logger.DebugwCtx(ctx, "processing raw event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
@@ -359,7 +359,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 
 	// Insert events into ClickHouse
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
-		s.Logger.Errorw("failed to insert events",
+		s.Logger.ErrorwCtx(ctx, "failed to insert events",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -371,7 +371,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 	// Only for the tenants that are forced to v1
 	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
 		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.Errorw("failed to publish event to post-processing service",
+			s.Logger.ErrorwCtx(ctx, "failed to publish event to post-processing service",
 				"error", err,
 				"event_id", event.ID,
 				"event_name", event.EventName,
@@ -380,7 +380,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		}
 	}
 
-	s.Logger.Debugw("successfully processed raw event",
+	s.Logger.DebugwCtx(ctx, "successfully processed raw event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"lag_ms", time.Since(event.Timestamp).Milliseconds(),

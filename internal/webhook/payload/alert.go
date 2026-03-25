@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
@@ -17,7 +18,7 @@ func NewAlertPayloadBuilder(services *Services) PayloadBuilder {
 }
 
 // BuildPayload for alert webhooks - fetches entities based on what IDs are provided
-func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error) {
+func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
 	// Unmarshal the internal alert event containing entity IDs (omitempty fields)
 	var internalEvent webhookDto.InternalAlertEvent
 	if err := json.Unmarshal(data, &internalEvent); err != nil {

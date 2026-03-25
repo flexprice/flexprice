@@ -99,7 +99,7 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 		}
 	}
 
-	r.logger.Infow("executing find raw events query",
+	r.logger.Debugw("executing find raw events query",
 		"query", query,
 		"args", args,
 		"external_customer_ids", params.ExternalCustomerIDs,
@@ -163,7 +163,7 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("fetched raw events from clickhouse",
+	r.logger.Debugw("fetched raw events from clickhouse",
 		"count", len(eventsList),
 		"expected_batch_size", params.BatchSize,
 		"offset", params.Offset,
@@ -437,7 +437,7 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("unprocessed raw events batch",
+	r.logger.Debugw("unprocessed raw events batch",
 		"count", len(eventsList),
 		"has_next_batch", nextCursor != nil,
 	)

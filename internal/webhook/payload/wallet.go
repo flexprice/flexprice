@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
@@ -29,7 +30,7 @@ func NewTransactionPayloadBuilder(services *Services) PayloadBuilder {
 	}
 }
 
-func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType string, data json.RawMessage) (json.RawMessage, error) {
+func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
 	// Validate input data
 	var parsedPayload webhookDto.InternalWalletEvent
 
@@ -69,7 +70,7 @@ func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType string
 
 func (b TransactionPayloadBuilder) BuildPayload(
 	ctx context.Context,
-	eventType string,
+	eventType types.WebhookEventName,
 	data json.RawMessage,
 ) (json.RawMessage, error) {
 

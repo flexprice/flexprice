@@ -74,12 +74,12 @@ func (s *groupService) GetGroup(ctx context.Context, id string) (*dto.GroupRespo
 	}
 
 	// Get associated entities based on type
-	entityIDs, err := s.getAssociatedEntities(ctx, groupObj.EntityType, id)
-	if err != nil {
-		return nil, err
-	}
+	// entityIDs, err := s.getAssociatedEntities(ctx, groupObj.EntityType, id)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	return dto.ToGroupResponseWithEntities(groupObj, entityIDs), nil
+	return dto.ToGroupResponseWithEntities(groupObj, nil), nil
 }
 
 // DeleteGroup deletes a group (entity associations are automatically removed by foreign key constraint)
@@ -131,19 +131,19 @@ func (s *groupService) ListGroups(ctx context.Context, filter *types.GroupFilter
 		return nil, err
 	}
 
-	// Fetch entity_ids for all groups in bulk (prices or features by entity_type)
-	entityIDsByGroup, err := s.getAssociatedEntitiesBulk(ctx, groups)
-	if err != nil {
-		return nil, err
-	}
+	// // Fetch entity_ids for all groups in bulk (prices or features by entity_type)
+	// entityIDsByGroup, err := s.getAssociatedEntitiesBulk(ctx, groups)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	responses := make([]*dto.GroupResponse, len(groups))
 	for i, groupObj := range groups {
-		ids := entityIDsByGroup[groupObj.ID]
-		if ids == nil {
-			ids = []string{}
-		}
-		responses[i] = dto.ToGroupResponseWithEntities(groupObj, ids)
+		// ids := entityIDsByGroup[groupObj.ID]
+		// if ids == nil {
+		// 	ids = []string{}
+		// }
+		responses[i] = dto.ToGroupResponseWithEntities(groupObj, nil)
 	}
 
 	return &dto.ListGroupsResponse{

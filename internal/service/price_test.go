@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -887,6 +888,67 @@ func (s *PriceServiceSuite) TestCalculateBucketedCost_ComplexScenario() {
 	s.True(expected.Equal(result),
 		"Expected cost %s but got %s for complex bucketed scenario %v",
 		expected.String(), result.String(), bucketedValues)
+}
+
+func (s *PriceServiceSuite) TestCalculateCostFromUsageResults_TieredSlab() {
+	// Slab tiered pricing: 0-10 units ₹1/unit, 10-∞ ₹2/unit. Per-group (e.g. per KRN) slab applied individually.
+	upTo10 := uint64(10)
+	price := &price.Price{
+		ID:           "price-group-tiered-slab",
+		Amount:       decimal.Zero,
+		Currency:     "inr",
+		BillingModel: types.BILLING_MODEL_TIERED,
+		TierMode:     types.BILLING_TIER_SLAB,
+		Tiers: []price.PriceTier{
+			{UpTo: &upTo10, UnitAmount: decimal.NewFromInt(1)},
+			{UpTo: nil, UnitAmount: decimal.NewFromInt(2)},
+		},
+	}
+
+	// One bucket (e.g. 1st hour): krn1 max=3, krn2 max=12
+	// krn1: 3 × ₹1 = ₹3; krn2: 10×₹1 + 2×₹2 = ₹14; total = ₹17
+	bucketStart := time.Now().Truncate(time.Hour)
+	results := []events.UsageResult{
+		{WindowSize: bucketStart, Value: decimal.NewFromInt(3), GroupKey: "krn1"},
+		{WindowSize: bucketStart, Value: decimal.NewFromInt(12), GroupKey: "krn2"},
+	}
+
+	result := s.priceService.CalculateCostFromUsageResults(s.ctx, price, results)
+	expected := decimal.NewFromInt(17)
+	s.True(expected.Equal(result),
+		"Expected cost %s but got %s for per-group slab (krn1=3, krn2=12)",
+		expected.String(), result.String())
+}
+
+func (s *PriceServiceSuite) TestCalculateCostFromUsageResults_TieredVolume() {
+	// Volume tiered: 0-10 $0.10/unit, 11-20 $0.05/unit. Per-group volume tier applied individually.
+	upTo10 := uint64(10)
+	upTo20 := uint64(20)
+	price := &price.Price{
+		ID:           "price-group-tiered-volume",
+		Amount:       decimal.Zero,
+		Currency:     "usd",
+		BillingModel: types.BILLING_MODEL_TIERED,
+		TierMode:     types.BILLING_TIER_VOLUME,
+		Tiers: []price.PriceTier{
+			{UpTo: &upTo10, UnitAmount: decimal.NewFromFloat(0.10)},
+			{UpTo: &upTo20, UnitAmount: decimal.NewFromFloat(0.05)},
+			{UpTo: nil, UnitAmount: decimal.NewFromFloat(0.02)},
+		},
+	}
+
+	// One bucket: group A max=5 (tier 1 → 5*0.10=$0.50), group B max=15 (tier 2 → 15*0.05=$0.75); total=$1.25
+	bucketStart := time.Now().Truncate(time.Hour)
+	results := []events.UsageResult{
+		{WindowSize: bucketStart, Value: decimal.NewFromInt(5), GroupKey: "A"},
+		{WindowSize: bucketStart, Value: decimal.NewFromInt(15), GroupKey: "B"},
+	}
+
+	result := s.priceService.CalculateCostFromUsageResults(s.ctx, price, results)
+	expected := decimal.NewFromFloat(1.25)
+	s.True(expected.Equal(result),
+		"Expected cost %s but got %s for per-group volume (A=5, B=15)",
+		expected.String(), result.String())
 }
 
 func (s *PriceServiceSuite) TestCalculateCostWithBreakup_TieredSlabCorrected() {

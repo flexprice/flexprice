@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 
-	"log"
 	"strings"
 	"time"
 
@@ -36,6 +35,34 @@ func safeDecimalFromFloat(f float64) decimal.Decimal {
 		return decimal.Zero
 	}
 	return decimal.NewFromFloat(f)
+}
+
+// clampToZero returns zero if d is negative, otherwise returns d unchanged.
+func clampToZero(d decimal.Decimal) decimal.Decimal {
+	if d.LessThan(decimal.Zero) {
+		return decimal.Zero
+	}
+	return d
+}
+
+// scanBucketedRow scans a row from a bucketed aggregation query.
+// Returns (total, value, windowSize, groupKey, error). groupKey is empty when hasGroupBy is false.
+func scanBucketedRow(rows interface{ Scan(...any) error }, hasGroupBy bool) (total, value decimal.Decimal, windowSize time.Time, groupKey string, err error) {
+	var totalFloat, valueFloat float64
+	if hasGroupBy {
+		if err = rows.Scan(&totalFloat, &windowSize, &valueFloat, &groupKey); err != nil {
+			return decimal.Zero, decimal.Zero, time.Time{}, "", ierr.WithError(err).
+				WithHint("Failed to scan bucketed result with group_key").
+				Mark(ierr.ErrDatabase)
+		}
+	} else {
+		if err = rows.Scan(&totalFloat, &windowSize, &valueFloat); err != nil {
+			return decimal.Zero, decimal.Zero, time.Time{}, "", ierr.WithError(err).
+				WithHint("Failed to scan bucketed result").
+				Mark(ierr.ErrDatabase)
+		}
+	}
+	return clampToZero(safeDecimalFromFloat(totalFloat)), clampToZero(safeDecimalFromFloat(valueFloat)), windowSize, groupKey, nil
 }
 
 func (r *EventRepository) InsertEvent(ctx context.Context, event *events.Event) error {
@@ -237,7 +264,6 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 	}
 
 	query := aggregator.GetQuery(ctx, params)
-	log.Printf("Executing query: %s", query)
 
 	rows, err := r.store.GetConn().Query(ctx, query)
 	if err != nil {
@@ -261,7 +287,6 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 		for rows.Next() {
 			var windowSize time.Time
 			var value decimal.Decimal
-			var total decimal.Decimal
 
 			switch params.AggregationType {
 			case types.AggregationCount, types.AggregationCountUnique:
@@ -279,46 +304,35 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 				value = decimal.NewFromUint64(countValue)
 			case types.AggregationMax, types.AggregationSum:
 				if params.BucketSize != "" {
-					var totalFloat, valueFloat float64
-					if err := rows.Scan(&totalFloat, &windowSize, &valueFloat); err != nil {
+					hasGroupBy := params.AggregationType == types.AggregationMax &&
+						params.GroupByProperty != "" &&
+						validateGroupByProperty(params.GroupByProperty) == nil
+
+					bucketTotal, bucketValue, bucketTime, groupKey, err := scanBucketedRow(rows, hasGroupBy)
+					if err != nil {
 						SetSpanError(span, err)
-						return nil, ierr.WithError(err).
-							WithHint("Failed to scan float result").
-							WithReportableDetails(map[string]interface{}{
-								"window_size": windowSize,
-								"value":       valueFloat,
-								"total":       totalFloat,
-							}).
-							Mark(ierr.ErrDatabase)
+						return nil, err
 					}
-					total = safeDecimalFromFloat(totalFloat)
-					value = safeDecimalFromFloat(valueFloat)
-					// Ensure negative values are treated as zero
-					if total.LessThan(decimal.Zero) {
-						total = decimal.Zero
+					result.Value = bucketTotal
+					windowSize = bucketTime
+					value = bucketValue
+					if hasGroupBy {
+						result.Results = append(result.Results, events.UsageResult{
+							WindowSize: bucketTime,
+							Value:      bucketValue,
+							GroupKey:   groupKey,
+						})
+						continue
 					}
-					if value.LessThan(decimal.Zero) {
-						value = decimal.Zero
-					}
-					// Set the overall max/sum as the result value
-					result.Value = total
 				} else {
 					var floatValue float64
 					if err := rows.Scan(&windowSize, &floatValue); err != nil {
 						SetSpanError(span, err)
 						return nil, ierr.WithError(err).
 							WithHint("Failed to scan float result").
-							WithReportableDetails(map[string]interface{}{
-								"window_size": windowSize,
-								"float_value": floatValue,
-							}).
 							Mark(ierr.ErrDatabase)
 					}
-					value = safeDecimalFromFloat(floatValue)
-					// Ensure negative values are treated as zero
-					if value.LessThan(decimal.Zero) {
-						value = decimal.Zero
-					}
+					value = clampToZero(safeDecimalFromFloat(floatValue))
 				}
 			case types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
 				var floatValue float64

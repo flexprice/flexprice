@@ -90,18 +90,14 @@ func RegisterHooks(lc fx.Lifecycle, svc *Service) {
 
 // Implement pyroscope.Logger interface for better debugging
 func (s *Service) Debugf(format string, args ...interface{}) {
-	return // force disable debug logging for now
-	if s.cfg.Logging.Level == "debug" {
-		s.logger.Debugf("[Pyroscope] "+format, args...)
-	}
 }
 
 func (s *Service) Infof(format string, args ...interface{}) {
-	s.logger.Infof("[Pyroscope] "+format, args...)
+	s.logger.Debugf("[Pyroscope] "+format, args...)
 }
 
 func (s *Service) Errorf(format string, args ...interface{}) {
-	s.logger.Errorf("[Pyroscope] "+format, args...)
+	s.logger.Debugf("[Pyroscope] "+format, args...)
 }
 
 // NewPyroscopeService creates a new Pyroscope service

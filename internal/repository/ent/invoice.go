@@ -413,9 +413,6 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 			invoice.TenantID(types.GetTenantID(ctx)),
 			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		WithLineItems(func(q *ent.InvoiceLineItemQuery) {
-			q.Where(invoicelineitem.Status(string(types.StatusPublished)))
-		}).
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -430,6 +427,16 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 	}
 
 	invoiceData := domainInvoice.FromEnt(invoice)
+
+	// TODO: This is done to ensure backwards compatibility with the old repository.
+	// We should remove this once we migrate all callers to use the new repository.
+	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
+	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
+	if err != nil {
+		r.logger.Error("failed to get invoice line items", "error", err)
+		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
+	}
+	invoiceData.LineItems = items
 	r.SetCache(ctx, invoiceData)
 	return invoiceData, nil
 }
@@ -1211,53 +1218,4 @@ func (r *invoiceRepository) GetInvoicePaymentStatus(ctx context.Context) (*types
 
 	SetSpanSuccess(span)
 	return &result, nil
-}
-
-// UpdateLineItem updates a single line item with credit adjustment information
-func (r *invoiceRepository) UpdateLineItem(ctx context.Context, item *domainInvoice.InvoiceLineItem) error {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "invoice_line_item", "update", map[string]interface{}{
-		"line_item_id": item.ID,
-	})
-	defer FinishSpan(span)
-
-	r.logger.Debugw("updating line item", "line_item_id", item.ID)
-
-	client := r.client.Writer(ctx)
-
-	_, err := client.InvoiceLineItem.UpdateOneID(item.ID).
-		Where(
-			invoicelineitem.TenantID(types.GetTenantID(ctx)),
-			invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
-		SetLineItemDiscount(item.LineItemDiscount).
-		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
-		SetMetadata(item.Metadata).
-		SetStatus(string(item.Status)).
-		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-		if ent.IsNotFound(err) {
-			return ierr.WithError(err).
-				WithHint("Invoice line item not found").
-				WithReportableDetails(map[string]interface{}{
-					"line_item_id": item.ID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-		return ierr.WithError(err).
-			WithHint("Failed to update line item with credit adjustments").
-			WithReportableDetails(map[string]interface{}{
-				"line_item_id": item.ID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	r.DeleteCache(ctx, item.InvoiceID)
-	SetSpanSuccess(span)
-	return nil
 }

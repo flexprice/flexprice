@@ -7,7 +7,7 @@ import (
 )
 
 type InternalWalletEvent struct {
-	EventType string                     `json:"event_type"`
+	EventType types.WebhookEventName     `json:"event_type"`
 	WalletID  string                     `json:"wallet_id"`
 	TenantID  string                     `json:"tenant_id"`
 	Alert     *WalletAlertInfo           `json:"alert,omitempty"`
@@ -15,17 +15,17 @@ type InternalWalletEvent struct {
 }
 
 type InternalTransactionEvent struct {
-	EventType     string `json:"event_type"`
-	TransactionID string `json:"transaction_id"`
-	TenantID      string `json:"tenant_id"`
+	EventType     types.WebhookEventName `json:"event_type"`
+	TransactionID string                 `json:"transaction_id"`
+	TenantID      string                 `json:"tenant_id"`
 }
 
 // WalletWebhookPayload represents the detailed payload for wallet webhooks
 type WalletWebhookPayload struct {
-	EventType string                `json:"event_type"`
-	Wallet    *dto.WalletResponse   `json:"wallet"`
-	Customer  *dto.CustomerResponse `json:"customer,omitempty"`
-	Alert     *WalletAlertInfo      `json:"alert,omitempty"`
+	EventType types.WebhookEventName `json:"event_type"`
+	Wallet    *dto.WalletResponse    `json:"wallet"`
+	Customer  *dto.CustomerResponse  `json:"customer,omitempty"`
+	Alert     *WalletAlertInfo       `json:"alert,omitempty"`
 }
 
 // WalletAlertInfo contains details about the wallet alert
@@ -38,12 +38,12 @@ type WalletAlertInfo struct {
 }
 
 type TransactionWebhookPayload struct {
-	EventType   string                         `json:"event_type"`
+	EventType   types.WebhookEventName         `json:"event_type"`
 	Transaction *dto.WalletTransactionResponse `json:"transaction"`
 	Wallet      *dto.WalletResponse            `json:"wallet"`
 }
 
-func NewWalletWebhookPayload(wallet *dto.WalletResponse, customer *dto.CustomerResponse, alert *WalletAlertInfo, eventType string) *WalletWebhookPayload {
+func NewWalletWebhookPayload(wallet *dto.WalletResponse, customer *dto.CustomerResponse, alert *WalletAlertInfo, eventType types.WebhookEventName) *WalletWebhookPayload {
 	return &WalletWebhookPayload{
 		EventType: eventType,
 		Wallet:    wallet,
@@ -52,7 +52,7 @@ func NewWalletWebhookPayload(wallet *dto.WalletResponse, customer *dto.CustomerR
 	}
 }
 
-func NewTransactionWebhookPayload(transaction *dto.WalletTransactionResponse, wallet *dto.WalletResponse, eventType string) *TransactionWebhookPayload {
+func NewTransactionWebhookPayload(transaction *dto.WalletTransactionResponse, wallet *dto.WalletResponse, eventType types.WebhookEventName) *TransactionWebhookPayload {
 	return &TransactionWebhookPayload{
 		EventType:   eventType,
 		Transaction: transaction,

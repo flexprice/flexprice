@@ -52,7 +52,7 @@ go:
   inputModelSuffix: Input
   maxMethodParams: 4
   methodArguments: require-security-and-request
-  modulePath: github.com/flexprice/flexprice-go
+  modulePath: github.com/flexprice/go-sdk
   multipartArrayFormat: standard
   nullableOptionalWrapper: true
   outputModelSuffix: Output

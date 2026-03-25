@@ -734,10 +734,9 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	filterConditions := buildFilterConditions(params.Filters)
 	timeConditions := buildTimeConditions(params)
 
-	// When GroupByProperty is set, use 3-level aggregation:
-	// 1. Inner CTE (per_group): max per group per bucket (e.g., MAX per krn per hour)
-	// 2. Middle CTE (bucket_maxes): SUM across groups per bucket (e.g., SUM of group maxes per hour)
-	// 3. Outer query: return per-bucket values and overall total
+	// When GroupByProperty is set, return per-group rows so tiered pricing can be applied per group (e.g. per KRN).
+	// 1. per_group CTE: max per group per bucket (e.g., MAX per krn per hour)
+	// 2. Return each group's value with group_key; total is sum of all group values for backward compat
 	if params.GroupByProperty != "" && validateGroupByProperty(params.GroupByProperty) == nil {
 		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", params.GroupByProperty)
 
@@ -756,21 +755,14 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 					%s
 					%s
 				GROUP BY bucket_start, group_key
-			),
-			bucket_maxes AS (
-				SELECT
-					bucket_start,
-					sum(group_value) as bucket_max
-				FROM per_group
-				GROUP BY bucket_start
-				ORDER BY bucket_start
 			)
 			SELECT
-				(SELECT sum(bucket_max) FROM bucket_maxes) as total,
+				(SELECT sum(group_value) FROM per_group) as total,
 				bucket_start as timestamp,
-				bucket_max as value
-			FROM bucket_maxes
-			ORDER BY bucket_start
+				group_value as value,
+				group_key
+			FROM per_group
+			ORDER BY bucket_start, group_key
 		`,
 			bucketWindow,
 			groupByExpr,

@@ -138,3 +138,9 @@ func (i *InvoiceLineItem) Validate() error {
 
 	return nil
 }
+
+// LineItemFromEnt converts an Ent InvoiceLineItem to the domain model.
+// Use this in repository code; it delegates to the existing receiver method.
+func LineItemFromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
+	return new(InvoiceLineItem).FromEnt(e)
+}

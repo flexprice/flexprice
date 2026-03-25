@@ -42,7 +42,7 @@ func (s *dashboardService) GetRevenues(ctx context.Context, req dto.DashboardRev
 	if req.RevenueTrend != nil {
 		revenueTrend, err := s.getRevenueTrend(ctx, req.RevenueTrend)
 		if err != nil {
-			s.Logger.Errorw("failed to get revenue trend", "error", err)
+			s.Logger.ErrorwCtx(ctx, "failed to get revenue trend", "error", err)
 			// Continue with other sections even if this fails
 		} else {
 			response.RevenueTrend = revenueTrend
@@ -52,7 +52,7 @@ func (s *dashboardService) GetRevenues(ctx context.Context, req dto.DashboardRev
 	// Recent Subscriptions - always fetch
 	recentSubs, err := s.getRecentSubscriptions(ctx)
 	if err != nil {
-		s.Logger.Errorw("failed to get recent subscriptions", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to get recent subscriptions", "error", err)
 		// Continue with other sections even if this fails
 	} else {
 		response.RecentSubscriptions = recentSubs
@@ -61,7 +61,7 @@ func (s *dashboardService) GetRevenues(ctx context.Context, req dto.DashboardRev
 	// Invoice Payment Status - always fetch
 	paymentStatus, err := s.getInvoicePaymentStatus(ctx)
 	if err != nil {
-		s.Logger.Errorw("failed to get invoice payment status", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to get invoice payment status", "error", err)
 		// Continue with other sections even if this fails
 	} else {
 		response.InvoicePaymentStatus = paymentStatus

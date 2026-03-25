@@ -1,0 +1,99 @@
+overlay: 1.0.0
+info:
+  title: FlexPrice MCP Scopes
+  version: 1.0.0
+actions:
+  # Step 1: Transform explicit x-scope → x-speakeasy-mcp.scopes
+  # Matches operations with x-scope: read
+  - target: $..get[?(@.x-scope == 'read')]
+    update:
+      x-speakeasy-mcp:
+        scopes: [read]
+        readOnlyHint: true
+  
+  - target: $..head[?(@.x-scope == 'read')]
+    update:
+      x-speakeasy-mcp:
+        scopes: [read]
+        readOnlyHint: true
+  
+  - target: $..post[?(@.x-scope == 'read')]
+    update:
+      x-speakeasy-mcp:
+        scopes: [read]
+        readOnlyHint: true
+  
+  # Matches operations with x-scope: write  
+  - target: $..post[?(@.x-scope == 'write')]
+    update:
+      x-speakeasy-mcp:
+        scopes: [write]
+        readOnlyHint: false
+  
+  - target: $..put[?(@.x-scope == 'write')]
+    update:
+      x-speakeasy-mcp:
+        scopes: [write]
+        readOnlyHint: false
+  
+  - target: $..patch[?(@.x-scope == 'write')]
+    update:
+      x-speakeasy-mcp:
+        scopes: [write]
+        readOnlyHint: false
+  
+  # Matches operations with x-scope: delete
+  - target: $..post[?(@.x-scope == 'delete')]
+    update:
+      x-speakeasy-mcp:
+        scopes: [delete]
+        readOnlyHint: false
+        destructiveHint: true
+  
+  - target: $..delete[?(@.x-scope == 'delete')]
+    update:
+      x-speakeasy-mcp:
+        scopes: [delete]
+        readOnlyHint: false
+        destructiveHint: true
+  
+  # Step 2: HTTP method defaults (only for ops without x-scope)
+  # GET/HEAD without explicit x-scope → read
+  - target: $..get[?(!@.x-scope && !@['x-speakeasy-mcp'])]
+    update:
+      x-speakeasy-mcp:
+        scopes: [read]
+        readOnlyHint: true
+  
+  - target: $..head[?(!@.x-scope && !@['x-speakeasy-mcp'])]
+    update:
+      x-speakeasy-mcp:
+        scopes: [read]
+        readOnlyHint: true
+  
+  # POST/PUT/PATCH without explicit x-scope → write
+  - target: $..post[?(!@.x-scope && !@['x-speakeasy-mcp'])]
+    update:
+      x-speakeasy-mcp:
+        scopes: [write]
+        readOnlyHint: false
+  
+  - target: $..put[?(!@.x-scope && !@['x-speakeasy-mcp'])]
+    update:
+      x-speakeasy-mcp:
+        scopes: [write]
+        readOnlyHint: false
+  
+  - target: $..patch[?(!@.x-scope && !@['x-speakeasy-mcp'])]
+    update:
+      x-speakeasy-mcp:
+        scopes: [write]
+        readOnlyHint: false
+  
+  # DELETE without explicit x-scope → delete
+  - target: $..delete[?(!@.x-scope && !@['x-speakeasy-mcp'])]
+    update:
+      x-speakeasy-mcp:
+        scopes: [delete]
+        readOnlyHint: false
+        destructiveHint: true
