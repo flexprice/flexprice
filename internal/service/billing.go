@@ -1962,6 +1962,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For preview, include both current period arrear and next period advance
 		// but don't filter out already invoiced items
 
+		// Cap periodEnd to now() so commitment/true-up is only calculated for elapsed time
+		now := time.Now()
+		if periodEnd.After(now) {
+			periodEnd = now
+		}
+
 		// For current period arrear charges
 		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,

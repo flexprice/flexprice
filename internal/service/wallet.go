@@ -1198,6 +1198,12 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			periodStart := sub.CurrentPeriodStart
 			periodEnd := sub.CurrentPeriodEnd
 
+			// Cap periodEnd to now() so commitment/true-up is only calculated for elapsed time
+			now := time.Now()
+			if periodEnd.After(now) {
+				periodEnd = now
+			}
+
 			usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 				SubscriptionID: sub.ID,
 				StartTime:      periodStart,
@@ -2402,6 +2408,12 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			periodStart := sub.CurrentPeriodStart
 			periodEnd := sub.CurrentPeriodEnd
 
+			// Cap periodEnd to now() so commitment/true-up is only calculated for elapsed time
+			now := time.Now()
+			if periodEnd.After(now) {
+				periodEnd = now
+			}
+
 			// Get usage data for current period using feature usage table
 			usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 				SubscriptionID: sub.ID,
@@ -2559,6 +2571,12 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 			// Get current period
 			periodStart := sub.CurrentPeriodStart
 			periodEnd := sub.CurrentPeriodEnd
+
+			// Cap periodEnd to now() so commitment/true-up is only calculated for elapsed time
+			now := time.Now()
+			if periodEnd.After(now) {
+				periodEnd = now
+			}
 
 			/*
 				// Get usage for subscription using raw events table

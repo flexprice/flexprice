@@ -1787,6 +1787,13 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 		req.PeriodEnd = &sub.CurrentPeriodEnd
 	}
 
+	// Cap periodEnd to now() so commitment/true-up is only calculated for elapsed time
+	now := time.Now()
+	if req.PeriodEnd.After(now) {
+		cappedEnd := now
+		req.PeriodEnd = &cappedEnd
+	}
+
 	// Prepare invoice request using billing service with the preview reference point
 	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
 		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointPreview)
