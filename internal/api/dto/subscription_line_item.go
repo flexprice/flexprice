@@ -275,6 +275,17 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 		}
 	}
 
+	// Note: inline price path (r.Price) is nil here; ONETIME cadence is validated
+	// downstream in CreatePriceRequest.Validate() for that path.
+	// ONETIME charges must use ADVANCE invoice cadence
+	if price != nil && price.BillingCadence == types.BILLING_CADENCE_ONETIME {
+		if price.InvoiceCadence != "" && price.InvoiceCadence != types.InvoiceCadenceAdvance {
+			return ierr.NewError("ONETIME charges must have invoice_cadence ADVANCE").
+				WithHint("One-time charges are always billed in advance").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Validate quantity is positive if provided
 	if !r.Quantity.IsZero() && r.Quantity.IsNegative() {
 		return ierr.NewError("quantity must be positive").
@@ -478,7 +489,6 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		PriceType:           params.Price.Type,
 		Currency:            params.Subscription.Currency,
 		BillingPeriod:       params.Price.BillingPeriod,
-		BillingCadence:      billingCadence,
 		InvoiceCadence:      invoiceCadence,
 		TrialPeriod:         params.Price.TrialPeriod,
 		EntityType:          params.EntityType,
@@ -551,7 +561,7 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		startDate = lo.FromPtr(r.StartDate)
 	}
 	// charge_date overrides everything for ONETIME charges (it is the exact billing date)
-	if billingCadence == types.BILLING_CADENCE_ONETIME && r.ChargeDate != nil {
+	if params.Price != nil && params.Price.BillingCadence == types.BILLING_CADENCE_ONETIME && r.ChargeDate != nil {
 		startDate = r.ChargeDate.UTC()
 	}
 	lineItem.StartDate = startDate.UTC()

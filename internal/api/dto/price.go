@@ -200,16 +200,6 @@ func (r *CreatePriceRequest) Validate() error {
 		return err
 	}
 
-	// Set default billing period count
-	if r.BillingPeriodCount < 1 {
-		return ierr.NewError("billing period count must be greater than 0").
-			WithHint("Billing period count must be greater than 0").
-			WithReportableDetails(map[string]interface{}{
-				"billing_period_count": r.BillingPeriodCount,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
 	// 3. Validate enum types
 	if err := r.Type.Validate(); err != nil {
 		return err
@@ -363,6 +353,20 @@ func (r *CreatePriceRequest) Validate() error {
 				WithHint("Please select a billing period to set up recurring pricing").
 				Mark(ierr.ErrValidation)
 		}
+		if r.BillingPeriodCount < 1 {
+			return ierr.NewError("billing period count must be greater than 0").
+				WithHint("Billing period count must be greater than 0").
+				WithReportableDetails(map[string]interface{}{
+					"billing_period_count": r.BillingPeriodCount,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	case types.BILLING_CADENCE_ONETIME:
+		if r.InvoiceCadence != "" && r.InvoiceCadence != types.InvoiceCadenceAdvance {
+			return ierr.NewError("invoice_cadence must be ADVANCE for ONETIME prices").
+				WithHint("One-time charges are always billed in advance").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// 11. Validate trial period
@@ -485,6 +489,14 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 			return nil, err
 		}
 		price.Tiers = tiers
+	}
+
+	// Normalize ONETIME prices: billing period is irrelevant for one-time charges.
+	// The client may supply any valid billing_period to satisfy the required tag;
+	// we clear it here so that IsOneTime() (BillingPeriod == "") works correctly.
+	if r.BillingCadence == types.BILLING_CADENCE_ONETIME {
+		price.BillingPeriod = ""
+		price.BillingPeriodCount = 0
 	}
 
 	price.DisplayAmount = price.GetDisplayAmount()

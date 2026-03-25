@@ -142,8 +142,8 @@ func (s *BillingOnetimeSuite) setupSharedFixtures() {
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           s.planT.ID,
 		Type:               types.PRICE_TYPE_FIXED,
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
+		BillingPeriod:      "",
+		BillingPeriodCount: 0,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 		BillingCadence:     types.BILLING_CADENCE_ONETIME,
 		InvoiceCadence:     types.InvoiceCadenceAdvance,
@@ -159,8 +159,8 @@ func (s *BillingOnetimeSuite) setupSharedFixtures() {
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           s.planT.ID,
 		Type:               types.PRICE_TYPE_FIXED,
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
+		BillingPeriod:      "",
+		BillingPeriodCount: 0,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 		BillingCadence:     types.BILLING_CADENCE_ONETIME,
 		InvoiceCadence:     types.InvoiceCadenceArrear,
@@ -197,9 +197,8 @@ func (s *BillingOnetimeSuite) makeOnetimeLineItem(priceID string, cadence types.
 		CustomerID:     s.cust.ID,
 		PriceID:        priceID,
 		PriceType:      types.PRICE_TYPE_FIXED,
-		BillingCadence: types.BILLING_CADENCE_ONETIME,
+		// BillingPeriod intentionally omitted (zero value "") — IsOneTime() uses PriceType==FIXED && BillingPeriod==""
 		InvoiceCadence: cadence,
-		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
 		Quantity:       decimal.NewFromInt(1),
 		Currency:       "usd",
 		StartDate:      chargeDate, // charge date = StartDate for ONETIME
@@ -214,7 +213,6 @@ func (s *BillingOnetimeSuite) makeRecurringLineItem(priceID string) *subscriptio
 		CustomerID:     s.cust.ID,
 		PriceID:        priceID,
 		PriceType:      types.PRICE_TYPE_FIXED,
-		BillingCadence: types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence: types.InvoiceCadenceAdvance,
 		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
 		Quantity:       decimal.NewFromInt(1),
@@ -368,29 +366,6 @@ func (s *BillingOnetimeSuite) TestGetChargeDate_ReturnsStartDate() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Group 3: BillingCadence stored on domain model
-// ─────────────────────────────────────────────────────────────────────────────
-
-func (s *BillingOnetimeSuite) TestLineItemFromEnt_DefaultsToRecurring() {
-	// When billing_cadence is empty string (old rows), it should default to RECURRING
-	item := &subscription.SubscriptionLineItem{
-		BillingCadence: types.BillingCadence(""),
-	}
-	if item.BillingCadence == "" {
-		item.BillingCadence = types.BILLING_CADENCE_RECURRING
-	}
-	s.Equal(types.BILLING_CADENCE_RECURRING, item.BillingCadence)
-	s.False(item.IsOneTime())
-}
-
-func (s *BillingOnetimeSuite) TestLineItemFromEnt_OnetimeCadence() {
-	item := &subscription.SubscriptionLineItem{
-		BillingCadence: types.BILLING_CADENCE_ONETIME,
-	}
-	s.True(item.IsOneTime())
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Group 4: CalculateFixedCharges — ONETIME has no proration
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -407,9 +382,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_FullAmountNoProration()
 			CustomerID:     sub.CustomerID,
 			PriceID:        s.prices.onetimeFixed.ID,
 			PriceType:      types.PRICE_TYPE_FIXED,
-			BillingCadence: types.BILLING_CADENCE_ONETIME,
 			InvoiceCadence: types.InvoiceCadenceAdvance,
-			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
 			Quantity:       decimal.NewFromInt(1),
 			Currency:       "usd",
 			StartDate:      s.jan15, // charge date
@@ -434,9 +407,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_LineItemPeriodIsChargeD
 			CustomerID:     sub.CustomerID,
 			PriceID:        s.prices.onetimeFixed.ID,
 			PriceType:      types.PRICE_TYPE_FIXED,
-			BillingCadence: types.BILLING_CADENCE_ONETIME,
 			InvoiceCadence: types.InvoiceCadenceAdvance,
-			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
 			Quantity:       decimal.NewFromInt(1),
 			Currency:       "usd",
 			StartDate:      s.jan15,
@@ -465,9 +436,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_WithQuantity3() {
 			CustomerID:     sub.CustomerID,
 			PriceID:        s.prices.onetimeFixed.ID, // $500 per unit
 			PriceType:      types.PRICE_TYPE_FIXED,
-			BillingCadence: types.BILLING_CADENCE_ONETIME,
 			InvoiceCadence: types.InvoiceCadenceAdvance,
-			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
 			Quantity:       decimal.NewFromInt(3), // 3 units
 			Currency:       "usd",
 			StartDate:      s.jan1,
@@ -491,9 +460,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_SkippedIfStartDateAfter
 			CustomerID:     sub.CustomerID,
 			PriceID:        s.prices.onetimeFixed.ID,
 			PriceType:      types.PRICE_TYPE_FIXED,
-			BillingCadence: types.BILLING_CADENCE_ONETIME,
 			InvoiceCadence: types.InvoiceCadenceAdvance,
-			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
 			Quantity:       decimal.NewFromInt(1),
 			Currency:       "usd",
 			StartDate:      s.mar1, // future charge date — after the invoice period
@@ -520,7 +487,6 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_Recurring_StillProratesNormally
 			CustomerID:     sub.CustomerID,
 			PriceID:        s.prices.recurringFixed.ID, // $100/month RECURRING
 			PriceType:      types.PRICE_TYPE_FIXED,
-			BillingCadence: types.BILLING_CADENCE_RECURRING,
 			InvoiceCadence: types.InvoiceCadenceAdvance,
 			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
 			Quantity:       decimal.NewFromInt(1),
@@ -563,9 +529,7 @@ func (s *BillingOnetimeSuite) TestOnetime_ZeroDurationLineItemPeriod() {
 			CustomerID:     sub.CustomerID,
 			PriceID:        s.prices.onetimeFixed.ID,
 			PriceType:      types.PRICE_TYPE_FIXED,
-			BillingCadence: types.BILLING_CADENCE_ONETIME,
 			InvoiceCadence: types.InvoiceCadenceAdvance,
-			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
 			Quantity:       decimal.NewFromInt(1),
 			Currency:       "usd",
 			StartDate:      s.jan1,
@@ -579,17 +543,6 @@ func (s *BillingOnetimeSuite) TestOnetime_ZeroDurationLineItemPeriod() {
 	// PeriodStart == PeriodEnd == charge date
 	s.True(lo.FromPtr(lineItems[0].PeriodStart).Equal(s.jan1))
 	s.True(lo.FromPtr(lineItems[0].PeriodEnd).Equal(s.jan1))
-}
-
-func (s *BillingOnetimeSuite) TestOnetime_BillingCadenceStoredOnLineItem() {
-	item := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, s.jan1)
-	s.Equal(types.BILLING_CADENCE_ONETIME, item.BillingCadence)
-}
-
-func (s *BillingOnetimeSuite) TestRecurring_BillingCadenceDefault() {
-	item := s.makeRecurringLineItem("price_recurring")
-	s.Equal(types.BILLING_CADENCE_RECURRING, item.BillingCadence)
-	s.False(item.IsOneTime())
 }
 
 func (s *BillingOnetimeSuite) TestOnetime_NeitherCurrentNorNext_WhenFarFuture() {
