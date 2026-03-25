@@ -196,7 +196,7 @@ func (p PaymentTerms) Validate() error {
 		return ierr.NewError("invalid payment_terms").
 			WithHint("Payment terms must be one of: 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET").
 			WithReportableDetails(map[string]any{
-				"payment_terms":   p,
+				"payment_terms":  p,
 				"allowed_values": AllPaymentTerms,
 			}).
 			Mark(ierr.ErrValidation)
@@ -283,6 +283,8 @@ type SubscriptionFilter struct {
 	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	// EnvironmentIDs filters by environment IDs (e.g. for sandbox/development env listing)
+	EnvironmentIDs []string `json:"environment_ids,omitempty" form:"environment_ids"`
 	// CustomerID filters by customer ID
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
 	// ExternalCustomerID filters by external customer ID

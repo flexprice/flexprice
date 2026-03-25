@@ -282,3 +282,17 @@ func (h *ScheduledTaskHandler) ScheduleUpdateBillingPeriod(c *gin.Context) {
 		"message": response,
 	})
 }
+
+// ScheduleSandboxSubscriptionsCleanup creates a daily Temporal schedule to run sandbox subscription cleanup (terminate dev env subs past tenant-configured cleanup window).
+// Not exposed in public API.
+func (h *ScheduledTaskHandler) ScheduleSandboxSubscriptionsCleanup(c *gin.Context) {
+	response, err := h.service.ScheduleSandboxSubscriptionsCleanup(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to schedule sandbox subscriptions cleanup", "error", err)
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": response,
+	})
+}

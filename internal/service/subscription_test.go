@@ -1509,15 +1509,17 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			})
 		}
 
-		// Test cancelling already cancelled subscription using a separate instance
+		// Test cancelling already cancelled subscription is idempotent: module returns success with only SubscriptionID and Message set.
 		s.Run("cancel_already_canceled_subscription", func() {
-			_, err := s.service.CancelSubscription(s.GetContext(), activeSub.ID, &dto.CancelSubscriptionRequest{
+			resp, err := s.service.CancelSubscription(s.GetContext(), activeSub.ID, &dto.CancelSubscriptionRequest{
 				CancellationType:  types.CancellationTypeImmediate,
 				ProrationBehavior: types.ProrationBehaviorNone,
 				Reason:            "test_cancellation",
 			})
-			s.Error(err)
-			s.Contains(err.Error(), "already cancelled")
+			s.NoError(err)
+			s.Require().NotNil(resp)
+			s.Equal(activeSub.ID, resp.SubscriptionID, "idempotent path returns subscription id")
+			s.Contains(resp.Message, "already cancelled", "idempotent path returns expected message")
 		})
 	})
 
@@ -3735,7 +3737,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 		s.T().Logf("✅ end_of_period: same guard blocks double-scheduling")
 	})
 
-	s.Run("already cancelled subscription is rejected", func() {
+	s.Run("already_cancelled_subscription_is_idempotent_success", func() {
 		sub := &subscription.Subscription{
 			ID:                 "sub_sched_already_cancelled",
 			CustomerID:         s.testData.customer.ID,
@@ -3751,14 +3753,15 @@ func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 		}
 		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
 
-		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		resp, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
 			CancellationType: types.CancellationTypeScheduledDate,
 			CancelAt:         &futureDate,
 		})
-		s.Error(err)
-		s.True(ierr.IsValidation(err), "expected validation error")
-		s.Contains(err.Error(), "already cancelled")
-		s.T().Logf("✅ scheduled_date: already-cancelled subscription rejected")
+		s.NoError(err)
+		s.Require().NotNil(resp)
+		s.Equal(sub.ID, resp.SubscriptionID)
+		s.Contains(resp.Message, "already cancelled")
+		s.T().Logf("✅ scheduled_date: already-cancelled subscription returns idempotent success (same as other cancellation types)")
 	})
 
 	s.Run("response message contains formatted date", func() {

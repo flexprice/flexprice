@@ -95,8 +95,10 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 
 	subscriptionService := service.NewSubscriptionService(params)
+	settingsService := service.NewSettingsService(params)
 
 	scheduleBillingActivities := subscriptionActivities.NewSubscriptionActivities(subscriptionService)
+	sandboxCleanupActivities := subscriptionActivities.NewSandboxSubscriptionCleanupActivities(subscriptionService, settingsService, params)
 	billingActivities := subscriptionActivities.NewBillingActivities(
 		subscriptionService,
 		params,
@@ -155,7 +157,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, customerActivities, scheduleBillingActivities, sandboxCleanupActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -183,6 +185,7 @@ func buildWorkerConfig(
 	paddleInvoiceSyncActivities *paddleActivities.InvoiceSyncActivities,
 	customerActivities *customerActivities.CustomerActivities,
 	scheduleBillingActivities *subscriptionActivities.SubscriptionActivities,
+	sandboxCleanupActivities *subscriptionActivities.SandboxSubscriptionCleanupActivities,
 	billingActivities *subscriptionActivities.BillingActivities,
 	invoiceActs *invoiceActivities.InvoiceActivities,
 	reprocessEventsActivities *eventsActivities.ReprocessEventsActivities,
@@ -247,12 +250,16 @@ func buildWorkerConfig(
 		workflowsList = append(
 			workflowsList,
 			subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
+			subscriptionWorkflows.SandboxSubscriptionCleanupWorkflow,
 			subscriptionWorkflows.ProcessSubscriptionBillingWorkflow,
 			invoiceWorkflows.RecalculateInvoiceWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			// Schedule billing activities
 			scheduleBillingActivities.ScheduleBillingActivity,
+			// Sandbox subscription cleanup (build list + terminate batches)
+			sandboxCleanupActivities.BuildSandboxCleanupListActivity,
+			sandboxCleanupActivities.TerminateSandboxSubscriptionsBatchActivity,
 			// Subscription billing period activities
 			billingActivities.CheckDraftSubscriptionActivity,
 			billingActivities.CalculatePeriodsActivity,

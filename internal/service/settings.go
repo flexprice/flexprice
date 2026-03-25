@@ -17,6 +17,10 @@ type SettingsService interface {
 	// Use this when you need the full Setting object with metadata (ID, timestamps, etc.)
 	GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error)
 
+	// GetTenantConfig returns effective tenant config (tenant-level setting with defaults).
+	// Use this when you need TenantConfig in activities or other services; uses GetSetting under the hood.
+	GetTenantConfig(ctx context.Context) (types.TenantConfig, error)
+
 	// UpdateSettingByKey updates a setting with partial values (merges with existing)
 	// Use this for API endpoints that accept partial updates
 	UpdateSettingByKey(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error)
@@ -33,6 +37,11 @@ func NewSettingsService(params ServiceParams) SettingsService {
 	return &settingsService{
 		ServiceParams: params,
 	}
+}
+
+// GetTenantConfig returns effective tenant config (defaults merged with tenant-level setting).
+func (s *settingsService) GetTenantConfig(ctx context.Context) (types.TenantConfig, error) {
+	return GetSetting[types.TenantConfig](s, ctx, types.SettingKeyTenantConfig)
 }
 
 // isTenantLevelSetting checks if a setting is tenant-level (no environment_id)

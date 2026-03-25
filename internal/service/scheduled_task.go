@@ -32,6 +32,7 @@ type ScheduledTaskService interface {
 
 	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
 	ScheduleUpdateBillingPeriod(ctx context.Context) (string, error)
+	ScheduleSandboxSubscriptionsCleanup(ctx context.Context) (string, error)
 }
 
 type scheduledTaskService struct {
@@ -809,4 +810,42 @@ func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) 
 	}
 
 	return "Triggered update billing period workflow successfully", nil
+}
+
+func (s *scheduledTaskService) ScheduleSandboxSubscriptionsCleanup(ctx context.Context) (string, error) {
+	scheduleID := types.GenerateUUIDWithPrefix("schtask_sandbox_cleanup")
+	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalDaily)
+
+	scheduleSpec := client.ScheduleSpec{
+		CronExpressions: []string{cronExpr},
+	}
+
+	// Workflow run timeout: build sandboxCleanupList (~1h) plus N batches of TerminateSandboxSubscriptionsBatch (10min each).
+	// For ~50k subs at 500/batch that is 100 batches → ~17h; set 18h so the full run can complete.
+	const sandboxCleanupRunTimeout = 18 * time.Hour
+	action := &client.ScheduleWorkflowAction{
+		Workflow:                 subscriptionWorkflows.SandboxSubscriptionCleanupWorkflow,
+		Args:                     []interface{}{},
+		TaskQueue:                string(types.TemporalTaskQueueSubscription),
+		WorkflowExecutionTimeout: sandboxCleanupRunTimeout,
+		WorkflowRunTimeout:       sandboxCleanupRunTimeout,
+		WorkflowTaskTimeout:      1 * time.Hour,
+	}
+
+	scheduleOptions := models.CreateScheduleOptions{
+		ID:     scheduleID,
+		Spec:   scheduleSpec,
+		Action: action,
+		Paused: false,
+	}
+
+	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
+	if err != nil {
+		s.logger.Errorw("failed to create temporal schedule for sandbox subscriptions cleanup", "error", err)
+		return "", ierr.WithError(err).
+			WithHint("Failed to create Temporal schedule for sandbox subscriptions cleanup").
+			Mark(ierr.ErrInternal)
+	}
+
+	return "Triggered sandbox subscriptions cleanup schedule successfully", nil
 }

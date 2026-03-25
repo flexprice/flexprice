@@ -67,6 +67,7 @@ const (
 	TemporalCustomerOnboardingWorkflow          TemporalWorkflowType = "CustomerOnboardingWorkflow"
 	TemporalPrepareProcessedEventsWorkflow      TemporalWorkflowType = "PrepareProcessedEventsWorkflow"
 	TemporalScheduleSubscriptionBillingWorkflow TemporalWorkflowType = "ScheduleSubscriptionBillingWorkflow"
+	TemporalSandboxSubscriptionCleanupWorkflow   TemporalWorkflowType = "SandboxSubscriptionCleanupWorkflow"
 	TemporalProcessSubscriptionBillingWorkflow  TemporalWorkflowType = "ProcessSubscriptionBillingWorkflow"
 	TemporalProcessInvoiceWorkflow              TemporalWorkflowType = "ProcessInvoiceWorkflow"
 	TemporalRecalculateInvoiceWorkflow          TemporalWorkflowType = "RecalculateInvoiceWorkflow"
@@ -80,6 +81,7 @@ const (
 // Use the existing TemporalWorkflowType enums so the list stays type-safe and discoverable.
 var WorkflowTypesExcludedFromTracking = []TemporalWorkflowType{
 	TemporalScheduleSubscriptionBillingWorkflow,
+	TemporalSandboxSubscriptionCleanupWorkflow,
 	TemporalProcessSubscriptionBillingWorkflow,
 	TemporalProcessInvoiceWorkflow,
 }
@@ -113,6 +115,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalCustomerOnboardingWorkflow,          // "CustomerOnboardingWorkflow"
 		TemporalPrepareProcessedEventsWorkflow,      // "PrepareProcessedEventsWorkflow"
 		TemporalScheduleSubscriptionBillingWorkflow, // "ScheduleSubscriptionBillingWorkflow"
+		TemporalSandboxSubscriptionCleanupWorkflow,   // "SandboxSubscriptionCleanupWorkflow"
 		TemporalProcessSubscriptionBillingWorkflow,  // "ProcessSubscriptionBillingWorkflow"
 		TemporalProcessInvoiceWorkflow,              // "ProcessInvoiceWorkflow"
 		TemporalRecalculateInvoiceWorkflow,          // "RecalculateInvoiceWorkflow"
@@ -138,7 +141,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueuePrice
 	case TemporalExecuteExportWorkflow:
 		return TemporalTaskQueueExport
-	case TemporalScheduleSubscriptionBillingWorkflow:
+	case TemporalScheduleSubscriptionBillingWorkflow, TemporalSandboxSubscriptionCleanupWorkflow:
 		return TemporalTaskQueueSubscription
 	case TemporalProcessSubscriptionBillingWorkflow:
 		return TemporalTaskQueueSubscription
@@ -190,6 +193,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 	case TemporalTaskQueueSubscription:
 		return []TemporalWorkflowType{
 			TemporalScheduleSubscriptionBillingWorkflow,
+			TemporalSandboxSubscriptionCleanupWorkflow,
 			TemporalProcessSubscriptionBillingWorkflow,
 			TemporalRecalculateInvoiceWorkflow,
 		}
