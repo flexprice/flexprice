@@ -16,6 +16,8 @@ The two most recent commits (`427640b6`, `d5265655`) implemented one-time charge
 
 **Pre-condition confirmed:** `make migrate-ent` was never run after commit `427640b6`. The `billing_cadence` column does not exist in the database. No migration is needed to remove it.
 
+**Backward-compatibility scope:** ONETIME charges are a brand-new feature introduced in commit `427640b6` and not yet deployed to any environment. No ONETIME line items exist in any database. There is no backward-compatibility gap for existing rows.
+
 ---
 
 ## What Is Already Working (Do Not Touch)
@@ -206,19 +208,21 @@ Note: `price.BillingCadence` here is the `Price` domain object's field — not t
 
 Removing `BillingCadence` from the struct will cause **compile errors** in the following files. All references must be removed:
 
+**Important:** Only remove `BillingCadence` from `subscription.SubscriptionLineItem{}` struct literals. References to `BillingCadence` on `price.Price`, `CreatePriceRequest`, `CreateSubscriptionRequest`, and `PlanChangeConfiguration` are on different structs and must **not** be touched.
+
 | File | Lines (approx) | What to change |
 |---|---|---|
-| `internal/service/billing_onetime_test.go` | 138–152, 193–225, 374–391, 584–592 | Fix `setupSharedFixtures`: set `BillingPeriod: ""` on ONETIME price fixtures. Fix `makeOnetimeLineItem`: remove `BillingCadence`, remove `BillingPeriod` (zero value). Remove `TestLineItemFromEnt_DefaultsToRecurring`, `TestLineItemFromEnt_OnetimeCadence`, `TestOnetime_BillingCadenceStoredOnLineItem`, `TestRecurring_BillingCadenceDefault`. |
-| `internal/service/billing_test.go` | ~204, 228, 245, 262, 806, 823, 992 | Remove `BillingCadence: types.BILLING_CADENCE_RECURRING` from line item literals |
-| `internal/service/proration_test.go` | ~91, 105 | Remove `BillingCadence` field |
-| `internal/service/invoice_void_recalculate_test.go` | ~139 | Remove `BillingCadence` field |
-| `internal/service/subscription_phase_test.go` | ~65, 191 | Remove `BillingCadence` field |
-| `internal/service/subscription_schedule_test.go` | ~99, 198 | Remove `BillingCadence` field |
-| `internal/integration/stripe/subscription.go` | ~453, 515 | Remove `BillingCadence` field — **production code** |
-| `internal/temporal/models/workflow.go` | ~729 | Remove `BillingCadence` field — **production code** |
+| `internal/service/billing_onetime_test.go` | 138–152, 193–225, 374–391, 584–592 | Fix `setupSharedFixtures`: set `BillingPeriod: ""` on ONETIME price fixtures. Fix `makeOnetimeLineItem`: remove `BillingCadence`, remove `BillingPeriod` field (zero value `""`). Remove `TestLineItemFromEnt_DefaultsToRecurring`, `TestLineItemFromEnt_OnetimeCadence`, `TestOnetime_BillingCadenceStoredOnLineItem`, `TestRecurring_BillingCadenceDefault`. |
+| `internal/service/billing_test.go` | multiple | Remove `BillingCadence: types.BILLING_CADENCE_RECURRING` only from `SubscriptionLineItem` struct literals (not from `price.Price` literals) |
+| `internal/service/proration_test.go` | ~91, 105 | Remove `BillingCadence` field from `SubscriptionLineItem` literals |
+| `internal/service/invoice_void_recalculate_test.go` | ~139 | Remove `BillingCadence` field from `SubscriptionLineItem` literal |
+| `internal/service/subscription_phase_test.go` | ~65, 191 | Remove `BillingCadence` field from `SubscriptionLineItem` literals |
+| `internal/service/subscription_schedule_test.go` | ~99, 198 | Remove `BillingCadence` field from `SubscriptionLineItem` literals |
 
 For RECURRING line items: simply remove the `BillingCadence` field — their non-empty `BillingPeriod` ensures `IsOneTime()` returns false correctly.
 For ONETIME line items: remove `BillingCadence` and ensure `BillingPeriod: ""` (zero value — omit the field).
+
+**Known limitation:** `UpdateSubscriptionLineItemRequest.ToSubscriptionLineItem()` copies `existingLineItem.BillingPeriod` without normalizing it. This is a pre-existing bug unrelated to this change and is out of scope.
 
 ---
 
@@ -239,15 +243,13 @@ For ONETIME line items: remove `BillingCadence` and ensure `BillingPeriod: ""` (
 | 3 | `internal/api/dto/subscription_line_item.go` | Normalize `BillingPeriod=""` for ONETIME in `ToSubscriptionLineItem()`; remove `BillingCadence` logic; add ONETIME+ADVANCE check in `Validate()`; remove `validate:"required"` from `SubscriptionPriceCreateRequest.BillingPeriod` |
 | 4 | `internal/api/dto/price.go` | Remove `validate:"required"` from `BillingPeriod`; move `BillingPeriodCount<1` guard into RECURRING case; add `case BILLING_CADENCE_ONETIME` |
 | 5 | `internal/service/billing_onetime_test.go` | Fix fixtures; fix `makeOnetimeLineItem`; remove 4 `BillingCadence`-specific test cases |
-| 6 | `internal/service/billing_test.go` | Remove `BillingCadence` from ~7 line item literals |
+| 6 | `internal/service/billing_test.go` | Remove `BillingCadence` from all `SubscriptionLineItem` literals (not from `price.Price` literals) |
 | 7 | `internal/service/proration_test.go` | Remove `BillingCadence` from ~2 literals |
 | 8 | `internal/service/invoice_void_recalculate_test.go` | Remove `BillingCadence` from ~1 literal |
 | 9 | `internal/service/subscription_phase_test.go` | Remove `BillingCadence` from ~2 literals |
 | 10 | `internal/service/subscription_schedule_test.go` | Remove `BillingCadence` from ~2 literals |
-| 11 | `internal/integration/stripe/subscription.go` | Remove `BillingCadence` from ~2 line item structs |
-| 12 | `internal/temporal/models/workflow.go` | Remove `BillingCadence` from ~1 line item struct |
-| 13 | Run `make generate-ent` | Regenerate Ent code after schema change |
-| 14 | Run `make test` | Verify no regressions |
+| 11 | Run `make generate-ent` | Regenerate Ent code after schema change |
+| 12 | Run `make test` | Verify no regressions |
 
 ---
 
