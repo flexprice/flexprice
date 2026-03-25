@@ -489,7 +489,7 @@ EOF
 
 ## Quick Reference: `IsOneTime()` After This Change
 
-```
+```text
 IsOneTime() returns true when:
   li.PriceType == PRICE_TYPE_FIXED   (flat charge, not usage-based)
   && li.BillingPeriod == ""          (no recurring interval)
