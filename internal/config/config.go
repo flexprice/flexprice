@@ -139,10 +139,10 @@ type LoggingConfig struct {
 	FluentdPort    int    `mapstructure:"fluentd_port" validate:"omitempty"`
 
 	// OpenTelemetry / SigNoz log export configuration
-	OtelEnabled        bool   `mapstructure:"otel_enabled" default:"false"`
-	OtelEndpoint       string `mapstructure:"otel_endpoint" validate:"omitempty"`        // e.g. ingest.us.signoz.cloud:443
-	OtelInsecure       bool   `mapstructure:"otel_insecure" default:"false"`             // set true for local collector without TLS
-	OtelIngestionKey   string `mapstructure:"otel_ingestion_key" validate:"omitempty"`   // SigNoz ingestion key
+	OtelEnabled      bool   `mapstructure:"otel_enabled" default:"false"`
+	OtelEndpoint     string `mapstructure:"otel_endpoint" validate:"omitempty"`      // e.g. ingest.us.signoz.cloud:443
+	OtelInsecure     bool   `mapstructure:"otel_insecure" default:"false"`           // set true for local collector without TLS
+	OtelIngestionKey string `mapstructure:"otel_ingestion_key" validate:"omitempty"` // SigNoz ingestion key
 }
 
 type PostgresConfig struct {

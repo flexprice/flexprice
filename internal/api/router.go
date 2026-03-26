@@ -351,6 +351,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.GET("/:id", handlers.Invoice.GetInvoice)
 			invoices.PUT("/:id", handlers.Invoice.UpdateInvoice)
 			invoices.POST("/:id/finalize", handlers.Invoice.FinalizeInvoice)
+			invoices.POST("/:id/compute", handlers.Invoice.ComputeInvoice)
 			invoices.POST("/:id/void", handlers.Invoice.VoidInvoice)
 			invoices.POST("/preview", handlers.Invoice.GetPreviewInvoice)
 			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
