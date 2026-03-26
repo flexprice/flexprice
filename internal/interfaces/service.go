@@ -143,6 +143,10 @@ type SubscriptionService interface {
 
 	// Mark cancellation schedule as executed (used by cron and Temporal workflows)
 	MarkCancellationScheduleAsExecuted(ctx context.Context, subscriptionID string) error
+
+	// ExecuteSubscriptionInheritance adds new child customers to an existing parent subscription.
+	// Idempotent: customers who already have an inherited subscription under this parent are silently skipped.
+	ExecuteSubscriptionInheritance(ctx context.Context, parentSubID string, req *dto.ExecuteSubscriptionInheritanceRequest) (*dto.SubscriptionResponse, error)
 }
 
 type PriceUnitService interface {

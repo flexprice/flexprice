@@ -11,6 +11,7 @@ type Repository interface {
 	Create(ctx context.Context, customer *Customer) error
 	Get(ctx context.Context, id string) (*Customer, error)
 	List(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
+	ListChildrenFromInheritedSubscriptions(ctx context.Context, parentCustomerID string) ([]*Customer, error)
 	Count(ctx context.Context, filter *types.CustomerFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*Customer, error)
 	Update(ctx context.Context, customer *Customer) error

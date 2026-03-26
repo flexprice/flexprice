@@ -1995,31 +1995,49 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 
 // GetFeatureUsageBySubscription gets usage data for a subscription using a single optimized query.
 // When opts.Source is InvoiceCreation, the query uses FINAL for correct ReplacingMergeTree deduplication.
-func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType, opts *events.GetFeatureUsageBySubscriptionOpts) (map[string]*events.UsageByFeatureResult, error) {
+func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Context, params *events.GetFeatureUsageBySubscriptionParams) (map[string]*events.UsageByFeatureResult, error) {
 	// Extract tenantID and environmentID from context
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "feature_usage", "get_usage_by_subscription_v2", map[string]interface{}{
-		"subscription_id": subscriptionID,
-		"customer_id":     customerID,
-		"environment_id":  environmentID,
-		"tenant_id":       tenantID,
-		"start_time":      startTime,
-		"end_time":        endTime,
+		"subscription_id":    params.SubscriptionID,
+		"customer_ids_count": len(params.CustomerIDs),
+		"environment_id":     environmentID,
+		"tenant_id":          tenantID,
+		"start_time":         params.StartTime,
+		"end_time":           params.EndTime,
 	})
 	defer FinishSpan(span)
 
 	// Build conditional aggregation columns
-	aggColumns := buildConditionalAggregationColumnsForSubscription(aggTypes)
+	aggColumns := buildConditionalAggregationColumnsForSubscription(params.AggTypes)
 
 	tableRef := "feature_usage"
-	if opts != nil && opts.Source.UseFinal() {
+	if params.Opts != nil && params.Opts.Source.UseFinal() {
 		tableRef = "feature_usage FINAL"
 	}
 
-	r.logger.Debugw("subscription usage query", "aggColumns", aggColumns, "tableRef", tableRef, "opts", opts)
+	r.logger.Debugw("subscription usage query", "aggColumns", aggColumns, "tableRef", tableRef, "opts", params.Opts)
+
+	// Build customer_id filter using IN (...) for all cases.
+	// Guard against empty slice which would yield invalid SQL (IN ()).
+	if len(params.CustomerIDs) == 0 {
+		return nil, ierr.NewError("customer_ids is required").
+			WithHint("At least one customer ID is required to fetch usage by subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	args := []interface{}{params.SubscriptionID}
+	customerPlaceholders := make([]string, len(params.CustomerIDs))
+	for i, cid := range params.CustomerIDs {
+		customerPlaceholders[i] = "?"
+		args = append(args, cid)
+	}
+	customerFilter := fmt.Sprintf("customer_id IN (%s)", strings.Join(customerPlaceholders, ", "))
+
+	args = append(args, environmentID, tenantID, params.StartTime, params.EndTime)
 
 	query := fmt.Sprintf(`
 		SELECT 
@@ -2031,33 +2049,37 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		FROM %s
 		WHERE 
 			subscription_id = ?
-			AND customer_id = ?
+			AND %s
 			AND environment_id = ?
 			AND tenant_id = ?
 			AND "timestamp" >= ?
 			AND "timestamp" < ?
 			AND sign != 0
 		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
-	`, strings.Join(aggColumns, ",\n\t\t\t"), tableRef)
+	`, strings.Join(aggColumns, ",\n\t\t\t"), tableRef, customerFilter)
 
 	r.logger.Debugw("executing subscription usage query",
-		"subscription_id", subscriptionID,
-		"customer_id", customerID,
+		"subscription_id", params.SubscriptionID,
+		"customer_ids_count", len(params.CustomerIDs),
 		"environment_id", environmentID,
-		"start_time", startTime,
-		"end_time", endTime,
+		"start_time", params.StartTime,
+		"end_time", params.EndTime,
 	)
 
-	r.logger.Debugw("subscription usage query", "query", query, "params", []interface{}{subscriptionID, customerID, environmentID, tenantID, startTime, endTime})
+	r.logger.Debugw("subscription usage query",
+		"subscription_id", params.SubscriptionID,
+		"customer_ids_count", len(params.CustomerIDs),
+		"agg_types_count", len(params.AggTypes),
+	)
 
-	rows, err := r.store.GetConn().Query(ctx, query, subscriptionID, customerID, environmentID, tenantID, startTime, endTime)
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to execute optimized subscription usage query").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-				"customer_id":     customerID,
+				"subscription_id":    params.SubscriptionID,
+				"customer_ids_count": len(params.CustomerIDs),
 			}).
 			Mark(ierr.ErrDatabase)
 	}
@@ -2099,7 +2121,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 
 	SetSpanSuccess(span)
 	r.logger.Debugw("optimized subscription usage query completed",
-		"subscription_id", subscriptionID,
+		"subscription_id", params.SubscriptionID,
 		"feature_count", len(results))
 
 	return results, nil
@@ -2322,10 +2344,7 @@ func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, 
 func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *events.FeatureUsageParams) string {
 	bucketWindow := r.formatWindowSize(params.UsageParams.WindowSize, params.UsageParams.BillingAnchor)
 
-	externalCustomerFilter := ""
-	if params.UsageParams.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params.UsageParams)
 
 	featureFilter := ""
 	if params.FeatureID != "" {

@@ -100,6 +100,8 @@ const (
 	FieldParentSubscriptionID = "parent_subscription_id"
 	// FieldPaymentTerms holds the string denoting the payment_terms field in the database.
 	FieldPaymentTerms = "payment_terms"
+	// FieldSubscriptionType holds the string denoting the subscription_type field in the database.
+	FieldSubscriptionType = "subscription_type"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -221,6 +223,7 @@ var Columns = []string{
 	FieldInvoicingCustomerID,
 	FieldParentSubscriptionID,
 	FieldPaymentTerms,
+	FieldSubscriptionType,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -292,6 +295,8 @@ var (
 	ProrationBehaviorValidator func(string) error
 	// DefaultEnableTrueUp holds the default value on creation for the "enable_true_up" field.
 	DefaultEnableTrueUp bool
+	// DefaultSubscriptionType holds the default value on creation for the "subscription_type" field.
+	DefaultSubscriptionType types.SubscriptionType
 )
 
 // OrderOption defines the ordering options for the Subscription queries.
@@ -505,6 +510,11 @@ func ByParentSubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 // ByPaymentTerms orders the results by the payment_terms field.
 func ByPaymentTerms(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPaymentTerms, opts...).ToFunc()
+}
+
+// BySubscriptionType orders the results by the subscription_type field.
+func BySubscriptionType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionType, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

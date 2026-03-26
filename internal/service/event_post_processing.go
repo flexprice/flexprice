@@ -953,6 +953,17 @@ func (s *eventPostProcessingService) GetUsageAnalytics(ctx context.Context, tena
 
 // GetDetailedUsageAnalytics provides detailed usage analytics with filtering, grouping, and time-series data
 func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+	// V1 is single-customer only. If ExternalCustomerID is absent but ExternalCustomerIDs
+	// is provided, use the first entry so V1 callers aren't broken.
+	// Warn when multiple IDs are passed so operators can detect misuse.
+	if req.ExternalCustomerID == "" && len(req.ExternalCustomerIDs) > 0 {
+		if len(req.ExternalCustomerIDs) > 1 {
+			s.Logger.WarnwCtx(ctx, "V1 analytics does not support multiple customer IDs; using first entry only",
+				"external_customer_ids", req.ExternalCustomerIDs)
+		}
+		req.ExternalCustomerID = req.ExternalCustomerIDs[0]
+	}
+
 	// Validate the request
 	if req.ExternalCustomerID == "" {
 		return nil, ierr.NewError("external_customer_id is required").

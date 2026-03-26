@@ -8852,6 +8852,86 @@
         ]
       }
     },
+    "/subscriptions/{id}/inheritance/execute": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Execute subscription inheritance changes",
+        "description": "Adds new child customers to an existing PARENT subscription. Customers already inherited are silently skipped.",
+        "operationId": "executeSubscriptionInheritance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Parent subscription ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Inheritance request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/dto.ExecuteSubscriptionInheritanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/dto.SubscriptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Subscription not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/subscriptions/{id}/lineitems": {
       "post": {
         "tags": [
@@ -15699,16 +15779,8 @@
           "gateway_payment_method_id": {
             "type": "string"
           },
-          "invoice_billing": {
-            "$ref": "#/components/schemas/types.InvoiceBilling"
-          },
-          "invoicing_customer_external_id": {
-            "type": "string",
-            "description": "invoicing_customer_external_id is the external ID of the customer to use for invoicing.\nResolved internally to an internal customer ID via external ID lookup.\nMutually exclusive with invoicing_customer_id."
-          },
-          "invoicing_customer_id": {
-            "type": "string",
-            "description": "invoicing_customer_id is the FlexPrice customer ID to use for invoicing.\nThis can differ from the subscription customer (e.g., a billing entity invoicing on behalf of another customer).\nMutually exclusive with invoicing_customer_external_id."
+          "inheritance": {
+            "$ref": "#/components/schemas/dto.SubscriptionInheritanceConfig"
           },
           "line_item_commitments": {
             "type": "object",
@@ -15759,10 +15831,6 @@
             "items": {
               "$ref": "#/components/schemas/dto.OverrideLineItemRequest"
             }
-          },
-          "parent_subscription_id": {
-            "type": "string",
-            "description": "ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)"
           },
           "payment_behavior": {
             "$ref": "#/components/schemas/types.PaymentBehavior"
@@ -16762,6 +16830,23 @@
           }
         }
       },
+      "dto.ExecuteSubscriptionInheritanceRequest": {
+        "type": "object",
+        "properties": {
+          "customer_ids_to_inherit_subscription": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "external_customer_ids_to_inherit_subscription": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "dto.FeatureResponse": {
         "type": "object",
         "properties": {
@@ -17150,9 +17235,6 @@
         }
       },
       "dto.GetUsageAnalyticsRequest": {
-        "required": [
-          "external_customer_id"
-        ],
         "type": "object",
         "properties": {
           "end_time": {
@@ -17166,7 +17248,15 @@
             }
           },
           "external_customer_id": {
-            "type": "string"
+            "type": "string",
+            "description": "ExternalCustomerID is the single external customer ID.\nOptional when ExternalCustomerIDs is provided; required otherwise."
+          },
+          "external_customer_ids": {
+            "type": "array",
+            "description": "ExternalCustomerIDs is a list of external customer IDs whose usage will be merged\ninto a single aggregated response. Unioned with ExternalCustomerID if both are set;\nduplicates are dropped. At least one of ExternalCustomerID or ExternalCustomerIDs\nmust be provided.",
+            "items": {
+              "type": "string"
+            }
           },
           "feature_ids": {
             "type": "array",
@@ -17180,6 +17270,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "include_children": {
+            "type": "boolean",
+            "description": "IncludeChildren when true folds child customers' usage into the single aggregated total.\nDefault: false."
           },
           "property_filters": {
             "type": "object",
@@ -17253,6 +17347,16 @@
           "external_customer_id": {
             "type": "string",
             "example": "user_5"
+          },
+          "external_customer_ids": {
+            "type": "array",
+            "example": [
+              "user_5",
+              "user_6"
+            ],
+            "items": {
+              "type": "string"
+            }
           },
           "filters": {
             "type": "object",
@@ -17377,6 +17481,16 @@
           "external_customer_id": {
             "type": "string",
             "example": "customer456"
+          },
+          "external_customer_ids": {
+            "type": "array",
+            "example": [
+              "customer456",
+              "customer789"
+            ],
+            "items": {
+              "type": "string"
+            }
           },
           "filters": {
             "type": "object",
@@ -19396,6 +19510,35 @@
           }
         }
       },
+      "dto.SubscriptionInheritanceConfig": {
+        "type": "object",
+        "properties": {
+          "customer_ids_to_inherit_subscription": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "external_customer_ids_to_inherit_subscription": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "invoice_billing": {
+            "$ref": "#/components/schemas/types.InvoiceBilling"
+          },
+          "invoicing_customer_external_id": {
+            "type": "string"
+          },
+          "invoicing_customer_id": {
+            "type": "string"
+          },
+          "parent_subscription_id": {
+            "type": "string"
+          }
+        }
+      },
       "dto.SubscriptionLineItemLookupResult": {
         "type": "object",
         "properties": {
@@ -19969,6 +20112,9 @@
           "subscription_status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
           },
+          "subscription_type": {
+            "$ref": "#/components/schemas/types.SubscriptionType"
+          },
           "tenant_id": {
             "type": "string"
           },
@@ -20169,6 +20315,9 @@
           },
           "subscription_status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
+          },
+          "subscription_type": {
+            "$ref": "#/components/schemas/types.SubscriptionType"
           },
           "tenant_id": {
             "type": "string"
@@ -24308,6 +24457,13 @@
             "type": "string",
             "description": "CustomerID filters by customer ID"
           },
+          "customer_ids": {
+            "type": "array",
+            "description": "CustomerIDs filters by multiple customer IDs (used for hierarchy lookups)",
+            "items": {
+              "type": "string"
+            }
+          },
           "end_time": {
             "type": "string"
           },
@@ -24381,6 +24537,13 @@
             "description": "SubscriptionStatus filters by subscription status",
             "items": {
               "$ref": "#/components/schemas/types.SubscriptionStatus"
+            }
+          },
+          "subscription_types": {
+            "type": "array",
+            "description": "SubscriptionTypes filters by subscription type (standalone, parent, inherited)",
+            "items": {
+              "$ref": "#/components/schemas/types.SubscriptionType"
             }
           },
           "with_line_items": {
@@ -25703,6 +25866,20 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.SubscriptionType": {
+        "type": "string",
+        "enum": [
+          "standalone",
+          "parent",
+          "inherited"
+        ],
+        "x-enum-varnames": [
+          "SubscriptionTypeStandalone",
+          "SubscriptionTypeParent",
+          "SubscriptionTypeInherited"
+        ],
+        "x-speakeasy-name-override": "SubscriptionType"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",

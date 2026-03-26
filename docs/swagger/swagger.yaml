@@ -1833,26 +1833,12 @@ definitions:
         type: string
       gateway_payment_method_id:
         type: string
-      invoice_billing:
+      inheritance:
         allOf:
-        - $ref: '#/definitions/types.InvoiceBilling'
+        - $ref: '#/definitions/dto.SubscriptionInheritanceConfig'
         description: |-
-          Deprecated: Use invoicing_customer_id or invoicing_customer_external_id instead.
-          invoice_billing determines which customer should receive invoices for a subscription.
-          Supported values: "invoice_to_parent" (uses the subscription customer's parent) or "invoice_to_self" (default).
-          Will be removed in a future version.
-      invoicing_customer_external_id:
-        description: |-
-          invoicing_customer_external_id is the external ID of the customer to use for invoicing.
-          Resolved internally to an internal customer ID via external ID lookup.
-          Mutually exclusive with invoicing_customer_id.
-        type: string
-      invoicing_customer_id:
-        description: |-
-          invoicing_customer_id is the FlexPrice customer ID to use for invoicing.
-          This can differ from the subscription customer (e.g., a billing entity invoicing on behalf of another customer).
-          Mutually exclusive with invoicing_customer_external_id.
-        type: string
+          Inheritance groups all customer-hierarchy fields.
+          When provided with at least one child ID, the subscription becomes a PARENT type.
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/dto.LineItemCommitmentConfig'
@@ -1893,10 +1879,6 @@ definitions:
         items:
           $ref: '#/definitions/dto.OverrideLineItemRequest'
         type: array
-      parent_subscription_id:
-        description: ParentSubscriptionID is the parent subscription ID for hierarchy
-          (e.g. child subscription under a parent)
-        type: string
       payment_behavior:
         allOf:
         - $ref: '#/definitions/types.PaymentBehavior'
@@ -2691,6 +2673,17 @@ definitions:
       requestId:
         type: string
     type: object
+  dto.ExecuteSubscriptionInheritanceRequest:
+    properties:
+      customer_ids_to_inherit_subscription:
+        items:
+          type: string
+        type: array
+      external_customer_ids_to_inherit_subscription:
+        items:
+          type: string
+        type: array
+    type: object
   dto.FeatureResponse:
     properties:
       alert_settings:
@@ -2980,7 +2973,19 @@ definitions:
           type: string
         type: array
       external_customer_id:
+        description: |-
+          ExternalCustomerID is the single external customer ID.
+          Optional when ExternalCustomerIDs is provided; required otherwise.
         type: string
+      external_customer_ids:
+        description: |-
+          ExternalCustomerIDs is a list of external customer IDs whose usage will be merged
+          into a single aggregated response. Unioned with ExternalCustomerID if both are set;
+          duplicates are dropped. At least one of ExternalCustomerID or ExternalCustomerIDs
+          must be provided.
+        items:
+          type: string
+        type: array
       feature_ids:
         items:
           type: string
@@ -2990,6 +2995,11 @@ definitions:
         items:
           type: string
         type: array
+      include_children:
+        description: |-
+          IncludeChildren when true folds child customers' usage into the single aggregated total.
+          Default: false.
+        type: boolean
       property_filters:
         additionalProperties:
           items:
@@ -3006,8 +3016,6 @@ definitions:
         type: string
       window_size:
         $ref: '#/definitions/types.WindowSize'
-    required:
-    - external_customer_id
     type: object
   dto.GetUsageAnalyticsResponse:
     properties:
@@ -3060,6 +3068,13 @@ definitions:
       external_customer_id:
         example: user_5
         type: string
+      external_customer_ids:
+        example:
+        - user_5
+        - user_6
+        items:
+          type: string
+        type: array
       filters:
         additionalProperties:
           items:
@@ -3164,6 +3179,13 @@ definitions:
       external_customer_id:
         example: customer456
         type: string
+      external_customer_ids:
+        example:
+        - customer456
+        - customer789
+        items:
+          type: string
+        type: array
       filters:
         additionalProperties:
           items:
@@ -4739,6 +4761,25 @@ definitions:
       subscription_id:
         type: string
     type: object
+  dto.SubscriptionInheritanceConfig:
+    properties:
+      customer_ids_to_inherit_subscription:
+        items:
+          type: string
+        type: array
+      external_customer_ids_to_inherit_subscription:
+        items:
+          type: string
+        type: array
+      invoice_billing:
+        $ref: '#/definitions/types.InvoiceBilling'
+      invoicing_customer_external_id:
+        type: string
+      invoicing_customer_id:
+        type: string
+      parent_subscription_id:
+        type: string
+    type: object
   dto.SubscriptionLineItemLookupResult:
     properties:
       error:
@@ -5180,6 +5221,11 @@ definitions:
         $ref: '#/definitions/types.Status'
       subscription_status:
         $ref: '#/definitions/types.SubscriptionStatus'
+      subscription_type:
+        allOf:
+        - $ref: '#/definitions/types.SubscriptionType'
+        description: SubscriptionType categorises this subscription within a customer
+          hierarchy.
       tenant_id:
         type: string
       trial_end:
@@ -5364,6 +5410,11 @@ definitions:
         $ref: '#/definitions/types.Status'
       subscription_status:
         $ref: '#/definitions/types.SubscriptionStatus'
+      subscription_type:
+        allOf:
+        - $ref: '#/definitions/types.SubscriptionType'
+        description: SubscriptionType categorises this subscription within a customer
+          hierarchy.
       tenant_id:
         type: string
       trial_end:
@@ -8385,6 +8436,12 @@ definitions:
       customer_id:
         description: CustomerID filters by customer ID
         type: string
+      customer_ids:
+        description: CustomerIDs filters by multiple customer IDs (used for hierarchy
+          lookups)
+        items:
+          type: string
+        type: array
       end_time:
         type: string
       expand:
@@ -8437,6 +8494,12 @@ definitions:
         description: SubscriptionStatus filters by subscription status
         items:
           $ref: '#/definitions/types.SubscriptionStatus'
+        type: array
+      subscription_types:
+        description: SubscriptionTypes filters by subscription type (standalone, parent,
+          inherited)
+        items:
+          $ref: '#/definitions/types.SubscriptionType'
         type: array
       with_line_items:
         description: WithLineItems includes line items in the response
@@ -9430,6 +9493,16 @@ definitions:
     additionalProperties:
       type: string
     type: object
+  types.SubscriptionType:
+    enum:
+    - standalone
+    - parent
+    - inherited
+    type: string
+    x-enum-varnames:
+    - SubscriptionTypeStandalone
+    - SubscriptionTypeParent
+    - SubscriptionTypeInherited
   webhookDto.AlertWebhookPayload:
     properties:
       alert_status:
@@ -14206,6 +14279,49 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get upcoming credit grant applications
+      tags:
+      - Subscriptions
+  /subscriptions/{id}/inheritance/execute:
+    post:
+      consumes:
+      - application/json
+      description: Adds new child customers to an existing PARENT subscription. Customers
+        already inherited are silently skipped.
+      operationId: executeSubscriptionInheritance
+      parameters:
+      - description: Parent subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Inheritance request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ExecuteSubscriptionInheritanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SubscriptionResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Execute subscription inheritance changes
       tags:
       - Subscriptions
   /subscriptions/{id}/lineitems:

@@ -651,3 +651,40 @@ func (h *SubscriptionHandler) TriggerSubscriptionWorkflow(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+// @Summary Execute subscription inheritance changes
+// @ID executeSubscriptionInheritance
+// @Description Adds new child customers to an existing PARENT subscription. Customers already inherited are silently skipped.
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Parent subscription ID"
+// @Param request body dto.ExecuteSubscriptionInheritanceRequest true "Inheritance request"
+// @Success 200 {object} dto.SubscriptionResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Subscription not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /subscriptions/{id}/inheritance/execute [post]
+func (h *SubscriptionHandler) ExecuteSubscriptionInheritance(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Provide the subscription ID in the URL path").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	var req dto.ExecuteSubscriptionInheritanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.service.ExecuteSubscriptionInheritance(c.Request.Context(), id, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}

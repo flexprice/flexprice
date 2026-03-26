@@ -562,12 +562,39 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	}
 
 	subscriptions := subscriptionsList.Items
+
+	// V1 hierarchy fallback: if no direct subscriptions, check for INHERITED subs
+	if len(subscriptions) == 0 {
+		parentSubIDs, err := listParentSubscriptionIDsForInheritedCustomer(ctx, s.ServiceParams, customer.ID)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to list parent subscription IDs for inherited customer",
+				"error", err,
+				"customer_id", customer.ID,
+			)
+			return results, err
+		}
+		if len(parentSubIDs) > 0 {
+			parentFilter := types.NewSubscriptionFilter()
+			parentFilter.SubscriptionIDs = parentSubIDs
+			parentFilter.WithLineItems = true
+			parentFilter.Expand = lo.ToPtr(string(types.ExpandPrices) + "," + string(types.ExpandMeters))
+			parentFilter.SubscriptionStatus = []types.SubscriptionStatus{
+				types.SubscriptionStatusActive,
+				types.SubscriptionStatusTrialing,
+			}
+			parentList, pErr := subscriptionService.ListSubscriptions(ctx, parentFilter)
+			if pErr != nil {
+				return results, pErr
+			}
+			subscriptions = parentList.Items
+		}
+	}
+
 	if len(subscriptions) == 0 {
 		s.Logger.DebugwCtx(ctx, "no active subscriptions found for customer, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 		)
-		// TODO: add sentry span for no active subscriptions found
 		return results, nil
 	}
 
@@ -968,6 +995,16 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 			"meter_ids", meterIDs,
 		)
 		return results, err
+	}
+
+	// STEP 4a: Hierarchy fallback – if no direct line items, check INHERITED subs
+	if len(lineItems) == 0 {
+		lineItems, err = s.resolveHierarchyLineItems(ctx, customer.ID, meterIDs, &event.Timestamp)
+		if err != nil {
+			s.Logger.Errorw("failed hierarchy line item resolution",
+				"error", err, "event_id", event.ID, "customer_id", customer.ID)
+			return results, err
+		}
 	}
 
 	if len(lineItems) == 0 {
@@ -1730,14 +1767,91 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalytics(ctx context.Cont
 		return nil, err
 	}
 
-	// 2. Fetch all required data in parallel
-	data, err := s.fetchAnalyticsData(ctx, req)
-	if err != nil {
-		return nil, err
+	// 2. Resolve the flat list of external IDs to fetch (deduped union of both fields)
+	effectiveIDs := resolveEffectiveExternalIDs(req)
+
+	// 3. If IncludeChildren, expand the list with each customer's hierarchy children.
+	//    Children are resolved here — before the fetch loop — so we never append to a
+	//    slice while ranging over it.
+	//    NOTE: fetchCustomer is called once per parent here to get the internal ID for
+	//    fetchChildCustomers. fetchAnalyticsData will call it again internally. This is an
+	//    accepted N+1 (one extra DB lookup per parent) kept for code clarity; the call is cheap.
+	if req.IncludeChildren {
+		var childExternalIDs []string
+		for _, id := range effectiveIDs {
+			cust, err := s.fetchCustomer(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			children, err := s.fetchChildCustomers(ctx, cust.ID)
+			if err != nil {
+				s.Logger.WarnwCtx(ctx, "failed to fetch child customers, skipping children for this parent",
+					"external_customer_id", id, "error", err)
+				continue
+			}
+			for _, child := range children {
+				childExternalIDs = append(childExternalIDs, child.ExternalID)
+			}
+		}
+		effectiveIDs = lo.Uniq(append(effectiveIDs, childExternalIDs...))
 	}
 
-	// 3. Process and return response
-	return s.buildAnalyticsResponse(ctx, data, req)
+	// 4. Fetch and merge analytics for all resolved customers.
+	//    mergeAnalyticsData merges subscription/line-item/feature/meter/price lookup maps.
+	//    The Analytics slice is accumulated separately (mergeAnalyticsData does not touch it).
+	//    currency is tracked separately (like GetDetailedUsageAnalyticsV2) because
+	//    mergeAnalyticsData does not update aggregatedData.Currency for subsequent customers.
+	var aggregatedData *AnalyticsData
+	var allAnalytics []*events.DetailedUsageAnalytic
+	var currency string
+
+	for _, id := range effectiveIDs {
+		customerReq := *req
+		customerReq.ExternalCustomerID = id
+		customerReq.ExternalCustomerIDs = nil
+		customerReq.IncludeChildren = false
+
+		data, err := s.fetchAnalyticsData(ctx, &customerReq)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch analytics data for customer, skipping",
+				"external_customer_id", id, "error", err)
+			continue
+		}
+
+		allAnalytics = append(allAnalytics, data.Analytics...)
+
+		if aggregatedData == nil {
+			aggregatedData = data
+			currency = data.Currency
+		} else {
+			if data.Currency != "" && currency != "" && data.Currency != currency {
+				return nil, ierr.NewError("multiple currencies detected across customers").
+					WithHint("Analytics is only supported when all customers use the same currency").
+					WithReportableDetails(map[string]interface{}{
+						"expected_currency":    currency,
+						"found_currency":       data.Currency,
+						"external_customer_id": id,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			s.mergeAnalyticsData(aggregatedData, data)
+		}
+	}
+
+	// 5. If all customers failed, return an empty response — no panic on nil aggregatedData.
+	if aggregatedData == nil {
+		return &dto.GetUsageAnalyticsResponse{
+			TotalCost: decimal.Zero,
+			Currency:  "",
+			Items:     []dto.UsageAnalyticItem{},
+		}, nil
+	}
+
+	// 6. Assign accumulated analytics and currency, then build the single aggregated response.
+	aggregatedData.Analytics = allAnalytics
+	aggregatedData.Currency = currency
+
+	return s.buildAnalyticsResponse(ctx, aggregatedData, req)
 }
 
 func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
@@ -1757,17 +1871,17 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Co
 	var currency string
 
 	// Process each customer and aggregate their analytics data
-	for i, customer := range customers {
+	for i, cust := range customers {
 		// Create a customer-specific request
 		customerReq := *req
-		customerReq.ExternalCustomerID = customer.ExternalID
+		customerReq.ExternalCustomerID = cust.ExternalID
 
 		// Fetch analytics data for this customer
 		data, err := s.fetchAnalyticsData(ctx, &customerReq)
 		if err != nil {
 			s.Logger.WarnwCtx(ctx, "failed to fetch analytics data for customer, skipping",
-				"customer_id", customer.ID,
-				"external_customer_id", customer.ExternalID,
+				"customer_id", cust.ID,
+				"external_customer_id", cust.ExternalID,
 				"error", err,
 			)
 			continue
@@ -1788,13 +1902,14 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Co
 					WithReportableDetails(map[string]interface{}{
 						"expected_currency": currency,
 						"found_currency":    data.Currency,
-						"customer_id":       customer.ID,
+						"customer_id":       cust.ID,
 					}).
 					Mark(ierr.ErrValidation)
 			}
 			// Merge additional data into aggregated structure
 			s.mergeAnalyticsData(aggregatedData, data)
 		}
+
 	}
 
 	// If no data was collected, return empty response
@@ -1810,15 +1925,21 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Co
 	aggregatedData.Analytics = allAnalytics
 	aggregatedData.Currency = currency
 
-	// 3. Process and return response
-	return s.buildAnalyticsResponse(ctx, aggregatedData, req)
+	// 3. Build and return the aggregate response
+	response, err := s.buildAnalyticsResponse(ctx, aggregatedData, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
-// validateAnalyticsRequest validates the analytics request
+// validateAnalyticsRequest validates the analytics request.
+// At least one of ExternalCustomerID or ExternalCustomerIDs must be provided.
 func (s *featureUsageTrackingService) validateAnalyticsRequest(req *dto.GetUsageAnalyticsRequest) error {
-	if req.ExternalCustomerID == "" {
-		return ierr.NewError("external_customer_id is required").
-			WithHint("External customer ID is required").
+	if len(resolveEffectiveExternalIDs(req)) == 0 {
+		return ierr.NewError("external_customer_id or external_customer_ids is required").
+			WithHint("Provide at least one external customer ID").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1835,6 +1956,36 @@ func (s *featureUsageTrackingService) validateAnalyticsRequestV2(req *dto.GetUsa
 	}
 
 	return nil
+}
+
+// resolveEffectiveExternalIDs returns a deduplicated, ordered union of
+// req.ExternalCustomerID and req.ExternalCustomerIDs. Empty strings are dropped.
+func resolveEffectiveExternalIDs(req *dto.GetUsageAnalyticsRequest) []string {
+	seen := make(map[string]bool)
+	var ids []string
+	all := append([]string{req.ExternalCustomerID}, req.ExternalCustomerIDs...)
+	for _, id := range all {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// fetchChildCustomers resolves child customers from inherited subscriptions under
+// all parent subscriptions owned by the given customer.
+func (s *featureUsageTrackingService) fetchChildCustomers(
+	ctx context.Context,
+	parentCustomerID string,
+) ([]*customer.Customer, error) {
+	children, err := s.CustomerRepo.ListChildrenFromInheritedSubscriptions(ctx, parentCustomerID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch child customers from inherited subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+	return children, nil
 }
 
 // fetchAnalyticsData fetches all required data sequentially
@@ -2028,7 +2179,11 @@ func (s *featureUsageTrackingService) fetchCustomer(ctx context.Context, externa
 	return customer, nil
 }
 
-// fetchSubscriptions fetches active subscriptions for a customer
+// fetchSubscriptions fetches active subscriptions for a customer.
+// If the customer has INHERITED subscriptions (i.e. is a child in a parent-child
+// hierarchy), the parent subscription(s) are also fetched and appended so that
+// their line items — which carry the actual pricing — are available for cost
+// calculation. Without this, inherited subs have empty line items and produce $0 cost.
 func (s *featureUsageTrackingService) fetchSubscriptions(ctx context.Context, customerID string) ([]*subscription.Subscription, error) {
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	filter := types.NewSubscriptionFilter()
@@ -2054,6 +2209,45 @@ func (s *featureUsageTrackingService) fetchSubscriptions(ctx context.Context, cu
 	subscriptions := make([]*subscription.Subscription, len(subscriptionsList.Items))
 	for i, subResp := range subscriptionsList.Items {
 		subscriptions[i] = subResp.Subscription
+	}
+
+	// If any subscription is INHERITED, also fetch the parent subscription(s) so that
+	// their line items (which carry the actual pricing) are available for cost calculation.
+	hasInherited := false
+	for _, sub := range subscriptions {
+		if sub.SubscriptionType == types.SubscriptionTypeInherited {
+			hasInherited = true
+			break
+		}
+	}
+	if hasInherited {
+		parentSubIDs, pErr := listParentSubscriptionIDsForInheritedCustomer(ctx, s.ServiceParams, customerID)
+		if pErr != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch parent subscription IDs for inherited customer; costs may be $0",
+				"error", pErr,
+				"customer_id", customerID,
+			)
+		} else {
+			seen := make(map[string]bool, len(subscriptions))
+			for _, sub := range subscriptions {
+				seen[sub.ID] = true
+			}
+			for _, parentSubID := range parentSubIDs {
+				if seen[parentSubID] {
+					continue
+				}
+				seen[parentSubID] = true
+				parentSubResp, pFetchErr := subscriptionService.GetSubscription(ctx, parentSubID)
+				if pFetchErr != nil {
+					s.Logger.WarnwCtx(ctx, "failed to fetch parent subscription for analytics",
+						"error", pFetchErr,
+						"parent_subscription_id", parentSubID,
+					)
+					continue
+				}
+				subscriptions = append(subscriptions, parentSubResp.Subscription)
+			}
+		}
 	}
 
 	return subscriptions, nil
@@ -3595,21 +3789,29 @@ func (s *featureUsageTrackingService) fetchAddons(ctx context.Context, data *Ana
 
 // fetchCustomers fetches all customers when no external customer ID is provided
 func (s *featureUsageTrackingService) fetchCustomers(ctx context.Context, req *dto.GetUsageAnalyticsRequest) ([]*customer.Customer, error) {
-	if req.ExternalCustomerID != "" {
-		cust, err := s.fetchCustomer(ctx, req.ExternalCustomerID)
-		if err != nil {
-			return nil, err
-		}
-		return []*customer.Customer{cust}, nil
-	} else {
-		customers, err := s.CustomerRepo.List(ctx, types.NewNoLimitCustomerFilter())
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Failed to fetch customers").
-				Mark(ierr.ErrDatabase)
+	effectiveIDs := resolveEffectiveExternalIDs(req)
+	if len(effectiveIDs) > 0 {
+		// NOTE: fetchCustomer is called once per ID here. GetDetailedUsageAnalyticsV2 will
+		// call fetchAnalyticsData per customer which calls fetchCustomer again internally —
+		// an accepted N+1 (2N lookups total) kept for code clarity; the call is cheap.
+		customers := make([]*customer.Customer, 0, len(effectiveIDs))
+		for _, id := range effectiveIDs {
+			cust, err := s.fetchCustomer(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			customers = append(customers, cust)
 		}
 		return customers, nil
 	}
+	// No IDs specified — fetch all customers (existing behaviour for V2 aggregate-all path)
+	customers, err := s.CustomerRepo.List(ctx, types.NewNoLimitCustomerFilter())
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch customers").
+			Mark(ierr.ErrDatabase)
+	}
+	return customers, nil
 }
 
 // mergeAnalyticsData merges additional analytics data into the aggregated data structure
@@ -4767,4 +4969,29 @@ func (s *featureUsageTrackingService) handleMissingFeature(
 	)
 
 	return createdFeature, nil
+}
+
+// resolveHierarchyLineItems looks up INHERITED subscriptions for a child customer
+// and returns the parent subscription's line items that match the given meter IDs.
+func (s *featureUsageTrackingService) resolveHierarchyLineItems(
+	ctx context.Context,
+	customerID string,
+	meterIDs []string,
+	eventTimestamp *time.Time,
+) ([]*subscription.SubscriptionLineItem, error) {
+	parentSubIDs, err := listParentSubscriptionIDsForInheritedCustomer(ctx, s.ServiceParams, customerID)
+	if err != nil || len(parentSubIDs) == 0 {
+		return nil, err
+	}
+
+	// Get line items from the parent subscription(s) filtered by meter IDs
+	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	lineItemFilter.MeterIDs = meterIDs
+	lineItemFilter.SubscriptionIDs = parentSubIDs
+	lineItemFilter.ActiveFilter = true
+	if eventTimestamp != nil {
+		lineItemFilter.CurrentPeriodStart = eventTimestamp
+	}
+
+	return s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
 }

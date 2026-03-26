@@ -5775,6 +5775,67 @@ func (s *SubscriptionServiceSuite) TestUpdateBillingPeriodsWithInvoicingCustomer
 	s.True(updatedSub.CurrentPeriodEnd.After(periodEnd), "Period end should be updated")
 }
 
+// TestUpdateBillingPeriodsSkipsInheritedSubscriptions ensures cron billing period rollforward only lists parent and standalone subs.
+func (s *SubscriptionServiceSuite) TestUpdateBillingPeriodsSkipsInheritedSubscriptions() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	periodStart := now.AddDate(0, 0, -2)
+	periodEnd := now.AddDate(0, 0, -1)
+
+	parentID := "sub_parent_for_inherited_billing_skip"
+	inheritedID := "sub_inherited_billing_skip_rollfwd"
+
+	parent := &subscription.Subscription{
+		ID:                 parentID,
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		SubscriptionType:   types.SubscriptionTypeParent,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, parent, []*subscription.SubscriptionLineItem{}))
+
+	inherited := &subscription.Subscription{
+		ID:                   inheritedID,
+		PlanID:               s.testData.plan.ID,
+		CustomerID:           s.testData.customer.ID,
+		StartDate:            periodStart,
+		CurrentPeriodStart:   periodStart,
+		CurrentPeriodEnd:     periodEnd,
+		Currency:             "usd",
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		ParentSubscriptionID: lo.ToPtr(parentID),
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, inherited, []*subscription.SubscriptionLineItem{}))
+
+	subService := s.service.(*subscriptionService)
+	response, err := subService.UpdateBillingPeriods(ctx)
+	s.NoError(err)
+
+	for _, item := range response.Items {
+		s.NotEqual(inheritedID, item.SubscriptionID, "inherited subscription must not be processed by UpdateBillingPeriods")
+	}
+
+	parentFound := false
+	for _, item := range response.Items {
+		if item.SubscriptionID == parentID {
+			parentFound = true
+			break
+		}
+	}
+	s.True(parentFound, "parent subscription should be included in billing period batch")
+}
+
 // TestMultiCadence_ProrationMutualExclusion_Creation implements PRD E.3.1: subscription creation with mixed billing periods.
 // Mixed periods + none -> success; mixed periods + create_prorations -> error.
 func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Creation() {
@@ -5842,6 +5903,10 @@ func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Cre
 	// Same plan, create_prorations -> must fail
 	reqProration := reqNone
 	reqProration.ProrationBehavior = types.ProrationBehaviorCreateProrations
+	// Refresh start date so Validate()'s proration + start-date check (calendar day) cannot fire
+	// before we reach mixed-period validation (e.g. UTC midnight between the two creates).
+	prorationStart := time.Now().UTC().Truncate(time.Millisecond)
+	reqProration.StartDate = &prorationStart
 	_, err2 := s.service.CreateSubscription(ctx, reqProration)
 	s.Require().Error(err2, "E.3.1: mixed periods + create_prorations must fail")
 	s.True(ierr.IsValidation(err2), "error should be validation")
@@ -5926,3 +5991,78 @@ func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Can
 	_, errCancelNone := s.service.CancelSubscription(ctx, resp.ID, cancelReqNone)
 	s.NoError(errCancelNone, "E.3.2: cancel with mixed + none should succeed")
 }
+
+// ---------------------------------------------------------------------------
+// TestUpdateSubscription_CustomerIDsToInheritSubscription
+// ---------------------------------------------------------------------------
+// Tests covering all edge cases for adding child customers via UpdateSubscription.
+// ---------------------------------------------------------------------------
+
+// uciHelpers creates a parent customer, N child customers (all pointing to the parent),
+// and an ACTIVE STANDALONE subscription owned by the parent.
+// Returns (parentCustomer, childCustomers, subscription).
+func (s *SubscriptionServiceSuite) uciSetup(
+	ctx context.Context,
+	tag string,
+	numChildren int,
+	subStatus types.SubscriptionStatus,
+) (*customer.Customer, []*customer.Customer, *subscription.Subscription) {
+	now := time.Now().UTC()
+
+	parentCust := &customer.Customer{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		Name:      "UCI Parent " + tag,
+		Email:     tag + "-parent@test.com",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, parentCust))
+
+	children := make([]*customer.Customer, numChildren)
+	for i := 0; i < numChildren; i++ {
+		c := &customer.Customer{
+			ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+			Name:      fmt.Sprintf("UCI Child %s %d", tag, i),
+			Email:     fmt.Sprintf("%s-child%d@test.com", tag, i),
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+		s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, c))
+		children[i] = c
+	}
+
+	sub := &subscription.Subscription{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         parentCust.ID,
+		StartDate:          now.AddDate(0, -1, 0),
+		CurrentPeriodStart: now.AddDate(0, 0, -1),
+		CurrentPeriodEnd:   now.AddDate(0, 0, 6),
+		BillingAnchor:      now.AddDate(0, -1, 0),
+		Currency:           "usd",
+		BillingCycle:       types.BillingCycleAnniversary,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		SubscriptionStatus: subStatus,
+		SubscriptionType:   types.SubscriptionTypeStandalone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
+	return parentCust, children, sub
+}
+
+// uciListInherited lists all INHERITED subscriptions whose parent is parentSubID.
+func (s *SubscriptionServiceSuite) uciListInherited(ctx context.Context, parentSubID string) []*subscription.Subscription {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{parentSubID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusPaused,
+	}
+	subs, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.Require().NoError(err)
+	return subs
+}
+

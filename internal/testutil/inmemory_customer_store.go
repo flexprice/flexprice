@@ -13,6 +13,7 @@ import (
 // InMemoryCustomerStore implements customer.Repository
 type InMemoryCustomerStore struct {
 	*InMemoryStore[*customer.Customer]
+	subscriptionStore *InMemorySubscriptionStore
 }
 
 // NewInMemoryCustomerStore creates a new in-memory customer store
@@ -20,6 +21,12 @@ func NewInMemoryCustomerStore() *InMemoryCustomerStore {
 	return &InMemoryCustomerStore{
 		InMemoryStore: NewInMemoryStore[*customer.Customer](),
 	}
+}
+
+// SetSubscriptionStore wires the subscription store so customer hierarchy lookups can
+// mirror production behavior based on parent/inherited subscriptions.
+func (s *InMemoryCustomerStore) SetSubscriptionStore(store *InMemorySubscriptionStore) {
+	s.subscriptionStore = store
 }
 
 // Helper to copy customer
@@ -110,6 +117,65 @@ func (s *InMemoryCustomerStore) List(ctx context.Context, filter *types.Customer
 	}), nil
 }
 
+// ListChildrenFromInheritedSubscriptions mirrors production behavior:
+// parent customer's PARENT subscriptions -> INHERITED child subscriptions -> distinct child customer IDs.
+func (s *InMemoryCustomerStore) ListChildrenFromInheritedSubscriptions(ctx context.Context, parentCustomerID string) ([]*customer.Customer, error) {
+	if s.subscriptionStore == nil {
+		return []*customer.Customer{}, nil
+	}
+
+	parentFilter := types.NewNoLimitSubscriptionFilter()
+	parentFilter.CustomerID = parentCustomerID
+	parentFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
+	parentSubs, err := s.subscriptionStore.List(ctx, parentFilter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch parent subscriptions for customer").
+			Mark(ierr.ErrDatabase)
+	}
+	if len(parentSubs) == 0 {
+		return []*customer.Customer{}, nil
+	}
+
+	parentSubIDs := make([]string, 0, len(parentSubs))
+	for _, parentSub := range parentSubs {
+		parentSubIDs = append(parentSubIDs, parentSub.ID)
+	}
+
+	inheritedFilter := types.NewNoLimitSubscriptionFilter()
+	inheritedFilter.ParentSubscriptionIDs = parentSubIDs
+	inheritedFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	inheritedSubs, err := s.subscriptionStore.List(ctx, inheritedFilter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch inherited subscriptions for customer").
+			Mark(ierr.ErrDatabase)
+	}
+	if len(inheritedSubs) == 0 {
+		return []*customer.Customer{}, nil
+	}
+
+	uniqueChildCustomerIDs := make(map[string]struct{}, len(inheritedSubs))
+	for _, inheritedSub := range inheritedSubs {
+		if inheritedSub.CustomerID == "" || inheritedSub.CustomerID == parentCustomerID {
+			continue
+		}
+		uniqueChildCustomerIDs[inheritedSub.CustomerID] = struct{}{}
+	}
+	if len(uniqueChildCustomerIDs) == 0 {
+		return []*customer.Customer{}, nil
+	}
+
+	customerIDs := make([]string, 0, len(uniqueChildCustomerIDs))
+	for customerID := range uniqueChildCustomerIDs {
+		customerIDs = append(customerIDs, customerID)
+	}
+
+	customerFilter := types.NewNoLimitCustomerFilter()
+	customerFilter.CustomerIDs = customerIDs
+	return s.List(ctx, customerFilter)
+}
+
 func (s *InMemoryCustomerStore) Count(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	return s.InMemoryStore.Count(ctx, filter, customerFilterFn)
 }
@@ -149,16 +215,6 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 	// Apply external ID filter
 	if f.ExternalID != "" && c.ExternalID != f.ExternalID {
 		return false
-	}
-
-	// Apply parent customer ID filter
-	if len(f.ParentCustomerIDs) > 0 {
-		if c.ParentCustomerID == nil {
-			return false
-		}
-		if !lo.Contains(f.ParentCustomerIDs, *c.ParentCustomerID) {
-			return false
-		}
 	}
 
 	// Apply email filter

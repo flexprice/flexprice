@@ -431,11 +431,11 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 
 	// Test usage calculation with filters
 	result, err := s.service.GetUsageByMeter(s.ctx, &dto.GetUsageByMeterRequest{
-		MeterID:            testMeter.ID,
-		ExternalCustomerID: "cust-1",
-		StartTime:          time.Now().Add(-2 * time.Hour),
-		EndTime:            time.Now(),
-		WindowSize:         types.WindowSizeHour,
+		MeterID:             testMeter.ID,
+		ExternalCustomerIDs: []string{"cust-1"},
+		StartTime:           time.Now().Add(-2 * time.Hour),
+		EndTime:             time.Now(),
+		WindowSize:          types.WindowSizeHour,
 		Filters: map[string][]string{
 			"region": {"us-east-1"},
 		},

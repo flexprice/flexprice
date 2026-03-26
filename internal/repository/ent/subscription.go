@@ -92,6 +92,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
 		SetNillablePaymentTerms(sub.PaymentTerms).
+		SetSubscriptionType(sub.SubscriptionType).
 		Save(ctx)
 
 	if err != nil {
@@ -181,6 +182,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetCollectionMethod(types.CollectionMethod(sub.CollectionMethod)).
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
+		SetSubscriptionType(sub.SubscriptionType).
 		SetUpdatedAt(now).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetMetadata(sub.Metadata)
@@ -570,9 +572,19 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		query = query.Where(subscription.ParentSubscriptionIDIn(f.ParentSubscriptionIDs...))
 	}
 
+	// Apply subscription type filter
+	if len(f.SubscriptionTypes) > 0 {
+		query = query.Where(subscription.SubscriptionTypeIn(f.SubscriptionTypes...))
+	}
+
 	// Apply customer filter
 	if f.CustomerID != "" {
 		query = query.Where(subscription.CustomerID(f.CustomerID))
+	}
+
+	// Apply multiple customer IDs filter
+	if len(f.CustomerIDs) > 0 {
+		query = query.Where(subscription.CustomerIDIn(f.CustomerIDs...))
 	}
 
 	// Apply invoicing customer filter

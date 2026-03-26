@@ -73,7 +73,6 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetCreatedAt(c.CreatedAt).
 		SetUpdatedAt(c.UpdatedAt).
 		SetCreatedBy(c.CreatedBy).
-		SetNillableParentCustomerID(c.ParentCustomerID).
 		SetUpdatedBy(c.UpdatedBy).
 		SetEnvironmentID(c.EnvironmentID).
 		Save(ctx)
@@ -242,6 +241,94 @@ func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFil
 	return domainCustomer.FromEntList(customers), nil
 }
 
+// ListChildrenFromInheritedSubscriptions returns unique child customers for a parent customer
+// by traversing PARENT subscriptions owned by the parent customer and INHERITED subscriptions
+// linked to those parent subscriptions.
+func (r *customerRepository) ListChildrenFromInheritedSubscriptions(ctx context.Context, parentCustomerID string) ([]*domainCustomer.Customer, error) {
+	client := r.client.Reader(ctx)
+
+	span := StartRepositorySpan(ctx, "customer", "list_children_from_inherited_subscriptions", map[string]interface{}{
+		"parent_customer_id": parentCustomerID,
+	})
+	defer FinishSpan(span)
+
+	query := `
+		SELECT DISTINCT child_sub.customer_id
+		FROM subscriptions AS parent_sub
+		INNER JOIN subscriptions AS child_sub
+			ON child_sub.parent_subscription_id = parent_sub.id
+			AND child_sub.tenant_id = parent_sub.tenant_id
+			AND child_sub.environment_id = parent_sub.environment_id
+		WHERE parent_sub.customer_id = $1
+			AND parent_sub.subscription_type = $2
+			AND child_sub.subscription_type = $3
+			AND parent_sub.tenant_id = $4
+			AND parent_sub.environment_id = $5
+			AND child_sub.customer_id <> $1
+	`
+
+	rows, err := client.QueryContext(
+		ctx,
+		query,
+		parentCustomerID,
+		types.SubscriptionTypeParent,
+		types.SubscriptionTypeInherited,
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch distinct child customer IDs from subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	childCustomerIDs := make([]string, 0)
+	for rows.Next() {
+		var childCustomerID string
+		if err := rows.Scan(&childCustomerID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan child customer ID row").
+				Mark(ierr.ErrDatabase)
+		}
+		if childCustomerID != "" {
+			childCustomerIDs = append(childCustomerIDs, childCustomerID)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed while iterating child customer ID rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(childCustomerIDs) == 0 {
+		SetSpanSuccess(span)
+		return []*domainCustomer.Customer{}, nil
+	}
+
+	children, err := client.Customer.Query().
+		Where(
+			customer.IDIn(childCustomerIDs...),
+			customer.TenantIDEQ(types.GetTenantID(ctx)),
+			customer.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
+			customer.StatusEQ(string(types.StatusPublished)),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch child customers for inherited subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainCustomer.FromEntList(children), nil
+}
+
 func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	client := r.client.Reader(ctx)
 
@@ -340,7 +427,6 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetAddressPostalCode(c.AddressPostalCode).
 		SetAddressCountry(c.AddressCountry).
 		SetMetadata(c.Metadata).
-		SetNillableParentCustomerID(c.ParentCustomerID).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
@@ -493,10 +579,6 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 
 	if f.ExternalID != "" {
 		query = query.Where(customer.ExternalID(f.ExternalID))
-	}
-
-	if len(f.ParentCustomerIDs) > 0 {
-		query = query.Where(customer.ParentCustomerIDIn(f.ParentCustomerIDs...))
 	}
 
 	if f.Email != "" {

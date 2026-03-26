@@ -133,6 +133,9 @@ type Subscription struct {
 	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
 	PaymentTerms *types.PaymentTerms `db:"payment_terms" json:"payment_terms,omitempty"`
 
+	// SubscriptionType categorises this subscription within a customer hierarchy.
+	SubscriptionType types.SubscriptionType `db:"subscription_type" json:"subscription_type"`
+
 	types.BaseModel
 }
 
@@ -247,6 +250,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		InvoicingCustomerID:  sub.InvoicingCustomerID,
 		ParentSubscriptionID: sub.ParentSubscriptionID,
 		PaymentTerms:         sub.PaymentTerms,
+		SubscriptionType:     types.SubscriptionType(sub.SubscriptionType),
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

@@ -7,33 +7,43 @@ import (
 	"github.com/samber/lo"
 )
 
-// InvoiceBilling determines which customer should receive invoices for a subscription
-type InvoiceBilling string
+// SubscriptionType categorises a subscription within a customer hierarchy.
+type SubscriptionType string
 
 const (
-	// InvoiceBillingInvoiceToParent - Invoices are sent to the parent customer
-	InvoiceBillingInvoiceToParent InvoiceBilling = "invoice_to_parent"
+	// SubscriptionTypeStandalone is a regular subscription with no hierarchy relationship.
+	SubscriptionTypeStandalone SubscriptionType = "standalone"
 
-	// InvoiceBillingInvoiceToSelf - Invoices are sent to the subscription's customer
-	InvoiceBillingInvoiceToSelf InvoiceBilling = "invoice_to_self"
+	// SubscriptionTypeParent is the primary subscription that owns line items and aggregates
+	// usage from child (inherited) subscriptions.
+	SubscriptionTypeParent SubscriptionType = "parent"
+
+	// SubscriptionTypeInherited is a skeleton subscription created for each child customer
+	// in a hierarchy. It carries no line items; events are matched via the parent subscription.
+	SubscriptionTypeInherited SubscriptionType = "inherited"
 )
 
-func (i InvoiceBilling) String() string {
-	return string(i)
+var SubscriptionTypeValues = []SubscriptionType{
+	SubscriptionTypeStandalone,
+	SubscriptionTypeParent,
+	SubscriptionTypeInherited,
 }
 
-func (i InvoiceBilling) Validate() error {
-	allowed := []InvoiceBilling{
-		InvoiceBillingInvoiceToParent,
-		InvoiceBillingInvoiceToSelf,
+func (t SubscriptionType) String() string {
+	return string(t)
+}
+
+func (t SubscriptionType) Validate() error {
+	if t == "" {
+		return nil
 	}
 
-	if i != "" && !lo.Contains(allowed, i) {
-		return ierr.NewError("invalid invoice billing").
-			WithHint("Invalid invoice billing").
+	if !lo.Contains(SubscriptionTypeValues, t) {
+		return ierr.NewError("invalid subscription type").
+			WithHint("Subscription type must be standalone, parent, or inherited").
 			WithReportableDetails(map[string]any{
-				"invoice_billing": i,
-				"allowed_values":  allowed,
+				"subscription_type": t,
+				"allowed_values":    SubscriptionTypeValues,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -196,7 +206,7 @@ func (p PaymentTerms) Validate() error {
 		return ierr.NewError("invalid payment_terms").
 			WithHint("Payment terms must be one of: 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET").
 			WithReportableDetails(map[string]any{
-				"payment_terms":   p,
+				"payment_terms":  p,
 				"allowed_values": AllPaymentTerms,
 			}).
 			Mark(ierr.ErrValidation)
@@ -302,6 +312,12 @@ type SubscriptionFilter struct {
 	// ActiveAt filters subscriptions that are active at the given time
 	ActiveAt *time.Time `json:"active_at,omitempty" form:"active_at"`
 
+	// SubscriptionTypes filters by subscription type (standalone, parent, inherited)
+	SubscriptionTypes []SubscriptionType `json:"subscription_types,omitempty" form:"subscription_types"`
+
+	// CustomerIDs filters by multiple customer IDs (used for hierarchy lookups)
+	CustomerIDs []string `json:"customer_ids,omitempty" form:"customer_ids"`
+
 	// WithLineItems includes line items in the response
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
 }
@@ -351,6 +367,13 @@ func (f SubscriptionFilter) Validate() error {
 	// Validate billing period values
 	for _, period := range f.BillingPeriod {
 		if err := period.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate subscription type values
+	for _, subType := range f.SubscriptionTypes {
+		if err := subType.Validate(); err != nil {
 			return err
 		}
 	}
