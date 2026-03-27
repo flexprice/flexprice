@@ -361,6 +361,11 @@ type InvoiceFilter struct {
 	// period_end_lte filters invoices with period_end <= value
 	PeriodEndLTE *time.Time `json:"period_end_lte,omitempty" form:"period_end_lte" validate:"omitempty,time_rfc3339"`
 
+	// created_at_gte filters invoices created at or after the given time
+	CreatedAtGTE *time.Time `json:"created_at_gte,omitempty" form:"created_at_gte" validate:"omitempty,time_rfc3339"`
+	// created_at_lte filters invoices created at or before the given time
+	CreatedAtLTE *time.Time `json:"created_at_lte,omitempty" form:"created_at_lte" validate:"omitempty,time_rfc3339"`
+
 	// SkipLineItems if true, will not include line items in the response
 	SkipLineItems bool `json:"skip_line_items,omitempty" form:"skip_line_items"`
 }
