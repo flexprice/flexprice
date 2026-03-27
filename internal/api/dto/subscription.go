@@ -30,6 +30,10 @@ type SubscriptionPhaseCreateRequest struct {
 	// If not provided, phase will use the same line items as the subscription (plan prices)
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 
+	// LineItems are extra line items to add during this phase, primarily one-time charges.
+	// Each item's charge_date (or start_date) defaults to the phase's start_date when not provided.
+	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
+
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
@@ -43,6 +47,17 @@ func (r *SubscriptionPhaseCreateRequest) Validate() error {
 		return ierr.NewError("end_date cannot be before start_date").
 			WithHint("Ensure the phase end date is on or after the start date").
 			Mark(ierr.ErrValidation)
+	}
+
+	// Validate each nested line item (price/price_id presence, date ordering, etc.)
+	// Price and subscription context are not available here; full business-rule
+	// validation is deferred to createPhaseExtraLineItems in the service layer.
+	for i, li := range r.LineItems {
+		if err := li.Validate(nil, nil); err != nil {
+			return ierr.NewErrorf("invalid line_item at index %d: %s", i, err.Error()).
+				WithHint("Check the line item fields at the given index").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil

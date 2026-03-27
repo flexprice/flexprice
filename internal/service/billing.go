@@ -179,14 +179,25 @@ func (s *billingService) CalculateFixedCharges(
 		if err != nil {
 			return nil, fixedCost, err
 		}
+		// Attach price so IsOneTime() uses price.BillingCadence (authoritative)
+		if item.Price == nil {
+			item.Price = price.Price
+		}
 
 		var amount decimal.Decimal
 		var linePeriodStart, linePeriodEnd time.Time
 
-		// Line item has longer cadence than subscription (e.g. quarterly line on monthly sub):
-		// Advance: include when line-item period start falls in [periodStart, periodEnd).
-		// Arrear: include when line-item period end falls in [periodStart, periodEnd).
-		if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
+		// ONETIME charge: full amount, no proration; service period = charge date.
+		if item.IsOneTime() {
+			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			chargeDate := item.GetChargeDate()
+			linePeriodStart = chargeDate
+			linePeriodEnd = chargeDate
+			// fall through to shared rounding + line item build below
+		} else if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
+			// Line item has longer cadence than subscription (e.g. quarterly line on monthly sub):
+			// Advance: include when line-item period start falls in [periodStart, periodEnd).
+			// Arrear: include when line-item period end falls in [periodStart, periodEnd).
 			res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
 				Item:           item,
 				PeriodStart:    periodStart,
@@ -1836,6 +1847,52 @@ func (s *billingService) calculateAllFeatureUsageCharges(
 	}, nil
 }
 
+// attachPricesToLineItems bulk-fetches prices for a slice of line items and attaches
+// each price to its line item so that IsOneTime() (and other price-aware methods) can
+// use price.BillingCadence without an additional per-item DB call.
+func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems []*subscription.SubscriptionLineItem) error {
+	if len(lineItems) == 0 {
+		return nil
+	}
+
+	// Collect unique price IDs (skip any line items that already have a price loaded)
+	priceIDSet := make(map[string]struct{}, len(lineItems))
+	for _, li := range lineItems {
+		if li.Price == nil && li.PriceID != "" {
+			priceIDSet[li.PriceID] = struct{}{}
+		}
+	}
+	if len(priceIDSet) == 0 {
+		return nil
+	}
+
+	priceIDs := make([]string, 0, len(priceIDSet))
+	for id := range priceIDSet {
+		priceIDs = append(priceIDs, id)
+	}
+
+	filter := types.NewNoLimitPriceFilter()
+	filter.PriceIDs = priceIDs
+	prices, err := s.PriceRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	priceMap := make(map[string]*priceDomain.Price, len(prices))
+	for _, p := range prices {
+		priceMap[p.ID] = p
+	}
+
+	for _, li := range lineItems {
+		if li.Price == nil {
+			if p, ok := priceMap[li.PriceID]; ok {
+				li.Price = p
+			}
+		}
+	}
+	return nil
+}
+
 func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -1859,6 +1916,11 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		return nil, err
 	}
 	sub.LineItems = lineItems
+
+	// Attach prices so ClassifyLineItems can use price.BillingCadence for ONETIME detection
+	if err := s.attachPricesToLineItems(ctx, sub.LineItems); err != nil {
+		return nil, err
+	}
 
 	// nothing to invoice default response 0$ invoice
 	zeroAmountInvoice, err := s.CreateInvoiceRequestForCharges(ctx,
@@ -2096,13 +2158,32 @@ func (s *billingService) checkIfChargeInvoiced(
 		if item.PeriodStart == nil || item.PeriodEnd == nil {
 			continue
 		}
+		lineStart := lo.FromPtr(item.PeriodStart)
+		lineEnd := lo.FromPtr(item.PeriodEnd)
+
+		// ONETIME charges have a zero-duration period (PeriodStart == PeriodEnd == chargeDate).
+		// The standard open-interval overlap check (lineEnd > periodStart) would miss boundary
+		// cases where chargeDate == periodStart (since chargeDate.After(chargeDate) is false).
+		// Instead, check that the charge date falls within [periodStart, periodEnd).
+		if lineStart.Equal(lineEnd) {
+			chargeDate := lineStart
+			// Use a closed interval [periodStart, periodEnd] so that arrear one-time
+			// charges with chargeDate == periodEnd are correctly detected as already
+			// invoiced.  ClassifyLineItems uses (start, end] for ARREAR, so we must
+			// be at least as inclusive here to avoid duplicate billing at the boundary.
+			if !chargeDate.Before(periodStart) && !chargeDate.After(periodEnd) {
+				return true
+			}
+			continue
+		}
+
 		/*
 			Match when the invoice line's period equals the given window (original behaviour) or overlaps it.
 			Equal: lineStart == periodStart && lineEnd == periodEnd (e.g. monthly line on monthly sub).
 			Overlap: lineStart < periodEnd && lineEnd > periodStart (e.g. quarterly line Jan–Mar vs window Jan 1–31).
 		*/
-		exactMatch := item.PeriodStart.Equal(periodStart) && item.PeriodEnd.Equal(periodEnd)
-		overlap := item.PeriodStart.Before(periodEnd) && item.PeriodEnd.After(periodStart)
+		exactMatch := lineStart.Equal(periodStart) && lineEnd.Equal(periodEnd)
+		overlap := lineStart.Before(periodEnd) && lineEnd.After(periodStart)
 		if !exactMatch && !overlap {
 			continue
 		}
@@ -2146,6 +2227,29 @@ func (s *billingService) ClassifyLineItems(
 		}
 
 		if item.PriceType != types.PRICE_TYPE_FIXED {
+			continue
+		}
+
+		// ONETIME charges: classified by whether the charge date (StartDate) falls in the period.
+		// They are never auto-added to both current and next (unlike RECURRING ADVANCE).
+		// FilterLineItemsToBeInvoiced prevents double-billing if the charge was already invoiced.
+		if item.IsOneTime() {
+			chargeDate := item.GetChargeDate()
+			if item.InvoiceCadence == types.InvoiceCadenceAdvance {
+				// Advance: charge date in [currentPeriodStart, currentPeriodEnd)
+				if !chargeDate.Before(currentPeriodStart) && chargeDate.Before(currentPeriodEnd) {
+					result.CurrentPeriodAdvance = append(result.CurrentPeriodAdvance, item)
+				}
+				// Also check if charge date falls in the next period window
+				if !chargeDate.Before(nextPeriodStart) && chargeDate.Before(nextPeriodEnd) {
+					result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
+				}
+			} else {
+				// Arrear: charge date in (currentPeriodStart, currentPeriodEnd]
+				if chargeDate.After(currentPeriodStart) && !chargeDate.After(currentPeriodEnd) {
+					result.CurrentPeriodArrear = append(result.CurrentPeriodArrear, item)
+				}
+			}
 			continue
 		}
 

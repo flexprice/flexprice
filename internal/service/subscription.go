@@ -404,6 +404,42 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
+		// Create phase 0 DB record and its extra line items (e.g. ADVANCE one-time charges) BEFORE
+		// invoice generation so they are included in the opening invoice.
+		// Subsequent phases are handled post-transaction in handleSubscriptionPhases.
+		if len(phases) > 0 {
+			if err = s.SubscriptionPhaseRepo.Create(ctx, phases[0]); err != nil {
+				return err
+			}
+			if len(req.Phases) > 0 && len(req.Phases[0].LineItems) > 0 {
+				extraItems, extraErr := s.createPhaseExtraLineItems(ctx, sub, phases[0], req.Phases[0])
+				if extraErr != nil {
+					return extraErr
+				}
+				// Apply phase 0 coupons to the extra line items created above.
+				// handleSubCoupons runs before this block and only covers req.Coupons /
+				// req.LineItemCoupons; phase-level coupons (req.Phases[0].Coupons /
+				// req.Phases[0].LineItemCoupons) need to be resolved here using the
+				// just-created items.
+				phase0Req := req.Phases[0]
+				if len(phase0Req.Coupons) > 0 || len(phase0Req.LineItemCoupons) > 0 {
+					phase0PriceToLIMap := make(map[string]string)
+					for _, li := range extraItems {
+						if li.PriceID != "" && li.ID != "" {
+							phase0PriceToLIMap[li.PriceID] = li.ID
+						}
+					}
+					phase0Coupons := s.normalizePhaseCoupons(phase0Req, phases[0].ID, phase0PriceToLIMap)
+					if len(phase0Coupons) > 0 {
+						couponSvc := NewCouponAssociationService(s.ServiceParams)
+						if err = couponSvc.ApplyCouponsToSubscription(ctx, sub, phase0Coupons); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+
 		// Create invoice for non-draft subscriptions
 		if req.SubscriptionStatus != types.SubscriptionStatusDraft {
 			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
@@ -896,14 +932,16 @@ func (s *subscriptionService) handleSubscriptionPhases(
 
 	// Process each phase
 	for i, phase := range phases {
+		// Phase 0: record + extra line items were already created inside the subscription transaction
+		// (before invoice generation) so that ADVANCE one-time charges appear in the opening invoice.
+		// Nothing to do here for phase 0.
+		if i == 0 {
+			continue
+		}
+
 		// Create the phase in database
 		if err := s.SubscriptionPhaseRepo.Create(ctx, phase); err != nil {
 			return err
-		}
-
-		// Skip creating line items for the first phase since they're already created with the subscription
-		if i == 0 {
-			continue
 		}
 
 		// Get corresponding phase request for additional data
@@ -976,6 +1014,20 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			}
 		}
 
+		// Handle extra line items (e.g. one-time charges) and merge them into the
+		// phasePriceToLineItemMap so LineItemCoupons can resolve them.
+		if len(phaseReq.LineItems) > 0 {
+			extraItems, err := s.createPhaseExtraLineItems(ctx, sub, phase, phaseReq)
+			if err != nil {
+				return err
+			}
+			for _, item := range extraItems {
+				if item.PriceID != "" && item.ID != "" {
+					phasePriceToLineItemMap[item.PriceID] = item.ID
+				}
+			}
+		}
+
 		// Handle phase coupons - transform simple coupons to SubscriptionCouponRequest format
 		couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 		phaseCoupons := s.normalizePhaseCoupons(phaseReq, phase.ID, phasePriceToLineItemMap)
@@ -1036,6 +1088,62 @@ func (s *subscriptionService) normalizePhaseCoupons(
 	}
 
 	return subscriptionCoupons
+}
+
+// createPhaseExtraLineItems creates extra line items defined in a phase request (e.g. one-time charges).
+// charge_date (or start_date) defaults to phase.StartDate when not provided.
+// Returns the created line items so callers can merge them into coupon resolution maps.
+func (s *subscriptionService) createPhaseExtraLineItems(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	phase *subscription.SubscriptionPhase,
+	phaseReq dto.SubscriptionPhaseCreateRequest,
+) ([]*subscription.SubscriptionLineItem, error) {
+	var created []*subscription.SubscriptionLineItem
+	for _, liReq := range phaseReq.LineItems {
+		// Default charge_date and start_date to phase start when not set.
+		if liReq.ChargeDate == nil && liReq.StartDate == nil {
+			liReq.ChargeDate = &phaseReq.StartDate
+		}
+
+		// Validate charge_date (or the effective start date) falls within the phase window.
+		effectiveDate := phaseReq.StartDate
+		if liReq.ChargeDate != nil {
+			effectiveDate = *liReq.ChargeDate
+		} else if liReq.StartDate != nil {
+			effectiveDate = *liReq.StartDate
+		}
+		if effectiveDate.Before(phaseReq.StartDate) {
+			return nil, ierr.NewError("line item charge_date cannot be before phase start date").
+				WithHint("charge_date must be on or after the phase's start date.").
+				WithReportableDetails(map[string]interface{}{
+					"charge_date":  effectiveDate,
+					"phase_start":  phaseReq.StartDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if phaseReq.EndDate != nil && effectiveDate.After(lo.FromPtr(phaseReq.EndDate)) {
+			return nil, ierr.NewError("line item charge_date cannot be after phase end date").
+				WithHint("charge_date must be on or before the phase's end date when the phase has an end date.").
+				WithReportableDetails(map[string]interface{}{
+					"charge_date": effectiveDate,
+					"phase_end":   phaseReq.EndDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		liReq.SubscriptionPhaseID = lo.ToPtr(phase.ID)
+		liReq.SkipEntitlementCheck = true
+
+		li, err := s.AddSubscriptionLineItem(ctx, sub.ID, liReq)
+		if err != nil {
+			return nil, err
+		}
+		if li != nil && li.SubscriptionLineItem != nil {
+			created = append(created, li.SubscriptionLineItem)
+		}
+	}
+	return created, nil
 }
 
 // processSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides
