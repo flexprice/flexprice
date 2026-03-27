@@ -204,6 +204,9 @@ type ClonePlanRequest struct {
 	DisplayOrder *int `json:"display_order,omitempty"`
 	// Metadata overrides the source plan's metadata when provided
 	Metadata types.Metadata `json:"metadata,omitempty"`
+	// TargetEnvironmentID, when provided, clones the plan into a different environment
+	// within the same tenant. Omit or leave null to clone within the same environment.
+	TargetEnvironmentID *string `json:"target_environment_id,omitempty"`
 }
 
 func (r *ClonePlanRequest) Validate() error {
@@ -215,6 +218,11 @@ func (r *ClonePlanRequest) Validate() error {
 	if r.LookupKey == "" {
 		return errors.NewError("lookup_key is required for cloned plan").
 			WithHint("Please provide a unique lookup_key for the cloned plan").
+			Mark(errors.ErrValidation)
+	}
+	if r.TargetEnvironmentID != nil && *r.TargetEnvironmentID == "" {
+		return errors.NewError("target_environment_id cannot be empty when provided").
+			WithHint("Provide a valid environment ID or omit the field entirely").
 			Mark(errors.ErrValidation)
 	}
 	return nil

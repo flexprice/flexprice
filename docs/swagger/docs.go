@@ -12099,6 +12099,10 @@ const docTemplate = `{
                 "name": {
                     "description": "Name is required and must be different from the source plan's name",
                     "type": "string"
+                },
+                "target_environment_id": {
+                    "description": "TargetEnvironmentID, when provided, clones the plan into a different environment\nwithin the same tenant. Omit or leave null to clone within the same environment.",
+                    "type": "string"
                 }
             }
         },
@@ -23395,7 +23399,6 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
-                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -23405,10 +23408,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
+                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
-                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -23418,7 +23421,8 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth"
+                "WindowSizeMonth",
+                "DefaultWindowSize"
             ]
         },
         "types.WorkflowExecutionFilter": {

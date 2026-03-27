@@ -34,7 +34,7 @@ func (s *InMemoryEnvironmentStore) Create(ctx context.Context, env *environment.
 	if _, exists := s.environments[env.ID]; exists {
 		return ierr.NewError("environment already exists").
 			WithHint("Environment already exists").
-			Mark(ierr.ErrDatabase)
+			Mark(ierr.ErrAlreadyExists)
 	}
 
 	env.CreatedAt = time.Now()
@@ -52,7 +52,7 @@ func (s *InMemoryEnvironmentStore) Get(ctx context.Context, id string) (*environ
 	}
 	return nil, ierr.NewError("environment not found").
 		WithHint("Environment not found").
-		Mark(ierr.ErrDatabase)
+		Mark(ierr.ErrNotFound)
 }
 
 func (s *InMemoryEnvironmentStore) List(ctx context.Context, filter types.Filter) ([]*environment.Environment, error) {

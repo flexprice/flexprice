@@ -524,6 +524,12 @@ definitions:
         description: Name is required and must be different from the source plan's
           name
         type: string
+      target_environment_id:
+        description: |-
+          TargetEnvironmentID, when provided, clones the plan into a different environment
+          within the same tenant. Omit or leave null to clone within the same environment.
+        type: string
+        x-nullable: true
     type: object
   dto.CostAnalyticItem:
     properties:
@@ -8788,7 +8794,6 @@ definitions:
     - WalletTypePostPaid
   types.WindowSize:
     enum:
-    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -8801,7 +8806,6 @@ definitions:
     - MONTH
     type: string
     x-enum-varnames:
-    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min

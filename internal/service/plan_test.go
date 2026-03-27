@@ -5,9 +5,11 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -1225,5 +1227,171 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 		s.Equal(testPlan.ID, testPrice.EntityID)
 		s.Equal(testPlan.ID, testSub.PlanID)
 		s.Equal(types.SubscriptionStatusActive, testSub.SubscriptionStatus)
+	})
+}
+
+func (s *PlanServiceSuite) TestClonePlan_CrossEnv() {
+	const (
+		sourceEnvID = "env-source"
+		targetEnvID = "env-target"
+	)
+
+	// seedEnv creates an environment in the store, ignoring already-exists errors
+	// so sub-tests that share the same IDs can each set up their own state.
+	// Unexpected errors are logged so they don't silently mask test failures.
+	seedEnv := func(id, name string) {
+		err := s.GetStores().EnvironmentRepo.Create(s.GetContext(), &environment.Environment{
+			ID:   id,
+			Name: name,
+			Type: types.EnvironmentDevelopment,
+			BaseModel: types.BaseModel{
+				TenantID: types.GetTenantID(s.GetContext()),
+				Status:   types.StatusPublished,
+			},
+		})
+		if err != nil && !ierr.IsAlreadyExists(err) {
+			s.T().Logf("seedEnv: unexpected error creating env %s: %v", id, err)
+		}
+	}
+
+	s.Run("same_env_no_target", func() {
+		srcCtx := types.SetEnvironmentID(s.GetContext(), sourceEnvID)
+		seedEnv(sourceEnvID, "Source Env")
+
+		sourcePlan, err := s.service.CreatePlan(srcCtx, dto.CreatePlanRequest{
+			Name:      "Source Plan Same",
+			LookupKey: "src-plan-same",
+		})
+		s.Require().NoError(err)
+
+		// Clone with no TargetEnvironmentID — should stay in the same env
+		cloned, err := s.service.ClonePlan(srcCtx, sourcePlan.Plan.ID, dto.ClonePlanRequest{
+			Name:      "Cloned Plan Same",
+			LookupKey: "cloned-plan-same",
+		})
+		s.Require().NoError(err)
+		s.Require().NotNil(cloned)
+		s.Equal(sourceEnvID, cloned.Plan.EnvironmentID, "cloned plan should be in the same environment as source")
+	})
+
+	s.Run("cross_env_success", func() {
+		srcCtx := types.SetEnvironmentID(s.GetContext(), sourceEnvID)
+		seedEnv(sourceEnvID, "Source Env")
+		seedEnv(targetEnvID, "Target Env")
+
+		sourcePlan, err := s.service.CreatePlan(srcCtx, dto.CreatePlanRequest{
+			Name:      "Source Plan Cross",
+			LookupKey: "src-plan-cross",
+		})
+		s.Require().NoError(err)
+
+		// Add a price to the source plan so we can verify price env is cloned to target
+		srcPrice := &price.Price{
+			ID:                 "price-cross-src",
+			Amount:             decimal.NewFromInt(50),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           sourcePlan.Plan.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			EnvironmentID:      sourceEnvID,
+			BaseModel:          types.GetDefaultBaseModel(srcCtx),
+		}
+		s.Require().NoError(s.GetStores().PriceRepo.Create(srcCtx, srcPrice))
+
+		cloned, err := s.service.ClonePlan(srcCtx, sourcePlan.Plan.ID, dto.ClonePlanRequest{
+			Name:                "Cloned Plan Cross",
+			LookupKey:           "cloned-plan-cross",
+			TargetEnvironmentID: lo.ToPtr(targetEnvID),
+		})
+		s.Require().NoError(err)
+		s.Require().NotNil(cloned)
+
+		// Plan must be in target env
+		s.Equal(targetEnvID, cloned.Plan.EnvironmentID, "cloned plan should be in the target environment")
+
+		// Every cloned price must be in target env
+		s.Require().NotEmpty(cloned.Prices, "cloned plan should have at least one price")
+		for _, p := range cloned.Prices {
+			s.Equal(targetEnvID, p.Price.EnvironmentID, "cloned price should be in the target environment")
+		}
+	})
+
+	s.Run("cross_env_invalid_target", func() {
+		srcCtx := types.SetEnvironmentID(s.GetContext(), sourceEnvID)
+		seedEnv(sourceEnvID, "Source Env")
+
+		sourcePlan, err := s.service.CreatePlan(srcCtx, dto.CreatePlanRequest{
+			Name:      "Source Plan Invalid",
+			LookupKey: "src-plan-invalid",
+		})
+		s.Require().NoError(err)
+
+		_, err = s.service.ClonePlan(srcCtx, sourcePlan.Plan.ID, dto.ClonePlanRequest{
+			Name:                "Cloned Plan Invalid",
+			LookupKey:           "cloned-plan-invalid",
+			TargetEnvironmentID: lo.ToPtr("nonexistent-env"),
+		})
+		s.Require().Error(err)
+		s.True(ierr.IsNotFound(err), "error should be ErrNotFound for nonexistent target environment, got: %v", err)
+	})
+
+	s.Run("cross_env_lookup_key_conflict_in_target", func() {
+		srcCtx := types.SetEnvironmentID(s.GetContext(), sourceEnvID)
+		tgtCtx := types.SetEnvironmentID(s.GetContext(), targetEnvID)
+		seedEnv(sourceEnvID, "Source Env")
+		seedEnv(targetEnvID, "Target Env")
+
+		const conflictKey = "conflict-key"
+
+		sourcePlan, err := s.service.CreatePlan(srcCtx, dto.CreatePlanRequest{
+			Name:      "Source Plan Conflict",
+			LookupKey: "src-plan-conflict",
+		})
+		s.Require().NoError(err)
+
+		// Pre-create a plan with the conflicting lookup_key in target env
+		_, err = s.service.CreatePlan(tgtCtx, dto.CreatePlanRequest{
+			Name:      "Existing Target Plan",
+			LookupKey: conflictKey,
+		})
+		s.Require().NoError(err)
+
+		// Cloning to target with the same lookup_key should fail with ErrAlreadyExists
+		_, err = s.service.ClonePlan(srcCtx, sourcePlan.Plan.ID, dto.ClonePlanRequest{
+			Name:                "Cloned Plan Conflict",
+			LookupKey:           conflictKey,
+			TargetEnvironmentID: lo.ToPtr(targetEnvID),
+		})
+		s.Require().Error(err)
+		s.True(ierr.IsAlreadyExists(err), "error should be ErrAlreadyExists for conflicting lookup_key in target env, got: %v", err)
+	})
+
+	s.Run("cross_env_lookup_key_ok_if_only_in_source", func() {
+		srcCtx := types.SetEnvironmentID(s.GetContext(), sourceEnvID)
+		seedEnv(sourceEnvID, "Source Env")
+		seedEnv(targetEnvID, "Target Env")
+
+		const sharedKey = "shared-key-only-source"
+
+		// Create source plan with the lookup_key in source env only (target env is empty)
+		sourcePlan, err := s.service.CreatePlan(srcCtx, dto.CreatePlanRequest{
+			Name:      "Source Plan Shared Key",
+			LookupKey: sharedKey,
+		})
+		s.Require().NoError(err)
+
+		// Clone to target env with the same lookup_key — target has no such key, so it should succeed
+		cloned, err := s.service.ClonePlan(srcCtx, sourcePlan.Plan.ID, dto.ClonePlanRequest{
+			Name:                "Cloned Plan Shared Key",
+			LookupKey:           sharedKey,
+			TargetEnvironmentID: lo.ToPtr(targetEnvID),
+		})
+		s.Require().NoError(err)
+		s.Require().NotNil(cloned)
+		s.Equal(targetEnvID, cloned.Plan.EnvironmentID, "cloned plan should be in the target environment")
+		s.Equal(sharedKey, cloned.Plan.LookupKey, "cloned plan should have the same lookup_key")
 	})
 }

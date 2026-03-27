@@ -14030,6 +14030,11 @@
           "name": {
             "type": "string",
             "description": "Name is required and must be different from the source plan's name"
+          },
+          "target_environment_id": {
+            "type": "string",
+            "description": "TargetEnvironmentID, when provided, clones the plan into a different environment\nwithin the same tenant. Omit or leave null to clone within the same environment.",
+            "x-nullable": true
           }
         }
       },
@@ -24877,7 +24882,6 @@
       "types.WindowSize": {
         "type": "string",
         "enum": [
-          "MONTH",
           "MINUTE",
           "15MIN",
           "30MIN",
@@ -24890,7 +24894,6 @@
           "MONTH"
         ],
         "x-enum-varnames": [
-          "DefaultWindowSize",
           "WindowSizeMinute",
           "WindowSize15Min",
           "WindowSize30Min",
