@@ -182,7 +182,7 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementCreated, result.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventEntitlementCreated, result.ID)
 
 	return response, nil
 }
@@ -384,7 +384,7 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 			response.Items = append(response.Items, entResp)
 
 			// Publish webhook event for each created entitlement
-			s.publishWebhookEvent(txCtx, types.WebhookEventEntitlementCreated, ent.ID)
+			s.publishSystemEvent(txCtx, types.WebhookEventEntitlementCreated, ent.ID)
 		}
 
 		return nil
@@ -661,7 +661,7 @@ func (s *entitlementService) UpdateEntitlement(ctx context.Context, id string, r
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementUpdated, result.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventEntitlementUpdated, result.ID)
 
 	return response, nil
 }
@@ -674,7 +674,7 @@ func (s *entitlementService) DeleteEntitlement(ctx context.Context, id string) e
 	}
 
 	// Publish webhook event after successful deletion
-	s.publishWebhookEvent(ctx, types.WebhookEventEntitlementDeleted, id)
+	s.publishSystemEvent(ctx, types.WebhookEventEntitlementDeleted, id)
 
 	return nil
 }
@@ -716,7 +716,7 @@ func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID s
 	return s.ListEntitlements(ctx, filter)
 }
 
-func (s *entitlementService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, entitlementID string) {
+func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, entitlementID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalEntitlementEvent{
 		EntitlementID: entitlementID,
 		TenantID:      types.GetTenantID(ctx),

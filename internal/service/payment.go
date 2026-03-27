@@ -157,7 +157,7 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		return nil, err
 	}
 
-	s.publishWebhookEvent(ctx, types.WebhookEventPaymentCreated, p.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventPaymentCreated, p.ID)
 
 	if req.ProcessPayment {
 		paymentProcessor := NewPaymentProcessorService(s.ServiceParams)
@@ -383,7 +383,7 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 		return nil, err // Repository already using ierr
 	}
 
-	s.publishWebhookEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
 
 	return dto.NewPaymentResponse(p), nil
 }
@@ -464,7 +464,7 @@ func (s *paymentService) DeletePayment(ctx context.Context, id string) error {
 	return s.PaymentRepo.Delete(ctx, id) // Repository already using ierr
 }
 
-func (s *paymentService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
+func (s *paymentService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
 		PaymentID: paymentID,
 		TenantID:  types.GetTenantID(ctx),
