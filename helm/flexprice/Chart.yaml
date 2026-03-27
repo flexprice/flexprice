@@ -1,0 +1,20 @@
+apiVersion: v2
+name: flexprice
+description: A Helm chart for FlexPrice billing and pricing platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - billing
+  - pricing
+  - subscription
+  - invoicing
+maintainers:
+  - name: FlexPrice Team
+    email: support@flexprice.io
+    url: https://flexprice.io
+home: https://github.com/flexprice/flexprice
+sources:
+  - https://github.com/flexprice/flexprice
+kubeVersion: ">=1.24.0"
+
