@@ -185,22 +185,6 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	existing, err := h.invoiceService.GetInvoice(ctx, id)
-	if err != nil {
-		h.logger.Errorw("failed to get invoice for compute", "error", err, "invoice_id", id)
-		c.Error(err)
-		return
-	}
-	if existing.InvoiceStatus != types.InvoiceStatusDraft {
-		c.Error(ierr.NewError("invoice is not in draft status").
-			WithHint("Only draft invoices can be computed").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id":     id,
-				"current_status": existing.InvoiceStatus,
-			}).
-			Mark(ierr.ErrValidation))
-		return
-	}
 
 	var reqPtr *dto.InvoiceComputeRequest
 	var body dto.InvoiceComputeRequest
