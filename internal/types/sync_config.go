@@ -10,6 +10,7 @@ type SyncConfig struct {
 	Plan         *EntitySyncConfig `json:"plan,omitempty"`
 	Subscription *EntitySyncConfig `json:"subscription,omitempty"`
 	Invoice      *EntitySyncConfig `json:"invoice,omitempty"`
+	Customer     *EntitySyncConfig `json:"customer,omitempty"`
 	Payment      *EntitySyncConfig `json:"payment,omitempty"` // Payment sync (QuickBooks bidirectional)
 	// CRM sync (HubSpot, Salesforce, etc.)
 	Deal  *EntitySyncConfig `json:"deal,omitempty"`
@@ -31,6 +32,7 @@ func DefaultSyncConfig() *SyncConfig {
 		Plan:         &EntitySyncConfig{Inbound: false, Outbound: false},
 		Subscription: &EntitySyncConfig{Inbound: false, Outbound: false},
 		Invoice:      &EntitySyncConfig{Inbound: false, Outbound: false},
+		Customer:     &EntitySyncConfig{Inbound: false, Outbound: false},
 		Payment:      &EntitySyncConfig{Inbound: false, Outbound: false},
 		// CRM sync
 		Deal:  &EntitySyncConfig{Inbound: false, Outbound: false},

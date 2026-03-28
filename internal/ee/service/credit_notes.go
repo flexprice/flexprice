@@ -120,7 +120,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		return nil, err
 	}
 
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteCreated, creditNote.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteCreated, creditNote.ID)
 
 	if req.ProcessCreditNote {
 		if err := s.FinalizeCreditNote(ctx, creditNote.ID); err != nil {
@@ -350,7 +350,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 		}
 	}
 
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 	return nil
 }
 
@@ -442,7 +442,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 		return err
 	}
 
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 	return nil
 }
 
@@ -579,7 +579,7 @@ func (s *creditNoteService) recalculateInvoiceAmountsForCreditNote(ctx context.C
 	return s.InvoiceRepo.Update(ctx, inv)
 }
 
-func (s *creditNoteService) publishInternalWebhookEvent(ctx context.Context, eventType string, creditNoteID string) {
+func (s *creditNoteService) publishSystemEvent(ctx context.Context, eventType string, creditNoteID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalCreditNoteEvent{
 		CreditNoteID: creditNoteID,
 		TenantID:     types.GetTenantID(ctx),

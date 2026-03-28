@@ -499,6 +499,26 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildMoyasarInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalPaddleInvoiceSyncWorkflow:
 		return s.buildPaddleInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalStripeInvoiceSyncWorkflow:
+		return s.buildStripeInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalRazorpayInvoiceSyncWorkflow:
+		return s.buildRazorpayInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalChargebeeInvoiceSyncWorkflow:
+		return s.buildChargebeeInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalQuickBooksInvoiceSyncWorkflow:
+		return s.buildQuickBooksInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalStripeCustomerSyncWorkflow:
+		return s.buildStripeCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalRazorpayCustomerSyncWorkflow:
+		return s.buildRazorpayCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalChargebeeCustomerSyncWorkflow:
+		return s.buildChargebeeCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalQuickBooksCustomerSyncWorkflow:
+		return s.buildQuickBooksCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalNomodCustomerSyncWorkflow:
+		return s.buildNomodCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalPaddleCustomerSyncWorkflow:
+		return s.buildPaddleCustomerSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalCustomerOnboardingWorkflow:
 		return s.buildCustomerOnboardingInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalPrepareProcessedEventsWorkflow:
@@ -750,6 +770,174 @@ func (s *temporalService) buildPaddleInvoiceSyncInput(_ context.Context, tenantI
 
 	return nil, errors.NewError("invalid input for Paddle invoice sync workflow").
 		WithHint("Provide PaddleInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildStripeInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.StripeInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.StripeInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Stripe invoice sync workflow").
+		WithHint("Provide StripeInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildRazorpayInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.RazorpayInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.RazorpayInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Razorpay invoice sync workflow").
+		WithHint("Provide RazorpayInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildChargebeeInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.ChargebeeInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.ChargebeeInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Chargebee invoice sync workflow").
+		WithHint("Provide ChargebeeInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildQuickBooksInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.QuickBooksInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.QuickBooksInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for QuickBooks invoice sync workflow").
+		WithHint("Provide QuickBooksInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildStripeCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.StripeCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.StripeCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Stripe customer sync workflow").
+		WithHint("Provide StripeCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildRazorpayCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.RazorpayCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.RazorpayCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Razorpay customer sync workflow").
+		WithHint("Provide RazorpayCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildChargebeeCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.ChargebeeCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.ChargebeeCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Chargebee customer sync workflow").
+		WithHint("Provide ChargebeeCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildQuickBooksCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.QuickBooksCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.QuickBooksCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for QuickBooks customer sync workflow").
+		WithHint("Provide QuickBooksCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildNomodCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.NomodCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.NomodCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Nomod customer sync workflow").
+		WithHint("Provide NomodCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildPaddleCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.PaddleCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.PaddleCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Paddle customer sync workflow").
+		WithHint("Provide PaddleCustomerSyncWorkflowInput with customer_id").
 		Mark(errors.ErrValidation)
 }
 

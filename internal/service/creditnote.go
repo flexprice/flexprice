@@ -122,7 +122,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 			return err
 		}
 
-		s.Logger.InfowCtx(ctx, 
+		s.Logger.InfowCtx(ctx,
 			"credit note created successfully",
 			"credit_note_id", cn.ID,
 			"credit_note_number", req.CreditNoteNumber,
@@ -136,7 +136,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 	})
 
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, 
+		s.Logger.ErrorwCtx(ctx,
 			"failed to create credit note",
 			"error", err,
 			"invoice_id", req.InvoiceID,
@@ -146,7 +146,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 	}
 
 	// Publish webhook event after successful transaction
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteCreated, creditNote.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteCreated, creditNote.ID)
 
 	// Finalize the credit note if the flag is set
 	if req.ProcessCreditNote {
@@ -429,7 +429,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 	}
 
 	// Publish webhook event after successful update
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 
 	s.Logger.InfowCtx(ctx, "credit note voided successfully",
 		"credit_note_id", id,
@@ -553,7 +553,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 	}
 
 	// Publish webhook event after successful transaction
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 
 	s.Logger.InfowCtx(ctx, "credit note processed successfully",
 		"credit_note_id", id,
@@ -803,7 +803,7 @@ func (c *creditNoteService) RecalculateInvoiceAmountsForCreditNote(ctx context.C
 	return nil
 }
 
-func (c *creditNoteService) publishInternalWebhookEvent(ctx context.Context, eventType string, creditNoteID string) {
+func (c *creditNoteService) publishSystemEvent(ctx context.Context, eventType string, creditNoteID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalCreditNoteEvent{
 		CreditNoteID: creditNoteID,
 		TenantID:     types.GetTenantID(ctx),

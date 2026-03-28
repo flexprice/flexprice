@@ -47,6 +47,7 @@ type Handlers struct {
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	EntityIntegrationMapping *v1.EntityIntegrationMappingHandler
+	IntegrationMappingLink   *v1.IntegrationMappingLinkHandler
 	Settings                 *v1.SettingsHandler
 	SetupIntent              *v1.SetupIntentHandler
 	Group                    *v1.GroupHandler
@@ -512,6 +513,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			entityIntegrationMappings.GET("", handlers.EntityIntegrationMapping.ListEntityIntegrationMappings)
 			entityIntegrationMappings.GET("/:id", handlers.EntityIntegrationMapping.GetEntityIntegrationMapping)
 			entityIntegrationMappings.DELETE("/:id", handlers.EntityIntegrationMapping.DeleteEntityIntegrationMapping)
+			entityIntegrationMappings.POST("/link", handlers.IntegrationMappingLink.Link)
 		}
 
 		// Coupon routes

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -16,10 +17,26 @@ import (
 
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
+
+// recordingWebhookPublisher captures WebhookEvent publishes while delegating to inner.
+type recordingWebhookPublisher struct {
+	inner  webhookPublisher.WebhookPublisher
+	events []*types.WebhookEvent
+}
+
+func (r *recordingWebhookPublisher) PublishWebhook(ctx context.Context, event *types.WebhookEvent) error {
+	r.events = append(r.events, event)
+	return r.inner.PublishWebhook(ctx, event)
+}
+
+func (r *recordingWebhookPublisher) Close() error {
+	return r.inner.Close()
+}
 
 type InvoiceServiceSuite struct {
 	testutil.BaseServiceTestSuite
@@ -613,6 +630,119 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 			}
 		})
 	}
+}
+
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PublishesFinalizedSystemEventWhenCreated() {
+	ctx := s.GetContext()
+	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}
+	s.service.(*invoiceService).WebhookPublisher = rec
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
+
+	var finalized *types.WebhookEvent
+	for _, ev := range rec.events {
+		if ev.EventName == types.WebhookEventInvoiceUpdateFinalized {
+			finalized = ev
+			break
+		}
+	}
+	s.Require().NotNil(finalized, "expected invoice.update.finalized system event")
+	var pl struct {
+		InvoiceID string `json:"invoice_id"`
+	}
+	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
+	s.Equal(resp.ID, pl.InvoiceID)
+}
+
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventForOneOffDraft() {
+	ctx := s.GetContext()
+	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}
+	s.service.(*invoiceService).WebhookPublisher = rec
+
+	draftInvoice := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(50),
+		Total:           decimal.NewFromFloat(50),
+		Subtotal:        decimal.NewFromFloat(50),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(50),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftInvoice))
+
+	s.NotContains(lo.Map(rec.events, func(ev *types.WebhookEvent, _ int) types.WebhookEventName {
+		return ev.EventName
+	}), types.WebhookEventInvoiceUpdateFinalized)
+
+	err := s.service.FinalizeInvoice(ctx, draftInvoice.ID)
+	s.Require().NoError(err)
+
+	var finalized *types.WebhookEvent
+	for _, ev := range rec.events {
+		if ev.EventName == types.WebhookEventInvoiceUpdateFinalized {
+			finalized = ev
+		}
+	}
+	s.Require().NotNil(finalized)
+	var pl struct {
+		InvoiceID string `json:"invoice_id"`
+	}
+	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
+	s.Equal(draftInvoice.ID, pl.InvoiceID)
+}
+
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventForSubscription() {
+	ctx := s.GetContext()
+	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}
+	s.service.(*invoiceService).WebhookPublisher = rec
+
+	draftSubscriptionInvoice := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  &s.testData.subscription.ID,
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(15),
+		Total:           decimal.NewFromFloat(15),
+		Subtotal:        decimal.NewFromFloat(15),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(15),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftSubscriptionInvoice))
+
+	err := s.service.FinalizeInvoice(ctx, draftSubscriptionInvoice.ID)
+	s.Require().NoError(err)
+	var finalized *types.WebhookEvent
+	for _, ev := range rec.events {
+		if ev.EventName == types.WebhookEventInvoiceUpdateFinalized {
+			finalized = ev
+		}
+	}
+	s.Require().NotNil(finalized)
+	var pl struct {
+		InvoiceID string `json:"invoice_id"`
+	}
+	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
+	s.Equal(draftSubscriptionInvoice.ID, pl.InvoiceID)
 }
 
 func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {

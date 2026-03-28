@@ -305,6 +305,12 @@ func (c *Connection) IsInvoiceOutboundEnabled() bool {
 	return config.Invoice != nil && config.Invoice.Outbound
 }
 
+// IsCustomerOutboundEnabled checks if customer outbound sync is enabled
+func (c *Connection) IsCustomerOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Customer != nil && config.Customer.Outbound
+}
+
 // IsDealInboundEnabled checks if deal inbound sync is enabled
 func (c *Connection) IsDealInboundEnabled() bool {
 	return false
