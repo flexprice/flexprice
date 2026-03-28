@@ -99,7 +99,7 @@ func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatur
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventFeatureCreated, featureModel.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventFeatureCreated, featureModel.ID)
 
 	response := &dto.FeatureResponse{Feature: featureModel}
 	if featureModel.GroupID != "" {
@@ -365,7 +365,7 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventFeatureUpdated, feature.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventFeatureUpdated, feature.ID)
 
 	response := &dto.FeatureResponse{Feature: feature}
 	if feature.GroupID != "" {
@@ -419,12 +419,12 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventFeatureDeleted, id)
+	s.publishSystemEvent(ctx, types.WebhookEventFeatureDeleted, id)
 
 	return nil
 }
 
-func (s *featureService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, featureID string) {
+func (s *featureService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, featureID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalFeatureEvent{
 		FeatureID: featureID,
 		TenantID:  types.GetTenantID(ctx),

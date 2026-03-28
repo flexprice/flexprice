@@ -58,7 +58,7 @@ func (s *subscriptionPhaseService) CreateSubscriptionPhase(ctx context.Context, 
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventSubscriptionPhaseCreated, phaseModel.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionPhaseCreated, phaseModel.ID)
 
 	return &dto.SubscriptionPhaseResponse{SubscriptionPhase: phaseModel}, nil
 }
@@ -154,7 +154,7 @@ func (s *subscriptionPhaseService) UpdateSubscriptionPhase(ctx context.Context, 
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventSubscriptionPhaseUpdated, phase.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionPhaseUpdated, phase.ID)
 
 	return &dto.SubscriptionPhaseResponse{SubscriptionPhase: phase}, nil
 }
@@ -184,12 +184,12 @@ func (s *subscriptionPhaseService) DeleteSubscriptionPhase(ctx context.Context, 
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventSubscriptionPhaseDeleted, id)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionPhaseDeleted, id)
 
 	return nil
 }
 
-func (s *subscriptionPhaseService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, phaseID string) {
+func (s *subscriptionPhaseService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, phaseID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalSubscriptionPhaseEvent{
 		PhaseID:  phaseID,
 		TenantID: types.GetTenantID(ctx),

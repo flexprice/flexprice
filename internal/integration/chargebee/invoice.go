@@ -10,6 +10,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -30,6 +32,8 @@ type InvoiceServiceParams struct {
 	CustomerSvc                  ChargebeeCustomerService
 	InvoiceRepo                  invoice.Repository
 	PaymentRepo                  payment.Repository
+	PriceRepo                    price.Repository
+	PlanSyncSvc                  ChargebeePlanSyncService
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	Logger                       *logger.Logger
 }
@@ -335,24 +339,28 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 			continue
 		}
 
-		// Skip if price ID is not available
+		// All-or-nothing: non-zero line items must have a valid price mapping.
 		if item.PriceID == nil || *item.PriceID == "" {
-			s.Logger.Debugw("line item has no price ID, skipping",
-				"invoice_id", flexInvoice.ID,
-				"line_item_id", item.ID)
-			continue
+			return nil, ierr.NewError("invoice line item has no price ID").
+				WithHint("Non-zero invoice line items must include a valid price ID for Chargebee sync").
+				WithReportableDetails(map[string]interface{}{
+					"invoice_id":   flexInvoice.ID,
+					"line_item_id": item.ID,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 
 		// Get Chargebee item price ID AND check if it's tiered
-		chargebeeItemPriceID, isTiered, err := s.getChargebeeItemPriceIDAndCheckTiered(ctx, *item.PriceID)
+		chargebeeItemPriceID, isTiered, err := s.getOrCreateChargebeeItemPriceIDAndCheckTiered(ctx, *item.PriceID)
 		if err != nil {
-			s.Logger.Errorw("failed to get Chargebee item price ID for line item",
-				"invoice_id", flexInvoice.ID,
-				"line_item_id", item.ID,
-				"price_id", *item.PriceID,
-				"error", err)
-			// Skip this line item if we can't find the mapping
-			continue
+			return nil, ierr.WithError(err).
+				WithHint("Failed to resolve Chargebee item price for invoice line item; aborting sync to avoid partial invoice").
+				WithReportableDetails(map[string]interface{}{
+					"invoice_id":   flexInvoice.ID,
+					"line_item_id": item.ID,
+					"price_id":     *item.PriceID,
+				}).
+				Mark(ierr.ErrInternal)
 		}
 
 		lineItem := InvoiceLineItem{
@@ -400,6 +408,64 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 	}
 
 	return lineItems, nil
+}
+
+// getOrCreateChargebeeItemPriceIDAndCheckTiered retrieves a mapped Chargebee item price ID,
+// or creates one on-the-fly when mapping is missing (e.g. prices created before Chargebee setup).
+func (s *InvoiceService) getOrCreateChargebeeItemPriceIDAndCheckTiered(ctx context.Context, flexPriceID string) (string, bool, error) {
+	itemPriceID, isTiered, err := s.getChargebeeItemPriceIDAndCheckTiered(ctx, flexPriceID)
+	if err == nil {
+		return itemPriceID, isTiered, nil
+	}
+	if !ierr.IsNotFound(err) {
+		return "", false, err
+	}
+
+	s.Logger.Infow("Chargebee item price mapping missing, creating on-the-fly",
+		"flexprice_price_id", flexPriceID)
+
+	if createErr := s.createChargebeeItemPriceForPrice(ctx, flexPriceID); createErr != nil {
+		return "", false, createErr
+	}
+
+	return s.getChargebeeItemPriceIDAndCheckTiered(ctx, flexPriceID)
+}
+
+func (s *InvoiceService) createChargebeeItemPriceForPrice(ctx context.Context, flexPriceID string) error {
+	if s.PriceRepo == nil {
+		return ierr.NewError("price repository not available").
+			WithHint("Unable to create Chargebee item price mapping").
+			Mark(ierr.ErrInternal)
+	}
+	if s.PlanSyncSvc == nil {
+		return ierr.NewError("chargebee plan sync service not available").
+			WithHint("Unable to create Chargebee item price mapping").
+			Mark(ierr.ErrInternal)
+	}
+
+	p, err := s.PriceRepo.Get(ctx, flexPriceID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get FlexPrice price for Chargebee item price creation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	syntheticPlan := &plan.Plan{
+		ID:          p.EntityID,
+		Name:        p.DisplayName,
+		Description: p.Description,
+	}
+	if syntheticPlan.Name == "" {
+		syntheticPlan.Name = p.ID
+	}
+
+	if err := s.PlanSyncSvc.SyncPlanToChargebee(ctx, syntheticPlan, []*price.Price{p}); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to create missing Chargebee item price mapping via plan sync").
+			Mark(ierr.ErrInternal)
+	}
+
+	return nil
 }
 
 // getChargebeeItemPriceIDAndCheckTiered retrieves the Chargebee item price ID and checks if it uses tiered pricing

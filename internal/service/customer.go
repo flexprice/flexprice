@@ -174,7 +174,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 	}
 
 	// Publish webhook event for customer creation
-	s.publishWebhookEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
 
 	// Check if we should skip the customer onboarding workflow
 	// This flag is used when a customer is created via a workflow to prevent infinite loops
@@ -492,7 +492,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 		return nil, err
 	}
 
-	s.publishWebhookEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCustomerUpdated, cust.ID)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
@@ -545,7 +545,7 @@ func (s *customerService) DeleteCustomer(ctx context.Context, id string) error {
 		return err
 	}
 
-	s.publishWebhookEvent(ctx, types.WebhookEventCustomerDeleted, id)
+	s.publishSystemEvent(ctx, types.WebhookEventCustomerDeleted, id)
 	return nil
 }
 
@@ -564,8 +564,7 @@ func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey 
 	return &dto.CustomerResponse{Customer: customer}, nil
 }
 
-
-func (s *customerService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, customerID string) {
+func (s *customerService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, customerID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalCustomerEvent{
 		CustomerID: customerID,
 		TenantID:   types.GetTenantID(ctx),

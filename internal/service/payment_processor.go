@@ -82,7 +82,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 			return paymentObj, err
 		}
-		p.publishWebhookEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	} else if paymentObj.PaymentMethodType != types.PaymentMethodTypePaymentLink {
 		// Update payment status to processing and fire pending event
 		// TODO: take a lock on the payment object here to avoid race conditions
@@ -91,7 +91,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 			return paymentObj, err
 		}
-		p.publishWebhookEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	}
 
 	// Process payment based on payment method type
@@ -177,7 +177,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.ErrorMessage = lo.ToPtr(errMsg)
 			failedAt := time.Now().UTC()
 			paymentObj.FailedAt = &failedAt
-			p.publishWebhookEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
+			p.publishSystemEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
 		}
 	} else {
 		// For payment links, keep as pending until external payment completion
@@ -185,13 +185,13 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.PaymentStatus = types.PaymentStatusPending
 			paymentObj.SucceededAt = nil // Keep succeeded_at as nil
 			p.Logger.InfowCtx(ctx, "keeping payment link as pending", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
-			p.publishWebhookEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+			p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 		} else {
 			paymentObj.PaymentStatus = types.PaymentStatusSucceeded
 			succeededAt := time.Now().UTC()
 			paymentObj.SucceededAt = &succeededAt
 			p.Logger.InfowCtx(ctx, "marking payment as succeeded", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
-			p.publishWebhookEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
+			p.publishSystemEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
 		}
 	}
 
@@ -770,7 +770,7 @@ func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *pay
 	return attempt, nil
 }
 
-func (p *paymentProcessor) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
+func (p *paymentProcessor) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
 		PaymentID: paymentID,
 		TenantID:  types.GetTenantID(ctx),

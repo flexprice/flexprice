@@ -302,22 +302,24 @@ func (f *Factory) GetChargebeeIntegration(ctx context.Context) (*ChargebeeIntegr
 		Logger:                       f.logger,
 	})
 
-	// Create invoice service
-	invoiceSvc := chargebee.NewInvoiceService(chargebee.InvoiceServiceParams{
-		Client:                       chargebeeClient,
-		CustomerSvc:                  customerSvc,
-		InvoiceRepo:                  f.invoiceRepo,
-		PaymentRepo:                  f.paymentRepo,
-		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
-		Logger:                       f.logger,
-	})
-
 	// Create plan sync service
 	planSyncSvc := chargebee.NewPlanSyncService(chargebee.PlanSyncServiceParams{
 		Client:                       chargebeeClient,
 		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
 		MeterRepo:                    f.meterRepo,
 		FeatureRepo:                  f.featureRepo,
+		Logger:                       f.logger,
+	})
+
+	// Create invoice service
+	invoiceSvc := chargebee.NewInvoiceService(chargebee.InvoiceServiceParams{
+		Client:                       chargebeeClient,
+		CustomerSvc:                  customerSvc,
+		InvoiceRepo:                  f.invoiceRepo,
+		PaymentRepo:                  f.paymentRepo,
+		PriceRepo:                    f.priceRepo,
+		PlanSyncSvc:                  planSyncSvc,
+		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
 		Logger:                       f.logger,
 	})
 

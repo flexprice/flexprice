@@ -255,10 +255,10 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			)
 		}
 	case types.AlertTypeFeatureWalletBalance:
-		// Publish webhook event using the publishWebhookEvent helper
+		// Publish webhook event using the publishSystemEvent helper
 		// This will pass the alert log with parent entity fields (feature_id, wallet_id) to AlertPayloadBuilder
 		if webhookEventName != "" {
-			if err := s.publishWebhookEvent(ctx, webhookEventName, alertLog, req.AlertType); err != nil {
+			if err := s.publishSystemEvent(ctx, webhookEventName, alertLog, req.AlertType); err != nil {
 				s.Logger.ErrorwCtx(ctx, "failed to publish webhook event",
 					"error", err,
 					"alert_log_id", alertLog.ID,
@@ -358,7 +358,7 @@ func (s *alertLogsService) getWebhookEventName(alertType types.AlertType, alertS
 	return ""
 }
 
-func (s *alertLogsService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, alertLog *alertlogs.AlertLog, alertType types.AlertType) error {
+func (s *alertLogsService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, alertLog *alertlogs.AlertLog, alertType types.AlertType) error {
 	var webhookPayload []byte
 	var err error
 

@@ -452,10 +452,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	isDraft := req.SubscriptionStatus == types.SubscriptionStatusDraft
 	if isDraft {
 		s.triggerHubSpotQuoteSyncWorkflow(ctx, sub.ID, customer.ID)
-		s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionDraftCreated, sub.ID)
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, sub.ID)
 	} else {
 		s.triggerHubSpotDealSyncWorkflow(ctx, sub.ID, customer.ID)
-		s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
 	}
 	return response, nil
 }
@@ -621,7 +621,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	}
 
 	// Publish activation webhook
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, sub.ID)
 
 	return response, nil
 }
@@ -1626,7 +1626,7 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 
 	logger.Info("successfully updated subscription")
 
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscription.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscription.ID)
 
 	// Return the updated subscription
 	return s.GetSubscription(ctx, subscriptionID)
@@ -3248,8 +3248,8 @@ func (s *subscriptionService) PauseSubscription(
 
 	// Return the response
 	// Publish webhook event
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionPaused, subscriptionID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionPaused, subscriptionID)
 	return response, nil
 }
 
@@ -3399,8 +3399,8 @@ func (s *subscriptionService) ResumeSubscription(
 	}
 
 	// Publish webhook event
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionResumed, subscriptionID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionResumed, subscriptionID)
 
 	// Return the response
 	return &dto.ResumeSubscriptionResponse{
@@ -3751,7 +3751,7 @@ func (s *subscriptionService) calculateBillingImpact(
 	return impact, nil
 }
 
-func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, eventName types.WebhookEventName, subscriptionID string) {
+func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, subscriptionID string) {
 
 	eventPayload := webhookDto.InternalSubscriptionEvent{
 		SubscriptionID: subscriptionID,
@@ -3797,7 +3797,7 @@ func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Con
 	for _, sub := range subscriptions {
 		ctx = context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, sub.EnvironmentID)
-		s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionRenewalDue, sub.ID)
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionRenewalDue, sub.ID)
 	}
 
 	return nil
@@ -4400,7 +4400,7 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 	}
 
 	// Publish webhook event for subscription activation
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionActivated, subscriptionID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionActivated, subscriptionID)
 
 	return nil
 }
@@ -4876,12 +4876,12 @@ func (s *subscriptionService) publishCancellationEvents(
 	sub *subscription.Subscription,
 	cancellationType types.CancellationType,
 ) {
-	// Always emit updated — subscription state has changed regardless of cancellation type
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
-	// scheduled_date only schedules a future cancellation; emit cancelled when it actually fires
+	// Publish standard subscription events
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 	if cancellationType != types.CancellationTypeScheduledDate {
-		s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
 	}
+
 	s.Logger.Debugw("subscription cancellation events published",
 		"subscription_id", sub.ID)
 }
