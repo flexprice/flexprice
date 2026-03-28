@@ -21,6 +21,20 @@ const (
 	WorkflowProcessSubscriptionBilling = "ProcessSubscriptionBillingWorkflow"
 )
 
+// ProcessRenewalDueAlertActivity fetches all subscriptions due for renewal across all tenants
+// and publishes a webhook event for each one.
+func (s *SubscriptionActivities) ProcessRenewalDueAlertActivity(ctx context.Context, input subscriptionModels.ProcessRenewalDueAlertActivityInput) (*subscriptionModels.ProcessRenewalDueAlertActivityResult, error) {
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.subscriptionService.ProcessSubscriptionRenewalDueAlert(ctx); err != nil {
+		return nil, err
+	}
+
+	return &subscriptionModels.ProcessRenewalDueAlertActivityResult{}, nil
+}
+
 // SubscriptionActivities contains all subscription-related activities
 // When registered with Temporal, methods will be called as "SubscriptionActivities.ScheduleBillingActivity"
 type SubscriptionActivities struct {

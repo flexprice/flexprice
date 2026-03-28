@@ -248,11 +248,14 @@ func buildWorkerConfig(
 			workflowsList,
 			subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
 			subscriptionWorkflows.ProcessSubscriptionBillingWorkflow,
+			subscriptionWorkflows.ProcessRenewalDueAlertWorkflow,
 			invoiceWorkflows.RecalculateInvoiceWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			// Schedule billing activities
 			scheduleBillingActivities.ScheduleBillingActivity,
+			// Renewal due alert activity
+			scheduleBillingActivities.ProcessRenewalDueAlertActivity,
 			// Subscription billing period activities
 			billingActivities.CheckDraftSubscriptionActivity,
 			billingActivities.CalculatePeriodsActivity,
