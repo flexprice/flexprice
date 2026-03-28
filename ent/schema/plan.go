@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 var Idx_tenant_environment_lookup_key = "idx_tenant_environment_lookup_key"
@@ -46,6 +47,14 @@ func (Plan) Fields() []ent.Field {
 			NotEmpty(),
 		field.Text("description").
 			Optional(),
+		field.String("invoice_cadence").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Default(string(types.InvoiceCadenceAdvance)).
+			GoType(types.InvoiceCadence("")),
+		field.Int("trial_period").
+			Default(0),
 		field.Int("display_order").
 			Default(0),
 	}
