@@ -75,6 +75,7 @@ const (
 	TemporalReprocessRawEventsWorkflow          TemporalWorkflowType = "ReprocessRawEventsWorkflow"
 	TemporalReprocessEventsForPlanWorkflow      TemporalWorkflowType = "ReprocessEventsForPlanWorkflow"
 	TemporalScheduleDraftFinalizationWorkflow   TemporalWorkflowType = "ScheduleDraftFinalizationWorkflow"
+	TemporalProcessRenewalDueAlertWorkflow      TemporalWorkflowType = "ProcessRenewalDueAlertWorkflow"
 )
 
 // WorkflowTypesExcludedFromTracking are workflow types that are not persisted to the
@@ -85,6 +86,7 @@ var WorkflowTypesExcludedFromTracking = []TemporalWorkflowType{
 	TemporalProcessSubscriptionBillingWorkflow,
 	TemporalProcessInvoiceWorkflow,
 	TemporalScheduleDraftFinalizationWorkflow,
+	TemporalProcessRenewalDueAlertWorkflow,
 }
 
 // ShouldTrackWorkflowType returns false if this workflow type is excluded from tracking
@@ -124,6 +126,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalReprocessRawEventsWorkflow,          // "ReprocessRawEventsWorkflow"
 		TemporalReprocessEventsForPlanWorkflow,      // "ReprocessEventsForPlanWorkflow"
 		TemporalScheduleDraftFinalizationWorkflow,   // "ScheduleDraftFinalizationWorkflow"
+		TemporalProcessRenewalDueAlertWorkflow,      // "ProcessRenewalDueAlertWorkflow"
 	}
 	if lo.Contains(allowedWorkflows, w) {
 		return nil
@@ -155,6 +158,8 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueWorkflows
 	case TemporalReprocessEventsWorkflow, TemporalReprocessRawEventsWorkflow, TemporalReprocessEventsForPlanWorkflow:
 		return TemporalTaskQueueReprocessEvents
+	case TemporalProcessRenewalDueAlertWorkflow:
+		return TemporalTaskQueueSubscription
 	default:
 		return TemporalTaskQueueTask // Default fallback
 	}
@@ -197,6 +202,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 			TemporalScheduleSubscriptionBillingWorkflow,
 			TemporalProcessSubscriptionBillingWorkflow,
 			TemporalRecalculateInvoiceWorkflow,
+			TemporalProcessRenewalDueAlertWorkflow,
 		}
 	case TemporalTaskQueueInvoice:
 		return []TemporalWorkflowType{

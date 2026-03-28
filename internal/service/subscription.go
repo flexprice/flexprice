@@ -3779,9 +3779,16 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 	}
 }
 
-// ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
+// ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal.
+// The look-ahead window is controlled by FLEXPRICE_SUBSCRIPTION_RENEWAL_ALERT_LOOK_AHEAD_HOURS (default 24).
 func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
-	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx)
+	lookAheadHours := 24
+	if s.Config != nil && s.Config.Subscription.RenewalAlertLookAheadHours > 0 {
+		lookAheadHours = s.Config.Subscription.RenewalAlertLookAheadHours
+	}
+	lookAhead := time.Duration(lookAheadHours) * time.Hour
+
+	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx, lookAhead)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to list subscriptions due for renewal", "error", err)
 		return err

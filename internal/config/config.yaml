@@ -147,6 +147,9 @@ billing:
   tenant_id: ""
   environment_id: ""
 
+subscription:
+  renewal_alert_look_ahead_hours: 24
+
 s3:
   enabled: false
   region: "ap-south-1"

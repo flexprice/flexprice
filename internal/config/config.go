@@ -54,6 +54,15 @@ type Configuration struct {
 	Redis                      RedisConfig                      `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing      RawEventsReprocessingConfig      `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
+	Subscription               SubscriptionConfig               `mapstructure:"subscription" validate:"omitempty"`
+}
+
+// SubscriptionConfig holds subscription-related configuration.
+type SubscriptionConfig struct {
+	// RenewalAlertLookAheadHours is how many hours ahead to look for subscriptions due for renewal.
+	// The query uses a ±1 hour window around (now + RenewalAlertLookAheadHours).
+	// Defaults to 24 if not set. Env var: FLEXPRICE_SUBSCRIPTION_RENEWAL_ALERT_LOOK_AHEAD_HOURS
+	RenewalAlertLookAheadHours int `mapstructure:"renewal_alert_look_ahead_hours" validate:"omitempty"`
 }
 
 type CacheConfig struct {

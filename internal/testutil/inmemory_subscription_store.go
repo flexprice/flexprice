@@ -442,16 +442,15 @@ func (s *InMemorySubscriptionStore) GetWithPauses(ctx context.Context, id string
 	return sub, pauses, nil
 }
 
-// ListSubscriptionsDueForRenewal retrieves all active subscriptions that are due for renewal in 24 hours
-func (s *InMemorySubscriptionStore) ListSubscriptionsDueForRenewal(ctx context.Context) ([]*subscription.Subscription, error) {
-	// Create a filter for active subscriptions
+// ListSubscriptionsDueForRenewal retrieves all active subscriptions due for renewal within lookAhead
+func (s *InMemorySubscriptionStore) ListSubscriptionsDueForRenewal(ctx context.Context, lookAhead time.Duration) ([]*subscription.Subscription, error) {
 	filter := &types.SubscriptionFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		SubscriptionStatus: []types.SubscriptionStatus{
 			types.SubscriptionStatusActive,
 		},
 		TimeRangeFilter: &types.TimeRangeFilter{
-			EndTime: lo.ToPtr(time.Now().UTC().Add(24 * time.Hour)),
+			EndTime: lo.ToPtr(time.Now().UTC().Add(lookAhead)),
 		},
 	}
 
