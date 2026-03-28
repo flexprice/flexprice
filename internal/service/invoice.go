@@ -349,54 +349,74 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	return s.CreateEmptyDraftInvoice(ctx, req)
 }
 
-// ComputeInvoice computes a draft invoice under lock: computes line items (subscription),
-// applies credits/coupons/taxes, or marks SKIPPED if zero-dollar. Re-runnable on draft invoices.
+// ComputeInvoice computes a draft (or previously-skipped) invoice: computes line items (subscription),
+// applies credits/coupons/taxes, or marks SKIPPED if zero-dollar. Re-runnable on draft and skipped invoices.
 // Invoice number is NOT assigned here — it is assigned during FinalizeInvoice.
 // For one-off/credit invoices, pass the original request to apply coupons/taxes; for subscription invoices, pass nil.
 // Always sets LastComputedAt on successful computation.
+//
+// Expensive computation (e.g. PrepareSubscriptionInvoiceRequest which queries ClickHouse) is performed
+// OUTSIDE the row-level lock to avoid lock timeouts. Only DB writes happen under the lock.
 func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error) {
-	var inv *invoice.Invoice
+	// 1. Read invoice WITHOUT lock to determine type and gather details for computation.
+	//    This avoids holding the row lock during expensive ClickHouse queries.
+	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return false, err
+	}
+
+	// Early return for finalized/voided — no lock needed, these are immutable.
+	if inv.InvoiceStatus != types.InvoiceStatusDraft && inv.InvoiceStatus != types.InvoiceStatusSkipped {
+		return false, nil
+	}
+
+	// 2. Compute the request OUTSIDE the lock (expensive for subscription invoices).
+	var applyReq *dto.InvoiceComputeRequest
+
+	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
+		// Subscription: compute line items from billing service
+		if inv.PeriodStart == nil || inv.PeriodEnd == nil {
+			return false, ierr.NewError("subscription invoice missing period dates").
+				WithHint("PeriodStart and PeriodEnd are required for subscription invoices").
+				WithReportableDetails(map[string]interface{}{
+					"invoice_id": inv.ID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+		if err != nil {
+			return false, err
+		}
+		refPoint := types.ReferencePointPeriodEnd
+		if inv.BillingReason == string(types.InvoiceBillingReasonProration) {
+			refPoint = types.ReferencePointCancel
+		}
+		billingService := NewBillingService(s.ServiceParams)
+		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, sub, *inv.PeriodStart, *inv.PeriodEnd, refPoint)
+		if err != nil {
+			return false, err
+		}
+		computeReq := subInvReq.ToComputeRequest()
+		applyReq = &computeReq
+	} else if req != nil {
+		// One-off or credit: line items and amounts come from the caller's request
+		applyReq = req
+	}
+
+	// 3. Take the lock — only for DB writes (line items, credits, coupons, taxes, status update).
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		inv, err = s.InvoiceRepo.GetForUpdate(txCtx, invoiceID)
 		if err != nil {
 			return err
 		}
-		// Only compute drafts; skip finalized/voided/skipped invoices
-		if inv.InvoiceStatus != types.InvoiceStatusDraft {
-			skipped = (inv.InvoiceStatus == types.InvoiceStatusSkipped)
+
+		// Re-check status under lock: allow SKIPPED invoices to be re-computed
+		// (usage may have accumulated since the invoice was first marked SKIPPED).
+		if inv.InvoiceStatus == types.InvoiceStatusSkipped {
+			inv.InvoiceStatus = types.InvoiceStatusDraft
+		} else if inv.InvoiceStatus != types.InvoiceStatusDraft {
+			// Finalized/voided between our initial read and the lock — nothing to do.
 			return nil
-		}
-
-		var applyReq *dto.InvoiceComputeRequest
-
-		if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
-			// Subscription: compute line items from billing service
-			if inv.PeriodStart == nil || inv.PeriodEnd == nil {
-				return ierr.NewError("subscription invoice missing period dates").
-					WithHint("PeriodStart and PeriodEnd are required for subscription invoices").
-					WithReportableDetails(map[string]interface{}{
-						"invoice_id": inv.ID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-			sub, err := s.SubRepo.Get(txCtx, *inv.SubscriptionID)
-			if err != nil {
-				return err
-			}
-			refPoint := types.ReferencePointPeriodEnd
-			if inv.BillingReason == string(types.InvoiceBillingReasonProration) {
-				refPoint = types.ReferencePointCancel
-			}
-			billingService := NewBillingService(s.ServiceParams)
-			subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx, sub, *inv.PeriodStart, *inv.PeriodEnd, refPoint)
-			if err != nil {
-				return err
-			}
-			computeReq := subInvReq.ToComputeRequest()
-			applyReq = &computeReq
-		} else if req != nil {
-			// One-off or credit: line items and amounts come from the caller's request
-			applyReq = req
 		}
 
 		// Populate invoice from the computed request (uniform for all invoice types)
