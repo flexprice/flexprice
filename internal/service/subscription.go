@@ -2068,6 +2068,15 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		return nil, err
 	}
 
+	// Ensure tenant and environment are in context for downstream queries (e.g. GetDistinctEventNames).
+	// Callers like cron or Temporal may not set these on the incoming context.
+	if types.GetTenantID(ctx) == "" && subscription.TenantID != "" {
+		ctx = types.SetTenantID(ctx, subscription.TenantID)
+	}
+	if types.GetEnvironmentID(ctx) == "" && subscription.EnvironmentID != "" {
+		ctx = types.SetEnvironmentID(ctx, subscription.EnvironmentID)
+	}
+
 	// Get customer
 	customer, err := s.CustomerRepo.Get(ctx, subscription.CustomerID)
 	if err != nil {

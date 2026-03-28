@@ -61,6 +61,9 @@ type InvoiceService interface {
 	TriggerWebhook(ctx context.Context, invoiceID string, eventName types.WebhookEventName) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
 
+	// GenerateSubscriptionInvoiceForPeriod creates a subscription invoice for a specific billing period (e.g. when one was not generated automatically).
+	GenerateSubscriptionInvoiceForPeriod(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, error)
+
 	// Cron methods
 	SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
@@ -1984,6 +1987,53 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		return nil, nil, err
 	}
 	return dto.NewInvoiceResponse(inv), subscription, nil
+}
+
+// GenerateSubscriptionInvoiceForPeriod creates a subscription invoice for the given period.
+// Use this when an invoice was not generated for a period (e.g. missed cron or delayed processing).
+// Returns ErrAlreadyExists if an invoice already exists for this subscription and period.
+func (s *invoiceService) GenerateSubscriptionInvoiceForPeriod(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest) (*dto.InvoiceResponse, error) {
+	// Default reference point for period-based generation (arrear charges) before validation
+	if req.ReferencePoint == "" {
+		req.ReferencePoint = types.ReferencePointPeriodEnd
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get subscription for payment params and existence check
+	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	exists, err := s.InvoiceRepo.ExistsForPeriod(ctx, req.SubscriptionID, req.PeriodStart, req.PeriodEnd)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, ierr.NewError("an invoice already exists for this subscription and billing period").
+			WithHint("Use GET /invoices?subscription_id=...&period_start_gte=...&period_end_lte=... to find the existing invoice.").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": req.SubscriptionID,
+				"period_start":     req.PeriodStart,
+				"period_end":       req.PeriodEnd,
+			}).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	paymentParams := dto.NewPaymentParametersFromSubscription(
+		subscription.CollectionMethod,
+		subscription.PaymentBehavior,
+		subscription.GatewayPaymentMethodID,
+	)
+	paymentParams = paymentParams.NormalizePaymentParameters()
+
+	inv, _, err := s.CreateSubscriptionInvoice(ctx, req, paymentParams, types.InvoiceFlowManual, false)
+	if err != nil {
+		return nil, err
+	}
+	return inv, nil
 }
 
 func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {
