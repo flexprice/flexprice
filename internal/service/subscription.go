@@ -3791,9 +3791,12 @@ func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Con
 			lookAheadHours = s.Config.Subscription.RenewalAlertLookAheadHours
 		}
 	}
-	lookAhead := time.Duration(lookAheadHours) * time.Hour
+	now := time.Now().UTC()
+	targetTime := now.Add(time.Duration(lookAheadHours) * time.Hour)
+	windowStart := targetTime.Add(-1 * time.Hour)
+	windowEnd := targetTime.Add(1 * time.Hour)
 
-	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx, lookAhead)
+	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx, windowStart, windowEnd)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to list subscriptions due for renewal", "error", err)
 		return err

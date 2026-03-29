@@ -28,8 +28,8 @@ type Repository interface {
 	GetWithPauses(ctx context.Context, id string) (*Subscription, []*SubscriptionPause, error)
 
 	// Renewal due alert methods
-	// lookAhead is the duration from now within which subscriptions are considered "due for renewal"
-	ListSubscriptionsDueForRenewal(ctx context.Context, lookAhead time.Duration) ([]*Subscription, error)
+	// windowStart and windowEnd define the inclusive period-end range for subscriptions considered "due for renewal"
+	ListSubscriptionsDueForRenewal(ctx context.Context, windowStart time.Time, windowEnd time.Time) ([]*Subscription, error)
 
 	// Dashboard methods
 	GetRecentSubscriptionsByPlan(ctx context.Context) ([]types.SubscriptionPlanCount, error)

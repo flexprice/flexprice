@@ -341,15 +341,8 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 }
 
 // ListSubscriptionsDueForRenewal retrieves all active subscriptions whose current period ends
-// within a ±1-hour window centred on (now + lookAhead).
-func (r *subscriptionRepository) ListSubscriptionsDueForRenewal(ctx context.Context, lookAhead time.Duration) ([]*domainSub.Subscription, error) {
-	now := time.Now().UTC()
-	targetTime := now.Add(lookAhead)
-
-	windowStart := targetTime.Add(-1 * time.Hour)
-	windowEnd := targetTime.Add(1 * time.Hour)
-
-	// Find subscriptions ending exactly at the target time
+// within [windowStart, windowEnd].
+func (r *subscriptionRepository) ListSubscriptionsDueForRenewal(ctx context.Context, windowStart time.Time, windowEnd time.Time) ([]*domainSub.Subscription, error) {
 	subs, err := r.client.Reader(ctx).Subscription.Query().
 		Where(
 			subscription.And(
