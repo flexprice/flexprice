@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -27,7 +28,8 @@ type Repository interface {
 	GetWithPauses(ctx context.Context, id string) (*Subscription, []*SubscriptionPause, error)
 
 	// Renewal due alert methods
-	ListSubscriptionsDueForRenewal(ctx context.Context) ([]*Subscription, error)
+	// windowStart and windowEnd define the inclusive period-end range for subscriptions considered "due for renewal"
+	ListSubscriptionsDueForRenewal(ctx context.Context, windowStart time.Time, windowEnd time.Time) ([]*Subscription, error)
 
 	// Dashboard methods
 	GetRecentSubscriptionsByPlan(ctx context.Context) ([]types.SubscriptionPlanCount, error)
