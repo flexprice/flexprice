@@ -3783,8 +3783,13 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 // The look-ahead window is controlled by FLEXPRICE_SUBSCRIPTION_RENEWAL_ALERT_LOOK_AHEAD_HOURS (default 24).
 func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
 	lookAheadHours := 24
-	if s.Config != nil && s.Config.Subscription.RenewalAlertLookAheadHours > 0 {
-		lookAheadHours = s.Config.Subscription.RenewalAlertLookAheadHours
+	if s.Config != nil {
+		if s.Config.Subscription.RenewalAlertLookAheadHours < 0 {
+			return fmt.Errorf("invalid configuration: Subscription.RenewalAlertLookAheadHours must be >= 0, got %d", s.Config.Subscription.RenewalAlertLookAheadHours)
+		}
+		if s.Config.Subscription.RenewalAlertLookAheadHours > 0 {
+			lookAheadHours = s.Config.Subscription.RenewalAlertLookAheadHours
+		}
 	}
 	lookAhead := time.Duration(lookAheadHours) * time.Hour
 
