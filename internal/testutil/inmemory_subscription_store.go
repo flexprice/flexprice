@@ -442,20 +442,26 @@ func (s *InMemorySubscriptionStore) GetWithPauses(ctx context.Context, id string
 	return sub, pauses, nil
 }
 
-// ListSubscriptionsDueForRenewal retrieves all active subscriptions whose period ends within [windowStart, windowEnd]
+// ListSubscriptionsDueForRenewal retrieves all active subscriptions whose period ends within [windowStart, windowEnd],
+// excluding any subscription with CancelAtPeriodEnd set. Mirrors the production ent repository logic.
 func (s *InMemorySubscriptionStore) ListSubscriptionsDueForRenewal(ctx context.Context, windowStart time.Time, windowEnd time.Time) ([]*subscription.Subscription, error) {
-	filter := &types.SubscriptionFilter{
-		QueryFilter: types.NewNoLimitQueryFilter(),
-		SubscriptionStatus: []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-		},
-		TimeRangeFilter: &types.TimeRangeFilter{
-			StartTime: lo.ToPtr(windowStart),
-			EndTime:   lo.ToPtr(windowEnd),
-		},
+	filterFn := func(ctx context.Context, sub *subscription.Subscription, _ interface{}) bool {
+		if sub == nil {
+			return false
+		}
+		if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+			return false
+		}
+		if sub.Status != types.StatusPublished {
+			return false
+		}
+		if sub.CancelAtPeriodEnd {
+			return false
+		}
+		return !sub.CurrentPeriodEnd.Before(windowStart) && !sub.CurrentPeriodEnd.After(windowEnd)
 	}
 
-	return s.ListAll(ctx, filter)
+	return s.InMemoryStore.List(ctx, nil, filterFn, subscriptionSortFn)
 }
 
 // GetRecentSubscriptionsByPlan returns subscription counts grouped by plan for last 7 days
