@@ -37,11 +37,7 @@ func ProcessRenewalDueAlertWorkflow(ctx workflow.Context, input subscriptionMode
 	err := workflow.ExecuteActivity(ctx, ActivityProcessRenewalDueAlert, subscriptionModels.ProcessRenewalDueAlertActivityInput{}).Get(ctx, &result)
 	if err != nil {
 		logger.Error("Process renewal due alert workflow failed", "error", err)
-		errStr := err.Error()
-		return &subscriptionModels.ProcessRenewalDueAlertWorkflowResult{
-			Success: false,
-			Error:   &errStr,
-		}, nil
+		return nil, err
 	}
 
 	logger.Info("Process renewal due alert workflow completed successfully")
