@@ -19,7 +19,6 @@ type CustomerFilter struct {
 	ExternalIDs       []string           `json:"external_ids,omitempty" form:"external_ids" validate:"omitempty"`
 	ExternalID        string             `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
 	Email             string             `json:"email,omitempty" form:"email" validate:"omitempty,email"`
-	ParentCustomerIDs []string           `json:"parent_customer_ids,omitempty" form:"parent_customer_ids" validate:"omitempty"`
 }
 
 // NewCustomerFilter creates a new CustomerFilter with default values
