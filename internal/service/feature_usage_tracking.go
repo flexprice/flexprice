@@ -1340,9 +1340,32 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Co
 		return nil, err
 	}
 
-	customers, err := s.fetchCustomers(ctx, req)
+	extIDs := usageAnalyticsExternalCustomerIDs(req)
+	custFilter := types.NewNoLimitCustomerFilter()
+	custFilter.Status = lo.ToPtr(types.StatusPublished)
+	custFilter.ExternalIDs = extIDs
+	listed, err := s.CustomerRepo.List(ctx, custFilter)
 	if err != nil {
-		return nil, err
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch customers").
+			Mark(ierr.ErrDatabase)
+	}
+	byExternalID := make(map[string]*customer.Customer, len(listed))
+	for _, c := range listed {
+		byExternalID[c.ExternalID] = c
+	}
+	customers := make([]*customer.Customer, 0, len(extIDs))
+	for _, extID := range extIDs {
+		cust, ok := byExternalID[extID]
+		if !ok {
+			return nil, ierr.NewErrorf("customer not found for external_customer_id %s", extID).
+				WithHint("Customer not found").
+				WithReportableDetails(map[string]interface{}{
+					"external_customer_id": extID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		customers = append(customers, cust)
 	}
 
 	// Initialize aggregated analytics slice
@@ -1425,7 +1448,15 @@ func (s *featureUsageTrackingService) validateAnalyticsRequest(req *dto.GetUsage
 
 func (s *featureUsageTrackingService) validateAnalyticsRequestV2(req *dto.GetUsageAnalyticsRequest) error {
 	if req.WindowSize != "" {
-		return req.WindowSize.Validate()
+		if err := req.WindowSize.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if len(usageAnalyticsExternalCustomerIDs(req)) == 0 {
+		return ierr.NewError("external_customer_id or external_customer_ids is required").
+			WithHint("Provide at least one external customer identifier").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
@@ -3143,23 +3174,19 @@ func (s *featureUsageTrackingService) fetchAddons(ctx context.Context, data *Ana
 	return addonMap, nil
 }
 
-// fetchCustomers fetches all customers when no external customer ID is provided
-func (s *featureUsageTrackingService) fetchCustomers(ctx context.Context, req *dto.GetUsageAnalyticsRequest) ([]*customer.Customer, error) {
+// usageAnalyticsExternalCustomerIDs merges ExternalCustomerID and ExternalCustomerIDs,
+// skips empty strings, deduplicates (first occurrence wins).
+func usageAnalyticsExternalCustomerIDs(req *dto.GetUsageAnalyticsRequest) []string {
+	ids := make([]string, 0, 1+len(req.ExternalCustomerIDs))
 	if req.ExternalCustomerID != "" {
-		cust, err := s.fetchCustomer(ctx, req.ExternalCustomerID)
-		if err != nil {
-			return nil, err
-		}
-		return []*customer.Customer{cust}, nil
-	} else {
-		customers, err := s.CustomerRepo.List(ctx, types.NewNoLimitCustomerFilter())
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Failed to fetch customers").
-				Mark(ierr.ErrDatabase)
-		}
-		return customers, nil
+		ids = append(ids, req.ExternalCustomerID)
 	}
+	for _, id := range req.ExternalCustomerIDs {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return lo.Uniq(ids)
 }
 
 // mergeAnalyticsData merges additional analytics data into the aggregated data structure
