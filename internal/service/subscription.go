@@ -1536,12 +1536,28 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 
 	logger.Info("updating subscription")
 
+	// Validate the request before any DB reads
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	// Get the current subscription
 	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve subscription").
 			Mark(ierr.ErrDatabase)
+	}
+	// parent_subscription_id can only be changed on standalone subscriptions.
+	if req.ParentSubscriptionID != nil && lo.FromPtr(req.ParentSubscriptionID) != "" &&
+		subscription.SubscriptionType != types.SubscriptionTypeStandalone {
+		return nil, ierr.NewError("parent_subscription_id can only be set on standalone subscriptions").
+			WithHint("Convert the subscription to standalone before assigning a parent").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id":   subscriptionID,
+				"subscription_type": subscription.SubscriptionType,
+			}).
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	// Handle parent_subscription_id: omit = unchanged, "" = clear, non-empty = set (validate exists and active)
