@@ -295,6 +295,10 @@ type SubscriptionFilter struct {
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
 	// CustomerID filters by customer ID
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
+
+	// CustomerIDs filters by customer IDs
+	CustomerIDs []string `json:"customer_ids,omitempty" form:"customer_ids"`
+
 	// ExternalCustomerID filters by external customer ID
 	ExternalCustomerID string `json:"external_customer_id,omitempty" form:"external_customer_id"`
 	// InvoicingCustomerIDs filters by invoicing customer ID
