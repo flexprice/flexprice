@@ -252,6 +252,37 @@ func (r *SubscriptionCouponRequest) Validate() error {
 	return nil
 }
 
+// SubscriptionInheritanceConfig groups all inheritance-related fields for
+// subscription creation. Child customers and invoicing customer are specified
+// by external (lookup) IDs; the service resolves them to internal IDs.
+type SubscriptionInheritanceConfig struct {
+	ExternalCustomerIDsToInheritSubscription []string `json:"external_customer_ids_to_inherit_subscription,omitempty"`
+	ParentSubscriptionID                     string   `json:"parent_subscription_id,omitempty"`
+	InvoicingCustomerExternalID              *string  `json:"invoicing_customer_external_id,omitempty"`
+}
+
+// ExecuteSubscriptionInheritanceRequest is the payload for
+// POST /subscriptions/:id/inheritance/execute.
+type ExecuteSubscriptionInheritanceRequest struct {
+	ExternalCustomerIDsToInheritSubscription []string `json:"external_customer_ids_to_inherit_subscription,omitempty"`
+}
+
+func (r *ExecuteSubscriptionInheritanceRequest) Validate() error {
+	if len(r.ExternalCustomerIDsToInheritSubscription) == 0 {
+		return ierr.NewError("at least one external customer ID is required").
+			WithHint("Provide external_customer_ids_to_inherit_subscription with at least one non-empty value").
+			Mark(ierr.ErrValidation)
+	}
+	for i, extID := range r.ExternalCustomerIDsToInheritSubscription {
+		if extID == "" {
+			return ierr.NewError("external_customer_ids_to_inherit_subscription cannot contain empty values").
+				WithHint(fmt.Sprintf("External customer ID at index %d is empty", i)).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 type CreateSubscriptionRequest struct {
 
 	// customer_id is the flexprice customer id
@@ -261,16 +292,6 @@ type CreateSubscriptionRequest struct {
 	// external_customer_id is the customer id in your DB
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string `json:"external_customer_id"`
-
-	// invoicing_customer_id is the FlexPrice customer ID to use for invoicing.
-	// This can differ from the subscription customer (e.g., a billing entity invoicing on behalf of another customer).
-	// Mutually exclusive with invoicing_customer_external_id.
-	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
-
-	// invoicing_customer_external_id is the external ID of the customer to use for invoicing.
-	// Resolved internally to an internal customer ID via external ID lookup.
-	// Mutually exclusive with invoicing_customer_id.
-	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
 
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
@@ -358,14 +379,18 @@ type CreateSubscriptionRequest struct {
 	// If set to "draft", the subscription will be created as a draft (skips invoice creation and payment processing)
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 
-	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
-	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
-
 	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
 	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
 
 	// Enable Commitment True Up Fee
 	EnableTrueUp bool `json:"enable_true_up"`
+
+	// Inheritance groups all customer-hierarchy fields.
+	// When provided with at least one child ID, the subscription becomes a PARENT type.
+	Inheritance *SubscriptionInheritanceConfig `json:"inheritance,omitempty"`
+
+	// SubscriptionType is set internally by the service layer.
+	SubscriptionType types.SubscriptionType `json:"-"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
@@ -396,6 +421,16 @@ type UpdateSubscriptionRequest struct {
 	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
 }
 
+// Validate checks UpdateSubscriptionRequest fields for basic structural validity.
+func (r *UpdateSubscriptionRequest) Validate() error {
+
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // CancelSubscriptionRequest represents the enhanced cancellation request
 type CancelSubscriptionRequest struct {
 
@@ -411,8 +446,6 @@ type CancelSubscriptionRequest struct {
 	// Reason for cancellation (for audit and business intelligence)
 	Reason string `json:"reason,omitempty"`
 
-	// CancelAt is the custom date to cancel the subscription.
-	// Required when CancellationType is "scheduled_date". Must be in the future.
 	CancelAt *time.Time `json:"cancel_at,omitempty"`
 
 	//SuppressWebhook is an internal flag to suppress webhook events during cancellation.
@@ -456,21 +489,6 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	if err := r.CancellationType.Validate(); err != nil {
 		return err
 	}
-
-	// Validate scheduled_date specific fields
-	if r.CancellationType == types.CancellationTypeScheduledDate {
-		if r.CancelAt == nil {
-			return ierr.NewError("cancel_at is required for scheduled_date cancellation type").
-				WithHint("Provide a future date in cancel_at when using scheduled_date cancellation type").
-				Mark(ierr.ErrValidation)
-		}
-		if !r.CancelAt.After(time.Now().UTC()) {
-			return ierr.NewError("cancel_at must be in the future").
-				WithHint("Provide a future date in cancel_at").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
 	// Set default proration behavior if not provided
 	if r.ProrationBehavior == "" {
 		r.ProrationBehavior = types.ProrationBehaviorNone
@@ -562,11 +580,14 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// invoicing_customer_id and invoicing_customer_external_id are mutually exclusive
-	if r.InvoicingCustomerID != nil && r.InvoicingCustomerExternalID != nil {
-		return ierr.NewError("only one of invoicing_customer_id or invoicing_customer_external_id may be provided").
-			WithHint("Send either invoicing_customer_id or invoicing_customer_external_id, but not both").
-			Mark(ierr.ErrValidation)
+	if r.Inheritance != nil {
+		for i, extID := range r.Inheritance.ExternalCustomerIDsToInheritSubscription {
+			if extID == "" {
+				return ierr.NewError("external_customer_ids_to_inherit_subscription cannot contain empty values").
+					WithHint(fmt.Sprintf("External customer ID at index %d is empty", i)).
+					Mark(ierr.ErrValidation)
+			}
+		}
 	}
 
 	err := validator.ValidateRequest(r)
@@ -698,12 +719,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PlanID == "" {
 		return ierr.NewError("plan_id is required").
 			WithHint("Plan ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	if r.ParentSubscriptionID != nil && lo.FromPtr(r.ParentSubscriptionID) == "" {
-		return ierr.NewError("parent_subscription_id cannot be empty when provided").
-			WithHint("Omit parent_subscription_id or provide a non-empty subscription ID").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1057,6 +1072,16 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		endDate = r.EndDate
 	}
 
+	subscriptionType := r.SubscriptionType
+	if subscriptionType == "" {
+		subscriptionType = types.SubscriptionTypeStandalone
+	}
+
+	var parentSubscriptionID *string
+	if r.Inheritance != nil && r.Inheritance.ParentSubscriptionID != "" {
+		parentSubscriptionID = lo.ToPtr(r.Inheritance.ParentSubscriptionID)
+	}
+
 	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		CustomerID:         r.CustomerID,
@@ -1083,9 +1108,9 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		PaymentBehavior:        string(paymentBehavior),
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
-		InvoicingCustomerID:    r.InvoicingCustomerID,
-		ParentSubscriptionID:   r.ParentSubscriptionID,
+		ParentSubscriptionID:   parentSubscriptionID,
 		PaymentTerms:           r.PaymentTerms,
+		SubscriptionType:       subscriptionType,
 	}
 
 	// Set commitment amount, duration, and overage factor if provided

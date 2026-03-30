@@ -88,31 +88,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
-	// Resolve invoicing customer: invoicing_customer_external_id takes precedence over invoicing_customer_id.
-	if req.InvoicingCustomerExternalID != nil && *req.InvoicingCustomerExternalID != "" {
-		invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, *req.InvoicingCustomerExternalID)
-		if err != nil {
-			return nil, err
-		}
-		req.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
-	}
-
-	// Validate that the resolved invoicing customer exists and is active.
-	if req.InvoicingCustomerID != nil && *req.InvoicingCustomerID != "" {
-		invoicingCustomer, err := s.CustomerRepo.Get(ctx, *req.InvoicingCustomerID)
-		if err != nil {
-			return nil, err
-		}
-		if invoicingCustomer.Status != types.StatusPublished {
-			return nil, ierr.NewError("invoicing customer is not active").
-				WithHint("The invoicing customer must be active").
-				WithReportableDetails(map[string]interface{}{"invoicing_customer_id": *req.InvoicingCustomerID, "status": invoicingCustomer.Status}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	if req.ParentSubscriptionID != nil && lo.FromPtr(req.ParentSubscriptionID) != "" {
-		parentSub, err := s.SubRepo.Get(ctx, lo.FromPtr(req.ParentSubscriptionID))
+	if req.Inheritance != nil && req.Inheritance.ParentSubscriptionID != "" {
+		parentSub, err := s.SubRepo.Get(ctx, req.Inheritance.ParentSubscriptionID)
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +97,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
 			return nil, ierr.NewError("parent subscription is not active").
 				WithHint("The parent subscription must be active").
-				WithReportableDetails(map[string]interface{}{"parent_subscription_id": *req.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
+				WithReportableDetails(map[string]interface{}{"parent_subscription_id": req.Inheritance.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
 				Mark(ierr.ErrValidation)
 		}
 	}
@@ -138,6 +115,20 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 
 	sub := req.ToSubscription(ctx)
+
+	if req.Inheritance != nil && req.Inheritance.InvoicingCustomerExternalID != nil && *req.Inheritance.InvoicingCustomerExternalID != "" {
+		invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, *req.Inheritance.InvoicingCustomerExternalID)
+		if err != nil {
+			return nil, err
+		}
+		if invoicingCustomer.Status != types.StatusPublished {
+			return nil, ierr.NewError("invoicing customer is not active").
+				WithHint("The invoicing customer must be active").
+				WithReportableDetails(map[string]interface{}{"invoicing_customer_external_id": *req.Inheritance.InvoicingCustomerExternalID, "status": invoicingCustomer.Status}).
+				Mark(ierr.ErrValidation)
+		}
+		sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
+	}
 
 	// Validate and filter prices
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, plan.ID, types.PRICE_ENTITY_TYPE_PLAN, sub, req.Workflow)
