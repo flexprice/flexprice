@@ -4753,3 +4753,48 @@ func (s *BillingServiceSuite) TestMultiCadence_SingleQuarterlyLine() {
 		s.True(total.Equal(decimal.NewFromInt(int64(pr.total))), "E.14.3: invoice %d expected $100", i+1)
 	}
 }
+
+func (s *BillingServiceSuite) TestUsageExternalCustomerIDsForSubscription_ParentIncludesChildren() {
+	ctx := s.GetContext()
+	b := s.service.(*billingService)
+
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_billing_child_ext_ids",
+		Name:       "Child",
+		Email:      "child-billing@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	parentSub := *s.testData.subscription
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, &parentSub))
+
+	inherited := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               parentSub.PlanID,
+		Currency:             parentSub.Currency,
+		SubscriptionStatus:   parentSub.SubscriptionStatus,
+		BillingAnchor:        parentSub.BillingAnchor,
+		BillingCycle:         parentSub.BillingCycle,
+		StartDate:            parentSub.StartDate,
+		EndDate:              parentSub.EndDate,
+		CurrentPeriodStart:   parentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:     parentSub.CurrentPeriodEnd,
+		BillingCadence:       parentSub.BillingCadence,
+		BillingPeriod:        parentSub.BillingPeriod,
+		BillingPeriodCount:   parentSub.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parentSub.EnvironmentID,
+		ParentSubscriptionID: &parentSub.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
+
+	ext, err := b.getChildExternalCustomerIDsForSubscription(ctx, &parentSub)
+	s.NoError(err)
+	s.ElementsMatch([]string{s.testData.customer.ExternalID, child.ExternalID}, ext)
+}

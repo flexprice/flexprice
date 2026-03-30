@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -102,6 +103,9 @@ func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Co
 	result := make(map[string]*events.UsageByFeatureResult)
 	for _, usage := range s.usage {
 		if usage.SubscriptionID != params.SubscriptionID {
+			continue
+		}
+		if len(params.CustomerIDs) > 0 && !lo.Contains(params.CustomerIDs, usage.CustomerID) {
 			continue
 		}
 

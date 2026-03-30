@@ -4977,7 +4977,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		return nil, err
 	}
 
-	customer, err := s.CustomerRepo.Get(ctx, subscription.CustomerID)
+	usageCustomerIDs, err := s.usageCustomerIDsForSubscription(ctx, subscription)
 	if err != nil {
 		return nil, err
 	}
@@ -5063,7 +5063,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	}
 	usageResults, err := s.FeatureUsageRepo.GetFeatureUsageBySubscription(ctx, &events.GetFeatureUsageBySubscriptionParams{
 		SubscriptionID: req.SubscriptionID,
-		CustomerIDs:    []string{customer.ID},
+		CustomerIDs:    usageCustomerIDs,
 		StartTime:      usageStartTime,
 		EndTime:        usageEndTime,
 		AggTypes:       aggTypes,
@@ -6321,6 +6321,23 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 			Mark(ierr.ErrDatabase)
 	}
 	return nil
+}
+
+// usageCustomerIDsForSubscription returns internal customer IDs whose feature_usage rows are
+// attributed to this subscription (subscription owner plus inherited child customers for parent subscriptions).
+func (s *subscriptionService) usageCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+	ids := []string{sub.CustomerID}
+	if sub.SubscriptionType != types.SubscriptionTypeParent {
+		return lo.Uniq(ids), nil
+	}
+	children, err := s.getInheritedSubscriptions(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, ch := range children {
+		ids = append(ids, ch.CustomerID)
+	}
+	return lo.Uniq(ids), nil
 }
 
 // getInheritedSubscriptions retrieves all INHERITED child subscriptions for a parent subscription.
