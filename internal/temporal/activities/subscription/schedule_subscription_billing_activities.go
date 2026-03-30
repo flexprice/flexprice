@@ -75,6 +75,13 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 			},
 			SubscriptionStatus:     []types.SubscriptionStatus{types.SubscriptionStatusActive},
 			EffectiveDateForUpdate: &now,
+			SubscriptionTypes: []types.SubscriptionType{
+				types.SubscriptionTypeStandalone,
+				types.SubscriptionTypeParent,
+			},
+			TimeRangeFilter: &types.TimeRangeFilter{
+				EndTime: &now,
+			},
 		}
 
 		subs, err := s.subscriptionService.GetSubscriptionsForBillingPeriodUpdate(ctx, filter)
