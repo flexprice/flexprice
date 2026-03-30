@@ -261,6 +261,20 @@ type SubscriptionInheritanceConfig struct {
 	InvoicingCustomerExternalID              *string  `json:"invoicing_customer_external_id,omitempty"`
 }
 
+// Validate enforces mutual exclusivity: parent_subscription_id and
+// external_customer_ids_to_inherit_subscription (non-empty) cannot both be set.
+func (c *SubscriptionInheritanceConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
+	if (c.ParentSubscriptionID != "" || c.InvoicingCustomerExternalID != nil) && *c.InvoicingCustomerExternalID != "" && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+		return ierr.NewError("cannot set parent_subscription_id together with external_customer_ids_to_inherit_subscription").
+			WithHint("Use either a parent subscription link or child customers to inherit, not both").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // ExecuteSubscriptionInheritanceRequest is the payload for
 // POST /subscriptions/:id/inheritance/execute.
 type ExecuteSubscriptionInheritanceRequest struct {
@@ -581,12 +595,8 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	}
 
 	if r.Inheritance != nil {
-		for i, extID := range r.Inheritance.ExternalCustomerIDsToInheritSubscription {
-			if extID == "" {
-				return ierr.NewError("external_customer_ids_to_inherit_subscription cannot contain empty values").
-					WithHint(fmt.Sprintf("External customer ID at index %d is empty", i)).
-					Mark(ierr.ErrValidation)
-			}
+		if err := r.Inheritance.Validate(); err != nil {
+			return err
 		}
 	}
 
