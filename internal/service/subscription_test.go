@@ -1080,6 +1080,75 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 	}
 }
 
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithInheritanceChildren() {
+	ctx := s.GetContext()
+
+	childExternal := "ext_child_org"
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: childExternal,
+		Name:       "Child Org",
+		Email:      "child@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{childExternal},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(types.SubscriptionTypeParent, resp.SubscriptionType)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	inherited, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Len(inherited, 1)
+	s.Equal(types.SubscriptionTypeInherited, inherited[0].SubscriptionType)
+	s.Equal(child.ID, inherited[0].CustomerID)
+	s.NotNil(inherited[0].ParentSubscriptionID)
+	s.Equal(resp.ID, *inherited[0].ParentSubscriptionID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionInheritanceChildEqualsSubscriber() {
+	ctx := s.GetContext()
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{s.testData.customer.ExternalID},
+		},
+	}
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+	s.Contains(err.Error(), "cannot inherit onto itself")
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCollectionMethod() {
 	// Test cases specifically for collection method functionality
 	testCases := []struct {
