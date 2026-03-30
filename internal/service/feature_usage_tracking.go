@@ -1340,32 +1340,9 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Co
 		return nil, err
 	}
 
-	extIDs := usageAnalyticsExternalCustomerIDs(req)
-	custFilter := types.NewNoLimitCustomerFilter()
-	custFilter.Status = lo.ToPtr(types.StatusPublished)
-	custFilter.ExternalIDs = extIDs
-	listed, err := s.CustomerRepo.List(ctx, custFilter)
+	customers, err := s.resolveEffectiveCustomersForUsageAnalytics(ctx, req)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch customers").
-			Mark(ierr.ErrDatabase)
-	}
-	byExternalID := make(map[string]*customer.Customer, len(listed))
-	for _, c := range listed {
-		byExternalID[c.ExternalID] = c
-	}
-	customers := make([]*customer.Customer, 0, len(extIDs))
-	for _, extID := range extIDs {
-		cust, ok := byExternalID[extID]
-		if !ok {
-			return nil, ierr.NewErrorf("customer not found for external_customer_id %s", extID).
-				WithHint("Customer not found").
-				WithReportableDetails(map[string]interface{}{
-					"external_customer_id": extID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-		customers = append(customers, cust)
+		return nil, err
 	}
 
 	// Initialize aggregated analytics slice
@@ -3187,18 +3164,10 @@ func (s *featureUsageTrackingService) fetchAddons(ctx context.Context, data *Ana
 }
 
 // usageAnalyticsExternalCustomerIDs merges ExternalCustomerID and ExternalCustomerIDs,
-// skips empty strings, deduplicates (first occurrence wins).
+// drops empty strings, deduplicates (first occurrence wins).
 func usageAnalyticsExternalCustomerIDs(req *dto.GetUsageAnalyticsRequest) []string {
-	ids := make([]string, 0, 1+len(req.ExternalCustomerIDs))
-	if req.ExternalCustomerID != "" {
-		ids = append(ids, req.ExternalCustomerID)
-	}
-	for _, id := range req.ExternalCustomerIDs {
-		if id != "" {
-			ids = append(ids, id)
-		}
-	}
-	return lo.Uniq(ids)
+	ids := append([]string{req.ExternalCustomerID}, req.ExternalCustomerIDs...)
+	return lo.Uniq(lo.Compact(ids))
 }
 
 // mergeAnalyticsData merges additional analytics data into the aggregated data structure
@@ -4321,4 +4290,91 @@ func (s *featureUsageTrackingService) resolveInheritedSubscriptionsLineItems(ctx
 		return nil, err
 	}
 	return lineItems, nil
+}
+
+func (s *featureUsageTrackingService) resolveEffectiveCustomersForUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) ([]*customer.Customer, error) {
+
+	extIDs := usageAnalyticsExternalCustomerIDs(req)
+	custFilter := types.NewNoLimitCustomerFilter()
+	custFilter.Status = lo.ToPtr(types.StatusPublished)
+	custFilter.ExternalIDs = extIDs
+	listed, err := s.CustomerRepo.List(ctx, custFilter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch customers").
+			Mark(ierr.ErrDatabase)
+	}
+	byExternalID := lo.SliceToMap(listed, func(c *customer.Customer) (string, *customer.Customer) {
+		return c.ExternalID, c
+	})
+	customers := make([]*customer.Customer, 0, len(extIDs))
+	for _, extID := range extIDs {
+		cust, ok := byExternalID[extID]
+		if !ok {
+			return nil, ierr.NewErrorf("customer not found for external_customer_id %s", extID).
+				WithHint("Customer not found").
+				WithReportableDetails(map[string]interface{}{
+					"external_customer_id": extID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		customers = append(customers, cust)
+	}
+
+	if req.IncludeChildren && len(customers) > 0 {
+		parentCustomerIDs := lo.Map(customers, func(c *customer.Customer, _ int) string {
+			return c.ID
+		})
+		parentSubFilter := types.NewNoLimitSubscriptionFilter()
+		parentSubFilter.Status = lo.ToPtr(types.StatusPublished)
+		parentSubFilter.CustomerIDs = parentCustomerIDs
+		parentSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
+		parentSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+			types.SubscriptionStatusDraft,
+		}
+		parentSubs, err := s.SubRepo.List(ctx, parentSubFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(parentSubs) == 0 {
+			return customers, nil
+		}
+
+		parentSubIDs := lo.Uniq(lo.Map(parentSubs, func(s *subscription.Subscription, _ int) string {
+			return s.ID
+		}))
+		childSubFilter := types.NewNoLimitSubscriptionFilter()
+		childSubFilter.Status = lo.ToPtr(types.StatusPublished)
+		childSubFilter.ParentSubscriptionIDs = parentSubIDs
+		childSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+		childSubFilter.SubscriptionStatus = parentSubFilter.SubscriptionStatus
+		inheritedSubs, err := s.SubRepo.List(ctx, childSubFilter)
+		if err != nil {
+			return nil, err
+		}
+		childCustomerIDs := lo.Without(
+			lo.Uniq(lo.Compact(lo.Map(inheritedSubs, func(s *subscription.Subscription, _ int) string {
+				return s.CustomerID
+			}))),
+			parentCustomerIDs...,
+		)
+
+		if len(childCustomerIDs) == 0 {
+			return customers, nil
+		}
+
+		childCustFilter := types.NewNoLimitCustomerFilter()
+		childCustFilter.Status = lo.ToPtr(types.StatusPublished)
+		childCustFilter.CustomerIDs = childCustomerIDs
+		childCustomers, err := s.CustomerRepo.List(ctx, childCustFilter)
+		if err != nil {
+			return nil, err
+		}
+		customers = append(customers, childCustomers...)
+	}
+
+	return customers, nil
 }
