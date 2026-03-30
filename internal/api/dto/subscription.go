@@ -272,12 +272,6 @@ type CreateSubscriptionRequest struct {
 	// Mutually exclusive with invoicing_customer_id.
 	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
 
-	// Deprecated: Use invoicing_customer_id or invoicing_customer_external_id instead.
-	// invoice_billing determines which customer should receive invoices for a subscription.
-	// Supported values: "invoice_to_parent" (uses the subscription customer's parent) or "invoice_to_self" (default).
-	// Will be removed in a future version.
-	InvoiceBilling *types.InvoiceBilling `json:"invoice_billing,omitempty"`
-
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
 	LookupKey          string               `json:"lookup_key"`
@@ -575,13 +569,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// invoice_billing (deprecated) cannot be combined with the new invoicing customer fields
-	if r.InvoiceBilling != nil && (r.InvoicingCustomerID != nil || r.InvoicingCustomerExternalID != nil) {
-		return ierr.NewError("invoice_billing cannot be used together with invoicing_customer_id or invoicing_customer_external_id").
-			WithHint("invoice_billing is deprecated; use invoicing_customer_id or invoicing_customer_external_id instead").
-			Mark(ierr.ErrValidation)
-	}
-
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
@@ -630,14 +617,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PaymentBehavior == nil {
 		defaultPaymentBehavior := types.PaymentBehaviorDefaultActive
 		r.PaymentBehavior = &defaultPaymentBehavior
-	}
-
-	// Deprecated: invoice_billing is deprecated in favor of invoicing_customer_id / invoicing_customer_external_id.
-	// Validate the value if it was explicitly provided for backward compatibility.
-	if r.InvoiceBilling != nil {
-		if err := r.InvoiceBilling.Validate(); err != nil {
-			return err
-		}
 	}
 
 	if r.PaymentTerms != nil {
