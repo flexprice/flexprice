@@ -526,66 +526,6 @@ func (h *EventsHandler) GetHuggingFaceBillingData(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *EventsHandler) BenchmarkV1(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var req dto.BenchmarkRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request payload").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	if err := req.Validate(); err != nil {
-		c.Error(err)
-		return
-	}
-
-	// Convert to event
-	event := req.ToEvent(ctx)
-
-	result, err := h.featureUsageTrackingService.BenchmarkPrepareV1(ctx, event)
-	if err != nil {
-		h.log.Error("Failed to benchmark V1", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
-}
-
-func (h *EventsHandler) BenchmarkV2(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var req dto.BenchmarkRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request payload").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	if err := req.Validate(); err != nil {
-		c.Error(err)
-		return
-	}
-
-	// Convert to event
-	event := req.ToEvent(ctx)
-
-	result, err := h.featureUsageTrackingService.BenchmarkPrepareV2(ctx, event)
-	if err != nil {
-		h.log.Error("Failed to benchmark V2", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
-}
-
 // @Summary Get event
 // @ID getEvent
 // @Description Use when debugging a specific event (e.g. why it failed or how it was aggregated). Includes processing status and debug info.

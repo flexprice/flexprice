@@ -455,56 +455,6 @@ type GetHuggingFaceBillingDataResponse struct {
 	Data []EventCostInfo `json:"requests"`
 }
 
-// BenchmarkResult represents the result of running a benchmark on event processing
-// This is used for comparing V1 vs V2 event processing performance
-type BenchmarkResult struct {
-	// Version of the prepare function used (v1 or v2)
-	Version string `json:"version"`
-	// Time taken to process the event in milliseconds
-	DurationMs float64 `json:"duration_ms"`
-	// Number of feature usage records generated
-	FeatureUsageCount int `json:"feature_usage_count"`
-	// Event ID that was processed
-	EventID string `json:"event_id"`
-	// Customer ID resolved for the event
-	CustomerID string `json:"customer_id,omitempty"`
-	// External customer ID from the event
-	ExternalCustomerID string `json:"external_customer_id"`
-	// Error message if processing failed
-	Error string `json:"error,omitempty"`
-
-	Events []*events.FeatureUsage `json:"events,omitempty"`
-}
-
-// BenchmarkRequest represents a request to benchmark event processing
-type BenchmarkRequest struct {
-	EventName          string                 `json:"event_name" validate:"required" binding:"required" example:"api_request"`
-	EventID            string                 `json:"event_id" example:"event123"`
-	CustomerID         string                 `json:"customer_id" example:"customer456"`
-	ExternalCustomerID string                 `json:"external_customer_id" validate:"required" binding:"required" example:"customer456"`
-	Timestamp          time.Time              `json:"timestamp" example:"2024-03-20T15:04:05Z"`
-	Source             string                 `json:"source" example:"api"`
-	Properties         map[string]interface{} `json:"properties" swaggertype:"object,string,number"`
-}
-
-func (r *BenchmarkRequest) Validate() error {
-	return validator.ValidateRequest(r)
-}
-
-func (r *BenchmarkRequest) ToEvent(ctx context.Context) *events.Event {
-	return events.NewEvent(
-		r.EventName,
-		types.GetTenantID(ctx),
-		r.ExternalCustomerID,
-		r.Properties,
-		r.Timestamp,
-		r.EventID,
-		r.CustomerID,
-		r.Source,
-		types.GetEnvironmentID(ctx),
-	)
-}
-
 type GetEventByIDResponse struct {
 	Event           *Event                          `json:"event"`
 	Status          types.EventProcessingStatusType `json:"status"`

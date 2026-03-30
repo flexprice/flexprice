@@ -151,9 +151,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.POST("/analytics-v2", handlers.Events.GetUsageAnalyticsV2)
 			events.POST("/huggingface-billing", handlers.Events.GetHuggingFaceBillingData)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
-			// Benchmark endpoints for comparing V1 vs V2 event processing performance
-			events.POST("/benchmark/v1", handlers.Events.BenchmarkV1)
-			events.POST("/benchmark/v2", handlers.Events.BenchmarkV2)
 			// Reprocess events endpoint
 			events.POST("/reprocess", handlers.Events.ReprocessEvents)
 			// Raw event ingestion (Bento-format, publishes directly to raw_events topic)
