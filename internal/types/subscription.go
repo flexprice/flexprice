@@ -349,6 +349,8 @@ type SubscriptionFilter struct {
 	// current_period_end <= date OR (cancel_at IS NOT NULL AND cancel_at <= date).
 	// When nil, period/cancel cutoff logic is not applied by this field (see TimeRangeFilter for legacy period-end filtering).
 	EffectiveDateForUpdate *time.Time `json:"effective_date_for_update,omitempty" form:"effective_date_for_update"`
+	// SubscriptionType filters by subscription type
+	SubscriptionTypes []SubscriptionType `json:"subscription_type,omitempty" form:"subscription_type"`
 
 	// WithLineItems includes line items in the response
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
@@ -399,6 +401,13 @@ func (f SubscriptionFilter) Validate() error {
 	// Validate billing period values
 	for _, period := range f.BillingPeriod {
 		if err := period.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate subscription type values
+	for _, subscriptionType := range f.SubscriptionTypes {
+		if err := subscriptionType.Validate(); err != nil {
 			return err
 		}
 	}
