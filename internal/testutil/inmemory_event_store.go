@@ -598,15 +598,26 @@ func (s *InMemoryEventStore) GetUsageWithFilters(ctx context.Context, params *ev
 	return results, nil
 }
 
-func (s *InMemoryEventStore) GetDistinctEventNames(ctx context.Context, externalCustomerID string, startTime, endTime time.Time) ([]string, error) {
+func (s *InMemoryEventStore) GetDistinctEventNames(ctx context.Context, externalCustomerIDs []string, startTime, endTime time.Time) ([]string, error) {
+	if len(externalCustomerIDs) == 0 {
+		return nil, nil
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	idSet := make(map[string]struct{}, len(externalCustomerIDs))
+	for _, id := range externalCustomerIDs {
+		idSet[id] = struct{}{}
+	}
+
 	var eventNames []string
 	for _, event := range s.events {
+		if _, ok := idSet[event.ExternalCustomerID]; !ok {
+			continue
+		}
 		// Use inclusive comparison: event.Timestamp >= startTime && event.Timestamp < endTime
-		if event.ExternalCustomerID == externalCustomerID &&
-			(event.Timestamp.Equal(startTime) || event.Timestamp.After(startTime)) &&
+		if (event.Timestamp.Equal(startTime) || event.Timestamp.After(startTime)) &&
 			event.Timestamp.Before(endTime) {
 			eventNames = append(eventNames, event.EventName)
 		}
