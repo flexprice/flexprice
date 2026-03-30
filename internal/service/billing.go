@@ -2864,6 +2864,44 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 	return response, nil
 }
 
+// getChildExternalCustomerIDsForSubscription returns distinct non-empty external customer IDs for every
+// internal customer whose usage counts toward this subscription (owner plus inherited children for parent subs).
+func (s *billingService) getChildExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+	internalIDs := []string{sub.CustomerID}
+	if sub.SubscriptionType == types.SubscriptionTypeParent {
+		filter := types.NewNoLimitSubscriptionFilter()
+		filter.ParentSubscriptionIDs = []string{sub.ID}
+		filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+		filter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+			types.SubscriptionStatusDraft,
+		}
+		children, err := s.SubRepo.List(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+		for _, ch := range children {
+			internalIDs = append(internalIDs, ch.CustomerID)
+		}
+	}
+	internalIDs = lo.Uniq(internalIDs)
+
+	custFilter := types.NewNoLimitCustomerFilter()
+	custFilter.CustomerIDs = internalIDs
+	customers, err := s.CustomerRepo.List(ctx, custFilter)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(customers))
+	for _, cust := range customers {
+		if cust.ExternalID != "" {
+			out = append(out, cust.ExternalID)
+		}
+	}
+	return lo.Uniq(out), nil
+}
+
 func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error) {
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
@@ -2958,6 +2996,17 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			continue
 		}
 
+		extCustomerIDsForMeter, err := s.getChildExternalCustomerIDsForSubscription(ctx, sub)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to resolve usage external customer ids for subscription",
+				"subscription_id", subscriptionID, "error", err)
+			continue
+		}
+		var meterExternalCustomerIDs []string
+		if len(extCustomerIDsForMeter) > 0 {
+			meterExternalCustomerIDs = extCustomerIDsForMeter
+		}
+
 		usageReq := &dto.GetUsageBySubscriptionRequest{
 			SubscriptionID: subscriptionID,
 			Source:         string(types.UsageSourceAnalytics),
@@ -2982,7 +3031,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// Create usage request with daily window size for current billing period
 					usageRequest := &dto.GetUsageByMeterRequest{
 						MeterID:             meterID,
-						ExternalCustomerIDs: lo.Ternary(customer.ExternalID != "", []string{customer.ExternalID}, nil),
+						ExternalCustomerIDs: meterExternalCustomerIDs,
 						StartTime:           sub.CurrentPeriodStart,
 						EndTime:             sub.CurrentPeriodEnd,
 						WindowSize:          types.WindowSizeDay,
@@ -3033,7 +3082,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// Create usage request for current month with monthly window size
 					usageRequest := &dto.GetUsageByMeterRequest{
 						MeterID:             meterID,
-						ExternalCustomerIDs: lo.Ternary(customer.ExternalID != "", []string{customer.ExternalID}, nil),
+						ExternalCustomerIDs: meterExternalCustomerIDs,
 						StartTime:           sub.CurrentPeriodStart,
 						EndTime:             sub.CurrentPeriodEnd,
 						WindowSize:          types.WindowSizeMonth,
@@ -3091,7 +3140,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// This maintains consistency with the billing logic
 					totalUsageRequest := &dto.GetUsageByMeterRequest{
 						MeterID:             meterID,
-						ExternalCustomerIDs: lo.Ternary(customer.ExternalID != "", []string{customer.ExternalID}, nil),
+						ExternalCustomerIDs: meterExternalCustomerIDs,
 						StartTime:           sub.StartDate,
 						EndTime:             sub.CurrentPeriodEnd,
 					}
