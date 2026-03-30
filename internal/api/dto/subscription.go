@@ -261,15 +261,21 @@ type SubscriptionInheritanceConfig struct {
 	InvoicingCustomerExternalID              *string  `json:"invoicing_customer_external_id,omitempty"`
 }
 
-// Validate enforces mutual exclusivity: parent_subscription_id and
-// external_customer_ids_to_inherit_subscription (non-empty) cannot both be set.
+// Validate enforces mutual exclusivity:
+//   - parent_subscription_id vs non-empty external_customer_ids_to_inherit_subscription
+//   - invoicing_customer_external_id vs non-empty external_customer_ids_to_inherit_subscription
 func (c *SubscriptionInheritanceConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
-	if (c.ParentSubscriptionID != "" || c.InvoicingCustomerExternalID != nil) && *c.InvoicingCustomerExternalID != "" && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+	if c.ParentSubscriptionID != "" && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
 		return ierr.NewError("cannot set parent_subscription_id together with external_customer_ids_to_inherit_subscription").
 			WithHint("Use either a parent subscription link or child customers to inherit, not both").
+			Mark(ierr.ErrValidation)
+	}
+	if c.InvoicingCustomerExternalID != nil && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+		return ierr.NewError("cannot set invoicing_customer_external_id together with external_customer_ids_to_inherit_subscription").
+			WithHint("Use either invoicing_customer_external_id or external_customer_ids_to_inherit_subscription, not both").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
