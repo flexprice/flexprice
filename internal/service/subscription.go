@@ -88,23 +88,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
-	// Resolve invoicing customer.
-	// Priority: invoicing_customer_external_id > invoicing_customer_id > deprecated invoice_billing fallback.
+	// Resolve invoicing customer: invoicing_customer_external_id takes precedence over invoicing_customer_id.
 	if req.InvoicingCustomerExternalID != nil && *req.InvoicingCustomerExternalID != "" {
-		// Resolve external ID to internal ID.
 		invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, *req.InvoicingCustomerExternalID)
 		if err != nil {
 			return nil, err
 		}
 		req.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
-	} else if req.InvoicingCustomerID == nil || *req.InvoicingCustomerID == "" {
-		// Deprecated fallback: if invoice_to_parent was specified, attempt to resolve from the
-		// subscription customer's parent. This path exists only for backward compatibility and
-		// will be removed once invoice_billing is fully retired.
-		if lo.FromPtr(req.InvoiceBilling) == types.InvoiceBillingInvoiceToParent && customer.ParentCustomerID != nil {
-			req.InvoicingCustomerID = customer.ParentCustomerID
-		}
-		// If invoice_to_parent is set but no parent exists, silently fall back to invoice_to_self behavior.
 	}
 
 	// Validate that the resolved invoicing customer exists and is active.

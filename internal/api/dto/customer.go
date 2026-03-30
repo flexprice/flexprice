@@ -63,16 +63,6 @@ type CreateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*IntegrationEntityMapping `json:"integration_entity_mapping,omitempty"`
-
-	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
-	// This field is accepted for backward compatibility but no hierarchy validations are enforced.
-	// parent_customer_id is the internal FlexPrice ID of the parent customer.
-	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
-
-	// Deprecated: See ParentCustomerID.
-	// parent_customer_external_id is the external ID of the parent customer from your system.
-	// Exactly one of parent_customer_id or parent_customer_external_id may be provided.
-	ParentCustomerExternalID *string `json:"parent_customer_external_id,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -110,24 +100,12 @@ type UpdateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*IntegrationEntityMapping `json:"integration_entity_mapping,omitempty"`
-
-	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
-	// This field is accepted for backward compatibility but no hierarchy validations are enforced.
-	// parent_customer_id is the internal FlexPrice ID of the parent customer.
-	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
-
-	// Deprecated: See ParentCustomerID.
-	// parent_customer_external_id is the external ID of the parent customer from your system.
-	// Exactly one of parent_customer_id or parent_customer_external_id may be provided.
-	// If you provide the external ID, the parent customer value will be ignored.
-	ParentCustomerExternalID *string `json:"parent_customer_external_id,omitempty"`
 }
 
 // CustomerResponse represents the response for customer operations
 // @Description Customer response object containing all customer information
 type CustomerResponse struct {
 	*customer.Customer
-	ParentCustomer *CustomerResponse `json:"parent_customer,omitempty"`
 }
 
 // ListCustomersResponse represents the response for listing customers
@@ -161,13 +139,6 @@ func (r *CreateCustomerRequest) Validate() error {
 		}
 	}
 
-	// Validate parent customer references – only one of ID or external ID can be provided
-	if r.ParentCustomerID != nil && r.ParentCustomerExternalID != nil {
-		return ierr.NewError("only one of parent_customer_id or parent_customer_external_id may be provided").
-			WithHint("Send either parent_customer_id or parent_customer_external_id, but not both").
-			Mark(ierr.ErrValidation)
-	}
-
 	return nil
 }
 
@@ -184,7 +155,6 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		AddressPostalCode: r.AddressPostalCode,
 		AddressCountry:    r.AddressCountry,
 		Metadata:          r.Metadata,
-		ParentCustomerID:  r.ParentCustomerID,
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 	}
@@ -193,13 +163,6 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
-	}
-
-	// Validate parent customer references – only one of ID or external ID can be provided
-	if r.ParentCustomerID != nil && r.ParentCustomerExternalID != nil {
-		return ierr.NewError("only one of parent_customer_id or parent_customer_external_id may be provided").
-			WithHint("Send either parent_customer_id or parent_customer_external_id, but not both").
-			Mark(ierr.ErrValidation)
 	}
 
 	return nil

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -32,17 +31,6 @@ func NewCustomerService(params ServiceParams) CustomerService {
 func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
-	}
-
-	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
-	// Fields are still accepted for backward compatibility; no hierarchy rules are enforced.
-	// Resolve parent_customer_external_id to an internal ID if provided.
-	if req.ParentCustomerExternalID != nil {
-		parent, err := s.CustomerRepo.GetByLookupKey(ctx, *req.ParentCustomerExternalID)
-		if err != nil {
-			return nil, err
-		}
-		req.ParentCustomerID = lo.ToPtr(parent.ID)
 	}
 
 	cust := req.ToCustomer(ctx)
@@ -204,17 +192,7 @@ func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.Cust
 		return nil, err
 	}
 
-	resp := &dto.CustomerResponse{Customer: customer}
-
-	if customer.ParentCustomerID != nil {
-		parentResp, err := s.GetCustomer(ctx, *customer.ParentCustomerID)
-		if err != nil {
-			return nil, err
-		}
-		resp.ParentCustomer = parentResp
-	}
-
-	return resp, nil
+	return &dto.CustomerResponse{Customer: customer}, nil
 }
 
 func (s *customerService) GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error) {
@@ -259,48 +237,6 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 		}, nil
 	}
 
-	// Expand parent customers if requested
-	var parentCustomersByID map[string]*dto.CustomerResponse
-	if filter.GetExpand().Has(types.ExpandParentCustomer) {
-		// Collect all unique parent customer IDs
-		parentCustomerIDs := make([]string, 0)
-		parentCustomerIDSet := make(map[string]bool)
-		for _, c := range customers {
-			if c.ParentCustomerID != nil && !parentCustomerIDSet[*c.ParentCustomerID] {
-				parentCustomerIDs = append(parentCustomerIDs, *c.ParentCustomerID)
-				parentCustomerIDSet[*c.ParentCustomerID] = true
-			}
-		}
-
-		if len(parentCustomerIDs) > 0 {
-			// Fetch parent customers in bulk
-			parentFilter := types.NewNoLimitCustomerFilter()
-			parentFilter.CustomerIDs = parentCustomerIDs
-
-			parentCustomers, err := s.CustomerRepo.List(ctx, parentFilter)
-			if err != nil {
-				return nil, err
-			}
-
-			// Create a map for quick parent customer lookup
-			parentCustomersByID = make(map[string]*dto.CustomerResponse, len(parentCustomers))
-			for _, pc := range parentCustomers {
-				parentCustomersByID[pc.ID] = &dto.CustomerResponse{Customer: pc}
-			}
-
-			s.Logger.DebugwCtx(ctx, "fetched parent customers for customers", "count", len(parentCustomers))
-		}
-	}
-
-	// Attach parent customers to response items
-	for _, resp := range response {
-		if resp.Customer.ParentCustomerID != nil {
-			if parentCustomer, ok := parentCustomersByID[*resp.Customer.ParentCustomerID]; ok {
-				resp.ParentCustomer = parentCustomer
-			}
-		}
-	}
-
 	return &dto.ListCustomersResponse{
 		Items:      response,
 		Pagination: types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset()),
@@ -338,17 +274,6 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	cust, err := s.CustomerRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-
-	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
-	// The parent_customer_id field is accepted for backward compatibility without enforcing hierarchy rules.
-	if req.ParentCustomerID != nil {
-		newParentID := strings.TrimSpace(*req.ParentCustomerID)
-		if newParentID == "" {
-			cust.ParentCustomerID = nil
-		} else {
-			cust.ParentCustomerID = lo.ToPtr(newParentID)
-		}
 	}
 
 	// Update basic fields
