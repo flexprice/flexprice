@@ -1740,6 +1740,12 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
+		if subscription.SubscriptionType == types.SubscriptionTypeParent {
+			if err := s.cascadeCancelToInherited(ctx, subscription, req); err != nil {
+				return err
+			}
+		}
+
 		// Step 7a: Cancel all addons on the subscription (mark associations cancelled, terminate addon line items)
 		if err := s.cancelAddonsForSubscription(ctx, subscription.ID, effectiveDate, req.Reason); err != nil {
 			return err
@@ -2582,6 +2588,12 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				return err
 			}
 
+			if sub.SubscriptionType == types.SubscriptionTypeParent {
+				if err := s.cascadePauseToInherited(ctx, sub); err != nil {
+					return err
+				}
+			}
+
 			s.Logger.InfowCtx(ctx, "activated period-end pause",
 				"subscription_id", sub.ID,
 				"pause_id", pause.ID)
@@ -2602,6 +2614,12 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 			if err := s.SubRepo.UpdatePause(ctx, pause); err != nil {
 				return err
+			}
+
+			if sub.SubscriptionType == types.SubscriptionTypeParent {
+				if err := s.cascadePauseToInherited(ctx, sub); err != nil {
+					return err
+				}
 			}
 
 			s.Logger.InfowCtx(ctx, "activated scheduled pause",
@@ -2644,6 +2662,12 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 			if err := s.SubRepo.UpdatePause(ctx, pause); err != nil {
 				return err
+			}
+
+			if sub.SubscriptionType == types.SubscriptionTypeParent {
+				if err := s.cascadeResumeToInherited(ctx, sub); err != nil {
+					return err
+				}
 			}
 
 			s.Logger.InfowCtx(ctx, "auto-resumed subscription",
@@ -2822,6 +2846,12 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// Update the subscription
 		if err := s.SubRepo.Update(ctx, sub); err != nil {
 			return err
+		}
+
+		if sub.SubscriptionType == types.SubscriptionTypeParent && sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+			if err := s.cascadeCancelToInherited(ctx, sub, nil); err != nil {
+				return err
+			}
 		}
 
 		// Process pending plan changes at period end (only if subscription is still active)
@@ -3270,6 +3300,12 @@ func (s *subscriptionService) executePause(
 			return err
 		}
 
+		if sub.SubscriptionType == types.SubscriptionTypeParent {
+			if err := s.cascadePauseToInherited(txCtx, sub); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	})
 
@@ -3419,6 +3455,12 @@ func (s *subscriptionService) executeResume(
 		// Update the subscription
 		if err := s.SubRepo.Update(txCtx, sub); err != nil {
 			return err
+		}
+
+		if sub.SubscriptionType == types.SubscriptionTypeParent {
+			if err := s.cascadeResumeToInherited(txCtx, sub); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -4709,27 +4751,6 @@ func (s *subscriptionService) determineEffectiveDate(
 			WithHintf("Unsupported cancellation type: %s", cancellationType).
 			Mark(ierr.ErrValidation)
 	}
-}
-
-// validateCancellationTiming ensures the cancellation timing is valid
-func (s *subscriptionService) validateCancellationTiming(
-	subscription *subscription.Subscription,
-	cancellationType types.CancellationType,
-	effectiveDate time.Time,
-) error {
-	switch cancellationType {
-	case types.CancellationTypeImmediate:
-		// Immediate cancellation should be within current period for proration
-		if effectiveDate.After(subscription.CurrentPeriodEnd) {
-			return ierr.NewError("immediate cancellation date is after current period end").
-				WithHintf("Current period ends at %s, cancellation date is %s",
-					subscription.CurrentPeriodEnd.Format("2006-01-02"),
-					effectiveDate.Format("2006-01-02")).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	return nil
 }
 
 // convertProrationResultToDetails converts SubscriptionProrationResult to response format
@@ -6282,6 +6303,82 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 				"child_customer_id":      childCustomerID,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+	return nil
+}
+
+// getInheritedSubscriptions retrieves all INHERITED child subscriptions for a parent subscription.
+func (s *subscriptionService) getInheritedSubscriptions(ctx context.Context, parentSubID string) ([]*subscription.Subscription, error) {
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{parentSubID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusPaused,
+	}
+
+	return s.SubRepo.List(ctx, filter)
+}
+
+// cascadeCancelToInherited cancels all INHERITED child subscriptions when the parent is cancelled.
+func (s *subscriptionService) cascadeCancelToInherited(ctx context.Context, parentSub *subscription.Subscription, _ *dto.CancelSubscriptionRequest) error {
+	children, err := s.getInheritedSubscriptions(ctx, parentSub.ID)
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		child.SubscriptionStatus = parentSub.SubscriptionStatus
+		child.CancelledAt = parentSub.CancelledAt
+		child.CancelAt = parentSub.CancelAt
+		child.CancelAtPeriodEnd = parentSub.CancelAtPeriodEnd
+		child.EndDate = parentSub.EndDate
+		if err := s.SubRepo.Update(ctx, child); err != nil {
+			return ierr.WithError(err).
+				WithHintf("Failed to cascade cancel to inherited subscription %s", child.ID).
+				Mark(ierr.ErrInternal)
+		}
+	}
+	return nil
+}
+
+// cascadePauseToInherited mirrors pause status on all INHERITED child subscriptions.
+func (s *subscriptionService) cascadePauseToInherited(ctx context.Context, parentSub *subscription.Subscription) error {
+	children, err := s.getInheritedSubscriptions(ctx, parentSub.ID)
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		child.SubscriptionStatus = parentSub.SubscriptionStatus
+		child.PauseStatus = parentSub.PauseStatus
+		child.ActivePauseID = nil
+		if err := s.SubRepo.Update(ctx, child); err != nil {
+			return ierr.WithError(err).
+				WithHintf("Failed to cascade pause to inherited subscription %s", child.ID).
+				Mark(ierr.ErrInternal)
+		}
+	}
+	return nil
+}
+
+// cascadeResumeToInherited mirrors resume on all INHERITED child subscriptions.
+func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, parentSub *subscription.Subscription) error {
+	children, err := s.getInheritedSubscriptions(ctx, parentSub.ID)
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		child.SubscriptionStatus = parentSub.SubscriptionStatus
+		child.PauseStatus = parentSub.PauseStatus
+		child.ActivePauseID = nil
+		child.CurrentPeriodStart = parentSub.CurrentPeriodStart
+		child.CurrentPeriodEnd = parentSub.CurrentPeriodEnd
+		if err := s.SubRepo.Update(ctx, child); err != nil {
+			return ierr.WithError(err).
+				WithHintf("Failed to cascade resume to inherited subscription %s", child.ID).
+				Mark(ierr.ErrInternal)
+		}
 	}
 	return nil
 }
