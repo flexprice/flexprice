@@ -282,6 +282,12 @@ func PaymentTerms(v types.PaymentTerms) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldPaymentTerms, vc))
 }
 
+// SubscriptionType applies equality check predicate on the "subscription_type" field. It's identical to SubscriptionTypeEQ.
+func SubscriptionType(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldEQ(FieldSubscriptionType, vc))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldTenantID, v))
@@ -2830,6 +2836,90 @@ func PaymentTermsEqualFold(v types.PaymentTerms) predicate.Subscription {
 func PaymentTermsContainsFold(v types.PaymentTerms) predicate.Subscription {
 	vc := string(v)
 	return predicate.Subscription(sql.FieldContainsFold(FieldPaymentTerms, vc))
+}
+
+// SubscriptionTypeEQ applies the EQ predicate on the "subscription_type" field.
+func SubscriptionTypeEQ(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldEQ(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeNEQ applies the NEQ predicate on the "subscription_type" field.
+func SubscriptionTypeNEQ(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldNEQ(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeIn applies the In predicate on the "subscription_type" field.
+func SubscriptionTypeIn(vs ...types.SubscriptionType) predicate.Subscription {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Subscription(sql.FieldIn(FieldSubscriptionType, v...))
+}
+
+// SubscriptionTypeNotIn applies the NotIn predicate on the "subscription_type" field.
+func SubscriptionTypeNotIn(vs ...types.SubscriptionType) predicate.Subscription {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Subscription(sql.FieldNotIn(FieldSubscriptionType, v...))
+}
+
+// SubscriptionTypeGT applies the GT predicate on the "subscription_type" field.
+func SubscriptionTypeGT(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldGT(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeGTE applies the GTE predicate on the "subscription_type" field.
+func SubscriptionTypeGTE(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldGTE(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeLT applies the LT predicate on the "subscription_type" field.
+func SubscriptionTypeLT(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldLT(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeLTE applies the LTE predicate on the "subscription_type" field.
+func SubscriptionTypeLTE(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldLTE(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeContains applies the Contains predicate on the "subscription_type" field.
+func SubscriptionTypeContains(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldContains(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeHasPrefix applies the HasPrefix predicate on the "subscription_type" field.
+func SubscriptionTypeHasPrefix(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldHasPrefix(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeHasSuffix applies the HasSuffix predicate on the "subscription_type" field.
+func SubscriptionTypeHasSuffix(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldHasSuffix(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeEqualFold applies the EqualFold predicate on the "subscription_type" field.
+func SubscriptionTypeEqualFold(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldEqualFold(FieldSubscriptionType, vc))
+}
+
+// SubscriptionTypeContainsFold applies the ContainsFold predicate on the "subscription_type" field.
+func SubscriptionTypeContainsFold(v types.SubscriptionType) predicate.Subscription {
+	vc := string(v)
+	return predicate.Subscription(sql.FieldContainsFold(FieldSubscriptionType, vc))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

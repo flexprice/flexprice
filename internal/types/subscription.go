@@ -7,6 +7,49 @@ import (
 	"github.com/samber/lo"
 )
 
+// SubscriptionType categorises a subscription within a customer hierarchy.
+type SubscriptionType string
+
+const (
+	// SubscriptionTypeStandalone is a regular subscription with no hierarchy relationship.
+	SubscriptionTypeStandalone SubscriptionType = "standalone"
+
+	// SubscriptionTypeParent is the primary subscription that owns line items and aggregates
+	// usage from child (inherited) subscriptions.
+	SubscriptionTypeParent SubscriptionType = "parent"
+
+	// SubscriptionTypeInherited is a skeleton subscription created for each child customer
+	// in a hierarchy. It carries no line items; events are matched via the parent subscription.
+	SubscriptionTypeInherited SubscriptionType = "inherited"
+)
+
+var SubscriptionTypeValues = []SubscriptionType{
+	SubscriptionTypeStandalone,
+	SubscriptionTypeParent,
+	SubscriptionTypeInherited,
+}
+
+func (t SubscriptionType) String() string {
+	return string(t)
+}
+
+func (t SubscriptionType) Validate() error {
+	if t == "" {
+		return nil
+	}
+
+	if !lo.Contains(SubscriptionTypeValues, t) {
+		return ierr.NewError("invalid subscription type").
+			WithHint("Subscription type must be standalone, parent, or inherited").
+			WithReportableDetails(map[string]any{
+				"subscription_type": t,
+				"allowed_values":    SubscriptionTypeValues,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // InvoiceBilling determines which customer should receive invoices for a subscription
 type InvoiceBilling string
 

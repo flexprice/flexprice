@@ -562,6 +562,20 @@ func (sc *SubscriptionCreate) SetNillablePaymentTerms(tt *types.PaymentTerms) *S
 	return sc
 }
 
+// SetSubscriptionType sets the "subscription_type" field.
+func (sc *SubscriptionCreate) SetSubscriptionType(tt types.SubscriptionType) *SubscriptionCreate {
+	sc.mutation.SetSubscriptionType(tt)
+	return sc
+}
+
+// SetNillableSubscriptionType sets the "subscription_type" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableSubscriptionType(tt *types.SubscriptionType) *SubscriptionCreate {
+	if tt != nil {
+		sc.SetSubscriptionType(*tt)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -793,6 +807,10 @@ func (sc *SubscriptionCreate) defaults() {
 		v := subscription.DefaultEnableTrueUp
 		sc.mutation.SetEnableTrueUp(v)
 	}
+	if _, ok := sc.mutation.SubscriptionType(); !ok {
+		v := subscription.DefaultSubscriptionType
+		sc.mutation.SetSubscriptionType(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -937,6 +955,14 @@ func (sc *SubscriptionCreate) check() error {
 	if v, ok := sc.mutation.PaymentTerms(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "payment_terms", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_terms": %w`, err)}
+		}
+	}
+	if _, ok := sc.mutation.SubscriptionType(); !ok {
+		return &ValidationError{Name: "subscription_type", err: errors.New(`ent: missing required field "Subscription.subscription_type"`)}
+	}
+	if v, ok := sc.mutation.SubscriptionType(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Subscription.subscription_type": %w`, err)}
 		}
 	}
 	return nil
@@ -1137,6 +1163,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.PaymentTerms(); ok {
 		_spec.SetField(subscription.FieldPaymentTerms, field.TypeString, value)
 		_node.PaymentTerms = &value
+	}
+	if value, ok := sc.mutation.SubscriptionType(); ok {
+		_spec.SetField(subscription.FieldSubscriptionType, field.TypeString, value)
+		_node.SubscriptionType = value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
