@@ -71,14 +71,6 @@ type FeatureUsageTrackingService interface {
 	// Get HuggingFace Inference
 	GetHuggingFaceBillingData(ctx context.Context, req *dto.GetHuggingFaceBillingDataRequest) (*dto.GetHuggingFaceBillingDataResponse, error)
 
-	// BenchmarkPrepareV1 runs the original prepareProcessedEvents function and returns timing info
-	// This is for benchmarking purposes only - does not persist to ClickHouse
-	BenchmarkPrepareV1(ctx context.Context, event *events.Event) (*dto.BenchmarkResult, error)
-
-	// BenchmarkPrepareV2 runs the optimized prepareProcessedEventsV2 function and returns timing info
-	// This is for benchmarking purposes only - does not persist to ClickHouse
-	BenchmarkPrepareV2(ctx context.Context, event *events.Event) (*dto.BenchmarkResult, error)
-
 	// DebugEvent provides debugging information for an event by ID
 	DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error)
 }
@@ -3925,78 +3917,6 @@ func (s *featureUsageTrackingService) mergeBucketPointsByWindow(points []events.
 	})
 
 	return mergedPoints
-}
-
-// BenchmarkPrepareV1 runs the original prepareProcessedEvents function and returns timing info
-// This is for benchmarking purposes only - does not persist to ClickHouse
-func (s *featureUsageTrackingService) BenchmarkPrepareV1(ctx context.Context, event *events.Event) (*dto.BenchmarkResult, error) {
-	result := &dto.BenchmarkResult{
-		Version:            "v1",
-		EventID:            event.ID,
-		ExternalCustomerID: event.ExternalCustomerID,
-	}
-
-	startTime := time.Now()
-
-	featureUsages, err := s.prepareProcessedEvents(ctx, event)
-
-	result.DurationMs = float64(time.Since(startTime).Microseconds()) / 1000.0 // Convert to milliseconds with precision
-
-	if err != nil {
-		result.Error = err.Error()
-		return result, nil // Still return the result with error info
-	}
-
-	result.Events = featureUsages
-
-	result.FeatureUsageCount = len(featureUsages)
-	if len(featureUsages) > 0 {
-		result.CustomerID = featureUsages[0].CustomerID
-	}
-
-	s.Logger.InfowCtx(ctx, "benchmark v1 completed",
-		"event_id", event.ID,
-		"duration_ms", result.DurationMs,
-		"feature_usage_count", result.FeatureUsageCount,
-	)
-
-	return result, nil
-}
-
-// BenchmarkPrepareV2 runs the optimized prepareProcessedEventsV2 function and returns timing info
-// This is for benchmarking purposes only - does not persist to ClickHouse
-func (s *featureUsageTrackingService) BenchmarkPrepareV2(ctx context.Context, event *events.Event) (*dto.BenchmarkResult, error) {
-	result := &dto.BenchmarkResult{
-		Version:            "v2",
-		EventID:            event.ID,
-		ExternalCustomerID: event.ExternalCustomerID,
-	}
-
-	startTime := time.Now()
-
-	featureUsages, err := s.prepareProcessedEventsV2(ctx, event)
-
-	result.DurationMs = float64(time.Since(startTime).Microseconds()) / 1000.0 // Convert to milliseconds with precision
-
-	if err != nil {
-		result.Error = err.Error()
-		return result, nil // Still return the result with error info
-	}
-
-	result.Events = featureUsages
-
-	result.FeatureUsageCount = len(featureUsages)
-	if len(featureUsages) > 0 {
-		result.CustomerID = featureUsages[0].CustomerID
-	}
-
-	s.Logger.InfowCtx(ctx, "benchmark v2 completed",
-		"event_id", event.ID,
-		"duration_ms", result.DurationMs,
-		"feature_usage_count", result.FeatureUsageCount,
-	)
-
-	return result, nil
 }
 
 func (s *featureUsageTrackingService) DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error) {
