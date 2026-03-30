@@ -3704,7 +3704,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 		})
 		s.Error(err)
 		s.True(ierr.IsValidation(err), "expected validation error")
-		s.Contains(err.Error(), "future")
+		s.Contains(err.Error(), "at or after the current time")
 		s.T().Logf("✅ scheduled_date: past cancel_at rejected")
 	})
 
