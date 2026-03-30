@@ -74,6 +74,10 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 				Status: lo.ToPtr(types.StatusPublished),
 			},
 			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
+			SubscriptionTypes: []types.SubscriptionType{
+				types.SubscriptionTypeStandalone,
+				types.SubscriptionTypeParent,
+			},
 			TimeRangeFilter: &types.TimeRangeFilter{
 				EndTime: &now,
 			},
