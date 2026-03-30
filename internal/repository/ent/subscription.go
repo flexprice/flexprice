@@ -59,6 +59,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetLookupKey(sub.LookupKey).
 		SetCustomerID(sub.CustomerID).
 		SetPlanID(sub.PlanID).
+		SetSubscriptionType(sub.SubscriptionType).
 		SetSubscriptionStatus(sub.SubscriptionStatus).
 		SetCurrency(sub.Currency).
 		SetBillingAnchor(sub.BillingAnchor).
@@ -173,6 +174,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetStartDate(sub.StartDate).
 		SetBillingAnchor(sub.BillingAnchor).
 		SetSubscriptionStatus(sub.SubscriptionStatus).
+		SetSubscriptionType(sub.SubscriptionType).
 		SetCurrentPeriodStart(sub.CurrentPeriodStart).
 		SetCurrentPeriodEnd(sub.CurrentPeriodEnd).
 		SetPauseStatus(sub.PauseStatus).

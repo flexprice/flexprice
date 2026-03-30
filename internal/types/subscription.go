@@ -345,6 +345,9 @@ type SubscriptionFilter struct {
 	// ActiveAt filters subscriptions that are active at the given time
 	ActiveAt *time.Time `json:"active_at,omitempty" form:"active_at"`
 
+	// SubscriptionType filters by subscription type
+	SubscriptionTypes []SubscriptionType `json:"subscription_type,omitempty" form:"subscription_type"`
+
 	// WithLineItems includes line items in the response
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
 }
@@ -394,6 +397,13 @@ func (f SubscriptionFilter) Validate() error {
 	// Validate billing period values
 	for _, period := range f.BillingPeriod {
 		if err := period.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate subscription type values
+	for _, subscriptionType := range f.SubscriptionTypes {
+		if err := subscriptionType.Validate(); err != nil {
 			return err
 		}
 	}
