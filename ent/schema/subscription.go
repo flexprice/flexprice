@@ -195,6 +195,13 @@ func (Subscription) Fields() []ent.Field {
 			Nillable().
 			GoType(types.PaymentTerms("")).
 			Comment("Payment terms for invoice due date (e.g. 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET)"),
+		field.String("subscription_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Default(string(types.SubscriptionTypeStandalone)).
+			GoType(types.SubscriptionType("")).
+			Comment("Subscription type within a customer hierarchy (standalone, parent, inherited)"),
 	}
 }
 

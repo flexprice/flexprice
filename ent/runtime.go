@@ -1668,6 +1668,10 @@ func init() {
 	subscriptionDescEnableTrueUp := subscriptionFields[32].Descriptor()
 	// subscription.DefaultEnableTrueUp holds the default value on creation for the enable_true_up field.
 	subscription.DefaultEnableTrueUp = subscriptionDescEnableTrueUp.Default.(bool)
+	// subscriptionDescSubscriptionType is the schema descriptor for subscription_type field.
+	subscriptionDescSubscriptionType := subscriptionFields[36].Descriptor()
+	// subscription.DefaultSubscriptionType holds the default value on creation for the subscription_type field.
+	subscription.DefaultSubscriptionType = types.SubscriptionType(subscriptionDescSubscriptionType.Default.(string))
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0
