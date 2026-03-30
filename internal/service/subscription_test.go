@@ -108,6 +108,22 @@ func (s *SubscriptionServiceSuite) TestPaymentBehaviorValidation() {
 	}
 }
 
+func (s *SubscriptionServiceSuite) TestCreateSubscription_FutureDateAllowed() {
+	futureDate := time.Now().UTC().Add(30 * 24 * time.Hour) // 30 days from now
+	req := &dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          &futureDate,
+		Currency:           "USD",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingCycle:       types.BillingCycleAnniversary,
+	}
+	err := req.Validate()
+	s.NoError(err, "future start_date should be allowed")
+}
+
 func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments() {
 	ctx := s.GetContext()
 
@@ -5925,4 +5941,64 @@ func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Can
 	cancelReqNone.Validate()
 	_, errCancelNone := s.service.CancelSubscription(ctx, resp.ID, cancelReqNone)
 	s.NoError(errCancelNone, "E.3.2: cancel with mixed + none should succeed")
+}
+
+func (s *SubscriptionServiceSuite) TestCancelSubscription_SetsEndDateOnPlanLineItems() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+
+	// Create a subscription with a plan line item directly via the repo
+	subID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)
+	lineItemID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
+	sub := &subscription.Subscription{
+		ID:                 subID,
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		StartDate:          now.Add(-24 * time.Hour),
+		CurrentPeriodStart: now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	planLineItem := &subscription.SubscriptionLineItem{
+		ID:             lineItemID,
+		SubscriptionID: subID,
+		CustomerID:     s.testData.customer.ID,
+		EntityID:       s.testData.plan.ID,
+		EntityType:     types.SubscriptionLineItemEntityTypePlan,
+		PriceID:        s.testData.prices.apiCalls.ID,
+		Currency:       "usd",
+		StartDate:      now.Add(-24 * time.Hour),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{planLineItem}))
+
+	// Cancel immediately
+	cancelReq := &dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	}
+	cancelFloor := time.Now().UTC().Add(-time.Second) // captured just before cancel
+	_, err := s.service.CancelSubscription(ctx, subID, cancelReq)
+	s.Require().NoError(err)
+
+	// Reload line items and verify EndDate is set
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{subID}
+	filter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypePlan)
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, filter)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(lineItems, "expected at least one plan line item")
+
+	for _, item := range lineItems {
+		s.False(item.EndDate.IsZero(),
+			"plan line item %s should have EndDate set after cancellation", item.ID)
+		s.True(!item.EndDate.Before(cancelFloor),
+			"plan line item EndDate should not be before cancellation time")
+		s.True(item.EndDate.Before(now.Add(time.Minute)),
+			"plan line item EndDate should be around cancellation time")
+	}
 }
