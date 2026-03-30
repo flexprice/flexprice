@@ -622,12 +622,14 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	}
 
 	if len(lineItems) == 0 {
-		s.Logger.DebugwCtx(ctx, "no active subscription line items found for meters and customer, skipping",
-			"event_id", event.ID,
-			"customer_id", customer.ID,
-			"meter_ids", meterIDs,
-		)
-		return results, nil
+		inheritedLineItems, err := s.resolveInheritedSubscriptionsLineItems(ctx, customer.ID, meterIDs)
+		if err != nil {
+			return results, err
+		}
+		if len(inheritedLineItems) == 0 {
+			return results, nil
+		}
+		lineItems = inheritedLineItems
 	}
 
 	// Filter line items that are active for the event timestamp
@@ -4242,4 +4244,41 @@ func (s *featureUsageTrackingService) handleMissingFeature(
 	)
 
 	return createdFeature, nil
+}
+
+func (s *featureUsageTrackingService) resolveInheritedSubscriptionsLineItems(ctx context.Context, customerID string, meterIDs []string) ([]*subscription.SubscriptionLineItem, error) {
+	inheritedFilter := types.NewNoLimitSubscriptionFilter()
+	inheritedFilter.CustomerID = customerID
+	inheritedFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	inheritedFilter.Status = lo.ToPtr(types.StatusPublished)
+	inheritedFilter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusDraft,
+	}
+
+	inheritedSubs, err := s.SubRepo.List(ctx, inheritedFilter)
+	if err != nil {
+		return nil, err
+	}
+	if len(inheritedSubs) == 0 {
+		return nil, nil
+	}
+
+	parentIDs := make([]string, 0, len(inheritedSubs))
+	for _, inherited := range inheritedSubs {
+		if inherited.ParentSubscriptionID != nil && lo.FromPtr(inherited.ParentSubscriptionID) != "" {
+			parentIDs = append(parentIDs, lo.FromPtr(inherited.ParentSubscriptionID))
+		}
+	}
+	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	lineItemFilter.SubscriptionIDs = parentIDs
+	lineItemFilter.MeterIDs = meterIDs
+	lineItemFilter.ActiveFilter = true
+
+	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	if err != nil {
+		return nil, err
+	}
+	return lineItems, nil
 }
