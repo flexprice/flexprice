@@ -1465,7 +1465,7 @@ func (s *featureUsageTrackingService) validateAnalyticsRequestV2(req *dto.GetUsa
 // fetchAnalyticsData fetches all required data sequentially
 func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*AnalyticsData, error) {
 	// 1. Fetch customer
-	customer, err := s.fetchCustomer(ctx, req.ExternalCustomerID)
+	customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.ExternalCustomerID)
 	if err != nil {
 		return nil, err
 	}
@@ -1639,20 +1639,6 @@ func (s *featureUsageTrackingService) buildAnalyticsResponse(ctx context.Context
 	return s.ToGetUsageAnalyticsResponseDTO(ctx, data, req)
 }
 
-// fetchCustomer fetches customer by external customer ID
-func (s *featureUsageTrackingService) fetchCustomer(ctx context.Context, externalCustomerID string) (*customer.Customer, error) {
-	customer, err := s.CustomerRepo.GetByLookupKey(ctx, externalCustomerID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Customer not found").
-			WithReportableDetails(map[string]interface{}{
-				"external_customer_id": externalCustomerID,
-			}).
-			Mark(ierr.ErrNotFound)
-	}
-	return customer, nil
-}
-
 // fetchSubscriptions fetches active subscriptions for a customer
 func (s *featureUsageTrackingService) fetchSubscriptions(ctx context.Context, customerID string) ([]*subscription.Subscription, error) {
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
@@ -1673,6 +1659,32 @@ func (s *featureUsageTrackingService) fetchSubscriptions(ctx context.Context, cu
 			"customer_id", customerID,
 		)
 		return nil, err
+	}
+
+	// also get parent subscriptions if any sub is of type inherited
+	parentSubIDs := make([]string, 0)
+	for _, sub := range subscriptionsList.Items {
+		if sub.Subscription.SubscriptionType == types.SubscriptionTypeInherited {
+			parentSubIDs = append(parentSubIDs, lo.FromPtr(sub.Subscription.ParentSubscriptionID))
+		}
+	}
+	if len(parentSubIDs) > 0 {
+		parentSubFilter := types.NewNoLimitSubscriptionFilter()
+		parentSubFilter.WithLineItems = true
+		parentSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
+		parentSubFilter.CustomerID = customerID
+		parentSubFilter.ParentSubscriptionIDs = parentSubIDs
+		parentSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+			types.SubscriptionStatusPaused,
+			types.SubscriptionStatusCancelled,
+		}
+		parentSubsList, err := subscriptionService.ListSubscriptions(ctx, parentSubFilter)
+		if err != nil {
+			return nil, err
+		}
+		subscriptionsList.Items = append(subscriptionsList.Items, parentSubsList.Items...)
 	}
 
 	// Convert to domain objects
