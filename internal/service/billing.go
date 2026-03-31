@@ -2998,13 +2998,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 		extCustomerIDsForMeter, err := s.getChildExternalCustomerIDsForSubscription(ctx, sub)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to resolve usage external customer ids for subscription",
-				"subscription_id", subscriptionID, "error", err)
-			continue
-		}
-		var meterExternalCustomerIDs []string
-		if len(extCustomerIDsForMeter) > 0 {
-			meterExternalCustomerIDs = extCustomerIDsForMeter
+			return nil, err
 		}
 
 		usageReq := &dto.GetUsageBySubscriptionRequest{
@@ -3031,7 +3025,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// Create usage request with daily window size for current billing period
 					usageRequest := &dto.GetUsageByMeterRequest{
 						MeterID:             meterID,
-						ExternalCustomerIDs: meterExternalCustomerIDs,
+						ExternalCustomerIDs: extCustomerIDsForMeter,
 						StartTime:           sub.CurrentPeriodStart,
 						EndTime:             sub.CurrentPeriodEnd,
 						WindowSize:          types.WindowSizeDay,
@@ -3082,7 +3076,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// Create usage request for current month with monthly window size
 					usageRequest := &dto.GetUsageByMeterRequest{
 						MeterID:             meterID,
-						ExternalCustomerIDs: meterExternalCustomerIDs,
+						ExternalCustomerIDs: extCustomerIDsForMeter,
 						StartTime:           sub.CurrentPeriodStart,
 						EndTime:             sub.CurrentPeriodEnd,
 						WindowSize:          types.WindowSizeMonth,
@@ -3140,7 +3134,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// This maintains consistency with the billing logic
 					totalUsageRequest := &dto.GetUsageByMeterRequest{
 						MeterID:             meterID,
-						ExternalCustomerIDs: meterExternalCustomerIDs,
+						ExternalCustomerIDs: extCustomerIDsForMeter,
 						StartTime:           sub.StartDate,
 						EndTime:             sub.CurrentPeriodEnd,
 					}
