@@ -6214,7 +6214,7 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 	}
 
 	childCustomerIDs := make([]string, 0, len(inh.ExternalCustomerIDsToInheritSubscription))
-	if len(childCustomerIDs) > 0 {
+	if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
 		childFilter := types.NewNoLimitCustomerFilter()
 		childFilter.ExternalIDs = inh.ExternalCustomerIDsToInheritSubscription
 		childFilter.Status = lo.ToPtr(types.StatusPublished)
@@ -6237,6 +6237,12 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 					WithHint("No customer exists for the given external id in this environment").
 					WithReportableDetails(map[string]interface{}{"external_id": extID}).
 					Mark(ierr.ErrNotFound)
+			}
+			if cust.ID == sub.CustomerID {
+				return nil, ierr.NewError("cannot inherit onto itself").
+					WithHint("The subscriber cannot appear in external_customer_ids_to_inherit_subscription").
+					WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+					Mark(ierr.ErrValidation)
 			}
 			if cust.Status != types.StatusPublished {
 				return nil, ierr.NewError("customer is not active").
