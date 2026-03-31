@@ -14,6 +14,17 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 )
 
+// HashResult represents a salted hash result
+type HashResult struct {
+	Salt string
+	Hash string
+}
+
+// String implements the Stringer interface and returns just the hash for backward compatibility
+func (hr HashResult) String() string {
+	return hr.Hash
+}
+
 // EncryptionService defines the interface for encryption and hashing operations
 type EncryptionService interface {
 	// Encrypt encrypts plaintext using AES-GCM
@@ -22,8 +33,11 @@ type EncryptionService interface {
 	// Decrypt decrypts ciphertext using AES-GCM
 	Decrypt(ciphertext string) (string, error)
 
-	// Hash creates a one-way hash of the input value using SHA-256
-	Hash(value string) string
+	// Hash creates a salted one-way hash of the input value using SHA-256
+	Hash(value string) HashResult
+
+	// VerifyHash verifies if a value matches a previously generated hash with its salt
+	VerifyHash(value string, previousHash HashResult) bool
 }
 
 type aesEncryptionService struct {
@@ -146,18 +160,59 @@ func (s *aesEncryptionService) Decrypt(ciphertext string) (string, error) {
 	return string(plaintext), nil
 }
 
-// Hash creates a one-way hash of the input value using SHA-256
-func (s *aesEncryptionService) Hash(value string) string {
+// Hash creates a salted one-way hash of the input value using SHA-256
+func (s *aesEncryptionService) Hash(value string) HashResult {
 	if value == "" {
-		return ""
+		return HashResult{}
+	}
+}
+
+// VerifyHash verifies if a value matches a previously generated hash with its salt
+func (s *aesEncryptionService) VerifyHash(value string, previousHash HashResult) bool {
+	if value == "" || previousHash.Salt == "" || previousHash.Hash == "" {
+		return false
+	}
+
+	// Decode the salt from hex
+	salt, err := hex.DecodeString(previousHash.Salt)
+	if err != nil {
+		s.logger.Error("Failed to decode salt", "error", err)
+		return false
 	}
 
 	// Create a new SHA-256 hasher
 	hasher := sha256.New()
 
-	// Write the value to the hasher
+	// Write the salt and then the value to the hasher
+	hasher.Write(salt)
 	hasher.Write([]byte(value))
 
-	// Get the hash sum and convert to hex string
-	return hex.EncodeToString(hasher.Sum(nil))
+	// Compare the computed hash with the stored hash
+	computedHash := hex.EncodeToString(hasher.Sum(nil))
+	return computedHash == previousHash.Hash
+
+func (s *aesEncryptionService) Hash(value string) HashResult {
+	if value == "" {
+		return HashResult{}
+	}
+
+	// Generate a random 32-byte salt
+	salt := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		s.logger.Error("Failed to generate salt", "error", err)
+		return HashResult{}
+	}
+
+	// Create a new SHA-256 hasher
+	hasher := sha256.New()
+
+	// Write the salt and then the value to the hasher
+	hasher.Write(salt)
+	hasher.Write([]byte(value))
+
+	// Get the hash sum and convert both salt and hash to hex strings
+	return HashResult{
+		Salt: hex.EncodeToString(salt),
+		Hash: hex.EncodeToString(hasher.Sum(nil)),
+	}
 }
