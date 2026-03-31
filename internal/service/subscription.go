@@ -6365,6 +6365,12 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 					WithReportableDetails(map[string]interface{}{"external_id": extID}).
 					Mark(ierr.ErrNotFound)
 			}
+			if cust.ID == sub.CustomerID {
+				return nil, ierr.NewError("cannot inherit onto itself").
+					WithHint("The subscriber cannot appear in external_customer_ids_to_inherit_subscription").
+					WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+					Mark(ierr.ErrValidation)
+			}
 			if cust.Status != types.StatusPublished {
 				return nil, ierr.NewError("customer is not active").
 					WithHint("The customer must be active").
