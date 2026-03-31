@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -848,19 +849,35 @@ func (s *InvoiceDiscountCreditWorkflowSuite) TestCreditSequentialVsProportionalA
 	err := s.applyDiscountsAndCredits(inv, []dto.InvoiceLineItemCoupon{}, []dto.InvoiceCoupon{})
 	s.NoError(err)
 
-	// Verify both methods: sequential (L1 then L2) vs proportional allocation
-	// Sequential: L1 gets $50 (full), L2 gets $0 (remaining $10 not enough for L2)
-	// Current implementation uses sequential
+	// Credits are applied sequentially in ListByInvoiceID order (not proportionally).
+	// In-memory ListByInvoiceID sorts by line ID so order is stable; invoice LineItems slice
+	// order from Get() may differ, so assert using the same ordering as the repo.
 	expectedSubtotal := decimal.NewFromFloat(100.00)
 	expectedDiscount := decimal.Zero
-	expectedCredits := decimal.NewFromFloat(50.00) // Applied sequentially
-	expectedTotal := decimal.NewFromFloat(50.00)   // $100 - $50 = $50
+	expectedCredits := decimal.NewFromFloat(50.00)
+	expectedTotal := decimal.NewFromFloat(50.00)
 
 	s.verifyInvoiceTotals(inv, expectedSubtotal, expectedDiscount, expectedCredits, expectedTotal)
 
-	// Verify sequential application: L1 should have credits, L2 may have partial
 	reloadedInv, _ := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
-	s.True(reloadedInv.LineItems[0].PrepaidCreditsApplied.GreaterThanOrEqual(decimal.NewFromFloat(50.00)), "L1 should have credits applied")
+	sorted := append([]*invoice.InvoiceLineItem(nil), reloadedInv.LineItems...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	remaining := decimal.NewFromFloat(50.00)
+	for _, li := range sorted {
+		if li.PriceType == nil || lo.FromPtr(li.PriceType) != string(types.PRICE_TYPE_USAGE) {
+			s.True(li.PrepaidCreditsApplied.IsZero(), "non-usage line should have no prepaid credits")
+			continue
+		}
+		net := li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
+		if net.LessThanOrEqual(decimal.Zero) {
+			s.True(li.PrepaidCreditsApplied.IsZero())
+			continue
+		}
+		want := decimal.Min(remaining, net)
+		s.True(li.PrepaidCreditsApplied.Equal(want),
+			"sequential credit: line %s expected prepaid %s, got %s", li.ID, want.String(), li.PrepaidCreditsApplied.String())
+		remaining = remaining.Sub(want)
+	}
 }
 
 // Test Case 17: Line discount greater than line amount
