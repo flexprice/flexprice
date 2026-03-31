@@ -118,7 +118,7 @@ Scripts typically require these environment variables (set via command flags):
 ## How scripts are structured
 
 - **Entrypoint:** [`scripts/main.go`](main.go) defines a `commands` slice (`Name`, `Description`, `Run func() error`). Use `-list` to print commands and `-cmd <name>` to run one.
-- **Flags → env:** Shared flags (`-tenant-id`, `-environment-id`, `-file-path`, `-dry-run`, `-worker-count`, etc.) are parsed in `main.go` and copied into `os.Setenv` so the implementation reads **`os.Getenv`** only. Command-specific flags can be added the same way (see `-effective-date` / `-failed-output` for calendar billing migration).
+- **Flags → env:** Shared flags (`-tenant-id`, `-environment-id`, `-file-path`, `-dry-run`, `-worker-count`, etc.) are parsed in `main.go` and copied into `os.Setenv` so the implementation reads **`os.Getenv`** only. Command-specific flags can be added the same way (see `-effective-date`, `-failed-output`, and `-success-output` for calendar billing migration).
 - **Implementations:** Live under [`scripts/internal/`](internal/) as `func MyScript() error` (or a thin wrapper that builds params and calls a private `run`). One file per concern (e.g. [`assign_plan.go`](internal/assign_plan.go), [`migrate_billing_cycle.go`](internal/migrate_billing_cycle.go)) is typical.
 - **Dependencies:** Scripts load `config.NewConfig()` and construct `postgres.NewEntClients` → `postgres.NewClient`, optional ClickHouse, in-memory `cache`, then `entRepo.New*` repositories and a **`service.ServiceParams`** (often partial; heavier scripts fill more fields). Context must carry tenancy: `context.WithValue(ctx, types.CtxTenantID, …)` and `types.CtxEnvironmentID`.
 - **Side effects:** Prefer [`mockWebhookPublisher`](internal/csv_feature_processor.go) for scripts that must not emit webhooks. Some scripts use real webhook/memory pubsub when needed (e.g. onboarding).
@@ -126,37 +126,41 @@ Scripts typically require these environment variables (set via command flags):
 
 ### migrate-calendar-billing-csv
 
-Schedules cancellation (`scheduled_date`, proration none, webhooks suppressed) and creates a new monthly calendar-billing subscription in **one database transaction per CSV row**.
+Calls the **Flexprice HTTP API** (not local DB): for each subscription ID in a CSV, schedules cancellation (`scheduled_date`, proration none) then creates a new monthly calendar-billing subscription. **Cancel and create are separate requests** — if create fails after cancel succeeds, you can be left in a partial state. The public cancel API does **not** expose webhook suppression; expect normal webhook behavior on cancel.
 
-**CSV format (two modes):**
+**Auth and base URL**
 
-1. **Header row (default):** First line lists column names (Ent / DB names). **Required:** `id` (alias `subscription_id`), `customer_id`, `plan_id`, `currency`. Optional `tenant_id` / `environment_id` must match flags when set.
+- **API key** (required): `-api-key` → `SCRIPT_FLEXPRICE_API_KEY`, or set `FLEXPRICE_API_KEY`. Sent as header `x-api-key`.
+- **Base URL** (optional): `-api-base-url` → `API_BASE_URL`. Default is `https://api.cloud.flexprice.io/v1` (must include `/v1`).
+- **Environment** (optional): `-environment-id` → `ENVIRONMENT_ID`, sent as `X-Environment-ID` when your API key does not pin an environment.
 
-2. **Positional (`-positional-csv`):** No header; columns follow `public.subscriptions` export order (0-based): `id`(0), `lookup_key`(1), `customer_id`(2), `plan_id`(3), `subscription_status`(4), `status`(5), `currency`(6), then `billing_anchor` through `billing_period_count`(7–20), `tenant_id`(21), `created_at`…`metadata`(22–27), `environment_id`(28), `pause_status` through `payment_terms`(29–43). Use **`-positional-skip-header`** if line 1 is still a header. Use **`-csv-delimiter tab`** for TSV.
+Tenant and environment come from the **API key** (and optional `X-Environment-ID`); the CSV is **subscription IDs only** for that scope.
+
+**CSV format**
+
+- **Header row:** first line contains `id` or `subscription_id`; that column is read for each data row.
+- **No header:** one column per row (first column is the subscription ID).
 
 **Usage:**
 
 ```bash
 go run scripts/main.go -cmd migrate-calendar-billing-csv \
-  -tenant-id "<tenant_id>" \
-  -environment-id "<environment_id>" \
+  -api-key "<api_key>" \
   -file-path "/path/to/subs.csv" \
   -effective-date "2026-04-01" \
+  -success-output "/path/to/successful.csv" \
   -failed-output "/path/to/failed.csv" \
   -dry-run false \
-  -worker-count 5
+  -worker-count 3
 ```
 
-Positional TSV (no header row):
+Successful rows (validated or migrated) are appended to **`successful_calendar_billing_migration.csv`** by default, or to `-success-output` / `SUCCESS_OUTPUT_PATH`. Columns: `original_subscription_id`, `customer_id`, `plan_id`, `currency`, `effective_date`, `new_subscription_id`, `mode` (`dry_run` or `migrated`).
 
-```bash
-go run scripts/main.go -cmd migrate-calendar-billing-csv \
-  -tenant-id "<tenant_id>" -environment-id "<environment_id>" \
-  -file-path "/path/to/subs.tsv" -effective-date "2026-04-01" \
-  -positional-csv -csv-delimiter tab
-```
+Optional: `-api-base-url "http://localhost:8080/v1"` for local API. If `-worker-count` is omitted, this command defaults to **3** workers (other scripts are unchanged and use their own defaults).
 
-`EFFECTIVE_DATE` must be **in the future** (required by subscription cancel validation). Optional: `-user-id` sets audit context (`USER_ID`).
+`EFFECTIVE_DATE` must be **in the future** (required by subscription cancel validation).
+
+**Environment variables (alternative to flags):** `SCRIPT_FLEXPRICE_API_KEY` or `FLEXPRICE_API_KEY`, `API_BASE_URL`, `FILE_PATH`, `EFFECTIVE_DATE`, `ENVIRONMENT_ID`, `SUCCESS_OUTPUT_PATH`, `FAILED_OUTPUT_PATH`, `DRY_RUN`, `WORKER_COUNT`.
 
 ## Development
 

@@ -135,7 +135,7 @@ var commands = []Command{
 	},
 	{
 		Name:        "migrate-calendar-billing-csv",
-		Description: "From CSV: schedule-cancel each subscription and create a new calendar-billing subscription (atomic per row)",
+		Description: "From CSV (subscription IDs): call API to schedule-cancel and create calendar-billing subscription per id",
 		Run:         internal.MigrateCalendarBillingCSV,
 	},
 }
@@ -200,8 +200,8 @@ func main() {
 		workerCount        string
 		effectiveDate      string
 		failedOutput       string
-		positionalCSV      bool
-		positionalSkipHdr  bool
+		successOutput      string
+		apiBaseURL         string
 	)
 
 	flag.BoolVar(&listCommands, "list", false, "List all available commands")
@@ -228,11 +228,11 @@ func main() {
 	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing")
 	flag.StringVar(&dryRun, "dry-run", "false", "Dry run mode (true/false)")
 	flag.StringVar(&addonID, "addon-id", "", "Addon ID for operations")
-	flag.StringVar(&workerCount, "worker-count", "10", "Number of concurrent workers for parallel processing")
+	flag.StringVar(&workerCount, "worker-count", "", "Concurrent workers (sets WORKER_COUNT when non-empty; migrate-calendar-billing-csv defaults to 3 if unset)")
 	flag.StringVar(&effectiveDate, "effective-date", "", "Effective date for calendar billing migration (RFC3339 or YYYY-MM-DD)")
 	flag.StringVar(&failedOutput, "failed-output", "", "Path for failed rows CSV (migrate-calendar-billing-csv)")
-	flag.BoolVar(&positionalCSV, "positional-csv", false, "Subscriptions export has no header; columns follow PostgreSQL table order (migrate-calendar-billing-csv)")
-	flag.BoolVar(&positionalSkipHdr, "positional-skip-header", false, "With -positional-csv, skip first line (e.g. header row)")
+	flag.StringVar(&successOutput, "success-output", "", "Path for successful rows CSV (migrate-calendar-billing-csv)")
+	flag.StringVar(&apiBaseURL, "api-base-url", "", "Flexprice API base URL including /v1 (migrate-calendar-billing-csv); default https://api.cloud.flexprice.io/v1")
 	flag.Parse()
 
 	if listCommands {
@@ -317,17 +317,17 @@ func main() {
 	if workerCount != "" {
 		os.Setenv("WORKER_COUNT", workerCount)
 	}
+	if apiBaseURL != "" {
+		os.Setenv("API_BASE_URL", apiBaseURL)
+	}
 	if effectiveDate != "" {
 		os.Setenv("EFFECTIVE_DATE", effectiveDate)
 	}
 	if failedOutput != "" {
 		os.Setenv("FAILED_OUTPUT_PATH", failedOutput)
 	}
-	if positionalCSV {
-		os.Setenv("POSITIONAL_CSV", "true")
-	}
-	if positionalSkipHdr {
-		os.Setenv("POSITIONAL_SKIP_HEADER", "true")
+	if successOutput != "" {
+		os.Setenv("SUCCESS_OUTPUT_PATH", successOutput)
 	}
 
 	// Find and run the command
