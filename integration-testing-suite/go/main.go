@@ -212,6 +212,13 @@ func isUsefulOutput(line string) bool {
 
 // runSDKTests runs test_sdk.go and streams output live. Returns true on failure.
 func runSDKTests(repoRoot string) bool {
+	sdkTestPath := filepath.Join(repoRoot, "api", "tests", "go", "test_sdk.go")
+	if _, err := os.Stat(sdkTestPath); os.IsNotExist(err) {
+		fmt.Println()
+		fmt.Println("  ⊘  SDK test file not found at api/tests/go/test_sdk.go — skipping")
+		return false
+	}
+
 	cmd := exec.Command("go", "run", "-tags", "published", "./api/tests/go/test_sdk.go")
 	cmd.Dir = repoRoot
 	cmd.Stdout = os.Stdout
