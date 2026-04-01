@@ -5004,8 +5004,17 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		usageEndTime = time.Now().UTC()
 	}
 
+	// For inherited subscriptions, line items live on the parent subscription.
+	// Use the parent's ID to fetch line items, but keep usageCustomerIDs scoped to
+	// the child so we only count the child's own events.
+	lineItemSubID := subscription.ID
+	if subscription.SubscriptionType == types.SubscriptionTypeInherited &&
+		subscription.ParentSubscriptionID != nil && lo.FromPtr(subscription.ParentSubscriptionID) != "" {
+		lineItemSubID = lo.FromPtr(subscription.ParentSubscriptionID)
+	}
+
 	// Fetch line items for the usage window
-	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, subscription.ID, usageStartTime, req.LifetimeUsage)
+	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, lineItemSubID, usageStartTime, req.LifetimeUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -5063,12 +5072,21 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	}
 	aggTypes = lo.Uniq(aggTypes)
 
+	// For inherited subscriptions, events in ClickHouse are stored under the parent's
+	// subscription_id (because line items belong to the parent). Use the parent's ID
+	// for the ClickHouse query so we match the stored rows correctly.
+	usageSubscriptionID := req.SubscriptionID
+	if subscription.SubscriptionType == types.SubscriptionTypeInherited &&
+		subscription.ParentSubscriptionID != nil && lo.FromPtr(subscription.ParentSubscriptionID) != "" {
+		usageSubscriptionID = lo.FromPtr(subscription.ParentSubscriptionID)
+	}
+
 	// Use the optimized single query with conditional aggregation
 	opts := &events.GetFeatureUsageBySubscriptionOpts{
 		Source: types.UsageSource(req.Source),
 	}
 	usageResults, err := s.FeatureUsageRepo.GetFeatureUsageBySubscription(ctx, &events.GetFeatureUsageBySubscriptionParams{
-		SubscriptionID: req.SubscriptionID,
+		SubscriptionID: usageSubscriptionID,
 		CustomerIDs:    usageCustomerIDs,
 		StartTime:      usageStartTime,
 		EndTime:        usageEndTime,
