@@ -1319,6 +1319,11 @@ type AnalyticsData struct {
 
 // GetDetailedUsageAnalytics provides detailed usage analytics with filtering, grouping, and time-series data
 func (s *featureUsageTrackingService) GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+	// If include_children is requested, delegate to V2 which handles multi-customer aggregation
+	if req.IncludeChildren {
+		return s.GetDetailedUsageAnalyticsV2(ctx, req)
+	}
+
 	// 1. Validate request
 	if err := s.validateAnalyticsRequest(req); err != nil {
 		return nil, err
@@ -1649,8 +1654,7 @@ func (s *featureUsageTrackingService) fetchSubscriptions(ctx context.Context, cu
 		parentSubFilter := types.NewNoLimitSubscriptionFilter()
 		parentSubFilter.WithLineItems = true
 		parentSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
-		parentSubFilter.CustomerID = customerID
-		parentSubFilter.ParentSubscriptionIDs = parentSubIDs
+		parentSubFilter.SubscriptionIDs = parentSubIDs
 		parentSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
 			types.SubscriptionStatusActive,
 			types.SubscriptionStatusTrialing,
