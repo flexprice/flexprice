@@ -88,7 +88,7 @@ migrate-local:
 	@set -a && [ -f .env.local ] && . ./.env.local; set +a; \
 	go run cmd/migrate/main.go
 
-.PHONY: test test-verbose test-coverage
+.PHONY: test test-verbose test-coverage test-suite
 
 # Run all tests
 test: install-typst
@@ -97,6 +97,10 @@ test: install-typst
 # Run tests with verbose output
 test-verbose:
 	go test -v ./internal/...
+
+# Run the Flexprice integration test suite (unit tests + optional SDK tests)
+test-suite: install-typst
+	@cd integration-testing-suite/go && go run main.go
 
 # Run tests with coverage report
 test-coverage:
