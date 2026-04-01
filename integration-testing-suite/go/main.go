@@ -126,7 +126,7 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 
 		case "pass":
 			d := toDuration(ev.Elapsed)
-			fmt.Printf("  ✓  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
+			fmt.Printf("  ✓  PASS  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
 			results = append(results, TestResult{
 				Name:     ev.Test,
 				Package:  shortPkg(ev.Package),
@@ -139,7 +139,7 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 			d := toDuration(ev.Elapsed)
 			errLines := pending[key]
 			errMsg := strings.Join(errLines, "\n")
-			fmt.Printf("  ❌ %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
+			fmt.Printf("  ❌ FAIL  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
 			for _, l := range errLines {
 				fmt.Printf("       %s\n", l)
 			}
@@ -154,7 +154,7 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 
 		case "skip":
 			d := toDuration(ev.Elapsed)
-			fmt.Printf("  ⊘  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
+			fmt.Printf("  ⊘  SKIP  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
 			delete(pending, key)
 		}
 	}
@@ -218,7 +218,7 @@ func printSummary(results []TestResult, buildErr error, total time.Duration) {
 		fmt.Println()
 		fmt.Println("  FAILED TESTS:")
 		for _, r := range failures {
-			fmt.Printf("    ❌  %s  [%s]\n", r.Name, r.Package)
+			fmt.Printf("    ❌ FAIL  %s  [%s]\n", r.Name, r.Package)
 			if r.Err != "" {
 				for _, line := range strings.Split(r.Err, "\n") {
 					if strings.TrimSpace(line) != "" {
