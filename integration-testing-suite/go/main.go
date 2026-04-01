@@ -159,12 +159,17 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 		}
 	}
 
-	_ = cmd.Wait()
+	waitErr := cmd.Wait()
 
 	// If there was stderr output (build errors, race output), show it
 	if stderrBuf.Len() > 0 {
 		fmt.Fprintln(os.Stderr, "\n--- stderr ---")
 		fmt.Fprint(os.Stderr, stderrBuf.String())
+	}
+
+	if waitErr != nil {
+		fmt.Printf("  ❌ FAIL  go test command exited with error: %v\n", waitErr)
+		return results, waitErr
 	}
 
 	return results, nil
