@@ -2831,6 +2831,12 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 
 	// Process each subscription to get its entitlements (including both plan and addon entitlements)
 	for _, sub := range subscriptions {
+
+		// Skip inherited subscriptions, they are handled by the parent subscription
+		if sub.SubscriptionType == types.SubscriptionTypeInherited {
+			continue
+		}
+
 		// Get all entitlements for this subscription (plan + addons)
 		subEntitlements, err := subscriptionService.GetSubscriptionEntitlements(ctx, sub.ID)
 		if err != nil {
