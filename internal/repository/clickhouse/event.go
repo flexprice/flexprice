@@ -1158,7 +1158,7 @@ func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, end
 		// No window size, just get total count
 		query := `
 			SELECT COUNT(DISTINCT(id)) as total_count
-			FROM events FINAL
+			FROM events
 			WHERE tenant_id = ?
 			AND environment_id = ?
 		`
