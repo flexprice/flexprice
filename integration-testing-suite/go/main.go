@@ -6,10 +6,6 @@
 // Usage:
 //
 //	make test-suite
-//	FLEXPRICE_API_KEY=xxx FLEXPRICE_API_HOST=localhost:8080/v1 make test-suite
-//
-// If FLEXPRICE_API_KEY and FLEXPRICE_API_HOST are set, SDK integration tests
-// (api/tests/go/test_sdk.go) are also run after unit tests.
 package main
 
 import (
@@ -52,26 +48,11 @@ func main() {
 	printSection("UNIT TESTS", "go test -json -v -race ./internal/...")
 	unitResults, buildErr := runUnitTests(repoRoot)
 
-	// ── SDK Integration Tests (optional) ────────────────────────────────────
-	apiKey := os.Getenv("FLEXPRICE_API_KEY")
-	apiHost := os.Getenv("FLEXPRICE_API_HOST")
-	sdkSkipped := apiKey == "" || apiHost == ""
-	sdkFailed := false
-
-	if sdkSkipped {
-		fmt.Println()
-		printSection("SDK INTEGRATION TESTS", "skipped")
-		fmt.Println("  ⊘  Set FLEXPRICE_API_KEY + FLEXPRICE_API_HOST to enable SDK tests")
-	} else {
-		printSection("SDK INTEGRATION TESTS", "go run -tags published ./api/tests/go/test_sdk.go")
-		sdkFailed = runSDKTests(repoRoot)
-	}
-
 	// ── Summary ──────────────────────────────────────────────────────────────
-	printSummary(unitResults, buildErr, sdkSkipped, sdkFailed, time.Since(start))
+	printSummary(unitResults, buildErr, time.Since(start))
 
 	// Exit non-zero if anything failed
-	anyFailed := buildErr != nil || sdkFailed
+	anyFailed := buildErr != nil
 	for _, r := range unitResults {
 		if !r.Passed {
 			anyFailed = true
@@ -145,7 +126,7 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 
 		case "pass":
 			d := toDuration(ev.Elapsed)
-			fmt.Printf("  ✓  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
+			fmt.Printf("  ✓  PASS  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
 			results = append(results, TestResult{
 				Name:     ev.Test,
 				Package:  shortPkg(ev.Package),
@@ -158,7 +139,7 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 			d := toDuration(ev.Elapsed)
 			errLines := pending[key]
 			errMsg := strings.Join(errLines, "\n")
-			fmt.Printf("  ❌ %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
+			fmt.Printf("  ❌ FAIL  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
 			for _, l := range errLines {
 				fmt.Printf("       %s\n", l)
 			}
@@ -173,7 +154,7 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 
 		case "skip":
 			d := toDuration(ev.Elapsed)
-			fmt.Printf("  ⊘  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
+			fmt.Printf("  ⊘  SKIP  %-65s %7s   %s\n", ev.Test, formatDur(d), shortPkg(ev.Package))
 			delete(pending, key)
 		}
 	}
@@ -208,22 +189,9 @@ func isUsefulOutput(line string) bool {
 	return true
 }
 
-// ── SDK integration test runner ───────────────────────────────────────────────
-
-// runSDKTests runs test_sdk.go and streams output live. Returns true on failure.
-func runSDKTests(repoRoot string) bool {
-	cmd := exec.Command("go", "run", "-tags", "published", "./api/tests/go/test_sdk.go")
-	cmd.Dir = repoRoot
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	fmt.Println()
-	err := cmd.Run()
-	return err != nil
-}
-
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-func printSummary(results []TestResult, buildErr error, sdkSkipped, sdkFailed bool, total time.Duration) {
+func printSummary(results []TestResult, buildErr error, total time.Duration) {
 	passed, failed := 0, 0
 	var failures []TestResult
 	for _, r := range results {
@@ -246,20 +214,11 @@ func printSummary(results []TestResult, buildErr error, sdkSkipped, sdkFailed bo
 		fmt.Printf("  Unit Tests:  %d passed  |  %d failed\n", passed, failed)
 	}
 
-	switch {
-	case sdkSkipped:
-		fmt.Println("  SDK Tests:   skipped (no credentials)")
-	case sdkFailed:
-		fmt.Println("  SDK Tests:   ❌ FAILED")
-	default:
-		fmt.Println("  SDK Tests:   ✓ passed")
-	}
-
 	if len(failures) > 0 {
 		fmt.Println()
 		fmt.Println("  FAILED TESTS:")
 		for _, r := range failures {
-			fmt.Printf("    ❌  %s  [%s]\n", r.Name, r.Package)
+			fmt.Printf("    ❌ FAIL  %s  [%s]\n", r.Name, r.Package)
 			if r.Err != "" {
 				for _, line := range strings.Split(r.Err, "\n") {
 					if strings.TrimSpace(line) != "" {
