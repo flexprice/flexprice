@@ -103,10 +103,25 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 			continue
 		}
 
-		// Skip package-level events; only care about individual test events
+		// Handle package-level events (build/package failures can have no Test name)
 		if ev.Test == "" {
 			if ev.Action == "build-fail" {
 				fmt.Printf("  ❌ BUILD FAILED [%s]\n", shortPkg(ev.Package))
+				results = append(results, TestResult{
+					Name:    "(build)",
+					Package: shortPkg(ev.Package),
+					Passed:  false,
+					Err:     "package build failed",
+				})
+			}
+			if ev.Action == "fail" {
+				fmt.Printf("  ❌ PACKAGE FAILED [%s]\n", shortPkg(ev.Package))
+				results = append(results, TestResult{
+					Name:    "(package)",
+					Package: shortPkg(ev.Package),
+					Passed:  false,
+					Err:     "package failed (see output above)",
+				})
 			}
 			continue
 		}
@@ -159,12 +174,17 @@ func runUnitTests(repoRoot string) ([]TestResult, error) {
 		}
 	}
 
-	_ = cmd.Wait()
+	waitErr := cmd.Wait()
 
 	// If there was stderr output (build errors, race output), show it
 	if stderrBuf.Len() > 0 {
 		fmt.Fprintln(os.Stderr, "\n--- stderr ---")
 		fmt.Fprint(os.Stderr, stderrBuf.String())
+	}
+
+	if waitErr != nil {
+		fmt.Printf("  ❌ go test command failed: %v\n", waitErr)
+		return results, waitErr
 	}
 
 	return results, nil
