@@ -230,6 +230,10 @@ func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
 	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.Cache)
 }
 
+func NewSystemEventRepository(p RepositoryParams) *entRepo.SystemEventRepository {
+	return entRepo.NewSystemEventRepository(p.EntClient)
+}
+
 func NewGroupRepository(p RepositoryParams) group.Repository {
 	return entRepo.NewGroupRepository(p.EntClient, p.Logger, p.Cache)
 }

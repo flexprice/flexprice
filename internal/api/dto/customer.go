@@ -10,16 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/validator"
 )
 
-// IntegrationEntityMapping represents a provider integration mapping
-// @Description Integration entity mapping for external provider systems
-type IntegrationEntityMapping struct {
-	// provider is the integration provider name (e.g., "stripe", "razorpay")
-	Provider string `json:"provider" validate:"required,oneof=stripe razorpay paypal"`
-
-	// id is the external entity ID from the provider
-	ID string `json:"id" validate:"required"`
-}
-
 // CreateCustomerRequest represents the request to create a new customer
 // @Description Request object for creating a new customer in the system
 type CreateCustomerRequest struct {
@@ -62,7 +52,17 @@ type CreateCustomerRequest struct {
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
 	// integration_entity_mapping contains provider integration mappings for this customer
-	IntegrationEntityMapping []*IntegrationEntityMapping `json:"integration_entity_mapping,omitempty"`
+	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
+
+	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+	// This field is accepted for backward compatibility but no hierarchy validations are enforced.
+	// parent_customer_id is the internal FlexPrice ID of the parent customer.
+	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
+
+	// Deprecated: See ParentCustomerID.
+	// parent_customer_external_id is the external ID of the parent customer from your system.
+	// Exactly one of parent_customer_id or parent_customer_external_id may be provided.
+	ParentCustomerExternalID *string `json:"parent_customer_external_id,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -99,13 +99,26 @@ type UpdateCustomerRequest struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// integration_entity_mapping contains provider integration mappings for this customer
-	IntegrationEntityMapping []*IntegrationEntityMapping `json:"integration_entity_mapping,omitempty"`
+	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
+
+	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+	// This field is accepted for backward compatibility but no hierarchy validations are enforced.
+	// parent_customer_id is the internal FlexPrice ID of the parent customer.
+	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
+
+	// Deprecated: See ParentCustomerID.
+	// parent_customer_external_id is the external ID of the parent customer from your system.
+	// Exactly one of parent_customer_id or parent_customer_external_id may be provided.
+	// If you provide the external ID, the parent customer value will be ignored.
+	ParentCustomerExternalID *string `json:"parent_customer_external_id,omitempty"`
 }
 
 // CustomerResponse represents the response for customer operations
 // @Description Customer response object containing all customer information
 type CustomerResponse struct {
 	*customer.Customer
+	ParentCustomer *CustomerResponse                   `json:"parent_customer,omitempty"`
+	Integrations   []*EntityIntegrationMappingResponse `json:"integrations,omitempty"`
 }
 
 // ListCustomersResponse represents the response for listing customers
@@ -128,15 +141,20 @@ func (r *CreateCustomerRequest) Validate() error {
 		}
 	}
 
-	// Validate integration entity mappings if provided
 	if len(r.IntegrationEntityMapping) > 0 {
 		for i, mapping := range r.IntegrationEntityMapping {
-			if err := validator.ValidateRequest(mapping); err != nil {
+			if err := mapping.Validate(); err != nil {
 				return ierr.WithError(err).
 					WithHint("Invalid integration entity mapping at index " + string(rune(i))).
 					Mark(ierr.ErrValidation)
 			}
 		}
+	}
+
+	if r.ParentCustomerID != nil && r.ParentCustomerExternalID != nil {
+		return ierr.NewError("only one of parent_customer_id or parent_customer_external_id may be provided").
+			WithHint("Send either parent_customer_id or parent_customer_external_id, but not both").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
@@ -163,6 +181,22 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.ParentCustomerID != nil && r.ParentCustomerExternalID != nil {
+		return ierr.NewError("only one of parent_customer_id or parent_customer_external_id may be provided").
+			WithHint("Send either parent_customer_id or parent_customer_external_id, but not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.IntegrationEntityMapping) > 0 {
+		for i, mapping := range r.IntegrationEntityMapping {
+			if err := mapping.Validate(); err != nil {
+				return ierr.WithError(err).
+					WithHint("Invalid integration entity mapping at index " + string(rune(i))).
+					Mark(ierr.ErrValidation)
+			}
+		}
 	}
 
 	return nil

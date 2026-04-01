@@ -16,12 +16,14 @@ const (
 )
 
 // StripeInvoiceSyncWorkflow orchestrates the Stripe invoice synchronization process.
+// Steps:
+// 1. Sleep for 5 seconds to allow the invoice DB transaction to commit before fetching.
+// 2. Sync invoice to Stripe.
 func StripeInvoiceSyncWorkflow(ctx workflow.Context, input models.StripeInvoiceSyncWorkflowInput) error {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Starting Stripe invoice sync workflow",
 		"invoice_id", input.InvoiceID,
-		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
 
@@ -38,18 +40,21 @@ func StripeInvoiceSyncWorkflow(ctx workflow.Context, input models.StripeInvoiceS
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
+	if err := workflow.Sleep(ctx, 5*time.Second); err != nil {
+		logger.Error("Sleep was interrupted", "error", err)
+		return err
+	}
+
 	err := workflow.ExecuteActivity(ctx, ActivitySyncInvoiceToStripe, input).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to sync invoice to Stripe",
 			"error", err,
-			"invoice_id", input.InvoiceID,
-			"customer_id", input.CustomerID)
+			"invoice_id", input.InvoiceID)
 		return err
 	}
 
 	logger.Info("Successfully completed Stripe invoice sync workflow",
-		"invoice_id", input.InvoiceID,
-		"customer_id", input.CustomerID)
+		"invoice_id", input.InvoiceID)
 
 	return nil
 }

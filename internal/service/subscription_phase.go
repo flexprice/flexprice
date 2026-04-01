@@ -200,13 +200,15 @@ func (s *subscriptionPhaseService) publishSystemEvent(ctx context.Context, event
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeSubscription,
+		EntityID:      phaseID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)

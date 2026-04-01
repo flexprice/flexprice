@@ -161,6 +161,115 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "invoice finalized successfully"})
 }
 
+func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
+		return
+	}
+
+	ctx := c.Request.Context()
+	existing, err := h.invoiceService.GetInvoice(ctx, id)
+	if err != nil {
+		h.logger.Errorw("failed to get invoice for compute", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+	if existing.InvoiceStatus != types.InvoiceStatusDraft && existing.InvoiceStatus != types.InvoiceStatusSkipped {
+		c.Error(ierr.NewError("invoice is not in draft or skipped status").
+			WithHint("Only draft or skipped invoices can be computed").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id":     id,
+				"current_status": existing.InvoiceStatus.String(),
+			}).
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	syncMode := c.Query("sync") == "true"
+
+	// Try Temporal workflow execution
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc != nil {
+		workflowInput := invoiceModels.ComputeInvoiceWorkflowInput{
+			InvoiceID: id,
+		}
+
+		if syncMode {
+			// Synchronous: execute workflow and wait for result
+			skipped, err := h.invoiceService.ComputeInvoice(ctx, id, nil)
+			if err != nil {
+				h.logger.Errorw("failed to compute invoice", "error", err, "invoice_id", id)
+				c.Error(err)
+				return
+			}
+
+			// Fetch the updated invoice to return
+			invoice, err := h.invoiceService.GetInvoice(ctx, id)
+			if err != nil {
+				h.logger.Errorw("failed to get invoice after compute", "error", err, "invoice_id", id)
+				c.Error(err)
+				return
+			}
+
+			c.JSON(http.StatusOK, dto.ComputeInvoiceResponse{
+				Invoice: invoice,
+				Skipped: skipped,
+			})
+			return
+		}
+
+		// Async mode (default): start workflow and return workflow ID
+		workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalComputeInvoiceWorkflow, workflowInput)
+		if err != nil {
+			h.logger.Errorw("failed to start compute invoice workflow", "error", err, "invoice_id", id)
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusAccepted, models.TemporalWorkflowResult{
+			Message:    "compute invoice workflow started",
+			WorkflowID: workflowRun.GetID(),
+			RunID:      workflowRun.GetRunID(),
+		})
+		return
+	}
+
+	// Fallback: no Temporal available, call service directly (always sync)
+	var reqPtr *dto.InvoiceComputeRequest
+	var body dto.InvoiceComputeRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		if errors.Is(err, io.EOF) {
+			reqPtr = nil
+		} else {
+			h.logger.Errorw("failed to bind compute request", "error", err, "invoice_id", id)
+			c.Error(ierr.WithError(err).WithHint("invalid request").Mark(ierr.ErrValidation))
+			return
+		}
+	} else {
+		reqPtr = &body
+	}
+
+	skipped, err := h.invoiceService.ComputeInvoice(ctx, id, reqPtr)
+	if err != nil {
+		h.logger.Errorw("failed to compute invoice", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+
+	invoice, err := h.invoiceService.GetInvoice(ctx, id)
+	if err != nil {
+		h.logger.Errorw("failed to get invoice after compute", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ComputeInvoiceResponse{
+		Invoice: invoice,
+		Skipped: skipped,
+	})
+}
+
 // VoidInvoice godoc
 // @Summary Void invoice
 // @ID voidInvoice

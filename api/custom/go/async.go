@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flexprice/flexprice-go/v2/models/types"
+	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
 // AsyncConfig provides configuration options for the enhanced FlexPrice client

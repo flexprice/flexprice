@@ -50,6 +50,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/flexprice/flexprice/ent/systemevent"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/taxapplied"
 	"github.com/flexprice/flexprice/ent/taxassociation"
@@ -109,6 +110,7 @@ const (
 	TypeSubscriptionPause        = "SubscriptionPause"
 	TypeSubscriptionPhase        = "SubscriptionPhase"
 	TypeSubscriptionSchedule     = "SubscriptionSchedule"
+	TypeSystemEvent              = "SystemEvent"
 	TypeTask                     = "Task"
 	TypeTaxApplied               = "TaxApplied"
 	TypeTaxAssociation           = "TaxAssociation"
@@ -55785,6 +55787,1160 @@ func (m *SubscriptionScheduleMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionSchedule edge %s", name)
+}
+
+// SystemEventMutation represents an operation that mutates the SystemEvent nodes in the graph.
+type SystemEventMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *string
+	tenant_id          *string
+	status             *string
+	created_at         *time.Time
+	updated_at         *time.Time
+	created_by         *string
+	updated_by         *string
+	environment_id     *string
+	event_name         *string
+	entity_type        *string
+	entity_id          *string
+	webhook_message_id *string
+	published_at       *time.Time
+	payload            *map[string]interface{}
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*SystemEvent, error)
+	predicates         []predicate.SystemEvent
+}
+
+var _ ent.Mutation = (*SystemEventMutation)(nil)
+
+// systemeventOption allows management of the mutation configuration using functional options.
+type systemeventOption func(*SystemEventMutation)
+
+// newSystemEventMutation creates new mutation for the SystemEvent entity.
+func newSystemEventMutation(c config, op Op, opts ...systemeventOption) *SystemEventMutation {
+	m := &SystemEventMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSystemEvent,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSystemEventID sets the ID field of the mutation.
+func withSystemEventID(id string) systemeventOption {
+	return func(m *SystemEventMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SystemEvent
+		)
+		m.oldValue = func(ctx context.Context) (*SystemEvent, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SystemEvent.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSystemEvent sets the old SystemEvent of the mutation.
+func withSystemEvent(node *SystemEvent) systemeventOption {
+	return func(m *SystemEventMutation) {
+		m.oldValue = func(context.Context) (*SystemEvent, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SystemEventMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SystemEventMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of SystemEvent entities.
+func (m *SystemEventMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SystemEventMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SystemEventMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SystemEvent.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *SystemEventMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *SystemEventMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *SystemEventMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *SystemEventMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *SystemEventMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *SystemEventMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SystemEventMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SystemEventMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SystemEventMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SystemEventMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SystemEventMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SystemEventMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *SystemEventMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *SystemEventMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *SystemEventMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[systemevent.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *SystemEventMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *SystemEventMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, systemevent.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *SystemEventMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *SystemEventMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *SystemEventMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[systemevent.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *SystemEventMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *SystemEventMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, systemevent.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *SystemEventMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *SystemEventMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *SystemEventMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[systemevent.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *SystemEventMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *SystemEventMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, systemevent.FieldEnvironmentID)
+}
+
+// SetEventName sets the "event_name" field.
+func (m *SystemEventMutation) SetEventName(s string) {
+	m.event_name = &s
+}
+
+// EventName returns the value of the "event_name" field in the mutation.
+func (m *SystemEventMutation) EventName() (r string, exists bool) {
+	v := m.event_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventName returns the old "event_name" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldEventName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventName: %w", err)
+	}
+	return oldValue.EventName, nil
+}
+
+// ClearEventName clears the value of the "event_name" field.
+func (m *SystemEventMutation) ClearEventName() {
+	m.event_name = nil
+	m.clearedFields[systemevent.FieldEventName] = struct{}{}
+}
+
+// EventNameCleared returns if the "event_name" field was cleared in this mutation.
+func (m *SystemEventMutation) EventNameCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldEventName]
+	return ok
+}
+
+// ResetEventName resets all changes to the "event_name" field.
+func (m *SystemEventMutation) ResetEventName() {
+	m.event_name = nil
+	delete(m.clearedFields, systemevent.FieldEventName)
+}
+
+// SetEntityType sets the "entity_type" field.
+func (m *SystemEventMutation) SetEntityType(s string) {
+	m.entity_type = &s
+}
+
+// EntityType returns the value of the "entity_type" field in the mutation.
+func (m *SystemEventMutation) EntityType() (r string, exists bool) {
+	v := m.entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityType returns the old "entity_type" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldEntityType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
+	}
+	return oldValue.EntityType, nil
+}
+
+// ClearEntityType clears the value of the "entity_type" field.
+func (m *SystemEventMutation) ClearEntityType() {
+	m.entity_type = nil
+	m.clearedFields[systemevent.FieldEntityType] = struct{}{}
+}
+
+// EntityTypeCleared returns if the "entity_type" field was cleared in this mutation.
+func (m *SystemEventMutation) EntityTypeCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldEntityType]
+	return ok
+}
+
+// ResetEntityType resets all changes to the "entity_type" field.
+func (m *SystemEventMutation) ResetEntityType() {
+	m.entity_type = nil
+	delete(m.clearedFields, systemevent.FieldEntityType)
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *SystemEventMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *SystemEventMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ClearEntityID clears the value of the "entity_id" field.
+func (m *SystemEventMutation) ClearEntityID() {
+	m.entity_id = nil
+	m.clearedFields[systemevent.FieldEntityID] = struct{}{}
+}
+
+// EntityIDCleared returns if the "entity_id" field was cleared in this mutation.
+func (m *SystemEventMutation) EntityIDCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldEntityID]
+	return ok
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *SystemEventMutation) ResetEntityID() {
+	m.entity_id = nil
+	delete(m.clearedFields, systemevent.FieldEntityID)
+}
+
+// SetWebhookMessageID sets the "webhook_message_id" field.
+func (m *SystemEventMutation) SetWebhookMessageID(s string) {
+	m.webhook_message_id = &s
+}
+
+// WebhookMessageID returns the value of the "webhook_message_id" field in the mutation.
+func (m *SystemEventMutation) WebhookMessageID() (r string, exists bool) {
+	v := m.webhook_message_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWebhookMessageID returns the old "webhook_message_id" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldWebhookMessageID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWebhookMessageID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWebhookMessageID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWebhookMessageID: %w", err)
+	}
+	return oldValue.WebhookMessageID, nil
+}
+
+// ClearWebhookMessageID clears the value of the "webhook_message_id" field.
+func (m *SystemEventMutation) ClearWebhookMessageID() {
+	m.webhook_message_id = nil
+	m.clearedFields[systemevent.FieldWebhookMessageID] = struct{}{}
+}
+
+// WebhookMessageIDCleared returns if the "webhook_message_id" field was cleared in this mutation.
+func (m *SystemEventMutation) WebhookMessageIDCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldWebhookMessageID]
+	return ok
+}
+
+// ResetWebhookMessageID resets all changes to the "webhook_message_id" field.
+func (m *SystemEventMutation) ResetWebhookMessageID() {
+	m.webhook_message_id = nil
+	delete(m.clearedFields, systemevent.FieldWebhookMessageID)
+}
+
+// SetPublishedAt sets the "published_at" field.
+func (m *SystemEventMutation) SetPublishedAt(t time.Time) {
+	m.published_at = &t
+}
+
+// PublishedAt returns the value of the "published_at" field in the mutation.
+func (m *SystemEventMutation) PublishedAt() (r time.Time, exists bool) {
+	v := m.published_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPublishedAt returns the old "published_at" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldPublishedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPublishedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPublishedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPublishedAt: %w", err)
+	}
+	return oldValue.PublishedAt, nil
+}
+
+// ClearPublishedAt clears the value of the "published_at" field.
+func (m *SystemEventMutation) ClearPublishedAt() {
+	m.published_at = nil
+	m.clearedFields[systemevent.FieldPublishedAt] = struct{}{}
+}
+
+// PublishedAtCleared returns if the "published_at" field was cleared in this mutation.
+func (m *SystemEventMutation) PublishedAtCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldPublishedAt]
+	return ok
+}
+
+// ResetPublishedAt resets all changes to the "published_at" field.
+func (m *SystemEventMutation) ResetPublishedAt() {
+	m.published_at = nil
+	delete(m.clearedFields, systemevent.FieldPublishedAt)
+}
+
+// SetPayload sets the "payload" field.
+func (m *SystemEventMutation) SetPayload(value map[string]interface{}) {
+	m.payload = &value
+}
+
+// Payload returns the value of the "payload" field in the mutation.
+func (m *SystemEventMutation) Payload() (r map[string]interface{}, exists bool) {
+	v := m.payload
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPayload returns the old "payload" field's value of the SystemEvent entity.
+// If the SystemEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SystemEventMutation) OldPayload(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPayload is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPayload requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPayload: %w", err)
+	}
+	return oldValue.Payload, nil
+}
+
+// ClearPayload clears the value of the "payload" field.
+func (m *SystemEventMutation) ClearPayload() {
+	m.payload = nil
+	m.clearedFields[systemevent.FieldPayload] = struct{}{}
+}
+
+// PayloadCleared returns if the "payload" field was cleared in this mutation.
+func (m *SystemEventMutation) PayloadCleared() bool {
+	_, ok := m.clearedFields[systemevent.FieldPayload]
+	return ok
+}
+
+// ResetPayload resets all changes to the "payload" field.
+func (m *SystemEventMutation) ResetPayload() {
+	m.payload = nil
+	delete(m.clearedFields, systemevent.FieldPayload)
+}
+
+// Where appends a list predicates to the SystemEventMutation builder.
+func (m *SystemEventMutation) Where(ps ...predicate.SystemEvent) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SystemEventMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SystemEventMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SystemEvent, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SystemEventMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SystemEventMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SystemEvent).
+func (m *SystemEventMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SystemEventMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.tenant_id != nil {
+		fields = append(fields, systemevent.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, systemevent.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, systemevent.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, systemevent.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, systemevent.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, systemevent.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, systemevent.FieldEnvironmentID)
+	}
+	if m.event_name != nil {
+		fields = append(fields, systemevent.FieldEventName)
+	}
+	if m.entity_type != nil {
+		fields = append(fields, systemevent.FieldEntityType)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, systemevent.FieldEntityID)
+	}
+	if m.webhook_message_id != nil {
+		fields = append(fields, systemevent.FieldWebhookMessageID)
+	}
+	if m.published_at != nil {
+		fields = append(fields, systemevent.FieldPublishedAt)
+	}
+	if m.payload != nil {
+		fields = append(fields, systemevent.FieldPayload)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SystemEventMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case systemevent.FieldTenantID:
+		return m.TenantID()
+	case systemevent.FieldStatus:
+		return m.Status()
+	case systemevent.FieldCreatedAt:
+		return m.CreatedAt()
+	case systemevent.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case systemevent.FieldCreatedBy:
+		return m.CreatedBy()
+	case systemevent.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case systemevent.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case systemevent.FieldEventName:
+		return m.EventName()
+	case systemevent.FieldEntityType:
+		return m.EntityType()
+	case systemevent.FieldEntityID:
+		return m.EntityID()
+	case systemevent.FieldWebhookMessageID:
+		return m.WebhookMessageID()
+	case systemevent.FieldPublishedAt:
+		return m.PublishedAt()
+	case systemevent.FieldPayload:
+		return m.Payload()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SystemEventMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case systemevent.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case systemevent.FieldStatus:
+		return m.OldStatus(ctx)
+	case systemevent.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case systemevent.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case systemevent.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case systemevent.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case systemevent.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case systemevent.FieldEventName:
+		return m.OldEventName(ctx)
+	case systemevent.FieldEntityType:
+		return m.OldEntityType(ctx)
+	case systemevent.FieldEntityID:
+		return m.OldEntityID(ctx)
+	case systemevent.FieldWebhookMessageID:
+		return m.OldWebhookMessageID(ctx)
+	case systemevent.FieldPublishedAt:
+		return m.OldPublishedAt(ctx)
+	case systemevent.FieldPayload:
+		return m.OldPayload(ctx)
+	}
+	return nil, fmt.Errorf("unknown SystemEvent field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SystemEventMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case systemevent.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case systemevent.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case systemevent.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case systemevent.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case systemevent.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case systemevent.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case systemevent.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case systemevent.FieldEventName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventName(v)
+		return nil
+	case systemevent.FieldEntityType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityType(v)
+		return nil
+	case systemevent.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
+	case systemevent.FieldWebhookMessageID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWebhookMessageID(v)
+		return nil
+	case systemevent.FieldPublishedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPublishedAt(v)
+		return nil
+	case systemevent.FieldPayload:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPayload(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SystemEvent field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SystemEventMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SystemEventMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SystemEventMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown SystemEvent numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SystemEventMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(systemevent.FieldCreatedBy) {
+		fields = append(fields, systemevent.FieldCreatedBy)
+	}
+	if m.FieldCleared(systemevent.FieldUpdatedBy) {
+		fields = append(fields, systemevent.FieldUpdatedBy)
+	}
+	if m.FieldCleared(systemevent.FieldEnvironmentID) {
+		fields = append(fields, systemevent.FieldEnvironmentID)
+	}
+	if m.FieldCleared(systemevent.FieldEventName) {
+		fields = append(fields, systemevent.FieldEventName)
+	}
+	if m.FieldCleared(systemevent.FieldEntityType) {
+		fields = append(fields, systemevent.FieldEntityType)
+	}
+	if m.FieldCleared(systemevent.FieldEntityID) {
+		fields = append(fields, systemevent.FieldEntityID)
+	}
+	if m.FieldCleared(systemevent.FieldWebhookMessageID) {
+		fields = append(fields, systemevent.FieldWebhookMessageID)
+	}
+	if m.FieldCleared(systemevent.FieldPublishedAt) {
+		fields = append(fields, systemevent.FieldPublishedAt)
+	}
+	if m.FieldCleared(systemevent.FieldPayload) {
+		fields = append(fields, systemevent.FieldPayload)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SystemEventMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SystemEventMutation) ClearField(name string) error {
+	switch name {
+	case systemevent.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case systemevent.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case systemevent.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case systemevent.FieldEventName:
+		m.ClearEventName()
+		return nil
+	case systemevent.FieldEntityType:
+		m.ClearEntityType()
+		return nil
+	case systemevent.FieldEntityID:
+		m.ClearEntityID()
+		return nil
+	case systemevent.FieldWebhookMessageID:
+		m.ClearWebhookMessageID()
+		return nil
+	case systemevent.FieldPublishedAt:
+		m.ClearPublishedAt()
+		return nil
+	case systemevent.FieldPayload:
+		m.ClearPayload()
+		return nil
+	}
+	return fmt.Errorf("unknown SystemEvent nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SystemEventMutation) ResetField(name string) error {
+	switch name {
+	case systemevent.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case systemevent.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case systemevent.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case systemevent.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case systemevent.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case systemevent.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case systemevent.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case systemevent.FieldEventName:
+		m.ResetEventName()
+		return nil
+	case systemevent.FieldEntityType:
+		m.ResetEntityType()
+		return nil
+	case systemevent.FieldEntityID:
+		m.ResetEntityID()
+		return nil
+	case systemevent.FieldWebhookMessageID:
+		m.ResetWebhookMessageID()
+		return nil
+	case systemevent.FieldPublishedAt:
+		m.ResetPublishedAt()
+		return nil
+	case systemevent.FieldPayload:
+		m.ResetPayload()
+		return nil
+	}
+	return fmt.Errorf("unknown SystemEvent field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SystemEventMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SystemEventMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SystemEventMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SystemEventMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SystemEventMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SystemEventMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SystemEventMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown SystemEvent unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SystemEventMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown SystemEvent edge %s", name)
 }
 
 // TaskMutation represents an operation that mutates the Task nodes in the graph.

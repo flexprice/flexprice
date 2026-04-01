@@ -814,13 +814,15 @@ func (c *creditNoteService) publishSystemEvent(ctx context.Context, eventType st
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventType,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeCreditNote,
+		EntityID:      creditNoteID,
 	}
 	c.Logger.InfowCtx(ctx, "attempting to publish webhook event",
 		"webhook_id", webhookEvent.ID,

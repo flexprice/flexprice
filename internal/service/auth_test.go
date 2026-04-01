@@ -43,6 +43,7 @@ func (s *AuthServiceSuite) setupService() {
 		MeterRepo:                    s.GetStores().MeterRepo,
 		CustomerRepo:                 s.GetStores().CustomerRepo,
 		InvoiceRepo:                  s.GetStores().InvoiceRepo,
+		InvoiceLineItemRepo:          s.GetStores().InvoiceLineItemRepo,
 		EntitlementRepo:              s.GetStores().EntitlementRepo,
 		EnvironmentRepo:              s.GetStores().EnvironmentRepo,
 		FeatureRepo:                  s.GetStores().FeatureRepo,

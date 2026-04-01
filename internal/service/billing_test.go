@@ -594,6 +594,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 				periodStart,
 				periodEnd,
 				tt.referencePoint,
+				"",
 			)
 
 			// Check error
@@ -683,7 +684,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_IncludesHist
 	}
 	s.False(foundAPI, "GetWithLineItems should omit line item whose EndDate is before new CurrentPeriodStart")
 
-	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, oldStart, oldEnd, types.ReferencePointPeriodEnd)
+	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, oldStart, oldEnd, types.ReferencePointPeriodEnd, "")
 	s.NoError(err)
 	s.NotNil(req)
 
@@ -1471,12 +1472,12 @@ func (s *BillingServiceSuite) TestSubscriptionLineItemPeriodScenarios() {
 
 			for i, p := range periods {
 				// Period-end reference point
-				reqEnd, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPeriodEnd)
+				reqEnd, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPeriodEnd, "")
 				s.NoError(err, "period %d PeriodEnd", i+1)
 				s.assertInvoiceRequestFixedLines(reqEnd, tt.expectedPerPeriod[i])
 
 				// Preview (same window; no already-invoiced filter)
-				reqPreview, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPreview)
+				reqPreview, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPreview, "")
 				s.NoError(err, "period %d Preview", i+1)
 				s.assertInvoiceRequestFixedLines(reqPreview, tt.expectedPerPeriod[i])
 			}
@@ -1484,7 +1485,7 @@ func (s *BillingServiceSuite) TestSubscriptionLineItemPeriodScenarios() {
 			// For monthly scenario only: assert ReferencePointPeriodStart for first period (advance-only, correct periods)
 			if tt.name == "monthly_sub_monthly_quarterly_advance_arrear" {
 				p := periods[0]
-				reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPeriodStart)
+				reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPeriodStart, "")
 				s.NoError(err)
 				// Period start = only advance for current period: monthly (Jan1-Feb1), quarterly (Jan1-Apr1, natural period end)
 				s.assertInvoiceRequestFixedLines(reqStart, []expectedLineForPeriodTests{
@@ -1716,6 +1717,7 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 				tt.periodStart,
 				tt.periodEnd,
 				sub.LineItems,
+				"",
 			)
 			s.NoError(err)
 			s.Len(filteredLineItems, tt.expectedCount, "Filtered line item count mismatch")
@@ -4097,7 +4099,7 @@ func (s *BillingServiceSuite) TestMultiCadence_FilterLineItems_QuarterlyDeduplic
 	}
 	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(ctx, inv))
 
-	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, apr1, may1, types.ReferencePointPeriodEnd)
+	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, apr1, may1, types.ReferencePointPeriodEnd, "")
 	s.NoError(err)
 	s.Require().NotNil(req)
 	s.Len(req.LineItems, 1, "E.15.1: Q already invoiced for Jan-Apr, Apr 1 invoice should have only M")
@@ -4341,26 +4343,26 @@ func (s *BillingServiceSuite) TestMultiCadence_12MonthSchedule_MixedAdvanceArrea
 	s.Require().NotNil(sub)
 
 	// E.6.3: Creation (period_start) — M-ADV (Jan) + A-ADV (Year 1) = $2420
-	reqCreate, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodStart)
+	reqCreate, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodStart, "")
 	s.NoError(err)
 	s.Require().NotNil(reqCreate)
 	s.True(reqCreate.AmountDue.Equal(decimal.NewFromInt(2420)), "creation: expected $2420, got %s", reqCreate.AmountDue.String())
 
 	// Feb 1 period_end — M-ADV (Feb next) = $20
-	reqFeb, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodEnd)
+	reqFeb, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodEnd, "")
 	s.NoError(err)
 	s.Require().NotNil(reqFeb)
 	s.True(reqFeb.AmountDue.Equal(decimal.NewFromInt(20)), "Feb 1: expected $20, got %s", reqFeb.AmountDue.String())
 
 	// Apr 1 period_end — M-ADV (Apr) + Q-ARR (Q1) = $170
-	reqApr, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), apr1, types.ReferencePointPeriodEnd)
+	reqApr, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), apr1, types.ReferencePointPeriodEnd, "")
 	s.NoError(err)
 	s.Require().NotNil(reqApr)
 	s.True(reqApr.AmountDue.Equal(decimal.NewFromInt(170)), "Apr 1: expected $170, got %s", reqApr.AmountDue.String())
 
 	// Jan 1 yr2 period_end — M-ADV (Jan yr2) + Q-ARR (Q4) + A-ADV (Year 2) = $2570
 	dec1 := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
-	reqJan2, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, dec1, jan1yr2, types.ReferencePointPeriodEnd)
+	reqJan2, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, dec1, jan1yr2, types.ReferencePointPeriodEnd, "")
 	s.NoError(err)
 	s.Require().NotNil(reqJan2)
 	s.True(reqJan2.AmountDue.Equal(decimal.NewFromInt(2570)), "Jan 1 yr2: expected $2570, got %s", reqJan2.AmountDue.String())
@@ -4383,25 +4385,25 @@ func (s *BillingServiceSuite) TestMultiCadence_PreviewInvoice_OrbStyle() {
 	s.Require().NotNil(sub)
 
 	// D.8.1 #1: Preview in period Jan 1 - Feb 1 → only M (next invoice Feb 1 has only M)
-	req1, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPreview)
+	req1, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPreview, "")
 	s.NoError(err)
 	s.Require().NotNil(req1)
 	s.Len(req1.LineItems, 1, "D.8.1: Jan period preview shows only M")
 
 	// D.8.1 #3: Preview in period Mar 1 - Apr 1 → M + Q
-	req3, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, mar1, apr1, types.ReferencePointPreview)
+	req3, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, mar1, apr1, types.ReferencePointPreview, "")
 	s.NoError(err)
 	s.Require().NotNil(req3)
 	s.Len(req3.LineItems, 2, "D.8.1: Mar-Apr period preview shows M + Q")
 
 	// D.8.1 #4: Preview in period Jun 1 - Jul 1 → M + Q + H
-	req4, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jun1, jul1, types.ReferencePointPreview)
+	req4, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jun1, jul1, types.ReferencePointPreview, "")
 	s.NoError(err)
 	s.Require().NotNil(req4)
 	s.Len(req4.LineItems, 3, "D.8.1: Jun-Jul period preview shows M + Q + H")
 
 	// D.8.1 #5: Preview in period Apr 1 - May 1 → only M (Q period ends Jul 1)
-	req5, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, apr1, may1, types.ReferencePointPreview)
+	req5, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, apr1, may1, types.ReferencePointPreview, "")
 	s.NoError(err)
 	s.Require().NotNil(req5)
 	s.Len(req5.LineItems, 1, "D.8.1: Apr-May period preview shows only M")
@@ -4423,21 +4425,21 @@ func (s *BillingServiceSuite) TestMultiCadence_ReferencePoints() {
 	s.Require().NotNil(sub)
 
 	// D.9.1 period_start: only ADVANCE (H $200)
-	reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodStart)
+	reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodStart, "")
 	s.NoError(err)
 	s.Require().NotNil(reqStart)
 	s.True(reqStart.AmountDue.Equal(decimal.NewFromInt(200)), "D.9.1: creation invoice $200 (H ADVANCE only)")
 	s.Len(reqStart.LineItems, 1, "D.9.1: one line item (H ADVANCE)")
 
 	// D.9.2 period_end Feb 1: M ARREAR $10 only
-	reqFeb, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodEnd)
+	reqFeb, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodEnd, "")
 	s.NoError(err)
 	s.Require().NotNil(reqFeb)
 	s.True(reqFeb.AmountDue.Equal(decimal.NewFromInt(10)), "D.9.2: Feb 1 invoice $10")
 	s.Len(reqFeb.LineItems, 1, "D.9.2: M ARREAR only")
 
 	// D.9.3 period_end Jul 1: M ARREAR + Q ARREAR + H ADVANCE (next) = $310
-	reqJul, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jun1, jul1, types.ReferencePointPeriodEnd)
+	reqJul, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jun1, jul1, types.ReferencePointPeriodEnd, "")
 	s.NoError(err)
 	s.Require().NotNil(reqJul)
 	s.True(reqJul.AmountDue.Equal(decimal.NewFromInt(310)), "D.9.3: Jul 1 invoice $310")

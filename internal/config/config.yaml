@@ -133,6 +133,11 @@ temporal:
     max_interval_seconds: 10
     max_attempts: 3
     backoff_coefficient: 2.0
+  worker:
+    max_concurrent_activity_execution_size: 10      # Max activities running concurrently per worker (default: 10)
+    max_concurrent_workflow_task_execution_size: 10  # Max workflow tasks running concurrently per worker (default: 10)
+    worker_activities_per_second: 5                  # Rate limit: activities dispatched per second per worker (default: 5, 0=unlimited)
+    task_queue_activities_per_second: 0              # Rate limit: activities per second across ALL workers for a task queue (default: 0=unlimited)
   connection:
     dial_timeout_seconds: 5
     retry_max_attempts: 5

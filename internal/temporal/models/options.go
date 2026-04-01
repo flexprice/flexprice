@@ -47,6 +47,10 @@ type WorkerOptions struct {
 	MaxConcurrentActivityExecutionSize int
 	// MaxConcurrentWorkflowTaskExecutionSize is the maximum number of workflow tasks that can be executed concurrently
 	MaxConcurrentWorkflowTaskExecutionSize int
+	// WorkerActivitiesPerSecond is the rate limit for activities per second per worker. 0 means unlimited.
+	WorkerActivitiesPerSecond float64
+	// TaskQueueActivitiesPerSecond is the rate limit for activities per second across all workers for the task queue. 0 means unlimited.
+	TaskQueueActivitiesPerSecond float64
 	// WorkerStopTimeout is the time to wait for worker to stop gracefully
 	WorkerStopTimeout time.Duration
 	// EnableLoggingInReplay enables logging in replay mode
@@ -55,11 +59,18 @@ type WorkerOptions struct {
 	Interceptors []interceptor.WorkerInterceptor
 }
 
+const (
+	DefaultMaxConcurrentActivityExecutionSize     = 10
+	DefaultMaxConcurrentWorkflowTaskExecutionSize = 10
+	DefaultWorkerActivitiesPerSecond              = 5.0
+)
+
 // DefaultWorkerOptions returns the default worker options
 func DefaultWorkerOptions() *WorkerOptions {
 	return &WorkerOptions{
-		MaxConcurrentActivityExecutionSize:     1000,
-		MaxConcurrentWorkflowTaskExecutionSize: 1000,
+		MaxConcurrentActivityExecutionSize:     DefaultMaxConcurrentActivityExecutionSize,
+		MaxConcurrentWorkflowTaskExecutionSize: DefaultMaxConcurrentWorkflowTaskExecutionSize,
+		WorkerActivitiesPerSecond:              DefaultWorkerActivitiesPerSecond,
 		WorkerStopTimeout:                      time.Second * 30,
 		EnableLoggingInReplay:                  false,
 	}
@@ -80,11 +91,13 @@ func (o *ClientOptions) ToSDKOptions() client.Options {
 // ToSDKOptions converts WorkerOptions to Temporal SDK worker.Options
 func (o *WorkerOptions) ToSDKOptions() worker.Options {
 	return worker.Options{
-		MaxConcurrentActivityExecutionSize:     o.MaxConcurrentActivityExecutionSize,
-		MaxConcurrentWorkflowTaskExecutionSize: o.MaxConcurrentWorkflowTaskExecutionSize,
-		WorkerStopTimeout:                      o.WorkerStopTimeout,
-		EnableLoggingInReplay:                  o.EnableLoggingInReplay,
-		Interceptors:                           o.Interceptors,
+		MaxConcurrentActivityExecutionSize:      o.MaxConcurrentActivityExecutionSize,
+		MaxConcurrentWorkflowTaskExecutionSize:  o.MaxConcurrentWorkflowTaskExecutionSize,
+		WorkerActivitiesPerSecond:               o.WorkerActivitiesPerSecond,
+		TaskQueueActivitiesPerSecond:            o.TaskQueueActivitiesPerSecond,
+		WorkerStopTimeout:                       o.WorkerStopTimeout,
+		EnableLoggingInReplay:                   o.EnableLoggingInReplay,
+		Interceptors:                            o.Interceptors,
 	}
 }
 

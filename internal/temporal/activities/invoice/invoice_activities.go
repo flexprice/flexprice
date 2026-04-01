@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/config"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
@@ -55,6 +56,55 @@ func (s *InvoiceActivities) ComputeInvoiceActivity(
 		"skipped", skipped)
 	return &invoiceModels.ComputeInvoiceActivityOutput{
 		Skipped: skipped,
+	}, nil
+}
+
+// CreateDraftForCurrentSubscriptionPeriodActivity creates an idempotent subscription draft for the subscription's current period (no compute).
+func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
+	ctx context.Context,
+	input invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityInput,
+) (*invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityOutput, error) {
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+	ctx = types.SetUserID(ctx, input.UserID)
+
+	sub, err := s.serviceParams.SubRepo.Get(ctx, input.SubscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	periodStart := sub.CurrentPeriodStart
+	periodEnd := sub.CurrentPeriodEnd
+	if periodStart.IsZero() || periodEnd.IsZero() {
+		return nil, ierr.NewError("subscription is missing current period bounds").
+			WithHint("Set CurrentPeriodStart and CurrentPeriodEnd on the subscription").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": input.SubscriptionID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if periodEnd.Before(periodStart) {
+		return nil, ierr.NewError("invalid subscription current period (end before start)").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": input.SubscriptionID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	invoiceService := service.NewInvoiceService(s.serviceParams)
+	draft, err := invoiceService.CreateDraftInvoiceForSubscription(
+		ctx, input.SubscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
+	)
+	if err != nil {
+		s.logger.Errorw("failed to create draft invoice for subscription current period",
+			"subscription_id", input.SubscriptionID,
+			"error", err)
+		return nil, err
+	}
+	return &invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityOutput{
+		InvoiceID: draft.ID,
 	}, nil
 }
 

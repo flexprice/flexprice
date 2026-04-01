@@ -16,12 +16,14 @@ const (
 )
 
 // RazorpayInvoiceSyncWorkflow orchestrates the Razorpay invoice synchronization process.
+// Steps:
+// 1. Sleep for 5 seconds to allow the invoice DB transaction to commit before fetching.
+// 2. Sync invoice to Razorpay.
 func RazorpayInvoiceSyncWorkflow(ctx workflow.Context, input models.RazorpayInvoiceSyncWorkflowInput) error {
 	logger := workflow.GetLogger(ctx)
 
 	logger.Info("Starting Razorpay invoice sync workflow",
 		"invoice_id", input.InvoiceID,
-		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
 
@@ -38,18 +40,21 @@ func RazorpayInvoiceSyncWorkflow(ctx workflow.Context, input models.RazorpayInvo
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
+	if err := workflow.Sleep(ctx, 5*time.Second); err != nil {
+		logger.Error("Sleep was interrupted", "error", err)
+		return err
+	}
+
 	err := workflow.ExecuteActivity(ctx, ActivitySyncInvoiceToRazorpay, input).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to sync invoice to Razorpay",
 			"error", err,
-			"invoice_id", input.InvoiceID,
-			"customer_id", input.CustomerID)
+			"invoice_id", input.InvoiceID)
 		return err
 	}
 
 	logger.Info("Successfully completed Razorpay invoice sync workflow",
-		"invoice_id", input.InvoiceID,
-		"customer_id", input.CustomerID)
+		"invoice_id", input.InvoiceID)
 
 	return nil
 }

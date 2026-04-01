@@ -66,13 +66,13 @@ type BillingService interface {
 
 	// PrepareSubscriptionInvoiceRequest prepares a complete invoice request for a subscription period
 	// using the reference point to determine which charges to include
-	PrepareSubscriptionInvoiceRequest(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.CreateInvoiceRequest, error)
+	PrepareSubscriptionInvoiceRequest(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint, excludeInvoiceID string) (*dto.CreateInvoiceRequest, error)
 
 	// ClassifyLineItems classifies line items based on cadence and type
 	ClassifyLineItems(sub *subscription.Subscription, currentPeriodStart, currentPeriodEnd time.Time, nextPeriodStart, nextPeriodEnd time.Time) *LineItemClassification
 
 	// FilterLineItemsToBeInvoiced filters the line items to be invoiced for the given period
-	FilterLineItemsToBeInvoiced(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time, lineItems []*subscription.SubscriptionLineItem) ([]*subscription.SubscriptionLineItem, error)
+	FilterLineItemsToBeInvoiced(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time, lineItems []*subscription.SubscriptionLineItem, excludeInvoiceID string) ([]*subscription.SubscriptionLineItem, error)
 
 	// CalculateCharges calculates charges for the given line items and period
 	CalculateCharges(ctx context.Context, sub *subscription.Subscription, lineItems []*subscription.SubscriptionLineItem, periodStart, periodEnd time.Time, includeUsage bool) (*BillingCalculationResult, error)
@@ -1842,6 +1842,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	periodStart,
 	periodEnd time.Time,
 	referencePoint types.InvoiceReferencePoint,
+	excludeInvoiceID string,
 ) (*dto.CreateInvoiceRequest, error) {
 	// Validate that the billing period respects subscription end date
 	if err := s.validatePeriodAgainstSubscriptionEndDate(sub, periodStart, periodEnd); err != nil {
@@ -1892,7 +1893,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	switch referencePoint {
 	case types.ReferencePointPeriodStart:
 		// Only include advance charges for current period
-		advanceLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodAdvance)
+		advanceLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodAdvance, excludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
@@ -1918,13 +1919,13 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	case types.ReferencePointPeriodEnd:
 		// Include both arrear charges for current period and advance charges for next period
 		// Use calculateFeatureUsageCharges for arrear so cumulative commitment is applied (feature_usage path)
-		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear)
+		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear, excludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
 
 		// Then, process advance charges for next period
-		advanceLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, nextPeriodStart, nextPeriodEnd, classification.NextPeriodAdvance)
+		advanceLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, nextPeriodStart, nextPeriodEnd, classification.NextPeriodAdvance, excludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
@@ -2013,7 +2014,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		metadata["is_preview"] = "true"
 	case types.ReferencePointCancel:
 		// for cancel, include arrear line items only (feature_usage path for cumulative commitment)
-		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear)
+		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear, excludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
@@ -2213,6 +2214,7 @@ func (s *billingService) FilterLineItemsToBeInvoiced(
 	periodStart,
 	periodEnd time.Time,
 	lineItems []*subscription.SubscriptionLineItem,
+	excludeInvoiceID string,
 ) ([]*subscription.SubscriptionLineItem, error) {
 	// If no line items to process, return empty slice immediately
 	if len(lineItems) == 0 {
@@ -2260,6 +2262,9 @@ func (s *billingService) FilterLineItemsToBeInvoiced(
 		lineItemInvoiced := false
 
 		for _, invoice := range invoices {
+			if excludeInvoiceID != "" && invoice.ID == excludeInvoiceID {
+				continue
+			}
 			if s.checkIfChargeInvoiced(invoice, lineItem, periodStart, periodEnd) {
 				lineItemInvoiced = true
 				break

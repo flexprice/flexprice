@@ -319,6 +319,11 @@ type SubscriptionFilter struct {
 	// SubscriptionType filters by subscription type
 	SubscriptionTypes []SubscriptionType `json:"subscription_type,omitempty" form:"subscription_type"`
 
+	// EffectiveDateForUpdate selects subscriptions that need a billing-period pass on or before this time:
+	// current_period_end <= date OR (cancel_at IS NOT NULL AND cancel_at <= date).
+	// When nil, period/cancel cutoff logic is not applied by this field (see TimeRangeFilter for legacy period-end filtering).
+	EffectiveDateForUpdate *time.Time `json:"effective_date_for_update,omitempty" form:"effective_date_for_update"`
+
 	// WithLineItems includes line items in the response
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
 }

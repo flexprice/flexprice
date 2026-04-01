@@ -104,12 +104,12 @@ const (
 	UUID_PREFIX_PRICE_UNIT                 = "price_unit"
 	UUID_PREFIX_ADDON                      = "addon"
 	UUID_PREFIX_ADDON_ASSOCIATION          = "addon_assoc"
-	UUID_PREFIX_WEBHOOK_EVENT              = "webhook"
 	UUID_PREFIX_SETTING                    = "setting"
 	UUID_PREFIX_ALERT_LOG                  = "alert"
 	UUID_PREFIX_GROUP                      = "group"
 	UUID_PREFIX_SUBSCRIPTION_ENTITLEMENT   = "sub_ent"
 	UUID_PREFIX_SUBSCRIPTION_PHASE         = "phase"
+	UUID_PREFIX_SYSTEM_EVENT               = "sys_event"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

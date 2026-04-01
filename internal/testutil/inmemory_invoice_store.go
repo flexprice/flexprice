@@ -232,7 +232,7 @@ func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key stri
 	return nil, ierr.NewError("invoice not found").WithHint("invoice not found").Mark(ierr.ErrNotFound)
 }
 
-func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
 	invoices, err := s.List(ctx, filter)
@@ -246,6 +246,9 @@ func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscription
 		if inv.InvoiceStatus == types.InvoiceStatusVoided {
 			continue
 		}
+		if billingReason != "" && inv.BillingReason != billingReason {
+			continue
+		}
 		if inv.PeriodStart != nil && inv.PeriodEnd != nil {
 			if (periodStart.Equal(*inv.PeriodStart) || periodStart.After(*inv.PeriodStart)) &&
 				(periodEnd.Equal(*inv.PeriodEnd) || periodEnd.Before(*inv.PeriodEnd)) {
@@ -257,7 +260,7 @@ func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscription
 	return false, nil
 }
 
-func (s *InMemoryInvoiceStore) GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (*invoice.Invoice, error) {
+func (s *InMemoryInvoiceStore) GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*invoice.Invoice, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
 	invoices, err := s.List(ctx, filter)
@@ -267,6 +270,9 @@ func (s *InMemoryInvoiceStore) GetForPeriod(ctx context.Context, subscriptionID 
 
 	for _, inv := range invoices {
 		if inv.InvoiceStatus == types.InvoiceStatusVoided {
+			continue
+		}
+		if billingReason != "" && inv.BillingReason != billingReason {
 			continue
 		}
 		if inv.PeriodStart != nil && inv.PeriodEnd != nil &&

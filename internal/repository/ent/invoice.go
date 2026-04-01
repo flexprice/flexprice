@@ -790,27 +790,31 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 	return invoiceData, nil
 }
 
-func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "exists_for_period", map[string]interface{}{
 		"subscription_id": subscriptionID,
 		"period_start":    periodStart,
 		"period_end":      periodEnd,
+		"billing_reason":  billingReason,
 	})
 	defer FinishSpan(span)
 
+	predicates := []predicate.Invoice{
+		invoice.TenantID(types.GetTenantID(ctx)),
+		invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+		invoice.SubscriptionIDEQ(subscriptionID),
+		invoice.PeriodStartEQ(periodStart),
+		invoice.PeriodEndEQ(periodEnd),
+		invoice.StatusEQ(string(types.StatusPublished)),
+		invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
+	}
+	if billingReason != "" {
+		predicates = append(predicates, invoice.BillingReasonEQ(billingReason))
+	}
+
 	exists, err := r.client.Writer(ctx).Invoice.Query().
-		Where(
-			invoice.And(
-				invoice.TenantID(types.GetTenantID(ctx)),
-				invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
-				invoice.SubscriptionIDEQ(subscriptionID),
-				invoice.PeriodStartEQ(periodStart),
-				invoice.PeriodEndEQ(periodEnd),
-				invoice.StatusEQ(string(types.StatusPublished)),
-				invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
-			),
-		).
+		Where(invoice.And(predicates...)).
 		Exist(ctx)
 	if err != nil {
 		return false, ierr.WithError(err).WithHint("invoice existence check failed").WithReportableDetails(map[string]any{
@@ -823,26 +827,30 @@ func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID 
 	return exists, nil
 }
 
-func (r *invoiceRepository) GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (*domainInvoice.Invoice, error) {
+func (r *invoiceRepository) GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*domainInvoice.Invoice, error) {
 	span := StartRepositorySpan(ctx, "invoice", "get_for_period", map[string]interface{}{
 		"subscription_id": subscriptionID,
 		"period_start":    periodStart,
 		"period_end":      periodEnd,
+		"billing_reason":  billingReason,
 	})
 	defer FinishSpan(span)
 
+	predicates := []predicate.Invoice{
+		invoice.TenantID(types.GetTenantID(ctx)),
+		invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+		invoice.SubscriptionIDEQ(subscriptionID),
+		invoice.PeriodStartEQ(periodStart),
+		invoice.PeriodEndEQ(periodEnd),
+		invoice.StatusEQ(string(types.StatusPublished)),
+		invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
+	}
+	if billingReason != "" {
+		predicates = append(predicates, invoice.BillingReasonEQ(billingReason))
+	}
+
 	inv, err := r.client.Reader(ctx).Invoice.Query().
-		Where(
-			invoice.And(
-				invoice.TenantID(types.GetTenantID(ctx)),
-				invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
-				invoice.SubscriptionIDEQ(subscriptionID),
-				invoice.PeriodStartEQ(periodStart),
-				invoice.PeriodEndEQ(periodEnd),
-				invoice.StatusEQ(string(types.StatusPublished)),
-				invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
-			),
-		).
+		Where(invoice.And(predicates...)).
 		First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/sentry"
@@ -31,22 +32,24 @@ type temporalService struct {
 	workerManager worker.TemporalWorkerManager
 	logger        *logger.Logger
 	sentry        *sentry.Service
+	workerConfig  config.TemporalWorkerConfig
 }
 
 // NewTemporalService creates a new temporal service instance
-func NewTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, sentryService *sentry.Service) TemporalService {
+func NewTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, sentryService *sentry.Service, cfg *config.TemporalConfig) TemporalService {
 	return &temporalService{
 		client:        client,
 		workerManager: workerManager,
 		logger:        logger,
 		sentry:        sentryService,
+		workerConfig:  cfg.Worker,
 	}
 }
 
 // InitializeGlobalTemporalService initializes the global Temporal service instance
-func InitializeGlobalTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, sentryService *sentry.Service) {
+func InitializeGlobalTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, sentryService *sentry.Service, cfg *config.TemporalConfig) {
 	globalTemporalOnce.Do(func() {
-		globalTemporalService = NewTemporalService(client, workerManager, logger, sentryService)
+		globalTemporalService = NewTemporalService(client, workerManager, logger, sentryService, cfg)
 	})
 }
 
@@ -234,18 +237,7 @@ func (s *temporalService) RegisterWorkflow(taskQueue types.TemporalTaskQueue, wo
 			Mark(errors.ErrValidation)
 	}
 
-	// Create worker options with Sentry and Workflow Tracking interceptors
-	options := models.DefaultWorkerOptions()
-	if s.sentry != nil && s.sentry.IsEnabled() {
-		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewSentryInterceptor(s.sentry),
-			temporalInterceptor.NewWorkflowTrackingInterceptor(),
-		}
-	} else {
-		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewWorkflowTrackingInterceptor(),
-		}
-	}
+	options := s.buildWorkerOptions()
 
 	w, err := s.workerManager.GetOrCreateWorker(taskQueue, options)
 	if err != nil {
@@ -270,18 +262,7 @@ func (s *temporalService) RegisterActivity(taskQueue types.TemporalTaskQueue, ac
 			Mark(errors.ErrValidation)
 	}
 
-	// Create worker options with Sentry and Workflow Tracking interceptors
-	options := models.DefaultWorkerOptions()
-	if s.sentry != nil && s.sentry.IsEnabled() {
-		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewSentryInterceptor(s.sentry),
-			temporalInterceptor.NewWorkflowTrackingInterceptor(),
-		}
-	} else {
-		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewWorkflowTrackingInterceptor(),
-		}
-	}
+	options := s.buildWorkerOptions()
 
 	w, err := s.workerManager.GetOrCreateWorker(taskQueue, options)
 	if err != nil {
@@ -313,6 +294,39 @@ func (s *temporalService) StopWorker(taskQueue types.TemporalTaskQueue) error {
 	}
 
 	return s.workerManager.StopWorker(taskQueue)
+}
+
+// buildWorkerOptions creates worker options from config with interceptors
+func (s *temporalService) buildWorkerOptions() *models.WorkerOptions {
+	options := models.DefaultWorkerOptions()
+
+	// Apply config overrides (0 values mean use defaults)
+	if s.workerConfig.MaxConcurrentActivityExecutionSize > 0 {
+		options.MaxConcurrentActivityExecutionSize = s.workerConfig.MaxConcurrentActivityExecutionSize
+	}
+	if s.workerConfig.MaxConcurrentWorkflowTaskExecutionSize > 0 {
+		options.MaxConcurrentWorkflowTaskExecutionSize = s.workerConfig.MaxConcurrentWorkflowTaskExecutionSize
+	}
+	if s.workerConfig.WorkerActivitiesPerSecond > 0 {
+		options.WorkerActivitiesPerSecond = s.workerConfig.WorkerActivitiesPerSecond
+	}
+	if s.workerConfig.TaskQueueActivitiesPerSecond > 0 {
+		options.TaskQueueActivitiesPerSecond = s.workerConfig.TaskQueueActivitiesPerSecond
+	}
+
+	// Add interceptors
+	if s.sentry != nil && s.sentry.IsEnabled() {
+		options.Interceptors = []interceptor.WorkerInterceptor{
+			temporalInterceptor.NewSentryInterceptor(s.sentry),
+			temporalInterceptor.NewWorkflowTrackingInterceptor(),
+		}
+	} else {
+		options.Interceptors = []interceptor.WorkerInterceptor{
+			temporalInterceptor.NewWorkflowTrackingInterceptor(),
+		}
+	}
+
+	return options
 }
 
 // StopAllWorkers implements TemporalService
@@ -375,6 +389,31 @@ func (s *temporalService) ExecuteWorkflow(ctx context.Context, workflowType type
 	return s.StartWorkflow(ctx, options, workflowType, input)
 }
 
+func (s *temporalService) ExecuteWorkflowWithDelay(ctx context.Context, workflowType types.TemporalWorkflowType, params interface{}, delaySeconds int) (models.WorkflowRun, error) {
+	// Check if service is initialized
+	if s == nil {
+		return nil, errors.NewError("temporal service not initialized").
+			WithHint("Temporal service must be initialized before use").
+			Mark(errors.ErrInternal)
+	}
+
+	// Build input with context validation
+	input, err := s.buildWorkflowInput(ctx, workflowType, params)
+	if err != nil {
+		return nil, err
+	}
+
+	workflowID := s.generateWorkflowID(workflowType, input)
+	options := models.StartWorkflowOptions{
+		ID:         workflowID,
+		TaskQueue:  workflowType.TaskQueueName(),
+		StartDelay: time.Duration(delaySeconds) * time.Second,
+	}
+
+	// Execute workflow using existing StartWorkflow method
+	return s.StartWorkflow(ctx, options, workflowType, input)
+}
+
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
 	contextID := s.extractWorkflowContextID(workflowType, params)
 	if contextID != "" {
@@ -397,10 +436,80 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(invoiceModels.ProcessInvoiceWorkflowInput); ok {
 			return input.InvoiceID
 		}
+
+	// Vendor invoice sync workflows — deterministic IDs prevent duplicate concurrent syncs
+	// for the same invoice when the same Kafka message is consumed by multiple consumers.
+	case types.TemporalStripeInvoiceSyncWorkflow:
+		if input, ok := params.(models.StripeInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalRazorpayInvoiceSyncWorkflow:
+		if input, ok := params.(models.RazorpayInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalChargebeeInvoiceSyncWorkflow:
+		if input, ok := params.(models.ChargebeeInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalQuickBooksInvoiceSyncWorkflow:
+		if input, ok := params.(models.QuickBooksInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalHubSpotInvoiceSyncWorkflow:
+		if input, ok := params.(models.HubSpotInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalMoyasarInvoiceSyncWorkflow:
+		if input, ok := params.(models.MoyasarInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalNomodInvoiceSyncWorkflow:
+		if input, ok := params.(models.NomodInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalPaddleInvoiceSyncWorkflow:
+		if input, ok := params.(models.PaddleInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+
+	// Vendor customer sync workflows — deterministic IDs prevent duplicate concurrent syncs.
+	case types.TemporalStripeCustomerSyncWorkflow:
+		if input, ok := params.(models.StripeCustomerSyncWorkflowInput); ok {
+			return input.CustomerID
+		}
+	case types.TemporalRazorpayCustomerSyncWorkflow:
+		if input, ok := params.(models.RazorpayCustomerSyncWorkflowInput); ok {
+			return input.CustomerID
+		}
+	case types.TemporalChargebeeCustomerSyncWorkflow:
+		if input, ok := params.(models.ChargebeeCustomerSyncWorkflowInput); ok {
+			return input.CustomerID
+		}
+	case types.TemporalQuickBooksCustomerSyncWorkflow:
+		if input, ok := params.(models.QuickBooksCustomerSyncWorkflowInput); ok {
+			return input.CustomerID
+		}
+	case types.TemporalNomodCustomerSyncWorkflow:
+		if input, ok := params.(models.NomodCustomerSyncWorkflowInput); ok {
+			return input.CustomerID
+		}
+	case types.TemporalPaddleCustomerSyncWorkflow:
+		if input, ok := params.(models.PaddleCustomerSyncWorkflowInput); ok {
+			return input.CustomerID
+		}
 	case types.TemporalRecalculateInvoiceWorkflow:
 		// Extract invoice ID from RecalculateInvoiceWorkflowInput
 		if input, ok := params.(invoiceModels.RecalculateInvoiceWorkflowInput); ok {
 			return input.InvoiceID
+		}
+	case types.TemporalComputeInvoiceWorkflow:
+		// Extract invoice ID from ComputeInvoiceWorkflowInput
+		if input, ok := params.(invoiceModels.ComputeInvoiceWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow:
+		if input, ok := params.(invoiceModels.DraftAndComputeSubscriptionInvoiceWorkflowInput); ok {
+			return input.SubscriptionID
 		}
 	case types.TemporalPrepareProcessedEventsWorkflow:
 		// Extract event ID from PrepareProcessedEventsWorkflowInput
@@ -507,6 +616,18 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildChargebeeInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalQuickBooksInvoiceSyncWorkflow:
 		return s.buildQuickBooksInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalStripeCustomerSyncWorkflow:
+		return s.buildStripeCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalRazorpayCustomerSyncWorkflow:
+		return s.buildRazorpayCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalChargebeeCustomerSyncWorkflow:
+		return s.buildChargebeeCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalQuickBooksCustomerSyncWorkflow:
+		return s.buildQuickBooksCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalNomodCustomerSyncWorkflow:
+		return s.buildNomodCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalPaddleCustomerSyncWorkflow:
+		return s.buildPaddleCustomerSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalCustomerOnboardingWorkflow:
 		return s.buildCustomerOnboardingInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalPrepareProcessedEventsWorkflow:
@@ -515,6 +636,10 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildProcessInvoiceInput(ctx, tenantID, environmentID, params)
 	case types.TemporalRecalculateInvoiceWorkflow:
 		return s.buildRecalculateInvoiceInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalComputeInvoiceWorkflow:
+		return s.buildComputeInvoiceInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow:
+		return s.buildDraftAndComputeSubscriptionInvoiceInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalReprocessEventsWorkflow:
 		return s.buildReprocessEventsInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalReprocessRawEventsWorkflow:
@@ -833,6 +958,102 @@ func (s *temporalService) buildQuickBooksInvoiceSyncInput(_ context.Context, ten
 		Mark(errors.ErrValidation)
 }
 
+func (s *temporalService) buildStripeCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.StripeCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.StripeCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Stripe customer sync workflow").
+		WithHint("Provide StripeCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildRazorpayCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.RazorpayCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.RazorpayCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Razorpay customer sync workflow").
+		WithHint("Provide RazorpayCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildChargebeeCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.ChargebeeCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.ChargebeeCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Chargebee customer sync workflow").
+		WithHint("Provide ChargebeeCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildQuickBooksCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.QuickBooksCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.QuickBooksCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for QuickBooks customer sync workflow").
+		WithHint("Provide QuickBooksCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildNomodCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.NomodCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.NomodCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Nomod customer sync workflow").
+		WithHint("Provide NomodCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildPaddleCustomerSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.PaddleCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.PaddleCustomerSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Paddle customer sync workflow").
+		WithHint("Provide PaddleCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
 // buildProcessInvoiceInput builds input for process invoice workflow
 func (s *temporalService) buildProcessInvoiceInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
 	// If already correct type, just ensure context is set
@@ -907,6 +1128,71 @@ func (s *temporalService) buildRecalculateInvoiceInput(_ context.Context, tenant
 		Mark(errors.ErrValidation)
 }
 
+// buildComputeInvoiceInput builds input for compute invoice workflow
+func (s *temporalService) buildComputeInvoiceInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(invoiceModels.ComputeInvoiceWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		return input, nil
+	}
+	if input, ok := params.(*invoiceModels.ComputeInvoiceWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		return *input, nil
+	}
+	// Handle string input (invoice ID)
+	if invoiceID, ok := params.(string); ok && invoiceID != "" {
+		return invoiceModels.ComputeInvoiceWorkflowInput{
+			InvoiceID:     invoiceID,
+			TenantID:      tenantID,
+			EnvironmentID: environmentID,
+			UserID:        userID,
+		}, nil
+	}
+	return nil, errors.NewError("invalid input for compute invoice workflow").
+		WithHint("Provide ComputeInvoiceWorkflowInput with invoice_id").
+		Mark(errors.ErrValidation)
+}
+
+// buildDraftAndComputeSubscriptionInvoiceInput builds input for DraftAndComputeSubscriptionInvoiceWorkflow.
+func (s *temporalService) buildDraftAndComputeSubscriptionInvoiceInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(invoiceModels.DraftAndComputeSubscriptionInvoiceWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+	if input, ok := params.(*invoiceModels.DraftAndComputeSubscriptionInvoiceWorkflowInput); ok && input != nil {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return *input, nil
+	}
+	if subscriptionID, ok := params.(string); ok && subscriptionID != "" {
+		input := invoiceModels.DraftAndComputeSubscriptionInvoiceWorkflowInput{
+			SubscriptionID: subscriptionID,
+			TenantID:       tenantID,
+			EnvironmentID:  environmentID,
+			UserID:         userID,
+		}
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for draft-and-compute subscription invoice workflow").
+		WithHint("Provide DraftAndComputeSubscriptionInvoiceWorkflowInput or subscription_id string").
+		Mark(errors.ErrValidation)
+}
+
 // buildPrepareProcessedEventsInput builds input for prepare processed events workflow
 func (s *temporalService) buildPrepareProcessedEventsInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
 	// If already correct type, just ensure context is set
@@ -976,6 +1262,21 @@ func (s *temporalService) ExecuteWorkflowSync(
 
 	case types.TemporalPrepareProcessedEventsWorkflow:
 		var result models.PrepareProcessedEventsWorkflowResult
+		if err := workflowRun.Get(timeoutCtx, &result); err != nil {
+			return nil, errors.WithError(err).
+				WithHint("Workflow execution failed or timed out").
+				WithReportableDetails(map[string]interface{}{
+					"workflow_id":   workflowRun.GetID(),
+					"run_id":        workflowRun.GetRunID(),
+					"workflow_type": workflowType.String(),
+					"timeout":       timeoutSeconds,
+				}).
+				Mark(errors.ErrInternal)
+		}
+		return &result, nil
+
+	case types.TemporalComputeInvoiceWorkflow:
+		var result invoiceModels.ComputeInvoiceWorkflowResult
 		if err := workflowRun.Get(timeoutCtx, &result); err != nil {
 			return nil, errors.WithError(err).
 				WithHint("Workflow execution failed or timed out").

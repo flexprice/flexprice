@@ -141,11 +141,12 @@ type LoggingConfig struct {
 
 	// OpenTelemetry log export configuration (works with SigNoz, Grafana, Datadog, etc.)
 	OtelEnabled    bool   `mapstructure:"otel_enabled" default:"false"`
-	OtelEndpoint   string `mapstructure:"otel_endpoint" validate:"omitempty"`   // e.g. ingest.us.signoz.cloud:443
+	OtelEndpoint   string `mapstructure:"otel_endpoint" validate:"omitempty"`    // e.g. <host>:<port>
 	OtelInsecure   bool   `mapstructure:"otel_insecure" default:"false"`         // set true for local collector without TLS
 	OtelProtocol   string `mapstructure:"otel_protocol" default:"grpc"`          // grpc (default) or http
-	OtelAuthHeader string `mapstructure:"otel_auth_header" validate:"omitempty"` // header name, e.g. signoz-ingestion-key
+	OtelAuthHeader string `mapstructure:"otel_auth_header" validate:"omitempty"` // header name
 	OtelAuthValue  string `mapstructure:"otel_auth_value" validate:"omitempty"`  // header value / token
+	OtelDebug      bool   `mapstructure:"otel_debug" default:"false"`            // use synchronous SimpleProcessor and verbose stderr output
 }
 
 type PostgresConfig struct {
@@ -196,13 +197,29 @@ type PyroscopeConfig struct {
 }
 
 type TemporalConfig struct {
-	Address                string `mapstructure:"address" validate:"required"`
-	TaskQueue              string `mapstructure:"task_queue" validate:"required"`
-	Namespace              string `mapstructure:"namespace" validate:"required"`
-	APIKey                 string `mapstructure:"api_key"`
-	APIKeyName             string `mapstructure:"api_key_name"`
-	TLS                    bool   `mapstructure:"tls"`
-	MaxWorkflowsPerCronRun int    `mapstructure:"max_workflows_per_cron_run"`
+	Address                string               `mapstructure:"address" validate:"required"`
+	TaskQueue              string               `mapstructure:"task_queue" validate:"required"`
+	Namespace              string               `mapstructure:"namespace" validate:"required"`
+	APIKey                 string               `mapstructure:"api_key"`
+	APIKeyName             string               `mapstructure:"api_key_name"`
+	TLS                    bool                 `mapstructure:"tls"`
+	MaxWorkflowsPerCronRun int                  `mapstructure:"max_workflows_per_cron_run"`
+	Worker                 TemporalWorkerConfig `mapstructure:"worker"`
+}
+
+type TemporalWorkerConfig struct {
+	// MaxConcurrentActivityExecutionSize is the max number of activities executed concurrently per worker.
+	// Default: 10
+	MaxConcurrentActivityExecutionSize int `mapstructure:"max_concurrent_activity_execution_size"`
+	// MaxConcurrentWorkflowTaskExecutionSize is the max number of workflow tasks executed concurrently per worker.
+	// Default: 10
+	MaxConcurrentWorkflowTaskExecutionSize int `mapstructure:"max_concurrent_workflow_task_execution_size"`
+	// WorkerActivitiesPerSecond is the rate limit for activities per second per worker. 0 means unlimited.
+	// Default: 5
+	WorkerActivitiesPerSecond float64 `mapstructure:"worker_activities_per_second"`
+	// TaskQueueActivitiesPerSecond is the rate limit for activities per second across all workers for the task queue. 0 means unlimited.
+	// Default: 0 (unlimited)
+	TaskQueueActivitiesPerSecond float64 `mapstructure:"task_queue_activities_per_second"`
 }
 
 type SecretsConfig struct {
@@ -389,6 +406,7 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.otel_protocol", "FLEXPRICE_LOGGING_OTEL_PROTOCOL")
 	_ = v.BindEnv("logging.otel_auth_header", "FLEXPRICE_LOGGING_OTEL_AUTH_HEADER")
 	_ = v.BindEnv("logging.otel_auth_value", "FLEXPRICE_LOGGING_OTEL_AUTH_VALUE")
+	_ = v.BindEnv("logging.otel_debug", "FLEXPRICE_LOGGING_OTEL_DEBUG")
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {

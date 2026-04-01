@@ -10,6 +10,7 @@ import (
 	"github.com/fluent/fluent-logger-golang/fluent"
 	"github.com/getsentry/sentry-go"
 	"go.opentelemetry.io/contrib/bridges/otelzap"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -99,7 +100,7 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 		zapLogger.Sugar().Warn("Fluentd is enabled but host/port not configured properly")
 	}
 
-	// Initialize OpenTelemetry log exporter (for SigNoz / any OTLP backend)
+	// Initialize OpenTelemetry log exporter (for any OTLP backend)
 	var otelLogProvider *sdklog.LoggerProvider
 	if cfg.Logging.OtelEnabled && cfg.Logging.OtelEndpoint != "" {
 		otelLogProvider, err = newOtelLogProvider(context.Background(), cfg)
@@ -107,11 +108,22 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 			zapLogger.Sugar().Warnf("Failed to initialize OTel log exporter: %v, falling back to stdout only", err)
 			otelLogProvider = nil
 		} else {
-			zapLogger.Sugar().Infof("OTel log exporter initialized (endpoint: %s, auth_header: %s, auth_value_set: %v)", cfg.Logging.OtelEndpoint, cfg.Logging.OtelAuthHeader, cfg.Logging.OtelAuthValue != "")
+			zapLogger.Sugar().Infof("OTel log exporter initialized (endpoint: %s, protocol: %s, auth_header: %s, auth_value_set: %v)", cfg.Logging.OtelEndpoint, cfg.Logging.OtelProtocol, cfg.Logging.OtelAuthHeader, cfg.Logging.OtelAuthValue != "")
+		}
+		if cfg.Logging.OtelDebug {
+			// Route otel SDK internal errors (e.g. failed exports, auth errors) to zap so they appear in logs.
+			otel.SetErrorHandler(otel.ErrorHandlerFunc(func(e error) {
+				zapLogger.Sugar().Errorf("OTel export error: %v", e)
+			}))
 		}
 	}
 
-	// Build the final zap logger, optionally tee-ing into the otelzap bridge
+	// Build the final zap logger, optionally tee-ing into the otelzap bridge.
+	// zapcore.NewTee's Enabled() is true if ANY core enables the level. The otelzap
+	// core delegates to OTel Logger.Enabled(), which (with the SDK batch processor)
+	// accepts all severities, so Debug would still flow to OTLP when the main core
+	// is gated to Info. Wrap the otel core with the same LevelEnabler as the
+	// preset logger so OTLP respects logging.level.
 	finalLogger := zapLogger
 	if otelLogProvider != nil {
 		scopeName := cfg.Logging.ServiceName
@@ -119,7 +131,11 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 			scopeName = string(cfg.Deployment.Mode)
 		}
 		otelCore := otelzap.NewCore(scopeName, otelzap.WithLoggerProvider(otelLogProvider))
-		finalLogger = zap.New(zapcore.NewTee(zapLogger.Core(), otelCore), zap.WithCaller(true))
+		otelTeeCore, incrErr := zapcore.NewIncreaseLevelCore(otelCore, config.Level)
+		if incrErr != nil {
+			return nil, incrErr
+		}
+		finalLogger = zap.New(zapcore.NewTee(zapLogger.Core(), otelTeeCore), zap.WithCaller(true))
 	}
 
 	sugar := finalLogger.Sugar()
@@ -135,7 +151,7 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 		fluentdLogger:   fluentdLogger,
 		otelLogProvider: otelLogProvider,
 		serviceName:     string(cfg.Deployment.Mode),
-		sentryEnabled:   cfg.Sentry.Enabled,
+		sentryEnabled:   false,
 		sentryCtx:       context.Background(),
 	}, nil
 }
@@ -178,8 +194,7 @@ func newOtelLogProvider(ctx context.Context, cfg *config.Configuration) (*sdklog
 		return nil, err
 	}
 
-	// Build resource with service.name and deployment.environment so SigNoz can
-	// group and filter logs correctly.
+	// Build resource with service.name and deployment.environment
 	resAttrs := []attribute.KeyValue{
 		semconv.ServiceName(cfg.Logging.ServiceName),
 	}
@@ -193,8 +208,16 @@ func newOtelLogProvider(ctx context.Context, cfg *config.Configuration) (*sdklog
 		return nil, err
 	}
 
+	// OtelDebug: synchronous processor exports immediately — use to confirm delivery without waiting for batch timer.
+	var processor sdklog.Processor
+	if cfg.Logging.OtelDebug {
+		processor = sdklog.NewSimpleProcessor(exporter)
+	} else {
+		processor = sdklog.NewBatchProcessor(exporter)
+	}
+
 	provider := sdklog.NewLoggerProvider(
-		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
+		sdklog.WithProcessor(processor),
 		sdklog.WithResource(res),
 	)
 	return provider, nil

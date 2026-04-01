@@ -117,6 +117,9 @@ type SubscriptionPhase func(*sql.Selector)
 // SubscriptionSchedule is the predicate function for subscriptionschedule builders.
 type SubscriptionSchedule func(*sql.Selector)
 
+// SystemEvent is the predicate function for systemevent builders.
+type SystemEvent func(*sql.Selector)
+
 // Task is the predicate function for task builders.
 type Task func(*sql.Selector)
 

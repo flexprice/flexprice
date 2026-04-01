@@ -231,6 +231,114 @@ type ScheduleDraftFinalizationWorkflowResult struct {
 	FailedCount    int `json:"failed_count"`
 }
 
+// ===================== Compute Invoice Workflow Models =====================
+
+// ComputeInvoiceWorkflowInput represents the input for the compute invoice workflow
+type ComputeInvoiceWorkflowInput struct {
+	InvoiceID     string `json:"invoice_id"`
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+	UserID        string `json:"user_id"`
+}
+
+// Validate validates the compute invoice workflow input
+func (i *ComputeInvoiceWorkflowInput) Validate() error {
+	if i.InvoiceID == "" {
+		return ierr.NewError("invoice_id is required").
+			WithHint("Invoice ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.EnvironmentID == "" {
+		return ierr.NewError("environment_id is required").
+			WithHint("Environment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ComputeInvoiceWorkflowResult represents the result of computing an invoice
+type ComputeInvoiceWorkflowResult struct {
+	Success     bool      `json:"success"`
+	Skipped     bool      `json:"skipped"`
+	CompletedAt time.Time `json:"completed_at"`
+}
+
+// ===================== Draft and compute subscription invoice workflow =====================
+
+// DraftAndComputeSubscriptionInvoiceWorkflowInput is input for DraftAndComputeSubscriptionInvoiceWorkflow.
+type DraftAndComputeSubscriptionInvoiceWorkflowInput struct {
+	SubscriptionID string `json:"subscription_id"`
+	TenantID       string `json:"tenant_id"`
+	EnvironmentID  string `json:"environment_id"`
+	UserID         string `json:"user_id"`
+}
+
+// Validate validates the draft-and-compute subscription invoice workflow input.
+func (i *DraftAndComputeSubscriptionInvoiceWorkflowInput) Validate() error {
+	if i.SubscriptionID == "" {
+		return ierr.NewError("subscription_id is required").
+			WithHint("Subscription ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.EnvironmentID == "" {
+		return ierr.NewError("environment_id is required").
+			WithHint("Environment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// DraftAndComputeSubscriptionInvoiceWorkflowResult is the workflow result.
+type DraftAndComputeSubscriptionInvoiceWorkflowResult struct {
+	InvoiceID      string    `json:"invoice_id"`
+	ComputeSkipped bool      `json:"compute_skipped"`
+	Success        bool      `json:"success"`
+	CompletedAt    time.Time `json:"completed_at"`
+}
+
+// CreateDraftForCurrentSubscriptionPeriodActivityInput is input for CreateDraftForCurrentSubscriptionPeriodActivity.
+type CreateDraftForCurrentSubscriptionPeriodActivityInput struct {
+	SubscriptionID string `json:"subscription_id"`
+	TenantID       string `json:"tenant_id"`
+	EnvironmentID  string `json:"environment_id"`
+	UserID         string `json:"user_id"`
+}
+
+// Validate validates the activity input.
+func (i *CreateDraftForCurrentSubscriptionPeriodActivityInput) Validate() error {
+	if i.SubscriptionID == "" {
+		return ierr.NewError("subscription_id is required").
+			WithHint("Subscription ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.EnvironmentID == "" {
+		return ierr.NewError("environment_id is required").
+			WithHint("Environment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// CreateDraftForCurrentSubscriptionPeriodActivityOutput is returned after creating the idempotent draft.
+type CreateDraftForCurrentSubscriptionPeriodActivityOutput struct {
+	InvoiceID string `json:"invoice_id"`
+}
+
 // FinalizeDueDraftsActivityInput represents the input for the finalize due drafts activity
 type FinalizeDueDraftsActivityInput struct {
 	BatchSize int `json:"batch_size"`

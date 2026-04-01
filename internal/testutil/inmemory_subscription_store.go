@@ -88,8 +88,14 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 		return false
 	}
 
-	// Filter by time range
-	if f.TimeRangeFilter != nil {
+	if f.EffectiveDateForUpdate != nil {
+		d := *f.EffectiveDateForUpdate
+		periodEnded := !sub.CurrentPeriodEnd.After(d)
+		cancelEffective := sub.CancelAt != nil && !sub.CancelAt.After(d)
+		if !periodEnded && !cancelEffective {
+			return false
+		}
+	} else if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && sub.CreatedAt.Before(*f.StartTime) {
 			return false
 		}
@@ -297,14 +303,14 @@ func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.S
 		BillingPeriod:           filter.BillingPeriod,
 		SubscriptionStatusNotIn: filter.SubscriptionStatusNotIn,
 		ActiveAt:                filter.ActiveAt,
+		EffectiveDateForUpdate:  filter.EffectiveDateForUpdate,
 	}
 
 	return s.List(ctx, unlimitedFilter)
 }
 
-// ListAllTenant returns all subscriptions across all tenants
-// NOTE: This is a potentially expensive operation and to be used only for CRONs
-func (s *InMemorySubscriptionStore) ListAllTenant(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
+// GetSubscriptionsForBillingPeriodUpdate returns subscriptions across all tenants for billing-period jobs.
+func (s *InMemorySubscriptionStore) GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
 	return s.ListAll(ctx, filter)
 }
 

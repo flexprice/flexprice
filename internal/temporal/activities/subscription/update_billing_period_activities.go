@@ -3,6 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -228,7 +229,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 	}
 
 	for _, invoiceID := range input.InvoiceIDs {
-		_, err := temporalSvc.ExecuteWorkflow(
+		_, err := temporalSvc.ExecuteWorkflowWithDelay(
 			ctx,
 			types.TemporalProcessInvoiceWorkflow,
 			invoiceModels.ProcessInvoiceWorkflowInput{
@@ -237,6 +238,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 				EnvironmentID: input.EnvironmentID,
 				UserID:        input.UserID,
 			},
+			900+rand.Intn(300), // adding a random delay between 900 and 1200 seconds
 		)
 		if err != nil {
 			s.logger.Errorw("failed to trigger invoice workflow",

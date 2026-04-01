@@ -123,6 +123,21 @@ var commands = []Command{
 		Description: "Sync a price to all subscriptions with the same plan and start date by creating new line items",
 		Run:         internal.SyncPriceToSubscriptions,
 	},
+	{
+		Name:        "setup-draft-invoices",
+		Description: "Create draft invoices for subscriptions from a JSON file and trigger processing workflows",
+		Run:         internal.SetupDraftInvoices,
+	},
+	{
+		Name:        "setup-dummy-billing-customer",
+		Description: "Create CUSTOMER_COUNT demo customers (default 1), each with subscription, $100 wallet top-up, and 500 meter events (Postgres + Kafka)",
+		Run:         internal.SetupDummyBillingCustomer,
+	},
+	{
+		Name:        "migrate-calendar-billing-csv",
+		Description: "From CSV (subscription IDs): call API to schedule-cancel and create calendar-billing subscription per id",
+		Run:         internal.MigrateCalendarBillingCSV,
+	},
 }
 
 // runBulkReprocessEventsCommand wraps the bulk reprocess events with command line parameters
@@ -177,8 +192,16 @@ func main() {
 		batchSize          string
 		dryRun             string
 		planID             string
+		meterID            string
+		startDate          string
+		billingCycle       string
+		customerCount      string
 		addonID            string
 		workerCount        string
+		effectiveDate      string
+		failedOutput       string
+		successOutput      string
+		apiBaseURL         string
 	)
 
 	flag.BoolVar(&listCommands, "list", false, "List all available commands")
@@ -193,6 +216,10 @@ func main() {
 	flag.StringVar(&environmentID, "environment-id", "", "Environment ID for operations")
 	flag.StringVar(&filePath, "file-path", "", "File path for operations")
 	flag.StringVar(&planID, "plan-id", "", "Plan ID for operations")
+	flag.StringVar(&meterID, "meter-id", "", "Meter ID (for setup-dummy-billing-customer)")
+	flag.StringVar(&startDate, "start-date", "", "Subscription start date RFC3339 or YYYY-MM-DD")
+	flag.StringVar(&billingCycle, "billing-cycle", "", "Billing cycle: anniversary or calendar")
+	flag.StringVar(&customerCount, "customer-count", "", "Number of customers to create (setup-dummy-billing-customer); default 1")
 	flag.StringVar(&apiKey, "api-key", "", "API key for operations")
 	flag.StringVar(&externalCustomerID, "external-customer-id", "", "External customer ID for reprocessing events")
 	flag.StringVar(&eventName, "event-name", "", "Event name filter for reprocessing")
@@ -201,7 +228,11 @@ func main() {
 	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing")
 	flag.StringVar(&dryRun, "dry-run", "false", "Dry run mode (true/false)")
 	flag.StringVar(&addonID, "addon-id", "", "Addon ID for operations")
-	flag.StringVar(&workerCount, "worker-count", "10", "Number of concurrent workers for parallel processing")
+	flag.StringVar(&workerCount, "worker-count", "", "Concurrent workers (sets WORKER_COUNT when non-empty; migrate-calendar-billing-csv defaults to 3 if unset)")
+	flag.StringVar(&effectiveDate, "effective-date", "", "Effective date for calendar billing migration (RFC3339 or YYYY-MM-DD)")
+	flag.StringVar(&failedOutput, "failed-output", "", "Path for failed rows CSV (migrate-calendar-billing-csv)")
+	flag.StringVar(&successOutput, "success-output", "", "Path for successful rows CSV (migrate-calendar-billing-csv)")
+	flag.StringVar(&apiBaseURL, "api-base-url", "", "Flexprice API base URL including /v1 (migrate-calendar-billing-csv); default https://api.cloud.flexprice.io/v1")
 	flag.Parse()
 
 	if listCommands {
@@ -247,6 +278,18 @@ func main() {
 	if planID != "" {
 		os.Setenv("PLAN_ID", planID)
 	}
+	if meterID != "" {
+		os.Setenv("METER_ID", meterID)
+	}
+	if startDate != "" {
+		os.Setenv("START_DATE", startDate)
+	}
+	if billingCycle != "" {
+		os.Setenv("BILLING_CYCLE", billingCycle)
+	}
+	if customerCount != "" {
+		os.Setenv("CUSTOMER_COUNT", customerCount)
+	}
 	if addonID != "" {
 		os.Setenv("ADDON_ID", addonID)
 	}
@@ -273,6 +316,18 @@ func main() {
 	}
 	if workerCount != "" {
 		os.Setenv("WORKER_COUNT", workerCount)
+	}
+	if apiBaseURL != "" {
+		os.Setenv("API_BASE_URL", apiBaseURL)
+	}
+	if effectiveDate != "" {
+		os.Setenv("EFFECTIVE_DATE", effectiveDate)
+	}
+	if failedOutput != "" {
+		os.Setenv("FAILED_OUTPUT_PATH", failedOutput)
+	}
+	if successOutput != "" {
+		os.Setenv("SUCCESS_OUTPUT_PATH", successOutput)
 	}
 
 	// Find and run the command

@@ -43,6 +43,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/flexprice/flexprice/ent/systemevent"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/taxapplied"
 	"github.com/flexprice/flexprice/ent/taxassociation"
@@ -1874,6 +1875,47 @@ func init() {
 	subscriptionscheduleDescScheduleType := subscriptionscheduleFields[2].Descriptor()
 	// subscriptionschedule.ScheduleTypeValidator is a validator for the "schedule_type" field. It is called by the builders before save.
 	subscriptionschedule.ScheduleTypeValidator = subscriptionscheduleDescScheduleType.Validators[0].(func(string) error)
+	systemeventMixin := schema.SystemEvent{}.Mixin()
+	systemeventMixinFields0 := systemeventMixin[0].Fields()
+	_ = systemeventMixinFields0
+	systemeventMixinFields1 := systemeventMixin[1].Fields()
+	_ = systemeventMixinFields1
+	systemeventFields := schema.SystemEvent{}.Fields()
+	_ = systemeventFields
+	// systemeventDescTenantID is the schema descriptor for tenant_id field.
+	systemeventDescTenantID := systemeventMixinFields0[0].Descriptor()
+	// systemevent.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	systemevent.TenantIDValidator = systemeventDescTenantID.Validators[0].(func(string) error)
+	// systemeventDescStatus is the schema descriptor for status field.
+	systemeventDescStatus := systemeventMixinFields0[1].Descriptor()
+	// systemevent.DefaultStatus holds the default value on creation for the status field.
+	systemevent.DefaultStatus = systemeventDescStatus.Default.(string)
+	// systemeventDescCreatedAt is the schema descriptor for created_at field.
+	systemeventDescCreatedAt := systemeventMixinFields0[2].Descriptor()
+	// systemevent.DefaultCreatedAt holds the default value on creation for the created_at field.
+	systemevent.DefaultCreatedAt = systemeventDescCreatedAt.Default.(func() time.Time)
+	// systemeventDescUpdatedAt is the schema descriptor for updated_at field.
+	systemeventDescUpdatedAt := systemeventMixinFields0[3].Descriptor()
+	// systemevent.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	systemevent.DefaultUpdatedAt = systemeventDescUpdatedAt.Default.(func() time.Time)
+	// systemevent.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	systemevent.UpdateDefaultUpdatedAt = systemeventDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// systemeventDescEnvironmentID is the schema descriptor for environment_id field.
+	systemeventDescEnvironmentID := systemeventMixinFields1[0].Descriptor()
+	// systemevent.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	systemevent.DefaultEnvironmentID = systemeventDescEnvironmentID.Default.(string)
+	// systemeventDescEventName is the schema descriptor for event_name field.
+	systemeventDescEventName := systemeventFields[1].Descriptor()
+	// systemevent.DefaultEventName holds the default value on creation for the event_name field.
+	systemevent.DefaultEventName = systemeventDescEventName.Default.(string)
+	// systemeventDescEntityType is the schema descriptor for entity_type field.
+	systemeventDescEntityType := systemeventFields[2].Descriptor()
+	// systemevent.DefaultEntityType holds the default value on creation for the entity_type field.
+	systemevent.DefaultEntityType = systemeventDescEntityType.Default.(string)
+	// systemeventDescEntityID is the schema descriptor for entity_id field.
+	systemeventDescEntityID := systemeventFields[3].Descriptor()
+	// systemevent.DefaultEntityID holds the default value on creation for the entity_id field.
+	systemevent.DefaultEntityID = systemeventDescEntityID.Default.(string)
 	taskMixin := schema.Task{}.Mixin()
 	taskMixinFields0 := taskMixin[0].Fields()
 	_ = taskMixinFields0

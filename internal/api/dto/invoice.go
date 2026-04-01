@@ -262,6 +262,12 @@ type InvoiceComputeRequest struct {
 	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
 }
 
+// ComputeInvoiceResponse is the API response after recomputing a draft invoice with ComputeInvoice.
+type ComputeInvoiceResponse struct {
+	Invoice *InvoiceResponse `json:"invoice"`
+	Skipped bool             `json:"skipped"`
+}
+
 // CreateProrationInvoiceRequest represents the request for creating a proration invoice
 type CreateProrationInvoiceRequest struct {
 	// subscription_id is the unique identifier of the subscription this proration relates to

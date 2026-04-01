@@ -651,3 +651,22 @@ func (h *SubscriptionHandler) TriggerSubscriptionWorkflow(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *SubscriptionHandler) TriggerSubscriptionDraftAndComputeWorkflow(c *gin.Context) {
+	subscriptionID := c.Param("subscription_id")
+	if subscriptionID == "" {
+		c.Error(ierr.NewError("subscription_id is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.service.TriggerSubscriptionDraftAndComputeWorkflow(c.Request.Context(), subscriptionID)
+	if err != nil {
+		h.log.Error("Failed to trigger draft-and-compute subscription invoice workflow", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, response)
+}

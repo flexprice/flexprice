@@ -35,9 +35,10 @@ type Repository interface {
 	GetByIdempotencyKey(ctx context.Context, key string) (*Invoice, error)
 
 	// Period validation
-	ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error)
-	// GetForPeriod returns the non-voided invoice for the given subscription period, or ErrNotFound if none exists.
-	GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (*Invoice, error)
+	ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error)
+	// GetForPeriod returns the non-voided invoice for the given subscription period and billing reason, or ErrNotFound if none exists.
+	// If billingReason is empty, it matches any billing reason (backward compat).
+	GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*Invoice, error)
 
 	// GetNextInvoiceNumber generates and returns the next invoice number for a tenant
 	// Format: INV-YYYYMM-XXXXX

@@ -94,12 +94,12 @@ func TestSyncPlanToChargebee_SyncsThreePricesAndCreatesMappings(t *testing.T) {
 	upTo100 := uint64(100)
 	prices := []*price.Price{
 		{
-			ID:           "price_flat",
-			Currency:     "USD",
-			BillingModel: types.BILLING_MODEL_FLAT_FEE,
-			Amount:       decimal.NewFromInt(10),
+			ID:            "price_flat",
+			Currency:      "USD",
+			BillingModel:  types.BILLING_MODEL_FLAT_FEE,
+			Amount:        decimal.NewFromInt(10),
 			EnvironmentID: "env_test",
-			BaseModel:    types.GetDefaultBaseModel(ctx),
+			BaseModel:     types.GetDefaultBaseModel(ctx),
 		},
 		{
 			ID:           "price_package",

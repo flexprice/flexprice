@@ -21,16 +21,6 @@ var _ = []any{
 	(*webhookDto.CreditNoteWebhookPayload)(nil),
 }
 
-// WebhookEventInvoiceCreateDrafted godoc
-// @Summary invoice.create.drafted
-// @Description Fired when a new invoice is created in draft status. Doc-only for parsing.
-// @Tags Webhook Events
-// @Accept json
-// @Produce json
-// @Success 200 {object} webhookDto.InvoiceWebhookPayload "Webhook payload"
-// @Router /webhook-events/invoice.create.drafted [post]
-func WebhookEventInvoiceCreateDrafted() {}
-
 // WebhookEventInvoiceUpdateFinalized godoc
 // @Summary invoice.update.finalized
 // @Description Fired when an invoice is finalized and locked for payment. Doc-only for parsing.

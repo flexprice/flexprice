@@ -86,10 +86,11 @@ func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (str
 	return dashboard.Url, nil
 }
 
-// SendMessage sends a webhook message to the given application
-func (c *Client) SendMessage(ctx context.Context, applicationID string, eventType string, payload interface{}) error {
+// SendMessage sends a webhook message to the given application.
+// Returns the Svix message id on success (empty string when Svix is disabled or the app doesn't exist).
+func (c *Client) SendMessage(ctx context.Context, applicationID string, eventType string, payload interface{}) (string, error) {
 	if !c.enabled || c.client == nil {
-		return nil // Return nil if Svix is not enabled
+		return "", nil
 	}
 
 	var payloadMap map[string]interface{}
@@ -100,38 +101,36 @@ func (c *Client) SendMessage(ctx context.Context, applicationID string, eventTyp
 		// If it's already a map, use it directly
 		payloadMap = p
 	case []byte:
-		// If it's a byte slice (like json.RawMessage), unmarshal it
 		if err := json.Unmarshal(p, &payloadMap); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
+			return "", fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 	case json.RawMessage:
-		// If it's a json.RawMessage, unmarshal it
 		if err := json.Unmarshal(p, &payloadMap); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
+			return "", fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 	default:
-		// For any other type, try to marshal and then unmarshal it
 		data, err := json.Marshal(p)
 		if err != nil {
-			return fmt.Errorf("failed to marshal payload: %w", err)
+			return "", fmt.Errorf("failed to marshal payload: %w", err)
 		}
 		if err := json.Unmarshal(data, &payloadMap); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
+			return "", fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 	}
 
 	payloadMap["event_type"] = eventType
-	_, err := c.client.Message.Create(ctx, applicationID, models.MessageIn{
+	out, err := c.client.Message.Create(ctx, applicationID, models.MessageIn{
 		EventType: eventType,
 		Payload:   payloadMap,
 	}, &svix.MessageCreateOptions{})
 	if err != nil {
-		// Check if application not found error
 		if err.Error() == "application not found" {
-			return nil // Ignore application not found errors as per requirement
+			return "", nil
 		}
-		return fmt.Errorf("failed to send message: %w", err)
+		return "", fmt.Errorf("failed to send message: %w", err)
 	}
-
-	return nil
+	if out == nil {
+		return "", nil
+	}
+	return out.Id, nil
 }

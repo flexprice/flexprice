@@ -445,15 +445,34 @@ func (s *PaymentService) HandleExternalRazorpayPaymentFromWebhook(
 ) error {
 	razorpayPaymentID := lo.FromPtrOr(extractStringFromMap(payment, "id"), "")
 	razorpayInvoiceID := lo.FromPtrOr(extractStringFromMap(payment, "invoice_id"), "")
+	description := lo.FromPtrOr(extractStringFromMap(payment, "description"), "")
+	orderID := lo.FromPtrOr(extractStringFromMap(payment, "order_id"), "")
 
 	s.logger.Infow("no FlexPrice payment ID found, processing as external Razorpay payment",
 		"razorpay_payment_id", razorpayPaymentID,
-		"razorpay_invoice_id", razorpayInvoiceID)
+		"razorpay_invoice_id", razorpayInvoiceID,
+		"order_id", orderID,
+		"description", description,
+	)
+
+	// When payment goes through a Razorpay order (e.g. paid via invoice short-link),
+	// Razorpay does NOT populate payment.invoice_id — it only puts the Razorpay invoice ID
+	// in the description as "Invoice #inv_xxx". Extract it as a fallback.
+	if razorpayInvoiceID == "" && strings.HasPrefix(description, "Invoice #") {
+		razorpayInvoiceID = strings.TrimPrefix(description, "Invoice #")
+		s.logger.Infow("extracted Razorpay invoice ID from payment description",
+			"razorpay_payment_id", razorpayPaymentID,
+			"razorpay_invoice_id", razorpayInvoiceID,
+			"order_id", orderID,
+		)
+	}
 
 	// Check if invoice ID exists (payment must be linked to an invoice)
 	if razorpayInvoiceID == "" {
 		s.logger.Infow("no Razorpay invoice ID found in external payment, skipping",
-			"razorpay_payment_id", razorpayPaymentID)
+			"razorpay_payment_id", razorpayPaymentID,
+			"order_id", orderID,
+			"description", description)
 		return nil
 	}
 

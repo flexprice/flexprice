@@ -371,7 +371,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		InvoiceNumberSuffixLength:              5,
 		DueDateDays:                            lo.ToPtr(1),
 		AutoCompletePurchasedCreditTransaction: false,
-		FinalizationDelaySeconds:               600, // 10 minutes
+		FinalizationDelaySeconds:               7200, // 2 hours
 	}
 
 	defaultSubscriptionConfig := SubscriptionConfig{

@@ -1825,13 +1825,15 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      walletID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -1859,13 +1861,15 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      transactionID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -2041,13 +2045,15 @@ func (s *walletService) PublishEvent(ctx context.Context, eventName types.Webhoo
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUID(),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      w.TenantID,
 		EnvironmentID: w.EnvironmentID,
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       eventJSON,
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      w.ID,
 	}
 
 	s.Logger.InfowCtx(ctx, "publishing webhook event",
@@ -2800,7 +2806,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 				"event_id", req.ID,
 			)
 			// Trigger auto top-up if enabled
-			err := s.checkAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
+			err := s.triggerAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
 			if err != nil {
 				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
 					"error", err,
@@ -3009,8 +3015,8 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"event_id", req.ID,
 		)
 
-		// Check auto top-up
-		err = s.checkAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
+		// Trigger auto top-up if enabled
+		err = s.triggerAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
 		if err != nil {
 			s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
 				"error", err,
@@ -3053,16 +3059,14 @@ func (s *walletService) PublishWalletBalanceAlertEvent(ctx context.Context, cust
 	}
 }
 
-// checkAutoTopup checks if auto top-up is enabled and triggers it if needed
-func (s *walletService) checkAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
+// triggerAutoTopup checks if auto top-up is enabled and triggers it if needed
+func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
 
 	if w.AutoTopup == nil || w.AutoTopup.Enabled == nil || !*w.AutoTopup.Enabled {
-		return ierr.NewError("auto top-up is not enabled").
-			WithHint("Auto top-up is not enabled").
-			WithReportableDetails(map[string]interface{}{
-				"wallet_id": w.ID,
-			}).
-			Mark(ierr.ErrInvalidOperation)
+		s.Logger.DebugwCtx(ctx, "auto top-up not enabled, skipping",
+			"wallet_id", w.ID,
+		)
+		return nil
 	}
 
 	// Check if ongoing balance is below threshold

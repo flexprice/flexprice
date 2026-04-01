@@ -363,6 +363,16 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 					Outbound: outbound,
 				}
 			}
+
+			// Parse customer sync config
+			if customerMap, ok := scMap["customer"].(map[string]interface{}); ok {
+				inbound, _ := customerMap["inbound"].(bool)
+				outbound, _ := customerMap["outbound"].(bool)
+				syncConfig.Customer = &types.EntitySyncConfig{
+					Inbound:  inbound,
+					Outbound: outbound,
+				}
+			}
 		}
 	}
 

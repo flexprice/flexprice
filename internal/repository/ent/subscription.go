@@ -390,13 +390,13 @@ func (r *subscriptionRepository) ListAll(ctx context.Context, filter *types.Subs
 	return r.List(ctx, filter)
 }
 
-// ListAllTenant retrieves all subscriptions across all tenants
-// NOTE: This is a potentially expensive operation and to be used only for CRONs
-func (r *subscriptionRepository) ListAllTenant(ctx context.Context, filter *types.SubscriptionFilter) ([]*domainSub.Subscription, error) {
-	r.logger.Debugw("listing subscriptions for all tenants", "filter", filter)
+// GetSubscriptionsForBillingPeriodUpdate lists subscriptions across all tenants for billing-period
+// maintenance (cron/Temporal). NOTE: expensive; intended for scheduled jobs only.
+func (r *subscriptionRepository) GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) ([]*domainSub.Subscription, error) {
+	r.logger.Debugw("listing subscriptions for billing period update", "filter", filter)
 
 	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "subscription", "list_all_tenant", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "subscription", "get_subscriptions_for_billing_period_update", map[string]interface{}{
 		"filter": filter,
 	})
 	defer FinishSpan(span)
@@ -643,6 +643,20 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		if f.TimeRangeFilter.EndTime != nil {
 			query = query.Where(subscription.CurrentPeriodEndLTE(*f.TimeRangeFilter.EndTime))
 		}
+	}
+
+	// Period / cancellation cutoff for billing updates (preferred for crons)
+	if f.EffectiveDateForUpdate != nil {
+		d := *f.EffectiveDateForUpdate
+		query = query.Where(
+			subscription.Or(
+				subscription.CurrentPeriodEndLTE(d),
+				subscription.And(
+					subscription.CancelAtNotNil(),
+					subscription.CancelAtLTE(d),
+				),
+			),
+		)
 	}
 
 	if f.Filters != nil {

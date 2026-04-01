@@ -20,11 +20,6 @@ func (input *StripeInvoiceSyncWorkflowInput) Validate() error {
 			WithHint("InvoiceID must not be empty").
 			Mark(ierr.ErrValidation)
 	}
-	if input.CustomerID == "" {
-		return ierr.NewError("customer_id is required").
-			WithHint("CustomerID must not be empty").
-			Mark(ierr.ErrValidation)
-	}
 	if input.TenantID == "" {
 		return ierr.NewError("tenant_id is required").
 			WithHint("TenantID must not be empty").

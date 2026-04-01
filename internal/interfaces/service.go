@@ -66,6 +66,7 @@ type EntityIntegrationMappingService interface {
 	GetEntityIntegrationMappings(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (*dto.ListEntityIntegrationMappingsResponse, error)
 	UpdateEntityIntegrationMapping(ctx context.Context, id string, req dto.UpdateEntityIntegrationMappingRequest) (*dto.EntityIntegrationMappingResponse, error)
 	DeleteEntityIntegrationMapping(ctx context.Context, id string) error
+	LinkIntegrationMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*dto.LinkIntegrationMappingResponse, error)
 }
 
 // RevenueAnalyticsService defines the interface for revenue analytics operations
@@ -117,7 +118,7 @@ type SubscriptionService interface {
 	GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 
 	// List all tenant subscriptions
-	ListAllTenantSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
+	GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 
 	// Credit grant applications
 	GetUpcomingCreditGrantApplications(ctx context.Context, req *dto.GetUpcomingCreditGrantApplicationsRequest) (*dto.ListCreditGrantApplicationsResponse, error)
@@ -132,6 +133,9 @@ type SubscriptionService interface {
 
 	// TriggerSubscriptionWorkflow triggers the subscription billing workflow
 	TriggerSubscriptionWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error)
+
+	// TriggerSubscriptionDraftAndComputeWorkflow creates an idempotent draft for the current period and runs compute via Temporal (invoice task queue).
+	TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error)
 
 	// Cron methods
 

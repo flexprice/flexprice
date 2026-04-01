@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	invoiceTemporalModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 
@@ -1767,7 +1768,12 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
-		// Step 7b: Handle scheduling for future cancellations (end_of_period and scheduled_date)
+		// Step 7b: Terminate plan line items (set EndDate = effectiveDate)
+		if err := s.cancelPlanLineItemsForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
+			return err
+		}
+
+		// Step 7c: Handle scheduling for future cancellations (end_of_period and scheduled_date)
 		if req.CancellationType == types.CancellationTypeEndOfPeriod ||
 			req.CancellationType == types.CancellationTypeScheduledDate {
 			// Cancel all pending schedules (especially plan changes) before creating cancellation schedule
@@ -2486,13 +2492,11 @@ func (s *subscriptionService) UpdateBillingPeriods(ctx context.Context) (*dto.Su
 				Offset: lo.ToPtr(offset),
 				Status: lo.ToPtr(types.StatusPublished),
 			},
-			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
-			TimeRangeFilter: &types.TimeRangeFilter{
-				EndTime: &now,
-			},
+			SubscriptionStatus:     []types.SubscriptionStatus{types.SubscriptionStatusActive},
+			EffectiveDateForUpdate: &now,
 		}
 
-		subs, err := s.SubRepo.ListAllTenant(ctx, filter)
+		subs, err := s.SubRepo.GetSubscriptionsForBillingPeriodUpdate(ctx, filter)
 		if err != nil {
 			return response, err
 		}
@@ -3788,13 +3792,15 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeSubscription,
+		EntityID:      subscriptionID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -5855,11 +5861,11 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 	return nil
 }
 
-func (s *subscriptionService) ListAllTenantSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
+func (s *subscriptionService) GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
 	if filter == nil {
 		filter = types.NewNoLimitSubscriptionFilter()
 	}
-	subs, err := s.SubRepo.ListAllTenant(ctx, filter)
+	subs, err := s.SubRepo.GetSubscriptionsForBillingPeriodUpdate(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -6437,5 +6443,126 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 				Mark(ierr.ErrInternal)
 		}
 	}
+	return nil
+}
+
+// TriggerSubscriptionDraftAndComputeWorkflow starts DraftAndComputeSubscriptionInvoiceWorkflow: idempotent draft for the subscription's current period, then compute.
+func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*dto.TriggerSubscriptionWorkflowResponse, error) {
+	if subscriptionID == "" {
+		return nil, ierr.NewError("subscription_id is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	userID := types.GetUserID(ctx)
+
+	s.Logger.InfowCtx(ctx, "triggering draft-and-compute subscription invoice workflow",
+		"subscription_id", subscriptionID,
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+		"user_id", userID)
+
+	workflowInput := invoiceTemporalModels.DraftAndComputeSubscriptionInvoiceWorkflowInput{
+		SubscriptionID: subscriptionID,
+		TenantID:       tenantID,
+		EnvironmentID:  environmentID,
+		UserID:         userID,
+	}
+	if err := workflowInput.Validate(); err != nil {
+		return nil, ierr.WithError(err).WithHint("Invalid workflow input").Mark(ierr.ErrValidation)
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return nil, ierr.NewError("temporal service not available").
+			WithHint("Temporal service not available").
+			Mark(ierr.ErrInternal)
+	}
+
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
+		workflowInput,
+	)
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to trigger draft-and-compute subscription invoice workflow",
+			"error", err,
+			"subscription_id", subscriptionID)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to trigger draft-and-compute subscription invoice workflow").
+			Mark(ierr.ErrInternal)
+	}
+
+	s.Logger.InfowCtx(ctx, "successfully triggered draft-and-compute subscription invoice workflow",
+		"subscription_id", subscriptionID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
+
+	return &dto.TriggerSubscriptionWorkflowResponse{
+		WorkflowID: workflowRun.GetID(),
+		RunID:      workflowRun.GetRunID(),
+		Message:    fmt.Sprintf("Successfully triggered draft-and-compute invoice workflow for subscription %s", subscriptionID),
+	}, nil
+}
+
+// cancelPlanLineItemsForSubscription sets EndDate on all plan line items for the subscription
+// up to effectiveDate. Items that have not yet started (StartDate > effectiveDate) are skipped
+// because they never became active; the subscription-level EndDate already protects billing.
+// Uses direct repository update (not DeleteSubscriptionLineItem) to avoid the effectiveFrom
+// validation in that service function.
+func (s *subscriptionService) cancelPlanLineItemsForSubscription(
+	ctx context.Context,
+	subscriptionID string,
+	effectiveDate time.Time,
+) error {
+	logger := s.Logger.With(
+		zap.String("subscription_id", subscriptionID),
+		zap.Time("effective_date", effectiveDate),
+	)
+
+	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	lineItemFilter.SubscriptionIDs = []string{subscriptionID}
+	lineItemFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypePlan)
+
+	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	if err != nil {
+		logger.Errorw("failed to list plan line items for cancellation", "error", err)
+		return ierr.WithError(err).
+			WithHint("Failed to list plan line items for cancellation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	terminated := 0
+	for _, item := range lineItems {
+		// Skip items that haven't started yet — they never became active
+		if item.StartDate.After(effectiveDate) {
+			logger.Debugw("skipping plan line item not yet started",
+				"line_item_id", item.ID,
+				"start_date", item.StartDate)
+			continue
+		}
+		// Skip items already terminated at or before effectiveDate
+		if !item.EndDate.IsZero() && !item.EndDate.After(effectiveDate) {
+			logger.Debugw("skipping plan line item already terminated",
+				"line_item_id", item.ID,
+				"end_date", item.EndDate)
+			continue
+		}
+		item.EndDate = effectiveDate
+		if err := s.SubscriptionLineItemRepo.Update(ctx, item); err != nil {
+			logger.Errorw("failed to update plan line item end date",
+				"line_item_id", item.ID,
+				"error", err)
+			return ierr.WithError(err).
+				WithHintf("Failed to set EndDate on plan line item %s", item.ID).
+				Mark(ierr.ErrDatabase)
+		}
+		terminated++
+	}
+
+	logger.Infow("terminated plan line items for subscription",
+		"line_items_terminated", terminated)
 	return nil
 }

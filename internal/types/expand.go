@@ -38,6 +38,7 @@ const (
 	ExpandCreatedByUser             ExpandableField = "created_by_user"
 	ExpandCreditsAvailableBreakdown ExpandableField = "credits_available_breakdown"
 	ExpandSubscriptionLineItems     ExpandableField = "subscription_line_items"
+	ExpandIntegrations              ExpandableField = "integrations"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -141,8 +142,10 @@ var (
 
 	// CustomerExpandConfig defines what can be expanded on a customer
 	CustomerExpandConfig = ExpandConfig{
-		AllowedFields: nil,
-		NestedExpands: map[ExpandableField][]ExpandableField{},
+		AllowedFields: []ExpandableField{ExpandIntegrations},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandIntegrations: {},
+		},
 	}
 
 	// WalletTransactionExpandConfig defines what can be expanded on a wallet transaction

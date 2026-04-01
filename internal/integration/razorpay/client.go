@@ -22,6 +22,7 @@ type RazorpayClient interface {
 	HasRazorpayConnection(ctx context.Context) bool
 	GetConnection(ctx context.Context) (*connection.Connection, error)
 	CreateCustomer(ctx context.Context, customerData map[string]interface{}) (map[string]interface{}, error)
+	UpdateCustomer(ctx context.Context, customerID string, customerData map[string]interface{}) (map[string]interface{}, error)
 	CreatePaymentLink(ctx context.Context, paymentLinkData map[string]interface{}) (map[string]interface{}, error)
 	CreateInvoice(ctx context.Context, invoiceData map[string]interface{}) (map[string]interface{}, error)
 	GetInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error)
@@ -229,6 +230,27 @@ func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]int
 
 	c.logger.Infow("successfully created customer in Razorpay", "customer_id", razorpayCustomer["id"])
 	return razorpayCustomer, nil
+}
+
+// UpdateCustomer updates a customer in Razorpay.
+func (c *Client) UpdateCustomer(ctx context.Context, customerID string, customerData map[string]interface{}) (map[string]interface{}, error) {
+	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
+	if err != nil {
+		return nil, ierr.NewError("failed to initialize Razorpay client").
+			WithHint("Unable to connect to Razorpay").
+			Mark(ierr.ErrInternal)
+	}
+	updatedCustomer, err := razorpayClient.Customer.Edit(customerID, customerData, nil)
+	if err != nil {
+		return nil, ierr.NewError("failed to update customer in Razorpay").
+			WithHint("Unable to update customer in Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customerID,
+				"error":       err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+	return updatedCustomer, nil
 }
 
 // CreatePaymentLink creates a payment link in Razorpay

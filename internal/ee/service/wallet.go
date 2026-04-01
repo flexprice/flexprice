@@ -944,13 +944,15 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      walletID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -969,13 +971,15 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      transactionID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
