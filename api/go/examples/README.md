@@ -1,7 +1,18 @@
 # Go SDK examples
 
-1. From repo root: `make sdk-all` or `make go-sdk` then `make merge-custom`.
-2. Copy `.env.sample` to `.env`; set `FLEXPRICE_API_KEY` and optionally `FLEXPRICE_API_HOST` (include `/v1`, e.g. `us.api.flexprice.io/v1`).
-3. From `api/go/examples`: `go mod tidy && go run main.go`.
+Uses the published module **[github.com/flexprice/go-sdk/v2](https://github.com/flexprice/go-sdk)** (v2.0.15+).
 
-Includes sync event ingest and the custom async client (async.go). Custom files live in `api/custom/go/`.
+## Run
+
+1. Copy `.env.sample` to `.env` and set `FLEXPRICE_API_KEY`. Optionally set `FLEXPRICE_API_HOST` (must include `/v1`, e.g. `https://us.api.flexprice.io/v1`).
+2. From this directory:
+
+```bash
+go mod tidy && go run .
+```
+
+## Monorepo workflow
+
+Source of truth for this sample is `api/custom/go/examples` (merged here by `make merge-custom`).
+
+**Verified tests:** Integration coverage lives in **api/tests/go** (see [api/tests/README.md](../../tests/README.md)).

@@ -7,13 +7,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/flexprice/flexprice-go/v2"
-	"github.com/flexprice/flexprice-go/v2/models/types"
+	"github.com/flexprice/go-sdk/v2"
+	"github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/joho/godotenv"
 )
-
-// This sample demonstrates the FlexPrice Go SDK and the custom async client.
-// To run: from api/go/examples, ensure parent api/go is built, then: go run main.go
 
 func main() {
 	godotenv.Load()
@@ -27,8 +24,10 @@ func main() {
 		log.Fatal("Set FLEXPRICE_API_KEY in .env")
 	}
 
-	// Initialize SDK (flexprice.New + WithSecurity)
-	client := flexprice.New(apiHost, flexprice.WithSecurity(apiKey))
+	client := flexprice.New(
+		flexprice.WithServerURL(apiHost),
+		flexprice.WithSecurity(apiKey),
+	)
 	ctx := context.Background()
 
 	// Sync: ingest one event
@@ -42,13 +41,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("IngestEvent: %v", err)
 	}
-	if resp != nil && resp.RawResponse != nil && resp.RawResponse.StatusCode == 202 {
-		fmt.Println("Event created (202).")
-	} else {
-		fmt.Printf("Event response: %+v\n", resp)
+	if resp != nil {
+		if r := resp.GetHTTPMeta().Response; r != nil && r.StatusCode == 202 {
+			fmt.Println("Event created (202).")
+		} else {
+			fmt.Printf("Event response: %+v\n", resp)
+		}
 	}
 
-	// Async client (custom)
+	// Async client (merged from api/custom/go/async.go)
 	asyncConfig := flexprice.DefaultAsyncConfig()
 	asyncConfig.Debug = true
 	asyncClient := client.NewAsyncClientWithConfig(asyncConfig)

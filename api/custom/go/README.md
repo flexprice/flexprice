@@ -9,13 +9,13 @@ Type-safe Go client for the FlexPrice API: billing, metering, and subscription m
 ## Installation
 
 ```bash
-go get github.com/flexprice/flexprice-go/v2
+go get github.com/flexprice/go-sdk/v2@v2.0.15
 ```
 
 Then in your code:
 
 ```go
-import "github.com/flexprice/flexprice-go/v2"
+import "github.com/flexprice/go-sdk/v2"
 ```
 
 ## Quick start
@@ -32,8 +32,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/flexprice/flexprice-go/v2"
-	"github.com/flexprice/flexprice-go/v2/models/types"
+	"github.com/flexprice/go-sdk/v2"
+	"github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/joho/godotenv"
 )
 
@@ -50,7 +50,10 @@ func main() {
 		log.Fatal("Set FLEXPRICE_API_KEY in .env or environment")
 	}
 
-	client := flexprice.New(apiHost, flexprice.WithSecurity(apiKey))
+	client := flexprice.New(
+		flexprice.WithServerURL(apiHost),
+		flexprice.WithSecurity(apiKey),
+	)
 	ctx := context.Background()
 
 	customerID := fmt.Sprintf("sample-customer-%d", time.Now().Unix())
@@ -65,8 +68,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("IngestEvent: %v", err)
 	}
-	if resp != nil && resp.RawResponse != nil && resp.RawResponse.StatusCode == 202 {
-		fmt.Println("Event created (202).")
+	if resp != nil {
+		if r := resp.GetHTTPMeta().Response; r != nil && r.StatusCode == 202 {
+			fmt.Println("Event created (202).")
+		}
 	}
 
 	// List events: use client.Events.ListRawEvents(ctx, ...) with optional filters
@@ -144,7 +149,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/flexprice/flexprice-go/v2/models/types"
+	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
 // envelope reads only the event_type field for cheap routing
