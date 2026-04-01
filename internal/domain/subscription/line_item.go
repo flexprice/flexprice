@@ -46,6 +46,10 @@ type SubscriptionLineItem struct {
 	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
 	CommitmentDuration      *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`
 
+	// BillingCadence mirrors the price's billing cadence (RECURRING or ONETIME).
+	// For ONETIME charges, StartDate is used as the charge date.
+	BillingCadence types.BillingCadence `db:"billing_cadence" json:"billing_cadence"`
+
 	Price *price.Price `json:"price,omitempty"`
 
 	types.BaseModel
@@ -74,6 +78,18 @@ func (li *SubscriptionLineItem) IsActive(t time.Time) bool {
 
 func (li *SubscriptionLineItem) IsUsage() bool {
 	return li.PriceType == types.PRICE_TYPE_USAGE && li.MeterID != ""
+}
+
+// IsOneTime returns true if this line item is charged exactly once (not recurring).
+// One-time charges are FIXED type with billing_cadence = ONETIME.
+func (li *SubscriptionLineItem) IsOneTime() bool {
+	return li.BillingCadence == types.BILLING_CADENCE_ONETIME
+}
+
+// GetChargeDate returns the date on which a ONETIME charge should be invoiced.
+// For ONETIME charges, this is always the StartDate of the line item.
+func (li *SubscriptionLineItem) GetChargeDate() time.Time {
+	return li.StartDate
 }
 
 // HasCommitment returns true if the line item has commitment configured
@@ -143,6 +159,11 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		commitmentDuration = &cd
 	}
 
+	billingCadence := types.BillingCadence(e.BillingCadence)
+	if billingCadence == "" {
+		billingCadence = types.BILLING_CADENCE_RECURRING
+	}
+
 	billingPeriodCount := e.BillingPeriodCount
 	if billingPeriodCount <= 0 {
 		billingPeriodCount = 1
@@ -179,6 +200,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		CommitmentTrueUpEnabled: e.CommitmentTrueUpEnabled,
 		CommitmentWindowed:      e.CommitmentWindowed,
 		CommitmentDuration:      commitmentDuration,
+		BillingCadence:          billingCadence,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
