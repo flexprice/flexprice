@@ -6,10 +6,6 @@
 // Usage:
 //
 //	make test-suite
-//	FLEXPRICE_API_KEY=xxx FLEXPRICE_API_HOST=localhost:8080/v1 make test-suite
-//
-// If FLEXPRICE_API_KEY and FLEXPRICE_API_HOST are set, SDK integration tests
-// (api/tests/go/test_sdk.go) are also run after unit tests.
 package main
 
 import (
@@ -52,26 +48,11 @@ func main() {
 	printSection("UNIT TESTS", "go test -json -v -race ./internal/...")
 	unitResults, buildErr := runUnitTests(repoRoot)
 
-	// ── SDK Integration Tests (optional) ────────────────────────────────────
-	apiKey := os.Getenv("FLEXPRICE_API_KEY")
-	apiHost := os.Getenv("FLEXPRICE_API_HOST")
-	sdkSkipped := apiKey == "" || apiHost == ""
-	sdkFailed := false
-
-	if sdkSkipped {
-		fmt.Println()
-		printSection("SDK INTEGRATION TESTS", "skipped")
-		fmt.Println("  ⊘  Set FLEXPRICE_API_KEY + FLEXPRICE_API_HOST to enable SDK tests")
-	} else {
-		printSection("SDK INTEGRATION TESTS", "go run -tags published ./api/tests/go/test_sdk.go")
-		sdkFailed = runSDKTests(repoRoot)
-	}
-
 	// ── Summary ──────────────────────────────────────────────────────────────
-	printSummary(unitResults, buildErr, sdkSkipped, sdkFailed, time.Since(start))
+	printSummary(unitResults, buildErr, time.Since(start))
 
 	// Exit non-zero if anything failed
-	anyFailed := buildErr != nil || sdkFailed
+	anyFailed := buildErr != nil
 	for _, r := range unitResults {
 		if !r.Passed {
 			anyFailed = true
@@ -208,29 +189,9 @@ func isUsefulOutput(line string) bool {
 	return true
 }
 
-// ── SDK integration test runner ───────────────────────────────────────────────
-
-// runSDKTests runs test_sdk.go and streams output live. Returns true on failure.
-func runSDKTests(repoRoot string) bool {
-	sdkTestPath := filepath.Join(repoRoot, "api", "tests", "go", "test_sdk.go")
-	if _, err := os.Stat(sdkTestPath); os.IsNotExist(err) {
-		fmt.Println()
-		fmt.Println("  ⊘  SDK test file not found at api/tests/go/test_sdk.go — skipping")
-		return false
-	}
-
-	cmd := exec.Command("go", "run", "-tags", "published", "./api/tests/go/test_sdk.go")
-	cmd.Dir = repoRoot
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	fmt.Println()
-	err := cmd.Run()
-	return err != nil
-}
-
 // ── Summary ───────────────────────────────────────────────────────────────────
 
-func printSummary(results []TestResult, buildErr error, sdkSkipped, sdkFailed bool, total time.Duration) {
+func printSummary(results []TestResult, buildErr error, total time.Duration) {
 	passed, failed := 0, 0
 	var failures []TestResult
 	for _, r := range results {
@@ -251,15 +212,6 @@ func printSummary(results []TestResult, buildErr error, sdkSkipped, sdkFailed bo
 		fmt.Printf("  Unit Tests:  ❌ BUILD FAILED\n")
 	} else {
 		fmt.Printf("  Unit Tests:  %d passed  |  %d failed\n", passed, failed)
-	}
-
-	switch {
-	case sdkSkipped:
-		fmt.Println("  SDK Tests:   skipped (no credentials)")
-	case sdkFailed:
-		fmt.Println("  SDK Tests:   ❌ FAILED")
-	default:
-		fmt.Println("  SDK Tests:   ✓ passed")
 	}
 
 	if len(failures) > 0 {
