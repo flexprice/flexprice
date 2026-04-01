@@ -1233,7 +1233,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		return nil, err
 	}
 
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) && lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
+	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
 	} else {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
@@ -2445,7 +2445,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		return nil, err
 	}
 
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) && lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
+	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
 	} else {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
@@ -2611,7 +2611,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		return nil, err
 	}
 
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) && lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
+	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
 	} else {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
