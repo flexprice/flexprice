@@ -82,6 +82,27 @@ jobs:
         run: echo "image=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Job 1b: Run database migrations (Ent + DB)
+  # Ensures schema is up to date before any deploy happens.
+  # ──────────────────────────────────────────────────────────────────────────
+  migrate-db:
+    name: Run DB migrations
+    runs-on: self-hosted
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate Ent code & run migrations
+        run: |
+          make generate-ent
+          make migrate-ent
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Job 2: Resolve deployment targets from branch or manual input
   #
   # Targets are stored as a single JSON variable per environment so that
@@ -167,8 +188,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   deploy-api:
     name: Deploy API (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, migrate-db]
+    if: ${{ needs.build.result == 'success' && needs.resolve-config.result == 'success' && needs.migrate-db.result == 'success' }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -195,8 +216,8 @@ jobs:
 
   deploy-consumer:
     name: Deploy Consumer (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, migrate-db]
+    if: ${{ needs.build.result == 'success' && needs.resolve-config.result == 'success' && needs.migrate-db.result == 'success' }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -223,8 +244,8 @@ jobs:
 
   deploy-worker:
     name: Deploy Worker (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, migrate-db]
+    if: ${{ needs.build.result == 'success' && needs.resolve-config.result == 'success' && needs.migrate-db.result == 'success' }}
     runs-on: self-hosted
     strategy:
       matrix:
