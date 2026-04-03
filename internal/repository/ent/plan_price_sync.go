@@ -3,6 +3,7 @@ package ent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -26,6 +27,19 @@ func NewPlanPriceSyncRepository(client postgres.IClient, log *logger.Logger) pla
 const (
 	DEFAULT_LIMIT = 1000
 )
+
+// subscriptionIDsSubsBatchFilter returns SQL " AND s.id IN ('…','…') " for subs_batch.
+// IDs are embedded as string literals; single quotes in an id are doubled (SQL escape).
+func subscriptionIDsSubsBatchFilter(subIDs []string) string {
+	if len(subIDs) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(subIDs))
+	for i, id := range subIDs {
+		quoted[i] = "'" + strings.ReplaceAll(id, "'", "''") + "'"
+	}
+	return " AND s.id IN (" + strings.Join(quoted, ", ") + ") "
+}
 
 // TerminateExpiredPlanPricesLineItems terminates plan-derived line items whose end_date must be set to price.end_date.
 //
@@ -339,6 +353,9 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 	environmentID := types.GetEnvironmentID(ctx)
 	cursorSubID := p.AfterSubID
 
+	// TODO: add the only sub ids if we want to filter it out sometimes (via ListPlanLineItemsToCreateParams.SubscriptionIDs).
+	filterSubIDs := p.SubscriptionIDs
+
 	hasCursor := cursorSubID != ""
 
 	span := StartRepositorySpan(ctx, "plan_price_sync", "list_plan_line_items_to_create", map[string]interface{}{
@@ -350,6 +367,8 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 	defer FinishSpan(span)
 
 	cursorCondition := "AND (p.last_sub_id = '' OR s.id >= p.last_sub_id) "
+
+	subIDsFilterClause := subscriptionIDsSubsBatchFilter(filterSubIDs)
 
 	query := fmt.Sprintf(`
 		WITH
@@ -374,6 +393,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 					AND s.status = '%s'
 					AND s.plan_id = $3
 					AND s.subscription_status IN ('%s', '%s')
+					%s
 					%s
 				ORDER BY s.id
 				LIMIT $4
@@ -443,6 +463,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 		string(types.SubscriptionStatusActive),
 		string(types.SubscriptionStatusTrialing),
 		cursorCondition,
+		subIDsFilterClause,
 		string(types.StatusPublished),
 		string(types.PRICE_ENTITY_TYPE_PLAN),
 		string(types.PRICE_TYPE_FIXED),
@@ -547,9 +568,13 @@ func (r *planPriceSyncRepository) GetLastSubscriptionIDInBatch(
 	environmentID := types.GetEnvironmentID(ctx)
 	cursorSubID := p.AfterSubID
 
+	filterSubIDs := p.SubscriptionIDs
+
 	hasCursor := cursorSubID != ""
 
 	cursorCondition := "AND (p.last_sub_id = '' OR s.id >= p.last_sub_id) "
+
+	subIDsFilterClause := subscriptionIDsSubsBatchFilter(filterSubIDs)
 
 	query := fmt.Sprintf(`
 		WITH
@@ -568,6 +593,7 @@ func (r *planPriceSyncRepository) GetLastSubscriptionIDInBatch(
 					AND s.plan_id = $3
 					AND s.subscription_status IN ('%s', '%s')
 					%s
+					%s
 				ORDER BY s.id
 				LIMIT $4
 			)
@@ -580,6 +606,7 @@ func (r *planPriceSyncRepository) GetLastSubscriptionIDInBatch(
 		string(types.SubscriptionStatusActive),
 		string(types.SubscriptionStatusTrialing),
 		cursorCondition,
+		subIDsFilterClause,
 	)
 
 	cursorParam := ""
