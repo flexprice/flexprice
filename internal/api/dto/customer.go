@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -123,7 +124,7 @@ func (r *CreateCustomerRequest) Validate() error {
 		for i, taxRate := range r.TaxRateOverrides {
 			if err := taxRate.Validate(); err != nil {
 				return ierr.WithError(err).
-					WithHint("Invalid tax rate configuration at index " + string(rune(i))).
+					WithHint("Invalid tax rate configuration at index " + strconv.Itoa(i)).
 					Mark(ierr.ErrValidation)
 			}
 		}
@@ -134,7 +135,7 @@ func (r *CreateCustomerRequest) Validate() error {
 		for i, mapping := range r.IntegrationEntityMapping {
 			if err := validator.ValidateRequest(mapping); err != nil {
 				return ierr.WithError(err).
-					WithHint("Invalid integration entity mapping at index " + string(rune(i))).
+					WithHint("Invalid integration entity mapping at index " + strconv.Itoa(i)).
 					Mark(ierr.ErrValidation)
 			}
 		}
