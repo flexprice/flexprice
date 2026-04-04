@@ -1996,6 +1996,12 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 // GetFeatureUsageBySubscription gets usage data for a subscription using a single optimized query.
 // When opts.Source is InvoiceCreation, the query uses FINAL for correct ReplacingMergeTree deduplication.
 func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Context, params *events.GetFeatureUsageBySubscriptionParams) (map[string]*events.UsageByFeatureResult, error) {
+	if params == nil {
+		return nil, ierr.NewError("params is required").
+			WithHint("GetFeatureUsageBySubscription requires non-nil params").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Extract tenantID and environmentID from context
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
@@ -2344,10 +2350,7 @@ func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, 
 func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *events.FeatureUsageParams) string {
 	bucketWindow := r.formatWindowSize(params.UsageParams.WindowSize, params.UsageParams.BillingAnchor)
 
-	externalCustomerFilter := ""
-	if params.UsageParams.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter, _ := buildUsageEventCustomerFilters(params.UsageParams)
 
 	featureFilter := ""
 	if params.FeatureID != "" {
