@@ -622,7 +622,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	}
 
 	if len(lineItems) == 0 {
-		inheritedLineItems, err := s.resolveInheritedSubscriptionsLineItems(ctx, customer.ID, meterIDs)
+		inheritedLineItems, err := s.resolveInheritedSubscriptionsLineItems(ctx, customer.ID, meterIDs, event.Timestamp)
 		if err != nil {
 			return results, err
 		}
@@ -4259,7 +4259,7 @@ func (s *featureUsageTrackingService) handleMissingFeature(
 	return createdFeature, nil
 }
 
-func (s *featureUsageTrackingService) resolveInheritedSubscriptionsLineItems(ctx context.Context, customerID string, meterIDs []string) ([]*subscription.SubscriptionLineItem, error) {
+func (s *featureUsageTrackingService) resolveInheritedSubscriptionsLineItems(ctx context.Context, customerID string, meterIDs []string, eventTime time.Time) ([]*subscription.SubscriptionLineItem, error) {
 	inheritedFilter := types.NewNoLimitSubscriptionFilter()
 	inheritedFilter.CustomerID = customerID
 	inheritedFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
@@ -4287,6 +4287,7 @@ func (s *featureUsageTrackingService) resolveInheritedSubscriptionsLineItems(ctx
 	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
 	lineItemFilter.SubscriptionIDs = parentIDs
 	lineItemFilter.MeterIDs = meterIDs
+	lineItemFilter.CurrentPeriodStart = &eventTime
 	lineItemFilter.ActiveFilter = true
 
 	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
