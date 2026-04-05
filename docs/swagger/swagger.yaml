@@ -1,5 +1,168 @@
 basePath: /v1
 definitions:
+  ListAddonsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/AddonResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListCouponsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CouponResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListCreditGrantApplicationsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CreditGrantApplicationResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListCreditGrantsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CreditGrantResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListCustomersResponse:
+    description: Response object for listing customers with pagination
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CustomerResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListEntitlementsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/EntitlementResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListFeaturesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/FeatureResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListGroupsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/GroupResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListInvoicesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/InvoiceResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListPlansResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/PlanResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListPriceUnitsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/PriceUnitResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListPricesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/PriceResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListScheduledTasksResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/ScheduledTaskResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListSubscriptionsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/SubscriptionResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListTaxAssociationsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/TaxAssociationResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListUsersResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/UserResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListWalletTransactionsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/WalletTransactionResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListWorkflowsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/WorkflowExecutionDTO'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   costsheet.Filter:
     properties:
       costsheetIDs:
@@ -95,7 +258,7 @@ definitions:
   coupon_association.CouponAssociation:
     properties:
       coupon:
-        $ref: '#/definitions/github_com_flexprice_flexprice_internal_domain_coupon.Coupon'
+        $ref: '#/definitions/DomainCoupon'
       coupon_id:
         type: string
       created_at:
@@ -164,7 +327,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.ActivateDraftSubscriptionRequest:
+  ActivateDraftSubscriptionRequest:
     properties:
       start_date:
         description: start_date is the new start date for the subscription when activating
@@ -172,13 +335,13 @@ definitions:
     required:
     - start_date
     type: object
-  dto.AddAddonRequest:
+  AddAddonRequest:
     properties:
       addon_id:
         type: string
       line_item_commitments:
         additionalProperties:
-          $ref: '#/definitions/dto.LineItemCommitmentConfig'
+          $ref: '#/definitions/LineItemCommitmentConfig'
         description: LineItemCommitments allows setting commitment configuration per
           addon line item (keyed by price_id)
         type: object
@@ -193,13 +356,13 @@ definitions:
     - addon_id
     - subscription_id
     type: object
-  dto.AddAddonToSubscriptionRequest:
+  AddAddonToSubscriptionRequest:
     properties:
       addon_id:
         type: string
       line_item_commitments:
         additionalProperties:
-          $ref: '#/definitions/dto.LineItemCommitmentConfig'
+          $ref: '#/definitions/LineItemCommitmentConfig'
         description: LineItemCommitments allows setting commitment configuration per
           addon line item (keyed by price_id)
         type: object
@@ -211,10 +374,10 @@ definitions:
     required:
     - addon_id
     type: object
-  dto.AddonAssociationResponse:
+  AddonAssociationResponse:
     properties:
       addon:
-        $ref: '#/definitions/dto.AddonResponse'
+        $ref: '#/definitions/AddonResponse'
       addon_id:
         type: string
       addon_status:
@@ -245,7 +408,7 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription:
-        $ref: '#/definitions/dto.SubscriptionResponse'
+        $ref: '#/definitions/SubscriptionResponse'
       tenant_id:
         type: string
       updated_at:
@@ -253,7 +416,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.AddonResponse:
+  AddonResponse:
     properties:
       created_at:
         type: string
@@ -263,7 +426,7 @@ definitions:
         type: string
       entitlements:
         items:
-          $ref: '#/definitions/dto.EntitlementResponse'
+          $ref: '#/definitions/EntitlementResponse'
         type: array
       environment_id:
         type: string
@@ -279,7 +442,7 @@ definitions:
       prices:
         description: Optional expanded fields
         items:
-          $ref: '#/definitions/dto.PriceResponse'
+          $ref: '#/definitions/PriceResponse'
         type: array
       status:
         $ref: '#/definitions/types.Status'
@@ -292,7 +455,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.Address:
+  Address:
     properties:
       address_city:
         maxLength: 100
@@ -312,7 +475,7 @@ definitions:
         maxLength: 100
         type: string
     type: object
-  dto.AggregatedEntitlement:
+  AggregatedEntitlement:
     properties:
       is_enabled:
         type: boolean
@@ -328,18 +491,18 @@ definitions:
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
     type: object
-  dto.AggregatedFeature:
+  AggregatedFeature:
     properties:
       entitlement:
-        $ref: '#/definitions/dto.AggregatedEntitlement'
+        $ref: '#/definitions/AggregatedEntitlement'
       feature:
-        $ref: '#/definitions/dto.FeatureResponse'
+        $ref: '#/definitions/FeatureResponse'
       sources:
         items:
-          $ref: '#/definitions/dto.EntitlementSource'
+          $ref: '#/definitions/EntitlementSource'
         type: array
     type: object
-  dto.AlertLogResponse:
+  AlertLogResponse:
     properties:
       alert_info:
         $ref: '#/definitions/types.AlertInfo'
@@ -353,7 +516,7 @@ definitions:
         type: string
       customer:
         allOf:
-        - $ref: '#/definitions/dto.CustomerResponse'
+        - $ref: '#/definitions/CustomerResponse'
         description: Expanded fields
       customer_id:
         type: string
@@ -364,7 +527,7 @@ definitions:
       environment_id:
         type: string
       feature:
-        $ref: '#/definitions/dto.FeatureResponse'
+        $ref: '#/definitions/FeatureResponse'
       id:
         type: string
       parent_entity_id:
@@ -380,9 +543,9 @@ definitions:
       updated_by:
         type: string
       wallet:
-        $ref: '#/definitions/dto.WalletResponse'
+        $ref: '#/definitions/WalletResponse'
     type: object
-  dto.BillingCycleInfo:
+  BillingCycleInfo:
     properties:
       billing_anchor:
         description: billing_anchor is the new billing anchor
@@ -406,7 +569,7 @@ definitions:
         description: period_start is the start of the new billing period
         type: string
     type: object
-  dto.BillingPeriodInfo:
+  BillingPeriodInfo:
     properties:
       end_time:
         type: string
@@ -416,18 +579,18 @@ definitions:
       start_time:
         type: string
     type: object
-  dto.BulkIngestEventRequest:
+  BulkIngestEventRequest:
     properties:
       events:
         items:
-          $ref: '#/definitions/dto.IngestEventRequest'
+          $ref: '#/definitions/IngestEventRequest'
         maxItems: 1000
         minItems: 1
         type: array
     required:
     - events
     type: object
-  dto.CancelScheduleRequest:
+  CancelScheduleRequest:
     description: Request to cancel a subscription schedule (supports two modes)
     properties:
       schedule_id:
@@ -444,7 +607,7 @@ definitions:
           is not provided)
         type: string
     type: object
-  dto.CancelScheduleResponse:
+  CancelScheduleResponse:
     description: Confirmation of schedule cancellation
     properties:
       message:
@@ -455,8 +618,13 @@ definitions:
         - $ref: '#/definitions/types.ScheduleStatus'
         description: status is the new status (should be "cancelled")
     type: object
-  dto.CancelSubscriptionRequest:
+  CancelSubscriptionRequest:
     properties:
+      cancel_at:
+        description: |-
+          CancelAt is the custom date to cancel the subscription.
+          Required when CancellationType is "scheduled_date". Must be in the future.
+        type: string
       cancel_immediately_inovice_policy:
         allOf:
         - $ref: '#/definitions/types.CancelImmediatelyInvoicePolicy'
@@ -476,7 +644,7 @@ definitions:
     required:
     - cancellation_type
     type: object
-  dto.CancelSubscriptionResponse:
+  CancelSubscriptionResponse:
     properties:
       cancellation_type:
         $ref: '#/definitions/types.CancellationType'
@@ -489,11 +657,11 @@ definitions:
         type: string
       proration_details:
         items:
-          $ref: '#/definitions/dto.ProrationDetail'
+          $ref: '#/definitions/ProrationDetail'
         type: array
       proration_invoice:
         allOf:
-        - $ref: '#/definitions/dto.InvoiceResponse'
+        - $ref: '#/definitions/InvoiceResponse'
         description: Proration details
       reason:
         type: string
@@ -505,7 +673,7 @@ definitions:
       total_credit_amount:
         type: string
     type: object
-  dto.ClonePlanRequest:
+  ClonePlanRequest:
     properties:
       description:
         description: Description overrides the source plan's description when provided
@@ -525,12 +693,12 @@ definitions:
           name
         type: string
     type: object
-  dto.CostAnalyticItem:
+  CostAnalyticItem:
     properties:
       cost_by_period:
         description: Breakdown
         items:
-          $ref: '#/definitions/dto.CostPoint'
+          $ref: '#/definitions/CostPoint'
         type: array
       costsheet_id:
         type: string
@@ -567,7 +735,7 @@ definitions:
       total_quantity:
         type: string
     type: object
-  dto.CostPoint:
+  CostPoint:
     properties:
       cost:
         type: string
@@ -578,7 +746,7 @@ definitions:
       timestamp:
         type: string
     type: object
-  dto.CostsheetResponse:
+  CostsheetResponse:
     properties:
       created_at:
         type: string
@@ -601,7 +769,7 @@ definitions:
       prices:
         description: Associated prices
         items:
-          $ref: '#/definitions/dto.PriceResponse'
+          $ref: '#/definitions/PriceResponse'
         type: array
       status:
         $ref: '#/definitions/types.Status'
@@ -612,7 +780,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CouponApplicationResponse:
+  CouponApplicationResponse:
     properties:
       applied_at:
         type: string
@@ -662,10 +830,10 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CouponAssociationResponse:
+  CouponAssociationResponse:
     properties:
       coupon:
-        $ref: '#/definitions/github_com_flexprice_flexprice_internal_domain_coupon.Coupon'
+        $ref: '#/definitions/DomainCoupon'
       coupon_id:
         type: string
       created_at:
@@ -703,7 +871,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CouponResponse:
+  CouponResponse:
     properties:
       amount_off:
         type: string
@@ -751,7 +919,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CreateAPIKeyRequest:
+  CreateAPIKeyRequest:
     properties:
       expires_at:
         type: string
@@ -765,14 +933,14 @@ definitions:
     - name
     - type
     type: object
-  dto.CreateAPIKeyResponse:
+  CreateAPIKeyResponse:
     properties:
       api_key:
         type: string
       secret:
-        $ref: '#/definitions/dto.SecretResponse'
+        $ref: '#/definitions/SecretResponse'
     type: object
-  dto.CreateAddonRequest:
+  CreateAddonRequest:
     properties:
       description:
         type: string
@@ -790,7 +958,7 @@ definitions:
     - name
     - type
     type: object
-  dto.CreateAddonResponse:
+  CreateAddonResponse:
     properties:
       created_at:
         type: string
@@ -800,7 +968,7 @@ definitions:
         type: string
       entitlements:
         items:
-          $ref: '#/definitions/dto.EntitlementResponse'
+          $ref: '#/definitions/EntitlementResponse'
         type: array
       environment_id:
         type: string
@@ -816,7 +984,7 @@ definitions:
       prices:
         description: Optional expanded fields
         items:
-          $ref: '#/definitions/dto.PriceResponse'
+          $ref: '#/definitions/PriceResponse'
         type: array
       status:
         $ref: '#/definitions/types.Status'
@@ -829,43 +997,43 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CreateBulkEntitlementRequest:
+  CreateBulkEntitlementRequest:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.CreateEntitlementRequest'
+          $ref: '#/definitions/CreateEntitlementRequest'
         maxItems: 100
         minItems: 1
         type: array
     required:
     - items
     type: object
-  dto.CreateBulkEntitlementResponse:
+  CreateBulkEntitlementResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.EntitlementResponse'
+          $ref: '#/definitions/EntitlementResponse'
         type: array
     type: object
-  dto.CreateBulkPriceRequest:
+  CreateBulkPriceRequest:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.CreatePriceRequest'
+          $ref: '#/definitions/CreatePriceRequest'
         maxItems: 100
         minItems: 1
         type: array
     required:
     - items
     type: object
-  dto.CreateBulkPriceResponse:
+  CreateBulkPriceResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.PriceResponse'
+          $ref: '#/definitions/PriceResponse'
         type: array
     type: object
-  dto.CreateCostsheetRequest:
+  CreateCostsheetRequest:
     properties:
       description:
         type: string
@@ -884,12 +1052,12 @@ definitions:
     required:
     - name
     type: object
-  dto.CreateCostsheetResponse:
+  CreateCostsheetResponse:
     properties:
       costsheet:
-        $ref: '#/definitions/dto.CostsheetResponse'
+        $ref: '#/definitions/CostsheetResponse'
     type: object
-  dto.CreateCouponRequest:
+  CreateCouponRequest:
     properties:
       amount_off:
         type: string
@@ -932,7 +1100,7 @@ definitions:
     - name
     - type
     type: object
-  dto.CreateCreditGrantRequest:
+  CreateCreditGrantRequest:
     properties:
       cadence:
         $ref: '#/definitions/types.CreditGrantCadence'
@@ -984,7 +1152,7 @@ definitions:
     - name
     - scope
     type: object
-  dto.CreateCreditNoteLineItemRequest:
+  CreateCreditNoteLineItemRequest:
     properties:
       amount:
         description: amount is the monetary amount to be credited for this line item
@@ -1006,7 +1174,7 @@ definitions:
     - amount
     - invoice_line_item_id
     type: object
-  dto.CreateCreditNoteRequest:
+  CreateCreditNoteRequest:
     properties:
       credit_note_number:
         description: credit_note_number is an optional human-readable identifier for
@@ -1024,7 +1192,7 @@ definitions:
         description: line_items contains the individual line items that make up this
           credit note (minimum 1 required)
         items:
-          $ref: '#/definitions/dto.CreateCreditNoteLineItemRequest'
+          $ref: '#/definitions/CreateCreditNoteLineItemRequest'
         type: array
       memo:
         description: memo is an optional free-text field for additional notes about
@@ -1049,7 +1217,7 @@ definitions:
     - invoice_id
     - reason
     type: object
-  dto.CreateCustomerRequest:
+  CreateCustomerRequest:
     description: Request object for creating a new customer in the system
     properties:
       address_city:
@@ -1087,12 +1255,6 @@ definitions:
         description: external_id is the unique identifier from your system to reference
           this customer (required)
         type: string
-      integration_entity_mapping:
-        description: integration_entity_mapping contains provider integration mappings
-          for this customer
-        items:
-          $ref: '#/definitions/dto.IntegrationEntityMapping'
-        type: array
       metadata:
         additionalProperties:
           type: string
@@ -1124,12 +1286,12 @@ definitions:
         description: tax_rate_overrides contains tax rate configurations to be linked
           to this customer
         items:
-          $ref: '#/definitions/dto.TaxRateOverride'
+          $ref: '#/definitions/TaxRateOverride'
         type: array
     required:
     - external_id
     type: object
-  dto.CreateEntitlementRequest:
+  CreateEntitlementRequest:
     properties:
       end_date:
         type: string
@@ -1161,29 +1323,7 @@ definitions:
     - feature_id
     - feature_type
     type: object
-  dto.CreateEntityIntegrationMappingRequest:
-    properties:
-      entity_id:
-        maxLength: 255
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.IntegrationEntityType'
-      metadata:
-        additionalProperties: true
-        type: object
-      provider_entity_id:
-        maxLength: 255
-        type: string
-      provider_type:
-        maxLength: 50
-        type: string
-    required:
-    - entity_id
-    - entity_type
-    - provider_entity_id
-    - provider_type
-    type: object
-  dto.CreateFeatureRequest:
+  CreateFeatureRequest:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
@@ -1197,7 +1337,7 @@ definitions:
       metadata:
         $ref: '#/definitions/types.Metadata'
       meter:
-        $ref: '#/definitions/dto.CreateMeterRequest'
+        $ref: '#/definitions/CreateMeterRequest'
       meter_id:
         type: string
       name:
@@ -1214,7 +1354,7 @@ definitions:
     - name
     - type
     type: object
-  dto.CreateGroupRequest:
+  CreateGroupRequest:
     properties:
       entity_type:
         type: string
@@ -1227,22 +1367,7 @@ definitions:
     - lookup_key
     - name
     type: object
-  dto.CreateIntegrationRequest:
-    properties:
-      credentials:
-        additionalProperties:
-          type: string
-        type: object
-      name:
-        type: string
-      provider:
-        $ref: '#/definitions/types.SecretProvider'
-    required:
-    - credentials
-    - name
-    - provider
-    type: object
-  dto.CreateInvoiceLineItemRequest:
+  CreateInvoiceLineItemRequest:
     properties:
       amount:
         description: amount is the monetary amount for this line item
@@ -1329,7 +1454,7 @@ definitions:
     - amount
     - quantity
     type: object
-  dto.CreateInvoiceRequest:
+  CreateInvoiceRequest:
     properties:
       amount_due:
         description: amount_due is the total amount that needs to be paid for this
@@ -1373,7 +1498,7 @@ definitions:
       invoice_coupons:
         description: Invoice Coupons
         items:
-          $ref: '#/definitions/dto.InvoiceCoupon'
+          $ref: '#/definitions/InvoiceCoupon'
         type: array
       invoice_number:
         description: invoice_number is an optional human-readable identifier for the
@@ -1396,12 +1521,12 @@ definitions:
       line_item_coupons:
         description: Invoice Line Item Coupons
         items:
-          $ref: '#/definitions/dto.InvoiceLineItemCoupon'
+          $ref: '#/definitions/InvoiceLineItemCoupon'
         type: array
       line_items:
         description: line_items contains the individual items that make up this invoice
         items:
-          $ref: '#/definitions/dto.CreateInvoiceLineItemRequest'
+          $ref: '#/definitions/CreateInvoiceLineItemRequest'
         type: array
       metadata:
         allOf:
@@ -1423,7 +1548,7 @@ definitions:
         description: prepared_tax_rates contains the tax rates pre-resolved by the
           caller (e.g., billing service)
         items:
-          $ref: '#/definitions/dto.TaxRateResponse'
+          $ref: '#/definitions/TaxRateResponse'
         type: array
       subscription_id:
         description: subscription_id is the optional unique identifier of the subscription
@@ -1436,7 +1561,7 @@ definitions:
         description: tax_rate_overrides is the tax rate overrides to be applied to
           the invoice
         items:
-          $ref: '#/definitions/dto.TaxRateOverride'
+          $ref: '#/definitions/TaxRateOverride'
         type: array
       tax_rates:
         description: tax_rates
@@ -1458,7 +1583,7 @@ definitions:
     - subtotal
     - total
     type: object
-  dto.CreateMeterRequest:
+  CreateMeterRequest:
     properties:
       aggregation:
         $ref: '#/definitions/meter.Aggregation'
@@ -1480,7 +1605,7 @@ definitions:
     - name
     - reset_usage
     type: object
-  dto.CreatePaymentRequest:
+  CreatePaymentRequest:
     properties:
       amount:
         type: string
@@ -1517,7 +1642,7 @@ definitions:
     - destination_type
     - payment_method_type
     type: object
-  dto.CreatePlanRequest:
+  CreatePlanRequest:
     properties:
       description:
         type: string
@@ -1532,7 +1657,7 @@ definitions:
     required:
     - name
     type: object
-  dto.CreatePriceRequest:
+  CreatePriceRequest:
     properties:
       amount:
         type: string
@@ -1580,7 +1705,7 @@ definitions:
         description: MinQuantity is the minimum quantity of the price
         type: integer
       price_unit_config:
-        $ref: '#/definitions/dto.PriceUnitConfig'
+        $ref: '#/definitions/PriceUnitConfig'
       price_unit_type:
         $ref: '#/definitions/types.PriceUnitType'
       start_date:
@@ -1589,7 +1714,7 @@ definitions:
         $ref: '#/definitions/types.BillingTier'
       tiers:
         items:
-          $ref: '#/definitions/dto.CreatePriceTier'
+          $ref: '#/definitions/CreatePriceTier'
         type: array
       transform_quantity:
         $ref: '#/definitions/price.TransformQuantity'
@@ -1608,7 +1733,7 @@ definitions:
     - price_unit_type
     - type
     type: object
-  dto.CreatePriceTier:
+  CreatePriceTier:
     properties:
       flat_amount:
         description: |-
@@ -1628,7 +1753,7 @@ definitions:
     required:
     - unit_amount
     type: object
-  dto.CreatePriceUnitRequest:
+  CreatePriceUnitRequest:
     properties:
       base_currency:
         description: base_currency  is the currency that the price unit is based on
@@ -1662,7 +1787,7 @@ definitions:
     - name
     - symbol
     type: object
-  dto.CreatePriceUnitResponse:
+  CreatePriceUnitResponse:
     properties:
       base_currency:
         type: string
@@ -1693,7 +1818,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CreateScheduledTaskRequest:
+  CreateScheduledTaskRequest:
     properties:
       connection_id:
         type: string
@@ -1716,7 +1841,7 @@ definitions:
     - interval
     - job_config
     type: object
-  dto.CreateSubscriptionLineItemRequest:
+  CreateSubscriptionLineItemRequest:
     properties:
       commitment_amount:
         description: Commitment fields
@@ -1743,7 +1868,7 @@ definitions:
         type: object
       price:
         allOf:
-        - $ref: '#/definitions/dto.SubscriptionPriceCreateRequest'
+        - $ref: '#/definitions/SubscriptionPriceCreateRequest'
         description: Price defines a new price inline; server creates a subscription-scoped
           price and adds the line item. Exactly one of price_id or price must be set.
           Entity/currency are set from the subscription.
@@ -1758,13 +1883,13 @@ definitions:
       subscription_phase_id:
         type: string
     type: object
-  dto.CreateSubscriptionRequest:
+  CreateSubscriptionRequest:
     properties:
       addons:
         description: Addons represents addons to be added to the subscription during
           creation
         items:
-          $ref: '#/definitions/dto.AddAddonToSubscriptionRequest'
+          $ref: '#/definitions/AddAddonToSubscriptionRequest'
         type: array
       billing_cadence:
         $ref: '#/definitions/types.BillingCadence'
@@ -1807,7 +1932,7 @@ definitions:
       credit_grants:
         description: Credit grants to be applied when subscription is created
         items:
-          $ref: '#/definitions/dto.CreateCreditGrantRequest'
+          $ref: '#/definitions/CreateCreditGrantRequest'
         type: array
       currency:
         type: string
@@ -1855,7 +1980,7 @@ definitions:
         type: string
       line_item_commitments:
         additionalProperties:
-          $ref: '#/definitions/dto.LineItemCommitmentConfig'
+          $ref: '#/definitions/LineItemCommitmentConfig'
         description: LineItemCommitments allows setting commitment configuration per
           line item (keyed by price_id)
         type: object
@@ -1869,7 +1994,7 @@ definitions:
         description: LineItems are extra line items to add at creation (each with
           price_id or price), in addition to plan prices
         items:
-          $ref: '#/definitions/dto.CreateSubscriptionLineItemRequest'
+          $ref: '#/definitions/CreateSubscriptionLineItemRequest'
         type: array
       lookup_key:
         type: string
@@ -1885,13 +2010,13 @@ definitions:
         description: OverrideEntitlements allows customizing specific entitlements
           for this subscription
         items:
-          $ref: '#/definitions/dto.OverrideEntitlementRequest'
+          $ref: '#/definitions/OverrideEntitlementRequest'
         type: array
       override_line_items:
         description: OverrideLineItems allows customizing specific prices for this
           subscription
         items:
-          $ref: '#/definitions/dto.OverrideLineItemRequest'
+          $ref: '#/definitions/OverrideLineItemRequest'
         type: array
       parent_subscription_id:
         description: ParentSubscriptionID is the parent subscription ID for hierarchy
@@ -1910,7 +2035,7 @@ definitions:
         description: Phases represents subscription phases to be created with the
           subscription
         items:
-          $ref: '#/definitions/dto.SubscriptionPhaseCreateRequest'
+          $ref: '#/definitions/SubscriptionPhaseCreateRequest'
         type: array
       plan_id:
         type: string
@@ -1935,7 +2060,7 @@ definitions:
         description: "tax_rate_overrides is the tax rate overrides\tto be applied
           to the subscription"
         items:
-          $ref: '#/definitions/dto.TaxRateOverride'
+          $ref: '#/definitions/TaxRateOverride'
         type: array
       trial_end:
         type: string
@@ -1947,7 +2072,7 @@ definitions:
     - currency
     - plan_id
     type: object
-  dto.CreateTaskRequest:
+  CreateTaskRequest:
     properties:
       entity_type:
         $ref: '#/definitions/types.EntityType'
@@ -1968,7 +2093,7 @@ definitions:
     - file_url
     - task_type
     type: object
-  dto.CreateTaxAssociationRequest:
+  CreateTaxAssociationRequest:
     properties:
       auto_apply:
         type: boolean
@@ -1991,7 +2116,7 @@ definitions:
     required:
     - tax_rate_code
     type: object
-  dto.CreateTaxRateRequest:
+  CreateTaxRateRequest:
     properties:
       code:
         description: code is the unique alphanumeric case sensitive identifier for
@@ -2031,7 +2156,7 @@ definitions:
     - code
     - name
     type: object
-  dto.CreateUserRequest:
+  CreateUserRequest:
     properties:
       email:
         description: Required when type is "user"
@@ -2048,7 +2173,7 @@ definitions:
     required:
     - type
     type: object
-  dto.CreateUserResponse:
+  CreateUserResponse:
     properties:
       email:
         description: Empty for service accounts
@@ -2062,11 +2187,11 @@ definitions:
           type: string
         type: array
       tenant:
-        $ref: '#/definitions/dto.TenantResponse'
+        $ref: '#/definitions/TenantResponse'
       type:
         $ref: '#/definitions/types.UserType'
     type: object
-  dto.CreateWalletRequest:
+  CreateWalletRequest:
     properties:
       alert_settings:
         allOf:
@@ -2134,7 +2259,7 @@ definitions:
     required:
     - currency
     type: object
-  dto.CreditGrantApplicationResponse:
+  CreditGrantApplicationResponse:
     properties:
       application_reason:
         $ref: '#/definitions/types.CreditGrantApplicationReason'
@@ -2181,7 +2306,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CreditGrantResponse:
+  CreditGrantResponse:
     properties:
       cadence:
         $ref: '#/definitions/types.CreditGrantCadence'
@@ -2246,7 +2371,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CreditNoteResponse:
+  CreditNoteResponse:
     properties:
       created_at:
         type: string
@@ -2270,7 +2395,7 @@ definitions:
         type: string
       customer:
         allOf:
-        - $ref: '#/definitions/github_com_flexprice_flexprice_internal_domain_customer.Customer'
+        - $ref: '#/definitions/DomainCustomer'
         description: customer contains the customer information associated with this
           credit note
       customer_id:
@@ -2293,7 +2418,7 @@ definitions:
         type: string
       invoice:
         allOf:
-        - $ref: '#/definitions/dto.InvoiceResponse'
+        - $ref: '#/definitions/InvoiceResponse'
         description: invoice contains the associated invoice information if requested
       invoice_id:
         description: invoice_id is the id of the invoice resource that this credit
@@ -2327,7 +2452,7 @@ definitions:
         $ref: '#/definitions/types.Status'
       subscription:
         allOf:
-        - $ref: '#/definitions/dto.SubscriptionResponse'
+        - $ref: '#/definitions/SubscriptionResponse'
         description: subscription contains the associated subscription information
           if applicable
       subscription_id:
@@ -2348,7 +2473,7 @@ definitions:
         description: voided_at is the timestamp when the credit note was voided
         type: string
     type: object
-  dto.CustomAnalyticItem:
+  CustomAnalyticItem:
     properties:
       feature_name:
         description: Name of the feature this applies to
@@ -2364,16 +2489,16 @@ definitions:
       value:
         type: string
     type: object
-  dto.CustomerEntitlementsResponse:
+  CustomerEntitlementsResponse:
     properties:
       customer_id:
         type: string
       features:
         items:
-          $ref: '#/definitions/dto.AggregatedFeature'
+          $ref: '#/definitions/AggregatedFeature'
         type: array
     type: object
-  dto.CustomerInvoiceSummary:
+  CustomerInvoiceSummary:
     properties:
       currency:
         description: currency is the three-letter ISO currency code for this summary
@@ -2414,16 +2539,16 @@ definitions:
           charges in this currency
         type: string
     type: object
-  dto.CustomerLookupResult:
+  CustomerLookupResult:
     properties:
       customer:
-        $ref: '#/definitions/github_com_flexprice_flexprice_internal_domain_customer.Customer'
+        $ref: '#/definitions/DomainCustomer'
       error:
         $ref: '#/definitions/errors.ErrorResponse'
       status:
         $ref: '#/definitions/types.DebugTrackerStatus'
     type: object
-  dto.CustomerMultiCurrencyInvoiceSummary:
+  CustomerMultiCurrencyInvoiceSummary:
     properties:
       customer_id:
         description: customer_id is the unique identifier of the customer
@@ -2434,10 +2559,10 @@ definitions:
       summaries:
         description: summaries contains the invoice summaries for each currency
         items:
-          $ref: '#/definitions/dto.CustomerInvoiceSummary'
+          $ref: '#/definitions/CustomerInvoiceSummary'
         type: array
     type: object
-  dto.CustomerResponse:
+  CustomerResponse:
     description: Customer response object containing all customer information
     properties:
       address_city:
@@ -2475,6 +2600,10 @@ definitions:
       id:
         description: ID is the unique identifier for the customer
         type: string
+      integrations:
+        items:
+          $ref: '#/definitions/EntityIntegrationMappingResponse'
+        type: array
       metadata:
         additionalProperties:
           type: string
@@ -2484,7 +2613,7 @@ definitions:
         description: Name is the name of the customer
         type: string
       parent_customer:
-        $ref: '#/definitions/dto.CustomerResponse'
+        $ref: '#/definitions/CustomerResponse'
       parent_customer_id:
         description: |-
           Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
@@ -2500,60 +2629,60 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.CustomerUsageSummaryResponse:
+  CustomerUsageSummaryResponse:
     properties:
       customer_id:
         type: string
       features:
         items:
-          $ref: '#/definitions/dto.FeatureUsageSummary'
+          $ref: '#/definitions/FeatureUsageSummary'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
       period:
-        $ref: '#/definitions/dto.BillingPeriodInfo'
+        $ref: '#/definitions/BillingPeriodInfo'
     type: object
-  dto.DebugTracker:
+  DebugTracker:
     properties:
       customer_lookup:
-        $ref: '#/definitions/dto.CustomerLookupResult'
+        $ref: '#/definitions/CustomerLookupResult'
       failure_point:
         $ref: '#/definitions/types.FailurePoint'
       meter_matching:
-        $ref: '#/definitions/dto.MeterMatchingResult'
+        $ref: '#/definitions/MeterMatchingResult'
       price_lookup:
-        $ref: '#/definitions/dto.PriceLookupResult'
+        $ref: '#/definitions/PriceLookupResult'
       subscription_line_item_lookup:
-        $ref: '#/definitions/dto.SubscriptionLineItemLookupResult'
+        $ref: '#/definitions/SubscriptionLineItemLookupResult'
     type: object
-  dto.DeleteCostsheetResponse:
+  DeleteCostsheetResponse:
     properties:
       id:
         type: string
       message:
         type: string
     type: object
-  dto.DeleteCreditGrantRequest:
+  DeleteCreditGrantRequest:
     properties:
       effective_date:
         description: EffectiveDate is optional; when set (subscription scope) the
           grant end date is set to this time.
         type: string
     type: object
-  dto.DeletePriceRequest:
+  DeletePriceRequest:
     properties:
       end_date:
         type: string
     type: object
-  dto.DeleteSubscriptionLineItemRequest:
+  DeleteSubscriptionLineItemRequest:
     properties:
       effective_from:
         type: string
     type: object
-  dto.EntitlementResponse:
+  EntitlementResponse:
     properties:
       addon:
-        $ref: '#/definitions/dto.AddonResponse'
+        $ref: '#/definitions/AddonResponse'
       created_at:
         type: string
       created_by:
@@ -2569,7 +2698,7 @@ definitions:
       environment_id:
         type: string
       feature:
-        $ref: '#/definitions/dto.FeatureResponse'
+        $ref: '#/definitions/FeatureResponse'
       feature_id:
         type: string
       feature_type:
@@ -2583,7 +2712,7 @@ definitions:
       parent_entitlement_id:
         type: string
       plan:
-        $ref: '#/definitions/dto.PlanResponse'
+        $ref: '#/definitions/PlanResponse'
       plan_id:
         description: 'TODO: Remove this once we have a proper entitlement entity type'
         type: string
@@ -2604,7 +2733,7 @@ definitions:
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
     type: object
-  dto.EntitlementSource:
+  EntitlementSource:
     properties:
       entitlement_id:
         type: string
@@ -2613,7 +2742,7 @@ definitions:
       entity_name:
         type: string
       entity_type:
-        $ref: '#/definitions/dto.EntitlementSourceEntityType'
+        $ref: '#/definitions/EntitlementSourceEntityType'
       is_enabled:
         type: boolean
       quantity:
@@ -2627,7 +2756,7 @@ definitions:
       usage_reset_period:
         $ref: '#/definitions/types.BillingPeriod'
     type: object
-  dto.EntitlementSourceEntityType:
+  EntitlementSourceEntityType:
     enum:
     - plan
     - addon
@@ -2637,7 +2766,7 @@ definitions:
     - EntitlementSourceEntityTypePlan
     - EntitlementSourceEntityTypeAddon
     - EntitlementSourceEntityTypeSubscription
-  dto.EntityIntegrationMappingResponse:
+  EntityIntegrationMappingResponse:
     properties:
       created_at:
         type: string
@@ -2664,7 +2793,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.Event:
+  Event:
     properties:
       customer_id:
         type: string
@@ -2684,14 +2813,14 @@ definitions:
       timestamp:
         type: string
     type: object
-  dto.EventCostInfo:
+  EventCostInfo:
     properties:
       costNanoUsd:
         type: string
       requestId:
         type: string
     type: object
-  dto.FeatureResponse:
+  FeatureResponse:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
@@ -2705,7 +2834,7 @@ definitions:
         type: string
       group:
         allOf:
-        - $ref: '#/definitions/dto.GroupResponse'
+        - $ref: '#/definitions/GroupResponse'
         description: Group is the full group object when the feature belongs to a
           group (populated in response)
       group_id:
@@ -2717,7 +2846,7 @@ definitions:
       metadata:
         $ref: '#/definitions/types.Metadata'
       meter:
-        $ref: '#/definitions/dto.MeterResponse'
+        $ref: '#/definitions/MeterResponse'
       meter_id:
         type: string
       name:
@@ -2739,7 +2868,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.FeatureUsageInfo:
+  FeatureUsageInfo:
     properties:
       customer_id:
         type: string
@@ -2758,12 +2887,12 @@ definitions:
       subscription_id:
         type: string
     type: object
-  dto.FeatureUsageSummary:
+  FeatureUsageSummary:
     properties:
       current_usage:
         type: string
       feature:
-        $ref: '#/definitions/dto.FeatureResponse'
+        $ref: '#/definitions/FeatureResponse'
       is_enabled:
         type: boolean
       is_soft_limit:
@@ -2774,14 +2903,14 @@ definitions:
         type: string
       sources:
         items:
-          $ref: '#/definitions/dto.EntitlementSource'
+          $ref: '#/definitions/EntitlementSource'
         type: array
       total_limit:
         type: integer
       usage_percent:
         type: string
     type: object
-  dto.GetCostAnalyticsRequest:
+  GetCostAnalyticsRequest:
     properties:
       end_time:
         type: string
@@ -2808,17 +2937,17 @@ definitions:
           provided)
         type: string
     type: object
-  dto.GetCostsheetResponse:
+  GetCostsheetResponse:
     properties:
       costsheet:
-        $ref: '#/definitions/dto.CostsheetResponse'
+        $ref: '#/definitions/CostsheetResponse'
     type: object
-  dto.GetDetailedCostAnalyticsResponse:
+  GetDetailedCostAnalyticsResponse:
     properties:
       cost_analytics:
         description: Cost analytics array (flattened from nested structure)
         items:
-          $ref: '#/definitions/dto.CostAnalyticItem'
+          $ref: '#/definitions/CostAnalyticItem'
         type: array
       currency:
         type: string
@@ -2844,20 +2973,20 @@ definitions:
         description: Derived metrics
         type: string
     type: object
-  dto.GetEventByIDResponse:
+  GetEventByIDResponse:
     properties:
       debug_tracker:
-        $ref: '#/definitions/dto.DebugTracker'
+        $ref: '#/definitions/DebugTracker'
       event:
-        $ref: '#/definitions/dto.Event'
+        $ref: '#/definitions/Event'
       processed_events:
         items:
-          $ref: '#/definitions/dto.FeatureUsageInfo'
+          $ref: '#/definitions/FeatureUsageInfo'
         type: array
       status:
         $ref: '#/definitions/types.EventProcessingStatusType'
     type: object
-  dto.GetEventsRequest:
+  GetEventsRequest:
     properties:
       end_time:
         description: |-
@@ -2914,11 +3043,11 @@ definitions:
         example: "2024-11-09T00:00:00Z"
         type: string
     type: object
-  dto.GetEventsResponse:
+  GetEventsResponse:
     properties:
       events:
         items:
-          $ref: '#/definitions/dto.Event'
+          $ref: '#/definitions/Event'
         type: array
       has_more:
         type: boolean
@@ -2931,14 +3060,14 @@ definitions:
       total_count:
         type: integer
     type: object
-  dto.GetHuggingFaceBillingDataResponse:
+  GetHuggingFaceBillingDataResponse:
     properties:
       requests:
         items:
-          $ref: '#/definitions/dto.EventCostInfo'
+          $ref: '#/definitions/EventCostInfo'
         type: array
     type: object
-  dto.GetPendingSchedulesResponse:
+  GetPendingSchedulesResponse:
     description: List of pending schedules for a subscription
     properties:
       count:
@@ -2947,10 +3076,10 @@ definitions:
       schedules:
         description: schedules is the list of pending schedules
         items:
-          $ref: '#/definitions/dto.SubscriptionScheduleResponse'
+          $ref: '#/definitions/SubscriptionScheduleResponse'
         type: array
     type: object
-  dto.GetPreviewInvoiceRequest:
+  GetPreviewInvoiceRequest:
     properties:
       hide_zero_charges_line_items:
         default: false
@@ -2970,7 +3099,7 @@ definitions:
     required:
     - subscription_id
     type: object
-  dto.GetUsageAnalyticsRequest:
+  GetUsageAnalyticsRequest:
     properties:
       end_time:
         type: string
@@ -3009,22 +3138,22 @@ definitions:
     required:
     - external_customer_id
     type: object
-  dto.GetUsageAnalyticsResponse:
+  GetUsageAnalyticsResponse:
     properties:
       currency:
         type: string
       custom_analytics:
         items:
-          $ref: '#/definitions/dto.CustomAnalyticItem'
+          $ref: '#/definitions/CustomAnalyticItem'
         type: array
       items:
         items:
-          $ref: '#/definitions/dto.UsageAnalyticItem'
+          $ref: '#/definitions/UsageAnalyticItem'
         type: array
       total_cost:
         type: string
     type: object
-  dto.GetUsageByMeterRequest:
+  GetUsageByMeterRequest:
     properties:
       billing_anchor:
         description: |-
@@ -3077,7 +3206,7 @@ definitions:
     required:
     - meter_id
     type: object
-  dto.GetUsageBySubscriptionRequest:
+  GetUsageBySubscriptionRequest:
     properties:
       end_time:
         example: "2024-03-20T00:00:00Z"
@@ -3094,13 +3223,13 @@ definitions:
     required:
     - subscription_id
     type: object
-  dto.GetUsageBySubscriptionResponse:
+  GetUsageBySubscriptionResponse:
     properties:
       amount:
         type: number
       charges:
         items:
-          $ref: '#/definitions/dto.SubscriptionUsageByMetersResponse'
+          $ref: '#/definitions/SubscriptionUsageByMetersResponse'
         type: array
       commitment_amount:
         type: number
@@ -3124,7 +3253,7 @@ definitions:
       start_time:
         type: string
     type: object
-  dto.GetUsageRequest:
+  GetUsageRequest:
     properties:
       aggregation_type:
         $ref: '#/definitions/types.AggregationType'
@@ -3191,20 +3320,20 @@ definitions:
     - aggregation_type
     - event_name
     type: object
-  dto.GetUsageResponse:
+  GetUsageResponse:
     properties:
       event_name:
         type: string
       results:
         items:
-          $ref: '#/definitions/dto.UsageResult'
+          $ref: '#/definitions/UsageResult'
         type: array
       type:
         $ref: '#/definitions/types.AggregationType'
       value:
         type: number
     type: object
-  dto.GroupResponse:
+  GroupResponse:
     properties:
       created_at:
         type: string
@@ -3229,7 +3358,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  dto.IngestEventRequest:
+  IngestEventRequest:
     properties:
       customer_id:
         example: customer456
@@ -3262,24 +3391,7 @@ definitions:
     - event_name
     - external_customer_id
     type: object
-  dto.IntegrationEntityMapping:
-    description: Integration entity mapping for external provider systems
-    properties:
-      id:
-        description: id is the external entity ID from the provider
-        type: string
-      provider:
-        description: provider is the integration provider name (e.g., "stripe", "razorpay")
-        enum:
-        - stripe
-        - razorpay
-        - paypal
-        type: string
-    required:
-    - id
-    - provider
-    type: object
-  dto.InvoiceCoupon:
+  InvoiceCoupon:
     properties:
       coupon_association_id:
         type: string
@@ -3288,7 +3400,7 @@ definitions:
     required:
     - coupon_id
     type: object
-  dto.InvoiceLineItemCoupon:
+  InvoiceLineItemCoupon:
     properties:
       coupon_association_id:
         type: string
@@ -3301,7 +3413,7 @@ definitions:
     - coupon_id
     - line_item_id
     type: object
-  dto.InvoiceLineItemPreview:
+  InvoiceLineItemPreview:
     properties:
       amount:
         description: amount for this line item
@@ -3325,7 +3437,7 @@ definitions:
         description: unit_price for this line item
         type: string
     type: object
-  dto.InvoiceLineItemResponse:
+  InvoiceLineItemResponse:
     properties:
       amount:
         type: string
@@ -3401,16 +3513,16 @@ definitions:
         description: usage_analytics contains usage analytics for this line item (legacy
           - grouped by source)
         items:
-          $ref: '#/definitions/dto.SourceUsageItem'
+          $ref: '#/definitions/SourceUsageItem'
         type: array
       usage_breakdown:
         description: usage_breakdown contains flexible usage breakdown for this line
           item (supports any grouping)
         items:
-          $ref: '#/definitions/dto.UsageBreakdownItem'
+          $ref: '#/definitions/UsageBreakdownItem'
         type: array
     type: object
-  dto.InvoicePreview:
+  InvoicePreview:
     properties:
       currency:
         description: currency is the currency for all amounts
@@ -3421,7 +3533,7 @@ definitions:
       line_items:
         description: line_items contains preview of line items
         items:
-          $ref: '#/definitions/dto.InvoiceLineItemPreview'
+          $ref: '#/definitions/InvoiceLineItemPreview'
         type: array
       subtotal:
         description: subtotal is the subtotal amount before taxes
@@ -3433,7 +3545,7 @@ definitions:
         description: total is the total amount including taxes
         type: string
     type: object
-  dto.InvoiceResponse:
+  InvoiceResponse:
     properties:
       adjustment_amount:
         description: |-
@@ -3468,7 +3580,7 @@ definitions:
         description: coupon_applications contains the coupon applications associated
           with this invoice (overrides embedded field)
         items:
-          $ref: '#/definitions/dto.CouponApplicationResponse'
+          $ref: '#/definitions/CouponApplicationResponse'
         type: array
       created_at:
         type: string
@@ -3480,7 +3592,7 @@ definitions:
         type: string
       customer:
         allOf:
-        - $ref: '#/definitions/dto.CustomerResponse'
+        - $ref: '#/definitions/CustomerResponse'
         description: customer contains the customer information associated with this
           invoice
       customer_id:
@@ -3525,11 +3637,15 @@ definitions:
         - $ref: '#/definitions/types.InvoiceType'
         description: invoice_type indicates the type of invoice - whether this is
           a subscription invoice, one-time charge, or other billing type
+      last_computed_at:
+        description: last_computed_at is the timestamp when this invoice was last
+          computed by ComputeInvoice
+        type: string
       line_items:
         description: line_items contains the individual items that make up this invoice
           (overrides embedded field)
         items:
-          $ref: '#/definitions/dto.InvoiceLineItemResponse'
+          $ref: '#/definitions/InvoiceLineItemResponse'
         type: array
       metadata:
         allOf:
@@ -3570,7 +3686,7 @@ definitions:
         $ref: '#/definitions/types.Status'
       subscription:
         allOf:
-        - $ref: '#/definitions/dto.SubscriptionResponse'
+        - $ref: '#/definitions/SubscriptionResponse'
         description: subscription contains the associated subscription information
           if requested
       subscription_id:
@@ -3585,7 +3701,7 @@ definitions:
         description: tax_applied_records contains the tax applied records associated
           with this invoice
         items:
-          $ref: '#/definitions/dto.TaxAppliedResponse'
+          $ref: '#/definitions/TaxAppliedResponse'
         type: array
       tenant_id:
         type: string
@@ -3614,7 +3730,7 @@ definitions:
         description: voided_at is the timestamp when this invoice was voided or cancelled
         type: string
     type: object
-  dto.LineItemCommitmentConfig:
+  LineItemCommitmentConfig:
     properties:
       commitment_amount:
         description: CommitmentAmount is the minimum amount committed for this line
@@ -3646,168 +3762,70 @@ definitions:
         description: OverageFactor is a multiplier applied to usage beyond the commitment
         type: number
     type: object
-  dto.LinkedIntegrationsResponse:
+  LinkIntegrationMappingRequest:
     properties:
-      providers:
-        items:
-          type: string
-        type: array
+      entity_id:
+        maxLength: 255
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.IntegrationEntityType'
+      metadata:
+        additionalProperties: true
+        type: object
+      provider_entity_id:
+        maxLength: 255
+        type: string
+      provider_type:
+        maxLength: 50
+        type: string
+    required:
+    - entity_id
+    - entity_type
+    - provider_entity_id
+    - provider_type
     type: object
-  dto.ListAddonsResponse:
+  LinkIntegrationMappingResponse:
+    properties:
+      mapping:
+        $ref: '#/definitions/EntityIntegrationMappingResponse'
+    type: object
+  ListAlertLogsResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.AddonResponse'
+          $ref: '#/definitions/AlertLogResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
-  dto.ListAlertLogsResponse:
+  ListCostsheetResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.AlertLogResponse'
+          $ref: '#/definitions/CostsheetResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
-  dto.ListCostsheetResponse:
+  ListPaymentsResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.CostsheetResponse'
+          $ref: '#/definitions/PaymentResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
-  dto.ListCouponsResponse:
+  ListSecretsResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.CouponResponse'
+          $ref: '#/definitions/SecretResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
-  dto.ListCreditGrantApplicationsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.CreditGrantApplicationResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListCreditGrantsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.CreditGrantResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListCustomersResponse:
-    description: Response object for listing customers with pagination
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.CustomerResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListEntitlementsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.EntitlementResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListFeaturesResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.FeatureResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListGroupsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.GroupResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListInvoicesResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.InvoiceResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListPaymentsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.PaymentResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListPlansResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.PlanResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListPriceUnitsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.PriceUnitResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListPricesResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.PriceResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListScheduledTasksResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.ScheduledTaskResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListSecretsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.SecretResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListSubscriptionPausesResponse:
+  ListSubscriptionPausesResponse:
     description: Response object for listing subscription pauses with total count
     properties:
       items:
@@ -3815,7 +3833,7 @@ definitions:
           List of subscription pause objects
           @Description Array of subscription pauses
         items:
-          $ref: '#/definitions/dto.SubscriptionPauseResponse'
+          $ref: '#/definitions/SubscriptionPauseResponse'
         type: array
       total:
         description: |-
@@ -3823,61 +3841,16 @@ definitions:
           @Description Total count of subscription pauses in the response
         type: integer
     type: object
-  dto.ListSubscriptionsResponse:
+  ListTasksResponse:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.SubscriptionResponse'
+          $ref: '#/definitions/TaskResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
-  dto.ListTasksResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.TaskResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListTaxAssociationsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.TaxAssociationResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListUsersResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.UserResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListWalletTransactionsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.WalletTransactionResponse'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.ListWorkflowsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/dto.WorkflowExecutionDTO'
-        type: array
-      pagination:
-        $ref: '#/definitions/types.PaginationResponse'
-    type: object
-  dto.MatchedMeter:
+  MatchedMeter:
     properties:
       event_name:
         type: string
@@ -3886,7 +3859,7 @@ definitions:
       meter_id:
         type: string
     type: object
-  dto.MatchedPrice:
+  MatchedPrice:
     properties:
       meter_id:
         type: string
@@ -3897,7 +3870,7 @@ definitions:
       status:
         type: string
     type: object
-  dto.MatchedSubscriptionLineItem:
+  MatchedSubscriptionLineItem:
     properties:
       end_date:
         type: string
@@ -3916,18 +3889,18 @@ definitions:
       timestamp_within_range:
         type: boolean
     type: object
-  dto.MeterMatchingResult:
+  MeterMatchingResult:
     properties:
       error:
         $ref: '#/definitions/errors.ErrorResponse'
       matched_meters:
         items:
-          $ref: '#/definitions/dto.MatchedMeter'
+          $ref: '#/definitions/MatchedMeter'
         type: array
       status:
         $ref: '#/definitions/types.DebugTrackerStatus'
     type: object
-  dto.MeterResponse:
+  MeterResponse:
     properties:
       aggregation:
         $ref: '#/definitions/meter.Aggregation'
@@ -3959,7 +3932,7 @@ definitions:
         example: "2024-03-20T15:04:05Z"
         type: string
     type: object
-  dto.OverrideEntitlementRequest:
+  OverrideEntitlementRequest:
     properties:
       entitlement_id:
         description: EntitlementID references the plan/addon entitlement to override
@@ -3978,7 +3951,7 @@ definitions:
     required:
     - entitlement_id
     type: object
-  dto.OverrideLineItemRequest:
+  OverrideLineItemRequest:
     properties:
       amount:
         description: Amount is the new price amount that overrides the original price
@@ -3997,7 +3970,7 @@ definitions:
         description: PriceUnitTiers are the tiers for the price unit (for CUSTOM type,
           TIERED billing model)
         items:
-          $ref: '#/definitions/dto.CreatePriceTier'
+          $ref: '#/definitions/CreatePriceTier'
         type: array
       quantity:
         description: Quantity for this line item (optional)
@@ -4009,7 +3982,7 @@ definitions:
       tiers:
         description: Tiers determines the pricing tiers for this line item
         items:
-          $ref: '#/definitions/dto.CreatePriceTier'
+          $ref: '#/definitions/CreatePriceTier'
         type: array
       transform_quantity:
         allOf:
@@ -4019,7 +3992,7 @@ definitions:
     required:
     - price_id
     type: object
-  dto.PauseSubscriptionRequest:
+  PauseSubscriptionRequest:
     description: Request object for pausing an active subscription with various pause
       modes and options
     properties:
@@ -4072,7 +4045,7 @@ definitions:
     required:
     - pause_mode
     type: object
-  dto.PaymentAttemptResponse:
+  PaymentAttemptResponse:
     properties:
       attempt_number:
         type: integer
@@ -4095,13 +4068,13 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.PaymentResponse:
+  PaymentResponse:
     properties:
       amount:
         type: string
       attempts:
         items:
-          $ref: '#/definitions/dto.PaymentAttemptResponse'
+          $ref: '#/definitions/PaymentAttemptResponse'
         type: array
       created_at:
         type: string
@@ -4156,7 +4129,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.PlanResponse:
+  PlanResponse:
     properties:
       created_at:
         type: string
@@ -4164,7 +4137,7 @@ definitions:
         type: string
       credit_grants:
         items:
-          $ref: '#/definitions/dto.CreditGrantResponse'
+          $ref: '#/definitions/CreditGrantResponse'
         type: array
       description:
         type: string
@@ -4172,7 +4145,7 @@ definitions:
         type: integer
       entitlements:
         items:
-          $ref: '#/definitions/dto.EntitlementResponse'
+          $ref: '#/definitions/EntitlementResponse'
         type: array
       environment_id:
         type: string
@@ -4187,7 +4160,7 @@ definitions:
       prices:
         description: 'TODO: Add inline addons'
         items:
-          $ref: '#/definitions/dto.PriceResponse'
+          $ref: '#/definitions/PriceResponse'
         type: array
       status:
         $ref: '#/definitions/types.Status'
@@ -4198,7 +4171,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.PlanSummary:
+  PlanSummary:
     properties:
       description:
         description: description of the plan
@@ -4213,21 +4186,21 @@ definitions:
         description: name of the plan
         type: string
     type: object
-  dto.PriceLookupResult:
+  PriceLookupResult:
     properties:
       error:
         $ref: '#/definitions/errors.ErrorResponse'
       matched_prices:
         items:
-          $ref: '#/definitions/dto.MatchedPrice'
+          $ref: '#/definitions/MatchedPrice'
         type: array
       status:
         $ref: '#/definitions/types.DebugTrackerStatus'
     type: object
-  dto.PriceResponse:
+  PriceResponse:
     properties:
       addon:
-        $ref: '#/definitions/dto.AddonResponse'
+        $ref: '#/definitions/AddonResponse'
       amount:
         description: |-
           Amount stored in main currency units (e.g., dollars, not cents)
@@ -4284,7 +4257,7 @@ definitions:
         description: EnvironmentID is the environment identifier for the price
         type: string
       group:
-        $ref: '#/definitions/dto.GroupResponse'
+        $ref: '#/definitions/GroupResponse'
       group_id:
         description: GroupID references the group this price belongs to
         type: string
@@ -4299,7 +4272,7 @@ definitions:
       metadata:
         $ref: '#/definitions/price.JSONBMetadata'
       meter:
-        $ref: '#/definitions/dto.MeterResponse'
+        $ref: '#/definitions/MeterResponse'
       meter_id:
         description: MeterID is the id of the meter for usage based pricing
         type: string
@@ -4312,7 +4285,7 @@ definitions:
           lineage tracking)
         type: string
       plan:
-        $ref: '#/definitions/dto.PlanResponse'
+        $ref: '#/definitions/PlanResponse'
       price_unit:
         description: PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
         type: string
@@ -4333,7 +4306,7 @@ definitions:
         - $ref: '#/definitions/types.PriceUnitType'
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
       pricing_unit:
-        $ref: '#/definitions/dto.PriceUnitResponse'
+        $ref: '#/definitions/PriceUnitResponse'
       start_date:
         description: StartDate is the start date of the price
         type: string
@@ -4361,7 +4334,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.PriceUnitConfig:
+  PriceUnitConfig:
     properties:
       amount:
         type: string
@@ -4369,12 +4342,12 @@ definitions:
         type: string
       price_unit_tiers:
         items:
-          $ref: '#/definitions/dto.CreatePriceTier'
+          $ref: '#/definitions/CreatePriceTier'
         type: array
     required:
     - price_unit
     type: object
-  dto.PriceUnitResponse:
+  PriceUnitResponse:
     properties:
       base_currency:
         type: string
@@ -4405,7 +4378,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.ProrationDetail:
+  ProrationDetail:
     properties:
       charge_amount:
         type: string
@@ -4424,7 +4397,7 @@ definitions:
       proration_days:
         type: integer
     type: object
-  dto.ProrationDetails:
+  ProrationDetails:
     properties:
       charge_amount:
         description: charge_amount is the charge amount for the new subscription
@@ -4461,7 +4434,7 @@ definitions:
         description: proration_date is the date used for proration calculations
         type: string
     type: object
-  dto.RemoveAddonRequest:
+  RemoveAddonRequest:
     properties:
       addon_association_id:
         type: string
@@ -4470,7 +4443,7 @@ definitions:
     required:
     - addon_association_id
     type: object
-  dto.ResumeSubscriptionRequest:
+  ResumeSubscriptionRequest:
     description: Request object for resuming a paused subscription
     properties:
       dry_run:
@@ -4497,7 +4470,7 @@ definitions:
     required:
     - resume_mode
     type: object
-  dto.ScheduledTaskResponse:
+  ScheduledTaskResponse:
     properties:
       connection_id:
         type: string
@@ -4527,7 +4500,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  dto.SecretResponse:
+  SecretResponse:
     properties:
       created_at:
         type: string
@@ -4559,7 +4532,7 @@ definitions:
         - $ref: '#/definitions/types.UserType'
         description: '"user" or "service_account"'
     type: object
-  dto.SourceUsageItem:
+  SourceUsageItem:
     properties:
       cost:
         description: cost is the cost attributed to this source for the line item
@@ -4579,7 +4552,7 @@ definitions:
           additional context)
         type: string
     type: object
-  dto.SubscriptionChangeExecuteResponse:
+  SubscriptionChangeExecuteResponse:
     description: Response after successfully executing a subscription plan change
     properties:
       change_type:
@@ -4591,14 +4564,14 @@ definitions:
         description: credit_grants contains any credit grants created for proration
           credits
         items:
-          $ref: '#/definitions/dto.CreditGrantResponse'
+          $ref: '#/definitions/CreditGrantResponse'
         type: array
       effective_date:
         description: effective_date is when the change took effect
         type: string
       invoice:
         allOf:
-        - $ref: '#/definitions/dto.InvoiceResponse'
+        - $ref: '#/definitions/InvoiceResponse'
         description: invoice contains the immediate invoice generated for the change
           (if any)
       is_scheduled:
@@ -4612,17 +4585,17 @@ definitions:
         type: object
       new_subscription:
         allOf:
-        - $ref: '#/definitions/dto.SubscriptionSummary'
+        - $ref: '#/definitions/SubscriptionSummary'
         description: new_subscription contains the new subscription details (only
           if is_scheduled=false)
       old_subscription:
         allOf:
-        - $ref: '#/definitions/dto.SubscriptionSummary'
+        - $ref: '#/definitions/SubscriptionSummary'
         description: old_subscription contains the archived subscription details (only
           if is_scheduled=false)
       proration_applied:
         allOf:
-        - $ref: '#/definitions/dto.ProrationDetails'
+        - $ref: '#/definitions/ProrationDetails'
         description: proration_applied contains details of the proration that was
           applied
       schedule_id:
@@ -4632,7 +4605,7 @@ definitions:
         description: scheduled_at is when the change will execute (only if is_scheduled=true)
         type: string
     type: object
-  dto.SubscriptionChangePreviewResponse:
+  SubscriptionChangePreviewResponse:
     description: Response showing the financial impact of a subscription plan change
     properties:
       change_type:
@@ -4642,7 +4615,7 @@ definitions:
           or lateral change
       current_plan:
         allOf:
-        - $ref: '#/definitions/dto.PlanSummary'
+        - $ref: '#/definitions/PlanSummary'
         description: current_plan contains information about the current plan
       effective_date:
         description: effective_date is when the change would take effect
@@ -4654,23 +4627,23 @@ definitions:
         type: object
       new_billing_cycle:
         allOf:
-        - $ref: '#/definitions/dto.BillingCycleInfo'
+        - $ref: '#/definitions/BillingCycleInfo'
         description: new_billing_cycle shows the new billing cycle details
       next_invoice_preview:
         allOf:
-        - $ref: '#/definitions/dto.InvoicePreview'
+        - $ref: '#/definitions/InvoicePreview'
         description: next_invoice_preview shows how the next regular invoice would
           be affected
       proration_details:
         allOf:
-        - $ref: '#/definitions/dto.ProrationDetails'
+        - $ref: '#/definitions/ProrationDetails'
         description: proration_details contains the calculated proration amounts
       subscription_id:
         description: subscription_id is the ID of the subscription being changed
         type: string
       target_plan:
         allOf:
-        - $ref: '#/definitions/dto.PlanSummary'
+        - $ref: '#/definitions/PlanSummary'
         description: target_plan contains information about the target plan
       warnings:
         description: warnings contains any warnings about the change
@@ -4678,7 +4651,7 @@ definitions:
           type: string
         type: array
     type: object
-  dto.SubscriptionChangeRequest:
+  SubscriptionChangeRequest:
     description: Request object for changing a subscription plan (upgrade/downgrade)
     properties:
       billing_cadence:
@@ -4728,29 +4701,29 @@ definitions:
     - proration_behavior
     - target_plan_id
     type: object
-  dto.SubscriptionEntitlementsResponse:
+  SubscriptionEntitlementsResponse:
     properties:
       features:
         items:
-          $ref: '#/definitions/dto.AggregatedFeature'
+          $ref: '#/definitions/AggregatedFeature'
         type: array
       plan_id:
         type: string
       subscription_id:
         type: string
     type: object
-  dto.SubscriptionLineItemLookupResult:
+  SubscriptionLineItemLookupResult:
     properties:
       error:
         $ref: '#/definitions/errors.ErrorResponse'
       matched_line_items:
         items:
-          $ref: '#/definitions/dto.MatchedSubscriptionLineItem'
+          $ref: '#/definitions/MatchedSubscriptionLineItem'
         type: array
       status:
         $ref: '#/definitions/types.DebugTrackerStatus'
     type: object
-  dto.SubscriptionLineItemResponse:
+  SubscriptionLineItemResponse:
     properties:
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
@@ -4805,7 +4778,7 @@ definitions:
       plan_display_name:
         type: string
       price:
-        $ref: '#/definitions/dto.PriceResponse'
+        $ref: '#/definitions/PriceResponse'
       price_id:
         type: string
       price_type:
@@ -4833,7 +4806,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.SubscriptionPauseResponse:
+  SubscriptionPauseResponse:
     description: Response object containing subscription pause information
     properties:
       created_at:
@@ -4886,7 +4859,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.SubscriptionPhaseCreateRequest:
+  SubscriptionPhaseCreateRequest:
     properties:
       coupons:
         description: Coupons represents subscription-level coupons to be applied to
@@ -4913,14 +4886,14 @@ definitions:
           OverrideLineItems allows customizing specific prices for this phase
           If not provided, phase will use the same line items as the subscription (plan prices)
         items:
-          $ref: '#/definitions/dto.OverrideLineItemRequest'
+          $ref: '#/definitions/OverrideLineItemRequest'
         type: array
       start_date:
         type: string
     required:
     - start_date
     type: object
-  dto.SubscriptionPhaseResponse:
+  SubscriptionPhaseResponse:
     properties:
       created_at:
         type: string
@@ -4955,7 +4928,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.SubscriptionPriceCreateRequest:
+  SubscriptionPriceCreateRequest:
     properties:
       amount:
         type: string
@@ -4992,7 +4965,7 @@ definitions:
       min_quantity:
         type: integer
       price_unit_config:
-        $ref: '#/definitions/dto.PriceUnitConfig'
+        $ref: '#/definitions/PriceUnitConfig'
       price_unit_type:
         $ref: '#/definitions/types.PriceUnitType'
       start_date:
@@ -5001,7 +4974,7 @@ definitions:
         $ref: '#/definitions/types.BillingTier'
       tiers:
         items:
-          $ref: '#/definitions/dto.CreatePriceTier'
+          $ref: '#/definitions/CreatePriceTier'
         type: array
       transform_quantity:
         $ref: '#/definitions/price.TransformQuantity'
@@ -5017,7 +4990,7 @@ definitions:
     - price_unit_type
     - type
     type: object
-  dto.SubscriptionResponse:
+  SubscriptionResponse:
     properties:
       active_pause_id:
         description: |-
@@ -5074,7 +5047,7 @@ definitions:
       coupon_associations:
         description: CouponAssociations are the coupon associations for this subscription
         items:
-          $ref: '#/definitions/dto.CouponAssociationResponse'
+          $ref: '#/definitions/CouponAssociationResponse'
         type: array
       created_at:
         type: string
@@ -5083,7 +5056,7 @@ definitions:
       credit_grants:
         description: Credit grants are the credit grants for this subscription
         items:
-          $ref: '#/definitions/dto.CreditGrantResponse'
+          $ref: '#/definitions/CreditGrantResponse'
         type: array
       currency:
         description: Currency is the currency of the subscription in lowercase 3 digit
@@ -5100,7 +5073,7 @@ definitions:
           At the end of this period, a new invoice will be created.
         type: string
       customer:
-        $ref: '#/definitions/dto.CustomerResponse'
+        $ref: '#/definitions/CustomerResponse'
       customer_id:
         description: CustomerID is the identifier for the customer in our system
         type: string
@@ -5128,7 +5101,7 @@ definitions:
         type: string
       latest_invoice:
         allOf:
-        - $ref: '#/definitions/dto.InvoiceResponse'
+        - $ref: '#/definitions/InvoiceResponse'
         description: Latest invoice information for incomplete subscriptions
       line_items:
         items:
@@ -5164,10 +5137,10 @@ definitions:
       phases:
         description: Phases are the subscription phases for this subscription
         items:
-          $ref: '#/definitions/dto.SubscriptionPhaseResponse'
+          $ref: '#/definitions/SubscriptionPhaseResponse'
         type: array
       plan:
-        $ref: '#/definitions/dto.PlanResponse'
+        $ref: '#/definitions/PlanResponse'
       plan_id:
         description: PlanID is the identifier for the plan in our system
         type: string
@@ -5196,7 +5169,7 @@ definitions:
         description: Version is used for optimistic locking
         type: integer
     type: object
-  dto.SubscriptionResponseV2:
+  SubscriptionResponseV2:
     properties:
       active_pause_id:
         description: |-
@@ -5254,7 +5227,7 @@ definitions:
         description: CouponAssociations are included when "coupon_associations" is
           in expand parameter
         items:
-          $ref: '#/definitions/dto.CouponAssociationResponse'
+          $ref: '#/definitions/CouponAssociationResponse'
         type: array
       created_at:
         type: string
@@ -5263,7 +5236,7 @@ definitions:
       credit_grants:
         description: CreditGrants are included when "credit_grants" is in expand parameter
         items:
-          $ref: '#/definitions/dto.CreditGrantResponse'
+          $ref: '#/definitions/CreditGrantResponse'
         type: array
       currency:
         description: Currency is the currency of the subscription in lowercase 3 digit
@@ -5281,7 +5254,7 @@ definitions:
         type: string
       customer:
         allOf:
-        - $ref: '#/definitions/dto.CustomerResponse'
+        - $ref: '#/definitions/CustomerResponse'
         description: Customer is expanded only if "customer" is in expand parameter
       customer_id:
         description: CustomerID is the identifier for the customer in our system
@@ -5313,7 +5286,7 @@ definitions:
           LineItems is expanded only if "subscription_line_items" is in expand parameter
           Each line item can optionally include expanded price data
         items:
-          $ref: '#/definitions/dto.SubscriptionLineItemResponse'
+          $ref: '#/definitions/SubscriptionLineItemResponse'
         type: array
       lookup_key:
         description: LookupKey is the key used to lookup the subscription in our system
@@ -5346,11 +5319,11 @@ definitions:
       phases:
         description: Phases are included when "phases" is in expand parameter
         items:
-          $ref: '#/definitions/dto.SubscriptionPhaseResponse'
+          $ref: '#/definitions/SubscriptionPhaseResponse'
         type: array
       plan:
         allOf:
-        - $ref: '#/definitions/dto.PlanResponse'
+        - $ref: '#/definitions/PlanResponse'
         description: Plan is expanded only if "plan" is in expand parameter
       plan_id:
         description: PlanID is the identifier for the plan in our system
@@ -5380,7 +5353,7 @@ definitions:
         description: Version is used for optimistic locking
         type: integer
     type: object
-  dto.SubscriptionScheduleResponse:
+  SubscriptionScheduleResponse:
     description: Full details of a subscription schedule
     properties:
       can_be_cancelled:
@@ -5433,7 +5406,7 @@ definitions:
         description: updated_at timestamp
         type: string
     type: object
-  dto.SubscriptionSummary:
+  SubscriptionSummary:
     properties:
       archived_at:
         description: archived_at timestamp (for old subscriptions)
@@ -5461,7 +5434,7 @@ definitions:
         - $ref: '#/definitions/types.SubscriptionStatus'
         description: status of the subscription
     type: object
-  dto.SubscriptionUsageByMetersResponse:
+  SubscriptionUsageByMetersResponse:
     properties:
       amount:
         type: number
@@ -5489,12 +5462,12 @@ definitions:
         description: 'For feature_usage: direct match by sub_line_item_id'
         type: string
     type: object
-  dto.SuccessResponse:
+  SuccessResponse:
     properties:
       message:
         type: string
     type: object
-  dto.TaskResponse:
+  TaskResponse:
     properties:
       completed_at:
         type: string
@@ -5548,7 +5521,7 @@ definitions:
       workflow_id:
         type: string
     type: object
-  dto.TaxAppliedResponse:
+  TaxAppliedResponse:
     properties:
       applied_at:
         type: string
@@ -5579,7 +5552,7 @@ definitions:
       tax_association_id:
         type: string
       tax_rate:
-        $ref: '#/definitions/dto.TaxRateResponse'
+        $ref: '#/definitions/TaxRateResponse'
       tax_rate_id:
         type: string
       taxable_amount:
@@ -5591,7 +5564,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.TaxAssociationResponse:
+  TaxAssociationResponse:
     properties:
       auto_apply:
         description: Whether this tax should be automatically applied
@@ -5628,7 +5601,7 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       tax_rate:
-        $ref: '#/definitions/dto.TaxRateResponse'
+        $ref: '#/definitions/TaxRateResponse'
       tax_rate_id:
         description: Reference to the TaxRate entity
         type: string
@@ -5639,7 +5612,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.TaxAssociationUpdateRequest:
+  TaxAssociationUpdateRequest:
     properties:
       auto_apply:
         type: boolean
@@ -5650,7 +5623,7 @@ definitions:
       priority:
         type: integer
     type: object
-  dto.TaxRateOverride:
+  TaxRateOverride:
     properties:
       auto_apply:
         default: true
@@ -5669,7 +5642,7 @@ definitions:
     - currency
     - tax_rate_code
     type: object
-  dto.TaxRateResponse:
+  TaxRateResponse:
     properties:
       code:
         type: string
@@ -5708,10 +5681,10 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.TenantBillingDetails:
+  TenantBillingDetails:
     properties:
       address:
-        $ref: '#/definitions/dto.Address'
+        $ref: '#/definitions/Address'
       email:
         type: string
       help_email:
@@ -5719,19 +5692,19 @@ definitions:
       phone:
         type: string
     type: object
-  dto.TenantBillingUsage:
+  TenantBillingUsage:
     properties:
       subscriptions:
         items:
-          $ref: '#/definitions/dto.SubscriptionResponse'
+          $ref: '#/definitions/SubscriptionResponse'
         type: array
       usage:
-        $ref: '#/definitions/dto.CustomerUsageSummaryResponse'
+        $ref: '#/definitions/CustomerUsageSummaryResponse'
     type: object
-  dto.TenantResponse:
+  TenantResponse:
     properties:
       billing_details:
-        $ref: '#/definitions/dto.TenantBillingDetails'
+        $ref: '#/definitions/TenantBillingDetails'
       created_at:
         type: string
       id:
@@ -5745,7 +5718,7 @@ definitions:
       updated_at:
         type: string
     type: object
-  dto.TopUpWalletRequest:
+  TopUpWalletRequest:
     properties:
       amount:
         description: |-
@@ -5786,28 +5759,28 @@ definitions:
     required:
     - transaction_reason
     type: object
-  dto.TopUpWalletResponse:
+  TopUpWalletResponse:
     properties:
       invoice_id:
         description: Invoice ID if an invoice was created (only for PURCHASED_CREDIT_INVOICED)
         type: string
       wallet:
         allOf:
-        - $ref: '#/definitions/dto.WalletResponse'
+        - $ref: '#/definitions/WalletResponse'
         description: Wallet details after the operation
       wallet_transaction:
         allOf:
-        - $ref: '#/definitions/dto.WalletTransactionResponse'
+        - $ref: '#/definitions/WalletTransactionResponse'
         description: Wallet transaction created (could be PENDING or COMPLETED)
     type: object
-  dto.TriggerForceRunRequest:
+  TriggerForceRunRequest:
     properties:
       end_time:
         type: string
       start_time:
         type: string
     type: object
-  dto.TriggerForceRunResponse:
+  TriggerForceRunResponse:
     properties:
       end_time:
         type: string
@@ -5821,7 +5794,7 @@ definitions:
       workflow_id:
         type: string
     type: object
-  dto.UpdateAddonRequest:
+  UpdateAddonRequest:
     properties:
       description:
         type: string
@@ -5831,7 +5804,7 @@ definitions:
       name:
         type: string
     type: object
-  dto.UpdateCostsheetRequest:
+  UpdateCostsheetRequest:
     properties:
       description:
         type: string
@@ -5848,12 +5821,12 @@ definitions:
         minLength: 1
         type: string
     type: object
-  dto.UpdateCostsheetResponse:
+  UpdateCostsheetResponse:
     properties:
       costsheet:
-        $ref: '#/definitions/dto.CostsheetResponse'
+        $ref: '#/definitions/CostsheetResponse'
     type: object
-  dto.UpdateCouponRequest:
+  UpdateCouponRequest:
     properties:
       metadata:
         additionalProperties:
@@ -5862,14 +5835,14 @@ definitions:
       name:
         type: string
     type: object
-  dto.UpdateCreditGrantRequest:
+  UpdateCreditGrantRequest:
     properties:
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
     type: object
-  dto.UpdateCustomerRequest:
+  UpdateCustomerRequest:
     description: Request object for updating an existing customer. All fields are
       optional - only provided fields will be updated
     properties:
@@ -5908,12 +5881,6 @@ definitions:
       external_id:
         description: external_id is the updated external identifier for the customer
         type: string
-      integration_entity_mapping:
-        description: integration_entity_mapping contains provider integration mappings
-          for this customer
-        items:
-          $ref: '#/definitions/dto.IntegrationEntityMapping'
-        type: array
       metadata:
         additionalProperties:
           type: string
@@ -5937,7 +5904,7 @@ definitions:
           parent_customer_id is the internal FlexPrice ID of the parent customer.
         type: string
     type: object
-  dto.UpdateEntitlementRequest:
+  UpdateEntitlementRequest:
     properties:
       is_enabled:
         type: boolean
@@ -5950,7 +5917,7 @@ definitions:
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
     type: object
-  dto.UpdateFeatureRequest:
+  UpdateFeatureRequest:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
@@ -5975,7 +5942,7 @@ definitions:
       unit_singular:
         type: string
     type: object
-  dto.UpdateInvoiceRequest:
+  UpdateInvoiceRequest:
     properties:
       due_date:
         type: string
@@ -5988,7 +5955,7 @@ definitions:
         - $ref: '#/definitions/types.Metadata'
         description: Invoice metadata will be overridden with the request metadata
     type: object
-  dto.UpdatePaymentRequest:
+  UpdatePaymentRequest:
     properties:
       error_message:
         type: string
@@ -6007,7 +5974,7 @@ definitions:
       succeeded_at:
         type: string
     type: object
-  dto.UpdatePaymentStatusRequest:
+  UpdatePaymentStatusRequest:
     properties:
       amount:
         description: amount is the optional payment amount to record
@@ -6020,7 +5987,7 @@ definitions:
     required:
     - payment_status
     type: object
-  dto.UpdatePlanRequest:
+  UpdatePlanRequest:
     properties:
       description:
         type: string
@@ -6033,7 +6000,7 @@ definitions:
       name:
         type: string
     type: object
-  dto.UpdatePriceRequest:
+  UpdatePriceRequest:
     properties:
       amount:
         description: Amount is the new price amount that overrides the original price
@@ -6071,7 +6038,7 @@ definitions:
         description: PriceUnitTiers are the price unit tiers (for CUSTOM price unit
           type, TIERED billing model)
         items:
-          $ref: '#/definitions/dto.CreatePriceTier'
+          $ref: '#/definitions/CreatePriceTier'
         type: array
       tier_mode:
         allOf:
@@ -6080,7 +6047,7 @@ definitions:
       tiers:
         description: Tiers determines the pricing tiers for this line item
         items:
-          $ref: '#/definitions/dto.CreatePriceTier'
+          $ref: '#/definitions/CreatePriceTier'
         type: array
       transform_quantity:
         allOf:
@@ -6088,21 +6055,21 @@ definitions:
         description: TransformQuantity determines how to transform the quantity for
           this line item
     type: object
-  dto.UpdatePriceUnitRequest:
+  UpdatePriceUnitRequest:
     properties:
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
     type: object
-  dto.UpdateScheduledTaskRequest:
+  UpdateScheduledTaskRequest:
     properties:
       enabled:
         type: boolean
     required:
     - enabled
     type: object
-  dto.UpdateSubscriptionLineItemRequest:
+  UpdateSubscriptionLineItemRequest:
     properties:
       amount:
         description: Amount is the new price amount that overrides the original price
@@ -6140,7 +6107,7 @@ definitions:
       tiers:
         description: Tiers determines the pricing tiers for this line item
         items:
-          $ref: '#/definitions/dto.CreatePriceTier'
+          $ref: '#/definitions/CreatePriceTier'
         type: array
       transform_quantity:
         allOf:
@@ -6148,7 +6115,7 @@ definitions:
         description: TransformQuantity determines how to transform the quantity for
           this line item
     type: object
-  dto.UpdateSubscriptionRequest:
+  UpdateSubscriptionRequest:
     properties:
       cancel_at:
         type: string
@@ -6161,14 +6128,14 @@ definitions:
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
     type: object
-  dto.UpdateTaskStatusRequest:
+  UpdateTaskStatusRequest:
     properties:
       task_status:
         $ref: '#/definitions/types.TaskStatus'
     required:
     - task_status
     type: object
-  dto.UpdateTaxRateRequest:
+  UpdateTaxRateRequest:
     properties:
       code:
         description: code is the updated unique alphanumeric identifier for the tax
@@ -6192,16 +6159,16 @@ definitions:
         description: tax_rate_type determines how the tax is calculated ("percentage"
           or "fixed")
     type: object
-  dto.UpdateTenantRequest:
+  UpdateTenantRequest:
     properties:
       billing_details:
-        $ref: '#/definitions/dto.TenantBillingDetails'
+        $ref: '#/definitions/TenantBillingDetails'
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
     type: object
-  dto.UpdateWalletRequest:
+  UpdateWalletRequest:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
@@ -6216,13 +6183,13 @@ definitions:
       name:
         type: string
     type: object
-  dto.UsageAnalyticItem:
+  UsageAnalyticItem:
     properties:
       add_on_id:
         type: string
       addon:
         allOf:
-        - $ref: '#/definitions/github_com_flexprice_flexprice_internal_domain_addon.Addon'
+        - $ref: '#/definitions/DomainAddon'
         description: Full addon object (only if expand includes "addon")
       aggregation_type:
         $ref: '#/definitions/types.AggregationType'
@@ -6237,7 +6204,7 @@ definitions:
         type: string
       feature:
         allOf:
-        - $ref: '#/definitions/github_com_flexprice_flexprice_internal_domain_feature.Feature'
+        - $ref: '#/definitions/DomainFeature'
         description: Full feature object (only if expand includes "feature")
       feature_id:
         type: string
@@ -6256,17 +6223,17 @@ definitions:
         type: string
       plan:
         allOf:
-        - $ref: '#/definitions/github_com_flexprice_flexprice_internal_domain_plan.Plan'
+        - $ref: '#/definitions/DomainPlan'
         description: Full plan object (only if expand includes "plan")
       plan_id:
         type: string
       points:
         items:
-          $ref: '#/definitions/dto.UsageAnalyticPoint'
+          $ref: '#/definitions/UsageAnalyticPoint'
         type: array
       price:
         allOf:
-        - $ref: '#/definitions/dto.PriceResponse'
+        - $ref: '#/definitions/PriceResponse'
         description: Full price object (only if expand includes "price")
       price_id:
         description: Price ID used for this usage
@@ -6316,7 +6283,7 @@ definitions:
         - $ref: '#/definitions/types.WindowSize'
         description: Window size for bucketed meters (only set if meter is bucketed)
     type: object
-  dto.UsageAnalyticPoint:
+  UsageAnalyticPoint:
     properties:
       computed_commitment_utilized_amount:
         description: Commitment breakdown (only populated for windowed commitments)
@@ -6335,7 +6302,7 @@ definitions:
       usage:
         type: string
     type: object
-  dto.UsageBreakdownItem:
+  UsageBreakdownItem:
     properties:
       cost:
         description: cost is the cost attributed to this group for the line item
@@ -6358,14 +6325,14 @@ definitions:
           additional context)
         type: string
     type: object
-  dto.UsageResult:
+  UsageResult:
     properties:
       value:
         type: number
       window_size:
         type: string
     type: object
-  dto.UserResponse:
+  UserResponse:
     properties:
       email:
         description: Empty for service accounts
@@ -6377,11 +6344,11 @@ definitions:
           type: string
         type: array
       tenant:
-        $ref: '#/definitions/dto.TenantResponse'
+        $ref: '#/definitions/TenantResponse'
       type:
         $ref: '#/definitions/types.UserType'
     type: object
-  dto.WalletBalanceResponse:
+  WalletBalanceResponse:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
@@ -6452,7 +6419,7 @@ definitions:
       wallet_type:
         $ref: '#/definitions/types.WalletType'
     type: object
-  dto.WalletResponse:
+  WalletResponse:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
@@ -6513,7 +6480,7 @@ definitions:
       wallet_type:
         $ref: '#/definitions/types.WalletType'
     type: object
-  dto.WalletTransactionResponse:
+  WalletTransactionResponse:
     properties:
       amount:
         type: string
@@ -6526,7 +6493,7 @@ definitions:
       created_by:
         type: string
       created_by_user:
-        $ref: '#/definitions/dto.UserResponse'
+        $ref: '#/definitions/UserResponse'
       credit_amount:
         type: string
       credit_balance_after:
@@ -6538,7 +6505,7 @@ definitions:
       currency:
         type: string
       customer:
-        $ref: '#/definitions/dto.CustomerResponse'
+        $ref: '#/definitions/CustomerResponse'
       customer_id:
         type: string
       description:
@@ -6578,11 +6545,11 @@ definitions:
       updated_by:
         type: string
       wallet:
-        $ref: '#/definitions/dto.WalletResponse'
+        $ref: '#/definitions/WalletResponse'
       wallet_id:
         type: string
     type: object
-  dto.WorkflowExecutionDTO:
+  WorkflowExecutionDTO:
     properties:
       close_time:
         type: string
@@ -6618,14 +6585,7 @@ definitions:
       message:
         type: string
     type: object
-  errors.ErrorResponse:
-    properties:
-      error:
-        $ref: '#/definitions/errors.ErrorDetail'
-      success:
-        type: boolean
-    type: object
-  github_com_flexprice_flexprice_internal_domain_addon.Addon:
+  DomainAddon:
     properties:
       created_at:
         type: string
@@ -6655,7 +6615,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  github_com_flexprice_flexprice_internal_domain_coupon.Coupon:
+  DomainCoupon:
     properties:
       amount_off:
         type: string
@@ -6703,7 +6663,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  github_com_flexprice_flexprice_internal_domain_customer.Customer:
+  DomainCustomer:
     properties:
       address_city:
         description: AddressCity is the city of the customer's address
@@ -6763,7 +6723,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  github_com_flexprice_flexprice_internal_domain_feature.Feature:
+  DomainFeature:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
@@ -6809,7 +6769,7 @@ definitions:
       updated_by:
         type: string
     type: object
-  github_com_flexprice_flexprice_internal_domain_plan.Plan:
+  DomainPlan:
     properties:
       created_at:
         type: string
@@ -6837,6 +6797,13 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  errors.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorDetail'
+      success:
+        type: boolean
     type: object
   types.AddonAssociationEntityType:
     enum:
@@ -6921,15 +6888,6 @@ definitions:
     type: string
     x-enum-comments:
       AggregationSumWithMultiplier: Sum with a multiplier - [sum(value) * multiplier]
-    x-enum-descriptions:
-    - ""
-    - ""
-    - ""
-    - ""
-    - ""
-    - Sum with a multiplier - [sum(value) * multiplier]
-    - ""
-    - ""
     x-enum-varnames:
     - AggregationCount
     - AggregationSum
@@ -7133,10 +7091,12 @@ definitions:
     enum:
     - immediate
     - end_of_period
+    - scheduled_date
     type: string
     x-enum-varnames:
     - CancellationTypeImmediate
     - CancellationTypeEndOfPeriod
+    - CancellationTypeScheduledDate
   types.CollectionMethod:
     enum:
     - charge_automatically
@@ -7833,11 +7793,13 @@ definitions:
     - DRAFT
     - FINALIZED
     - VOIDED
+    - SKIPPED
     type: string
     x-enum-varnames:
     - InvoiceStatusDraft
     - InvoiceStatusFinalized
     - InvoiceStatusVoided
+    - InvoiceStatusSkipped
   types.InvoiceType:
     enum:
     - SUBSCRIPTION
@@ -8133,9 +8095,6 @@ definitions:
     x-enum-comments:
       ProrationBehaviorCreateProrations: 'Default: Create credits/charges on invoice'
       ProrationBehaviorNone: Calculate but don't apply (e.g., for previews)
-    x-enum-descriptions:
-    - 'Default: Create credits/charges on invoice'
-    - Calculate but don't apply (e.g., for previews)
     x-enum-varnames:
     - ProrationBehaviorCreateProrations
     - ProrationBehaviorNone
@@ -8282,19 +8241,16 @@ definitions:
   types.ScheduledTaskInterval:
     enum:
     - 15MIN
+    - 30MIN
     - custom
     - hourly
     - daily
     type: string
     x-enum-comments:
       ScheduledTaskIntervalCustom: 10 minutes for testing
-    x-enum-descriptions:
-    - ""
-    - 10 minutes for testing
-    - ""
-    - ""
     x-enum-varnames:
     - ScheduledTaskIntervalEvery15Minutes
+    - ScheduledTaskIntervalEvery30Minutes
     - ScheduledTaskIntervalCustom
     - ScheduledTaskIntervalHourly
     - ScheduledTaskIntervalDaily
@@ -8384,6 +8340,12 @@ definitions:
         type: array
       customer_id:
         description: CustomerID filters by customer ID
+        type: string
+      effective_date_for_update:
+        description: |-
+          EffectiveDateForUpdate selects subscriptions that need a billing-period pass on or before this time:
+          current_period_end <= date OR (cancel_at IS NOT NULL AND cancel_at <= date).
+          When nil, period/cancel cutoff logic is not applied by this field (see TimeRangeFilter for legacy period-end filtering).
         type: string
       end_time:
         type: string
@@ -8786,9 +8748,96 @@ definitions:
     x-enum-varnames:
     - WalletTypePrePaid
     - WalletTypePostPaid
+  types.WebhookEventName:
+    enum:
+    - subscription.created
+    - subscription.draft.created
+    - subscription.activated
+    - subscription.updated
+    - subscription.paused
+    - subscription.cancelled
+    - subscription.resumed
+    - subscription.phase.created
+    - subscription.phase.updated
+    - subscription.phase.deleted
+    - feature.created
+    - feature.updated
+    - feature.deleted
+    - feature.wallet_balance.alert
+    - entitlement.created
+    - entitlement.updated
+    - entitlement.deleted
+    - wallet.created
+    - wallet.updated
+    - wallet.terminated
+    - wallet.transaction.created
+    - payment.created
+    - payment.updated
+    - payment.failed
+    - payment.success
+    - payment.pending
+    - customer.created
+    - customer.updated
+    - customer.deleted
+    - invoice.update.finalized
+    - invoice.update.payment
+    - invoice.update.voided
+    - invoice.update
+    - invoice.payment.overdue
+    - wallet.credit_balance.dropped
+    - wallet.credit_balance.recovered
+    - wallet.ongoing_balance.dropped
+    - wallet.ongoing_balance.recovered
+    - subscription.renewal.due
+    - invoice.communication.triggered
+    - credit_note.created
+    - credit_note.updated
+    type: string
+    x-enum-varnames:
+    - WebhookEventSubscriptionCreated
+    - WebhookEventSubscriptionDraftCreated
+    - WebhookEventSubscriptionActivated
+    - WebhookEventSubscriptionUpdated
+    - WebhookEventSubscriptionPaused
+    - WebhookEventSubscriptionCancelled
+    - WebhookEventSubscriptionResumed
+    - WebhookEventSubscriptionPhaseCreated
+    - WebhookEventSubscriptionPhaseUpdated
+    - WebhookEventSubscriptionPhaseDeleted
+    - WebhookEventFeatureCreated
+    - WebhookEventFeatureUpdated
+    - WebhookEventFeatureDeleted
+    - WebhookEventFeatureWalletBalanceAlert
+    - WebhookEventEntitlementCreated
+    - WebhookEventEntitlementUpdated
+    - WebhookEventEntitlementDeleted
+    - WebhookEventWalletCreated
+    - WebhookEventWalletUpdated
+    - WebhookEventWalletTerminated
+    - WebhookEventWalletTransactionCreated
+    - WebhookEventPaymentCreated
+    - WebhookEventPaymentUpdated
+    - WebhookEventPaymentFailed
+    - WebhookEventPaymentSuccess
+    - WebhookEventPaymentPending
+    - WebhookEventCustomerCreated
+    - WebhookEventCustomerUpdated
+    - WebhookEventCustomerDeleted
+    - WebhookEventInvoiceUpdateFinalized
+    - WebhookEventInvoiceUpdatePayment
+    - WebhookEventInvoiceUpdateVoided
+    - WebhookEventInvoiceUpdate
+    - WebhookEventInvoicePaymentOverdue
+    - WebhookEventWalletCreditBalanceDropped
+    - WebhookEventWalletCreditBalanceRecovered
+    - WebhookEventWalletOngoingBalanceDropped
+    - WebhookEventWalletOngoingBalanceRecovered
+    - WebhookEventSubscriptionRenewalDue
+    - WebhookEventInvoiceCommunicationTriggered
+    - WebhookEventCreditNoteCreated
+    - WebhookEventCreditNoteUpdated
   types.WindowSize:
     enum:
-    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -8799,9 +8848,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
+    - MONTH
     type: string
     x-enum-varnames:
-    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -8812,6 +8861,7 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
+    - DefaultWindowSize
   types.WorkflowExecutionFilter:
     properties:
       end_time:
@@ -9421,7 +9471,7 @@ definitions:
     properties:
       items:
         items:
-          $ref: '#/definitions/dto.WalletResponse'
+          $ref: '#/definitions/WalletResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -9437,85 +9487,85 @@ definitions:
       alert_type:
         type: string
       customer:
-        $ref: '#/definitions/dto.CustomerResponse'
+        $ref: '#/definitions/CustomerResponse'
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       feature:
-        $ref: '#/definitions/dto.FeatureResponse'
+        $ref: '#/definitions/FeatureResponse'
       wallet:
-        $ref: '#/definitions/dto.WalletResponse'
+        $ref: '#/definitions/WalletResponse'
     type: object
   webhookDto.CommunicationWebhookPayload:
     properties:
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       invoice:
-        $ref: '#/definitions/dto.InvoiceResponse'
+        $ref: '#/definitions/InvoiceResponse'
     type: object
   webhookDto.CreditNoteWebhookPayload:
     properties:
       credit_note:
-        $ref: '#/definitions/dto.CreditNoteResponse'
+        $ref: '#/definitions/CreditNoteResponse'
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
     type: object
   webhookDto.CustomerWebhookPayload:
     properties:
       customer:
-        $ref: '#/definitions/dto.CustomerResponse'
+        $ref: '#/definitions/CustomerResponse'
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
     type: object
   webhookDto.EntitlementWebhookPayload:
     properties:
       entitlement:
-        $ref: '#/definitions/dto.EntitlementResponse'
+        $ref: '#/definitions/EntitlementResponse'
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
     type: object
   webhookDto.FeatureWebhookPayload:
     properties:
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       feature:
-        $ref: '#/definitions/dto.FeatureResponse'
+        $ref: '#/definitions/FeatureResponse'
     type: object
   webhookDto.InvoiceWebhookPayload:
     properties:
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       invoice:
-        $ref: '#/definitions/dto.InvoiceResponse'
+        $ref: '#/definitions/InvoiceResponse'
     type: object
   webhookDto.PaymentWebhookPayload:
     properties:
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       payment:
-        $ref: '#/definitions/dto.PaymentResponse'
+        $ref: '#/definitions/PaymentResponse'
     type: object
   webhookDto.SubscriptionPhaseWebhookPayload:
     properties:
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       phase:
-        $ref: '#/definitions/dto.SubscriptionPhaseResponse'
+        $ref: '#/definitions/SubscriptionPhaseResponse'
     type: object
   webhookDto.SubscriptionWebhookPayload:
     properties:
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       subscription:
-        $ref: '#/definitions/dto.SubscriptionResponse'
+        $ref: '#/definitions/SubscriptionResponse'
     type: object
   webhookDto.TransactionWebhookPayload:
     properties:
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       transaction:
-        $ref: '#/definitions/dto.WalletTransactionResponse'
+        $ref: '#/definitions/WalletTransactionResponse'
       wallet:
-        $ref: '#/definitions/dto.WalletResponse'
+        $ref: '#/definitions/WalletResponse'
     type: object
   webhookDto.WalletAlertInfo:
     properties:
@@ -9535,11 +9585,11 @@ definitions:
       alert:
         $ref: '#/definitions/webhookDto.WalletAlertInfo'
       customer:
-        $ref: '#/definitions/dto.CustomerResponse'
+        $ref: '#/definitions/CustomerResponse'
       event_type:
-        type: string
+        $ref: '#/definitions/types.WebhookEventName'
       wallet:
-        $ref: '#/definitions/dto.WalletResponse'
+        $ref: '#/definitions/WalletResponse'
     type: object
 info:
   contact:
@@ -9564,14 +9614,14 @@ paths:
         name: addon
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateAddonRequest'
+          $ref: '#/definitions/CreateAddonRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CreateAddonResponse'
+            $ref: '#/definitions/CreateAddonResponse'
         "400":
           description: Invalid request
           schema:
@@ -9602,7 +9652,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -9632,7 +9682,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.AddonResponse'
+            $ref: '#/definitions/AddonResponse'
         "400":
           description: Invalid request
           schema:
@@ -9662,14 +9712,14 @@ paths:
         name: addon
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateAddonRequest'
+          $ref: '#/definitions/UpdateAddonRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.AddonResponse'
+            $ref: '#/definitions/AddonResponse'
         "400":
           description: Invalid request
           schema:
@@ -9700,7 +9750,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListEntitlementsResponse'
+            $ref: '#/definitions/ListEntitlementsResponse'
         "400":
           description: Invalid request
           schema:
@@ -9735,7 +9785,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.AddonResponse'
+            $ref: '#/definitions/AddonResponse'
         "400":
           description: Invalid request
           schema:
@@ -9769,7 +9819,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListAddonsResponse'
+            $ref: '#/definitions/ListAddonsResponse'
         "400":
           description: Invalid request
           schema:
@@ -9804,7 +9854,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListAlertLogsResponse'
+            $ref: '#/definitions/ListAlertLogsResponse'
         "400":
           description: Invalid request
           schema:
@@ -9831,14 +9881,14 @@ paths:
         name: costsheet
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateCostsheetRequest'
+          $ref: '#/definitions/CreateCostsheetRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created costsheet
           schema:
-            $ref: '#/definitions/dto.CreateCostsheetResponse'
+            $ref: '#/definitions/CreateCostsheetResponse'
         "400":
           description: Invalid request
           schema:
@@ -9875,7 +9925,7 @@ paths:
         "200":
           description: Costsheet deleted
           schema:
-            $ref: '#/definitions/dto.DeleteCostsheetResponse'
+            $ref: '#/definitions/DeleteCostsheetResponse'
         "400":
           description: Invalid request
           schema:
@@ -9913,7 +9963,7 @@ paths:
         "200":
           description: Costsheet details
           schema:
-            $ref: '#/definitions/dto.GetCostsheetResponse'
+            $ref: '#/definitions/GetCostsheetResponse'
         "400":
           description: Invalid request
           schema:
@@ -9947,14 +9997,14 @@ paths:
         name: costsheet
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateCostsheetRequest'
+          $ref: '#/definitions/UpdateCostsheetRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Updated costsheet
           schema:
-            $ref: '#/definitions/dto.UpdateCostsheetResponse'
+            $ref: '#/definitions/UpdateCostsheetResponse'
         "400":
           description: Invalid request
           schema:
@@ -9987,7 +10037,7 @@ paths:
         "200":
           description: Active costsheet
           schema:
-            $ref: '#/definitions/dto.CostsheetResponse'
+            $ref: '#/definitions/CostsheetResponse'
         "404":
           description: No active costsheet
           schema:
@@ -10015,14 +10065,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.GetCostAnalyticsRequest'
+          $ref: '#/definitions/GetCostAnalyticsRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetDetailedCostAnalyticsResponse'
+            $ref: '#/definitions/GetDetailedCostAnalyticsResponse'
         "400":
           description: Invalid request
           schema:
@@ -10051,14 +10101,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.GetCostAnalyticsRequest'
+          $ref: '#/definitions/GetCostAnalyticsRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetDetailedCostAnalyticsResponse'
+            $ref: '#/definitions/GetDetailedCostAnalyticsResponse'
         "400":
           description: Invalid request
           schema:
@@ -10092,7 +10142,7 @@ paths:
         "200":
           description: Paginated costsheets
           schema:
-            $ref: '#/definitions/dto.ListCostsheetResponse'
+            $ref: '#/definitions/ListCostsheetResponse'
         "400":
           description: Invalid request
           schema:
@@ -10119,14 +10169,14 @@ paths:
         name: coupon
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateCouponRequest'
+          $ref: '#/definitions/CreateCouponRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CouponResponse'
+            $ref: '#/definitions/CouponResponse'
         "400":
           description: Invalid request
           schema:
@@ -10217,7 +10267,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CouponResponse'
+            $ref: '#/definitions/CouponResponse'
         "400":
           description: Invalid request
           schema:
@@ -10252,14 +10302,14 @@ paths:
         name: coupon
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateCouponRequest'
+          $ref: '#/definitions/UpdateCouponRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CouponResponse'
+            $ref: '#/definitions/CouponResponse'
         "400":
           description: Invalid request
           schema:
@@ -10306,7 +10356,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListCouponsResponse'
+            $ref: '#/definitions/ListCouponsResponse'
         "400":
           description: Invalid request
           schema:
@@ -10334,14 +10384,14 @@ paths:
         name: credit_grant
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateCreditGrantRequest'
+          $ref: '#/definitions/CreateCreditGrantRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CreditGrantResponse'
+            $ref: '#/definitions/CreditGrantResponse'
         "400":
           description: Invalid request
           schema:
@@ -10373,14 +10423,14 @@ paths:
         in: body
         name: body
         schema:
-          $ref: '#/definitions/dto.DeleteCreditGrantRequest'
+          $ref: '#/definitions/DeleteCreditGrantRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -10410,7 +10460,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CreditGrantResponse'
+            $ref: '#/definitions/CreditGrantResponse'
         "400":
           description: Invalid request
           schema:
@@ -10441,14 +10491,14 @@ paths:
         name: credit_grant
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateCreditGrantRequest'
+          $ref: '#/definitions/UpdateCreditGrantRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CreditGrantResponse'
+            $ref: '#/definitions/CreditGrantResponse'
         "400":
           description: Invalid request
           schema:
@@ -10475,14 +10525,14 @@ paths:
         name: credit_note
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateCreditNoteRequest'
+          $ref: '#/definitions/CreateCreditNoteRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CreditNoteResponse'
+            $ref: '#/definitions/CreditNoteResponse'
         "400":
           description: Invalid request
           schema:
@@ -10526,7 +10576,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CreditNoteResponse'
+            $ref: '#/definitions/CreditNoteResponse'
         "400":
           description: Invalid request
           schema:
@@ -10563,7 +10613,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CreditNoteResponse'
+            $ref: '#/definitions/CreditNoteResponse'
         "400":
           description: Invalid request
           schema:
@@ -10609,7 +10659,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CreditNoteResponse'
+            $ref: '#/definitions/CreditNoteResponse'
         "400":
           description: Invalid request
           schema:
@@ -10649,14 +10699,14 @@ paths:
         name: customer
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateCustomerRequest'
+          $ref: '#/definitions/CreateCustomerRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CustomerResponse'
+            $ref: '#/definitions/CustomerResponse'
         "400":
           description: Invalid request
           schema:
@@ -10691,14 +10741,14 @@ paths:
         name: customer
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateCustomerRequest'
+          $ref: '#/definitions/UpdateCustomerRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CustomerResponse'
+            $ref: '#/definitions/CustomerResponse'
         "400":
           description: Invalid request
           schema:
@@ -10759,7 +10809,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CustomerResponse'
+            $ref: '#/definitions/CustomerResponse'
         "400":
           description: Invalid request
           schema:
@@ -10791,7 +10841,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CustomerEntitlementsResponse'
+            $ref: '#/definitions/CustomerEntitlementsResponse'
         "400":
           description: Invalid request
           schema:
@@ -10822,7 +10872,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListCreditGrantApplicationsResponse'
+            $ref: '#/definitions/ListCreditGrantApplicationsResponse'
         "400":
           description: Invalid request
           schema:
@@ -10859,7 +10909,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CustomerMultiCurrencyInvoiceSummary'
+            $ref: '#/definitions/CustomerMultiCurrencyInvoiceSummary'
         "400":
           description: Invalid request
           schema:
@@ -10893,7 +10943,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/dto.WalletResponse'
+              $ref: '#/definitions/WalletResponse'
             type: array
         "400":
           description: Invalid request
@@ -10925,7 +10975,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CustomerResponse'
+            $ref: '#/definitions/CustomerResponse'
         "400":
           description: Invalid request
           schema:
@@ -10963,7 +11013,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListCustomersResponse'
+            $ref: '#/definitions/ListCustomersResponse'
         "400":
           description: Invalid request
           schema:
@@ -11016,7 +11066,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CustomerUsageSummaryResponse'
+            $ref: '#/definitions/CustomerUsageSummaryResponse'
         "400":
           description: Invalid request
           schema:
@@ -11066,7 +11116,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/dto.WalletResponse'
+              $ref: '#/definitions/WalletResponse'
             type: array
         "400":
           description: Invalid request
@@ -11098,14 +11148,14 @@ paths:
         name: entitlement
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateEntitlementRequest'
+          $ref: '#/definitions/CreateEntitlementRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.EntitlementResponse'
+            $ref: '#/definitions/EntitlementResponse'
         "400":
           description: Invalid request
           schema:
@@ -11138,7 +11188,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -11168,7 +11218,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.EntitlementResponse'
+            $ref: '#/definitions/EntitlementResponse'
         "400":
           description: Invalid request
           schema:
@@ -11199,14 +11249,14 @@ paths:
         name: entitlement
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateEntitlementRequest'
+          $ref: '#/definitions/UpdateEntitlementRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.EntitlementResponse'
+            $ref: '#/definitions/EntitlementResponse'
         "400":
           description: Invalid request
           schema:
@@ -11233,14 +11283,14 @@ paths:
         name: entitlements
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateBulkEntitlementRequest'
+          $ref: '#/definitions/CreateBulkEntitlementRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CreateBulkEntitlementResponse'
+            $ref: '#/definitions/CreateBulkEntitlementResponse'
         "400":
           description: Invalid request
           schema:
@@ -11274,7 +11324,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListEntitlementsResponse'
+            $ref: '#/definitions/ListEntitlementsResponse'
         "400":
           description: Invalid request
           schema:
@@ -11288,87 +11338,6 @@ paths:
       summary: Query entitlements
       tags:
       - Entitlements
-  /entity-integration-mappings:
-    post:
-      consumes:
-      - application/json
-      description: Use when linking a FlexPrice entity to an external system (e.g.
-        CRM or payment provider) so you can sync or reconcile by external ID.
-      operationId: createEntityIntegrationMapping
-      parameters:
-      - description: Entity integration mapping data
-        in: body
-        name: entity_integration_mapping
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateEntityIntegrationMappingRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.EntityIntegrationMappingResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create entity integration mapping
-      tags:
-      - Entity Integration Mappings
-  /entity-integration-mappings/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Use when unlinking a FlexPrice entity from an external system or
-        cleaning up stale integration mappings.
-      operationId: deleteEntityIntegrationMapping
-      parameters:
-      - description: Entity integration mapping ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "404":
-          description: Resource not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete entity integration mapping
-      tags:
-      - Entity Integration Mappings
   /events:
     post:
       consumes:
@@ -11383,7 +11352,7 @@ paths:
         name: event
         required: true
         schema:
-          $ref: '#/definitions/dto.IngestEventRequest'
+          $ref: '#/definitions/IngestEventRequest'
       produces:
       - application/json
       responses:
@@ -11423,7 +11392,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetEventByIDResponse'
+            $ref: '#/definitions/GetEventByIDResponse'
         "404":
           description: Not Found
           schema:
@@ -11450,14 +11419,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.GetUsageAnalyticsRequest'
+          $ref: '#/definitions/GetUsageAnalyticsRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetUsageAnalyticsResponse'
+            $ref: '#/definitions/GetUsageAnalyticsResponse'
         "400":
           description: Invalid request
           schema:
@@ -11484,7 +11453,7 @@ paths:
         name: event
         required: true
         schema:
-          $ref: '#/definitions/dto.BulkIngestEventRequest'
+          $ref: '#/definitions/BulkIngestEventRequest'
       produces:
       - application/json
       responses:
@@ -11518,7 +11487,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetHuggingFaceBillingDataResponse'
+            $ref: '#/definitions/GetHuggingFaceBillingDataResponse'
         "500":
           description: Server error
           schema:
@@ -11541,14 +11510,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.GetEventsRequest'
+          $ref: '#/definitions/GetEventsRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetEventsResponse'
+            $ref: '#/definitions/GetEventsResponse'
         "400":
           description: Invalid request
           schema:
@@ -11575,14 +11544,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.GetUsageRequest'
+          $ref: '#/definitions/GetUsageRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetUsageResponse'
+            $ref: '#/definitions/GetUsageResponse'
         "400":
           description: Invalid request
           schema:
@@ -11610,14 +11579,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.GetUsageByMeterRequest'
+          $ref: '#/definitions/GetUsageByMeterRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetUsageResponse'
+            $ref: '#/definitions/GetUsageResponse'
         "400":
           description: Invalid request
           schema:
@@ -11648,14 +11617,14 @@ paths:
         name: feature
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateFeatureRequest'
+          $ref: '#/definitions/CreateFeatureRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.FeatureResponse'
+            $ref: '#/definitions/FeatureResponse'
         "400":
           description: Invalid request
           schema:
@@ -11688,7 +11657,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -11723,14 +11692,14 @@ paths:
         name: feature
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateFeatureRequest'
+          $ref: '#/definitions/UpdateFeatureRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.FeatureResponse'
+            $ref: '#/definitions/FeatureResponse'
         "400":
           description: Invalid request
           schema:
@@ -11768,7 +11737,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListFeaturesResponse'
+            $ref: '#/definitions/ListFeaturesResponse'
         "400":
           description: Invalid request
           schema:
@@ -11795,14 +11764,14 @@ paths:
         name: group
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateGroupRequest'
+          $ref: '#/definitions/CreateGroupRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.GroupResponse'
+            $ref: '#/definitions/GroupResponse'
         "400":
           description: Invalid request
           schema:
@@ -11869,7 +11838,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GroupResponse'
+            $ref: '#/definitions/GroupResponse'
         "400":
           description: Invalid request
           schema:
@@ -11907,7 +11876,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListGroupsResponse'
+            $ref: '#/definitions/ListGroupsResponse'
         "400":
           description: Invalid request
           schema:
@@ -11921,6 +11890,40 @@ paths:
       summary: Query groups
       tags:
       - Groups
+  /integrations/link:
+    post:
+      consumes:
+      - application/json
+      description: Link a FlexPrice entity to provider entity with provider-specific
+        side effects.
+      operationId: linkIntegrationMapping
+      parameters:
+      - description: Link mapping request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/LinkIntegrationMappingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/LinkIntegrationMappingResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Link integration mapping
+      tags:
+      - Integrations
   /invoices:
     post:
       consumes:
@@ -11934,14 +11937,14 @@ paths:
         name: invoice
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateInvoiceRequest'
+          $ref: '#/definitions/CreateInvoiceRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.InvoiceResponse'
+            $ref: '#/definitions/InvoiceResponse'
         "400":
           description: Invalid request
           schema:
@@ -11986,7 +11989,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.InvoiceResponse'
+            $ref: '#/definitions/InvoiceResponse'
         "404":
           description: Resource not found
           schema:
@@ -12017,14 +12020,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateInvoiceRequest'
+          $ref: '#/definitions/UpdateInvoiceRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.InvoiceResponse'
+            $ref: '#/definitions/InvoiceResponse'
         "400":
           description: Invalid request
           schema:
@@ -12061,7 +12064,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -12098,7 +12101,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -12131,14 +12134,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdatePaymentStatusRequest'
+          $ref: '#/definitions/UpdatePaymentStatusRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.InvoiceResponse'
+            $ref: '#/definitions/InvoiceResponse'
         "400":
           description: Invalid request
           schema:
@@ -12175,7 +12178,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -12197,6 +12200,8 @@ paths:
     get:
       description: Use when delivering an invoice PDF to the customer (e.g. email
         attachment or download). Use url=true for a presigned URL instead of binary.
+        Use force_generate=true to regenerate and re-upload the PDF even if one already
+        exists in S3.
       operationId: getInvoicePdf
       parameters:
       - description: Invoice ID
@@ -12207,6 +12212,12 @@ paths:
       - description: Return presigned URL from s3 instead of PDF
         in: query
         name: url
+        type: boolean
+      - description: 'Force regeneration of the PDF even if one already exists in
+          S3 (default: false). Note: force_generate has no effect if invoice_pdf_url
+          is already set on the invoice.'
+        in: query
+        name: force_generate
         type: boolean
       responses:
         "200":
@@ -12292,7 +12303,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.InvoiceResponse'
+            $ref: '#/definitions/InvoiceResponse'
         "400":
           description: Invalid request
           schema:
@@ -12329,7 +12340,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -12356,14 +12367,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.GetPreviewInvoiceRequest'
+          $ref: '#/definitions/GetPreviewInvoiceRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.InvoiceResponse'
+            $ref: '#/definitions/InvoiceResponse'
         "400":
           description: Invalid request
           schema:
@@ -12398,7 +12409,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListInvoicesResponse'
+            $ref: '#/definitions/ListInvoicesResponse'
         "400":
           description: Invalid request
           schema:
@@ -12496,7 +12507,7 @@ paths:
         "200":
           description: Paginated payments
           schema:
-            $ref: '#/definitions/dto.ListPaymentsResponse'
+            $ref: '#/definitions/ListPaymentsResponse'
         "400":
           description: Invalid request
           schema:
@@ -12522,14 +12533,14 @@ paths:
         name: payment
         required: true
         schema:
-          $ref: '#/definitions/dto.CreatePaymentRequest'
+          $ref: '#/definitions/CreatePaymentRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created payment
           schema:
-            $ref: '#/definitions/dto.PaymentResponse'
+            $ref: '#/definitions/PaymentResponse'
         "400":
           description: Invalid request
           schema:
@@ -12562,7 +12573,7 @@ paths:
         "200":
           description: Payment deleted
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -12598,7 +12609,7 @@ paths:
         "200":
           description: Payment details
           schema:
-            $ref: '#/definitions/dto.PaymentResponse'
+            $ref: '#/definitions/PaymentResponse'
         "400":
           description: Invalid request
           schema:
@@ -12633,14 +12644,14 @@ paths:
         name: payment
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdatePaymentRequest'
+          $ref: '#/definitions/UpdatePaymentRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Updated payment
           schema:
-            $ref: '#/definitions/dto.PaymentResponse'
+            $ref: '#/definitions/PaymentResponse'
         "400":
           description: Invalid request
           schema:
@@ -12673,7 +12684,7 @@ paths:
         "200":
           description: Processed payment
           schema:
-            $ref: '#/definitions/dto.PaymentResponse'
+            $ref: '#/definitions/PaymentResponse'
         "400":
           description: Invalid request
           schema:
@@ -12704,14 +12715,14 @@ paths:
         name: plan
         required: true
         schema:
-          $ref: '#/definitions/dto.CreatePlanRequest'
+          $ref: '#/definitions/CreatePlanRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.PlanResponse'
+            $ref: '#/definitions/PlanResponse'
         "400":
           description: Invalid request
           schema:
@@ -12744,7 +12755,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -12778,7 +12789,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PlanResponse'
+            $ref: '#/definitions/PlanResponse'
         "400":
           description: Invalid request
           schema:
@@ -12813,14 +12824,14 @@ paths:
         name: plan
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdatePlanRequest'
+          $ref: '#/definitions/UpdatePlanRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PlanResponse'
+            $ref: '#/definitions/PlanResponse'
         "400":
           description: Invalid request
           schema:
@@ -12855,14 +12866,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.ClonePlanRequest'
+          $ref: '#/definitions/ClonePlanRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.PlanResponse'
+            $ref: '#/definitions/PlanResponse'
         "400":
           description: Bad Request
           schema:
@@ -12901,7 +12912,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListCreditGrantsResponse'
+            $ref: '#/definitions/ListCreditGrantsResponse'
         "400":
           description: Invalid request
           schema:
@@ -12936,7 +12947,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PlanResponse'
+            $ref: '#/definitions/ListEntitlementsResponse'
         "400":
           description: Invalid request
           schema:
@@ -13015,7 +13026,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListPlansResponse'
+            $ref: '#/definitions/ListPlansResponse'
         "400":
           description: Invalid request
           schema:
@@ -13042,14 +13053,14 @@ paths:
         name: price
         required: true
         schema:
-          $ref: '#/definitions/dto.CreatePriceRequest'
+          $ref: '#/definitions/CreatePriceRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.PriceResponse'
+            $ref: '#/definitions/PriceResponse'
         "400":
           description: Invalid request
           schema:
@@ -13081,14 +13092,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.DeletePriceRequest'
+          $ref: '#/definitions/DeletePriceRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -13120,7 +13131,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PriceResponse'
+            $ref: '#/definitions/PriceResponse'
         "400":
           description: Invalid request
           schema:
@@ -13151,14 +13162,14 @@ paths:
         name: price
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdatePriceRequest'
+          $ref: '#/definitions/UpdatePriceRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PriceResponse'
+            $ref: '#/definitions/PriceResponse'
         "400":
           description: Invalid request
           schema:
@@ -13185,14 +13196,14 @@ paths:
         name: prices
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateBulkPriceRequest'
+          $ref: '#/definitions/CreateBulkPriceRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CreateBulkPriceResponse'
+            $ref: '#/definitions/CreateBulkPriceResponse'
         "400":
           description: Invalid request
           schema:
@@ -13225,7 +13236,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PriceResponse'
+            $ref: '#/definitions/PriceResponse'
         "400":
           description: Invalid request
           schema:
@@ -13259,7 +13270,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListPricesResponse'
+            $ref: '#/definitions/ListPricesResponse'
         "400":
           description: Invalid request
           schema:
@@ -13315,7 +13326,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListPriceUnitsResponse'
+            $ref: '#/definitions/ListPriceUnitsResponse'
         "400":
           description: Invalid request
           schema:
@@ -13341,14 +13352,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.CreatePriceUnitRequest'
+          $ref: '#/definitions/CreatePriceUnitRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CreatePriceUnitResponse'
+            $ref: '#/definitions/CreatePriceUnitResponse'
         "400":
           description: Invalid request
           schema:
@@ -13381,7 +13392,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Bad Request
           schema:
@@ -13413,7 +13424,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PriceUnitResponse'
+            $ref: '#/definitions/PriceUnitResponse'
         "400":
           description: Bad Request
           schema:
@@ -13444,14 +13455,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdatePriceUnitRequest'
+          $ref: '#/definitions/UpdatePriceUnitRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PriceUnitResponse'
+            $ref: '#/definitions/PriceUnitResponse'
         "400":
           description: Bad Request
           schema:
@@ -13484,7 +13495,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.PriceUnitResponse'
+            $ref: '#/definitions/PriceUnitResponse'
         "400":
           description: Invalid request
           schema:
@@ -13522,7 +13533,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListPriceUnitsResponse'
+            $ref: '#/definitions/ListPriceUnitsResponse'
         "400":
           description: Invalid request
           schema:
@@ -13620,7 +13631,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListSecretsResponse'
+            $ref: '#/definitions/ListSecretsResponse'
         "400":
           description: Invalid request
           schema:
@@ -13646,14 +13657,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateAPIKeyRequest'
+          $ref: '#/definitions/CreateAPIKeyRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CreateAPIKeyResponse'
+            $ref: '#/definitions/CreateAPIKeyResponse'
         "400":
           description: Invalid request
           schema:
@@ -13698,132 +13709,6 @@ paths:
       summary: Delete an API key
       tags:
       - Secrets
-  /secrets/integrations/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Use when disconnecting an integration (e.g. switching provider
-        or removing OAuth). Deletes stored credentials.
-      operationId: deleteIntegration
-      parameters:
-      - description: Integration ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "404":
-          description: Resource not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete an integration
-      tags:
-      - Integrations
-  /secrets/integrations/by-provider/{provider}:
-    get:
-      consumes:
-      - application/json
-      description: Use when you need to check or display integration config (e.g.
-        which provider is linked). Sensitive values may be redacted.
-      operationId: getIntegration
-      parameters:
-      - description: Integration provider
-        in: path
-        name: provider
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.SecretResponse'
-        "404":
-          description: Resource not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get integration details
-      tags:
-      - Integrations
-  /secrets/integrations/create/{provider}:
-    post:
-      consumes:
-      - application/json
-      description: Use when storing or updating credentials for an external integration
-        (e.g. Stripe, HubSpot). Secrets are encrypted at rest.
-      operationId: createOrUpdateIntegration
-      parameters:
-      - description: Integration provider
-        in: path
-        name: provider
-        required: true
-        type: string
-      - description: Integration creation request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateIntegrationRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.SecretResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create or update an integration
-      tags:
-      - Integrations
-  /secrets/integrations/linked:
-    get:
-      consumes:
-      - application/json
-      description: Use when showing which integrations are connected (e.g. settings
-        page). Returns providers that have valid linked credentials.
-      operationId: listLinkedIntegrations
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.LinkedIntegrationsResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List linked integrations
-      tags:
-      - Integrations
   /subscriptions:
     post:
       consumes:
@@ -13837,14 +13722,14 @@ paths:
         name: subscription
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateSubscriptionRequest'
+          $ref: '#/definitions/CreateSubscriptionRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.SubscriptionResponse'
+            $ref: '#/definitions/SubscriptionResponse'
         "400":
           description: Invalid request
           schema:
@@ -13875,7 +13760,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionResponse'
+            $ref: '#/definitions/SubscriptionResponse'
         "400":
           description: Invalid request
           schema:
@@ -13906,14 +13791,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateSubscriptionRequest'
+          $ref: '#/definitions/UpdateSubscriptionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionResponse'
+            $ref: '#/definitions/SubscriptionResponse'
         "400":
           description: Invalid request
           schema:
@@ -13945,14 +13830,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.ActivateDraftSubscriptionRequest'
+          $ref: '#/definitions/ActivateDraftSubscriptionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionResponse'
+            $ref: '#/definitions/SubscriptionResponse'
         "400":
           description: Invalid request
           schema:
@@ -13984,7 +13869,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/dto.AddonAssociationResponse'
+              $ref: '#/definitions/AddonAssociationResponse'
             type: array
         "400":
           description: Invalid request
@@ -14022,14 +13907,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.CancelSubscriptionRequest'
+          $ref: '#/definitions/CancelSubscriptionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CancelSubscriptionResponse'
+            $ref: '#/definitions/CancelSubscriptionResponse'
         "400":
           description: Invalid request
           schema:
@@ -14061,14 +13946,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.SubscriptionChangeRequest'
+          $ref: '#/definitions/SubscriptionChangeRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionChangeExecuteResponse'
+            $ref: '#/definitions/SubscriptionChangeExecuteResponse'
         "400":
           description: Invalid request
           schema:
@@ -14104,14 +13989,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.SubscriptionChangeRequest'
+          $ref: '#/definitions/SubscriptionChangeRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionChangePreviewResponse'
+            $ref: '#/definitions/SubscriptionChangePreviewResponse'
         "400":
           description: Invalid request
           schema:
@@ -14155,7 +14040,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionEntitlementsResponse'
+            $ref: '#/definitions/SubscriptionEntitlementsResponse'
         "400":
           description: Invalid request
           schema:
@@ -14190,7 +14075,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListCreditGrantApplicationsResponse'
+            $ref: '#/definitions/ListCreditGrantApplicationsResponse'
         "400":
           description: Invalid request
           schema:
@@ -14226,14 +14111,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateSubscriptionLineItemRequest'
+          $ref: '#/definitions/CreateSubscriptionLineItemRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.SubscriptionLineItemResponse'
+            $ref: '#/definitions/SubscriptionLineItemResponse'
         "400":
           description: Invalid request
           schema:
@@ -14269,14 +14154,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.PauseSubscriptionRequest'
+          $ref: '#/definitions/PauseSubscriptionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionPauseResponse'
+            $ref: '#/definitions/SubscriptionPauseResponse'
         "400":
           description: Invalid request
           schema:
@@ -14312,7 +14197,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/dto.ListSubscriptionPausesResponse'
+              $ref: '#/definitions/ListSubscriptionPausesResponse'
             type: array
         "400":
           description: Invalid request
@@ -14347,14 +14232,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.ResumeSubscriptionRequest'
+          $ref: '#/definitions/ResumeSubscriptionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionPauseResponse'
+            $ref: '#/definitions/SubscriptionPauseResponse'
         "400":
           description: Invalid request
           schema:
@@ -14393,7 +14278,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionResponseV2'
+            $ref: '#/definitions/SubscriptionResponseV2'
         "400":
           description: Invalid request
           schema:
@@ -14420,14 +14305,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.RemoveAddonRequest'
+          $ref: '#/definitions/RemoveAddonRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -14453,14 +14338,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.AddAddonRequest'
+          $ref: '#/definitions/AddAddonRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.AddonAssociationResponse'
+            $ref: '#/definitions/AddonAssociationResponse'
         "400":
           description: Invalid request
           schema:
@@ -14492,14 +14377,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.DeleteSubscriptionLineItemRequest'
+          $ref: '#/definitions/DeleteSubscriptionLineItemRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionLineItemResponse'
+            $ref: '#/definitions/SubscriptionLineItemResponse'
         "400":
           description: Invalid request
           schema:
@@ -14530,14 +14415,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateSubscriptionLineItemRequest'
+          $ref: '#/definitions/UpdateSubscriptionLineItemRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionLineItemResponse'
+            $ref: '#/definitions/SubscriptionLineItemResponse'
         "400":
           description: Invalid request
           schema:
@@ -14572,7 +14457,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListSubscriptionsResponse'
+            $ref: '#/definitions/ListSubscriptionsResponse'
         "400":
           description: Invalid request
           schema:
@@ -14599,14 +14484,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.GetUsageBySubscriptionRequest'
+          $ref: '#/definitions/GetUsageBySubscriptionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetUsageBySubscriptionResponse'
+            $ref: '#/definitions/GetUsageBySubscriptionResponse'
         "400":
           description: Invalid request
           schema:
@@ -14713,7 +14598,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListTasksResponse'
+            $ref: '#/definitions/ListTasksResponse'
         "400":
           description: Invalid request
           schema:
@@ -14739,14 +14624,14 @@ paths:
         name: task
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateTaskRequest'
+          $ref: '#/definitions/CreateTaskRequest'
       produces:
       - application/json
       responses:
         "202":
           description: Accepted
           schema:
-            $ref: '#/definitions/dto.TaskResponse'
+            $ref: '#/definitions/TaskResponse'
         "400":
           description: Invalid request
           schema:
@@ -14779,7 +14664,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TaskResponse'
+            $ref: '#/definitions/TaskResponse'
         "400":
           description: Invalid request
           schema:
@@ -14855,14 +14740,14 @@ paths:
         name: status
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateTaskStatusRequest'
+          $ref: '#/definitions/UpdateTaskStatusRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SuccessResponse'
+            $ref: '#/definitions/SuccessResponse'
         "400":
           description: Invalid request
           schema:
@@ -14955,7 +14840,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListScheduledTasksResponse'
+            $ref: '#/definitions/ListScheduledTasksResponse'
         "400":
           description: Invalid request
           schema:
@@ -14981,14 +14866,14 @@ paths:
         name: scheduled_task
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateScheduledTaskRequest'
+          $ref: '#/definitions/CreateScheduledTaskRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.ScheduledTaskResponse'
+            $ref: '#/definitions/ScheduledTaskResponse'
         "400":
           description: Invalid request
           schema:
@@ -15055,7 +14940,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ScheduledTaskResponse'
+            $ref: '#/definitions/ScheduledTaskResponse'
         "400":
           description: Invalid request
           schema:
@@ -15090,14 +14975,14 @@ paths:
         name: scheduled_task
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateScheduledTaskRequest'
+          $ref: '#/definitions/UpdateScheduledTaskRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ScheduledTaskResponse'
+            $ref: '#/definitions/ScheduledTaskResponse'
         "400":
           description: Invalid request or task is archived
           schema:
@@ -15132,14 +15017,14 @@ paths:
         in: body
         name: request
         schema:
-          $ref: '#/definitions/dto.TriggerForceRunRequest'
+          $ref: '#/definitions/TriggerForceRunRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Returns workflow details and time range
           schema:
-            $ref: '#/definitions/dto.TriggerForceRunResponse'
+            $ref: '#/definitions/TriggerForceRunResponse'
         "400":
           description: Invalid request
           schema:
@@ -15155,6 +15040,34 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Trigger force run
+      tags:
+      - Scheduled Tasks
+  /tasks/scheduled/schedule-draft-finalization:
+    post:
+      consumes:
+      - application/json
+      description: Triggers the draft invoice finalization workflow that scans computed
+        draft invoices whose finalization delay has elapsed and finalizes them (assign
+        invoice number, sync to vendors, attempt payment).
+      operationId: scheduleDraftFinalization
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Schedule draft finalization
       tags:
       - Scheduled Tasks
   /tasks/scheduled/schedule-update-billing-period:
@@ -15221,7 +15134,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListTaxAssociationsResponse'
+            $ref: '#/definitions/ListTaxAssociationsResponse'
         "400":
           description: Invalid request
           schema:
@@ -15247,14 +15160,14 @@ paths:
         name: tax_config
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateTaxAssociationRequest'
+          $ref: '#/definitions/CreateTaxAssociationRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TaxAssociationResponse'
+            $ref: '#/definitions/TaxAssociationResponse'
         "400":
           description: Invalid request
           schema:
@@ -15287,7 +15200,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TaxAssociationResponse'
+            $ref: '#/definitions/TaxAssociationResponse'
         "400":
           description: Invalid request
           schema:
@@ -15319,7 +15232,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TaxAssociationResponse'
+            $ref: '#/definitions/TaxAssociationResponse'
         "400":
           description: Invalid request
           schema:
@@ -15350,14 +15263,14 @@ paths:
         name: tax_config
         required: true
         schema:
-          $ref: '#/definitions/dto.TaxAssociationUpdateRequest'
+          $ref: '#/definitions/TaxAssociationUpdateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TaxAssociationResponse'
+            $ref: '#/definitions/TaxAssociationResponse'
         "400":
           description: Invalid request
           schema:
@@ -15444,7 +15357,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/dto.TaxRateResponse'
+              $ref: '#/definitions/TaxRateResponse'
             type: array
         "400":
           description: Invalid request
@@ -15471,14 +15384,14 @@ paths:
         name: tax_rate
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateTaxRateRequest'
+          $ref: '#/definitions/CreateTaxRateRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.TaxRateResponse'
+            $ref: '#/definitions/TaxRateResponse'
         "400":
           description: Invalid request
           schema:
@@ -15541,7 +15454,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TaxRateResponse'
+            $ref: '#/definitions/TaxRateResponse'
         "400":
           description: Invalid request
           schema:
@@ -15572,14 +15485,14 @@ paths:
         name: tax_rate
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateTaxRateRequest'
+          $ref: '#/definitions/UpdateTaxRateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TaxRateResponse'
+            $ref: '#/definitions/TaxRateResponse'
         "400":
           description: Invalid request
           schema:
@@ -15606,7 +15519,7 @@ paths:
         "200":
           description: Tenant billing usage
           schema:
-            $ref: '#/definitions/dto.TenantBillingUsage'
+            $ref: '#/definitions/TenantBillingUsage'
         "400":
           description: Invalid request
           schema:
@@ -15642,7 +15555,7 @@ paths:
         "200":
           description: Tenant details
           schema:
-            $ref: '#/definitions/dto.TenantResponse'
+            $ref: '#/definitions/TenantResponse'
         "404":
           description: Tenant not found
           schema:
@@ -15669,14 +15582,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateTenantRequest'
+          $ref: '#/definitions/UpdateTenantRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Updated tenant
           schema:
-            $ref: '#/definitions/dto.TenantResponse'
+            $ref: '#/definitions/TenantResponse'
         "400":
           description: Invalid request
           schema:
@@ -15709,14 +15622,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateUserRequest'
+          $ref: '#/definitions/CreateUserRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.CreateUserResponse'
+            $ref: '#/definitions/CreateUserResponse'
         "400":
           description: Invalid request
           schema:
@@ -15741,7 +15654,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.UserResponse'
+            $ref: '#/definitions/UserResponse'
         "401":
           description: Unauthorized
           schema:
@@ -15775,7 +15688,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListUsersResponse'
+            $ref: '#/definitions/ListUsersResponse'
         "400":
           description: Invalid request
           schema:
@@ -15819,7 +15732,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetPendingSchedulesResponse'
+            $ref: '#/definitions/GetPendingSchedulesResponse'
       summary: List all subscription schedules
       tags:
       - Subscriptions
@@ -15842,7 +15755,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.SubscriptionScheduleResponse'
+            $ref: '#/definitions/SubscriptionScheduleResponse'
       summary: Get subscription schedule
       tags:
       - Subscriptions
@@ -15865,7 +15778,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.GetPendingSchedulesResponse'
+            $ref: '#/definitions/GetPendingSchedulesResponse'
       summary: List subscription schedules
       tags:
       - Subscriptions
@@ -15885,14 +15798,14 @@ paths:
         in: body
         name: request
         schema:
-          $ref: '#/definitions/dto.CancelScheduleRequest'
+          $ref: '#/definitions/CancelScheduleRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.CancelScheduleResponse'
+            $ref: '#/definitions/CancelScheduleResponse'
       summary: Cancel subscription schedule
       tags:
       - Subscriptions
@@ -15909,14 +15822,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateWalletRequest'
+          $ref: '#/definitions/CreateWalletRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletResponse'
+            $ref: '#/definitions/WalletResponse'
         "400":
           description: Invalid request
           schema:
@@ -15949,7 +15862,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletResponse'
+            $ref: '#/definitions/WalletResponse'
         "400":
           description: Invalid request
           schema:
@@ -15984,14 +15897,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateWalletRequest'
+          $ref: '#/definitions/UpdateWalletRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletResponse'
+            $ref: '#/definitions/WalletResponse'
         "400":
           description: Invalid request
           schema:
@@ -16033,7 +15946,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletBalanceResponse'
+            $ref: '#/definitions/WalletBalanceResponse'
         "400":
           description: Invalid request
           schema:
@@ -16070,7 +15983,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.WalletResponse'
+            $ref: '#/definitions/WalletResponse'
         "400":
           description: Invalid request
           schema:
@@ -16106,14 +16019,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/dto.TopUpWalletRequest'
+          $ref: '#/definitions/TopUpWalletRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.TopUpWalletResponse'
+            $ref: '#/definitions/TopUpWalletResponse'
         "400":
           description: Invalid request
           schema:
@@ -16256,7 +16169,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListWalletTransactionsResponse'
+            $ref: '#/definitions/ListWalletTransactionsResponse'
         "400":
           description: Invalid request
           schema:
@@ -16329,7 +16242,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListWalletTransactionsResponse'
+            $ref: '#/definitions/ListWalletTransactionsResponse'
         "400":
           description: Invalid request
           schema:
@@ -16538,22 +16451,6 @@ paths:
           schema:
             $ref: '#/definitions/webhookDto.CommunicationWebhookPayload'
       summary: invoice.communication.triggered
-      tags:
-      - Webhook Events
-  /webhook-events/invoice.create.drafted:
-    post:
-      consumes:
-      - application/json
-      description: Fired when a new invoice is created in draft status. Doc-only for
-        parsing.
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Webhook payload
-          schema:
-            $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
-      summary: invoice.create.drafted
       tags:
       - Webhook Events
   /webhook-events/invoice.payment.overdue:
@@ -17024,7 +16921,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/dto.ListWorkflowsResponse'
+            $ref: '#/definitions/ListWorkflowsResponse'
         "400":
           description: Invalid request
           schema:

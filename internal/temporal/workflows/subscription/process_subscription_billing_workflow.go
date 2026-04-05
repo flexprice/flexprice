@@ -104,6 +104,15 @@ func ProcessSubscriptionBillingWorkflow(
 		}, nil
 	}
 
+	if draftSubscriptionOutput.IsInherited {
+		logger.Info("Subscription is inherited, skipping period processing (parent/standalone handles billing)",
+			"subscription_id", input.SubscriptionID)
+		return &subscriptionModels.ProcessSubscriptionBillingWorkflowResult{
+			Success:     true,
+			CompletedAt: workflow.Now(ctx),
+		}, nil
+	}
+
 	// ================================================================================
 	// STEP 2: Calculate Billing Periods
 	// ================================================================================

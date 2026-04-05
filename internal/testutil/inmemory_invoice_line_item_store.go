@@ -87,6 +87,11 @@ func (s *InMemoryInvoiceLineItemStore) ListByInvoiceID(ctx context.Context, invo
 			result = append(result, &cp)
 		}
 	}
+	// Stable order: map iteration is random in Go. Match a predictable ordering so service code
+	// that iterates line items (e.g. sequential credit application) behaves deterministically in tests.
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ID < result[j].ID
+	})
 	return result, nil
 }
 

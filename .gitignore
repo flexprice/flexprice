@@ -88,6 +88,8 @@ lambdas/*
 # =============================================================================
 api/*/*
 !api/go/
+!api/go/errorutils/
+!api/go/errorutils/**
 !api/typescript/
 !api/python/
 !api/tests/

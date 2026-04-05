@@ -120,7 +120,7 @@ func (r *TaxAssociationResponse) WithTaxRate(taxRate *TaxRateResponse) *TaxAssoc
 }
 
 // ListTaxAssociationsResponse represents the response for listing tax associations
-type ListTaxAssociationsResponse = types.ListResponse[*TaxAssociationResponse]
+type ListTaxAssociationsResponse = types.ListResponse[*TaxAssociationResponse] // @name ListTaxAssociationsResponse
 
 // TaxRateOverride represents a tax rate override for a specific entity
 // This is used to override the tax rate for a specific entity i.e if you give `tax_overrides` in the create customer request it will link the tax rate to the customer else it will inherit the tenant tax rate,

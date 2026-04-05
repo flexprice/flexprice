@@ -61,6 +61,18 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 		return false
 	}
 
+	// Filter by parent subscription IDs
+	if len(f.ParentSubscriptionIDs) > 0 {
+		if sub.ParentSubscriptionID == nil || !lo.Contains(f.ParentSubscriptionIDs, *sub.ParentSubscriptionID) {
+			return false
+		}
+	}
+
+	// Filter by subscription type
+	if len(f.SubscriptionTypes) > 0 && !lo.Contains(f.SubscriptionTypes, sub.SubscriptionType) {
+		return false
+	}
+
 	// Filter by subscription status
 	if len(f.SubscriptionStatus) > 0 && !lo.Contains(f.SubscriptionStatus, sub.SubscriptionStatus) {
 		return false
@@ -286,6 +298,8 @@ func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.S
 		TimeRangeFilter:         filter.TimeRangeFilter,
 		CustomerID:              filter.CustomerID,
 		PlanID:                  filter.PlanID,
+		ParentSubscriptionIDs:   filter.ParentSubscriptionIDs,
+		SubscriptionTypes:       filter.SubscriptionTypes,
 		SubscriptionStatus:      filter.SubscriptionStatus,
 		BillingCadence:          filter.BillingCadence,
 		BillingPeriod:           filter.BillingPeriod,

@@ -140,7 +140,7 @@ type UpdatePlanRequest struct {
 }
 
 // ListPlansResponse represents the response for listing plans with prices, entitlements, and credit grants
-type ListPlansResponse = types.ListResponse[*PlanResponse]
+type ListPlansResponse = types.ListResponse[*PlanResponse] // @name ListPlansResponse
 
 type SyncPlanPricesResponse struct {
 	PlanID  string                `json:"plan_id"`

@@ -122,7 +122,7 @@ type PriceResponse struct {
 }
 
 // ListPricesResponse represents the response for listing prices
-type ListPricesResponse = types.ListResponse[*PriceResponse]
+type ListPricesResponse = types.ListResponse[*PriceResponse] // @name ListPricesResponse
 
 // CreateBulkPriceRequest represents the request to create multiple prices in bulk
 type CreateBulkPriceRequest struct {

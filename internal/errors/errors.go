@@ -7,33 +7,41 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+// errorMapping holds both the HTTP status and machine-readable code for a
+// sentinel error. Single source of truth — one iteration resolves both.
+type errorMapping struct {
+	Status int
+	Code   string
+}
+
 // Common error types that can be used across the application
-// TODO: move to errors.New from cockroachdb/errors
 var (
-	ErrNotFound         = new(ErrCodeNotFound, "resource not found")
-	ErrAlreadyExists    = new(ErrCodeAlreadyExists, "resource already exists")
-	ErrVersionConflict  = new(ErrCodeVersionConflict, "version conflict")
-	ErrValidation       = new(ErrCodeValidation, "validation error")
-	ErrInvalidOperation = new(ErrCodeInvalidOperation, "invalid operation")
-	ErrPermissionDenied = new(ErrCodePermissionDenied, "permission denied")
-	ErrHTTPClient       = new(ErrCodeHTTPClient, "http client error")
-	ErrDatabase         = new(ErrCodeDatabase, "database error")
-	ErrSystem              = new(ErrCodeSystemError, "system error")
-	ErrInternal            = new(ErrCodeInternalError, "internal error")
-	ErrServiceUnavailable  = new(ErrCodeServiceUnavailable, "service unavailable")
-	// maps errors to http status codes
-	statusCodeMap = map[error]int{
-		ErrHTTPClient:          http.StatusInternalServerError,
-		ErrDatabase:            http.StatusInternalServerError,
-		ErrNotFound:            http.StatusNotFound,
-		ErrAlreadyExists:       http.StatusConflict,
-		ErrVersionConflict:     http.StatusConflict,
-		ErrValidation:          http.StatusBadRequest,
-		ErrInvalidOperation:   http.StatusBadRequest,
-		ErrPermissionDenied:    http.StatusForbidden,
-		ErrSystem:              http.StatusInternalServerError,
-		ErrInternal:            http.StatusInternalServerError,
-		ErrServiceUnavailable:  http.StatusServiceUnavailable,
+	ErrNotFound           = new(ErrCodeNotFound, "resource not found")
+	ErrAlreadyExists      = new(ErrCodeAlreadyExists, "resource already exists")
+	ErrVersionConflict    = new(ErrCodeVersionConflict, "version conflict")
+	ErrValidation         = new(ErrCodeValidation, "validation error")
+	ErrInvalidOperation   = new(ErrCodeInvalidOperation, "invalid operation")
+	ErrPermissionDenied   = new(ErrCodePermissionDenied, "permission denied")
+	ErrHTTPClient         = new(ErrCodeHTTPClient, "http client error")
+	ErrDatabase           = new(ErrCodeDatabase, "database error")
+	ErrSystem             = new(ErrCodeSystemError, "system error")
+	ErrInternal           = new(ErrCodeInternalError, "internal error")
+	ErrServiceUnavailable = new(ErrCodeServiceUnavailable, "service unavailable")
+
+	// errMappings is the single map that ties sentinel → (HTTP status, error code).
+	// ResolveError iterates this once to get both values.
+	errMappings = map[error]errorMapping{
+		ErrNotFound:           {http.StatusNotFound, ErrCodeNotFound},
+		ErrAlreadyExists:      {http.StatusConflict, ErrCodeAlreadyExists},
+		ErrVersionConflict:    {http.StatusConflict, ErrCodeVersionConflict},
+		ErrValidation:         {http.StatusBadRequest, ErrCodeValidation},
+		ErrInvalidOperation:   {http.StatusBadRequest, ErrCodeInvalidOperation},
+		ErrPermissionDenied:   {http.StatusForbidden, ErrCodePermissionDenied},
+		ErrHTTPClient:         {http.StatusInternalServerError, ErrCodeHTTPClient},
+		ErrDatabase:           {http.StatusInternalServerError, ErrCodeDatabase},
+		ErrSystem:             {http.StatusInternalServerError, ErrCodeSystemError},
+		ErrInternal:           {http.StatusInternalServerError, ErrCodeInternalError},
+		ErrServiceUnavailable: {http.StatusServiceUnavailable, ErrCodeServiceUnavailable},
 	}
 )
 
@@ -152,11 +160,14 @@ func IsServiceUnavailable(err error) bool {
 	return errors.Is(err, ErrServiceUnavailable)
 }
 
-func HTTPStatusFromErr(err error) int {
-	for e, status := range statusCodeMap {
-		if errors.Is(err, e) {
-			return status
+// ResolveError returns both the HTTP status code and machine-readable error
+// code for the given error in a single pass over errMappings.
+func ResolveError(err error) (httpStatus int, code string) {
+	for sentinel, m := range errMappings {
+		if errors.Is(err, sentinel) {
+			return m.Status, m.Code
 		}
 	}
-	return http.StatusInternalServerError
+	return http.StatusInternalServerError, ErrCodeInternalError
 }
+

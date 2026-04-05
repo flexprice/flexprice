@@ -1,6 +1,6 @@
 [project]
 name = "flexprice"
-version = "2.0.2"
+version = "2.0.5"
 description = "Python Client SDK for the FlexPrice API."
 authors = [{ name = "Flexprice" },]
 readme = "README.md"
@@ -8,6 +8,7 @@ requires-python = ">=3.10"
 dependencies = [
     "httpcore >=1.0.9",
     "httpx >=0.28.1",
+    "jsonpath-python >=1.0.6",
     "pydantic >=2.11.2",
 ]
 license = { text = "Apache-2.0" }

@@ -1058,7 +1058,7 @@ func (r *InvoiceResponse) WithUsageBreakdown(usageBreakdown map[string][]UsageBr
 }
 
 // ListInvoicesResponse represents the paginated response for listing invoices
-type ListInvoicesResponse = types.ListResponse[*InvoiceResponse]
+type ListInvoicesResponse = types.ListResponse[*InvoiceResponse] // @name ListInvoicesResponse
 
 // GetPreviewInvoiceRequest represents the request payload for previewing an invoice
 type GetPreviewInvoiceRequest struct {

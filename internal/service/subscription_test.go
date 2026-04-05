@@ -1080,6 +1080,230 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 	}
 }
 
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithInheritanceChildren() {
+	ctx := s.GetContext()
+
+	childExternal := "ext_child_org"
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: childExternal,
+		Name:       "Child Org",
+		Email:      "child@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{childExternal},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(types.SubscriptionTypeParent, resp.SubscriptionType)
+
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{resp.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	inherited, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Len(inherited, 1)
+	s.Equal(types.SubscriptionTypeInherited, inherited[0].SubscriptionType)
+	s.Equal(child.ID, inherited[0].CustomerID)
+	s.NotNil(inherited[0].ParentSubscriptionID)
+	s.Equal(resp.ID, *inherited[0].ParentSubscriptionID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionSubscriberRejectedWhenChildHasInheritedSubscription() {
+	ctx := s.GetContext()
+
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_subscriber_guard",
+		Name:       "Child Subscriber Guard",
+		Email:      "child-guard@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	parentSub := *s.testData.subscription
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, &parentSub))
+
+	inherited := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               parentSub.PlanID,
+		Currency:             parentSub.Currency,
+		SubscriptionStatus:   parentSub.SubscriptionStatus,
+		BillingAnchor:        parentSub.BillingAnchor,
+		BillingCycle:         parentSub.BillingCycle,
+		StartDate:            parentSub.StartDate,
+		EndDate:              parentSub.EndDate,
+		CurrentPeriodStart:   parentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:     parentSub.CurrentPeriodEnd,
+		BillingCadence:       parentSub.BillingCadence,
+		BillingPeriod:        parentSub.BillingPeriod,
+		BillingPeriodCount:   parentSub.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parentSub.EnvironmentID,
+		ParentSubscriptionID: &parentSub.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         child.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+	}
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "expected validation error, got %v", err)
+	s.Contains(err.Error(), "inherited subscription")
+
+	inherited.SubscriptionStatus = types.SubscriptionStatusCancelled
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, inherited))
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(child.ID, resp.CustomerID)
+}
+
+func (s *SubscriptionServiceSuite) TestGetFeatureUsageBySubscription_ParentAggregatesChildCustomerFeatureUsage() {
+	ctx := s.GetContext()
+
+	childExternal := "ext_child_feature_usage_agg"
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: childExternal,
+		Name:       "Child Org Usage",
+		Email:      "child-usage@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	parentSub := *s.testData.subscription
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, &parentSub))
+
+	inherited := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               parentSub.PlanID,
+		Currency:             parentSub.Currency,
+		SubscriptionStatus:   parentSub.SubscriptionStatus,
+		BillingAnchor:        parentSub.BillingAnchor,
+		BillingCycle:         parentSub.BillingCycle,
+		StartDate:            parentSub.StartDate,
+		EndDate:              parentSub.EndDate,
+		CurrentPeriodStart:   parentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:     parentSub.CurrentPeriodEnd,
+		BillingCadence:       parentSub.BillingCadence,
+		BillingPeriod:        parentSub.BillingPeriod,
+		BillingPeriodCount:   parentSub.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parentSub.EnvironmentID,
+		ParentSubscriptionID: &parentSub.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
+
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{parentSub.ID}
+	lineItems, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.NoError(err)
+	var apiLI *subscription.SubscriptionLineItem
+	for _, li := range lineItems {
+		if li.MeterID == s.testData.meters.apiCalls.ID {
+			apiLI = li
+			break
+		}
+	}
+	s.Require().NotNil(apiLI, "expected API calls subscription line item in repo for subscription %s", parentSub.ID)
+
+	fuStore := s.GetStores().FeatureUsageRepo.(*testutil.InMemoryFeatureUsageStore)
+	s.NoError(fuStore.InsertProcessedEvent(ctx, &events.FeatureUsage{
+		Event: events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           parentSub.TenantID,
+			EnvironmentID:      parentSub.EnvironmentID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			CustomerID:         child.ID,
+			ExternalCustomerID: childExternal,
+			Timestamp:          parentSub.CurrentPeriodStart.Add(time.Hour),
+		},
+		SubscriptionID: parentSub.ID,
+		SubLineItemID:  apiLI.ID,
+		PriceID:        s.testData.prices.apiCalls.ID,
+		FeatureID:      types.GenerateUUIDWithPrefix(types.UUID_PREFIX_FEATURE),
+		MeterID:        s.testData.meters.apiCalls.ID,
+		QtyTotal:       decimal.NewFromInt(99),
+	}))
+
+	out, err := s.service.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: parentSub.ID,
+		Source:         string(types.UsageSourceAnalytics),
+		StartTime:      parentSub.CurrentPeriodStart,
+		EndTime:        parentSub.CurrentPeriodEnd,
+	})
+	s.NoError(err)
+
+	var apiQty float64
+	for _, c := range out.Charges {
+		if c.MeterID == s.testData.meters.apiCalls.ID {
+			apiQty = c.Quantity
+			break
+		}
+	}
+	s.Equal(99.0, apiQty)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionInheritanceChildEqualsSubscriber() {
+	ctx := s.GetContext()
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{s.testData.customer.ExternalID},
+		},
+	}
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+	s.Contains(err.Error(), "cannot inherit onto itself")
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCollectionMethod() {
 	// Test cases specifically for collection method functionality
 	testCases := []struct {
@@ -3637,7 +3861,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 		})
 		s.Error(err)
 		s.True(ierr.IsValidation(err), "expected validation error")
-		s.Contains(err.Error(), "future")
+		s.Contains(err.Error(), "at or after the current time")
 		s.T().Logf("✅ scheduled_date: past cancel_at rejected")
 	})
 

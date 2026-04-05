@@ -109,4 +109,4 @@ func (r *UpdatePriceUnitRequest) Validate() error {
 }
 
 // ListPriceUnitsResponse represents the response for listing price units
-type ListPriceUnitsResponse = types.ListResponse[*PriceUnitResponse]
+type ListPriceUnitsResponse = types.ListResponse[*PriceUnitResponse] // @name ListPriceUnitsResponse

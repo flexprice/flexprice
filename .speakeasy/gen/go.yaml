@@ -31,7 +31,7 @@ generation:
     generateNewTests: true
     skipResponseBodyAssertions: false
 go:
-  version: 2.0.0
+  version: 2.0.5
   additionalDependencies: {}
   baseErrorName: FlexpriceError
   clientServerStatusCodesAsErrors: true
@@ -49,14 +49,12 @@ go:
       webhooks: models/webhooks
   includeEmptyObjects: true
   inferUnionDiscriminators: true
-  inputModelSuffix: Input
   maxMethodParams: 4
   methodArguments: require-security-and-request
   modulePath: github.com/flexprice/go-sdk
   multipartArrayFormat: standard
   nullableOptionalWrapper: true
-  outputModelSuffix: Output
-  respectRequiredFields: false
+  respectRequiredFields: true
   respectTitlesForPrimitiveUnionMembers: true
   responseFormat: envelope-http
   sdkPackageName: flexprice

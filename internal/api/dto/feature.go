@@ -121,4 +121,4 @@ type FeatureResponse struct {
 }
 
 // ListFeaturesResponse represents a paginated list of features
-type ListFeaturesResponse = types.ListResponse[*FeatureResponse]
+type ListFeaturesResponse = types.ListResponse[*FeatureResponse] // @name ListFeaturesResponse

@@ -9,13 +9,13 @@ Type-safe Go client for the FlexPrice API: billing, metering, and subscription m
 ## Installation
 
 ```bash
-go get github.com/flexprice/flexprice-go/v2
+go get github.com/flexprice/go-sdk/v2
 ```
 
 Then in your code:
 
 ```go
-import "github.com/flexprice/flexprice-go/v2"
+import "github.com/flexprice/go-sdk/v2"
 ```
 
 ## Quick start
@@ -32,8 +32,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/flexprice/flexprice-go/v2"
-	"github.com/flexprice/flexprice-go/v2/models/types"
+	"github.com/flexprice/go-sdk/v2"
+	"github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/joho/godotenv"
 )
 
@@ -56,7 +56,7 @@ func main() {
 	customerID := fmt.Sprintf("sample-customer-%d", time.Now().Unix())
 
 	// Ingest an event
-	req := types.DtoIngestEventRequest{
+	req := types.IngestEventRequest{
 		EventName:          "Sample Event",
 		ExternalCustomerID: customerID,
 		Properties:         map[string]string{"source": "sample_app", "environment": "test"},
@@ -75,6 +75,88 @@ func main() {
 ```
 
 For more examples and all API operations, see the [API reference](https://docs.flexprice.io) and the [examples](examples/) in this repo.
+
+## Optional fields and pointer helpers
+
+Required fields are plain Go values; optional fields are pointers. The SDK ships helper functions so you never need a temporary variable:
+
+```go
+import "github.com/flexprice/go-sdk/v2"
+
+// Create a customer with optional address and metadata
+resp, err := client.Customers.CreateCustomer(ctx, types.CreateCustomerRequest{
+    ExternalID: "acme-001",
+    Name:       flexprice.String("Acme Corp"),
+    Email:      flexprice.String("billing@acme.com"),
+    // Optional address fields
+    AddressLine1:   flexprice.String("123 Main St"),
+    AddressCity:    flexprice.String("San Francisco"),
+    AddressState:   flexprice.String("CA"),
+    AddressCountry: flexprice.String("US"),
+    // Generic helper for any type
+    Metadata: flexprice.Pointer(map[string]string{"plan_tier": "growth"}),
+})
+```
+
+Available helpers: `flexprice.String`, `flexprice.Bool`, `flexprice.Int`, `flexprice.Int64`, `flexprice.Float32`, `flexprice.Float64`, `flexprice.Pointer[T]`.
+
+## Nil-safe getters
+
+Every generated type has nil-safe `Get*()` methods. Calling a getter on a nil pointer returns the zero value — no panic:
+
+```go
+var sub *types.Subscription // nil
+
+// Safe — returns "" instead of panicking
+id := sub.GetID()
+
+// Safe chain — returns nil instead of panicking
+cycle := sub.GetBillingCycle()
+```
+
+Prefer getters when traversing nested optional fields:
+
+```go
+if s := resp.GetSubscription(); s != nil {
+    fmt.Println(s.GetID(), s.GetStatus())
+    if cycle := s.GetBillingCycle(); cycle != nil {
+        fmt.Println(cycle.GetInterval())
+    }
+}
+```
+
+## Error handling
+
+Use `errors.As` for typed errors, or the `errorutils` helpers for HTTP status checks:
+
+```go
+import (
+    "errors"
+    "github.com/flexprice/go-sdk/v2/errorutils"
+    sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
+)
+
+resp, err := client.Customers.CreateCustomer(ctx, req)
+if err != nil {
+    switch {
+    case errorutils.IsConflict(err):
+        // 409 — customer already exists
+        log.Println("duplicate customer, continuing")
+    case errorutils.IsValidation(err):
+        // 400 — bad request
+        var apiErr *sdkerrors.APIError
+        errors.As(err, &apiErr)
+        log.Fatalf("validation error: %s", apiErr.Body)
+    case errorutils.IsNotFound(err):
+        // 404
+        log.Fatalf("not found")
+    default:
+        log.Fatalf("unexpected error: %v", err)
+    }
+}
+```
+
+Available helpers: `IsNotFound` (404), `IsValidation` (400), `IsConflict` (409), `IsRateLimit` (429), `IsPermissionDenied` (403), `IsServerError` (5xx).
 
 ## Async client (high-volume events)
 
@@ -102,6 +184,19 @@ err = asyncClient.EnqueueWithOptions(flexprice.EventOptions{
 ```
 
 **Benefits:** Automatic batching, background sending, configurable batch size and flush interval, optional debug logging. Call `Close()` before exit to flush remaining events.
+
+## Idempotent requests
+
+Use `WithIdempotencyKey` on any POST request to safely retry without risk of duplicates:
+
+```go
+resp, err := client.Customers.CreateCustomer(ctx, types.CreateCustomerRequest{
+    ExternalID: "acme-001",
+    Name:       flexprice.String("Acme Corp"),
+}, flexprice.WithIdempotencyKey("create-customer-acme-001"))
+```
+
+Stripe and Orb use the same `Idempotency-Key` header convention. The key should be unique per logical operation — a UUID or a deterministic hash of the operation's inputs works well.
 
 ## Authentication
 
@@ -144,7 +239,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/flexprice/flexprice-go/v2/models/types"
+	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
 // envelope reads only the event_type field for cheap routing

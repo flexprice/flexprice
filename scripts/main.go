@@ -93,11 +93,7 @@ var commands = []Command{
 		Description: "Migrate to addon",
 		Run:         internal.CopyPlanChargesToAddons,
 	},
-	{
-		Name:        "migrate-billing-cycle",
-		Description: "Migrate subscriptions from anniversary to calendar billing cycle",
-		Run:         internal.MigrateBillingCycle,
-	},
+
 	{
 		Name:        "process-csv-features",
 		Description: "Process CSV file to create features and prices for serverless plan",
@@ -193,6 +189,10 @@ func main() {
 		customerCount      string
 		addonID            string
 		workerCount        string
+		effectiveDate      string
+		failedOutput       string
+		successOutput      string
+		apiBaseURL         string
 	)
 
 	flag.BoolVar(&listCommands, "list", false, "List all available commands")
@@ -219,7 +219,11 @@ func main() {
 	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing")
 	flag.StringVar(&dryRun, "dry-run", "false", "Dry run mode (true/false)")
 	flag.StringVar(&addonID, "addon-id", "", "Addon ID for operations")
-	flag.StringVar(&workerCount, "worker-count", "10", "Number of concurrent workers for parallel processing")
+	flag.StringVar(&workerCount, "worker-count", "", "Concurrent workers (sets WORKER_COUNT when non-empty; migrate-calendar-billing-csv defaults to 3 if unset)")
+	flag.StringVar(&effectiveDate, "effective-date", "", "Effective date for calendar billing migration (RFC3339 or YYYY-MM-DD)")
+	flag.StringVar(&failedOutput, "failed-output", "", "Path for failed rows CSV (migrate-calendar-billing-csv)")
+	flag.StringVar(&successOutput, "success-output", "", "Path for successful rows CSV (migrate-calendar-billing-csv)")
+	flag.StringVar(&apiBaseURL, "api-base-url", "", "Flexprice API base URL including /v1 (migrate-calendar-billing-csv); default https://api.cloud.flexprice.io/v1")
 	flag.Parse()
 
 	if listCommands {
@@ -303,6 +307,18 @@ func main() {
 	}
 	if workerCount != "" {
 		os.Setenv("WORKER_COUNT", workerCount)
+	}
+	if apiBaseURL != "" {
+		os.Setenv("API_BASE_URL", apiBaseURL)
+	}
+	if effectiveDate != "" {
+		os.Setenv("EFFECTIVE_DATE", effectiveDate)
+	}
+	if failedOutput != "" {
+		os.Setenv("FAILED_OUTPUT_PATH", failedOutput)
+	}
+	if successOutput != "" {
+		os.Setenv("SUCCESS_OUTPUT_PATH", successOutput)
 	}
 
 	// Find and run the command

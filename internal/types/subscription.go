@@ -7,33 +7,43 @@ import (
 	"github.com/samber/lo"
 )
 
-// InvoiceBilling determines which customer should receive invoices for a subscription
-type InvoiceBilling string
+// SubscriptionType categorises a subscription within a customer hierarchy.
+type SubscriptionType string
 
 const (
-	// InvoiceBillingInvoiceToParent - Invoices are sent to the parent customer
-	InvoiceBillingInvoiceToParent InvoiceBilling = "invoice_to_parent"
+	// SubscriptionTypeStandalone is a regular subscription with no hierarchy relationship.
+	SubscriptionTypeStandalone SubscriptionType = "standalone"
 
-	// InvoiceBillingInvoiceToSelf - Invoices are sent to the subscription's customer
-	InvoiceBillingInvoiceToSelf InvoiceBilling = "invoice_to_self"
+	// SubscriptionTypeParent is the primary subscription that owns line items and aggregates
+	// usage from child (inherited) subscriptions.
+	SubscriptionTypeParent SubscriptionType = "parent"
+
+	// SubscriptionTypeInherited is a skeleton subscription created for each child customer
+	// in a hierarchy. It carries no line items; events are matched via the parent subscription.
+	SubscriptionTypeInherited SubscriptionType = "inherited"
 )
 
-func (i InvoiceBilling) String() string {
-	return string(i)
+var SubscriptionTypeValues = []SubscriptionType{
+	SubscriptionTypeStandalone,
+	SubscriptionTypeParent,
+	SubscriptionTypeInherited,
 }
 
-func (i InvoiceBilling) Validate() error {
-	allowed := []InvoiceBilling{
-		InvoiceBillingInvoiceToParent,
-		InvoiceBillingInvoiceToSelf,
+func (t SubscriptionType) String() string {
+	return string(t)
+}
+
+func (t SubscriptionType) Validate() error {
+	if t == "" {
+		return nil
 	}
 
-	if i != "" && !lo.Contains(allowed, i) {
-		return ierr.NewError("invalid invoice billing").
-			WithHint("Invalid invoice billing").
+	if !lo.Contains(SubscriptionTypeValues, t) {
+		return ierr.NewError("invalid subscription type").
+			WithHint("Subscription type must be standalone, parent, or inherited").
 			WithReportableDetails(map[string]any{
-				"invoice_billing": i,
-				"allowed_values":  allowed,
+				"subscription_type": t,
+				"allowed_values":    SubscriptionTypeValues,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -285,6 +295,10 @@ type SubscriptionFilter struct {
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
 	// CustomerID filters by customer ID
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
+
+	// CustomerIDs filters by customer IDs
+	CustomerIDs []string `json:"customer_ids,omitempty" form:"customer_ids"`
+
 	// ExternalCustomerID filters by external customer ID
 	ExternalCustomerID string `json:"external_customer_id,omitempty" form:"external_customer_id"`
 	// InvoicingCustomerIDs filters by invoicing customer ID
@@ -306,6 +320,8 @@ type SubscriptionFilter struct {
 	// current_period_end <= date OR (cancel_at IS NOT NULL AND cancel_at <= date).
 	// When nil, period/cancel cutoff logic is not applied by this field (see TimeRangeFilter for legacy period-end filtering).
 	EffectiveDateForUpdate *time.Time `json:"effective_date_for_update,omitempty" form:"effective_date_for_update"`
+	// SubscriptionType filters by subscription type
+	SubscriptionTypes []SubscriptionType `json:"subscription_type,omitempty" form:"subscription_type"`
 
 	// WithLineItems includes line items in the response
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
@@ -356,6 +372,13 @@ func (f SubscriptionFilter) Validate() error {
 	// Validate billing period values
 	for _, period := range f.BillingPeriod {
 		if err := period.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate subscription type values
+	for _, subscriptionType := range f.SubscriptionTypes {
+		if err := subscriptionType.Validate(); err != nil {
 			return err
 		}
 	}

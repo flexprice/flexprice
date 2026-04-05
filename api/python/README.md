@@ -107,6 +107,68 @@ For a full list of operations, see the [API reference](https://docs.flexprice.io
 - **Wrong server URL:** Use `https://us.api.flexprice.io/v1`. Always include `/v1`; no trailing space or slash.
 - **4xx/5xx on ingest:** Event ingest returns 202 Accepted; for errors, check request fields (`event_name`, `external_customer_id`, `properties`, `source`) against the [API docs](https://docs.flexprice.io).
 
+## Handling Webhooks
+
+Flexprice sends webhook events to your server for async updates on payments, invoices, subscriptions, wallets, and more.
+
+**Flow:**
+1. Register your endpoint URL in the Flexprice dashboard
+2. Receive `POST` with raw JSON body
+3. Read `event_type` to route
+4. Parse payload into typed model
+5. Handle business logic idempotently
+6. Return `200` quickly
+
+```python
+import json
+from flexprice.models import (
+    WebhookDtoPaymentWebhookPayload,
+    WebhookDtoSubscriptionWebhookPayload,
+    WebhookDtoInvoiceWebhookPayload,
+)
+
+def handle_webhook(raw_body: str) -> None:
+    event = json.loads(raw_body)
+
+    match event.get("event_type"):
+        case "payment.success" | "payment.failed" | "payment.updated":
+            payload = WebhookDtoPaymentWebhookPayload.model_validate(event)
+            if payload.payment:
+                print(f"payment {payload.payment.id}")
+                # TODO: update payment record
+
+        case "subscription.activated" | "subscription.cancelled" | "subscription.updated":
+            payload = WebhookDtoSubscriptionWebhookPayload.model_validate(event)
+            if payload.subscription:
+                print(f"subscription {payload.subscription.id}")
+
+        case "invoice.update.finalized" | "invoice.payment.overdue":
+            payload = WebhookDtoInvoiceWebhookPayload.model_validate(event)
+            if payload.invoice:
+                print(f"invoice {payload.invoice.id}")
+
+        case _:
+            print(f"unhandled event: {event.get('event_type')}")
+```
+
+### Event types
+
+| Category | Events |
+|---|---|
+| **Payment** | `payment.created` · `payment.updated` · `payment.success` · `payment.failed` · `payment.pending` |
+| **Invoice** | `invoice.create.drafted` · `invoice.update` · `invoice.update.finalized` · `invoice.update.payment` · `invoice.update.voided` · `invoice.payment.overdue` · `invoice.communication.triggered` |
+| **Subscription** | `subscription.created` · `subscription.draft.created` · `subscription.activated` · `subscription.updated` · `subscription.paused` · `subscription.resumed` · `subscription.cancelled` · `subscription.renewal.due` |
+| **Subscription Phase** | `subscription.phase.created` · `subscription.phase.updated` · `subscription.phase.deleted` |
+| **Customer** | `customer.created` · `customer.updated` · `customer.deleted` |
+| **Wallet** | `wallet.created` · `wallet.updated` · `wallet.terminated` · `wallet.transaction.created` · `wallet.credit_balance.dropped` · `wallet.credit_balance.recovered` · `wallet.ongoing_balance.dropped` · `wallet.ongoing_balance.recovered` |
+| **Feature / Entitlement** | `feature.created` · `feature.updated` · `feature.deleted` · `feature.wallet_balance.alert` · `entitlement.created` · `entitlement.updated` · `entitlement.deleted` |
+| **Credit Note** | `credit_note.created` · `credit_note.updated` |
+
+**Production rules:**
+- Keep handlers idempotent — Flexprice retries on non-`2xx`
+- Return `200` for unknown event types — prevents unnecessary retries
+- Do heavy processing async — respond fast, queue the work
+
 ## Documentation
 
 - [FlexPrice API documentation](https://docs.flexprice.io)

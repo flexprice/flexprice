@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -94,16 +94,21 @@ func (s *InMemoryFeatureUsageStore) GetDetailedUsageAnalytics(ctx context.Contex
 }
 
 // GetFeatureUsageBySubscription gets feature usage by subscription.
-// opts is ignored (in-memory has no FINAL concept).
-func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType, opts *events.GetFeatureUsageBySubscriptionOpts) (map[string]*events.UsageByFeatureResult, error) {
+// params.Opts is ignored (in-memory has no FINAL concept).
+func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Context, params *events.GetFeatureUsageBySubscriptionParams) (map[string]*events.UsageByFeatureResult, error) {
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	result := make(map[string]*events.UsageByFeatureResult)
 	for _, usage := range s.usage {
-		if usage.SubscriptionID != subscriptionID {
+		if usage.SubscriptionID != params.SubscriptionID {
 			continue
 		}
+		if len(params.CustomerIDs) > 0 && !lo.Contains(params.CustomerIDs, usage.CustomerID) {
+			continue
+		}
+
 		// For count aggregation, subscription service uses CountDistinctIDs.
 		// Use QtyTotal as count when it's a whole number (typical for count meters).
 		countDistinctIDs := uint64(0)

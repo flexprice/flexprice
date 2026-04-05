@@ -77,7 +77,7 @@ type CreateAddonResponse struct {
 }
 
 // ListAddonsResponse represents the response for listing addons
-type ListAddonsResponse = types.ListResponse[*AddonResponse]
+type ListAddonsResponse = types.ListResponse[*AddonResponse] // @name ListAddonsResponse
 
 // AddAddonToSubscriptionRequest represents the request to add an addon to a subscription
 type AddAddonToSubscriptionRequest struct {

@@ -59,6 +59,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetLookupKey(sub.LookupKey).
 		SetCustomerID(sub.CustomerID).
 		SetPlanID(sub.PlanID).
+		SetSubscriptionType(sub.SubscriptionType).
 		SetSubscriptionStatus(sub.SubscriptionStatus).
 		SetCurrency(sub.Currency).
 		SetBillingAnchor(sub.BillingAnchor).
@@ -173,6 +174,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetStartDate(sub.StartDate).
 		SetBillingAnchor(sub.BillingAnchor).
 		SetSubscriptionStatus(sub.SubscriptionStatus).
+		SetSubscriptionType(sub.SubscriptionType).
 		SetCurrentPeriodStart(sub.CurrentPeriodStart).
 		SetCurrentPeriodEnd(sub.CurrentPeriodEnd).
 		SetPauseStatus(sub.PauseStatus).
@@ -570,9 +572,19 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		query = query.Where(subscription.ParentSubscriptionIDIn(f.ParentSubscriptionIDs...))
 	}
 
+	// Apply subscription type filter
+	if len(f.SubscriptionTypes) > 0 {
+		query = query.Where(subscription.SubscriptionTypeIn(f.SubscriptionTypes...))
+	}
+
 	// Apply customer filter
 	if f.CustomerID != "" {
 		query = query.Where(subscription.CustomerID(f.CustomerID))
+	}
+
+	// Apply customer IDs filter
+	if len(f.CustomerIDs) > 0 {
+		query = query.Where(subscription.CustomerIDIn(f.CustomerIDs...))
 	}
 
 	// Apply invoicing customer filter

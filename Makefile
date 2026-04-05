@@ -4,7 +4,7 @@ swagger-clean:
 
 .PHONY: install-swag
 install-swag:
-	@which swag > /dev/null || (go install github.com/swaggo/swag/cmd/swag@latest)
+	@which swag > /dev/null || (go install github.com/swaggo/swag/v2/cmd/swag@v2.0.0-rc5)
 
 .PHONY: swagger
 swagger: swagger-2-0 swagger-3-0
@@ -456,7 +456,7 @@ sdk-all-local:
 # Generate Go SDK only with Speakeasy
 speakeasy-go-sdk:
 	@echo "🔨 Generating Go SDK with Speakeasy..."
-	@bash -c 'set -o pipefail; CI=true TERM=dumb speakeasy run --target flexprice-go -y < /dev/null | cat'
+	@bash -c 'set -o pipefail; CI=true TERM=dumb speakeasy run --target flexprice-go -y --skip-compile < /dev/null | cat'
 	@echo "✓ Go SDK generated successfully"
 
 # Clean only Go SDK
@@ -525,4 +525,20 @@ test-sdk test-sdks:
 	@echo "--- TypeScript (install deps + test) ---"; (cd api/tests/ts && npm install && npm test) || true
 	@echo "✓ All SDK tests finished"
 
-.PHONY: sdk-all test-sdk test-sdks
+# Run the orchestrated sanity integration test suite.
+# Usage:
+#   export FLEXPRICE_API_KEY=sk_...
+#   make test-suite
+# Host defaults to localhost:8080/v1 (http for localhost, https for remote).
+test-suite:
+	@if [ -z "$$FLEXPRICE_API_KEY" ]; then \
+		echo ""; \
+		echo "❌ Need an API key:"; \
+		echo "   export FLEXPRICE_API_KEY=sk_..."; \
+		echo "   make test-suite"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@cd integration-testing-suite/go && go run .
+
+.PHONY: sdk-all test-sdk test-sdks test-suite

@@ -1,9 +1,1063 @@
-# OpenAPI Overlay for Flexprice SDK and MCP
-# Use actions here to add x-speakeasy-mcp (scopes, descriptions, hints), improve
-# operation summary/description, or x-speakeasy-name-override without editing the main spec.
-# See https://spec.openapis.org/overlay/latest.html
 overlay: 1.0.0
 info:
   title: Flexprice SDK and MCP customizations
-  version: 2.0.0
-actions: []
+  version: 2.1.0
+actions:
+  - target: '$'
+    update:
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500
+          maxInterval: 60000
+          maxElapsedTime: 3600000
+          exponent: 1.5
+        statusCodes:
+          - '408'
+          - '429'
+          - '5XX'
+        retryConnectionErrors: true
+  - target: '$.paths["/payments"]["get"]'
+    update:
+      x-speakeasy-pagination:
+        type: offsetLimit
+        inputs:
+          - name: limit
+            in: parameters
+            type: limit
+          - name: offset
+            in: parameters
+            type: offset
+        outputs:
+          results: $.items
+          numResultsKey: $.pagination.total
+  - target: '$.paths["/prices/units"]["get"]'
+    update:
+      x-speakeasy-pagination:
+        type: offsetLimit
+        inputs:
+          - name: limit
+            in: parameters
+            type: limit
+          - name: offset
+            in: parameters
+            type: offset
+        outputs:
+          results: $.items
+          numResultsKey: $.pagination.total
+  - target: '$.paths["/secrets/api/keys"]["get"]'
+    update:
+      x-speakeasy-pagination:
+        type: offsetLimit
+        inputs:
+          - name: limit
+            in: parameters
+            type: limit
+          - name: offset
+            in: parameters
+            type: offset
+        outputs:
+          results: $.items
+          numResultsKey: $.pagination.total
+  - target: '$.paths["/tasks"]["get"]'
+    update:
+      x-speakeasy-pagination:
+        type: offsetLimit
+        inputs:
+          - name: limit
+            in: parameters
+            type: limit
+          - name: offset
+            in: parameters
+            type: offset
+        outputs:
+          results: $.items
+          numResultsKey: $.pagination.total
+  - target: '$.paths["/tasks/scheduled"]["get"]'
+    update:
+      x-speakeasy-pagination:
+        type: offsetLimit
+        inputs:
+          - name: limit
+            in: parameters
+            type: limit
+          - name: offset
+            in: parameters
+            type: offset
+        outputs:
+          results: $.items
+          numResultsKey: $.pagination.total
+  - target: '$.paths["/wallets/{id}/transactions"]["get"]'
+    update:
+      x-speakeasy-pagination:
+        type: offsetLimit
+        inputs:
+          - name: limit
+            in: parameters
+            type: limit
+          - name: offset
+            in: parameters
+            type: offset
+        outputs:
+          results: $.items
+          numResultsKey: $.pagination.total
+  - target: '$.paths["/events/query"]["post"]'
+    update:
+      x-speakeasy-pagination:
+        type: cursor
+        inputs:
+          - name: iter_first_key
+            in: requestBody
+            type: cursor
+          - name: page_size
+            in: requestBody
+            type: limit
+        outputs:
+          nextCursor: $.iter_last_key
+          hasMore: $.has_more
+          results: $.events
+  - target: '$.components.schemas["CustomerResponse"]'
+    update:
+      x-speakeasy-name-override: "Customer"
+  - target: '$.components.schemas["SubscriptionResponse"]'
+    update:
+      x-speakeasy-name-override: "Subscription"
+  - target: '$.components.schemas["InvoiceResponse"]'
+    update:
+      x-speakeasy-name-override: "Invoice"
+  - target: '$.components.schemas["PlanResponse"]'
+    update:
+      x-speakeasy-name-override: "Plan"
+  - target: '$.components.schemas["PriceResponse"]'
+    update:
+      x-speakeasy-name-override: "Price"
+  - target: '$.components.schemas["AddonResponse"]'
+    update:
+      x-speakeasy-name-override: "Addon"
+  - target: '$.components.schemas["WalletResponse"]'
+    update:
+      x-speakeasy-name-override: "Wallet"
+  - target: '$.components.schemas["PaymentResponse"]'
+    update:
+      x-speakeasy-name-override: "Payment"
+  - target: '$.components.schemas["CouponResponse"]'
+    update:
+      x-speakeasy-name-override: "Coupon"
+  - target: '$.components.schemas["FeatureResponse"]'
+    update:
+      x-speakeasy-name-override: "Feature"
+  - target: '$.components.schemas["errors.ErrorDetail"]'
+    update:
+      x-speakeasy-name-override: "ErrorDetail"
+  - target: '$.components.schemas["errors.ErrorResponse"]'
+    update:
+      x-speakeasy-name-override: "ErrorResponse"
+  - target: '$.components.schemas["errors.ErrorResponse"].properties["error"]'
+    update:
+      x-speakeasy-name-override: "detail"
+  - target: '$.components.schemas["coupon_application.CouponApplication"].properties["applied_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["coupon_application.CouponApplication"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["coupon_application.CouponApplication"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["coupon_association.CouponAssociation"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["coupon_association.CouponAssociation"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["coupon_association.CouponAssociation"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["coupon_association.CouponAssociation"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["creditnote.CreditNoteLineItem"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["creditnote.CreditNoteLineItem"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["ActivateDraftSubscriptionRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddAddonRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddAddonToSubscriptionRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddonAssociationResponse"].properties["cancelled_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddonAssociationResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddonAssociationResponse"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddonAssociationResponse"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddonAssociationResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddonResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AddonResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AlertLogResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["AlertLogResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["BillingCycleInfo"].properties["billing_anchor"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["BillingCycleInfo"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["BillingCycleInfo"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["BillingPeriodInfo"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["BillingPeriodInfo"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CancelSubscriptionRequest"].properties["cancel_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CancelSubscriptionResponse"].properties["effective_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CancelSubscriptionResponse"].properties["processed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CostsheetResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CostsheetResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponApplicationResponse"].properties["applied_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponApplicationResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponApplicationResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponAssociationResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponAssociationResponse"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponAssociationResponse"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponAssociationResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CouponResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateAPIKeyRequest"].properties["expires_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateAddonResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateAddonResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateCreditGrantRequest"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateCreditGrantRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateEntitlementRequest"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateEntitlementRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateInvoiceLineItemRequest"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateInvoiceLineItemRequest"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateInvoiceRequest"].properties["due_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateInvoiceRequest"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateInvoiceRequest"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreatePriceRequest"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreatePriceRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreatePriceUnitResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreatePriceUnitResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateSubscriptionLineItemRequest"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateSubscriptionLineItemRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateSubscriptionRequest"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateSubscriptionRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateSubscriptionRequest"].properties["trial_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreateSubscriptionRequest"].properties["trial_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantApplicationResponse"].properties["applied_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantApplicationResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantApplicationResponse"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantApplicationResponse"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantApplicationResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantResponse"].properties["credit_grant_anchor"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantResponse"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantResponse"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditGrantResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditNoteResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditNoteResponse"].properties["finalized_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditNoteResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CreditNoteResponse"].properties["voided_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CustomerResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["CustomerResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["DeleteCreditGrantRequest"].properties["effective_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["DeletePriceRequest"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["EntitlementResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["EntitlementResponse"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["EntitlementResponse"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["EntitlementResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["EntityIntegrationMappingResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["EntityIntegrationMappingResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["FeatureResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["FeatureResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["FeatureUsageInfo"].properties["processed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["FeatureUsageSummary"].properties["next_usage_reset_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetCostAnalyticsRequest"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetCostAnalyticsRequest"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetDetailedCostAnalyticsResponse"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetDetailedCostAnalyticsResponse"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetEventsRequest"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetEventsRequest"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetPreviewInvoiceRequest"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetPreviewInvoiceRequest"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageAnalyticsRequest"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageAnalyticsRequest"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageByMeterRequest"].properties["billing_anchor"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageByMeterRequest"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageByMeterRequest"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageBySubscriptionRequest"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageBySubscriptionRequest"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageBySubscriptionResponse"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageBySubscriptionResponse"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageRequest"].properties["billing_anchor"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageRequest"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GetUsageRequest"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GroupResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["GroupResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceLineItemPreview"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceLineItemPreview"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceLineItemResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceLineItemResponse"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceLineItemResponse"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceLineItemResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoicePreview"].properties["due_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["due_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["finalized_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["last_computed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["paid_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["InvoiceResponse"].properties["voided_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["MatchedSubscriptionLineItem"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["MatchedSubscriptionLineItem"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["MeterResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["MeterResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PauseSubscriptionRequest"].properties["pause_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PauseSubscriptionRequest"].properties["pause_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PaymentAttemptResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PaymentAttemptResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PaymentResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PaymentResponse"].properties["failed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PaymentResponse"].properties["refunded_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PaymentResponse"].properties["succeeded_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PaymentResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PlanResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PlanResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PriceResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PriceResponse"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PriceResponse"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PriceResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PriceUnitResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["PriceUnitResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["ProrationDetails"].properties["current_period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["ProrationDetails"].properties["current_period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["ProrationDetails"].properties["proration_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["ScheduledTaskResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["ScheduledTaskResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SecretResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SecretResponse"].properties["expires_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SecretResponse"].properties["last_used_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SecretResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionChangeExecuteResponse"].properties["effective_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionChangeExecuteResponse"].properties["scheduled_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionChangePreviewResponse"].properties["effective_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionLineItemResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionLineItemResponse"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionLineItemResponse"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionLineItemResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPauseResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPauseResponse"].properties["original_period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPauseResponse"].properties["original_period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPauseResponse"].properties["pause_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPauseResponse"].properties["pause_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPauseResponse"].properties["resumed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPauseResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPhaseCreateRequest"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPhaseCreateRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPhaseResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPhaseResponse"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPhaseResponse"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPhaseResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPriceCreateRequest"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionPriceCreateRequest"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["billing_anchor"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["cancel_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["cancelled_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["current_period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["current_period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["trial_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["trial_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["billing_anchor"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["cancel_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["cancelled_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["current_period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["current_period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["trial_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["trial_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionResponseV2"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionScheduleResponse"].properties["cancelled_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionScheduleResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionScheduleResponse"].properties["executed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionScheduleResponse"].properties["scheduled_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionScheduleResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionSummary"].properties["archived_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionSummary"].properties["billing_anchor"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionSummary"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionSummary"].properties["current_period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["SubscriptionSummary"].properties["current_period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaskResponse"].properties["completed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaskResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaskResponse"].properties["failed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaskResponse"].properties["started_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaskResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaxAppliedResponse"].properties["applied_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaxAppliedResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaxAppliedResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaxAssociationResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaxAssociationResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaxRateResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TaxRateResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TenantResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TenantResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TriggerForceRunRequest"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TriggerForceRunRequest"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TriggerForceRunResponse"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["TriggerForceRunResponse"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["UpdateInvoiceRequest"].properties["due_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["UpdatePaymentRequest"].properties["failed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["UpdatePaymentRequest"].properties["succeeded_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["UpdateSubscriptionRequest"].properties["cancel_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WalletBalanceResponse"].properties["balance_updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WalletBalanceResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WalletBalanceResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WalletResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WalletResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WalletTransactionResponse"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WalletTransactionResponse"].properties["expiry_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WalletTransactionResponse"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WorkflowExecutionDTO"].properties["close_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["WorkflowExecutionDTO"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.AddonFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.AddonFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.AlertLogFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.AlertLogFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.CustomerFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.CustomerFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.EntitlementFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.EntitlementFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.FeatureFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.FeatureFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.GroupFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.GroupFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.InvoiceFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.InvoiceFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.PlanFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.PlanFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.PriceFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.PriceFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.PriceUnitFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.PriceUnitFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.SubscriptionFilter"].properties["active_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.SubscriptionFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.SubscriptionFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.TimeRangeFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.TimeRangeFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.UserFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.UserFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.WalletTransactionFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.WalletTransactionFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.WorkflowExecutionFilter"].properties["end_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["types.WorkflowExecutionFilter"].properties["start_time"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["group.Group"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["group.Group"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["invoice.InvoiceLineItem"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["invoice.InvoiceLineItem"].properties["period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["invoice.InvoiceLineItem"].properties["period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["invoice.InvoiceLineItem"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["meter.Meter"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["meter.Meter"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["price.Price"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["price.Price"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["price.Price"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["price.Price"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionLineItem"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionLineItem"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionLineItem"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionLineItem"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPause"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPause"].properties["original_period_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPause"].properties["original_period_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPause"].properties["pause_end"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPause"].properties["pause_start"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPause"].properties["resumed_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPause"].properties["updated_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPhase"].properties["created_at"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPhase"].properties["end_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPhase"].properties["start_date"]'
+    update:
+      format: "date-time"
+  - target: '$.components.schemas["subscription.SubscriptionPhase"].properties["updated_at"]'
+    update:
+      format: "date-time"

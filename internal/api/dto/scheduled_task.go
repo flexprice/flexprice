@@ -80,7 +80,7 @@ type ScheduledTaskResponse struct {
 }
 
 // ListScheduledTasksResponse represents a list of scheduled tasks
-type ListScheduledTasksResponse = types.ListResponse[*ScheduledTaskResponse]
+type ListScheduledTasksResponse = types.ListResponse[*ScheduledTaskResponse] // @name ListScheduledTasksResponse
 
 // ToScheduledTaskResponse converts a domain scheduled task to a response
 func ToScheduledTaskResponse(task *scheduledtask.ScheduledTask) *ScheduledTaskResponse {

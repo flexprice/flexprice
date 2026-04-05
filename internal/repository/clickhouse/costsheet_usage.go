@@ -262,7 +262,7 @@ func (r *CostSheetUsageRepository) GetProcessedEvents(ctx context.Context, param
 	return eventsList, totalCount, nil
 }
 
-// GetFeatureUsageBySubscription gets usage data for a subscription using a single optimized query
+// GetUsageByCostSheetID gets usage data for a cost sheet using a single optimized query.
 func (r *CostSheetUsageRepository) GetUsageByCostSheetID(ctx context.Context, costSheetID, externalCustomerID string, startTime, endTime time.Time) (map[string]*events.UsageByCostSheetResult, error) {
 	// Extract tenantID and environmentID from context
 	tenantID := types.GetTenantID(ctx)

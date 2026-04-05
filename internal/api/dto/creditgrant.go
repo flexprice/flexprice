@@ -58,7 +58,7 @@ type CreditGrantResponse struct {
 }
 
 // ListCreditGrantsResponse represents a paginated list of credit grants
-type ListCreditGrantsResponse = types.ListResponse[*CreditGrantResponse]
+type ListCreditGrantsResponse = types.ListResponse[*CreditGrantResponse] // @name ListCreditGrantsResponse
 
 // Validate validates the create credit grant request
 func (r *CreateCreditGrantRequest) Validate() error {
@@ -355,7 +355,7 @@ type CreditGrantApplicationResponse struct {
 }
 
 // ListCreditGrantApplicationsResponse represents a paginated list of credit grant applications
-type ListCreditGrantApplicationsResponse = types.ListResponse[*CreditGrantApplicationResponse]
+type ListCreditGrantApplicationsResponse = types.ListResponse[*CreditGrantApplicationResponse] // @name ListCreditGrantApplicationsResponse
 
 // CreateCreditGrantApplicationRequest represents the request to create a new credit grant application
 type CreateCreditGrantApplicationRequest struct {
