@@ -60,6 +60,44 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 	c.JSON(http.StatusCreated, invoice)
 }
 
+// GenerateSubscriptionInvoiceForPeriod godoc
+// @Summary Generate invoice for subscription period
+// @ID generateSubscriptionInvoiceForPeriod
+// @Description Generates a subscription invoice for a specific billing period (start and end). Use when an invoice was not generated for the period (e.g. missed cron or delayed processing). If an invoice already exists for the same subscription and period, returns 409 Conflict.
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.CreateSubscriptionInvoiceRequest true "Subscription ID and period (period_start, period_end). reference_point is optional (default: period_end)."
+// @Success 201 {object} dto.InvoiceResponse "Invoice created"
+// @Failure 200 {object} map[string]string "No invoice generated (zero amount for period)"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 409 {object} ierr.ErrorResponse "Invoice already exists for this subscription and period"
+// @Failure 404 {object} ierr.ErrorResponse "Subscription not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /invoices/generate-for-period [post]
+func (h *InvoiceHandler) GenerateSubscriptionInvoiceForPeriod(c *gin.Context) {
+	var req dto.CreateSubscriptionInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Errorw("failed to bind request", "error", err)
+		c.Error(ierr.WithError(err).WithHint("invalid request").Mark(ierr.ErrValidation))
+		return
+	}
+
+	invoice, err := h.invoiceService.GenerateSubscriptionInvoiceForPeriod(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.Errorw("failed to generate subscription invoice for period", "error", err, "subscription_id", req.SubscriptionID)
+		c.Error(err)
+		return
+	}
+
+	if invoice == nil {
+		c.JSON(http.StatusOK, gin.H{"message": "no invoice generated (zero amount for the given period)"})
+		return
+	}
+	c.JSON(http.StatusCreated, invoice)
+}
+
 // GetInvoice godoc
 // @Summary Get invoice
 // @ID getInvoice
