@@ -116,3 +116,6 @@ CLAUDE.m
 api/tests/python/.venv/
 
 vendor/
+
+scripts/bash/data_sync/*
+!scripts/bash/data_sync/*.sh
