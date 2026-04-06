@@ -901,12 +901,41 @@ func (r *UpdateInvoiceRequest) Validate() error {
 	return nil
 }
 
+// CommitmentBreakdown provides an invoice-level summary of how commitment pricing
+// contributed to the invoice total. It aggregates commitment info from all line items.
+// total_commitment_charge = total_commitment_utilized + total_overage_amount + total_true_up_amount
+type CommitmentBreakdown struct {
+	// has_commitments indicates whether any line items on this invoice have commitment pricing
+	HasCommitments bool `json:"has_commitments"`
+
+	// total_commitment_amount is the sum of all committed amounts across line items
+	TotalCommitmentAmount decimal.Decimal `json:"total_commitment_amount" swaggertype:"string"`
+
+	// total_commitment_utilized is the sum of actual usage that fell within commitment across line items
+	TotalCommitmentUtilized decimal.Decimal `json:"total_commitment_utilized" swaggertype:"string"`
+
+	// total_overage_amount is the sum of overage charges (usage beyond commitment) across line items
+	TotalOverageAmount decimal.Decimal `json:"total_overage_amount" swaggertype:"string"`
+
+	// total_true_up_amount is the sum of true-up charges (commitment minus usage when under-utilized) across line items
+	TotalTrueUpAmount decimal.Decimal `json:"total_true_up_amount" swaggertype:"string"`
+
+	// total_commitment_charge is the total charge from commitment pricing (utilized + overage + true_up)
+	TotalCommitmentCharge decimal.Decimal `json:"total_commitment_charge" swaggertype:"string"`
+
+	// line_item_count is the number of line items that have commitment pricing
+	LineItemCount int `json:"line_item_count"`
+}
+
 // InvoiceResponse represents the response payload containing invoice information
 type InvoiceResponse struct {
 	invoice.Invoice
 
 	// overpaid_amount is the amount overpaid if payment_status is OVERPAID (amount_paid - total)
 	OverpaidAmount *decimal.Decimal `json:"overpaid_amount,omitempty" swaggertype:"string"`
+
+	// commitment_breakdown provides an invoice-level summary of commitment pricing breakdown
+	CommitmentBreakdown *CommitmentBreakdown `json:"commitment_breakdown,omitempty"`
 
 	// subscription contains the associated subscription information if requested
 	Subscription *SubscriptionResponse `json:"subscription,omitempty"`
@@ -976,13 +1005,19 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 		resp.WithOverpaidAmount(&overpaidAmount)
 	}
 
-	// Convert line items to response format
+	// Convert line items to response format and compute commitment breakdown
 	if inv.LineItems != nil {
 		lineItems := make([]*InvoiceLineItemResponse, len(inv.LineItems))
 		for i, item := range inv.LineItems {
 			lineItems[i] = NewInvoiceLineItemResponse(item)
 		}
 		resp.WithLineItems(lineItems)
+
+		// Aggregate commitment info from line items
+		breakdown := computeCommitmentBreakdown(inv.LineItems)
+		if breakdown.HasCommitments {
+			resp.CommitmentBreakdown = breakdown
+		}
 	}
 
 	// Convert coupon applications to response format
@@ -1033,6 +1068,33 @@ func (r *InvoiceResponse) WithTaxes(taxes []*TaxAppliedResponse) *InvoiceRespons
 func (r *InvoiceResponse) WithCouponApplications(couponApplications []*CouponApplicationResponse) *InvoiceResponse {
 	r.CouponApplications = couponApplications
 	return r
+}
+
+// computeCommitmentBreakdown aggregates commitment info from all line items into an invoice-level summary
+func computeCommitmentBreakdown(lineItems []*invoice.InvoiceLineItem) *CommitmentBreakdown {
+	breakdown := &CommitmentBreakdown{}
+
+	for _, item := range lineItems {
+		if item.CommitmentInfo == nil {
+			continue
+		}
+		ci := item.CommitmentInfo
+
+		breakdown.HasCommitments = true
+		breakdown.LineItemCount++
+		breakdown.TotalCommitmentAmount = breakdown.TotalCommitmentAmount.Add(ci.Amount)
+		breakdown.TotalCommitmentUtilized = breakdown.TotalCommitmentUtilized.Add(ci.ComputedCommitmentUtilizedAmount)
+		breakdown.TotalOverageAmount = breakdown.TotalOverageAmount.Add(ci.ComputedOverageAmount)
+		breakdown.TotalTrueUpAmount = breakdown.TotalTrueUpAmount.Add(ci.ComputedTrueUpAmount)
+	}
+
+	if breakdown.HasCommitments {
+		breakdown.TotalCommitmentCharge = breakdown.TotalCommitmentUtilized.
+			Add(breakdown.TotalOverageAmount).
+			Add(breakdown.TotalTrueUpAmount)
+	}
+
+	return breakdown
 }
 
 // WithUsageAnalytics adds usage analytics to the invoice response
