@@ -12,14 +12,12 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
 
 type EventsHandler struct {
 	eventService                 service.EventService
-	eventPostProcessingService   service.EventPostProcessingService
 	featureUsageTrackingService  service.FeatureUsageTrackingService
 	rawEventsReprocessingService service.RawEventsReprocessingService
 	rawEventConsumptionService   service.RawEventConsumptionService
@@ -27,10 +25,9 @@ type EventsHandler struct {
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
-		eventPostProcessingService:   eventPostProcessingService,
 		featureUsageTrackingService:  featureUsageTrackingService,
 		rawEventsReprocessingService: rawEventsReprocessingService,
 		rawEventConsumptionService:   rawEventConsumptionService,
@@ -388,13 +385,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 	// Call the appropriate service based on feature flag
 	var response *dto.GetUsageAnalyticsResponse
 
-	if !h.config.FeatureFlag.EnableFeatureUsageForAnalytics || h.config.FeatureFlag.ForceV1ForTenant == types.GetTenantID(ctx) {
-		// Use v1 (eventPostProcessingService) when flag is disabled
-		response, err = h.eventPostProcessingService.GetDetailedUsageAnalytics(ctx, &req)
-	} else {
-		// Use v2 (featureUsageTrackingService) when flag is enabled
-		response, err = h.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &req)
-	}
+	response, err = h.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &req)
 
 	if err != nil {
 		c.Error(err)
@@ -524,66 +515,6 @@ func (h *EventsHandler) GetHuggingFaceBillingData(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response)
-}
-
-func (h *EventsHandler) BenchmarkV1(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var req dto.BenchmarkRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request payload").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	if err := req.Validate(); err != nil {
-		c.Error(err)
-		return
-	}
-
-	// Convert to event
-	event := req.ToEvent(ctx)
-
-	result, err := h.featureUsageTrackingService.BenchmarkPrepareV1(ctx, event)
-	if err != nil {
-		h.log.Error("Failed to benchmark V1", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
-}
-
-func (h *EventsHandler) BenchmarkV2(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var req dto.BenchmarkRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request payload").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	if err := req.Validate(); err != nil {
-		c.Error(err)
-		return
-	}
-
-	// Convert to event
-	event := req.ToEvent(ctx)
-
-	result, err := h.featureUsageTrackingService.BenchmarkPrepareV2(ctx, event)
-	if err != nil {
-		h.log.Error("Failed to benchmark V2", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, result)
 }
 
 // @Summary Get event

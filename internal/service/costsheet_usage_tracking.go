@@ -19,9 +19,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -46,6 +46,12 @@ type CostSheetUsageTrackingService interface {
 
 	// Reprocess cost sheet usage
 	ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error
+}
+
+// PriceMatch represents a matching price and meter for an event
+type PriceMatch struct {
+	Price *price.Price
+	Meter *meter.Meter
 }
 
 type costsheetUsageTrackingService struct {

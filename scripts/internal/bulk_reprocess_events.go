@@ -37,7 +37,6 @@ type BulkReprocessEventsScript struct {
 	serviceParams               service.ServiceParams
 	customerRepo                domainCustomer.Repository
 	subscriptionRepo            domainSubscription.Repository
-	eventPostProcessingService  service.EventPostProcessingService
 	featureUsageTrackingService service.FeatureUsageTrackingService
 }
 
@@ -233,7 +232,6 @@ func newBulkReprocessEventsScript() (*BulkReprocessEventsScript, error) {
 
 	// Initialize repositories
 	eventRepo := chRepo.NewEventRepository(chStore, log)
-	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, log)
 	customerRepo := entRepo.NewCustomerRepository(pgClient, log, cacheClient)
 	subscriptionRepo := entRepo.NewSubscriptionRepository(pgClient, log, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(pgClient, log, cacheClient)
@@ -252,14 +250,6 @@ func newBulkReprocessEventsScript() (*BulkReprocessEventsScript, error) {
 		FeatureUsageRepo: featureUsageRepo,
 		SubRepo:          subscriptionRepo,
 	}
-
-	// Initialize event post-processing service (this creates Kafka connections once)
-	eventPostProcessingService := service.NewEventPostProcessingService(
-		serviceParams,
-		eventRepo,
-		processedEventRepo,
-	)
-
 	featureUsageTrackingService := service.NewFeatureUsageTrackingService(
 		serviceParams,
 		eventRepo,
@@ -271,7 +261,6 @@ func newBulkReprocessEventsScript() (*BulkReprocessEventsScript, error) {
 		serviceParams:               serviceParams,
 		customerRepo:                customerRepo,
 		subscriptionRepo:            subscriptionRepo,
-		eventPostProcessingService:  eventPostProcessingService,
 		featureUsageTrackingService: featureUsageTrackingService,
 	}, nil
 }
