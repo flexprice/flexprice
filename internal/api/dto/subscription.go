@@ -30,6 +30,10 @@ type SubscriptionPhaseCreateRequest struct {
 	// If not provided, phase will use the same line items as the subscription (plan prices)
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 
+	// LineItems are extra line items to add during this phase, primarily one-time charges.
+	// Each item's charge_date (or start_date) defaults to the phase's start_date when not provided.
+	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
+
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
