@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS flexprice.meter_usage
     -- query dimensions
     external_customer_id  LowCardinality(String)   NOT NULL,
     meter_id              LowCardinality(String)   NOT NULL,
+    event_name            LowCardinality(String)   NOT NULL,
 
     -- time
     timestamp             DateTime                 NOT NULL  CODEC(DoubleDelta, ZSTD(1)),
@@ -23,13 +24,10 @@ CREATE TABLE IF NOT EXISTS flexprice.meter_usage
     unique_hash           String                   NOT NULL  DEFAULT ''
                                                              CODEC(ZSTD(1)),
 
-    -- analytics dimensions (cold path — not read by billing queries)
+    -- analytics dimensions (not on hot read path)
     source                LowCardinality(String)   NOT NULL  DEFAULT '',
     properties            String                   NOT NULL  DEFAULT ''
-                                                             CODEC(ZSTD(3)),
-
-    -- skip index: backfill reconciliation
-    INDEX idx_ingested_at ingested_at TYPE minmax GRANULARITY 1
+                                                             CODEC(ZSTD(3))
 )
 ENGINE = ReplacingMergeTree(ingested_at)
 PARTITION BY toYYYYMMDD(timestamp)
