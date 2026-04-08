@@ -12,14 +12,12 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
 
 type EventsHandler struct {
 	eventService                 service.EventService
-	eventPostProcessingService   service.EventPostProcessingService
 	featureUsageTrackingService  service.FeatureUsageTrackingService
 	rawEventsReprocessingService service.RawEventsReprocessingService
 	rawEventConsumptionService   service.RawEventConsumptionService
@@ -27,10 +25,9 @@ type EventsHandler struct {
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
-		eventPostProcessingService:   eventPostProcessingService,
 		featureUsageTrackingService:  featureUsageTrackingService,
 		rawEventsReprocessingService: rawEventsReprocessingService,
 		rawEventConsumptionService:   rawEventConsumptionService,
@@ -388,13 +385,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 	// Call the appropriate service based on feature flag
 	var response *dto.GetUsageAnalyticsResponse
 
-	if !h.config.FeatureFlag.EnableFeatureUsageForAnalytics || h.config.FeatureFlag.ForceV1ForTenant == types.GetTenantID(ctx) {
-		// Use v1 (eventPostProcessingService) when flag is disabled
-		response, err = h.eventPostProcessingService.GetDetailedUsageAnalytics(ctx, &req)
-	} else {
-		// Use v2 (featureUsageTrackingService) when flag is enabled
-		response, err = h.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &req)
-	}
+	response, err = h.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &req)
 
 	if err != nil {
 		c.Error(err)

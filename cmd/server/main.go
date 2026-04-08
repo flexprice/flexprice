@@ -218,7 +218,6 @@ func main() {
 			service.NewEnvironmentService,
 			service.NewMeterService,
 			service.NewEventService,
-			service.NewEventPostProcessingService,
 			service.NewEventConsumptionService,
 			service.NewFeatureUsageTrackingService,
 			service.NewRawEventsReprocessingService,
@@ -303,7 +302,6 @@ func provideHandlers(
 	logger *logger.Logger,
 	meterService service.MeterService,
 	eventService service.EventService,
-	eventPostProcessingService service.EventPostProcessingService,
 	environmentService service.EnvironmentService,
 	authService service.AuthService,
 	userService service.UserService,
@@ -354,7 +352,7 @@ func provideHandlers(
 	geminiPricingService service.GeminiPricingService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                 v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, cfg, logger),
+		Events:                 v1.NewEventsHandler(eventService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, cfg, logger),
 		Meter:                  v1.NewMeterHandler(meterService, logger),
 		Auth:                   v1.NewAuthHandler(cfg, authService, logger),
 		User:                   v1.NewUserHandler(userService, logger),
@@ -482,7 +480,6 @@ func startServer(
 	router *pubsubRouter.Router,
 	onboardingService service.OnboardingService,
 	log *logger.Logger,
-	eventPostProcessingSvc service.EventPostProcessingService,
 	eventConsumptionSvc service.EventConsumptionService,
 	featureUsageSvc service.FeatureUsageTrackingService,
 	costSheetUsageSvc service.CostSheetUsageTrackingService,
@@ -503,21 +500,21 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, true)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, temporalService, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 
 		// Register all handlers and start router once (no event consumption)
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, false)
 		startRouter(lc, router, log)
 
 	case types.ModeTemporalWorker:
 		// Register webhook handler and start router so that webhook events
 		// published by temporal activities (e.g. invoice finalization) are
 		// consumed and delivered via Svix/native in the same process.
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, false)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, temporalService, params)
 	case types.ModeConsumer:
@@ -526,7 +523,7 @@ func startServer(
 		}
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, true)
 		startRouter(lc, router, log)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
@@ -590,7 +587,6 @@ func registerRouterHandlers(
 	webhookService *webhook.WebhookService,
 	integrationEventService *integrationevents.IntegrationEventService,
 	onboardingService service.OnboardingService,
-	eventPostProcessingSvc service.EventPostProcessingService,
 	eventConsumptionSvc service.EventConsumptionService,
 	featureUsageSvc service.FeatureUsageTrackingService,
 	costSheetUsageSvc service.CostSheetUsageTrackingService,
@@ -605,7 +601,6 @@ func registerRouterHandlers(
 		integrationEventService.RegisterHandler(router)
 		eventConsumptionSvc.RegisterHandler(router, cfg)
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
-		// eventPostProcessingSvc.RegisterHandler(router, cfg)
 		eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
 		featureUsageSvc.RegisterHandler(router, cfg)
 		featureUsageSvc.RegisterHandlerLazy(router, cfg)

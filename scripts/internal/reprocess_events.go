@@ -33,8 +33,8 @@ type ReprocessEventsScriptParams struct {
 
 // ReprocessEventsScript holds all dependencies for the script
 type ReprocessEventsScript struct {
-	log                        *logger.Logger
-	eventPostProcessingService service.EventPostProcessingService
+	log                         *logger.Logger
+	featureUsageTrackingService service.FeatureUsageTrackingService
 }
 
 // ReprocessEvents triggers reprocessing of events with given parameters
@@ -83,7 +83,7 @@ func ReprocessEvents(params ReprocessEventsScriptParams) error {
 	}
 
 	// Execute reprocessing
-	if err := script.eventPostProcessingService.ReprocessEvents(ctx, reprocessParams); err != nil {
+	if _, err := script.featureUsageTrackingService.ReprocessEvents(ctx, reprocessParams); err != nil {
 		return fmt.Errorf("event reprocessing failed: %w", err)
 	}
 
@@ -176,7 +176,7 @@ func newReprocessEventsScript() (*ReprocessEventsScript, error) {
 
 	// Initialize repositories
 	eventRepo := chRepo.NewEventRepository(chStore, log)
-	processedEventRepo := chRepo.NewProcessedEventRepository(chStore, log)
+	featureUsageRepo := chRepo.NewFeatureUsageRepository(chStore, log)
 	customerRepo := entRepo.NewCustomerRepository(pgClient, log, cacheClient)
 	meterRepo := entRepo.NewMeterRepository(pgClient, log, cacheClient)
 	priceRepo := entRepo.NewPriceRepository(pgClient, log, cacheClient)
@@ -193,14 +193,14 @@ func newReprocessEventsScript() (*ReprocessEventsScript, error) {
 	}
 
 	// Initialize event post-processing service
-	eventPostProcessingService := service.NewEventPostProcessingService(
+	featureUsageTrackingService := service.NewFeatureUsageTrackingService(
 		serviceParams,
 		eventRepo,
-		processedEventRepo,
+		featureUsageRepo,
 	)
 
 	return &ReprocessEventsScript{
-		log:                        log,
-		eventPostProcessingService: eventPostProcessingService,
+		log:                         log,
+		featureUsageTrackingService: featureUsageTrackingService,
 	}, nil
 }

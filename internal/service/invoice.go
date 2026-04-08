@@ -639,8 +639,8 @@ func (s *invoiceService) getBulkUsageAnalyticsForInvoice(ctx context.Context, us
 		"feature_ids_count", len(featureIDs),
 		"customer_id", customer.ExternalID)
 
-	eventPostProcessingService := NewEventPostProcessingService(s.ServiceParams, s.EventRepo, s.ProcessedEventRepo)
-	analyticsResponse, err := eventPostProcessingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+	featureUsageTrackingService := NewFeatureUsageTrackingService(s.ServiceParams, s.EventRepo, s.FeatureUsageRepo)
+	analyticsResponse, err := featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to get bulk usage analytics",
 			"invoice_id", inv.ID,
