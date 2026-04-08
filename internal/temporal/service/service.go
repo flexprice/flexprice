@@ -653,9 +653,9 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 	}
 }
 
-// buildPriceSyncInput builds input for price sync workflow
+// buildPriceSyncInput builds input for the price sync workflow (plan or addon).
 func (s *temporalService) buildPriceSyncInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
-	// If already correct type, just ensure context is set
+	// If already correct type, just ensure context fields are set
 	if input, ok := params.(models.PriceSyncWorkflowInput); ok {
 		input.TenantID = tenantID
 		input.EnvironmentID = environmentID
@@ -663,16 +663,19 @@ func (s *temporalService) buildPriceSyncInput(_ context.Context, tenantID, envir
 		return input, nil
 	}
 
-	// Handle string input (plan ID)
-	planID, ok := params.(string)
-	if !ok || planID == "" {
-		return nil, errors.NewError("plan ID is required").
-			WithHint("Provide plan ID as string or PriceSyncWorkflowInput").
+	// Handle string input — treat as plan ID for backward compatibility
+	entityID, ok := params.(string)
+	if !ok || entityID == "" {
+		return nil, errors.NewError("entity ID is required").
+			WithHint("Provide plan ID or addon ID as string, or a PriceSyncWorkflowInput").
 			Mark(errors.ErrValidation)
 	}
 
+	// Default to plan for backward compat when a bare string is passed
 	return models.PriceSyncWorkflowInput{
-		PlanID:        planID,
+		EntityType:    types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:      entityID,
+		PlanID:        entityID, // keep PlanID populated for backward compat
 		TenantID:      tenantID,
 		EnvironmentID: environmentID,
 		UserID:        userID,

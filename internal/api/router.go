@@ -254,6 +254,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			addon.PUT("/:id", handlers.Addon.UpdateAddon)
 			addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)
 			addon.DELETE("/:id", handlers.Addon.DeleteAddon)
+			addon.POST("/:id/sync/subscriptions", handlers.Addon.SyncAddonPrices)
+			addon.POST("/:id/sync/subscriptions/v2", handlers.Addon.SyncAddonPricesV2)
 		}
 
 		group := v1Private.Group("/groups")

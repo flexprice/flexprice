@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -100,6 +101,10 @@ func NewPlanRepository(p RepositoryParams) plan.Repository {
 
 func NewPlanPriceSyncRepository(p RepositoryParams) planpricesync.Repository {
 	return entRepo.NewPlanPriceSyncRepository(p.EntClient, p.Logger)
+}
+
+func NewAddonPriceSyncRepository(p RepositoryParams) addonpricesync.Repository {
+	return entRepo.NewAddonPriceSyncRepository(p.EntClient, p.Logger)
 }
 
 func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {

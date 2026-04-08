@@ -7,9 +7,15 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
+	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	eventsWorkflowModels "github.com/flexprice/flexprice/internal/temporal/models/events"
+	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // AddonService interface defines the business logic for addon management
@@ -25,6 +31,10 @@ type AddonService interface {
 	// Addon Association operations
 	ListAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error)
 	GetActiveAddonAssociation(ctx context.Context, req dto.GetActiveAddonAssociationRequest) (*dto.ListAddonAssociationsResponse, error)
+
+	// SyncAddonPrices syncs addon prices to subscription line items for all active subscriptions
+	// that have this addon attached. Idempotent: safe to re-run.
+	SyncAddonPrices(ctx context.Context, addonID string) (*dto.SyncAddonPricesResponse, error)
 }
 
 type addonService struct {
@@ -499,4 +509,222 @@ func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.Ge
 	}
 
 	return associations, nil
+}
+
+// createAddonLineItem builds a SubscriptionLineItem for an addon-derived price.
+func createAddonLineItem(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	price *domainPrice.Price,
+) *subscription.SubscriptionLineItem {
+	metadata := make(map[string]string)
+	for k, v := range price.Metadata {
+		metadata[k] = v
+	}
+	metadata["added_by"] = "addon_sync_api"
+	metadata["sync_version"] = "1.0"
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:     price.ID,
+		Quantity:    decimal.Zero,
+		Metadata:    metadata,
+		DisplayName: price.DisplayName,
+		StartDate:   price.StartDate,
+		EndDate:     price.EndDate,
+	}
+
+	lineItemParams := dto.LineItemParams{
+		Subscription: &dto.SubscriptionResponse{Subscription: sub},
+		Price:        &dto.PriceResponse{Price: price},
+		EntityType:   types.SubscriptionLineItemEntityTypeAddon,
+	}
+
+	return req.ToSubscriptionLineItem(ctx, lineItemParams)
+}
+
+// SyncAddonPrices syncs addon prices to subscription line items.
+func (s *addonService) SyncAddonPrices(ctx context.Context, addonID string) (*dto.SyncAddonPricesResponse, error) {
+	syncStartTime := time.Now()
+
+	lineItemsFoundForCreation := 0
+	lineItemsCreated := 0
+	lineItemsTerminated := 0
+
+	if _, err := s.AddonRepo.GetByID(ctx, addonID); err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to get addon for price synchronization", "addon_id", addonID, "error", err)
+		return nil, err
+	}
+
+	// Termination loop
+	terminationStartTime := time.Now()
+	terminationParams := addonpricesync.TerminateExpiredAddonPricesLineItemsParams{
+		AddonID: addonID,
+		Limit:   1000,
+	}
+	terminationIteration := 0
+	for {
+		terminationIteration++
+		numTerminated, err := s.AddonPriceSyncRepo.TerminateExpiredAddonPricesLineItems(ctx, terminationParams)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to terminate expired addon price line items", "addon_id", addonID, "error", err)
+			return nil, err
+		}
+		lineItemsTerminated += numTerminated
+		if numTerminated == 0 || numTerminated < terminationParams.Limit {
+			break
+		}
+	}
+	terminationDuration := time.Since(terminationStartTime)
+
+	// Cursor creation loop
+	creationStartTime := time.Now()
+	cursorSubID := ""
+	creationIteration := 0
+	for {
+		creationIteration++
+		queryParams := addonpricesync.ListAddonLineItemsToCreateParams{
+			AddonID:    addonID,
+			Limit:      1000,
+			AfterSubID: cursorSubID,
+		}
+
+		missingPairs, err := s.AddonPriceSyncRepo.ListAddonLineItemsToCreate(ctx, queryParams)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to list addon line items to create", "addon_id", addonID, "error", err)
+			return nil, err
+		}
+
+		nextSubID, err := s.AddonPriceSyncRepo.GetLastSubscriptionIDInBatch(ctx, queryParams)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to get last subscription ID in addon batch", "addon_id", addonID, "error", err)
+			return nil, err
+		}
+
+		if len(missingPairs) == 0 && nextSubID == nil {
+			break
+		}
+
+		if len(missingPairs) == 0 {
+			cursorSubID = *nextSubID
+			continue
+		}
+
+		lineItemsFoundForCreation += len(missingPairs)
+
+		priceIDs := lo.Uniq(lo.Map(missingPairs, func(pair addonpricesync.AddonLineItemCreationDelta, _ int) string {
+			return pair.PriceID
+		}))
+		subscriptionIDs := lo.Uniq(lo.Map(missingPairs, func(pair addonpricesync.AddonLineItemCreationDelta, _ int) string {
+			return pair.SubscriptionID
+		}))
+
+		priceFilter := types.NewNoLimitPriceFilter().
+			WithPriceIDs(priceIDs).
+			WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
+			WithAllowExpiredPrices(true)
+
+		prices, err := s.PriceRepo.List(ctx, priceFilter)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to fetch addon prices for line item creation", "addon_id", addonID, "error", err)
+			return nil, err
+		}
+		priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
+
+		subFilter := types.NewNoLimitSubscriptionFilter()
+		subFilter.SubscriptionIDs = subscriptionIDs
+		subs, err := s.SubRepo.List(ctx, subFilter)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to fetch subscriptions for addon line item creation", "addon_id", addonID, "error", err)
+			return nil, err
+		}
+		subMap := lo.KeyBy(subs, func(s *subscription.Subscription) string { return s.ID })
+
+		var lineItemsToCreate []*subscription.SubscriptionLineItem
+		for _, pair := range missingPairs {
+			price, priceFound := priceMap[pair.PriceID]
+			sub, subFound := subMap[pair.SubscriptionID]
+			if !priceFound || !subFound {
+				return nil, ierr.NewError("price or subscription not found to create addon line item").
+					WithHint("Price or subscription not found to create addon line item").
+					WithReportableDetails(map[string]interface{}{
+						"price_id":        pair.PriceID,
+						"subscription_id": pair.SubscriptionID,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+			lineItemsToCreate = append(lineItemsToCreate, createAddonLineItem(ctx, sub, price))
+		}
+
+		if len(lineItemsToCreate) > 0 {
+			const bulkInsertBatchSize = 2000
+			totalCreated := 0
+			for i := 0; i < len(lineItemsToCreate); i += bulkInsertBatchSize {
+				end := i + bulkInsertBatchSize
+				if end > len(lineItemsToCreate) {
+					end = len(lineItemsToCreate)
+				}
+				batch := lineItemsToCreate[i:end]
+				if err = s.SubscriptionLineItemRepo.CreateBulk(ctx, batch); err != nil {
+					s.Logger.ErrorwCtx(ctx, "failed to create addon line items in bulk batch",
+						"addon_id", addonID, "error", err,
+						"batch_start", i, "batch_end", end,
+						"batch_count", len(batch), "total_count", len(lineItemsToCreate))
+					return nil, err
+				}
+				totalCreated += len(batch)
+			}
+			lineItemsCreated += totalCreated
+
+			// Fire reprocess events workflow non-blocking for usage-based prices
+			if temporalSvc := temporalService.GetGlobalTemporalService(); temporalSvc != nil {
+				pairs := make([]eventsWorkflowModels.MissingPair, len(missingPairs))
+				for j, p := range missingPairs {
+					pairs[j] = eventsWorkflowModels.MissingPair{
+						SubscriptionID: p.SubscriptionID,
+						PriceID:        p.PriceID,
+						CustomerID:     p.CustomerID,
+					}
+				}
+				workflowInput := eventsWorkflowModels.ReprocessEventsForPlanWorkflowInput{
+					MissingPairs:  pairs,
+					TenantID:      types.GetTenantID(ctx),
+					EnvironmentID: types.GetEnvironmentID(ctx),
+					UserID:        types.GetUserID(ctx),
+				}
+				workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsForPlanWorkflow, workflowInput)
+				if err != nil {
+					s.Logger.WarnwCtx(ctx, "failed to start reprocess events workflow for addon",
+						"addon_id", addonID, "missing_pairs_count", len(missingPairs), "error", err)
+				} else {
+					s.Logger.DebugwCtx(ctx, "reprocess events workflow started for addon",
+						"addon_id", addonID, "workflow_id", workflowRun.GetID(), "run_id", workflowRun.GetRunID())
+				}
+			}
+		}
+
+		if nextSubID != nil {
+			cursorSubID = *nextSubID
+		}
+	}
+	creationDuration := time.Since(creationStartTime)
+
+	totalDuration := time.Since(syncStartTime)
+	s.Logger.InfowCtx(ctx, "completed addon price synchronization",
+		"addon_id", addonID,
+		"line_items_found_for_creation", lineItemsFoundForCreation,
+		"line_items_created", lineItemsCreated,
+		"line_items_terminated", lineItemsTerminated,
+		"total_duration_ms", totalDuration.Milliseconds(),
+		"termination_duration_ms", terminationDuration.Milliseconds(),
+		"creation_duration_ms", creationDuration.Milliseconds())
+
+	return &dto.SyncAddonPricesResponse{
+		AddonID: addonID,
+		Message: "Addon prices synchronized to subscription line items successfully",
+		Summary: dto.SyncAddonPricesSummary{
+			LineItemsFoundForCreation: lineItemsFoundForCreation,
+			LineItemsCreated:          lineItemsCreated,
+			LineItemsTerminated:       lineItemsTerminated,
+		},
+	}, nil
 }

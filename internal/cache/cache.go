@@ -72,6 +72,8 @@ const (
 	// PrefixPriceSyncLock is the Redis key prefix for plan-level price sync lock (used with planID).
 	// Used by both API (acquire) and Temporal activity (release); do not change without updating both.
 	PrefixPriceSyncLock = "price_sync:plan:"
+	// PrefixAddonPriceSyncLock is the Redis key prefix for addon-level price sync lock (used with addonID).
+	PrefixAddonPriceSyncLock = "price_sync:addon:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

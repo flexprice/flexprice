@@ -4,9 +4,12 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -14,13 +17,20 @@ import (
 type AddonHandler struct {
 	service            service.AddonService
 	entitlementService service.EntitlementService
+	temporalService    temporalservice.TemporalService
 	log                *logger.Logger
 }
 
-func NewAddonHandler(service service.AddonService, entitlementService service.EntitlementService, log *logger.Logger) *AddonHandler {
+func NewAddonHandler(
+	service service.AddonService,
+	entitlementService service.EntitlementService,
+	temporalService temporalservice.TemporalService,
+	log *logger.Logger,
+) *AddonHandler {
 	return &AddonHandler{
 		service:            service,
 		entitlementService: entitlementService,
+		temporalService:    temporalService,
 		log:                log,
 	}
 }
@@ -271,6 +281,142 @@ func (h *AddonHandler) GetAddonEntitlements(c *gin.Context) {
 	resp, err := h.entitlementService.GetAddonEntitlements(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error("Failed to get addon entitlements", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func addonPriceSyncLockKey(addonID string) string {
+	return cache.PrefixAddonPriceSyncLock + addonID
+}
+
+// @Summary Sync addon prices to subscriptions (async)
+// @ID syncAddonPrices
+// @Description Starts a Temporal workflow to sync addon prices to subscription line items for all active subscriptions with this addon.
+// @Tags Addons
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Addon ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 409 {object} ierr.ErrorResponse "Sync already in progress"
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /addons/{id}/sync/subscriptions [post]
+func (h *AddonHandler) SyncAddonPrices(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("addon ID is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Verify addon exists
+	if _, err := h.service.GetAddon(c.Request.Context(), id); err != nil {
+		c.Error(err)
+		return
+	}
+
+	// Acquire addon-level lock
+	redisCache := cache.GetRedisCache()
+	if redisCache == nil {
+		c.Error(ierr.NewError("price sync lock unavailable").
+			WithHint("Redis cache is not available. Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+	lockKey := addonPriceSyncLockKey(id)
+	acquired, err := redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	if err != nil {
+		h.log.Errorw("addon_price_sync_lock_acquire_failed", "addon_id", id, "lock_key", lockKey, "error", err)
+		c.Error(ierr.NewError("failed to acquire addon price sync lock").
+			WithHint("Try again later.").
+			Mark(ierr.ErrInternal))
+		return
+	}
+	if !acquired {
+		h.log.Infow("addon_price_sync_lock_rejected", "addon_id", id, "lock_key", lockKey, "reason", "already_held")
+		c.Error(ierr.NewError("price sync already in progress for this addon").
+			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			Mark(ierr.ErrAlreadyExists))
+		return
+	}
+	h.log.Infow("addon_price_sync_lock_acquired", "addon_id", id, "lock_key", lockKey)
+	// Release lock if workflow dispatch fails (activity releases it on success path).
+	defer func() {
+		if c.IsAborted() || len(c.Errors) > 0 {
+			redisCache.Delete(c.Request.Context(), lockKey)
+		}
+	}()
+
+	workflowInput := models.PriceSyncWorkflowInput{
+		EntityType: types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:   id,
+	}
+	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, workflowInput)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "addon price sync workflow started successfully",
+		"workflow_id": workflowRun.GetID(),
+		"run_id":      workflowRun.GetRunID(),
+	})
+}
+
+// @Summary Sync addon prices to subscriptions (synchronous)
+// @ID syncAddonPricesV2
+// @Description Synchronously syncs addon prices to subscription line items. Blocks until complete.
+// @Tags Addons
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Addon ID"
+// @Success 200 {object} dto.SyncAddonPricesResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 409 {object} ierr.ErrorResponse "Sync already in progress"
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /addons/{id}/sync/subscriptions/v2 [post]
+func (h *AddonHandler) SyncAddonPricesV2(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("addon ID is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	redisCache := cache.GetRedisCache()
+	if redisCache == nil {
+		c.Error(ierr.NewError("price sync lock unavailable").
+			WithHint("Redis cache is not available. Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+	lockKey := addonPriceSyncLockKey(id)
+	acquired, err := redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	if err != nil {
+		h.log.Errorw("addon_price_sync_lock_acquire_failed", "addon_id", id, "lock_key", lockKey, "error", err)
+		c.Error(ierr.NewError("failed to acquire addon price sync lock").
+			WithHint("Try again later.").
+			Mark(ierr.ErrInternal))
+		return
+	}
+	if !acquired {
+		h.log.Infow("addon_price_sync_lock_rejected", "addon_id", id, "lock_key", lockKey, "reason", "already_held")
+		c.Error(ierr.NewError("price sync already in progress for this addon").
+			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			Mark(ierr.ErrAlreadyExists))
+		return
+	}
+	h.log.Infow("addon_price_sync_lock_acquired", "addon_id", id, "lock_key", lockKey)
+	defer redisCache.Delete(c.Request.Context(), lockKey)
+
+	resp, err := h.service.SyncAddonPrices(c.Request.Context(), id)
+	if err != nil {
 		c.Error(err)
 		return
 	}
