@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	meterusage "github.com/flexprice/flexprice/internal/domain/meter_usage"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -72,6 +73,10 @@ func NewFeatureUsageRepository(p RepositoryParams) events.FeatureUsageRepository
 
 func NewRawEventRepository(p RepositoryParams) events.RawEventRepository {
 	return clickhouseRepo.NewRawEventRepository(p.ClickHouseDB, p.Logger)
+}
+
+func NewMeterUsageRepository(p RepositoryParams) meterusage.Repository {
+	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
 }
 
 func NewMeterRepository(p RepositoryParams) meter.Repository {

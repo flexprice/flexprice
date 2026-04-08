@@ -234,7 +234,14 @@ costsheet_usage_tracking_lazy:
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service_lazy"
-  
+
+meter_usage_tracking:
+  enabled: true
+  topic: "events"
+  rate_limit: 1
+  consumer_group: "v1_meter_usage_tracking_service"
+  allowed_properties_insert_for_tenant: []
+
 wallet_balance_alert:
   enabled: true
   topic: "wallet_alert"
