@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS flexprice.meter_usage
                                                              CODEC(Delta, ZSTD(1)),
 
     -- metric
-    qty_total             Decimal(18, 8)           NOT NULL  CODEC(ZSTD(1)),
+    qty_total             Decimal(25, 15)           NOT NULL  CODEC(ZSTD(1)),
 
     -- COUNT_UNIQUE support
     unique_hash           String                   NOT NULL  DEFAULT ''
