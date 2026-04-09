@@ -2167,7 +2167,12 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		return nil, err
 	}
 
-	// Get customer
+	usageExternalIDs, err := s.usageExternalCustomerIDsForSubscription(ctx, subscription)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get customer (subscription owner — used for logging and display context)
 	customer, err := s.CustomerRepo.Get(ctx, subscription.CustomerID)
 	if err != nil {
 		return nil, err
@@ -2189,7 +2194,14 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		usageEndTime = time.Now().UTC()
 	}
 
-	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, subscription.ID, usageStartTime, req.LifetimeUsage)
+	// For inherited subscriptions, line items live on the parent (same as GetFeatureUsageBySubscription).
+	lineItemSubID := subscription.ID
+	if subscription.SubscriptionType == types.SubscriptionTypeInherited &&
+		subscription.ParentSubscriptionID != nil && lo.FromPtr(subscription.ParentSubscriptionID) != "" {
+		lineItemSubID = lo.FromPtr(subscription.ParentSubscriptionID)
+	}
+
+	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, lineItemSubID, usageStartTime, req.LifetimeUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -2238,17 +2250,22 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		"subscription_id", req.SubscriptionID,
 		"start_time", usageStartTime,
 		"end_time", usageEndTime,
-		"metered_line_items", len(priceIDs))
+		"metered_line_items", len(priceIDs),
+		"usage_external_customer_ids_count", len(usageExternalIDs))
 
-	// Performance optimization: Get distinct event names for this customer
-	// to filter out meters that have no events, reducing processing from potentially
-	// 400-500 meters down to only 5-7 that have actual usage
-	distinctEventNames, err := s.EventRepo.GetDistinctEventNames(ctx, []string{customer.ExternalID}, usageStartTime, usageEndTime)
-	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get distinct event names",
-			"error", err,
-			"external_customer_id", customer.ExternalID)
-		return nil, fmt.Errorf("failed to get distinct event names for customer %s: %w", customer.ExternalID, err)
+	// Performance optimization: distinct event names for all customers that roll up into this subscription
+	// (parent + inherited children), same scope as GetFeatureUsageBySubscription / usageCustomerIDsForSubscription.
+	var distinctEventNames []string
+	ranDistinctEventQuery := false
+	if len(usageExternalIDs) > 0 {
+		ranDistinctEventQuery = true
+		distinctEventNames, err = s.EventRepo.GetDistinctEventNames(ctx, usageExternalIDs, usageStartTime, usageEndTime)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to get distinct event names",
+				"error", err,
+				"external_customer_ids", usageExternalIDs)
+			return nil, fmt.Errorf("failed to get distinct event names for subscription %s: %w", req.SubscriptionID, err)
+		}
 	}
 
 	// Create a map for fast event name lookup
@@ -2258,10 +2275,11 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	}
 
 	s.Logger.DebugwCtx(ctx, "distinct event names optimization",
-		"external_customer_id", customer.ExternalID,
+		"external_customer_ids", usageExternalIDs,
 		"total_distinct_events", len(distinctEventNames),
 		"total_line_items", len(lineItems),
-		"distinct_event_names", distinctEventNames)
+		"distinct_event_names", distinctEventNames,
+		"ran_distinct_event_query", ranDistinctEventQuery)
 
 	meterUsageRequests := make([]*dto.GetUsageByMeterRequest, 0, len(lineItems))
 	for _, lineItem := range lineItems {
@@ -2278,43 +2296,37 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			continue
 		}
 
-		if len(distinctEventNames) == 0 {
-			// skip all usage items if distinct event names is nil
-			// which means there is no event data in the database
-			// this is a fallback to ensure that we don't process all meters
-			// if the event data is not available
+		if ranDistinctEventQuery && len(distinctEventNames) == 0 {
+			// Distinct-name query ran for this subscription's external IDs and found no event names — skip meters.
 			s.Logger.DebugwCtx(ctx, "skipping meter as there are no events",
 				"meter_id", lineItem.MeterID,
 				"event_name", meter.EventName,
 				"customer_id", customer.ID,
-				"external_customer_id", customer.ExternalID,
+				"external_customer_ids", usageExternalIDs,
 				"subscription_id", req.SubscriptionID)
 			continue
 		}
 
-		// Performance optimization: Skip meters that don't have any events for this customer.
-		// distinctEventNames == nil means the optimization query failed (e.g. context deadline),
-		// so we fall back to processing all meters. A non-nil empty slice means the query
-		// succeeded but found no events, so we can safely skip.
-		if distinctEventNames != nil && !eventNameExists[meter.EventName] {
+		// Skip meters with no matching events only when the optimization query ran.
+		if ranDistinctEventQuery && !eventNameExists[meter.EventName] {
 			s.Logger.DebugwCtx(ctx, "skipping meter with no events",
 				"meter_id", lineItem.MeterID,
 				"event_name", meter.EventName,
 				"customer_id", customer.ID,
-				"external_customer_id", customer.ExternalID,
+				"external_customer_ids", usageExternalIDs,
 				"subscription_id", req.SubscriptionID)
 			continue
 		}
 
 		meterID := lineItem.MeterID
 		usageRequest := &dto.GetUsageByMeterRequest{
-			MeterID:            meterID,
-			PriceID:            lineItem.PriceID,
-			Meter:              meter.ToMeter(),
-			ExternalCustomerID: customer.ExternalID,
-			StartTime:          lineItem.GetPeriodStart(usageStartTime),
-			EndTime:            lineItem.GetPeriodEnd(usageEndTime),
-			Filters:            make(map[string][]string),
+			MeterID:             meterID,
+			PriceID:             lineItem.PriceID,
+			Meter:               meter.ToMeter(),
+			ExternalCustomerIDs: usageExternalIDs,
+			StartTime:           lineItem.GetPeriodStart(usageStartTime),
+			EndTime:             lineItem.GetPeriodEnd(usageEndTime),
+			Filters:             make(map[string][]string),
 		}
 
 		for _, filter := range meter.Filters {
@@ -2325,11 +2337,11 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 	s.Logger.InfowCtx(ctx, "performance optimization results",
 		"subscription_id", req.SubscriptionID,
-		"external_customer_id", customer.ExternalID,
+		"external_customer_ids", usageExternalIDs,
 		"total_line_items", len(lineItems),
 		"total_usage_line_items", len(priceIDs),
 		"meters_with_events", len(meterUsageRequests),
-		"optimization_enabled", distinctEventNames != nil,
+		"optimization_enabled", ranDistinctEventQuery,
 		"meters_skipped", len(priceIDs)-len(meterUsageRequests))
 
 	usageMap, err := eventService.BulkGetUsageByMeterSync(ctx, meterUsageRequests)
@@ -6636,6 +6648,32 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 			Mark(ierr.ErrDatabase)
 	}
 	return nil
+}
+
+// usageExternalCustomerIDsForSubscription returns external customer IDs whose raw events should
+// count toward this subscription (owner plus inherited children for parent subscriptions).
+// Aligns with usageCustomerIDsForSubscription for use with ClickHouse events / GetUsageByMeter.
+func (s *subscriptionService) usageExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+	internalIDs, err := s.usageCustomerIDsForSubscription(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+	if len(internalIDs) == 0 {
+		return nil, nil
+	}
+	custFilter := types.NewNoLimitCustomerFilter()
+	custFilter.CustomerIDs = internalIDs
+	customers, err := s.CustomerRepo.List(ctx, custFilter)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(customers))
+	for _, c := range customers {
+		if c.ExternalID != "" {
+			out = append(out, c.ExternalID)
+		}
+	}
+	return lo.Uniq(out), nil
 }
 
 // usageCustomerIDsForSubscription returns internal customer IDs whose feature_usage rows are
