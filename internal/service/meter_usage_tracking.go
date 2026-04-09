@@ -342,26 +342,20 @@ func (s *meterUsageTrackingService) checkMeterFilters(event *events.Event, filte
 	return true
 }
 
-// generateUniqueHash returns a SHA-256 hex string used for deduplication.
-// Two cases:
-//  1. COUNT_UNIQUE: hash(eventName + fieldName + fieldValue) — two events with
-//     the same field value produce the same hash and are deduplicated.
-//  2. All other types: hash(eventName + eventID) — every distinct event is unique.
+// generateUniqueHash returns a SHA-256 hex string for COUNT_UNIQUE deduplication only.
+// For COUNT_UNIQUE: hash(eventName + fieldName + fieldValue) so two events sharing the
+// same field value are deduplicated and counted once.
+// For all other aggregation types: returns "" — deduplication is handled by the
+// ReplacingMergeTree ORDER BY key in ClickHouse, not by unique_hash.
 func (s *meterUsageTrackingService) generateUniqueHash(event *events.Event, m *meter.Meter) string {
-	var hashStr string
-
 	if m.Aggregation.Type == types.AggregationCountUnique && m.Aggregation.Field != "" {
 		if fieldValue, ok := event.Properties[m.Aggregation.Field]; ok {
-			hashStr = fmt.Sprintf("%s:%s:%v", event.EventName, m.Aggregation.Field, fieldValue)
+			hashStr := fmt.Sprintf("%s:%s:%v", event.EventName, m.Aggregation.Field, fieldValue)
+			hash := sha256.Sum256([]byte(hashStr))
+			return hex.EncodeToString(hash[:])
 		}
 	}
-
-	if hashStr == "" {
-		hashStr = event.EventName + ":" + event.ID
-	}
-
-	hash := sha256.Sum256([]byte(hashStr))
-	return hex.EncodeToString(hash[:])
+	return ""
 }
 
 // extractQuantity extracts the quantity from event properties based on the meter's aggregation config.

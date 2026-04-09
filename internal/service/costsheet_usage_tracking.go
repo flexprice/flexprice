@@ -1017,52 +1017,289 @@ func (s *costsheetUsageTrackingService) GetCostSheetUsageAnalytics(ctx context.C
 }
 
 func (s *costsheetUsageTrackingService) fetchAnalytics(ctx context.Context, costsheet *dto.CostsheetResponse, req *dto.GetCostAnalyticsRequest, customer *customer.Customer) ([]*events.DetailedUsageAnalytic, error) {
-	// STEP1: Extract features and build max bucket and sum bucket features maps
-	maxBucketFeatures, sumBucketFeatures, featureMap, meterMap, err := s.buildBucketFeaturesFromCostsheet(ctx, costsheet)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Resolve external customer ID
+	externalCustomerID := req.ExternalCustomerID
+	if externalCustomerID == "" && customer != nil {
+		externalCustomerID = customer.ExternalID
+	}
+
+	// STEP1: Collect meters from costsheet prices
+	meterIDs := make([]string, 0)
+	meterIDSet := make(map[string]bool)
+	// Map meter_id → price for cost calculation later
+	type priceMeterPair struct {
+		price   *dto.PriceResponse
+		meterID string
+	}
+	var priceMeterPairs []priceMeterPair
+
+	for _, priceResp := range costsheet.Prices {
+		if priceResp == nil || !priceResp.IsUsage() || priceResp.MeterID == "" {
+			continue
+		}
+		priceMeterPairs = append(priceMeterPairs, priceMeterPair{price: priceResp, meterID: priceResp.MeterID})
+		if !meterIDSet[priceResp.MeterID] {
+			meterIDs = append(meterIDs, priceResp.MeterID)
+			meterIDSet[priceResp.MeterID] = true
+		}
+	}
+
+	if len(meterIDs) == 0 {
+		s.Logger.DebugwCtx(ctx, "no usage-based prices with meters found in costsheet", "costsheet_id", costsheet.ID)
+		return nil, nil
+	}
+
+	// STEP2: Fetch meters in bulk
+	meterFilter := types.NewNoLimitMeterFilter()
+	meterFilter.MeterIDs = meterIDs
+	meters, err := s.MeterRepo.List(ctx, meterFilter)
 	if err != nil {
 		return nil, err
 	}
-
-	// STEP2: Create analytics parameters
-	params := &events.UsageAnalyticsParams{
-		TenantID:      types.GetTenantID(ctx),
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		FeatureIDs:    req.FeatureIDs,
-		StartTime:     req.StartTime,
-		EndTime:       req.EndTime,
-		GroupBy:       []string{"feature_id"}, // Default grouping for costsheet analytics
+	meterMap := make(map[string]*meter.Meter)
+	for _, m := range meters {
+		meterMap[m.ID] = m
 	}
 
-	// Set customer info if provided
-	if customer != nil {
-		params.CustomerID = customer.ID
-		params.ExternalCustomerID = customer.ExternalID
+	// STEP3: Fetch features for enrichment
+	featureMap := make(map[string]*feature.Feature)
+	if len(meterMap) > 0 {
+		featureFilter := types.NewNoLimitFeatureFilter()
+		featureFilter.MeterIDs = lo.Keys(meterMap)
+		features, err := s.FeatureRepo.List(ctx, featureFilter)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch features for cost analytics enrichment", "error", err)
+		} else {
+			for _, f := range features {
+				featureMap[f.ID] = f
+			}
+		}
 	}
 
-	// STEP3: Fetch analytics using repository method
-	analytics, err := s.costUsageRepo.GetDetailedUsageAnalytics(ctx, costsheet.ID, params.ExternalCustomerID, params, maxBucketFeatures, sumBucketFeatures)
-	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get detailed usage analytics from costsheet repo",
-			"error", err,
-			"costsheet_id", costsheet.ID,
-			"external_customer_id", params.ExternalCustomerID,
-		)
-		return nil, err
+	// Build meter → feature lookup for feature_id filtering
+	meterToFeature := make(map[string]*feature.Feature)
+	for _, f := range featureMap {
+		if f.MeterID != "" {
+			meterToFeature[f.MeterID] = f
+		}
 	}
 
-	// STEP4: Enrich analytics with feature and meter metadata
+	// If feature_ids filter is provided, restrict to those features' meters
+	allowedMeterIDs := meterIDSet // default: all meters from costsheet
+	if len(req.FeatureIDs) > 0 {
+		allowedMeterIDs = make(map[string]bool)
+		featureIDSet := make(map[string]bool)
+		for _, fid := range req.FeatureIDs {
+			featureIDSet[fid] = true
+		}
+		for mID, f := range meterToFeature {
+			if featureIDSet[f.ID] {
+				allowedMeterIDs[mID] = true
+			}
+		}
+	}
+
+	// STEP4: Group meters by aggregation type for batched querying
+	// Separate bucketed meters (need individual queries) from regular meters (can batch)
+	type regularMeterInfo struct {
+		meterID   string
+		priceResp *dto.PriceResponse
+		featureID string
+	}
+	// Group regular meters by aggregation type for batch queries
+	regularByAggType := make(map[types.AggregationType][]regularMeterInfo)
+	var bucketedPairs []priceMeterPair
+
+	for _, pair := range priceMeterPairs {
+		if !allowedMeterIDs[pair.meterID] {
+			continue
+		}
+		m, ok := meterMap[pair.meterID]
+		if !ok {
+			continue
+		}
+
+		featureID := ""
+		if f, exists := meterToFeature[pair.meterID]; exists {
+			featureID = f.ID
+		}
+
+		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
+			bucketedPairs = append(bucketedPairs, pair)
+		} else {
+			aggType := m.Aggregation.Type
+			regularByAggType[aggType] = append(regularByAggType[aggType], regularMeterInfo{
+				meterID:   pair.meterID,
+				priceResp: pair.price,
+				featureID: featureID,
+			})
+		}
+	}
+
+	analytics := make([]*events.DetailedUsageAnalytic, 0, len(priceMeterPairs))
+
+	// STEP4a: Batch query regular meters by aggregation type
+	for aggType, infos := range regularByAggType {
+		batchMeterIDs := make([]string, len(infos))
+		for i, info := range infos {
+			batchMeterIDs[i] = info.meterID
+		}
+
+		params := &events.MeterUsageQueryParams{
+			TenantID:           tenantID,
+			EnvironmentID:      environmentID,
+			ExternalCustomerID: externalCustomerID,
+			MeterIDs:           batchMeterIDs,
+			StartTime:          req.StartTime,
+			EndTime:            req.EndTime,
+			AggregationType:    aggType,
+			WindowSize:         types.WindowSizeDay,
+			UseFinal:           true,
+		}
+
+		results, err := s.MeterUsageRepo.GetUsageMultiMeter(ctx, params)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to batch query meter_usage for cost analytics",
+				"error", err, "agg_type", aggType, "meter_count", len(batchMeterIDs),
+			)
+			continue
+		}
+
+		// Index results by meter_id
+		resultByMeter := make(map[string]*events.MeterUsageAggregationResult, len(results))
+		for _, r := range results {
+			resultByMeter[r.MeterID] = r
+		}
+
+		// Build analytics items
+		for _, info := range infos {
+			result, ok := resultByMeter[info.meterID]
+			if !ok {
+				// No usage data for this meter — skip
+				continue
+			}
+
+			item := &events.DetailedUsageAnalytic{
+				FeatureID:       info.featureID,
+				MeterID:         info.meterID,
+				PriceID:         info.priceResp.ID,
+				AggregationType: aggType,
+				TotalUsage:      result.TotalValue,
+				EventCount:      result.EventCount,
+				Points:          make([]events.UsageAnalyticPoint, 0, len(result.Points)),
+			}
+
+			// Set the correct aggregation-specific field
+			switch aggType {
+			case types.AggregationMax:
+				item.MaxUsage = result.TotalValue
+			case types.AggregationLatest:
+				item.LatestUsage = result.TotalValue
+			case types.AggregationCountUnique:
+				item.CountUniqueUsage = uint64(result.TotalValue.IntPart())
+			}
+
+			// Convert windowed results to points
+			for _, p := range result.Points {
+				point := events.UsageAnalyticPoint{
+					Timestamp:  p.WindowStart,
+					Usage:      p.Value,
+					EventCount: p.EventCount,
+				}
+				switch aggType {
+				case types.AggregationMax:
+					point.MaxUsage = p.Value
+				case types.AggregationLatest:
+					point.LatestUsage = p.Value
+				case types.AggregationCountUnique:
+					point.CountUniqueUsage = uint64(p.Value.IntPart())
+				}
+				item.Points = append(item.Points, point)
+			}
+
+			analytics = append(analytics, item)
+		}
+	}
+
+	// STEP4b: Query bucketed meters individually (they need special windowed queries)
+	for _, pair := range bucketedPairs {
+		m := meterMap[pair.meterID]
+		featureID := ""
+		if f, exists := meterToFeature[pair.meterID]; exists {
+			featureID = f.ID
+		}
+
+		item := s.fetchBucketedMeterAnalytics(ctx, tenantID, environmentID, externalCustomerID, req, pair.price, m, featureID)
+		if item != nil {
+			analytics = append(analytics, item)
+		}
+	}
+
+	// STEP5: Enrich analytics with feature and meter metadata
 	s.enrichAnalyticsWithMetadata(analytics, featureMap, meterMap)
 
-	s.Logger.DebugwCtx(ctx, "fetched analytics from costsheet usage repo",
+	s.Logger.DebugwCtx(ctx, "fetched analytics from meter_usage",
 		"costsheet_id", costsheet.ID,
 		"analytics_count", len(analytics),
-		"feature_count", len(featureMap),
 		"meter_count", len(meterMap),
-		"max_bucket_features_count", len(maxBucketFeatures),
-		"sum_bucket_features_count", len(sumBucketFeatures),
 	)
 
 	return analytics, nil
+}
+
+// fetchBucketedMeterAnalytics queries meter_usage for a bucketed (MAX/SUM with bucket_size) meter
+// and returns a DetailedUsageAnalytic with bucketed points.
+func (s *costsheetUsageTrackingService) fetchBucketedMeterAnalytics(
+	ctx context.Context,
+	tenantID, environmentID, externalCustomerID string,
+	req *dto.GetCostAnalyticsRequest,
+	priceResp *dto.PriceResponse,
+	m *meter.Meter,
+	featureID string,
+) *events.DetailedUsageAnalytic {
+	params := &events.MeterUsageQueryParams{
+		TenantID:           tenantID,
+		EnvironmentID:      environmentID,
+		ExternalCustomerID: externalCustomerID,
+		MeterID:            m.ID,
+		StartTime:          req.StartTime,
+		EndTime:            req.EndTime,
+		AggregationType:    m.Aggregation.Type,
+		WindowSize:         types.WindowSize(m.Aggregation.BucketSize),
+		UseFinal:           true,
+	}
+	if m.IsBucketedMaxMeter() {
+		params.GroupByProperty = m.Aggregation.GroupBy
+	}
+
+	result, err := s.MeterUsageRepo.GetUsageForBucketedMeters(ctx, params)
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "failed to query meter_usage for bucketed cost analytics",
+			"error", err, "meter_id", m.ID, "price_id", priceResp.ID,
+		)
+		return nil
+	}
+
+	item := &events.DetailedUsageAnalytic{
+		FeatureID:       featureID,
+		MeterID:         m.ID,
+		PriceID:         priceResp.ID,
+		AggregationType: m.Aggregation.Type,
+		TotalUsage:      result.Value,
+		Points:          make([]events.UsageAnalyticPoint, 0, len(result.Results)),
+	}
+
+	for _, r := range result.Results {
+		item.Points = append(item.Points, events.UsageAnalyticPoint{
+			Timestamp: r.WindowSize,
+			Usage:     r.Value,
+		})
+	}
+
+	return item
 }
 
 // buildBucketFeaturesFromCostsheet extracts features from costsheet and builds max and sum bucket features maps
