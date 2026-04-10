@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -382,6 +383,191 @@ func (r *MeterUsageRepository) GetDistinctMeterIDs(ctx context.Context, params *
 	}
 
 	return meterIDs, nil
+}
+
+// GetDetailedAnalytics provides comprehensive analytics with filtering, grouping, and time-series data.
+func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) ([]*events.MeterUsageDetailedResult, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
+	// Parse and validate group-by columns
+	groupByResult, err := r.qb.BuildDetailedGroupByColumns(params)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid group_by configuration").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Check if source is in group_by
+	sourceInGroupBy := false
+	for _, g := range params.GroupBy {
+		if g == "source" {
+			sourceInGroupBy = true
+			break
+		}
+	}
+
+	// Build SELECT columns: group-by aliases + aggregation columns
+	selectColumns := make([]string, 0, len(groupByResult.Aliases)+6)
+	if len(groupByResult.Aliases) > 0 {
+		selectColumns = append(selectColumns, groupByResult.Aliases...)
+	}
+	aggColumns := buildConditionalAggregationColumns(params.AggregationTypes)
+	selectColumns = append(selectColumns, aggColumns...)
+	if !sourceInGroupBy {
+		selectColumns = append(selectColumns, "groupUniqArray(source) AS sources")
+	}
+
+	// Build WHERE clause
+	where, args := r.qb.BuildDetailedWhereClause(params)
+	finalClause, settings := r.qb.BuildFinalClause(params.UseFinal)
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s
+		FROM meter_usage %s
+		WHERE %s
+	`, joinSelect(selectColumns), finalClause, where)
+
+	if len(groupByResult.Columns) > 0 {
+		query += " GROUP BY " + joinSelect(groupByResult.Columns)
+	}
+
+	if settings != "" {
+		query += "\n" + settings
+	}
+
+	r.logger.Debugw("executing detailed meter usage analytics query",
+		"query", query,
+		"group_by", params.GroupBy,
+		"property_filters", params.PropertyFilters,
+	)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute detailed meter usage analytics query").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []*events.MeterUsageDetailedResult
+
+	for rows.Next() {
+		result := &events.MeterUsageDetailedResult{
+			Properties: make(map[string]string),
+			Points:     make([]events.MeterUsageDetailedPoint, 0),
+		}
+
+		// Build scan targets: group-by columns + 5 aggregation values + optional sources
+		totalGroupByCols := len(groupByResult.Columns)
+		expectedCols := totalGroupByCols + 5 // total_usage, max_usage, latest_usage, count_unique_usage, event_count
+		if !sourceInGroupBy {
+			expectedCols++ // sources array
+		}
+
+		scanArgs := make([]interface{}, expectedCols)
+		groupByTargets := make([]string, totalGroupByCols)
+		for i := range groupByTargets {
+			scanArgs[i] = &groupByTargets[i]
+		}
+
+		scanArgs[totalGroupByCols] = &result.TotalUsage
+		scanArgs[totalGroupByCols+1] = &result.MaxUsage
+		scanArgs[totalGroupByCols+2] = &result.LatestUsage
+		scanArgs[totalGroupByCols+3] = &result.CountUniqueUsage
+		scanArgs[totalGroupByCols+4] = &result.EventCount
+		if !sourceInGroupBy {
+			result.Sources = []string{}
+			scanArgs[totalGroupByCols+5] = &result.Sources
+		}
+
+		if err := rows.Scan(scanArgs...); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan detailed meter usage analytics row").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Map scanned group-by values to result fields
+		for i, col := range groupByResult.Columns {
+			value := groupByTargets[i]
+			switch col {
+			case "meter_id":
+				result.MeterID = value
+			case "source":
+				result.Source = value
+			default:
+				// Property group-by: extract property name from JSONExtractString expression
+				if strings.HasPrefix(col, "JSONExtractString(properties, '") {
+					start := len("JSONExtractString(properties, '")
+					end := strings.Index(col[start:], "'")
+					if end > 0 {
+						propName := col[start : start+end]
+						result.Properties[propName] = value
+					}
+				}
+			}
+		}
+
+		// Fetch time-series points if window_size is specified
+		if params.WindowSize != "" {
+			points, err := r.getDetailedAnalyticsPoints(ctx, params, result, groupByResult)
+			if err != nil {
+				return nil, err
+			}
+			result.Points = points
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating detailed meter usage analytics rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return results, nil
+}
+
+// getDetailedAnalyticsPoints fetches time-series breakdown for a single group result.
+func (r *MeterUsageRepository) getDetailedAnalyticsPoints(
+	ctx context.Context,
+	params *events.MeterUsageDetailedAnalyticsParams,
+	result *events.MeterUsageDetailedResult,
+	groupByResult *DetailedGroupByResult,
+) ([]events.MeterUsageDetailedPoint, error) {
+	query, args := r.qb.BuildDetailedPointsQuery(params, result, groupByResult)
+	if query == "" {
+		return nil, nil
+	}
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query detailed meter usage analytics points").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var points []events.MeterUsageDetailedPoint
+	for rows.Next() {
+		var p events.MeterUsageDetailedPoint
+		if err := rows.Scan(&p.WindowStart, &p.TotalUsage, &p.MaxUsage, &p.LatestUsage, &p.CountUniqueUsage, &p.EventCount); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan detailed meter usage analytics point").
+				Mark(ierr.ErrDatabase)
+		}
+		points = append(points, p)
+	}
+
+	return points, nil
+}
+
+// joinSelect joins select columns with comma+newline for readability
+func joinSelect(cols []string) string {
+	return strings.Join(cols, ",\n\t\t\t")
 }
 
 // getMeterUsageAggExprs returns the SQL expression pair for a given aggregator.
