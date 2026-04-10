@@ -286,7 +286,10 @@ func (s *meterUsageTrackingService) generateUniqueHash(event *events.Event, m *m
 		}
 	}
 
-	return ""
+	// For non-CountUnique meters, use event_name:event_id as the dedup hash
+	hashStr := fmt.Sprintf("%s:%s", event.EventName, event.ID)
+	hash := sha256.Sum256([]byte(hashStr))
+	return hex.EncodeToString(hash[:])
 }
 
 // extractQuantity extracts the quantity from event properties based on the meter's aggregation config.
