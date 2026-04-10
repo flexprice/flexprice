@@ -2,14 +2,22 @@ package service
 
 import (
 	"context"
+	"sort"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // MeterUsageService handles read-side meter usage queries.
@@ -18,20 +26,22 @@ import (
 type MeterUsageService interface {
 	GetUsage(ctx context.Context, params *events.MeterUsageQueryParams) (*events.MeterUsageAggregationResult, error)
 	GetUsageMultiMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterUsageAggregationResult, error)
-	GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) ([]*events.MeterUsageDetailedResult, error)
+	GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error)
 }
 
 type meterUsageService struct {
-	repo      events.MeterUsageRepository
-	meterRepo meter.Repository
-	logger    *logger.Logger
+	ServiceParams
+	repo                        events.MeterUsageRepository
+	featureUsageTrackingService FeatureUsageTrackingService
+	logger                      *logger.Logger
 }
 
-func NewMeterUsageService(repo events.MeterUsageRepository, meterRepo meter.Repository, logger *logger.Logger) MeterUsageService {
+func NewMeterUsageService(params ServiceParams, featureUsageTrackingService FeatureUsageTrackingService) MeterUsageService {
 	return &meterUsageService{
-		repo:      repo,
-		meterRepo: meterRepo,
-		logger:    logger,
+		ServiceParams:               params,
+		repo:                        params.MeterUsageRepo,
+		featureUsageTrackingService: featureUsageTrackingService,
+		logger:                      params.Logger,
 	}
 }
 
@@ -49,7 +59,7 @@ func (s *meterUsageService) GetUsageMultiMeter(ctx context.Context, params *even
 	return s.repo.GetUsageMultiMeter(ctx, params)
 }
 
-func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) ([]*events.MeterUsageDetailedResult, error) {
+func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) (*dto.GetUsageAnalyticsResponse, error) {
 	if params == nil {
 		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
 	}
@@ -134,7 +144,342 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		allResults = append(allResults, results...)
 	}
 
-	return allResults, nil
+	// Build analytics data with subscription/pricing context and calculate costs
+	return s.buildAnalyticsResponse(ctx, allResults, meterMap, params)
+}
+
+// buildAnalyticsResponse converts MeterUsageDetailedResult items to GetUsageAnalyticsResponse,
+// enriching with meter metadata and calculating costs via the feature usage cost pipeline.
+func (s *meterUsageService) buildAnalyticsResponse(
+	ctx context.Context,
+	results []*events.MeterUsageDetailedResult,
+	meterMap map[string]*meter.Meter,
+	params *events.MeterUsageDetailedAnalyticsParams,
+) (*dto.GetUsageAnalyticsResponse, error) {
+	// Build AnalyticsData with subscription/pricing context for cost calculation
+	data, err := s.buildAnalyticsData(ctx, results, meterMap, params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate costs using the feature usage pipeline (handles all aggregation types, bucketed, commitments)
+	if len(data.Analytics) > 0 && s.featureUsageTrackingService != nil {
+		if err := s.featureUsageTrackingService.CalculateCostsForAnalytics(ctx, data); err != nil {
+			s.logger.Warnw("failed to calculate costs for meter usage analytics, costs will be zero",
+				"error", err,
+			)
+		}
+	}
+
+	// Set currency on all analytics items
+	if data.Currency != "" {
+		for _, item := range data.Analytics {
+			item.Currency = data.Currency
+		}
+	}
+
+	// Convert to response DTO
+	return s.toUsageAnalyticsResponseDTO(data, meterMap, params), nil
+}
+
+// buildAnalyticsData constructs the AnalyticsData structure required by the cost calculation pipeline.
+// It resolves customer → subscriptions → line items → prices, and converts meter usage results
+// to DetailedUsageAnalytic objects.
+func (s *meterUsageService) buildAnalyticsData(
+	ctx context.Context,
+	results []*events.MeterUsageDetailedResult,
+	meterMap map[string]*meter.Meter,
+	params *events.MeterUsageDetailedAnalyticsParams,
+) (*AnalyticsData, error) {
+	data := &AnalyticsData{
+		SubscriptionLineItems: make(map[string]*subscription.SubscriptionLineItem),
+		SubscriptionsMap:      make(map[string]*subscription.Subscription),
+		Features:              make(map[string]*feature.Feature),
+		Meters:                meterMap,
+		Prices:                make(map[string]*price.Price),
+		Plans:                 make(map[string]*plan.Plan),
+		Analytics:             make([]*events.DetailedUsageAnalytic, 0, len(results)),
+		Params: &events.UsageAnalyticsParams{
+			TenantID:        params.TenantID,
+			EnvironmentID:   params.EnvironmentID,
+			StartTime:       params.StartTime,
+			EndTime:         params.EndTime,
+			GroupBy:         params.GroupBy,
+			WindowSize:      params.WindowSize,
+			PropertyFilters: params.PropertyFilters,
+		},
+	}
+
+	// Resolve customer and subscriptions for cost calculation
+	customer, subscriptions, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
+	if err != nil {
+		// Continue without cost data rather than failing
+		s.logger.Warnw("failed to resolve customer/subscriptions for cost calculation",
+			"error", err,
+			"external_customer_id", params.ExternalCustomerID,
+		)
+	} else {
+		data.Customer = customer
+		data.Subscriptions = subscriptions
+
+		// Validate currency
+		if len(subscriptions) > 0 {
+			data.Currency = subscriptions[0].Currency
+		}
+
+		// Build subscription and line item maps
+		for _, sub := range subscriptions {
+			data.SubscriptionsMap[sub.ID] = sub
+			for _, li := range sub.LineItems {
+				data.SubscriptionLineItems[li.ID] = li
+			}
+		}
+	}
+
+	// Build meter_id → (line_item, price) mapping from subscriptions
+	meterToLineItem := make(map[string]*subscription.SubscriptionLineItem)
+	meterToPrice := make(map[string]*price.Price)
+	if len(data.SubscriptionLineItems) > 0 {
+		// Collect all price IDs
+		priceIDs := make(map[string]bool)
+		for _, li := range data.SubscriptionLineItems {
+			if li.MeterID != "" && li.PriceID != "" {
+				priceIDs[li.PriceID] = true
+			}
+		}
+
+		// Fetch prices in batch
+		if len(priceIDs) > 0 {
+			priceFilter := types.NewNoLimitPriceFilter()
+			priceFilter.PriceIDs = lo.Keys(priceIDs)
+			prices, err := s.PriceRepo.List(ctx, priceFilter)
+			if err != nil {
+				s.logger.Warnw("failed to fetch prices for cost calculation", "error", err)
+			} else {
+				for _, p := range prices {
+					data.Prices[p.ID] = p
+				}
+			}
+		}
+
+		// Map meter_id → first matching line item and price
+		for _, li := range data.SubscriptionLineItems {
+			if li.MeterID == "" || li.PriceID == "" {
+				continue
+			}
+			if _, exists := meterToLineItem[li.MeterID]; exists {
+				continue
+			}
+			meterToLineItem[li.MeterID] = li
+			if p, ok := data.Prices[li.PriceID]; ok {
+				meterToPrice[li.MeterID] = p
+			}
+		}
+	}
+
+	// Resolve meter_id → feature_id mapping
+	meterToFeature := make(map[string]*feature.Feature)
+	meterIDs := lo.Keys(meterMap)
+	if len(meterIDs) > 0 {
+		featureFilter := types.NewNoLimitFeatureFilter()
+		featureFilter.MeterIDs = meterIDs
+		features, err := s.FeatureRepo.List(ctx, featureFilter)
+		if err != nil {
+			s.logger.Warnw("failed to fetch features for meter mapping", "error", err)
+		} else {
+			for _, f := range features {
+				if f.MeterID != "" {
+					meterToFeature[f.MeterID] = f
+					data.Features[f.ID] = f
+				}
+			}
+		}
+	}
+
+	// Convert MeterUsageDetailedResult → DetailedUsageAnalytic
+	for _, r := range results {
+		analytic := &events.DetailedUsageAnalytic{
+			MeterID:          r.MeterID,
+			TotalUsage:       r.TotalUsage,
+			MaxUsage:         r.MaxUsage,
+			LatestUsage:      r.LatestUsage,
+			CountUniqueUsage: r.CountUniqueUsage,
+			EventCount:       r.EventCount,
+			Source:           r.Source,
+			Sources:          r.Sources,
+			Properties:       r.Properties,
+		}
+
+		// Set meter metadata
+		if m, ok := meterMap[r.MeterID]; ok {
+			analytic.EventName = m.EventName
+			analytic.AggregationType = m.Aggregation.Type
+		}
+
+		// Set feature info
+		if f, ok := meterToFeature[r.MeterID]; ok {
+			analytic.FeatureID = f.ID
+			analytic.FeatureName = f.Name
+			analytic.Unit = f.UnitSingular
+			analytic.UnitPlural = f.UnitPlural
+		}
+
+		// Set subscription/pricing info
+		if li, ok := meterToLineItem[r.MeterID]; ok {
+			analytic.PriceID = li.PriceID
+			analytic.SubLineItemID = li.ID
+			analytic.SubscriptionID = li.SubscriptionID
+		}
+
+		// Convert points
+		if len(r.Points) > 0 {
+			analytic.Points = make([]events.UsageAnalyticPoint, 0, len(r.Points))
+			for _, p := range r.Points {
+				analytic.Points = append(analytic.Points, events.UsageAnalyticPoint{
+					Timestamp:        p.WindowStart,
+					WindowStart:      p.WindowStart,
+					Usage:            p.TotalUsage,
+					MaxUsage:         p.MaxUsage,
+					LatestUsage:      p.LatestUsage,
+					CountUniqueUsage: p.CountUniqueUsage,
+					EventCount:       p.EventCount,
+				})
+			}
+		}
+
+		data.Analytics = append(data.Analytics, analytic)
+	}
+
+	return data, nil
+}
+
+// resolveCustomerAndSubscriptions fetches the internal customer and their active subscriptions.
+func (s *meterUsageService) resolveCustomerAndSubscriptions(ctx context.Context, externalCustomerID string) (*customer.Customer, []*subscription.Subscription, error) {
+	cust, err := s.CustomerRepo.GetByLookupKey(ctx, externalCustomerID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	subService := NewSubscriptionService(s.ServiceParams)
+	filter := types.NewSubscriptionFilter()
+	filter.CustomerID = cust.ID
+	filter.WithLineItems = true
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusPaused,
+		types.SubscriptionStatusCancelled,
+	}
+
+	subsList, err := subService.ListSubscriptions(ctx, filter)
+	if err != nil {
+		return cust, nil, err
+	}
+
+	subscriptions := make([]*subscription.Subscription, len(subsList.Items))
+	for i, subResp := range subsList.Items {
+		subscriptions[i] = subResp.Subscription
+	}
+
+	return cust, subscriptions, nil
+}
+
+// toUsageAnalyticsResponseDTO converts the enriched analytics data to the response DTO.
+func (s *meterUsageService) toUsageAnalyticsResponseDTO(
+	data *AnalyticsData,
+	meterMap map[string]*meter.Meter,
+	params *events.MeterUsageDetailedAnalyticsParams,
+) *dto.GetUsageAnalyticsResponse {
+	response := &dto.GetUsageAnalyticsResponse{
+		TotalCost: decimal.Zero,
+		Currency:  data.Currency,
+		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
+	}
+
+	for _, analytic := range data.Analytics {
+		// Use correct usage value based on aggregation type
+		totalUsage := getCorrectMeterUsageValue(analytic)
+
+		item := dto.UsageAnalyticItem{
+			FeatureID:       analytic.FeatureID,
+			PriceID:         analytic.PriceID,
+			MeterID:         analytic.MeterID,
+			SubLineItemID:   analytic.SubLineItemID,
+			SubscriptionID:  analytic.SubscriptionID,
+			FeatureName:     analytic.FeatureName,
+			EventName:       analytic.EventName,
+			Source:          analytic.Source,
+			Sources:         analytic.Sources,
+			Unit:            analytic.Unit,
+			UnitPlural:      analytic.UnitPlural,
+			AggregationType: analytic.AggregationType,
+			TotalUsage:      totalUsage,
+			TotalCost:       analytic.TotalCost,
+			Currency:        analytic.Currency,
+			EventCount:      analytic.EventCount,
+			Properties:      analytic.Properties,
+			CommitmentInfo:  analytic.CommitmentInfo,
+			Points:          make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
+		}
+
+		// If feature has no name, use meter name
+		if item.FeatureName == "" {
+			if m, ok := meterMap[analytic.MeterID]; ok {
+				item.FeatureName = m.Name
+			}
+		}
+
+		// Set window size
+		if m, ok := meterMap[analytic.MeterID]; ok {
+			if m.HasBucketSize() {
+				item.WindowSize = m.Aggregation.BucketSize
+			} else {
+				item.WindowSize = params.WindowSize
+			}
+		}
+
+		// Map time-series points
+		for _, point := range analytic.Points {
+			item.Points = append(item.Points, dto.UsageAnalyticPoint{
+				Timestamp:                        point.Timestamp,
+				Usage:                            point.Usage,
+				Cost:                             point.Cost,
+				EventCount:                       point.EventCount,
+				ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
+				ComputedOverageAmount:            point.ComputedOverageAmount,
+				ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
+			})
+		}
+
+		response.Items = append(response.Items, item)
+		response.TotalCost = response.TotalCost.Add(analytic.TotalCost)
+	}
+
+	// Sort by feature name (same as feature usage)
+	sort.Slice(response.Items, func(i, j int) bool {
+		return response.Items[i].FeatureName < response.Items[j].FeatureName
+	})
+
+	return response
+}
+
+// getCorrectMeterUsageValue returns the correct usage value based on the aggregation type.
+// Mirrors the logic in featureUsageTrackingService.getCorrectUsageValue.
+func getCorrectMeterUsageValue(item *events.DetailedUsageAnalytic) decimal.Decimal {
+	switch item.AggregationType {
+	case types.AggregationCountUnique:
+		return decimal.NewFromInt(int64(item.CountUniqueUsage))
+	case types.AggregationMax:
+		// For bucketed MAX, TotalUsage already contains sum of bucket maxes
+		if !item.TotalUsage.IsZero() {
+			return item.TotalUsage
+		}
+		return item.MaxUsage
+	case types.AggregationLatest:
+		return item.LatestUsage
+	default:
+		return item.TotalUsage
+	}
 }
 
 // fetchMeters fetches meter configurations for the requested meter IDs.
@@ -145,7 +490,7 @@ func (s *meterUsageService) fetchMeters(ctx context.Context, params *events.Mete
 		filter.MeterIDs = params.MeterIDs
 	}
 
-	meters, err := s.meterRepo.List(ctx, filter)
+	meters, err := s.MeterRepo.List(ctx, filter)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to fetch meters for detailed analytics").

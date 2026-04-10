@@ -73,6 +73,10 @@ type FeatureUsageTrackingService interface {
 
 	// DebugEvent provides debugging information for an event by ID
 	DebugEvent(ctx context.Context, eventID string) (*dto.GetEventByIDResponse, error)
+
+	// CalculateCostsForAnalytics enriches analytics data with cost calculations.
+	// Used by meter-usage service to reuse the same cost logic as feature usage.
+	CalculateCostsForAnalytics(ctx context.Context, data *AnalyticsData) error
 }
 
 type featureUsageTrackingService struct {
@@ -2062,6 +2066,10 @@ func (s *featureUsageTrackingService) enrichAnalyticsWithMetadata(data *Analytic
 }
 
 // calculateCosts calculates costs for analytics items
+func (s *featureUsageTrackingService) CalculateCostsForAnalytics(ctx context.Context, data *AnalyticsData) error {
+	return s.calculateCosts(ctx, data)
+}
+
 func (s *featureUsageTrackingService) calculateCosts(ctx context.Context, data *AnalyticsData) error {
 	priceService := NewPriceService(s.ServiceParams)
 
