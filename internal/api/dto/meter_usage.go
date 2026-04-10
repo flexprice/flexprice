@@ -132,7 +132,6 @@ type MeterUsageDetailedAnalyticsRequest struct {
 	GroupBy            []string            `json:"group_by,omitempty" example:"meter_id,source"`
 	PropertyFilters    map[string][]string `json:"property_filters,omitempty"`
 	Sources            []string            `json:"sources,omitempty"`
-	AggregationTypes   []types.AggregationType `json:"aggregation_types,omitempty" example:"SUM,COUNT"`
 	WindowSize         types.WindowSize    `json:"window_size,omitempty" example:"DAY"`
 	BillingAnchor      *time.Time          `json:"billing_anchor,omitempty"`
 }
@@ -153,10 +152,8 @@ func (r *MeterUsageDetailedAnalyticsRequest) ToParams(tenantID, environmentID st
 		GroupBy:            r.GroupBy,
 		PropertyFilters:    r.PropertyFilters,
 		Sources:            r.Sources,
-		AggregationTypes:   r.AggregationTypes,
 		WindowSize:         r.WindowSize,
 		BillingAnchor:      r.BillingAnchor,
-		UseFinal:           true,
 	}
 }
 

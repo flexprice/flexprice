@@ -71,10 +71,6 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	if params.StartTime.IsZero() {
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
 	}
-	if len(params.GroupBy) == 0 {
-		params.GroupBy = []string{"meter_id"}
-	}
-
 	// Fetch meter configs to identify bucketed meters
 	meters, err := s.fetchMeters(ctx, params)
 	if err != nil {
@@ -136,6 +132,10 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		standardParams := *params
 		if len(standardMeterIDs) > 0 {
 			standardParams.MeterIDs = standardMeterIDs
+		}
+		// Ensure meter_id is in group_by when querying multiple meters so results don't collapse
+		if len(standardParams.MeterIDs) > 1 && !lo.Contains(standardParams.GroupBy, "meter_id") {
+			standardParams.GroupBy = append([]string{"meter_id"}, standardParams.GroupBy...)
 		}
 		results, err := s.repo.GetDetailedAnalytics(ctx, &standardParams)
 		if err != nil {
