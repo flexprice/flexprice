@@ -2074,19 +2074,30 @@ func (s *featureUsageTrackingService) calculateCosts(ctx context.Context, data *
 	priceService := NewPriceService(s.ServiceParams)
 
 	for _, item := range data.Analytics {
+		// Resolve meter: prefer via feature, fall back to direct MeterID lookup.
+		// The fallback handles meter-usage analytics where no feature exists for a meter.
+		var m *meter.Meter
 		if feature, ok := data.Features[item.FeatureID]; ok {
-			if meter, ok := data.Meters[feature.MeterID]; ok {
-				// Use price_id from the analytics item - this ensures we use the correct price
-				// that was active when the usage was recorded (important for cancelled/new subscriptions)
-				if price, hasPricing := data.Prices[item.PriceID]; hasPricing {
-					// Calculate cost based on meter type
-					if meter.IsBucketedMaxMeter() || meter.IsBucketedSumMeter() {
-						s.calculateBucketedCost(ctx, priceService, item, price, meter, data)
-					} else {
-						s.calculateRegularCost(ctx, priceService, item, meter, price, data)
-					}
-				}
-			}
+			m = data.Meters[feature.MeterID]
+		}
+		if m == nil && item.MeterID != "" {
+			m = data.Meters[item.MeterID]
+		}
+		if m == nil {
+			continue
+		}
+
+		// Use price_id from the analytics item - this ensures we use the correct price
+		// that was active when the usage was recorded (important for cancelled/new subscriptions)
+		price, hasPricing := data.Prices[item.PriceID]
+		if !hasPricing {
+			continue
+		}
+
+		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
+			s.calculateBucketedCost(ctx, priceService, item, price, m, data)
+		} else {
+			s.calculateRegularCost(ctx, priceService, item, m, price, data)
 		}
 	}
 

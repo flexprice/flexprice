@@ -236,9 +236,8 @@ func (s *meterUsageService) buildAnalyticsData(
 		}
 	}
 
-	// Build meter_id → (line_item, price) mapping from subscriptions
-	meterToLineItem := make(map[string]*subscription.SubscriptionLineItem)
-	meterToPrice := make(map[string]*price.Price)
+	// Build meter_id → []line_items mapping from subscriptions
+	meterToLineItems := make(map[string][]*subscription.SubscriptionLineItem)
 	if len(data.SubscriptionLineItems) > 0 {
 		// Collect all price IDs
 		priceIDs := make(map[string]bool)
@@ -262,18 +261,34 @@ func (s *meterUsageService) buildAnalyticsData(
 			}
 		}
 
-		// Map meter_id → first matching line item and price
+		// Collect all line items per meter_id
 		for _, li := range data.SubscriptionLineItems {
 			if li.MeterID == "" || li.PriceID == "" {
 				continue
 			}
-			if _, exists := meterToLineItem[li.MeterID]; exists {
-				continue
-			}
-			meterToLineItem[li.MeterID] = li
-			if p, ok := data.Prices[li.PriceID]; ok {
-				meterToPrice[li.MeterID] = p
-			}
+			meterToLineItems[li.MeterID] = append(meterToLineItems[li.MeterID], li)
+		}
+
+		// Sort each meter's line items for deterministic ordering:
+		// 1. Subscription status priority (active > trialing > paused > cancelled)
+		// 2. Most recent StartDate first
+		// 3. Lexicographic ID as final tie-breaker
+		for meterID := range meterToLineItems {
+			items := meterToLineItems[meterID]
+			sort.Slice(items, func(i, j int) bool {
+				si := data.SubscriptionsMap[items[i].SubscriptionID]
+				sj := data.SubscriptionsMap[items[j].SubscriptionID]
+				pi := subscriptionStatusPriority(si)
+				pj := subscriptionStatusPriority(sj)
+				if pi != pj {
+					return pi < pj
+				}
+				if !items[i].StartDate.Equal(items[j].StartDate) {
+					return items[i].StartDate.After(items[j].StartDate)
+				}
+				return items[i].ID < items[j].ID
+			})
+			meterToLineItems[meterID] = items
 		}
 	}
 
@@ -297,57 +312,67 @@ func (s *meterUsageService) buildAnalyticsData(
 	}
 
 	// Convert MeterUsageDetailedResult → DetailedUsageAnalytic
+	// If a meter has multiple line items (e.g. from active + cancelled subscriptions),
+	// produce one analytic per line item so each gets independent cost calculation.
 	for _, r := range results {
-		analytic := &events.DetailedUsageAnalytic{
-			MeterID:          r.MeterID,
-			TotalUsage:       r.TotalUsage,
-			MaxUsage:         r.MaxUsage,
-			LatestUsage:      r.LatestUsage,
-			CountUniqueUsage: r.CountUniqueUsage,
-			EventCount:       r.EventCount,
-			Source:           r.Source,
-			Sources:          r.Sources,
-			Properties:       r.Properties,
+		lineItems := meterToLineItems[r.MeterID]
+		if len(lineItems) == 0 {
+			// No subscription context — produce a single analytic without pricing
+			lineItems = []*subscription.SubscriptionLineItem{nil}
 		}
 
-		// Set meter metadata
-		if m, ok := meterMap[r.MeterID]; ok {
-			analytic.EventName = m.EventName
-			analytic.AggregationType = m.Aggregation.Type
-		}
-
-		// Set feature info
-		if f, ok := meterToFeature[r.MeterID]; ok {
-			analytic.FeatureID = f.ID
-			analytic.FeatureName = f.Name
-			analytic.Unit = f.UnitSingular
-			analytic.UnitPlural = f.UnitPlural
-		}
-
-		// Set subscription/pricing info
-		if li, ok := meterToLineItem[r.MeterID]; ok {
-			analytic.PriceID = li.PriceID
-			analytic.SubLineItemID = li.ID
-			analytic.SubscriptionID = li.SubscriptionID
-		}
-
-		// Convert points
-		if len(r.Points) > 0 {
-			analytic.Points = make([]events.UsageAnalyticPoint, 0, len(r.Points))
-			for _, p := range r.Points {
-				analytic.Points = append(analytic.Points, events.UsageAnalyticPoint{
-					Timestamp:        p.WindowStart,
-					WindowStart:      p.WindowStart,
-					Usage:            p.TotalUsage,
-					MaxUsage:         p.MaxUsage,
-					LatestUsage:      p.LatestUsage,
-					CountUniqueUsage: p.CountUniqueUsage,
-					EventCount:       p.EventCount,
-				})
+		for _, li := range lineItems {
+			analytic := &events.DetailedUsageAnalytic{
+				MeterID:          r.MeterID,
+				TotalUsage:       r.TotalUsage,
+				MaxUsage:         r.MaxUsage,
+				LatestUsage:      r.LatestUsage,
+				CountUniqueUsage: r.CountUniqueUsage,
+				EventCount:       r.EventCount,
+				Source:           r.Source,
+				Sources:          r.Sources,
+				Properties:       r.Properties,
 			}
-		}
 
-		data.Analytics = append(data.Analytics, analytic)
+			// Set meter metadata
+			if m, ok := meterMap[r.MeterID]; ok {
+				analytic.EventName = m.EventName
+				analytic.AggregationType = m.Aggregation.Type
+			}
+
+			// Set feature info
+			if f, ok := meterToFeature[r.MeterID]; ok {
+				analytic.FeatureID = f.ID
+				analytic.FeatureName = f.Name
+				analytic.Unit = f.UnitSingular
+				analytic.UnitPlural = f.UnitPlural
+			}
+
+			// Set subscription/pricing info
+			if li != nil {
+				analytic.PriceID = li.PriceID
+				analytic.SubLineItemID = li.ID
+				analytic.SubscriptionID = li.SubscriptionID
+			}
+
+			// Convert points
+			if len(r.Points) > 0 {
+				analytic.Points = make([]events.UsageAnalyticPoint, 0, len(r.Points))
+				for _, p := range r.Points {
+					analytic.Points = append(analytic.Points, events.UsageAnalyticPoint{
+						Timestamp:        p.WindowStart,
+						WindowStart:      p.WindowStart,
+						Usage:            p.TotalUsage,
+						MaxUsage:         p.MaxUsage,
+						LatestUsage:      p.LatestUsage,
+						CountUniqueUsage: p.CountUniqueUsage,
+						EventCount:       p.EventCount,
+					})
+				}
+			}
+
+			data.Analytics = append(data.Analytics, analytic)
+		}
 	}
 
 	return data, nil
@@ -613,6 +638,26 @@ func (s *meterUsageService) getEventCountForMeter(ctx context.Context, params *e
 
 	// For COUNT aggregation, TotalValue holds the count as a decimal
 	return result.TotalValue.BigInt().Uint64(), nil
+}
+
+// subscriptionStatusPriority returns a sort priority for subscription status.
+// Lower value = higher priority (active preferred over cancelled).
+func subscriptionStatusPriority(sub *subscription.Subscription) int {
+	if sub == nil {
+		return 99
+	}
+	switch sub.SubscriptionStatus {
+	case types.SubscriptionStatusActive:
+		return 0
+	case types.SubscriptionStatusTrialing:
+		return 1
+	case types.SubscriptionStatusPaused:
+		return 2
+	case types.SubscriptionStatusCancelled:
+		return 3
+	default:
+		return 10
+	}
 }
 
 // ensure meterUsageService implements MeterUsageService
