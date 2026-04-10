@@ -120,3 +120,106 @@ func ToMeterUsageAnalyticsResponse(results []*events.MeterUsageAggregationResult
 	}
 	return &MeterUsageAnalyticsResponse{Items: items}
 }
+
+// --- Detailed Analytics ---
+
+// MeterUsageDetailedAnalyticsRequest is the request for POST /v1/meter-usage/detailed-analytics
+type MeterUsageDetailedAnalyticsRequest struct {
+	ExternalCustomerID string              `json:"external_customer_id" validate:"required" binding:"required" example:"cust_123"`
+	MeterIDs           []string            `json:"meter_ids,omitempty" example:"mtr_abc,mtr_def"`
+	StartTime          time.Time           `json:"start_time,omitempty" example:"2024-01-01T00:00:00Z"`
+	EndTime            time.Time           `json:"end_time,omitempty" example:"2024-02-01T00:00:00Z"`
+	GroupBy            []string            `json:"group_by,omitempty" example:"meter_id,source"`
+	PropertyFilters    map[string][]string `json:"property_filters,omitempty"`
+	Sources            []string            `json:"sources,omitempty"`
+	AggregationTypes   []types.AggregationType `json:"aggregation_types,omitempty" example:"SUM,COUNT"`
+	WindowSize         types.WindowSize    `json:"window_size,omitempty" example:"DAY"`
+	BillingAnchor      *time.Time          `json:"billing_anchor,omitempty"`
+}
+
+func (r *MeterUsageDetailedAnalyticsRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
+// ToParams converts the DTO to domain detailed analytics params
+func (r *MeterUsageDetailedAnalyticsRequest) ToParams(tenantID, environmentID string) *events.MeterUsageDetailedAnalyticsParams {
+	return &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           tenantID,
+		EnvironmentID:      environmentID,
+		ExternalCustomerID: r.ExternalCustomerID,
+		MeterIDs:           r.MeterIDs,
+		StartTime:          r.StartTime,
+		EndTime:            r.EndTime,
+		GroupBy:            r.GroupBy,
+		PropertyFilters:    r.PropertyFilters,
+		Sources:            r.Sources,
+		AggregationTypes:   r.AggregationTypes,
+		WindowSize:         r.WindowSize,
+		BillingAnchor:      r.BillingAnchor,
+		UseFinal:           true,
+	}
+}
+
+// MeterUsageDetailedAnalyticsResponse wraps detailed analytics results
+type MeterUsageDetailedAnalyticsResponse struct {
+	Items []MeterUsageDetailedItem `json:"items"`
+}
+
+// MeterUsageDetailedItem represents a single group's analytics data
+type MeterUsageDetailedItem struct {
+	MeterID          string                       `json:"meter_id,omitempty" example:"mtr_abc"`
+	Source           string                       `json:"source,omitempty" example:"api"`
+	Sources          []string                     `json:"sources,omitempty"`
+	Properties       map[string]string            `json:"properties,omitempty"`
+	TotalUsage       decimal.Decimal              `json:"total_usage" swaggertype:"string" example:"1234.5678"`
+	MaxUsage         decimal.Decimal              `json:"max_usage" swaggertype:"string" example:"100.0000"`
+	LatestUsage      decimal.Decimal              `json:"latest_usage" swaggertype:"string" example:"50.0000"`
+	CountUniqueUsage uint64                       `json:"count_unique_usage" example:"25"`
+	EventCount       uint64                       `json:"event_count" example:"42"`
+	Points           []MeterUsageDetailedPointDTO `json:"points,omitempty"`
+}
+
+// MeterUsageDetailedPointDTO is a single time-bucketed analytics point
+type MeterUsageDetailedPointDTO struct {
+	Timestamp        time.Time       `json:"timestamp" example:"2024-01-01T00:00:00Z"`
+	TotalUsage       decimal.Decimal `json:"total_usage" swaggertype:"string" example:"100.0000"`
+	MaxUsage         decimal.Decimal `json:"max_usage" swaggertype:"string" example:"50.0000"`
+	LatestUsage      decimal.Decimal `json:"latest_usage" swaggertype:"string" example:"25.0000"`
+	CountUniqueUsage uint64          `json:"count_unique_usage" example:"10"`
+	EventCount       uint64          `json:"event_count" example:"20"`
+}
+
+// ToMeterUsageDetailedAnalyticsResponse converts domain results to DTO response
+func ToMeterUsageDetailedAnalyticsResponse(results []*events.MeterUsageDetailedResult) *MeterUsageDetailedAnalyticsResponse {
+	items := make([]MeterUsageDetailedItem, 0, len(results))
+	for _, r := range results {
+		item := MeterUsageDetailedItem{
+			MeterID:          r.MeterID,
+			Source:           r.Source,
+			Sources:          r.Sources,
+			Properties:       r.Properties,
+			TotalUsage:       r.TotalUsage,
+			MaxUsage:         r.MaxUsage,
+			LatestUsage:      r.LatestUsage,
+			CountUniqueUsage: r.CountUniqueUsage,
+			EventCount:       r.EventCount,
+		}
+
+		if len(r.Points) > 0 {
+			item.Points = make([]MeterUsageDetailedPointDTO, 0, len(r.Points))
+			for _, p := range r.Points {
+				item.Points = append(item.Points, MeterUsageDetailedPointDTO{
+					Timestamp:        p.WindowStart,
+					TotalUsage:       p.TotalUsage,
+					MaxUsage:         p.MaxUsage,
+					LatestUsage:      p.LatestUsage,
+					CountUniqueUsage: p.CountUniqueUsage,
+					EventCount:       p.EventCount,
+				})
+			}
+		}
+
+		items = append(items, item)
+	}
+	return &MeterUsageDetailedAnalyticsResponse{Items: items}
+}

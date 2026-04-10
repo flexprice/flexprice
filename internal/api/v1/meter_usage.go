@@ -115,3 +115,49 @@ func (h *MeterUsageHandler) GetAnalytics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.ToMeterUsageAnalyticsResponse(results))
 }
+
+// GetDetailedAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series
+// @Summary Get detailed meter usage analytics
+// @ID getDetailedMeterUsageAnalytics
+// @Description Query detailed analytics from meter_usage table with support for group by, property filters, source filtering, and time-series breakdown
+// @Tags MeterUsage
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.MeterUsageDetailedAnalyticsRequest true "Detailed analytics parameters"
+// @Success 200 {object} dto.MeterUsageDetailedAnalyticsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /meter-usage/detailed-analytics [post]
+func (h *MeterUsageHandler) GetDetailedAnalytics(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req dto.MeterUsageDetailedAnalyticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.NewError("invalid request payload").
+			WithHint("Check your request body").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	params := req.ToParams(tenantID, environmentID)
+
+	results, err := h.meterUsageService.GetDetailedAnalytics(ctx, params)
+	if err != nil {
+		h.log.ErrorwCtx(ctx, "failed to query detailed meter usage analytics",
+			"error", err,
+			"meter_ids", req.MeterIDs,
+		)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToMeterUsageDetailedAnalyticsResponse(results))
+}
