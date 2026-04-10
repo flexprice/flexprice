@@ -1052,6 +1052,42 @@ func (s *costsheetUsageTrackingService) fetchAnalytics(ctx context.Context, cost
 		return nil, nil
 	}
 
+	// STEP1b: Filter to meters that actually have data in this period.
+	// Avoids querying usage for potentially thousands of meters that will return zero.
+	activeMeterIDList, err := s.MeterUsageRepo.GetDistinctMeterIDs(ctx, &events.MeterUsageQueryParams{
+		TenantID:           tenantID,
+		EnvironmentID:      environmentID,
+		ExternalCustomerID: externalCustomerID,
+		StartTime:          req.StartTime,
+		EndTime:            req.EndTime,
+		MeterIDs:           meterIDs,
+		UseFinal:           true,
+	})
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "failed to get distinct meter_ids, proceeding with all meters", "error", err)
+	} else {
+		if len(activeMeterIDList) == 0 {
+			s.Logger.DebugwCtx(ctx, "no meter_usage data in period", "costsheet_id", costsheet.ID)
+			return nil, nil
+		}
+		activeSet := make(map[string]bool, len(activeMeterIDList))
+		for _, id := range activeMeterIDList {
+			activeSet[id] = true
+		}
+		filtered := priceMeterPairs[:0]
+		for _, pair := range priceMeterPairs {
+			if activeSet[pair.meterID] {
+				filtered = append(filtered, pair)
+			}
+		}
+		priceMeterPairs = filtered
+		s.Logger.DebugwCtx(ctx, "distinct meter_ids optimization",
+			"costsheet_id", costsheet.ID,
+			"total_meters", len(meterIDs),
+			"active_meters", len(activeMeterIDList),
+		)
+	}
+
 	// STEP2: Fetch meters in bulk
 	meterFilter := types.NewNoLimitMeterFilter()
 	meterFilter.MeterIDs = meterIDs

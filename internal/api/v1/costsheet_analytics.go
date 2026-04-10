@@ -33,7 +33,7 @@ func NewRevenueAnalyticsHandler(
 	}
 }
 
-// GetCostAnalytics retrieves cost analytics from the meter usage pipeline
+// GetCostAnalytics retrieves cost analytics
 // @Summary Get cost analytics
 // @ID getDetailedCostAnalytics
 // @Description Use when building dashboards or reports that need cost analytics over a time period (e.g. finance views or executive summaries).
@@ -42,7 +42,7 @@ func NewRevenueAnalyticsHandler(
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetCostAnalyticsRequest true "Cost analytics request (start_time/end_time optional - defaults to last 7 days)"
-// @Success 200 {object} dto.GetCostAnalyticsResponse
+// @Success 200 {object} dto.GetDetailedCostAnalyticsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs/analytics [post]
@@ -57,7 +57,7 @@ func (h *RevenueAnalyticsHandler) GetDetailedCostAnalytics(c *gin.Context) {
 		return
 	}
 
-	response, err := h.costsheetUsageTrackingService.GetCostSheetUsageAnalytics(ctx, &req)
+	response, err := h.revenueAnalyticsService.GetDetailedCostAnalytics(ctx, &req)
 	if err != nil {
 		c.Error(err)
 		return
