@@ -244,23 +244,19 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}
 
-	// Create billing event if configured
-	if s.Config.Billing.TenantID != "" {
+	// Create billing event if configured and this event is not already from the billing tenant
+	if s.Config.Billing.TenantID != "" &&
+		s.Config.Billing.MeterEventName != "" &&
+		event.TenantID != s.Config.Billing.TenantID {
 		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
+			s.Config.Billing.MeterEventName,
 			s.Config.Billing.TenantID,
 			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
+			nil,
 			time.Now(),
-			"", // Customer ID will be looked up by external ID
-			"", // Generate new ID
-			"system",
+			"",
+			"",
+			"flexprice_meta_billing",
 			s.Config.Billing.EnvironmentID,
 		)
 		eventsToInsert = append(eventsToInsert, billingEvent)
@@ -335,23 +331,19 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}
 
-	// Create billing event if configured
-	if s.Config.Billing.TenantID != "" {
+	// Create billing event if configured and this event is not already from the billing tenant
+	if s.Config.Billing.TenantID != "" &&
+		s.Config.Billing.MeterEventName != "" &&
+		event.TenantID != s.Config.Billing.TenantID {
 		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
+			s.Config.Billing.MeterEventName,
 			s.Config.Billing.TenantID,
 			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
+			nil,
 			time.Now(),
-			"", // Customer ID will be looked up by external ID
-			"", // Generate new ID
-			"system",
+			"",
+			"",
+			"flexprice_meta_billing",
 			s.Config.Billing.EnvironmentID,
 		)
 		eventsToInsert = append(eventsToInsert, billingEvent)

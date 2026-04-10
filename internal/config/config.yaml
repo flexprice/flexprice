@@ -151,6 +151,8 @@ secrets:
 billing:
   tenant_id: ""
   environment_id: ""
+  plan_id: ""
+  meter_event_name: "event_ingest"
 
 s3:
   enabled: false
@@ -227,7 +229,7 @@ meter_usage_tracking:
   enabled: true
   topic: "events"
   rate_limit: 1
-  consumer_group: "v1_meter_usage_tracking_service"
+  consumer_group: "v1_meter_usage_tracking_service_v2"
   properties_enabled_tenants: [] # List of tenant IDs for which event properties will be processed and stored. For other tenants, properties will be ignored to save storage and processing costs.
 
 costsheet_usage_tracking:

@@ -9,6 +9,8 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	flexpricebillingmodels "github.com/flexprice/flexprice/internal/temporal/models/flexprice_billing"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -46,15 +48,52 @@ func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRe
 		return nil, err
 	}
 
-	// Create a customer in the billing tenant for this new tenant
-	if err := s.CreateTenantAsBillingCustomer(ctx, newTenant); err != nil {
+	// Trigger async billing onboarding workflow (non-blocking)
+	if err := s.triggerBillingOnboardingWorkflow(ctx, newTenant); err != nil {
 		// Log error but don't fail tenant creation
-		s.Logger.ErrorwCtx(ctx, "Failed to create billing customer for tenant",
+		s.Logger.ErrorwCtx(ctx, "Failed to trigger billing onboarding workflow",
 			"tenant_id", newTenant.ID,
 			"error", err)
 	}
 
 	return dto.NewTenantResponse(newTenant), nil
+}
+
+// triggerBillingOnboardingWorkflow asynchronously starts the FlexpriceBillingOnboardingWorkflow
+// for a newly created tenant. It is fire-and-forget: errors are logged but never bubble up.
+func (s *tenantService) triggerBillingOnboardingWorkflow(ctx context.Context, t *tenant.Tenant) error {
+	if s.Config.Billing.TenantID == "" {
+		s.Logger.WarnwCtx(ctx, "Billing tenant ID not configured, skipping billing onboarding workflow",
+			"tenant_id", t.ID)
+		return nil
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		s.Logger.WarnwCtx(ctx, "Temporal service not available, skipping billing onboarding workflow",
+			"tenant_id", t.ID)
+		return nil
+	}
+
+	input := flexpricebillingmodels.FlexpriceBillingOnboardingInput{
+		TenantID:             t.ID,
+		TenantName:           t.Name,
+		Email:                t.BillingDetails.Email,
+		BillingTenantID:      s.Config.Billing.TenantID,
+		BillingEnvironmentID: s.Config.Billing.EnvironmentID,
+		BillingPlanID:        s.Config.Billing.PlanID,
+	}
+
+	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalFlexpriceBillingOnboardingWorkflow, input)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.InfowCtx(ctx, "FlexpriceBillingOnboardingWorkflow started",
+		"tenant_id", t.ID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
+	return nil
 }
 
 // CreateTenantAsBillingCustomer creates a customer in the billing tenant using the tenant details
@@ -106,6 +145,26 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 	ctx = context.WithValue(ctx, types.CtxTenantID, flexpriceTenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, flexpriceEnvironmentID)
 
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+
+	// If a BASE plan is explicitly configured, use it directly
+	if s.Config.Billing.PlanID != "" {
+		_, err := subscriptionService.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+			CustomerID:   customer.ID,
+			PlanID:       s.Config.Billing.PlanID,
+			StartDate:    lo.ToPtr(time.Now().UTC()),
+			BillingCycle: types.BillingCycleAnniversary,
+		})
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "Failed to create subscription for configured plan",
+				"tenant_id", t.ID,
+				"plan_id", s.Config.Billing.PlanID,
+				"error", err)
+			return err
+		}
+		return nil
+	}
+
 	planService := NewPlanService(s.ServiceParams)
 	// List plans
 	planFilter := types.NewNoLimitPlanFilter()
@@ -138,8 +197,6 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 	}
 
 	// Create a subscription for the tenant
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
-
 	_, err = subscriptionService.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
 		CustomerID:         customer.ID,
 		PlanID:             freePlan.ID,
