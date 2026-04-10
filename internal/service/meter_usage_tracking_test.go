@@ -69,13 +69,9 @@ func (s *MeterUsageTrackingSuite) TestGenerateUniqueHash_NonCountUnique() {
 	event := &events.Event{ID: "evt_123", EventName: "api_call"}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "duration"}}
 
+	// Non-CountUnique aggregations return empty hash (only CountUnique needs dedup hashing)
 	hash := s.svc.generateUniqueHash(event, m)
-	assert.NotEmpty(s.T(), hash)
-	assert.Len(s.T(), hash, 64) // SHA256 hex
-
-	// Same input produces same hash
-	hash2 := s.svc.generateUniqueHash(event, m)
-	assert.Equal(s.T(), hash, hash2)
+	assert.Empty(s.T(), hash)
 }
 
 func (s *MeterUsageTrackingSuite) TestGenerateUniqueHash_CountUnique() {
@@ -338,8 +334,7 @@ func (s *MeterUsageTrackingSuite) TestProcessEvent_MatchesMeters() {
 	hash2 := s.svc.generateUniqueHash(event, m2)
 	assert.NotEmpty(s.T(), hash2)
 
-	// Verify unique hash is event-based for SUM
+	// Verify unique hash is empty for SUM (only CountUnique produces hashes)
 	hash1 := s.svc.generateUniqueHash(event, m1)
-	assert.NotEmpty(s.T(), hash1)
-	assert.NotEqual(s.T(), hash1, hash2)
+	assert.Empty(s.T(), hash1)
 }
