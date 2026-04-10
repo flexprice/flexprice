@@ -290,6 +290,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
 		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
+		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
 	})
 }
@@ -1787,6 +1788,7 @@ func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
+		MeterUsageRepo:             s.GetStores().MeterUsageRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 	})
@@ -4928,6 +4930,7 @@ func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
 		AuthRepo:                 s.GetStores().AuthRepo,
 		WalletRepo:               s.GetStores().WalletRepo,
 		PaymentRepo:              s.GetStores().PaymentRepo,
+		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 	})
