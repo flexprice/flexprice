@@ -125,7 +125,7 @@ func (h *MeterUsageHandler) GetAnalytics(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.MeterUsageDetailedAnalyticsRequest true "Detailed analytics parameters"
-// @Success 200 {object} dto.MeterUsageDetailedAnalyticsResponse
+// @Success 200 {object} dto.GetUsageAnalyticsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /meter-usage/detailed-analytics [post]
@@ -149,7 +149,7 @@ func (h *MeterUsageHandler) GetDetailedAnalytics(c *gin.Context) {
 	environmentID := types.GetEnvironmentID(ctx)
 	params := req.ToParams(tenantID, environmentID)
 
-	results, err := h.meterUsageService.GetDetailedAnalytics(ctx, params)
+	response, err := h.meterUsageService.GetDetailedAnalytics(ctx, params)
 	if err != nil {
 		h.log.ErrorwCtx(ctx, "failed to query detailed meter usage analytics",
 			"error", err,
@@ -159,5 +159,5 @@ func (h *MeterUsageHandler) GetDetailedAnalytics(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.ToMeterUsageDetailedAnalyticsResponse(results))
+	c.JSON(http.StatusOK, response)
 }
