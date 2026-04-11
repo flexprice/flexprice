@@ -655,7 +655,13 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		}
 
 		// Convert each LineItemMeterUsage → DetailedUsageAnalytic
+		// Skip line items with zero usage — they add noise to analytics responses.
+		// (Billing path uses ConvertToBillingCharges which keeps zero-usage for commitment minimums.)
 		for _, lu := range su.LineItemUsages {
+			if lu.Usage.IsZero() && lu.EventCount == 0 && len(lu.Points) == 0 && lu.BucketedResult == nil {
+				continue
+			}
+
 			analytic := &events.DetailedUsageAnalytic{
 				MeterID: lu.MeterID,
 			}
