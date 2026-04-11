@@ -228,8 +228,10 @@ type SecretsConfig struct {
 }
 
 type BillingConfig struct {
-	TenantID      string `mapstructure:"tenant_id" validate:"omitempty"`
-	EnvironmentID string `mapstructure:"environment_id" validate:"omitempty"`
+	TenantID       string `mapstructure:"tenant_id" validate:"omitempty"`
+	EnvironmentID  string `mapstructure:"environment_id" validate:"omitempty"`
+	PlanID         string `mapstructure:"plan_id" validate:"omitempty"`
+	MeterEventName string `mapstructure:"meter_event_name" validate:"omitempty"`
 }
 
 type EventProcessingConfig struct {
@@ -390,7 +392,7 @@ func NewConfig() (*Configuration, error) {
 	v := viper.New()
 
 	// Step 1: Load `.env` if it exists
-	_ = godotenv.Load()
+	_ = godotenv.Load(".env.us")
 
 	// Step 2: Initialize Viper
 	v.SetConfigName("config")

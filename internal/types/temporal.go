@@ -55,6 +55,7 @@ const (
 	TemporalChargebeeInvoiceSyncWorkflow               TemporalWorkflowType = "ChargebeeInvoiceSyncWorkflow"
 	TemporalComputeInvoiceWorkflow                     TemporalWorkflowType = "ComputeInvoiceWorkflow"
 	TemporalCustomerOnboardingWorkflow                 TemporalWorkflowType = "CustomerOnboardingWorkflow"
+	TemporalFlexpriceBillingOnboardingWorkflow         TemporalWorkflowType = "FlexpriceBillingOnboardingWorkflow"
 	TemporalDraftAndComputeSubscriptionInvoiceWorkflow TemporalWorkflowType = "DraftAndComputeSubscriptionInvoiceWorkflow"
 	TemporalExecuteExportWorkflow                      TemporalWorkflowType = "ExecuteExportWorkflow"
 	TemporalFinalizeDraftInvoiceWorkflow               TemporalWorkflowType = "FinalizeDraftInvoiceWorkflow"
@@ -117,6 +118,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalChargebeeInvoiceSyncWorkflow,
 		TemporalComputeInvoiceWorkflow,
 		TemporalCustomerOnboardingWorkflow,
+		TemporalFlexpriceBillingOnboardingWorkflow,
 		TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
 		TemporalExecuteExportWorkflow,
 		TemporalFinalizeDraftInvoiceWorkflow,
@@ -176,7 +178,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueSubscription
 	case TemporalProcessInvoiceWorkflow, TemporalFinalizeDraftInvoiceWorkflow, TemporalScheduleDraftFinalizationWorkflow, TemporalComputeInvoiceWorkflow, TemporalDraftAndComputeSubscriptionInvoiceWorkflow:
 		return TemporalTaskQueueInvoice
-	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow:
+	case TemporalCustomerOnboardingWorkflow, TemporalFlexpriceBillingOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow:
 		return TemporalTaskQueueWorkflows
 	case TemporalReprocessEventsWorkflow, TemporalReprocessRawEventsWorkflow, TemporalReprocessEventsForPlanWorkflow:
 		return TemporalTaskQueueReprocessEvents
@@ -247,6 +249,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 	case TemporalTaskQueueWorkflows:
 		return []TemporalWorkflowType{
 			TemporalCustomerOnboardingWorkflow,
+			TemporalFlexpriceBillingOnboardingWorkflow,
 			TemporalPrepareProcessedEventsWorkflow,
 		}
 	case TemporalTaskQueueReprocessEvents:
