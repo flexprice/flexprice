@@ -383,8 +383,8 @@ type CreateSubscriptionRequest struct {
 	// If not set, the default value is UTC.
 	CustomerTimezone string `json:"customer_timezone" validate:"omitempty,timezone"`
 
-	//Billing Anchor
-	BillingAnchor *time.Time `json:"-"`
+	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
+	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
 
 	// Workflow
 	Workflow *types.TemporalWorkflowType `json:"-"`
@@ -623,6 +623,15 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	if err := r.BillingCycle.Validate(); err != nil {
 		return err
+	}
+	if r.BillingAnchor != nil && r.BillingCycle != types.BillingCycleAnniversary {
+		return ierr.NewError("invalid billing_anchor for billing_cycle").
+			WithHint("billing_anchor can only be passed when billing_cycle is anniversary").
+			WithReportableDetails(map[string]any{
+				"billing_cycle":  r.BillingCycle,
+				"billing_anchor": r.BillingAnchor,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Handle legacy collection method conversion and validation
@@ -1083,6 +1092,9 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 			billingAnchor = startDate
 		}
 		endDate = r.EndDate
+	}
+	if r.BillingAnchor != nil {
+		billingAnchor = *r.BillingAnchor
 	}
 
 	subscriptionType := r.SubscriptionType
