@@ -721,6 +721,45 @@ definitions:
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
     type: object
+  CloneEnvironmentRequest:
+    properties:
+      name:
+        description: Name of the new environment (required when target_environment_id
+          is not provided)
+        type: string
+      target_environment_id:
+        description: |-
+          TargetEnvironmentID is the ID of an existing environment to clone into (optional).
+          When provided, Name and Type are ignored. When omitted, Name and Type are required.
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/types.EnvironmentType'
+        description: Type of the new environment, e.g. "production" or "development"
+          (required when target_environment_id is not provided)
+    type: object
+  CloneFeatureRequest:
+    properties:
+      description:
+        description: Description overrides the source feature's description when provided
+        type: string
+      lookup_key:
+        description: LookupKey is required and must be unique across published features
+        type: string
+      metadata:
+        allOf:
+        - $ref: '#/definitions/types.Metadata'
+        description: Metadata overrides the source feature's metadata when provided
+      name:
+        description: Name is required and must be different from the source feature's
+          name
+        type: string
+      target_environment_id:
+        description: |-
+          TargetEnvironmentID optionally specifies the target environment for cross-env cloning.
+          When empty, the feature is cloned within the same environment.
+        type: string
+    type: object
   ClonePlanRequest:
     properties:
       description:
@@ -739,6 +778,11 @@ definitions:
       name:
         description: Name is required and must be different from the source plan's
           name
+        type: string
+      target_environment_id:
+        description: |-
+          TargetEnvironmentID optionally specifies the target environment for cross-env cloning.
+          When empty, the plan is cloned within the same environment.
         type: string
     type: object
   CostAnalyticItem:
@@ -9717,6 +9761,14 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.EnvironmentType:
+    enum:
+    - development
+    - production
+    type: string
+    x-enum-varnames:
+    - EnvironmentDevelopment
+    - EnvironmentProduction
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -11588,6 +11640,52 @@ paths:
       summary: Query entitlements
       tags:
       - Entitlements
+  /environments/{id}/clone:
+    post:
+      consumes:
+      - application/json
+      description: Clone all published features and plans from the source environment
+        into a target environment. If target_environment_id is provided, entities
+        are cloned into that existing environment. Otherwise a new environment is
+        created from name and type first.
+      operationId: cloneEnvironment
+      parameters:
+      - description: Source Environment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Clone configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CloneEnvironmentRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/models.TemporalWorkflowResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Clone an environment
+      tags:
+      - Environments
+      x-scope: write
   /events:
     post:
       consumes:
@@ -11967,6 +12065,53 @@ paths:
       summary: Update feature
       tags:
       - Features
+  /features/{id}/clone:
+    post:
+      consumes:
+      - application/json
+      description: Clone an existing feature
+      operationId: cloneFeature
+      parameters:
+      - description: Source Feature ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Clone configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CloneFeatureRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/FeatureResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Clone a feature
+      tags:
+      - Features
+      x-scope: write
   /features/search:
     post:
       consumes:
@@ -13206,6 +13351,7 @@ paths:
       - application/json
       description: Clone an existing plan, copying its active prices, published entitlements,
         and published credit grants
+      operationId: clonePlan
       parameters:
       - description: Source Plan ID
         in: path
@@ -13246,6 +13392,7 @@ paths:
       summary: Clone a plan
       tags:
       - Plans
+      x-scope: write
   /plans/{id}/creditgrants:
     get:
       description: Use when listing credits attached to a plan (e.g. included prepaid

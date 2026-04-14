@@ -3220,6 +3220,87 @@
         ]
       }
     },
+    "/environments/{id}/clone": {
+      "post": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Clone an environment",
+        "description": "Clone all published features and plans from the source environment into a target environment. If target_environment_id is provided, entities are cloned into that existing environment. Otherwise a new environment is created from name and type first.",
+        "operationId": "cloneEnvironment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Clone configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneEnvironmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.TemporalWorkflowResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/events": {
       "post": {
         "tags": [
@@ -3947,6 +4028,97 @@
             "ApiKeyAuth": []
           }
         ]
+      }
+    },
+    "/features/{id}/clone": {
+      "post": {
+        "tags": [
+          "Features"
+        ],
+        "summary": "Clone a feature",
+        "description": "Clone an existing feature",
+        "operationId": "cloneFeature",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source Feature ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Clone configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneFeatureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
       }
     },
     "/groups": {
@@ -6187,6 +6359,7 @@
         ],
         "summary": "Clone a plan",
         "description": "Clone an existing plan, copying its active prices, published entitlements, and published credit grants",
+        "operationId": "clonePlan",
         "parameters": [
           {
             "name": "id",
@@ -6266,6 +6439,7 @@
             "ApiKeyAuth": []
           }
         ],
+        "x-scope": "write",
         "x-codegen-request-body-name": "request"
       }
     },
@@ -14437,6 +14611,46 @@
           }
         }
       },
+      "CloneEnvironmentRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the new environment (required when target_environment_id is not provided)"
+          },
+          "target_environment_id": {
+            "type": "string",
+            "description": "TargetEnvironmentID is the ID of an existing environment to clone into (optional).\nWhen provided, Name and Type are ignored. When omitted, Name and Type are required."
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.EnvironmentType"
+          }
+        }
+      },
+      "CloneFeatureRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Description overrides the source feature's description when provided"
+          },
+          "lookup_key": {
+            "type": "string",
+            "description": "LookupKey is required and must be unique across published features"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name is required and must be different from the source feature's name"
+          },
+          "target_environment_id": {
+            "type": "string",
+            "description": "TargetEnvironmentID optionally specifies the target environment for cross-env cloning.\nWhen empty, the feature is cloned within the same environment."
+          }
+        }
+      },
       "ClonePlanRequest": {
         "type": "object",
         "properties": {
@@ -14458,6 +14672,10 @@
           "name": {
             "type": "string",
             "description": "Name is required and must be different from the source plan's name"
+          },
+          "target_environment_id": {
+            "type": "string",
+            "description": "TargetEnvironmentID optionally specifies the target environment for cross-env cloning.\nWhen empty, the plan is cloned within the same environment."
           }
         }
       },
@@ -26456,6 +26674,18 @@
             "type": "string"
           }
         }
+      },
+      "types.EnvironmentType": {
+        "type": "string",
+        "enum": [
+          "development",
+          "production"
+        ],
+        "x-enum-varnames": [
+          "EnvironmentDevelopment",
+          "EnvironmentProduction"
+        ],
+        "x-speakeasy-name-override": "EnvironmentType"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",

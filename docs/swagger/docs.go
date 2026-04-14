@@ -2659,6 +2659,72 @@ const docTemplate = `{
                 }
             }
         },
+        "/environments/{id}/clone": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Clone all published features and plans from the source environment into a target environment. If target_environment_id is provided, entities are cloned into that existing environment. Otherwise a new environment is created from name and type first.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Environments"
+                ],
+                "summary": "Clone an environment",
+                "operationId": "cloneEnvironment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source Environment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Clone configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CloneEnvironmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/models.TemporalWorkflowResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
         "/events": {
             "post": {
                 "security": [
@@ -3283,6 +3349,78 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/features/{id}/clone": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Clone an existing feature",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Features"
+                ],
+                "summary": "Clone a feature",
+                "operationId": "cloneFeature",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source Feature ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Clone configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CloneFeatureRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/FeatureResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
             }
         },
         "/groups": {
@@ -5159,6 +5297,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Clone a plan",
+                "operationId": "clonePlan",
                 "parameters": [
                     {
                         "type": "string",
@@ -5208,7 +5347,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "write"
             }
         },
         "/plans/{id}/creditgrants": {
@@ -12457,6 +12597,56 @@ const docTemplate = `{
                 }
             }
         },
+        "CloneEnvironmentRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the new environment (required when target_environment_id is not provided)",
+                    "type": "string"
+                },
+                "target_environment_id": {
+                    "description": "TargetEnvironmentID is the ID of an existing environment to clone into (optional).\nWhen provided, Name and Type are ignored. When omitted, Name and Type are required.",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type of the new environment, e.g. \"production\" or \"development\" (required when target_environment_id is not provided)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.EnvironmentType"
+                        }
+                    ]
+                }
+            }
+        },
+        "CloneFeatureRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "Description overrides the source feature's description when provided",
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "description": "LookupKey is required and must be unique across published features",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata overrides the source feature's metadata when provided",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "Name is required and must be different from the source feature's name",
+                    "type": "string"
+                },
+                "target_environment_id": {
+                    "description": "TargetEnvironmentID optionally specifies the target environment for cross-env cloning.\nWhen empty, the feature is cloned within the same environment.",
+                    "type": "string"
+                }
+            }
+        },
         "ClonePlanRequest": {
             "type": "object",
             "properties": {
@@ -12482,6 +12672,10 @@ const docTemplate = `{
                 },
                 "name": {
                     "description": "Name is required and must be different from the source plan's name",
+                    "type": "string"
+                },
+                "target_environment_id": {
+                    "description": "TargetEnvironmentID optionally specifies the target environment for cross-env cloning.\nWhen empty, the plan is cloned within the same environment.",
                     "type": "string"
                 }
             }
@@ -24720,6 +24914,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "types.EnvironmentType": {
+            "type": "string",
+            "enum": [
+                "development",
+                "production"
+            ],
+            "x-enum-varnames": [
+                "EnvironmentDevelopment",
+                "EnvironmentProduction"
+            ]
         },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
