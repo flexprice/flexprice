@@ -36,3 +36,16 @@
 6. Health check:
   kubectl exec --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "flexprice.name" . }},app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=api" -- curl http://localhost:8080/health
 
+{{- if not .Values.secrets.existingSecret }}
+
+WARNING: You are using the dev-only fallback Secret.
+  The chart rendered {{ include "flexprice.fullname" . }}-secrets from plaintext values.
+  Do NOT use this mode in production. Create a Secret out-of-band and set
+  secrets.existingSecret to its name. See values.yaml "Secrets management".
+{{- else }}
+
+Using existing Secret: {{ .Values.secrets.existingSecret }}
+  Verify it exists and contains all required keys:
+    kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.secrets.existingSecret }} -o jsonpath='{.data}' | jq 'keys'
+{{- end }}
+

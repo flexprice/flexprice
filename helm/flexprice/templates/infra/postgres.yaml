@@ -1,4 +1,5 @@
-{{- if not .Values.postgres.external.enabled }}
+{{- /* Hand-rolled PostgreSQL — only rendered when external is disabled AND bitnami subchart is disabled */}}
+{{- if and (not .Values.postgres.external.enabled) (not .Values.postgresql.enabled) }}
 ---
 apiVersion: v1
 kind: Service
@@ -55,7 +56,7 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "flexprice.fullname" . }}-secrets
+                  name: {{ include "flexprice.secretName" . }}
                   key: postgres-password
             - name: POSTGRES_DB
               value: {{ .Values.postgres.dbname | quote }}

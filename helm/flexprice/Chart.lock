@@ -1,0 +1,15 @@
+dependencies:
+- name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  version: 16.7.27
+- name: kafka
+  repository: https://charts.bitnami.com/bitnami
+  version: 32.4.3
+- name: redis
+  repository: https://charts.bitnami.com/bitnami
+  version: 20.13.4
+- name: temporal
+  repository: https://go.temporal.io/helm-charts
+  version: 0.74.0
+digest: sha256:ae0ca8811c7614b32990aa81132fbfe2d8facecfef1bfa16fe5d46db3b5463d6
+generated: "2026-04-15T13:30:59.396782+05:30"
