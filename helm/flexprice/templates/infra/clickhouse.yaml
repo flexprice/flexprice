@@ -1,0 +1,228 @@
+{{- if eq .Values.clickhouse.mode "standalone" }}
+---
+# Single-replica ClickHouse StatefulSet. No operator required.
+# Service: {{ include "flexprice.fullname" . }}-clickhouse  (ports 8123 HTTP, 9000 native)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "flexprice.fullname" . }}-clickhouse
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  serviceName: {{ include "flexprice.fullname" . }}-clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: clickhouse
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: clickhouse
+    spec:
+      {{- with .Values.clickhouse.standalone.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.clickhouse.standalone.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: clickhouse
+          image: "{{ .Values.clickhouse.standalone.image.repository }}:{{ .Values.clickhouse.standalone.image.tag }}"
+          imagePullPolicy: {{ .Values.clickhouse.standalone.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: native
+              containerPort: 9000
+            - name: interserver
+              containerPort: 9009
+          env:
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.username | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: clickhouse-password
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          resources:
+            {{- toYaml .Values.clickhouse.standalone.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.clickhouse.standalone.persistence.storageClass }}
+        storageClassName: {{ .Values.clickhouse.standalone.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.clickhouse.standalone.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexprice.fullname" . }}-clickhouse
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "flexprice.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+  ports:
+    - name: http
+      port: {{ .Values.clickhouse.standalone.service.httpPort }}
+      targetPort: http
+    - name: native
+      port: {{ .Values.clickhouse.standalone.service.nativePort }}
+      targetPort: native
+
+{{- else if eq .Values.clickhouse.mode "altinity" }}
+---
+# ClickHouseInstallation managed by the Altinity operator.
+# Prerequisites: Altinity operator CRDs + controller must be installed cluster-wide.
+# Install: kubectl apply -f shared/clickhouse/operator/install-bundle.yaml
+#
+# Service naming: the operator creates a ClusterIP service named
+#   chi-<chi-name>-<cluster-name>-0-0
+# Helper resolves to: chi-<fullname>-flexprice-0-0:9000
+apiVersion: clickhouse.altinity.com/v1
+kind: ClickHouseInstallation
+metadata:
+  name: {{ include "flexprice.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  configuration:
+    clusters:
+      - name: flexprice
+        layout:
+          shardsCount: 1
+          replicasCount: 1
+        templates:
+          podTemplate: clickhouse-pod
+          dataVolumeClaimTemplate: clickhouse-data
+
+    users:
+      readonly/profile: readonly
+      {{ .Values.clickhouse.username }}/password:
+        valueFrom:
+          secretKeyRef:
+            name: {{ include "flexprice.secretName" . }}
+            key: clickhouse-password
+      {{ .Values.clickhouse.username }}/profile: default
+      {{ .Values.clickhouse.username }}/quota: default
+      {{ .Values.clickhouse.username }}/networks/ip:
+        - "0.0.0.0/0"
+        - "::/0"
+
+    profiles:
+      readonly/readonly: "1"
+      default/data_type_default_nullable: 1
+      default/insert_distributed_sync: 1
+      {{- if .Values.clickhouse.altinity.asyncInsert.enabled }}
+      default/async_insert: 1
+      default/async_insert_busy_timeout_ms: {{ .Values.clickhouse.altinity.asyncInsert.busyTimeoutMs }}
+      default/async_insert_max_data_size: {{ .Values.clickhouse.altinity.asyncInsert.maxDataSize }}
+      default/async_insert_stale_timeout_ms: {{ .Values.clickhouse.altinity.asyncInsert.staleTimeoutMs }}
+      default/wait_for_async_insert: 0
+      {{- end }}
+      default/log_queries: 1
+      default/log_query_threads: 1
+      default/min_insert_block_size_bytes: 1048576
+      default/min_insert_block_size_rows: 1000
+      default/parts_to_delay_insert: 300
+      default/parts_to_throw_insert: 600
+
+    files:
+      config.d/merge_tree_defaults.xml: |
+        <clickhouse>
+          <merge_tree>
+            <allow_nullable_key>1</allow_nullable_key>
+            <max_bytes_to_merge_at_max_space_in_pool>10737418240</max_bytes_to_merge_at_max_space_in_pool>
+          </merge_tree>
+        </clickhouse>
+      config.d/server_settings.xml: |
+        <clickhouse>
+          <background_pool_size>{{ .Values.clickhouse.altinity.backgroundPoolSize }}</background_pool_size>
+          <background_schedule_pool_size>4</background_schedule_pool_size>
+          <max_server_memory_usage_to_ram_ratio>0.8</max_server_memory_usage_to_ram_ratio>
+          <query_log><flush_interval_milliseconds>30000</flush_interval_milliseconds></query_log>
+          <query_thread_log><enabled>0</enabled></query_thread_log>
+          <metric_log><flush_interval_milliseconds>30000</flush_interval_milliseconds></metric_log>
+          <asynchronous_metric_log><flush_interval_milliseconds>30000</flush_interval_milliseconds></asynchronous_metric_log>
+          <trace_log><enabled>0</enabled></trace_log>
+        </clickhouse>
+
+    settings:
+      allow_nullable_key: 1
+
+  templates:
+    podTemplates:
+      - name: clickhouse-pod
+        spec:
+          {{- with .Values.clickhouse.altinity.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.clickhouse.altinity.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: clickhouse
+              image: "{{ .Values.clickhouse.altinity.image.repository }}:{{ .Values.clickhouse.altinity.image.tag }}"
+              imagePullPolicy: {{ .Values.clickhouse.altinity.image.pullPolicy }}
+              ports:
+                - containerPort: 8123
+                - containerPort: 9000
+                - containerPort: 9009
+              resources:
+                {{- toYaml .Values.clickhouse.altinity.resources | nindent 16 }}
+              volumeMounts:
+                - name: clickhouse-data
+                  mountPath: /var/lib/clickhouse
+
+    volumeClaimTemplates:
+      - name: clickhouse-data
+        reclaimPolicy: Retain
+        spec:
+          storageClassName: {{ .Values.clickhouse.altinity.persistence.storageClass | quote }}
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: {{ .Values.clickhouse.altinity.persistence.size }}
+{{- end }}
+{{- /* mode=external: no resources rendered — user points clickhouse.address at their endpoint */}}

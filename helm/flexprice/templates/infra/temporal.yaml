@@ -1,4 +1,5 @@
-{{- if not .Values.temporal.external.enabled }}
+{{- /* Hand-rolled Temporal — only rendered when external is disabled AND official subchart is disabled */}}
+{{- if and (not .Values.temporalConfig.external.enabled) (not .Values.temporalConfig.enabled) }}
 ---
 apiVersion: v1
 kind: Service
@@ -8,9 +9,9 @@ metadata:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: temporal
 spec:
-  type: {{ .Values.temporal.internal.server.service.type }}
+  type: {{ .Values.temporalConfig.internal.server.service.type }}
   ports:
-    - port: {{ .Values.temporal.internal.server.service.port }}
+    - port: {{ .Values.temporalConfig.internal.server.service.port }}
       targetPort: 7233
       protocol: TCP
       name: temporal
@@ -43,8 +44,8 @@ spec:
       {{- end }}
       containers:
         - name: temporal
-          image: "{{ .Values.temporal.internal.server.image.repository }}:{{ .Values.temporal.internal.server.image.tag }}"
-          imagePullPolicy: {{ .Values.temporal.internal.server.image.pullPolicy }}
+          image: "{{ .Values.temporalConfig.internal.server.image.repository }}:{{ .Values.temporalConfig.internal.server.image.tag }}"
+          imagePullPolicy: {{ .Values.temporalConfig.internal.server.image.pullPolicy }}
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -59,65 +60,65 @@ spec:
             - name: DB
               value: "postgres12"
             - name: DB_PORT
-              value: {{ if hasKey .Values.temporal.internal "postgres" }}{{ if .Values.temporal.internal.postgres.useExternalPostgres }}{{ .Values.temporal.internal.postgres.port | quote }}{{ else }}{{ .Values.postgres.internal.service.port | quote }}{{ end }}{{ else }}{{ .Values.postgres.internal.service.port | quote }}{{ end }}
+              value: {{ if hasKey .Values.temporalConfig.internal "postgres" }}{{ if .Values.temporalConfig.internal.postgres.useExternalPostgres }}{{ .Values.temporalConfig.internal.postgres.port | quote }}{{ else }}{{ .Values.postgres.internal.service.port | quote }}{{ end }}{{ else }}{{ .Values.postgres.internal.service.port | quote }}{{ end }}
             - name: DB_USER
-              value: {{ if hasKey .Values.temporal.internal "postgres" }}{{ if .Values.temporal.internal.postgres.useExternalPostgres }}{{ .Values.temporal.internal.postgres.user | quote }}{{ else }}{{ if .Values.temporal.internal.postgres.user }}{{ .Values.temporal.internal.postgres.user | quote }}{{ else }}{{ .Values.postgres.user | quote }}{{ end }}{{ end }}{{ else }}{{ .Values.postgres.user | quote }}{{ end }}
+              value: {{ if hasKey .Values.temporalConfig.internal "postgres" }}{{ if .Values.temporalConfig.internal.postgres.useExternalPostgres }}{{ .Values.temporalConfig.internal.postgres.user | quote }}{{ else }}{{ if .Values.temporalConfig.internal.postgres.user }}{{ .Values.temporalConfig.internal.postgres.user | quote }}{{ else }}{{ .Values.postgres.user | quote }}{{ end }}{{ end }}{{ else }}{{ .Values.postgres.user | quote }}{{ end }}
             - name: DB_PWD
-              {{- if hasKey .Values.temporal.internal "postgres" }}
-              {{- if .Values.temporal.internal.postgres.useExternalPostgres }}
-              {{- if .Values.temporal.internal.postgres.password }}
-              value: {{ .Values.temporal.internal.postgres.password | quote }}
+              {{- if hasKey .Values.temporalConfig.internal "postgres" }}
+              {{- if .Values.temporalConfig.internal.postgres.useExternalPostgres }}
+              {{- if .Values.temporalConfig.internal.postgres.password }}
+              value: {{ .Values.temporalConfig.internal.postgres.password | quote }}
               {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "flexprice.fullname" . }}-secrets
+                  name: {{ include "flexprice.secretName" . }}
                   key: postgres-password
               {{- end }}
               {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "flexprice.fullname" . }}-secrets
+                  name: {{ include "flexprice.secretName" . }}
                   key: postgres-password
               {{- end }}
               {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "flexprice.fullname" . }}-secrets
+                  name: {{ include "flexprice.secretName" . }}
                   key: postgres-password
               {{- end }}
             - name: DB_NAME
-              value: {{ if hasKey .Values.temporal.internal "postgres" }}{{ if .Values.temporal.internal.postgres.dbname }}{{ .Values.temporal.internal.postgres.dbname | quote }}{{ else }}"temporal"{{ end }}{{ else }}"temporal"{{ end }}
+              value: {{ if hasKey .Values.temporalConfig.internal "postgres" }}{{ if .Values.temporalConfig.internal.postgres.dbname }}{{ .Values.temporalConfig.internal.postgres.dbname | quote }}{{ else }}"temporal"{{ end }}{{ else }}"temporal"{{ end }}
             - name: DB_HOST
-              value: {{ if hasKey .Values.temporal.internal "postgres" }}{{ if .Values.temporal.internal.postgres.useExternalPostgres }}{{ .Values.temporal.internal.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
+              value: {{ if hasKey .Values.temporalConfig.internal "postgres" }}{{ if .Values.temporalConfig.internal.postgres.useExternalPostgres }}{{ .Values.temporalConfig.internal.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
             - name: POSTGRES_USER
-              value: {{ if hasKey .Values.temporal.internal "postgres" }}{{ if .Values.temporal.internal.postgres.useExternalPostgres }}{{ .Values.temporal.internal.postgres.user | quote }}{{ else }}{{ if .Values.temporal.internal.postgres.user }}{{ .Values.temporal.internal.postgres.user | quote }}{{ else }}{{ .Values.postgres.user | quote }}{{ end }}{{ end }}{{ else }}{{ .Values.postgres.user | quote }}{{ end }}
+              value: {{ if hasKey .Values.temporalConfig.internal "postgres" }}{{ if .Values.temporalConfig.internal.postgres.useExternalPostgres }}{{ .Values.temporalConfig.internal.postgres.user | quote }}{{ else }}{{ if .Values.temporalConfig.internal.postgres.user }}{{ .Values.temporalConfig.internal.postgres.user | quote }}{{ else }}{{ .Values.postgres.user | quote }}{{ end }}{{ end }}{{ else }}{{ .Values.postgres.user | quote }}{{ end }}
             - name: POSTGRES_PWD
-              {{- if hasKey .Values.temporal.internal "postgres" }}
-              {{- if .Values.temporal.internal.postgres.useExternalPostgres }}
-              {{- if .Values.temporal.internal.postgres.password }}
-              value: {{ .Values.temporal.internal.postgres.password | quote }}
+              {{- if hasKey .Values.temporalConfig.internal "postgres" }}
+              {{- if .Values.temporalConfig.internal.postgres.useExternalPostgres }}
+              {{- if .Values.temporalConfig.internal.postgres.password }}
+              value: {{ .Values.temporalConfig.internal.postgres.password | quote }}
               {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "flexprice.fullname" . }}-secrets
+                  name: {{ include "flexprice.secretName" . }}
                   key: postgres-password
               {{- end }}
               {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "flexprice.fullname" . }}-secrets
+                  name: {{ include "flexprice.secretName" . }}
                   key: postgres-password
               {{- end }}
               {{- else }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "flexprice.fullname" . }}-secrets
+                  name: {{ include "flexprice.secretName" . }}
                   key: postgres-password
               {{- end }}
             - name: POSTGRES_SEEDS
-              value: {{ if hasKey .Values.temporal.internal "postgres" }}{{ if .Values.temporal.internal.postgres.useExternalPostgres }}{{ .Values.temporal.internal.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
+              value: {{ if hasKey .Values.temporalConfig.internal "postgres" }}{{ if .Values.temporalConfig.internal.postgres.useExternalPostgres }}{{ .Values.temporalConfig.internal.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
           resources:
-            {{- toYaml .Values.temporal.internal.server.resources | nindent 12 }}
+            {{- toYaml .Values.temporalConfig.internal.server.resources | nindent 12 }}
           livenessProbe:
             tcpSocket:
               port: temporal
@@ -133,7 +134,7 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
 ---
-{{- if .Values.temporal.internal.ui.enabled }}
+{{- if .Values.temporalConfig.internal.ui.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -142,9 +143,9 @@ metadata:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: temporal-ui
 spec:
-  type: {{ .Values.temporal.internal.ui.service.type }}
+  type: {{ .Values.temporalConfig.internal.ui.service.type }}
   ports:
-    - port: {{ .Values.temporal.internal.ui.service.port }}
+    - port: {{ .Values.temporalConfig.internal.ui.service.port }}
       targetPort: 8080
       protocol: TCP
       name: http
@@ -177,8 +178,8 @@ spec:
       {{- end }}
       containers:
         - name: temporal-ui
-          image: "{{ .Values.temporal.internal.ui.image.repository }}:{{ .Values.temporal.internal.ui.image.tag }}"
-          imagePullPolicy: {{ .Values.temporal.internal.ui.image.pullPolicy }}
+          image: "{{ .Values.temporalConfig.internal.ui.image.repository }}:{{ .Values.temporalConfig.internal.ui.image.tag }}"
+          imagePullPolicy: {{ .Values.temporalConfig.internal.ui.image.pullPolicy }}
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -189,9 +190,9 @@ spec:
               protocol: TCP
           env:
             - name: TEMPORAL_ADDRESS
-              value: {{ include "flexprice.fullname" . }}-temporal:{{ .Values.temporal.internal.server.service.port }}
+              value: {{ include "flexprice.fullname" . }}-temporal:{{ .Values.temporalConfig.internal.server.service.port }}
           resources:
-            {{- toYaml .Values.temporal.internal.ui.resources | nindent 12 }}
+            {{- toYaml .Values.temporalConfig.internal.ui.resources | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /
