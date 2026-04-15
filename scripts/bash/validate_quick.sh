@@ -61,7 +61,10 @@ SELECT COALESCE(SUM(mt.total_qty * cp.amount), 0) FROM mt INNER JOIN cp ON mt.me
 import sys, json
 try:
     d = json.load(sys.stdin)
-    print(d.get('total_cost', '0'))
+    v = d.get('total_cost')
+    if v is None:
+        raise KeyError('total_cost missing from response')
+    print(v)
 except:
     print('ERROR')
 " 2>/dev/null | tr -d '[:space:]')
@@ -96,7 +99,7 @@ done <<< "$CUSTOMERS"
 echo "-----------------------------------------------------------------------------------------------------------"
 echo ""
 echo "Summary: Matches=$matches  Mismatches=$mismatches  Errors=$errors"
-if [ "$mismatches" -gt 0 ]; then
+if [ "$mismatches" -gt 0 ] || [ "$errors" -gt 0 ]; then
     echo "VALIDATION FAILED"
     exit 1
 else

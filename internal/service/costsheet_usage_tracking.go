@@ -1071,6 +1071,11 @@ func (s *costsheetUsageTrackingService) fetchAnalytics(ctx context.Context, cost
 		featureFilter.MeterIDs = lo.Keys(meterMap)
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
+			// If caller supplied a FeatureIDs filter we cannot correctly restrict the
+			// meter set without a successful feature lookup — fail fast.
+			if len(req.FeatureIDs) > 0 {
+				return nil, err
+			}
 			s.Logger.WarnwCtx(ctx, "failed to fetch features for cost analytics enrichment", "error", err)
 		} else {
 			for _, f := range features {
@@ -1158,10 +1163,14 @@ func (s *costsheetUsageTrackingService) fetchAnalytics(ctx context.Context, cost
 				Points:          make([]events.UsageAnalyticPoint, 0, len(result.Results)),
 			}
 			for _, r := range result.Results {
-				item.Points = append(item.Points, events.UsageAnalyticPoint{
+				point := events.UsageAnalyticPoint{
 					Timestamp: r.WindowSize,
 					Usage:     r.Value,
-				})
+				}
+				if m.IsBucketedMaxMeter() {
+					point.MaxUsage = r.Value
+				}
+				item.Points = append(item.Points, point)
 			}
 			analytics = append(analytics, item)
 		} else {

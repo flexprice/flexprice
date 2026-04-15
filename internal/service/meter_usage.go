@@ -64,6 +64,10 @@ func (s *meterUsageService) QueryUsageByMeters(
 	meters map[string]*meter.Meter,
 	params *events.MeterUsageQueryParams,
 ) (*events.MeterUsageQueryResult, error) {
+	if params == nil {
+		return nil, ierr.NewError("params are required").Mark(ierr.ErrValidation)
+	}
+
 	result := &events.MeterUsageQueryResult{
 		Regular:  make(map[string]*events.MeterUsageAggregationResult),
 		Bucketed: make(map[string]*events.AggregationResult),
