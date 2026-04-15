@@ -6,11 +6,8 @@ metadata:
     {{- include "flexprice.labels" . | nindent 4 }}
 data:
   config.yaml: |
-    deployment:
-      mode: {{ .Values.deployment.mode | quote }}
-    
     server:
-      address: {{ .Values.server.address | quote }}
+      address: ":8080"
     
     auth:
       provider: {{ .Values.auth.provider | quote }}
@@ -22,12 +19,11 @@ data:
     {{- end }}
     
     postgres:
-      host: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
-      port: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.port }}{{ else }}{{ .Values.postgres.internal.service.port }}{{ end }}
+      host: {{ include "flexprice.postgresHost" . | quote }}
+      port: {{ include "flexprice.postgresPort" . }}
       user: {{ .Values.postgres.user | quote }}
-      # Password will be overridden by FLEXPRICE_POSTGRES_PASSWORD environment variable
-      # This empty string ensures Viper recognizes the key and can override it
-      password: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.password }}{{ else }}{{ .Values.postgres.internal.service.password }}{{ end }}
+      # Password is injected via FLEXPRICE_POSTGRES_PASSWORD env var from the secret
+      password: ""
       dbname: {{ .Values.postgres.dbname | quote }}
       sslmode: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.sslmode | quote }}{{ else }}"disable"{{ end }}
       max_open_conns: {{ .Values.postgres.maxOpenConns }}
@@ -38,43 +34,44 @@ data:
       reader_host: {{ .Values.postgres.readerHost | quote }}
       reader_port: {{ .Values.postgres.readerPort }}
     {{- end }}
-    
+
     clickhouse:
-      address: {{ if .Values.clickhouse.external.enabled }}{{ .Values.clickhouse.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-clickhouse:{{ .Values.clickhouse.internal.service.nativePort }}{{ end }}
+      address: {{ include "flexprice.clickhouseAddress" . | quote }}
       tls: {{ .Values.clickhouse.tls }}
       username: {{ .Values.clickhouse.username | quote }}
       database: {{ .Values.clickhouse.database | quote }}
-    
+
+    redis:
+      host: {{ include "flexprice.redisHost" . | quote }}
+      port: {{ include "flexprice.redisPort" . }}
+      db: {{ .Values.redisConfig.db | default 0 }}
+      use_tls: {{ .Values.redisConfig.useTLS | default false }}
+      timeout: {{ .Values.redisConfig.timeout | default "5s" | quote }}
+
     kafka:
       brokers:
-        {{- if .Values.kafka.external.enabled }}
-        {{- range .Values.kafka.brokers }}
-        - {{ . | quote }}
-        {{- end }}
-        {{- else }}
-        - {{ include "flexprice.fullname" . }}-kafka:{{ .Values.kafka.internal.service.internalPort | quote }}
-        {{- end }}
-      consumer_group: {{ .Values.kafka.consumerGroup | quote }}
-      topic: {{ .Values.kafka.topic | quote }}
-      topic_lazy: {{ .Values.kafka.topicLazy | quote }}
-      tls: {{ .Values.kafka.tls }}
-      use_sasl: {{ .Values.kafka.useSASL }}
-      sasl_mechanism: {{ .Values.kafka.saslMechanism | quote }}
-      client_id: {{ .Values.kafka.clientId | quote }}
-    {{- if .Values.kafka.routeTenantsOnLazyMode }}
+        - {{ include "flexprice.kafkaBrokers" . | quote }}
+      consumer_group: {{ .Values.kafkaConfig.consumerGroup | quote }}
+      topic: {{ .Values.kafkaConfig.topic | quote }}
+      topic_lazy: {{ .Values.kafkaConfig.topicLazy | quote }}
+      tls: {{ .Values.kafkaConfig.tls }}
+      use_sasl: {{ .Values.kafkaConfig.useSASL }}
+      sasl_mechanism: {{ .Values.kafkaConfig.saslMechanism | quote }}
+      client_id: {{ .Values.kafkaConfig.clientId | quote }}
+    {{- if .Values.kafkaConfig.routeTenantsOnLazyMode }}
       route_tenants_on_lazy_mode:
-        {{- range .Values.kafka.routeTenantsOnLazyMode }}
+        {{- range .Values.kafkaConfig.routeTenantsOnLazyMode }}
         - {{ . | quote }}
         {{- end }}
     {{- end }}
     
     temporal:
-      address: {{ if .Values.temporal.external.enabled }}{{ .Values.temporal.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-temporal:{{ .Values.temporal.internal.server.service.port }}{{ end }}
-      task_queue: {{ .Values.temporal.taskQueue | quote }}
-      namespace: {{ .Values.temporal.namespace | quote }}
-      tls: {{ .Values.temporal.tls }}
-    {{- if .Values.temporal.apiKeyName }}
-      api_key_name: {{ .Values.temporal.apiKeyName | quote }}
+      address: {{ include "flexprice.temporalAddress" . | quote }}
+      task_queue: {{ .Values.temporalConfig.taskQueue | quote }}
+      namespace: {{ .Values.temporalConfig.namespace | quote }}
+      tls: {{ .Values.temporalConfig.tls }}
+    {{- if .Values.temporalConfig.apiKeyName }}
+      api_key_name: {{ .Values.temporalConfig.apiKeyName | quote }}
     {{- end }}
     
     logging:
