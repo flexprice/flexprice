@@ -142,6 +142,7 @@ type LoggingConfig struct {
 	// Service identity fields added to every log line
 	ServiceName string `mapstructure:"service_name" validate:"omitempty"`
 	Environment string `mapstructure:"environment" validate:"omitempty"`
+	Region      string `mapstructure:"region" validate:"omitempty"`
 
 	// Fluentd configuration
 	FluentdEnabled bool   `mapstructure:"fluentd_enabled" default:"false"`
@@ -424,6 +425,7 @@ func NewConfig() (*Configuration, error) {
 	// Bind bare env vars (no FLEXPRICE_ prefix) for service identity fields
 	_ = v.BindEnv("logging.service_name", "SERVICE_NAME")
 	_ = v.BindEnv("logging.environment", "ENVIRONMENT")
+	_ = v.BindEnv("logging.region", "REGION")
 
 	// Explicitly bind OTel logging vars — AutomaticEnv can miss nested keys with underscores
 	_ = v.BindEnv("logging.otel_enabled", "FLEXPRICE_LOGGING_OTEL_ENABLED")
