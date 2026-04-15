@@ -1,28 +1,28 @@
-{{- if .Values.api.enabled }}
+{{- if .Values.consumer.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "flexprice.fullname" . }}-api
+  name: {{ include "flexprice.fullname" . }}-consumer
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api
+    app.kubernetes.io/component: consumer
 spec:
-  replicas: {{ .Values.api.replicaCount }}
+  replicas: {{ .Values.consumer.replicaCount }}
   selector:
     matchLabels:
       {{- include "flexprice.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: api
+      app.kubernetes.io/component: consumer
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
+        checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
         {{- include "flexprice.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: api
+        app.kubernetes.io/component: consumer
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -43,19 +43,29 @@ spec:
               containerPort: 8080
               protocol: TCP
           env:
+            {{- include "flexprice.env" . | nindent 12 }}
             - name: FLEXPRICE_DEPLOYMENT_MODE
-              value: "api"
+              value: "consumer"
             - name: TMPDIR
               value: "/tmp"
-            {{- include "flexprice.env" . | nindent 12 }}
           livenessProbe:
-            {{- toYaml .Values.livenessProbe | nindent 12 }}
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
-            {{- toYaml .Values.readinessProbe | nindent 12 }}
-          startupProbe:
-            {{- toYaml .Values.startupProbe | nindent 12 }}
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
-            {{- toYaml .Values.api.resources | nindent 12 }}
+            {{- toYaml .Values.consumer.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /app/config

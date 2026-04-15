@@ -1,28 +1,28 @@
-{{- if .Values.consumer.enabled }}
+{{- if .Values.worker.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "flexprice.fullname" . }}-consumer
+  name: {{ include "flexprice.fullname" . }}-worker
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
-    app.kubernetes.io/component: consumer
+    app.kubernetes.io/component: worker
 spec:
-  replicas: {{ .Values.consumer.replicaCount }}
+  replicas: {{ .Values.worker.replicaCount }}
   selector:
     matchLabels:
       {{- include "flexprice.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: consumer
+      app.kubernetes.io/component: worker
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
+        checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
         {{- include "flexprice.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: consumer
+        app.kubernetes.io/component: worker
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -45,7 +45,7 @@ spec:
           env:
             {{- include "flexprice.env" . | nindent 12 }}
             - name: FLEXPRICE_DEPLOYMENT_MODE
-              value: "consumer"
+              value: "temporal_worker"
             - name: TMPDIR
               value: "/tmp"
           livenessProbe:
@@ -65,7 +65,7 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
           resources:
-            {{- toYaml .Values.consumer.resources | nindent 12 }}
+            {{- toYaml .Values.worker.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /app/config
