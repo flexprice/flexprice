@@ -798,6 +798,10 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		filter.CustomerID = customer.ID
 	}
 
+	filter.Sort = []*types.SortCondition{
+		{Field: "period_start", Direction: types.SortDirectionDesc},
+	}
+
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
