@@ -1094,9 +1094,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		}
 		endDate = r.EndDate
 	}
-	if r.BillingAnchor != nil {
-		billingAnchor = *r.BillingAnchor
-	}
+
 	if r.BillingAnchor != nil {
 		billingAnchor = *r.BillingAnchor
 	}

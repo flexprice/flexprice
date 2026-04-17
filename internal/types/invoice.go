@@ -368,6 +368,14 @@ type InvoiceFilter struct {
 	SkipLineItems bool `json:"skip_line_items,omitempty" form:"skip_line_items"`
 }
 
+// DefaultCustomerInvoiceListSort is used when listing invoices for a single customer
+// and the caller did not supply filter.Sort (see applyCustomerInvoiceListSortDefault).
+func DefaultCustomerInvoiceListSort() []*SortCondition {
+	return []*SortCondition{
+		{Field: "period_start", Direction: SortDirectionDesc},
+	}
+}
+
 // NewInvoiceFilter creates a new invoice filter with default options
 func NewInvoiceFilter() *InvoiceFilter {
 	return &InvoiceFilter{

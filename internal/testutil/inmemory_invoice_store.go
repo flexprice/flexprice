@@ -202,7 +202,7 @@ func (s *InMemoryInvoiceStore) Delete(ctx context.Context, id string) error {
 }
 
 func (s *InMemoryInvoiceStore) List(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
-	return s.InMemoryStore.List(ctx, filter, invoiceFilterFn, invoiceSortFn)
+	return s.InMemoryStore.List(ctx, filter, invoiceFilterFn, invoiceSortFn(filter))
 }
 
 func (s *InMemoryInvoiceStore) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
@@ -464,12 +464,33 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 	return true
 }
 
-// invoiceSortFn implements sorting logic for invoices
-func invoiceSortFn(i, j *invoice.Invoice) bool {
-	if i == nil || j == nil {
-		return false
+// invoiceSortFn returns the list sort predicate: created_at desc, or period_start when filter.Sort requests it.
+func invoiceSortFn(f *types.InvoiceFilter) func(i, j *invoice.Invoice) bool {
+	if f != nil && len(f.Sort) > 0 && f.Sort[0] != nil && f.Sort[0].Field == "period_start" {
+		desc := f.Sort[0].Direction != types.SortDirectionAsc
+		return func(i, j *invoice.Invoice) bool {
+			if i == nil || j == nil {
+				return false
+			}
+			var ti, tj time.Time
+			if i.PeriodStart != nil {
+				ti = *i.PeriodStart
+			}
+			if j.PeriodStart != nil {
+				tj = *j.PeriodStart
+			}
+			if desc {
+				return ti.After(tj)
+			}
+			return ti.Before(tj)
+		}
 	}
-	return i.CreatedAt.After(j.CreatedAt)
+	return func(i, j *invoice.Invoice) bool {
+		if i == nil || j == nil {
+			return false
+		}
+		return i.CreatedAt.After(j.CreatedAt)
+	}
 }
 
 // GetRevenueTrend returns revenue trend data grouped by time windows

@@ -643,6 +643,12 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	})
 	defer FinishSpan(span)
 
+	if filter == nil {
+		filter = &types.InvoiceFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
 	client := r.client.Reader(ctx)
 	query := client.Invoice.Query().
 		WithCouponApplications(func(q *ent.CouponApplicationQuery) {

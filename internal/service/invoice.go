@@ -784,6 +784,18 @@ func (s *invoiceService) CalculatePriceBreakdown(ctx context.Context, inv *dto.I
 	return s.getBulkUsageAnalyticsForInvoice(ctx, usageBasedLineItems, inv)
 }
 
+// applyCustomerInvoiceListSortDefault sets filter.Sort only for single-customer lists when
+// the caller did not specify DSL sorts or an explicit legacy sort= query param.
+func applyCustomerInvoiceListSortDefault(filter *types.InvoiceFilter) {
+	if filter.CustomerID == "" || len(filter.Sort) > 0 {
+		return
+	}
+	if filter.QueryFilter != nil && filter.QueryFilter.Sort != nil {
+		return
+	}
+	filter.Sort = types.DefaultCustomerInvoiceListSort()
+}
+
 func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error) {
 	if filter.GetLimit() == 0 {
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
@@ -798,9 +810,7 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		filter.CustomerID = customer.ID
 	}
 
-	filter.Sort = []*types.SortCondition{
-		{Field: "period_start", Direction: types.SortDirectionDesc},
-	}
+	applyCustomerInvoiceListSortDefault(filter)
 
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
