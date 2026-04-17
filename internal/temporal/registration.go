@@ -198,8 +198,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 
 	// Environment clone activities
-	featureService := service.NewFeatureService(params)
-	envActivities := environmentActivities.NewEnvironmentActivities(featureService, planService)
+	envActivities := environmentActivities.NewEnvironmentActivities(params)
 
 	// Reprocess events activities
 	featureUsageTrackingService := service.NewFeatureUsageTrackingService(

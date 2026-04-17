@@ -145,6 +145,9 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 	if cfg.Logging.Environment != "" {
 		sugar = sugar.With("deployment.environment", cfg.Logging.Environment)
 	}
+	if cfg.Logging.Region != "" {
+		sugar = sugar.With("cloud.region", cfg.Logging.Region)
+	}
 
 	return &Logger{
 		SugaredLogger:   sugar,
@@ -194,12 +197,15 @@ func newOtelLogProvider(ctx context.Context, cfg *config.Configuration) (*sdklog
 		return nil, err
 	}
 
-	// Build resource with service.name and deployment.environment
+	// Build resource with service.name, deployment.environment, and cloud.region
 	resAttrs := []attribute.KeyValue{
 		semconv.ServiceName(cfg.Logging.ServiceName),
 	}
 	if cfg.Logging.Environment != "" {
 		resAttrs = append(resAttrs, semconv.DeploymentEnvironmentName(cfg.Logging.Environment))
+	}
+	if cfg.Logging.Region != "" {
+		resAttrs = append(resAttrs, semconv.CloudRegion(cfg.Logging.Region))
 	}
 	res, err := resource.New(ctx,
 		resource.WithAttributes(resAttrs...),

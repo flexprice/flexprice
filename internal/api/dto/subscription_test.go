@@ -10,14 +10,14 @@ import (
 
 func baseCreateSubscriptionRequest() CreateSubscriptionRequest {
 	return CreateSubscriptionRequest{
-		CustomerID:     "cust_test",
-		PlanID:         "plan_test",
-		Currency:       "usd",
-		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
-		BillingCycle:   types.BillingCycleAnniversary,
-		StartDate:      nil,
-		EndDate:        nil,
-		BillingAnchor:  nil,
+		CustomerID:      "cust_test",
+		PlanID:          "plan_test",
+		Currency:        "usd",
+		BillingPeriod:   types.BILLING_PERIOD_MONTHLY,
+		BillingCycle:    types.BillingCycleAnniversary,
+		StartDate:       nil,
+		EndDate:         nil,
+		BillingAnchor:   nil,
 		PaymentBehavior: nil,
 	}
 }

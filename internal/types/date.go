@@ -10,9 +10,12 @@ import (
 // NextBillingDate calculates the next billing date based on the current period start,
 // billing anchor, billing period, and billing period unit.
 // The billing anchor determines the reference point for billing cycles:
-// - For MONTHLY periods, it sets the day of the month
-// - For ANNUAL periods, it sets the month and day of the year
-// - For WEEKLY/DAILY periods, it's used only for validation
+//   - For MONTHLY periods, it sets the day of the month; if the period starts before that
+//     day in the month, the next billing date is that anchor day in the same month (first
+//     partial period), otherwise the usual advance by unit months applies
+//   - For ANNUAL periods, it sets the month and day of the year
+//   - For WEEKLY/DAILY periods, it's used only for validation
+//
 // If subscriptionEndDate is provided, the result will be cliffed to not exceed it.
 func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time) (time.Time, error) {
 	if unit <= 0 {
@@ -92,14 +95,34 @@ func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, peri
 	// is set to the start of the next calendar boundary (e.g. April 1 for a
 	// subscription starting mid-Q1). If currentPeriodStart is before the anchor,
 	// we are still in the partial first period and the next billing date IS
-	// the anchor itself. MONTHLY and ANNUAL already handle this correctly via
-	// their own month/year arithmetic.
+	// the anchor itself.
 	if (period == BILLING_PERIOD_QUARTER || period == BILLING_PERIOD_HALF_YEAR) &&
 		currentPeriodStart.Before(billingAnchor) {
 		if subscriptionEndDate != nil && billingAnchor.After(*subscriptionEndDate) {
 			return *subscriptionEndDate, nil
 		}
 		return billingAnchor, nil
+	}
+
+	// MONTHLY: If the period starts before the anchor day in the same calendar month,
+	// the next billing date is that month's anchor day (Stripe-style first short period).
+	// Compare by day-of-month only (not time-of-day) so same-day start/anchor still
+	// advances by `unit` months via the logic below.
+	if period == BILLING_PERIOD_MONTHLY {
+		y, m, d := currentPeriodStart.Date()
+		h, min, sec := billingAnchor.Clock()
+		lastDayThisMonth := time.Date(y, m+1, 0, 0, 0, 0, 0, currentPeriodStart.Location()).Day()
+		clampedAnchorD := billingAnchor.Day()
+		if clampedAnchorD > lastDayThisMonth {
+			clampedAnchorD = lastDayThisMonth
+		}
+		if d < clampedAnchorD {
+			nextDate := time.Date(y, m, clampedAnchorD, h, min, sec, 0, currentPeriodStart.Location())
+			if subscriptionEndDate != nil && nextDate.After(*subscriptionEndDate) {
+				return *subscriptionEndDate, nil
+			}
+			return nextDate, nil
+		}
 	}
 
 	// Get the current year and month

@@ -140,9 +140,14 @@ services:
       - FLEXPRICE_DEPLOYMENT_MODE=api
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
+      - FLEXPRICE_POSTGRES_READER_HOST=postgres
       - FLEXPRICE_KAFKA_BROKERS=kafka:9092
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
+      # Auth: API key mode — raw key is sk_local_flexprice_test_key
+      - FLEXPRICE_AUTH_PROVIDER=api_key
+      - FLEXPRICE_AUTH_API_KEY_HEADER=x-api-key
+      - 'FLEXPRICE_AUTH_API_KEY_KEYS={"0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c":{"tenant_id":"00000000-0000-0000-0000-000000000000","user_id":"00000000-0000-0000-0000-000000000000","name":"Local Dev API Key","is_active":true}}'
     volumes:
       - ./internal/config:/app/internal/config
     restart: unless-stopped
@@ -162,9 +167,14 @@ services:
       - FLEXPRICE_DEPLOYMENT_MODE=consumer
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
+      - FLEXPRICE_POSTGRES_READER_HOST=postgres
       - FLEXPRICE_KAFKA_BROKERS=kafka:9092
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
+      # Auth: API key mode — raw key is sk_local_flexprice_test_key
+      - FLEXPRICE_AUTH_PROVIDER=api_key
+      - FLEXPRICE_AUTH_API_KEY_HEADER=x-api-key
+      - 'FLEXPRICE_AUTH_API_KEY_KEYS={"0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c":{"tenant_id":"00000000-0000-0000-0000-000000000000","user_id":"00000000-0000-0000-0000-000000000000","name":"Local Dev API Key","is_active":true}}'
     volumes:
       - ./internal/config:/app/internal/config
     restart: unless-stopped
@@ -184,9 +194,14 @@ services:
       - FLEXPRICE_DEPLOYMENT_MODE=temporal_worker
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
+      - FLEXPRICE_POSTGRES_READER_HOST=postgres
       - FLEXPRICE_KAFKA_BROKERS=kafka:9092
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
+      # Auth: API key mode — raw key is sk_local_flexprice_test_key
+      - FLEXPRICE_AUTH_PROVIDER=api_key
+      - FLEXPRICE_AUTH_API_KEY_HEADER=x-api-key
+      - 'FLEXPRICE_AUTH_API_KEY_KEYS={"0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c":{"tenant_id":"00000000-0000-0000-0000-000000000000","user_id":"00000000-0000-0000-0000-000000000000","name":"Local Dev API Key","is_active":true}}'
     volumes:
       - ./internal/config:/app/internal/config
     restart: unless-stopped

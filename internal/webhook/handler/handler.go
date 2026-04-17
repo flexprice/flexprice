@@ -155,8 +155,8 @@ func (h *handler) processMessage(msg *message.Message) error {
 				"tenant_id", event.TenantID,
 				"event", event.EventName,
 			)
-			return nil
 		}
+		return nil
 	}
 
 	err := h.processMessageNative(ctx, &event, msg.UUID)

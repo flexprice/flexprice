@@ -993,7 +993,7 @@ func (s *invoiceService) IsFinalizationDue(ctx context.Context, invoiceID string
 		return false, nil
 	}
 
-	if inv.LastComputedAt != nil && inv.LastComputedAt.Before(*inv.PeriodEnd) && inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) {
+	if inv.LastComputedAt != nil && inv.PeriodEnd != nil && inv.LastComputedAt.Before(*inv.PeriodEnd) && inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) {
 		return false, nil
 	}
 
@@ -2018,7 +2018,10 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 		return nil, err
 	}
 
-	mergedInvoices := append(invoicesResp.Items, invoicesInvoicedToParent.Items...)
+	merged := append(invoicesResp.Items, invoicesInvoicedToParent.Items...)
+	// The same invoice can match both direct CustomerID and SubscriptionCustomerIDs (e.g. parent
+	// billing); count each invoice once.
+	mergedInvoices := lo.UniqBy(merged, func(inv *dto.InvoiceResponse) string { return inv.ID })
 
 	summary := &dto.CustomerInvoiceSummary{
 		CustomerID:          customerID,

@@ -8,7 +8,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/feature"
-	domainGroup "github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -452,7 +451,8 @@ func (s *featureService) publishSystemEvent(ctx context.Context, eventName types
 	}
 }
 
-// CloneFeature clones a feature and its associated meter into a new feature with a distinct name and lookup_key.
+// CloneFeature clones a feature within the same environment with a new name and lookup_key.
+// Cross-env feature cloning is handled exclusively by the environment clone Temporal workflow.
 func (s *featureService) CloneFeature(ctx context.Context, id string, req dto.CloneFeatureRequest) (*dto.FeatureResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("feature ID is required").
@@ -469,24 +469,11 @@ func (s *featureService) CloneFeature(ctx context.Context, id string, req dto.Cl
 		return nil, err
 	}
 
-	// Determine target environment: use request override or source feature's environment
-	targetEnvID := sourceFeature.EnvironmentID
-	if req.TargetEnvironmentID != "" {
-		// Validate target environment exists before rebinding context
-		if _, err := s.EnvironmentRepo.Get(ctx, req.TargetEnvironmentID); err != nil {
-			return nil, err
-		}
-		targetEnvID = req.TargetEnvironmentID
-	}
-
-	// Use target environment context for uniqueness checks and entity creation
-	targetCtx := types.SetEnvironmentID(ctx, targetEnvID)
-
-	// Check lookup_key uniqueness among published features in the target environment
+	// Check lookup_key uniqueness among published features in the same environment
 	lookupFilter := types.NewNoLimitFeatureFilter()
 	lookupFilter.LookupKey = req.LookupKey
 	lookupFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	existing, err := s.FeatureRepo.List(targetCtx, lookupFilter)
+	existing, err := s.FeatureRepo.List(ctx, lookupFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -527,115 +514,66 @@ func (s *featureService) CloneFeature(ctx context.Context, id string, req dto.Cl
 		ReportingUnit: sourceFeature.ReportingUnit,
 		AlertSettings: sourceFeature.AlertSettings,
 		GroupID:       sourceFeature.GroupID,
-		EnvironmentID: targetEnvID,
-		BaseModel:     types.GetDefaultBaseModel(targetCtx),
+		EnvironmentID: sourceFeature.EnvironmentID,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 
-	err = s.DB.WithTx(targetCtx, func(txCtx context.Context) error {
-		// For cross-env cloning, resolve the group in the target environment.
-		// Groups are env-scoped so we need to find or create the corresponding group.
-		// Done inside the transaction so group creation rolls back if feature creation fails.
-		if req.TargetEnvironmentID != "" && sourceFeature.GroupID != "" {
-			resolvedID, err := s.resolveOrCreateGroup(ctx, targetCtx, sourceFeature.GroupID)
-			if err != nil {
-				s.Logger.Warnw("failed to resolve group in target environment, clearing group_id",
-					"source_group_id", sourceFeature.GroupID,
-					"error", err,
-				)
-				newFeature.GroupID = ""
-			} else {
-				newFeature.GroupID = resolvedID
-			}
-		}
-
-		// For metered features, clone the underlying meter so the new feature
-		// has its own independent meter instance.
+	// For metered features, deep-copy the meter so the clone is fully independent.
+	// Sharing the meter would cause UpdateFeature (mutates filters) or DeleteFeature
+	// (disables the meter) on the clone to silently break the source feature.
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if sourceFeature.Type == types.FeatureTypeMetered && sourceFeature.MeterID != "" {
-			sourceMeter, err := s.MeterRepo.GetMeter(ctx, sourceFeature.MeterID)
+			sourceMeter, err := s.MeterRepo.GetMeter(txCtx, sourceFeature.MeterID)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to fetch source meter: %w", err)
 			}
+			filtersCopy := make([]meter.Filter, len(sourceMeter.Filters))
+			copy(filtersCopy, sourceMeter.Filters)
 			newMeter := &meter.Meter{
 				ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
-				Name:          req.Name,
+				Name:          sourceMeter.Name,
 				EventName:     sourceMeter.EventName,
 				Aggregation:   sourceMeter.Aggregation,
-				Filters:       sourceMeter.Filters,
+				Filters:       filtersCopy,
 				ResetUsage:    sourceMeter.ResetUsage,
-				EnvironmentID: targetEnvID,
+				EnvironmentID: sourceFeature.EnvironmentID,
 				BaseModel:     types.GetDefaultBaseModel(txCtx),
 			}
 			newMeter.Status = types.StatusPublished
 			if err := s.MeterRepo.CreateMeter(txCtx, newMeter); err != nil {
-				return err
+				return fmt.Errorf("failed to create meter copy: %w", err)
 			}
 			newFeature.MeterID = newMeter.ID
 		}
-
 		return s.FeatureRepo.Create(txCtx, newFeature)
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, err
 	}
 
 	s.Logger.InfowCtx(ctx, "feature cloned successfully",
 		"source_feature_id", id,
 		"new_feature_id", newFeature.ID,
-		"target_environment_id", targetEnvID,
 	)
 
 	// Publish webhook event
-	s.publishSystemEvent(targetCtx, types.WebhookEventFeatureCreated, newFeature.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventFeatureCreated, newFeature.ID)
 
 	response := &dto.FeatureResponse{Feature: newFeature}
 	if newFeature.Type == types.FeatureTypeMetered && newFeature.MeterID != "" {
-		newMeter, err := s.MeterRepo.GetMeter(targetCtx, newFeature.MeterID)
+		clonedMeter, err := s.MeterRepo.GetMeter(ctx, newFeature.MeterID)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to fetch cloned meter for response", "meter_id", newFeature.MeterID, "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch meter for cloned feature response", "meter_id", newFeature.MeterID, "error", err)
 		} else {
-			response.Meter = dto.ToMeterResponse(newMeter)
+			response.Meter = dto.ToMeterResponse(clonedMeter)
 		}
 	}
 	if newFeature.GroupID != "" {
 		groupService := NewGroupService(s.ServiceParams)
-		if groupResp, err := groupService.GetGroup(targetCtx, newFeature.GroupID); err != nil {
+		if groupResp, err := groupService.GetGroup(ctx, newFeature.GroupID); err != nil {
 			s.Logger.WarnwCtx(ctx, "failed to fetch group for cloned feature response", "group_id", newFeature.GroupID, "error", err)
 		} else {
 			response.Group = groupResp
 		}
 	}
 	return response, nil
-}
-
-// resolveOrCreateGroup looks up the source group and finds or creates a matching
-// group in the target environment (by lookup_key). Returns the target group ID.
-func (s *featureService) resolveOrCreateGroup(sourceCtx, targetCtx context.Context, sourceGroupID string) (string, error) {
-	sourceGroup, err := s.GroupRepo.Get(sourceCtx, sourceGroupID)
-	if err != nil {
-		return "", err
-	}
-
-	// Try to find a group with the same lookup_key in the target environment
-	existingGroup, err := s.GroupRepo.GetByLookupKey(targetCtx, sourceGroup.LookupKey)
-	if err == nil && existingGroup != nil {
-		return existingGroup.ID, nil
-	}
-	if err != nil && !ierr.IsNotFound(err) {
-		return "", err
-	}
-
-	// Group doesn't exist in target env — create it
-	newGroup := &domainGroup.Group{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_GROUP),
-		Name:          sourceGroup.Name,
-		EntityType:    sourceGroup.EntityType,
-		EnvironmentID: types.GetEnvironmentID(targetCtx),
-		LookupKey:     sourceGroup.LookupKey,
-		Metadata:      sourceGroup.Metadata,
-		BaseModel:     types.GetDefaultBaseModel(targetCtx),
-	}
-	if err := s.GroupRepo.Create(targetCtx, newGroup); err != nil {
-		return "", err
-	}
-	return newGroup.ID, nil
 }

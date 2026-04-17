@@ -385,6 +385,8 @@ type CreateSubscriptionRequest struct {
 
 	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
+	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
+	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
 
 	// Workflow
 	Workflow *types.TemporalWorkflowType `json:"-"`
@@ -587,6 +589,12 @@ type SubscriptionResponseV2 struct {
 }
 
 func (r *CreateSubscriptionRequest) Validate() error {
+
+	err := validator.ValidateRequest(r)
+	if err != nil {
+		return err
+	}
+
 	// Case- Both are absent
 	if r.CustomerID == "" && r.ExternalCustomerID == "" {
 		return ierr.NewError("either customer_id or external_customer_id is required").
@@ -598,11 +606,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		if err := r.Inheritance.Validate(); err != nil {
 			return err
 		}
-	}
-
-	err := validator.ValidateRequest(r)
-	if err != nil {
-		return err
 	}
 
 	// Validate currency
@@ -623,6 +626,15 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	if err := r.BillingCycle.Validate(); err != nil {
 		return err
+	}
+	if r.BillingAnchor != nil && r.BillingCycle != types.BillingCycleAnniversary {
+		return ierr.NewError("invalid billing_anchor for billing_cycle").
+			WithHint("billing_anchor can only be passed when billing_cycle is anniversary").
+			WithReportableDetails(map[string]any{
+				"billing_cycle":  r.BillingCycle,
+				"billing_anchor": r.BillingAnchor,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 	if r.BillingAnchor != nil && r.BillingCycle != types.BillingCycleAnniversary {
 		return ierr.NewError("invalid billing_anchor for billing_cycle").

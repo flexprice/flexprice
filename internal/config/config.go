@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -142,6 +143,7 @@ type LoggingConfig struct {
 	// Service identity fields added to every log line
 	ServiceName string `mapstructure:"service_name" validate:"omitempty"`
 	Environment string `mapstructure:"environment" validate:"omitempty"`
+	Region      string `mapstructure:"region" validate:"omitempty"`
 
 	// Fluentd configuration
 	FluentdEnabled bool   `mapstructure:"fluentd_enabled" default:"false"`
@@ -405,8 +407,10 @@ type RedisConfig struct {
 func NewConfig() (*Configuration, error) {
 	v := viper.New()
 
-	// Step 1: Load `.env` if it exists
+	// Step 1: Load `.env` then `.env.local` if they exist.
+	// .env.local takes precedence (loaded second so it overrides .env values).
 	_ = godotenv.Load()
+	_ = godotenv.Overload(".env.local")
 
 	// Step 2: Initialize Viper
 	v.SetConfigName("config")
@@ -424,6 +428,7 @@ func NewConfig() (*Configuration, error) {
 	// Bind bare env vars (no FLEXPRICE_ prefix) for service identity fields
 	_ = v.BindEnv("logging.service_name", "SERVICE_NAME")
 	_ = v.BindEnv("logging.environment", "ENVIRONMENT")
+	_ = v.BindEnv("logging.region", "REGION")
 
 	// Explicitly bind OTel logging vars — AutomaticEnv can miss nested keys with underscores
 	_ = v.BindEnv("logging.otel_enabled", "FLEXPRICE_LOGGING_OTEL_ENABLED")
@@ -433,6 +438,11 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.otel_auth_header", "FLEXPRICE_LOGGING_OTEL_AUTH_HEADER")
 	_ = v.BindEnv("logging.otel_auth_value", "FLEXPRICE_LOGGING_OTEL_AUTH_VALUE")
 	_ = v.BindEnv("logging.otel_debug", "FLEXPRICE_LOGGING_OTEL_DEBUG")
+
+	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
+	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
+	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
+	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -449,13 +459,15 @@ func NewConfig() (*Configuration, error) {
 		return nil, fmt.Errorf("unable to decode into config struct, %v", err)
 	}
 
-	// Step 6: Parse API keys
-	apiKeysStr := v.GetString("auth.api_key.keys")
-	// Parse API keys JSON if present
-	if apiKeysStr != "" {
+	// Step 6: Parse API keys from env var (JSON string override).
+	// We read the OS env var directly instead of via Viper because the value is a JSON
+	// string — Viper/mapstructure would try to decode it as a map and panic during
+	// Unmarshal. Reading it here (after Unmarshal) avoids that conflict.
+	apiKeysEnv := os.Getenv("FLEXPRICE_AUTH_API_KEY_KEYS")
+	if apiKeysEnv != "" {
 		var apiKeys map[string]APIKeyDetails
-		if err := json.Unmarshal([]byte(apiKeysStr), &apiKeys); err != nil {
-			return nil, fmt.Errorf("failed to parse API keys JSON: %v", err)
+		if err := json.Unmarshal([]byte(apiKeysEnv), &apiKeys); err != nil {
+			return nil, fmt.Errorf("failed to parse FLEXPRICE_AUTH_API_KEY_KEYS JSON: %v", err)
 		}
 		cfg.Auth.APIKey.Keys = apiKeys
 	}

@@ -126,7 +126,7 @@ type FeatureResponse struct {
 // ListFeaturesResponse represents a paginated list of features
 type ListFeaturesResponse = types.ListResponse[*FeatureResponse] // @name ListFeaturesResponse
 
-// CloneFeatureRequest represents the request to clone a feature
+// CloneFeatureRequest represents the request to clone a feature within the same environment.
 type CloneFeatureRequest struct {
 	// Name is required and must be different from the source feature's name
 	Name string `json:"name"`
@@ -136,9 +136,6 @@ type CloneFeatureRequest struct {
 	Description *string `json:"description,omitempty"`
 	// Metadata overrides the source feature's metadata when provided
 	Metadata types.Metadata `json:"metadata,omitempty"`
-	// TargetEnvironmentID optionally specifies the target environment for cross-env cloning.
-	// When empty, the feature is cloned within the same environment.
-	TargetEnvironmentID string `json:"target_environment_id,omitempty"`
 }
 
 func (r *CloneFeatureRequest) Validate() error {

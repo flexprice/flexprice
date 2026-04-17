@@ -13,10 +13,10 @@ auth:
   api_key:
     header: "x-api-key"
     keys:
-      "c3b3fa371183f0df159d659da0b42c5270c8d53c22e180df2286e059c75802ab":
+      "0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c":
         tenant_id: "00000000-0000-0000-0000-000000000000"
         user_id: "00000000-0000-0000-0000-000000000000"
-        name: "Dev API Keys"
+        name: "Local Dev API Key"
         is_active: true
 
 kafka:
@@ -47,8 +47,8 @@ postgres:
   host: 127.0.0.1 # For local mode
   # Will be overridden by FLEXPRICE_POSTGRES_HOST env var in Docker
   port: 5432
-  reader_host: 127.0.0.1
-  reader_port: 5432
+  reader_host: "" # empty = use writer host; set FLEXPRICE_POSTGRES_READER_HOST to override
+  reader_port: 0  # 0 = use writer port
   user: flexprice
   password: flexprice123
   dbname: flexprice

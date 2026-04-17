@@ -15,20 +15,12 @@ const (
 	ActivityCloneEnvironmentPlans    = "CloneEnvironmentPlans"
 )
 
-// EnvironmentCloneResult is the output of the environment clone workflow.
-type EnvironmentCloneResult struct {
-	FeaturesCloned int      `json:"features_cloned"`
-	PlansCloned    int      `json:"plans_cloned"`
-	FeatureIDs     []string `json:"feature_ids"`
-	PlanIDs        []string `json:"plan_ids"`
-	Errors         []string `json:"errors,omitempty"`
-}
-
 // EnvironmentCloneWorkflow orchestrates cloning all published features and plans
 // from a source environment into a target environment.
-// Activity 1: Clone features (must run first since plans may reference features via entitlements)
-// Activity 2: Clone plans (runs after features are cloned)
-func EnvironmentCloneWorkflow(ctx workflow.Context, in models.EnvironmentCloneWorkflowInput) (*EnvironmentCloneResult, error) {
+// The target environment must already exist when the workflow starts.
+// Activity 1: Clone features (runs first — plans reference features via entitlements)
+// Activity 2: Clone plans (runs after features so ID maps resolve correctly)
+func EnvironmentCloneWorkflow(ctx workflow.Context, in models.EnvironmentCloneWorkflowInput) (*models.EnvironmentCloneResult, error) {
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
@@ -44,37 +36,26 @@ func EnvironmentCloneWorkflow(ctx workflow.Context, in models.EnvironmentCloneWo
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	result := &EnvironmentCloneResult{}
-
-	// Activity 1: Clone all published features
-	featuresInput := environmentActivities.CloneEnvironmentFeaturesInput{
+	input := models.CloneEnvironmentInput{
 		SourceEnvironmentID: in.SourceEnvironmentID,
 		TargetEnvironmentID: in.TargetEnvironmentID,
 		TenantID:            in.TenantID,
 		UserID:              in.UserID,
 	}
-	var featuresOutput environmentActivities.CloneEnvironmentFeaturesOutput
-	if err := workflow.ExecuteActivity(ctx, ActivityCloneEnvironmentFeatures, featuresInput).Get(ctx, &featuresOutput); err != nil {
+
+	var featResult environmentActivities.CloneFeaturesResult
+	if err := workflow.ExecuteActivity(ctx, ActivityCloneEnvironmentFeatures, input).Get(ctx, &featResult); err != nil {
 		return nil, err
 	}
-	result.FeaturesCloned = featuresOutput.FeaturesCloned
-	result.FeatureIDs = featuresOutput.FeatureIDs
-	result.Errors = append(result.Errors, featuresOutput.Errors...)
 
-	// Activity 2: Clone all published plans
-	plansInput := environmentActivities.CloneEnvironmentPlansInput{
-		SourceEnvironmentID: in.SourceEnvironmentID,
-		TargetEnvironmentID: in.TargetEnvironmentID,
-		TenantID:            in.TenantID,
-		UserID:              in.UserID,
-	}
-	var plansOutput environmentActivities.CloneEnvironmentPlansOutput
-	if err := workflow.ExecuteActivity(ctx, ActivityCloneEnvironmentPlans, plansInput).Get(ctx, &plansOutput); err != nil {
+	var planResult environmentActivities.ClonePlansResult
+	if err := workflow.ExecuteActivity(ctx, ActivityCloneEnvironmentPlans, input).Get(ctx, &planResult); err != nil {
 		return nil, err
 	}
-	result.PlansCloned = plansOutput.PlansCloned
-	result.PlanIDs = plansOutput.PlanIDs
-	result.Errors = append(result.Errors, plansOutput.Errors...)
 
-	return result, nil
+	return &models.EnvironmentCloneResult{
+		Features: featResult.CloneEnvironmentFeaturesOutput,
+		Plans:    planResult.CloneEnvironmentPlansOutput,
+		Errors:   append(featResult.Errors, planResult.Errors...),
+	}, nil
 }
