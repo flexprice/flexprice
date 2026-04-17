@@ -143,16 +143,20 @@ func (s *environmentService) GetEnvironments(ctx context.Context, filter types.F
 	}
 
 	response := &dto.ListEnvironmentsResponse{
-		Environments: make([]dto.EnvironmentResponse, len(allowedEnvironments)),
-		Total:        len(allowedEnvironments),
+		Environments: make([]dto.EnvironmentResponse, 0, len(allowedEnvironments)),
+		Total:        0,
 		Offset:       filter.Offset,
 		Limit:        filter.Limit,
 	}
 
-	for i, env := range allowedEnvironments {
-		response.Environments[i] = *dto.NewEnvironmentResponse(env)
+	for _, env := range allowedEnvironments {
+		if env.Status != types.StatusPublished {
+			continue
+		}
+		response.Environments = append(response.Environments, *dto.NewEnvironmentResponse(env))
 	}
 
+	response.Total = len(response.Environments)
 	return response, nil
 }
 
