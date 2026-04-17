@@ -84,8 +84,8 @@ func (s *EnvironmentServiceSuite) TestGetEnvironmentByID() {
 }
 
 func (s *EnvironmentServiceSuite) TestListEnvironments() {
-	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-1", Name: "Production", Type: types.EnvironmentProduction})
-	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-2", Name: "Development", Type: types.EnvironmentDevelopment})
+	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-1", Name: "Production", Type: types.EnvironmentProduction, BaseModel: types.BaseModel{Status: types.StatusPublished}})
+	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-2", Name: "Development", Type: types.EnvironmentDevelopment, BaseModel: types.BaseModel{Status: types.StatusPublished}})
 
 	resp, err := s.environmentService.GetEnvironments(s.ctx, types.Filter{Offset: 0, Limit: 10})
 	s.NoError(err)

@@ -385,8 +385,6 @@ type CreateSubscriptionRequest struct {
 
 	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
-	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
-	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
 
 	// Workflow
 	Workflow *types.TemporalWorkflowType `json:"-"`
