@@ -5,6 +5,8 @@ values.local.yaml
 values-prod.yaml
 values-staging.yaml
 values-dev.yaml
+# Local values override (may contain dev secrets)
+values-local.yaml
 # Helm dependency tarballs — restored via `helm dependency update`
 charts/
 # Helm package output
