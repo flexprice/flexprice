@@ -13,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	meterDomain "github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/interfaces"
 
@@ -5580,40 +5579,30 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 }
 
 // GetMeterUsageBySubscription queries the meter_usage table for usage data.
-// Follows the same pattern as GetFeatureUsageBySubscription but reads from the
-// meter_usage ClickHouse table instead of feature_usage. No subscription_id/period_id
-// coupling — queries by (meter_id, external_customer_id, time_range).
+// Delegates to MeterUsageService.GetSubscriptionMeterUsage for the actual querying,
+// then converts results to billing charges and applies commitment/overage logic.
 func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
 	response := &dto.GetUsageBySubscriptionResponse{}
-	priceService := NewPriceService(s.ServiceParams)
 
-	// Get subscription with line items
-	sub, err := s.SubRepo.Get(ctx, req.SubscriptionID)
+	useFinal := req.Source == string(types.UsageSourceInvoiceCreation)
+
+	// Delegate querying to the centralized function
+	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
+	subMeterUsage, err := meterUsageSvc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID:  req.SubscriptionID,
+		StartTime:       req.StartTime,
+		EndTime:         req.EndTime,
+		LifetimeUsage:   req.LifetimeUsage,
+		UseFinal:        useFinal,
+		IncludeFeatures: false,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Resolve internal customer IDs, then map to external IDs for meter_usage queries
-	internalCustomerIDs, err := s.usageCustomerIDsForSubscription(ctx, sub)
-	if err != nil {
-		return nil, err
-	}
+	sub := subMeterUsage.Subscription
 
-	custFilter := types.NewNoLimitCustomerFilter()
-	custFilter.CustomerIDs = internalCustomerIDs
-	customers, err := s.CustomerRepo.List(ctx, custFilter)
-	if err != nil {
-		return nil, err
-	}
-	externalCustomerIDs := make([]string, 0, len(customers))
-	for _, cust := range customers {
-		if cust.ExternalID != "" {
-			externalCustomerIDs = append(externalCustomerIDs, cust.ExternalID)
-		}
-	}
-	externalCustomerIDs = lo.Uniq(externalCustomerIDs)
-
-	// Time range resolution
+	// Resolve effective time range for response
 	usageStartTime := req.StartTime
 	if usageStartTime.IsZero() {
 		usageStartTime = sub.CurrentPeriodStart
@@ -5627,282 +5616,17 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 		usageEndTime = time.Now().UTC()
 	}
 
-	// For inherited subscriptions, line items live on the parent
-	lineItemSubID := sub.ID
-	if sub.SubscriptionType == types.SubscriptionTypeInherited &&
-		sub.ParentSubscriptionID != nil && lo.FromPtr(sub.ParentSubscriptionID) != "" {
-		lineItemSubID = lo.FromPtr(sub.ParentSubscriptionID)
-	}
-
-	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, lineItemSubID, usageStartTime, req.LifetimeUsage)
-	if err != nil {
-		return nil, err
-	}
-	sub.LineItems = lineItems
-
-	// Collect usage line items and fetch prices with meter expansion
-	priceIDs := make([]string, 0, len(lineItems))
-	for _, item := range lineItems {
-		if item.PriceType == types.PRICE_TYPE_USAGE && item.MeterID != "" {
-			priceIDs = append(priceIDs, item.PriceID)
-		}
-	}
-
-	if len(priceIDs) == 0 {
+	if len(subMeterUsage.LineItemUsages) == 0 {
 		response.Currency = sub.Currency
 		response.StartTime = usageStartTime
 		response.EndTime = usageEndTime
 		return response, nil
 	}
 
-	priceFilter := types.NewNoLimitPriceFilter()
-	priceFilter.PriceIDs = priceIDs
-	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
-	priceFilter.AllowExpiredPrices = true
-	pricesList, err := priceService.GetPrices(ctx, priceFilter)
+	// Convert to billing charges
+	usageCharges, totalCost, err := meterUsageSvc.ConvertToBillingCharges(ctx, subMeterUsage)
 	if err != nil {
 		return nil, err
-	}
-
-	priceMap := make(map[string]*price.Price, len(pricesList.Items))
-	meterMap := make(map[string]*dto.MeterResponse, len(pricesList.Items))
-	meterDisplayNames := make(map[string]string)
-	for _, p := range pricesList.Items {
-		priceMap[p.ID] = p.Price
-		meterMap[p.Price.MeterID] = p.Meter
-		if p.Meter != nil {
-			meterDisplayNames[p.Price.MeterID] = p.Meter.Name
-		}
-	}
-
-	s.Logger.DebugwCtx(ctx, "calculating meter usage for subscription",
-		"subscription_id", req.SubscriptionID,
-		"start_time", usageStartTime,
-		"end_time", usageEndTime,
-		"metered_line_items", len(priceIDs))
-
-	// Performance optimization: query distinct meter_ids that have data in meter_usage
-	// for this customer and time range. Skips meters with zero usage — reduces processing
-	// from potentially hundreds of meters down to only those with actual data.
-	useFinal := req.Source == string(types.UsageSourceInvoiceCreation)
-	distinctMeterIDs, err := s.MeterUsageRepo.GetDistinctMeterIDs(ctx, &events.MeterUsageQueryParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs: externalCustomerIDs,
-		StartTime:           usageStartTime,
-		EndTime:             usageEndTime,
-		UseFinal:            useFinal,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get distinct meter_ids from meter_usage: %w", err)
-	}
-	activeMeterIDs := make(map[string]bool, len(distinctMeterIDs))
-	for _, id := range distinctMeterIDs {
-		activeMeterIDs[id] = true
-	}
-
-	s.Logger.DebugwCtx(ctx, "distinct meter_ids optimization",
-		"subscription_id", req.SubscriptionID,
-		"total_distinct_meters", len(distinctMeterIDs),
-		"total_line_items", len(lineItems))
-
-	// Build meter_id → line items map, skipping meters with no data in meter_usage
-	meterToLineItems := make(map[string][]*subscription.SubscriptionLineItem)
-	meterAggType := make(map[string]types.AggregationType)
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
-			continue
-		}
-		if !activeMeterIDs[item.MeterID] {
-			continue
-		}
-		meterToLineItems[item.MeterID] = append(meterToLineItems[item.MeterID], item)
-		if m := meterMap[item.MeterID]; m != nil {
-			meterAggType[item.MeterID] = m.Aggregation.Type
-		}
-	}
-
-	// Separate bucketed meters (MAX/SUM with bucket_size) from non-bucketed meters.
-	// Bucketed meters need windowed queries with per-line-item time ranges,
-	// while non-bucketed meters can be batched by aggregation type.
-	bucketedMeterIDs := make(map[string]bool)
-	meterDomainMap := make(map[string]*meterDomain.Meter) // converted meter objects for bucketed meters
-	for meterID, meterResp := range meterMap {
-		if meterResp != nil {
-			m := meterResp.ToMeter()
-			if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
-				bucketedMeterIDs[meterID] = true
-				meterDomainMap[meterID] = m
-			}
-		}
-	}
-
-	// Only non-bucketed meters go into the batch GetUsageMultiMeter calls
-	aggTypeToMeterIDs := make(map[types.AggregationType][]string)
-	for meterID, aggType := range meterAggType {
-		if !bucketedMeterIDs[meterID] {
-			aggTypeToMeterIDs[aggType] = append(aggTypeToMeterIDs[aggType], meterID)
-		}
-	}
-
-	// --- Query non-bucketed meters via GetUsageMultiMeter (scalar, batched) ---
-	meterResults := make(map[string]*events.MeterUsageAggregationResult)
-	for aggType, meterIDs := range aggTypeToMeterIDs {
-		results, err := s.MeterUsageRepo.GetUsageMultiMeter(ctx, &events.MeterUsageQueryParams{
-			TenantID:            types.GetTenantID(ctx),
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerIDs: externalCustomerIDs,
-			MeterIDs:            meterIDs,
-			StartTime:           usageStartTime,
-			EndTime:             usageEndTime,
-			AggregationType:     aggType,
-			UseFinal:            useFinal,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to query meter_usage for agg type %s: %w", aggType, err)
-		}
-		for _, r := range results {
-			meterResults[r.MeterID] = r
-		}
-	}
-
-	s.Logger.DebugwCtx(ctx, "fetched meter usage results",
-		"meter_ids", lo.Keys(meterResults),
-		"total_meters_with_usage", len(meterResults),
-		"bucketed_meter_count", len(bucketedMeterIDs),
-		"subscription_id", req.SubscriptionID)
-
-	// Map results back to line items and build charges
-	var usageCharges []*dto.SubscriptionUsageByMetersResponse
-	totalCost := decimal.Zero
-	processedLineItems := make(map[string]bool)
-
-	// Build charges for non-bucketed meters (flat scalar totals)
-	for meterID, result := range meterResults {
-		items := meterToLineItems[meterID]
-		for _, item := range items {
-			priceObj := priceMap[item.PriceID]
-			if priceObj == nil {
-				s.Logger.WarnwCtx(ctx, "price object not found for meter usage, skipping",
-					"price_id", item.PriceID,
-					"meter_id", meterID,
-					"subscription_id", req.SubscriptionID)
-				continue
-			}
-
-			quantity := result.TotalValue
-			cost := priceService.CalculateCost(ctx, priceObj, quantity)
-			totalCost = totalCost.Add(cost)
-
-			charge := &dto.SubscriptionUsageByMetersResponse{
-				SubscriptionLineItemID: item.ID,
-				Amount:                 cost.InexactFloat64(),
-				Currency:               priceObj.Currency,
-				DisplayAmount:          fmt.Sprintf("%.2f %s", cost.InexactFloat64(), priceObj.Currency),
-				Quantity:               quantity.InexactFloat64(),
-				FilterValues:           make(price.JSONBFilters),
-				MeterID:                meterID,
-				MeterDisplayName:       meterDisplayNames[meterID],
-				Price:                  priceObj,
-			}
-
-			if m := meterMap[meterID]; m != nil {
-				for _, filter := range m.Filters {
-					charge.FilterValues[filter.Key] = filter.Values
-				}
-			}
-
-			usageCharges = append(usageCharges, charge)
-			processedLineItems[item.ID] = true
-		}
-	}
-
-	// --- Query bucketed meters per line item (windowed, with BucketedUsageResult) ---
-	for meterID := range bucketedMeterIDs {
-		m := meterDomainMap[meterID]
-		items := meterToLineItems[meterID]
-		for _, item := range items {
-			priceObj := priceMap[item.PriceID]
-			if priceObj == nil {
-				s.Logger.WarnwCtx(ctx, "price object not found for bucketed meter usage, skipping",
-					"price_id", item.PriceID,
-					"meter_id", meterID,
-					"subscription_id", req.SubscriptionID)
-				continue
-			}
-
-			itemStart := item.GetPeriodStart(usageStartTime)
-			itemEnd := item.GetPeriodEnd(usageEndTime)
-
-			usageResult, err := s.queryBucketedMeterUsage(
-				ctx, m, externalCustomerIDs,
-				itemStart, itemEnd, &sub.BillingAnchor, useFinal,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
-			}
-
-			hasGroupBy := m.IsBucketedMaxMeter() && m.Aggregation.GroupBy != ""
-			bucketedCost := calculateBucketedMeterCost(ctx, priceService, priceObj, usageResult, hasGroupBy)
-			totalCost = totalCost.Add(bucketedCost.Amount)
-
-			charge := &dto.SubscriptionUsageByMetersResponse{
-				SubscriptionLineItemID: item.ID,
-				Amount:                 bucketedCost.Amount.InexactFloat64(),
-				Currency:               priceObj.Currency,
-				DisplayAmount:          fmt.Sprintf("%.2f %s", bucketedCost.Amount.InexactFloat64(), priceObj.Currency),
-				Quantity:               bucketedCost.Quantity.InexactFloat64(),
-				FilterValues:           make(price.JSONBFilters),
-				MeterID:                meterID,
-				MeterDisplayName:       meterDisplayNames[meterID],
-				Price:                  priceObj,
-				BucketedUsageResult:    usageResult,
-			}
-
-			if meterResp := meterMap[meterID]; meterResp != nil {
-				for _, filter := range meterResp.Filters {
-					charge.FilterValues[filter.Key] = filter.Values
-				}
-			}
-
-			usageCharges = append(usageCharges, charge)
-			processedLineItems[item.ID] = true
-		}
-	}
-
-	// Zero-quantity charges for line items with no usage
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
-			continue
-		}
-		if processedLineItems[item.ID] {
-			continue
-		}
-
-		priceObj := priceMap[item.PriceID]
-		if priceObj == nil {
-			continue
-		}
-
-		charge := &dto.SubscriptionUsageByMetersResponse{
-			SubscriptionLineItemID: item.ID,
-			Amount:                 0.0,
-			Currency:               priceObj.Currency,
-			DisplayAmount:          fmt.Sprintf("0.00 %s", priceObj.Currency),
-			Quantity:               0.0,
-			FilterValues:           make(price.JSONBFilters),
-			MeterID:                item.MeterID,
-			MeterDisplayName:       meterDisplayNames[item.MeterID],
-			Price:                  priceObj,
-		}
-
-		if m := meterMap[item.MeterID]; m != nil {
-			for _, filter := range m.Filters {
-				charge.FilterValues[filter.Key] = filter.Values
-			}
-		}
-
-		usageCharges = append(usageCharges, charge)
 	}
 
 	// Apply commitment-based overage logic if configured
@@ -6027,33 +5751,6 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 	return response, nil
 }
 
-// queryBucketedMeterUsage queries the meter_usage table for a single bucketed meter,
-// returning a per-bucket AggregationResult suitable for calculateBucketedMeterCost.
-func (s *subscriptionService) queryBucketedMeterUsage(
-	ctx context.Context,
-	m *meterDomain.Meter,
-	externalCustomerIDs []string,
-	periodStart, periodEnd time.Time,
-	billingAnchor *time.Time,
-	useFinal bool,
-) (*events.AggregationResult, error) {
-	aggType := m.Aggregation.Type
-	groupBy := m.Aggregation.GroupBy
-	params := &events.MeterUsageQueryParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs: externalCustomerIDs,
-		MeterID:             m.ID,
-		StartTime:           periodStart,
-		EndTime:             periodEnd,
-		AggregationType:     aggType,
-		WindowSize:          m.Aggregation.BucketSize,
-		BillingAnchor:       billingAnchor,
-		GroupByProperty:     groupBy,
-		UseFinal:            useFinal,
-	}
-	return s.MeterUsageRepo.GetUsageForBucketedMeters(ctx, params)
-}
 
 // GetSubscriptionEntitlements retrieves all entitlements associated with a subscription
 // This includes entitlements from:
