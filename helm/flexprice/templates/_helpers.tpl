@@ -381,9 +381,44 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.eventProcessing.rateLimit | quote }}
 - name: FLEXPRICE_EVENT_PROCESSING_CONSUMER_GROUP
   value: {{ .Values.eventProcessing.consumerGroup | quote }}
+{{- /* ---- Redis extended ---- */}}
+{{- if .Values.redisExtended.keyPrefix }}
+- name: FLEXPRICE_REDIS_KEY_PREFIX
+  value: {{ .Values.redisExtended.keyPrefix | quote }}
+{{- end }}
+- name: FLEXPRICE_REDIS_CLUSTER_MODE
+  value: {{ .Values.redisExtended.clusterMode | quote }}
+- name: FLEXPRICE_REDIS_POOL_SIZE
+  value: {{ .Values.redisExtended.poolSize | quote }}
+{{- /* ---- Logging extended ---- */}}
+- name: FLEXPRICE_LOGGING_FORMAT
+  value: {{ .Values.logging.format | default "json" | quote }}
+{{- if .Values.logging.otel.enabled }}
+- name: FLEXPRICE_LOGGING_OTEL_ENABLED
+  value: "true"
+- name: FLEXPRICE_LOGGING_OTEL_ENDPOINT
+  value: {{ .Values.logging.otel.endpoint | quote }}
+- name: FLEXPRICE_LOGGING_OTEL_INSECURE
+  value: {{ .Values.logging.otel.insecure | quote }}
+- name: FLEXPRICE_LOGGING_OTEL_AUTH_HEADER
+  value: {{ .Values.logging.otel.authHeader | quote }}
+- name: FLEXPRICE_LOGGING_OTEL_AUTH_VALUE
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: logging-otel-auth-value
+{{- end }}
+{{- /* ---- App URLs ---- */}}
+{{- if .Values.app.customerPortalUrl }}
+- name: FLEXPRICE_CUSTOMER_PORTAL_URL
+  value: {{ .Values.app.customerPortalUrl | quote }}
+{{- end }}
+{{- if .Values.app.oauthRedirectUri }}
+- name: FLEXPRICE_OAUTH_REDIRECT_URI
+  value: {{ .Values.app.oauthRedirectUri | quote }}
+{{- end }}
 {{- /* ---- Extra env vars (passthrough) ---- */}}
-{{- range $key, $value := .Values.extraEnv }}
-- name: {{ $key | quote }}
-  value: {{ $value | quote }}
+{{- with .Values.extraEnv }}
+{{- toYaml . }}
 {{- end }}
 {{- end }}

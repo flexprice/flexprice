@@ -440,3 +440,124 @@ The provisioning script eliminates this race by:
 ### Secrets design
 
 Passwords are injected once in Step 1 as a Kubernetes Secret (`<release>-secrets`). The Helm chart reads them via `secretKeyRef` — passwords never need to appear in `values.yaml` in production. The provisioning script takes passwords from environment variables so nothing sensitive touches disk or version control.
+
+---
+
+## Node groups (EKS)
+
+This Helm chart deploys workloads onto existing nodes — it does **not** create node groups. Node groups are AWS EC2 Auto Scaling Groups registered with EKS and must be provisioned before `helm install`.
+
+### Recommended node group layout for production
+
+| Node group | Instance type | Purpose |
+|------------|--------------|---------|
+| `flexprice-app` | `t3.large` (2 vCPU, 8 GB) | api, consumer, worker pods |
+| `flexprice-infra` | `r6g.large` (2 vCPU, 16 GB) | PostgreSQL, Redis, ClickHouse StatefulSets (memory-heavy) |
+| `flexprice-kafka` | `m6i.large` (2 vCPU, 8 GB) | Kafka controller + broker StatefulSets (I/O-heavy) |
+
+A single `general` node group works fine for development.
+
+### Provision node groups with eksctl
+
+```bash
+eksctl create nodegroup \
+  --cluster  my-eks-cluster \
+  --region   ap-south-1 \
+  --name     flexprice-app \
+  --node-type t3.large \
+  --nodes-min 2 \
+  --nodes-max 6 \
+  --managed
+
+eksctl create nodegroup \
+  --cluster  my-eks-cluster \
+  --region   ap-south-1 \
+  --name     flexprice-infra \
+  --node-type r6g.large \
+  --nodes-min 1 \
+  --nodes-max 3 \
+  --managed \
+  --node-labels role=infra \
+  --node-taints dedicated=infra:NoSchedule
+```
+
+EKS automatically labels every node with `eks.amazonaws.com/nodegroup: <name>`.
+
+### Pin pods to node groups via values.yaml
+
+Use `nodeSelector` to target a specific node group. Set it globally (all pods) or per component (api/consumer/worker independently):
+
+```yaml
+# Pin all FlexPrice app pods to the flexprice-app node group
+nodeSelector:
+  eks.amazonaws.com/nodegroup: flexprice-app
+
+# Or pin each component to a different node group
+api:
+  nodeSelector:
+    eks.amazonaws.com/nodegroup: flexprice-app
+
+consumer:
+  nodeSelector:
+    eks.amazonaws.com/nodegroup: flexprice-app
+
+worker:
+  nodeSelector:
+    eks.amazonaws.com/nodegroup: flexprice-app
+
+# Pin ClickHouse StatefulSet to infra nodes
+clickhouse:
+  standalone:
+    nodeSelector:
+      eks.amazonaws.com/nodegroup: flexprice-infra
+    tolerations:
+      - key: dedicated
+        operator: Equal
+        value: infra
+        effect: NoSchedule
+```
+
+### Spread pods across Availability Zones
+
+For HA, use `affinity` to prefer different AZs:
+
+```yaml
+api:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: flexprice
+                app.kubernetes.io/component: api
+            topologyKey: topology.kubernetes.io/zone
+```
+
+### Provision node groups with Terraform
+
+If you manage infrastructure with Terraform, use the `aws_eks_node_group` resource:
+
+```hcl
+resource "aws_eks_node_group" "flexprice_app" {
+  cluster_name    = aws_eks_cluster.main.name
+  node_group_name = "flexprice-app"
+  node_role_arn   = aws_iam_role.node.arn
+  subnet_ids      = var.private_subnet_ids
+
+  instance_types = ["t3.large"]
+
+  scaling_config {
+    desired_size = 2
+    min_size     = 2
+    max_size     = 6
+  }
+
+  labels = {
+    role = "app"
+  }
+}
+```
+
+The chart's `nodeSelector` key `eks.amazonaws.com/nodegroup: flexprice-app` matches the node group name automatically — no additional label configuration needed.
