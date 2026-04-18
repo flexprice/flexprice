@@ -52,12 +52,16 @@ fi
 kubectl config use-context "kind-${CLUSTER_NAME}"
 
 # ── ingress-nginx ─────────────────────────────────────────────────────────────
-info "Installing ingress-nginx for kind..."
-kubectl apply -f "$INGRESS_NGINX_MANIFEST"
+if kubectl get deployment ingress-nginx-controller -n ingress-nginx &>/dev/null; then
+  warn "ingress-nginx already installed — skipping"
+else
+  info "Installing ingress-nginx for kind..."
+  kubectl apply -f "$INGRESS_NGINX_MANIFEST"
 
-info "Waiting for ingress-nginx to be ready..."
-kubectl rollout status deployment/ingress-nginx-controller \
-  -n ingress-nginx --timeout=120s
+  info "Waiting for ingress-nginx to be ready..."
+  kubectl rollout status deployment/ingress-nginx-controller \
+    -n ingress-nginx --timeout=120s
+fi
 
 # ── Namespace ─────────────────────────────────────────────────────────────────
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
@@ -92,6 +96,10 @@ helm upgrade "$RELEASE" "$CHART" \
 info "Phase 3/3 — deploying application pods (api, consumer, worker)..."
 helm upgrade "$RELEASE" "$CHART" \
   -f "$BASE_VALUES" -f "$LOCAL_VALUES" \
+  --set api.enabled=true \
+  --set consumer.enabled=true \
+  --set worker.enabled=true \
+  --set migration.enabled=true \
   -n "$NAMESPACE" \
   --wait --timeout 5m
 

@@ -15,6 +15,13 @@ nameOverride: ""
 fullnameOverride: ""
 
 # ServiceAccount for the pods
+# On AWS EKS, annotate with the IAM role ARN for IRSA (IAM Roles for Service Accounts).
+# The role's trust policy must allow the OIDC provider to assume it for this service account.
+# All pods (api, consumer, worker) share this service account — scope the IAM role accordingly.
+# Example:
+#   serviceAccount:
+#     annotations:
+#       eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/flexprice-role
 serviceAccount:
   create: true
   annotations: {}
@@ -38,7 +45,13 @@ securityContext:
 api:
   enabled: true
   replicaCount: 1
-  resources: {}
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "768Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1536Mi"
   autoscaling:
     enabled: true
     minReplicas: 1
@@ -48,28 +61,49 @@ api:
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 # Consumer deployment configuration
 consumer:
   enabled: true
   replicaCount: 1
-  resources: {}
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1024Mi"
+    limits:
+      cpu: "1000m"
+      memory: "2048Mi"
   autoscaling:
     enabled: true
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 # Temporal Worker deployment configuration
 worker:
   enabled: true
   replicaCount: 1
-  resources: {}
+  resources:
+    requests:
+      cpu: "375m"
+      memory: "512Mi"
+    limits:
+      cpu: "750m"
+      memory: "1024Mi"
   autoscaling:
     enabled: false
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 # Service configuration
 service:
@@ -354,7 +388,14 @@ temporalConfig:
 
 # Logging configuration
 logging:
-  level: "info" # "debug", "info", "warn", "error"
+  level: "info"    # "debug", "info", "warn", "error"
+  format: "json"   # "json" or "text"
+  otel:
+    enabled: false
+    endpoint: ""           # e.g. "ingest.in2.signoz.cloud:443"
+    insecure: false        # set true for non-TLS endpoints
+    authHeader: ""         # e.g. "signoz-ingestion-key"
+    authValue: ""          # Set via secret in production
 
 # Sentry configuration
 sentry:
@@ -415,6 +456,12 @@ redisConfig:
 # Cache configuration
 cache:
   enabled: false
+
+# Redis extended configuration (beyond host/port/db set above)
+redisExtended:
+  keyPrefix: ""         # e.g. "flexprice:prod" — namespaces all keys
+  clusterMode: false    # set true for AWS ElastiCache cluster mode (clustercfg. endpoint)
+  poolSize: 10          # connection pool size
 
 # Event processing configuration
 eventProcessing:
@@ -479,35 +526,87 @@ webhook:
 # Secrets management
 # ---------------------------------------------------------------------------
 #
-# Production: pre-create a Kubernetes Secret out-of-band (kubectl, SOPS,
-# ExternalSecrets, Vault, AWS Secrets Manager CSI, etc.) and set
-# `secrets.existingSecret` to its name. The chart will only reference it —
-# it will NOT create or manage the Secret.
+# PRODUCTION — use one of these approaches (never commit real values here):
 #
-# The referenced Secret must contain these keys (presence depends on features):
-#   encryption-key                 (required)
-#   auth-secret                    (required)
-#   postgres-password              (required)
-#   clickhouse-password            (required)
-#   redis-password                 (required if redisConfig.password is used)
-#   kafka-sasl-password            (required if kafkaConfig.useSASL=true)
-#   temporal-api-key               (required for Temporal Cloud)
-#   supabase-service-key           (required if auth.provider=supabase)
-#   sentry-dsn                     (required if sentry.enabled=true)
-#   pyroscope-basic-auth-password  (required if pyroscope auth enabled)
-#   email-resend-api-key           (required if email.enabled=true)
-#   svix-auth-token                (required if webhook svix enabled)
+# ── Option A: AWS Secrets Manager + External Secrets Operator ────────────────
+# 1. Create a secret in AWS Secrets Manager with all keys as a JSON object:
 #
-# Example:
+#   aws secretsmanager create-secret \
+#     --name flexprice/prod \
+#     --region ap-south-1 \
+#     --secret-string '{
+#       "encryption-key":                "<openssl rand -hex 32>",
+#       "auth-secret":                   "<openssl rand -hex 32>",
+#       "postgres-password":             "<pg-password>",
+#       "clickhouse-password":           "<ch-password>",
+#       "kafka-sasl-password":           "<kafka-sasl-password>",
+#       "temporal-api-key":              "<temporal-cloud-api-key>",
+#       "supabase-service-key":          "<supabase-service-role-key>",
+#       "sentry-dsn":                    "<https://...@sentry.io/...>",
+#       "pyroscope-basic-auth-password": "<grafana-cloud-api-key>",
+#       "email-resend-api-key":          "<re_...>",
+#       "svix-auth-token":               "<sk_...>",
+#       "logging-otel-auth-value":       "<signoz-ingestion-key>"
+#     }'
+#
+# 2. Install External Secrets Operator (ESO) in the cluster:
+#   helm repo add external-secrets https://charts.external-secrets.io
+#   helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace
+#
+# 3. Create an ExternalSecret that syncs to a Kubernetes Secret named "flexprice-secrets":
+#   apiVersion: external-secrets.io/v1beta1
+#   kind: ExternalSecret
+#   metadata:
+#     name: flexprice-secrets
+#   spec:
+#     refreshInterval: 1h
+#     secretStoreRef:
+#       name: aws-secretsmanager
+#       kind: ClusterSecretStore
+#     target:
+#       name: flexprice-secrets   # ← this name goes into secrets.existingSecret below
+#     dataFrom:
+#       - extract:
+#           key: flexprice/prod
+#
+# 4. Set in values.yaml (or values-prod.yaml):
+#   secrets:
+#     existingSecret: "flexprice-secrets"
+#
+# ── Option B: kubectl (simpler, no ESO required) ─────────────────────────────
 #   kubectl create secret generic flexprice-secrets \
 #     --from-literal=encryption-key=$(openssl rand -hex 32) \
 #     --from-literal=auth-secret=$(openssl rand -hex 32) \
 #     --from-literal=postgres-password=$PG_PASSWORD \
-#     --from-literal=clickhouse-password=$CH_PASSWORD
+#     --from-literal=clickhouse-password=$CH_PASSWORD \
+#     --from-literal=kafka-sasl-password=$KAFKA_PASSWORD \
+#     --from-literal=temporal-api-key=$TEMPORAL_API_KEY \
+#     --from-literal=supabase-service-key=$SUPABASE_KEY \
+#     --from-literal=sentry-dsn=$SENTRY_DSN \
+#     --from-literal=pyroscope-basic-auth-password=$PYROSCOPE_PASSWORD \
+#     --from-literal=email-resend-api-key=$RESEND_KEY \
+#     --from-literal=svix-auth-token=$SVIX_TOKEN \
+#     --from-literal=logging-otel-auth-value=$SIGNOZ_KEY
 #   helm install flexprice ./flexprice --set secrets.existingSecret=flexprice-secrets
 #
-# Dev fallback: leave existingSecret empty and the chart will render a Secret
-# from the plaintext values below. NEVER commit real keys to values.yaml.
+# ── Required keys (chart will error if missing when the feature is enabled) ──
+#   encryption-key                 always required
+#   auth-secret                    always required
+#   postgres-password              always required
+#   clickhouse-password            always required
+#   kafka-sasl-password            required if kafkaConfig.useSASL=true
+#   temporal-api-key               required if using Temporal Cloud
+#   supabase-service-key           required if auth.provider=supabase
+#   sentry-dsn                     required if sentry.enabled=true
+#   pyroscope-basic-auth-password  required if pyroscope.basicAuthUser is set
+#   email-resend-api-key           required if email.enabled=true
+#   svix-auth-token                required if webhook.svixConfig.enabled=true
+#   logging-otel-auth-value        required if logging.otel.enabled=true
+#   redis-password                 required if redisConfig.password is set
+#
+# ── Dev fallback ──────────────────────────────────────────────────────────────
+# Leave existingSecret empty — chart renders its own Secret from plaintext
+# values scattered in this file. NEVER use this in production.
 # ---------------------------------------------------------------------------
 secrets:
   existingSecret: ""   # name of a pre-created Secret (production). Takes precedence over fields below.
@@ -526,6 +625,11 @@ email:
   replyTo: ""
   calendarUrl: ""
 
+# App URL configuration
+app:
+  customerPortalUrl: ""   # e.g. "https://admin.flexprice.io/customer-portal"
+  oauthRedirectUri: ""    # e.g. "https://admin.flexprice.io/tools/integrations/oauth/callback"
+
 # Feature flag configuration
 featureFlag:
   enableFeatureUsageForAnalytics: true
@@ -538,13 +642,50 @@ envAccess:
 # Pod annotations
 podAnnotations: {}
 
-# Node selector
+# ---------------------------------------------------------------------------
+# Node placement — nodeSelector, tolerations, affinity
+# ---------------------------------------------------------------------------
+# These apply globally to all pods (api, consumer, worker, migration).
+# On EKS, node groups expose labels you can use to pin workloads:
+#
+#   nodeSelector:
+#     eks.amazonaws.com/nodegroup: flexprice-app   # target a specific managed node group
+#     node.kubernetes.io/instance-type: t3.medium  # target an instance type
+#     kubernetes.io/arch: amd64
+#
+# If the node group has a taint (e.g. dedicated=flexprice:NoSchedule), add a matching toleration:
+#   tolerations:
+#     - key: dedicated
+#       operator: Equal
+#       value: flexprice
+#       effect: NoSchedule
+#
+# For HA: spread pods across AZs using topology spread constraints via affinity:
+#   affinity:
+#     podAntiAffinity:
+#       preferredDuringSchedulingIgnoredDuringExecution:
+#         - weight: 100
+#           podAffinityTerm:
+#             labelSelector:
+#               matchLabels:
+#                 app.kubernetes.io/name: flexprice
+#             topologyKey: topology.kubernetes.io/zone
+#
+# Per-component overrides (api/consumer/worker each accept the same three keys):
+#   api:
+#     nodeSelector:
+#       eks.amazonaws.com/nodegroup: flexprice-api
+#   consumer:
+#     nodeSelector:
+#       eks.amazonaws.com/nodegroup: flexprice-consumer
+#   worker:
+#     nodeSelector:
+#       eks.amazonaws.com/nodegroup: flexprice-worker
+# ---------------------------------------------------------------------------
+
+# Global defaults — used when per-component overrides are not set
 nodeSelector: {}
-
-# Tolerations
 tolerations: []
-
-# Affinity
 affinity: {}
 
 # Liveness probe
@@ -577,10 +718,23 @@ startupProbe:
   timeoutSeconds: 5
   failureThreshold: 30
 
-# Additional environment variables
+# Additional environment variables injected into all pods (api, consumer, worker).
+# Supports plain values and valueFrom (secretKeyRef, configMapKeyRef, fieldRef).
+# Example:
+#   extraEnv:
+#     - name: CUSTOM_VAR
+#       value: "custom-value"
+#     - name: SECRET_VAR
+#       valueFrom:
+#         secretKeyRef:
+#           name: my-secret
+#           key: my-key
+#     - name: CONFIGMAP_VAR
+#       valueFrom:
+#         configMapKeyRef:
+#           name: my-configmap
+#           key: my-key
 extraEnv: []
-# - name: CUSTOM_VAR
-#   value: "custom-value"
 
 # Additional volumes
 extraVolumes: []
