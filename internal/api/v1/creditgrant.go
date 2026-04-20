@@ -94,7 +94,7 @@ func (h *CreditGrantHandler) ListCreditGrants(c *gin.Context) {
 
 	// Set default filter if not provided
 	if filter.QueryFilter == nil {
-		filter.QueryFilter = types.NewDefaultQueryFilter()
+		filter.QueryFilter = types.NewNoLimitPublishedQueryFilter()
 	}
 
 	resp, err := h.service.ListCreditGrants(c.Request.Context(), &filter)

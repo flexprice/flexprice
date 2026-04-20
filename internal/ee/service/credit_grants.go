@@ -218,9 +218,6 @@ func (s *creditGrantService) ListCreditGrants(ctx context.Context, filter *types
 	if filter == nil {
 		filter = types.NewDefaultCreditGrantFilter()
 	}
-	if filter.QueryFilter == nil {
-		filter.QueryFilter = types.NewDefaultQueryFilter()
-	}
 
 	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)
 	if err != nil {
