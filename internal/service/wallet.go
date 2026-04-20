@@ -673,10 +673,70 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		ServiceParams: s.ServiceParams,
 	}
 
-	// Retrieve wallet and customer details
-	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
-	if err != nil {
-		return "", "", err
+	// Idempotency: if a transaction already exists for this key, return it (and its invoice if present).
+	if idempotencyKey != nil && lo.FromPtr(idempotencyKey) != "" {
+		existingTx, err := s.WalletRepo.GetTransactionByIdempotencyKey(ctx, *idempotencyKey)
+		if err == nil && existingTx != nil {
+			existingInv, invErr := s.InvoiceRepo.GetByIdempotencyKey(ctx, *idempotencyKey)
+			if invErr == nil && existingInv != nil {
+				return existingTx.ID, existingInv.ID, nil
+			}
+			if invErr != nil && !ierr.IsNotFound(invErr) {
+				return "", "", invErr
+			}
+
+			// Transaction exists but invoice does not (or is not visible yet). Attempt invoice creation.
+			w, wErr := s.WalletRepo.GetWalletByID(ctx, walletID)
+			if wErr != nil {
+				return "", "", wErr
+			}
+
+			amount := s.GetCurrencyAmountFromCredits(existingTx.CreditAmount, w.TopupConversionRate)
+			invoiceMetadata := make(types.Metadata)
+			if req.Metadata != nil {
+				for k, v := range req.Metadata {
+					invoiceMetadata[k] = v
+				}
+			}
+			invoiceMetadata["wallet_transaction_id"] = existingTx.ID
+			invoiceMetadata["wallet_id"] = walletID
+			invoiceMetadata["credits_amount"] = existingTx.CreditAmount.String()
+			invoiceMetadata["auto_completed"] = fmt.Sprintf("%v", existingTx.TxStatus == types.TransactionStatusCompleted)
+			if req.Description != "" {
+				invoiceMetadata["description"] = req.Description
+			}
+
+			invReq := dto.CreateInvoiceRequest{
+				CustomerID:     w.CustomerID,
+				AmountDue:      amount,
+				Subtotal:       amount,
+				Total:          amount,
+				Currency:       w.Currency,
+				InvoiceType:    types.InvoiceTypeOneOff,
+				DueDate:        lo.ToPtr(time.Now().UTC()),
+				IdempotencyKey: idempotencyKey,
+				LineItems: []dto.CreateInvoiceLineItemRequest{
+					{
+						Amount:      amount,
+						Quantity:    decimal.NewFromInt(1),
+						DisplayName: lo.ToPtr(fmt.Sprintf("Purchase %s Credits", existingTx.CreditAmount.String())),
+					},
+				},
+				PaymentStatus: lo.ToPtr(lo.Ternary(existingTx.TxStatus == types.TransactionStatusCompleted, types.PaymentStatusSucceeded, types.PaymentStatusPending)),
+				Metadata:      invoiceMetadata,
+			}
+
+			inv, invCreateErr := invoiceService.CreateInvoice(ctx, invReq)
+			if invCreateErr != nil {
+				return "", "", ierr.WithError(invCreateErr).
+					WithHint("Failed to create invoice for existing purchased credit transaction").
+					Mark(ierr.ErrInternal)
+			}
+			return existingTx.ID, inv.ID, nil
+		}
+		if err != nil && !ierr.IsNotFound(err) {
+			return "", "", err
+		}
 	}
 
 	// Get invoice config setting to check auto_complete flag
@@ -701,6 +761,18 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	var walletTransactionID string
 	var invoiceID string
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Acquire wallet lock and read the latest state inside the transaction.
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: walletID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire wallet lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+		if err != nil {
+			return err
+		}
+
 		// Step 1: Create wallet transaction (pending or completed based on setting)
 		txStatus := types.TransactionStatusPending
 		balanceAfter := w.CreditBalance
@@ -715,18 +787,21 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			description = lo.Ternary(req.Description != "", req.Description, "Purchased credits - pending payment")
 		}
 
-		txMetadata := req.Metadata
-		if txMetadata == nil {
-			txMetadata = types.Metadata{}
+		txMetadata := make(types.Metadata)
+		if req.Metadata != nil {
+			for k, v := range req.Metadata {
+				txMetadata[k] = v
+			}
 		}
 
+		amount := s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.TopupConversionRate)
 		tx := &wallet.Transaction{
 			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
 			WalletID:            walletID,
 			CustomerID:          w.CustomerID,
 			Type:                types.TransactionTypeCredit,
 			CreditAmount:        req.CreditsToAdd,
-			Amount:              s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.TopupConversionRate),
+			Amount:              amount,
 			TxStatus:            txStatus,
 			ReferenceType:       types.WalletTxReferenceTypeExternal,
 			ReferenceID:         lo.FromPtr(idempotencyKey),
@@ -778,93 +853,90 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 		walletTransactionID = tx.ID
 
-		// Step 2: Create invoice for credit purchase with wallet_transaction_id in metadata
-		amount := s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.TopupConversionRate)
-		invoiceMetadata := make(types.Metadata)
-
-		// Copy existing metadata from request if provided
-		if req.Metadata != nil {
-			for key, value := range req.Metadata {
-				invoiceMetadata[key] = value
-			}
-		}
-
-		// Ensure auto_topup flag is present on invoice metadata as well
-		invoiceMetadata["auto_topup"] = lo.Ternary(req.Metadata != nil && req.Metadata["auto_topup"] == "true", "true", invoiceMetadata["auto_topup"])
-
-		// Add required fields
-		invoiceMetadata["wallet_transaction_id"] = walletTransactionID
-		invoiceMetadata["wallet_id"] = walletID
-		invoiceMetadata["credits_amount"] = req.CreditsToAdd.String()
-		invoiceMetadata["auto_completed"] = fmt.Sprintf("%v", autoCompleteEnabled)
-
-		// Add description to invoice metadata if provided
-		if req.Description != "" {
-			invoiceMetadata["description"] = req.Description
-		}
-
-		// Set payment status based on auto-complete setting
-		paymentStatus := types.PaymentStatusPending
-		var amountPaid *decimal.Decimal
-		if autoCompleteEnabled {
-			paymentStatus = types.PaymentStatusSucceeded
-			amountPaid = &amount
-		}
-
-		invReq := dto.CreateInvoiceRequest{
-			CustomerID:     w.CustomerID,
-			AmountDue:      amount,
-			AmountPaid:     amountPaid,
-			Subtotal:       amount,
-			Total:          amount,
-			Currency:       w.Currency,
-			InvoiceType:    types.InvoiceTypeOneOff,
-			DueDate:        lo.ToPtr(time.Now().UTC()),
-			IdempotencyKey: idempotencyKey,
-			LineItems: []dto.CreateInvoiceLineItemRequest{
-				{
-					Amount:      amount,
-					Quantity:    decimal.NewFromInt(1),
-					DisplayName: lo.ToPtr(fmt.Sprintf("Purchase %s Credits", req.CreditsToAdd.String())),
-				},
-			},
-			PaymentStatus: lo.ToPtr(paymentStatus),
-			Metadata:      invoiceMetadata,
-		}
-		// Use CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
-		inv, err := invoiceService.CreateInvoice(ctx, invReq)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create invoice for purchased credits").
-				Mark(ierr.ErrInternal)
-		}
-
-		invoiceID = inv.ID
-
-		if autoCompleteEnabled {
-			s.Logger.InfowCtx(ctx, "created auto-completed credit purchase",
-				"wallet_transaction_id", walletTransactionID,
-				"invoice_id", inv.ID,
-				"wallet_id", walletID,
-				"credits", req.CreditsToAdd.String(),
-				"amount", amount.String(),
-				"payment_status", paymentStatus,
-			)
-		} else {
-			s.Logger.InfowCtx(ctx, "created pending credit purchase",
-				"wallet_transaction_id", walletTransactionID,
-				"invoice_id", inv.ID,
-				"wallet_id", walletID,
-				"credits", req.CreditsToAdd.String(),
-				"amount", amount.String(),
-			)
-		}
-
 		return nil
 	})
 
 	if err != nil {
 		return "", "", err
+	}
+
+	// Step 2: Create invoice OUTSIDE the wallet transaction to avoid long locks and partial side effects.
+	// Re-read wallet (non-locking) for invoice fields.
+	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return "", "", err
+	}
+
+	amount := s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.TopupConversionRate)
+	invoiceMetadata := make(types.Metadata)
+	if req.Metadata != nil {
+		for k, v := range req.Metadata {
+			invoiceMetadata[k] = v
+		}
+	}
+	invoiceMetadata["wallet_transaction_id"] = walletTransactionID
+	invoiceMetadata["wallet_id"] = walletID
+	invoiceMetadata["credits_amount"] = req.CreditsToAdd.String()
+	invoiceMetadata["auto_completed"] = fmt.Sprintf("%v", autoCompleteEnabled)
+	if req.Description != "" {
+		invoiceMetadata["description"] = req.Description
+	}
+
+	// Set payment status based on auto-complete setting
+	paymentStatus := types.PaymentStatusPending
+	var amountPaid *decimal.Decimal
+	if autoCompleteEnabled {
+		paymentStatus = types.PaymentStatusSucceeded
+		amountPaid = &amount
+	}
+
+	invReq := dto.CreateInvoiceRequest{
+		CustomerID:     w.CustomerID,
+		AmountDue:      amount,
+		AmountPaid:     amountPaid,
+		Subtotal:       amount,
+		Total:          amount,
+		Currency:       w.Currency,
+		InvoiceType:    types.InvoiceTypeOneOff,
+		DueDate:        lo.ToPtr(time.Now().UTC()),
+		IdempotencyKey: idempotencyKey,
+		LineItems: []dto.CreateInvoiceLineItemRequest{
+			{
+				Amount:      amount,
+				Quantity:    decimal.NewFromInt(1),
+				DisplayName: lo.ToPtr(fmt.Sprintf("Purchase %s Credits", req.CreditsToAdd.String())),
+			},
+		},
+		PaymentStatus: lo.ToPtr(paymentStatus),
+		Metadata:      invoiceMetadata,
+	}
+
+	inv, err := invoiceService.CreateInvoice(ctx, invReq)
+	if err != nil {
+		return "", "", ierr.WithError(err).
+			WithHint("Failed to create invoice for purchased credits").
+			Mark(ierr.ErrInternal)
+	}
+
+	invoiceID = inv.ID
+
+	if autoCompleteEnabled {
+		s.Logger.InfowCtx(ctx, "created auto-completed credit purchase",
+			"wallet_transaction_id", walletTransactionID,
+			"invoice_id", inv.ID,
+			"wallet_id", walletID,
+			"credits", req.CreditsToAdd.String(),
+			"amount", amount.String(),
+			"payment_status", paymentStatus,
+		)
+	} else {
+		s.Logger.InfowCtx(ctx, "created pending credit purchase",
+			"wallet_transaction_id", walletTransactionID,
+			"invoice_id", inv.ID,
+			"wallet_id", walletID,
+			"credits", req.CreditsToAdd.String(),
+			"amount", amount.String(),
+		)
 	}
 
 	// If auto-completed, publish webhook event immediately
@@ -1574,7 +1646,15 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
 		}
 
-		finalBalance = s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
+		// Wallet.Balance is a currency ledger: apply the currency amount delta directly.
+		// req.Amount is normalized in validateWalletOperation using:
+		// - TopupConversionRate for credit operations
+		// - ConversionRate for debit operations
+		if req.Type == types.TransactionTypeDebit {
+			finalBalance = w.Balance.Sub(req.Amount)
+		} else {
+			finalBalance = w.Balance.Add(req.Amount)
+		}
 
 		// Step 5: Create transaction record
 		tx = &wallet.Transaction{
