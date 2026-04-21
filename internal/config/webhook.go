@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 )
 
@@ -31,4 +32,30 @@ type Svix struct {
 	Enabled   bool   `mapstructure:"enabled"`
 	AuthToken string `mapstructure:"auth_token"`
 	BaseURL   string `mapstructure:"base_url"`
+}
+
+// TenantConfig returns the webhook config for a tenant. Lookup is
+// case-insensitive because Viper lowercases YAML map keys while tenant
+// IDs (ULIDs) are uppercase. Always use this helper instead of indexing
+// w.Tenants directly.
+func (w *Webhook) TenantConfig(tenantID string) (TenantWebhookConfig, bool) {
+	if w == nil || w.Tenants == nil {
+		return TenantWebhookConfig{}, false
+	}
+	cfg, ok := w.Tenants[strings.ToLower(tenantID)]
+	return cfg, ok
+}
+
+// normalizeTenantKeys rewrites Tenants so every key is lowercase. Safe to
+// call multiple times. Guards against future config sources (env, remote)
+// that may not lowercase keys like Viper's YAML loader does.
+func (w *Webhook) normalizeTenantKeys() {
+	if w == nil || len(w.Tenants) == 0 {
+		return
+	}
+	normalized := make(map[string]TenantWebhookConfig, len(w.Tenants))
+	for k, v := range w.Tenants {
+		normalized[strings.ToLower(k)] = v
+	}
+	w.Tenants = normalized
 }

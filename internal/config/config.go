@@ -478,6 +478,7 @@ func NewConfig() (*Configuration, error) {
 		return nil, fmt.Errorf("failed to unmarshal webhook tenants config: %v", err)
 	}
 	cfg.Webhook.Tenants = tenantWebhookConfig
+	cfg.Webhook.normalizeTenantKeys()
 
 	// Alternative: try to parse user_env_mapping directly
 	userEnvMappingJSON := v.GetString("user_env_mapping")
