@@ -48,14 +48,14 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		return false
 	}
 
-	// Filter by plan IDs
+	// Filter by entity IDs
 	if len(f.EntityIDs) > 0 {
 		if !lo.Contains(f.EntityIDs, p.EntityID) {
 			return false
 		}
 	}
 
-	// filter by price ids
+	// Filter by price IDs
 	if len(f.PriceIDs) > 0 {
 		if !lo.Contains(f.PriceIDs, p.ID) {
 			return false
