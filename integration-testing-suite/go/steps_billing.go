@@ -170,7 +170,7 @@ skipTax:
 		if resp == nil {
 			return fmt.Errorf("create coupon returned nil response")
 		}
-		coupon := resp.Coupon
+		coupon := resp.CouponResponse
 		if coupon == nil || coupon.ID == nil {
 			return fmt.Errorf("create coupon returned no body")
 		}

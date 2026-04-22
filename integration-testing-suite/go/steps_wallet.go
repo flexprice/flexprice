@@ -36,7 +36,7 @@ func (r *SanityRunner) runWalletSteps(ctx context.Context) {
 		if resp == nil {
 			return fmt.Errorf("create wallet returned nil response")
 		}
-		wallet := resp.Wallet
+		wallet := resp.WalletResponse
 		if wallet == nil || wallet.ID == nil {
 			return fmt.Errorf("create wallet returned no body")
 		}

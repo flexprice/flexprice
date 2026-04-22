@@ -52,8 +52,12 @@ func main() {
 	// ── Build server URL ────────────────────────────────────────────────
 
 	// Support both localhost (http) and remote (https).
+	// FLEXPRICE_INSECURE=true forces http:// (e.g. in-cluster kind deployments).
 	scheme := "https://"
-	if strings.HasPrefix(apiHost, "localhost") || strings.HasPrefix(apiHost, "127.0.0.1") {
+	if strings.HasPrefix(apiHost, "localhost") ||
+		strings.HasPrefix(apiHost, "127.0.0.1") ||
+		strings.Contains(apiHost, ".local") ||
+		os.Getenv("FLEXPRICE_INSECURE") == "true" {
 		scheme = "http://"
 	}
 	serverURL := scheme + apiHost

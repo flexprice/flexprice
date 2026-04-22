@@ -93,7 +93,7 @@ func (r *SanityRunner) runInvoiceSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		inv := resp.Invoice
+		inv := resp.InvoiceResponse
 		if inv == nil {
 			return fmt.Errorf("get invoice returned no body")
 		}
@@ -131,7 +131,7 @@ func (r *SanityRunner) runInvoiceSteps(ctx context.Context) {
 		if err != nil {
 			return fmt.Errorf("get invoice pre-payment: %w", err)
 		}
-		inv := getResp.Invoice
+		inv := getResp.InvoiceResponse
 
 		// Finalize if still draft.
 		if inv != nil && inv.InvoiceStatus != nil {
@@ -144,7 +144,7 @@ func (r *SanityRunner) runInvoiceSteps(ctx context.Context) {
 				if err != nil {
 					return fmt.Errorf("re-fetch after finalize: %w", err)
 				}
-				inv = getResp.Invoice
+				inv = getResp.InvoiceResponse
 			}
 		}
 

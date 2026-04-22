@@ -88,7 +88,7 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		feature := resp.Feature
+		feature := resp.FeatureResponse
 		if feature == nil || feature.ID == nil {
 			return fmt.Errorf("create feature returned no body")
 		}
@@ -133,7 +133,7 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		feature := resp.Feature
+		feature := resp.FeatureResponse
 		if feature == nil || feature.ID == nil {
 			return fmt.Errorf("create feature returned no body")
 		}
@@ -164,7 +164,7 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		plan := resp.Plan
+		plan := resp.PlanResponse
 		if plan == nil || plan.ID == nil {
 			return fmt.Errorf("create plan returned no body")
 		}
@@ -190,7 +190,6 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 			EntityType:         types.PriceEntityTypePlan,
 			Type:               types.PriceTypeFixed,
 			BillingModel:       types.BillingModelFlatFee,
-			BillingCadence:     types.BillingCadenceRecurring,
 			BillingPeriod:      types.BillingPeriodMonthly,
 			BillingPeriodCount: int64Ptr(1),
 			InvoiceCadence:     types.InvoiceCadenceArrear,
@@ -205,7 +204,7 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		price := resp.Price
+		price := resp.PriceResponse
 		if price == nil || price.ID == nil {
 			return fmt.Errorf("create price returned no body")
 		}
@@ -223,7 +222,6 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 			EntityType:         types.PriceEntityTypePlan,
 			Type:               types.PriceTypeFixed,
 			BillingModel:       types.BillingModelFlatFee,
-			BillingCadence:     types.BillingCadenceRecurring,
 			BillingPeriod:      types.BillingPeriodMonthly,
 			BillingPeriodCount: int64Ptr(1),
 			InvoiceCadence:     types.InvoiceCadenceArrear,
@@ -237,7 +235,7 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		price := resp.Price
+		price := resp.PriceResponse
 		if price == nil || price.ID == nil {
 			return fmt.Errorf("create price returned no body")
 		}
@@ -260,7 +258,6 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 			EntityType:         types.PriceEntityTypePlan,
 			Type:               types.PriceTypeUsage,
 			BillingModel:       types.BillingModelFlatFee,
-			BillingCadence:     types.BillingCadenceRecurring,
 			BillingPeriod:      types.BillingPeriodMonthly,
 			BillingPeriodCount: int64Ptr(1),
 			InvoiceCadence:     types.InvoiceCadenceArrear,
@@ -275,7 +272,7 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		price := resp.Price
+		price := resp.PriceResponse
 		if price == nil || price.ID == nil {
 			return fmt.Errorf("create price returned no body")
 		}
@@ -297,7 +294,6 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 			EntityType:         types.PriceEntityTypePlan,
 			Type:               types.PriceTypeUsage,
 			BillingModel:       types.BillingModelFlatFee,
-			BillingCadence:     types.BillingCadenceRecurring,
 			BillingPeriod:      types.BillingPeriodMonthly,
 			BillingPeriodCount: int64Ptr(1),
 			InvoiceCadence:     types.InvoiceCadenceArrear,
@@ -312,7 +308,7 @@ func (r *SanityRunner) runCatalogSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		price := resp.Price
+		price := resp.PriceResponse
 		if price == nil || price.ID == nil {
 			return fmt.Errorf("create price returned no body")
 		}
