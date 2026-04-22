@@ -31,6 +31,7 @@ provision.sh
 *.sh
 # Documentation that doesn't belong in the chart package
 docs/
-*.md
-!README.md
+CHANGELOG.md
+CONTRIBUTING.md
+DEVELOPMENT.md
 

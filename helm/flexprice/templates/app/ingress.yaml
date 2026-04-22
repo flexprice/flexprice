@@ -1,11 +1,11 @@
-{{- if .Values.ingress.enabled -}}
-{{- if .Values.api.enabled }}
+{{- if and .Values.ingress.enabled .Values.api.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "flexprice.fullname" . }}
+  name: {{ include "flexprice.fullname" . }}-api
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -40,5 +40,40 @@ spec:
           {{- end }}
     {{- end }}
 {{- end }}
+---
+{{- if and .Values.frontendIngress.enabled .Values.frontend.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "flexprice.fullname" . }}-frontend
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+  {{- with .Values.frontendIngress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.frontendIngress.className }}
+  ingressClassName: {{ .Values.frontendIngress.className }}
+  {{- end }}
+  {{- if .Values.frontendIngress.tls }}
+  tls:
+    {{- range .Values.frontendIngress.tls }}
+    - hosts:
+        - {{ $.Values.frontendIngress.host | quote }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.frontendIngress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "flexprice.fullname" . }}-frontend
+                port:
+                  number: 3000
 {{- end }}
-

@@ -233,6 +233,8 @@ All service addresses are resolved via named templates above so this block stays
 - name: FLEXPRICE_KAFKA_CLIENT_ID
   value: {{ .Values.kafkaConfig.clientId | quote }}
 {{- if .Values.kafkaConfig.useSASL }}
+- name: FLEXPRICE_KAFKA_SASL_MECHANISM
+  value: {{ .Values.kafkaConfig.saslMechanism | quote }}
 - name: FLEXPRICE_KAFKA_SASL_USER
   value: {{ .Values.kafkaConfig.saslUser | quote }}
 - name: FLEXPRICE_KAFKA_SASL_PASSWORD
@@ -260,6 +262,8 @@ All service addresses are resolved via named templates above so this block stays
       key: redis-password
 {{- end }}
 {{- /* ---- Temporal ---- */}}
+- name: FLEXPRICE_TEMPORAL_ENABLED
+  value: {{ .Values.temporalConfig.enabled | default true | quote }}
 - name: FLEXPRICE_TEMPORAL_ADDRESS
   value: {{ include "flexprice.temporalAddress" . | quote }}
 - name: FLEXPRICE_TEMPORAL_TASK_QUEUE
@@ -296,10 +300,23 @@ All service addresses are resolved via named templates above so this block stays
 {{- end }}
 - name: FLEXPRICE_AUTH_API_KEY_HEADER
   value: {{ .Values.auth.apiKey.header | quote }}
+{{- if .Values.auth.apiKey.keys }}
+- name: FLEXPRICE_AUTH_API_KEY_KEYS
+  value: {{ .Values.auth.apiKey.keys | toJson | quote }}
+{{- end }}
+{{- /* ---- Billing ---- */}}
+{{- if .Values.billing.tenantId }}
+- name: FLEXPRICE_BILLING_TENANT_ID
+  value: {{ .Values.billing.tenantId | quote }}
+{{- end }}
+{{- if .Values.billing.environmentId }}
+- name: FLEXPRICE_BILLING_ENVIRONMENT_ID
+  value: {{ .Values.billing.environmentId | quote }}
+{{- end }}
 {{- /* ---- Observability ---- */}}
-{{- if .Values.sentry.enabled }}
 - name: FLEXPRICE_SENTRY_ENABLED
-  value: "true"
+  value: {{ .Values.sentry.enabled | quote }}
+{{- if .Values.sentry.enabled }}
 - name: FLEXPRICE_SENTRY_DSN
   valueFrom:
     secretKeyRef:
@@ -310,9 +327,9 @@ All service addresses are resolved via named templates above so this block stays
 - name: FLEXPRICE_SENTRY_SAMPLE_RATE
   value: {{ .Values.sentry.sampleRate | quote }}
 {{- end }}
-{{- if .Values.pyroscope.enabled }}
 - name: FLEXPRICE_PYROSCOPE_ENABLED
-  value: "true"
+  value: {{ .Values.pyroscope.enabled | quote }}
+{{- if .Values.pyroscope.enabled }}
 - name: FLEXPRICE_PYROSCOPE_SERVER_ADDRESS
   value: {{ .Values.pyroscope.serverAddress | quote }}
 - name: FLEXPRICE_PYROSCOPE_APPLICATION_NAME
@@ -381,6 +398,32 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.eventProcessing.rateLimit | quote }}
 - name: FLEXPRICE_EVENT_PROCESSING_CONSUMER_GROUP
   value: {{ .Values.eventProcessing.consumerGroup | quote }}
+- name: FLEXPRICE_EVENT_PROCESSING_LAZY_CONSUMER_GROUP
+  value: {{ .Values.eventProcessingLazy.consumerGroup | quote }}
+{{- /* ---- Raw event consumption ---- */}}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_ENABLED
+  value: {{ .Values.rawEventConsumption.enabled | default false | quote }}
+{{- if .Values.rawEventConsumption.enabled }}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_TOPIC
+  value: {{ .Values.rawEventConsumption.topic | default "raw_events" | quote }}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_OUTPUT_TOPIC
+  value: {{ .Values.rawEventConsumption.outputTopic | default "events" | quote }}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_CONSUMER_GROUP
+  value: {{ .Values.rawEventConsumption.consumerGroup | default "raw_events_consumer" | quote }}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_RATE_LIMIT
+  value: {{ .Values.rawEventConsumption.rateLimit | default 100 | quote }}
+{{- end }}
+{{- /* ---- DynamoDB ---- */}}
+- name: FLEXPRICE_DYNAMODB_IN_USE
+  value: {{ .Values.dynamodb.inUse | quote }}
+{{- /* ---- Webhook / Svix ---- */}}
+{{- if .Values.webhook.svixConfig.enabled }}
+- name: FLEXPRICE_SVIX_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: svix-auth-token
+{{- end }}
 {{- /* ---- Redis extended ---- */}}
 {{- if .Values.redisExtended.keyPrefix }}
 - name: FLEXPRICE_REDIS_KEY_PREFIX
