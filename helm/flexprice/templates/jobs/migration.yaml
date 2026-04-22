@@ -76,6 +76,61 @@ spec:
               cpu: "50m"
               memory: "32Mi"
 
+        {{- if .Values.migration.steps.seed }}
+        # ── 1b. Seed PostgreSQL with default tenant, user, environments ───────
+        - name: seed-postgres
+          image: postgres:15.3-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              POSTGRES_HOST="{{ include "flexprice.postgresHost" . }}"
+              POSTGRES_PORT="{{ include "flexprice.postgresPort" . }}"
+              POSTGRES_USER="{{ .Values.postgres.user }}"
+              POSTGRES_DB="{{ .Values.postgres.dbname }}"
+              echo "Seeding default data into ${POSTGRES_DB}..."
+              psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB} <<'EOSQL'
+              INSERT INTO public.tenants (id, name, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'Default Tenant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.users (id, email, tenant_id, created_at, updated_at, created_by, updated_by)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'admin@flexprice.dev', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000')
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.environments (id, name, type, tenant_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'Sandbox', 'development', '00000000-0000-0000-0000-000000000000', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.environments (id, name, type, tenant_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000001', 'Production', 'production', '00000000-0000-0000-0000-000000000000', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.auths (user_id, provider, token, status, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'flexprice', 'sk_local_flexprice_test_key', 'published', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT DO NOTHING;
+
+              INSERT INTO public.secrets (id, tenant_id, environment_id, name, type, provider, value, display_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('sk_local_flexprice_test_key', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', 'Local Test Key', 'private_key', 'flexprice', '0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c', 'sk_local_****_test_key', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+              EOSQL
+              echo "✅ Seed data inserted"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: postgres-password
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+
         {{- if .Values.migration.steps.clickhouse }}
         # ── 2. Wait for ClickHouse ────────────────────────────────────────────
         - name: wait-for-clickhouse
@@ -285,13 +340,19 @@ spec:
               KAFKA_BROKER="{{ include "flexprice.kafkaBrokers" . }}"
               echo "Creating Kafka topics on ${KAFKA_BROKER}..."
 
+              # cp-kafka uses /usr/bin/kafka-topics; bitnami uses kafka-topics.sh
+              KAFKA_TOPICS_CMD="kafka-topics"
+              if command -v kafka-topics.sh >/dev/null 2>&1; then
+                KAFKA_TOPICS_CMD="kafka-topics.sh"
+              fi
+
               # Helper: create topic if it does not exist
               create_topic() {
                 TOPIC=$1
                 PARTITIONS=${2:-1}
                 REPLICATION=${3:-1}
                 echo "→ Creating topic: ${TOPIC} (partitions=${PARTITIONS}, replication=${REPLICATION})"
-                kafka-topics.sh --bootstrap-server "${KAFKA_BROKER}" \
+                $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" \
                   --create --if-not-exists \
                   --topic "${TOPIC}" \
                   --partitions "${PARTITIONS}" \
@@ -306,7 +367,7 @@ spec:
               create_topic "{{ .Values.webhook.topic }}"
 
               echo "✅ Kafka topics ready"
-              kafka-topics.sh --bootstrap-server "${KAFKA_BROKER}" --list
+              $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" --list
           resources:
             limits:
               cpu: "200m"
@@ -381,8 +442,7 @@ spec:
               {{- end }}
 
               {{- if .Values.migration.steps.seed }}
-              echo ""
-              echo "Step 5: Seed data — skipped (requires psql in migration image)"
+              echo "Step 5: Seed data — handled by init container ✅"
               {{- else }}
               echo "Step 5: Seed data — skipped"
               {{- end }}
@@ -396,7 +456,8 @@ spec:
             {{- include "flexprice.env" . | nindent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /app/config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
               readOnly: true
             - name: tools
               mountPath: /tools

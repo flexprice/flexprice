@@ -11,8 +11,10 @@
 #   ./local-up.sh
 #
 # Access after startup:
-#   API:         http://flexprice.local  (add 127.0.0.1 flexprice.local to /etc/hosts)
-#   Temporal UI: kubectl port-forward -n flexprice svc/flexprice-temporal-ui 8088:8088
+#   UI:          http://flexprice.local
+#   API:         http://api.flexprice.local
+#   Temporal UI: http://temporal.flexprice.local
+#   (add all three to /etc/hosts: 127.0.0.1 flexprice.local api.flexprice.local temporal.flexprice.local)
 #
 # Teardown:
 #   kind delete cluster --name flexprice-local
@@ -68,40 +70,107 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 
 # ── Helm dependencies ─────────────────────────────────────────────────────────
 info "Updating helm dependencies..."
-helm dependency update "$CHART"
+CHART_DIR="$(cd "$(dirname "$0")/${CHART}" && pwd)"
+(cd "$CHART_DIR" && helm dependency update .)
 
 # ── Phase 1: Infra only ───────────────────────────────────────────────────────
-info "Phase 1/3 — deploying infrastructure (postgres, clickhouse, kafka, redis, temporal)..."
+info "Phase 1/5 — deploying infrastructure (postgres, clickhouse, kafka, redis, temporal)..."
 helm upgrade --install "$RELEASE" "$CHART" \
   -f "$BASE_VALUES" -f "$LOCAL_VALUES" \
   --set api.enabled=false \
   --set consumer.enabled=false \
   --set worker.enabled=false \
+  --set frontend.enabled=false \
   --set migration.enabled=false \
   -n "$NAMESPACE" \
   --wait --timeout 10m
 
+# Restart Temporal server pods after schema jobs complete to avoid stale DNS race
+info "Restarting Temporal server pods to pick up fresh DB connection..."
+for dep in flexprice-temporal-frontend flexprice-temporal-history flexprice-temporal-matching flexprice-temporal-worker; do
+  kubectl rollout restart deployment "$dep" -n "$NAMESPACE" 2>/dev/null || true
+done
+
+# ── Temporal namespace bootstrap ──────────────────────────────────────────────
+info "Bootstrapping Temporal 'default' namespace..."
+kubectl exec -n "$NAMESPACE" deploy/flexprice-temporal-admintools -- \
+  temporal operator namespace create --namespace default --retention 72h 2>&1 | grep -v 'already registered' || true
+
+# ── API image ─────────────────────────────────────────────────────────────────
+API_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+info "Building API image from $API_DIR ..."
+docker build -f "$API_DIR/Dockerfile.local" -t flexprice-app:local "$API_DIR"
+info "Loading API image into kind cluster..."
+kind load docker-image flexprice-app:local --name "$CLUSTER_NAME"
+
 # ── Phase 2: Migration ────────────────────────────────────────────────────────
-info "Phase 2/3 — running migrations..."
+info "Phase 2/5 — running migrations..."
 helm upgrade "$RELEASE" "$CHART" \
   -f "$BASE_VALUES" -f "$LOCAL_VALUES" \
   --set api.enabled=false \
   --set consumer.enabled=false \
   --set worker.enabled=false \
+  --set frontend.enabled=false \
   --set migration.enabled=true \
   -n "$NAMESPACE" \
   --wait --timeout 5m
 
-# ── Phase 3: App pods ─────────────────────────────────────────────────────────
-info "Phase 3/3 — deploying application pods (api, consumer, worker)..."
+# ── Phase 3: App pods (api, consumer, worker) ─────────────────────────────────
+info "Phase 3/5 — deploying application pods (api, consumer, worker)..."
 helm upgrade "$RELEASE" "$CHART" \
   -f "$BASE_VALUES" -f "$LOCAL_VALUES" \
   --set api.enabled=true \
   --set consumer.enabled=true \
   --set worker.enabled=true \
-  --set migration.enabled=true \
+  --set frontend.enabled=false \
+  --set migration.enabled=false \
   -n "$NAMESPACE" \
   --wait --timeout 5m
+
+# ── Phase 4: Integration sanity test ─────────────────────────────────────────
+info "Phase 4/5 — running integration sanity test..."
+SUITE_DIR="$(cd "$(dirname "$0")/../integration-testing-suite/go" && pwd)"
+info "Building integration test image from $SUITE_DIR ..."
+docker build -t flexprice-integration-test:local "$SUITE_DIR"
+info "Loading integration test image into kind cluster..."
+kind load docker-image flexprice-integration-test:local --name "$CLUSTER_NAME"
+
+info "Running integration sanity test (logs follow)..."
+kubectl run integration-test --rm --attach --restart=Never \
+  -n "$NAMESPACE" \
+  --image=flexprice-integration-test:local \
+  --image-pull-policy=IfNotPresent \
+  --env="FLEXPRICE_API_KEY=sk_local_flexprice_test_key" \
+  --env="FLEXPRICE_API_HOST=flexprice.$NAMESPACE.svc.cluster.local/v1" \
+  --env="FLEXPRICE_INSECURE=true" \
+  || warn "Integration tests finished with failures — check output above"
+
+# ── Frontend image ────────────────────────────────────────────────────────────
+FRONTEND_DIR="$(cd "$(dirname "$0")/../../flexprice-front" 2>/dev/null && pwd || true)"
+if [[ -d "$FRONTEND_DIR" ]]; then
+  info "Building frontend image from $FRONTEND_DIR ..."
+  docker build \
+    --build-arg VITE_API_URL="http://api.flexprice.local/v1" \
+    --build-arg VITE_ENVIRONMENT="self-hosted" \
+    -t flexprice-frontend:local \
+    "$FRONTEND_DIR"
+  info "Loading frontend image into kind cluster..."
+  kind load docker-image flexprice-frontend:local --name "$CLUSTER_NAME"
+else
+  warn "flexprice-front directory not found at $FRONTEND_DIR — skipping frontend build"
+fi
+
+# ── Phase 5: Frontend ─────────────────────────────────────────────────────────
+info "Phase 5/5 — deploying frontend..."
+helm upgrade "$RELEASE" "$CHART" \
+  -f "$BASE_VALUES" -f "$LOCAL_VALUES" \
+  --set api.enabled=true \
+  --set consumer.enabled=true \
+  --set worker.enabled=true \
+  --set frontend.enabled=true \
+  --set migration.enabled=false \
+  -n "$NAMESPACE" \
+  --wait --timeout 3m
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
@@ -109,13 +178,12 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  FlexPrice is up!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  API:         http://flexprice.local"
+echo "  UI:          http://flexprice.local"
+echo "  API:         http://api.flexprice.local"
+echo "  Temporal UI: http://temporal.flexprice.local"
 echo ""
-echo "  If http://flexprice.local doesn't resolve, add to /etc/hosts:"
-echo "    echo '127.0.0.1 flexprice.local' | sudo tee -a /etc/hosts"
-echo ""
-echo "  Temporal UI: kubectl port-forward -n ${NAMESPACE} svc/flexprice-temporal-ui 8088:8088"
-echo "               then open http://localhost:8088"
+echo "  If these don't resolve, add to /etc/hosts:"
+echo "    echo '127.0.0.1 flexprice.local api.flexprice.local temporal.flexprice.local' | sudo tee -a /etc/hosts"
 echo ""
 echo "  Teardown:    kind delete cluster --name ${CLUSTER_NAME}"
 echo ""

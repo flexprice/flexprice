@@ -5,9 +5,9 @@
 replicaCount: 1
 
 image:
-  repository: shreeda/flexprice-app # TODO: point to our public registry
-  pullPolicy: Always  # Changed to Always to ensure we pull the latest image
-  tag: "latest" # Never use latest, please use stable tag
+  repository: flexprice-app
+  pullPolicy: IfNotPresent
+  tag: "local"
 
 imagePullSecrets: []
 
@@ -124,6 +124,45 @@ ingress:
           pathType: Prefix
   tls: []
 
+
+# Frontend deployment configuration
+frontend:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: flexprice-frontend
+    tag: "local"
+    pullPolicy: IfNotPresent
+  env:
+    apiUrl: "http://api.flexprice.example.com/v1"
+    environment: "self-hosted"
+    supabaseUrl: ""
+    supabaseAnonKey: ""
+  extraEnv: []
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "768Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1536Mi"
+
+# Frontend ingress — serves the UI at its own hostname
+frontendIngress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  host: "flexprice.example.com"
+  tls: []
+
+# Temporal UI ingress — exposes temporal-web on its own hostname
+temporalIngress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  host: "temporal.example.com"
+  tls: []
+
 # Auth configuration
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
@@ -203,8 +242,8 @@ clickhouse:
       tag: "24.8-alpine"
       pullPolicy: IfNotPresent
     persistence:
-      size: 50Gi
-      storageClass: "gp3"  # EKS default; use "" for cluster default, "pd-balanced" for GKE
+      size: 10Gi
+      storageClass: ""  # "" = cluster default (kind: "standard", EKS: set to "gp3", GKE: "pd-balanced")
     resources:
       requests:
         memory: "2Gi"
@@ -334,6 +373,7 @@ migration:
 #   2. External managed / Temporal Cloud       — temporal.enabled=false (top-level), temporal.external.enabled=true
 #   3. Hand-rolled internal                   — temporal.enabled=false (top-level), temporal.external.enabled=false (legacy)
 temporalConfig:
+  enabled: true   # Set false to disable Temporal entirely (no worker, no workflows)
   external:
     enabled: false  # Set true when pointing to an external Temporal or Temporal Cloud
   # External Temporal configuration (when external.enabled=true)
@@ -494,6 +534,14 @@ featureUsageTrackingLazy:
   topic: "events_lazy"
   rateLimit: 1
   consumerGroup: "v1_feature_tracking_service_lazy"
+
+# Raw event consumption configuration
+rawEventConsumption:
+  enabled: false
+  topic: "raw_events"
+  outputTopic: "events"
+  consumerGroup: "raw_events_consumer"
+  rateLimit: 100
 
 # DynamoDB configuration
 dynamodb:
