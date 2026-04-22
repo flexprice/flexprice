@@ -5,9 +5,9 @@
 replicaCount: 1
 
 image:
-  repository: shreeda/flexprice-app
-  pullPolicy: Always  # Changed to Always to ensure we pull the latest image
-  tag: "latest"
+  repository: flexprice-app
+  pullPolicy: IfNotPresent
+  tag: "local"
 
 imagePullSecrets: []
 
@@ -15,6 +15,13 @@ nameOverride: ""
 fullnameOverride: ""
 
 # ServiceAccount for the pods
+# On AWS EKS, annotate with the IAM role ARN for IRSA (IAM Roles for Service Accounts).
+# The role's trust policy must allow the OIDC provider to assume it for this service account.
+# All pods (api, consumer, worker) share this service account — scope the IAM role accordingly.
+# Example:
+#   serviceAccount:
+#     annotations:
+#       eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/flexprice-role
 serviceAccount:
   create: true
   annotations: {}
@@ -34,15 +41,17 @@ securityContext:
       - ALL
   readOnlyRootFilesystem: false
 
-# Application configuration
-deployment:
-  mode: "api" # "api", "consumer", "temporal_worker", or "local" (for testing)
-
 # API deployment configuration
 api:
   enabled: true
   replicaCount: 1
-  resources: {}
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "768Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1536Mi"
   autoscaling:
     enabled: true
     minReplicas: 1
@@ -52,28 +61,49 @@ api:
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 # Consumer deployment configuration
 consumer:
   enabled: true
   replicaCount: 1
-  resources: {}
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1024Mi"
+    limits:
+      cpu: "1000m"
+      memory: "2048Mi"
   autoscaling:
     enabled: true
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 # Temporal Worker deployment configuration
 worker:
   enabled: true
   replicaCount: 1
-  resources: {}
+  resources:
+    requests:
+      cpu: "375m"
+      memory: "512Mi"
+    limits:
+      cpu: "750m"
+      memory: "1024Mi"
   autoscaling:
     enabled: false
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
 
 # Service configuration
 service:
@@ -84,24 +114,54 @@ service:
 
 # Ingress configuration
 ingress:
-  enabled: false
+  enabled: true
   className: "nginx"
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  annotations: {}
   hosts:
     - host: flexprice.example.com
       paths:
         - path: /
           pathType: Prefix
   tls: []
-  # - secretName: flexprice-tls
-  #   hosts:
-  #     - flexprice.example.com
 
-# Server configuration
-server:
-  address: ":8080"
+
+# Frontend deployment configuration
+frontend:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: flexprice-frontend
+    tag: "local"
+    pullPolicy: IfNotPresent
+  env:
+    apiUrl: "http://api.flexprice.example.com/v1"
+    environment: "self-hosted"
+    supabaseUrl: ""
+    supabaseAnonKey: ""
+  extraEnv: []
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "768Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1536Mi"
+
+# Frontend ingress — serves the UI at its own hostname
+frontendIngress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  host: "flexprice.example.com"
+  tls: []
+
+# Temporal UI ingress — exposes temporal-web on its own hostname
+temporalIngress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  host: "temporal.example.com"
+  tls: []
 
 # Auth configuration
 auth:
@@ -115,10 +175,13 @@ auth:
     keys: {} # Map of hashed API keys to details
 
 # PostgreSQL Configuration
-# Set external.enabled=false to deploy PostgreSQL internally
+# Deployment options (pick one):
+#   1. Bitnami subchart (default)  — postgresql.enabled=true, postgres.external.enabled=false
+#   2. External managed service    — postgresql.enabled=false, postgres.external.enabled=true
+#   3. Hand-rolled internal        — postgresql.enabled=false, postgres.external.enabled=false (legacy, not recommended)
 postgres:
   external:
-    enabled: false  # Set to false to deploy PostgreSQL internally
+    enabled: false  # Set true when pointing to an external/managed PostgreSQL
   # External PostgreSQL configuration (when external.enabled=true)
   host: "postgres-service"  # Override when using external PostgreSQL
   port: 5432
@@ -151,42 +214,83 @@ postgres:
       # Scripts will be mounted from migrations/postgres directory if available
 
 # ClickHouse Configuration
-# Set external.enabled=false to deploy ClickHouse internally
+# Deployment options — set clickhouse.mode to one of:
+#   standalone  (default) — single-replica StatefulSet, no operator required. Good for dev and
+#                           single-node production. Works on any cluster out of the box.
+#   altinity              — ClickHouseInstallation CRD managed by the Altinity operator.
+#                           Requires operator installed cluster-wide before helm install.
+#                           Install: kubectl apply -f shared/clickhouse/operator/install-bundle.yaml
+#   external              — point to ClickHouse Cloud or any self-managed endpoint.
 clickhouse:
-  external:
-    enabled: false  # Set to false to deploy ClickHouse internally
-  # External ClickHouse configuration (when external.enabled=true)
-  address: "clickhouse-service:9000"  # Override when using external ClickHouse
+  mode: standalone   # standalone | altinity | external
+
+  # Shared connection settings (used by all modes)
   tls: false
-  username: "flexprice"
-  password: "flexprice123" # Set via secret
+  username: "default"
+  password: "" # Set via secret or secrets.existingSecret key: clickhouse-password
   database: "flexprice"
-  # Internal ClickHouse configuration (when external.enabled=false)
-  internal:
+
+  # ── external mode ────────────────────────────────────────────────────────────
+  # address: "my-clickhouse.example.com:9000"
+
+  # ── standalone mode ──────────────────────────────────────────────────────────
+  # Single-replica StatefulSet + ClusterIP Service. No operator needed.
+  # Service name: <fullname>-clickhouse  →  address: <fullname>-clickhouse:9000
+  standalone:
     image:
       repository: clickhouse/clickhouse-server
-      tag: "24.9-alpine"
+      tag: "24.8-alpine"
       pullPolicy: IfNotPresent
     persistence:
-      enabled: true
-      size: 50Gi
-      storageClass: ""  # Use default storage class if empty
-    resources: {}
+      size: 10Gi
+      storageClass: ""  # "" = cluster default (kind: "standard", EKS: set to "gp3", GKE: "pd-balanced")
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "500m"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
     service:
-      type: ClusterIP
       httpPort: 8123
       nativePort: 9000
-      interserverPort: 9009
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
+    nodeSelector: {}
+    tolerations: []
+
+  # ── altinity mode ─────────────────────────────────────────────────────────────
+  # ClickHouseInstallation CRD. Operator creates service: chi-<fullname>-flexprice-0-0
+  altinity:
+    image:
+      repository: altinity/clickhouse-server
+      tag: "24.8.14.10459.altinitystable"
+      pullPolicy: IfNotPresent
+    persistence:
+      size: 50Gi
+      storageClass: "gp3"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1"
+      limits:
+        memory: "4Gi"
+        cpu: "2"
+    backgroundPoolSize: 8
+    asyncInsert:
+      enabled: true
+      busyTimeoutMs: 50
+      maxDataSize: 10485760   # 10 MiB
+      staleTimeoutMs: 1000
+    nodeSelector: {}
+    tolerations: []
 
 # Kafka Configuration
-# Set external.enabled=false to deploy Kafka internally
-kafka:
+# Deployment options (pick one):
+#   1. Bitnami subchart (default)  — kafka.enabled=true (top-level), kafka.external.enabled=false
+#   2. External managed service    — kafka.enabled=false (top-level), kafka.external.enabled=true
+#   3. Hand-rolled internal        — kafka.enabled=false (top-level), kafka.external.enabled=false (legacy)
+kafkaConfig:
   external:
-    enabled: false  # Set to false to deploy Kafka internally
+    enabled: false  # Set true when pointing to an external/managed Kafka
   # External Kafka configuration (when external.enabled=true)
   brokers:
     - "kafka-service:9092"  # Override when using external Kafka
@@ -251,9 +355,10 @@ migration:
   # Migration steps to run (all enabled by default)
   steps:
     postgresSetup: true  # Create schema and extensions in PostgreSQL
-    clickhouse: true  # Run ClickHouse migrations
-    ent: true  # Run Ent framework migrations
-    seed: false  # Run seed data (optional, set to true to enable)
+    clickhouse: true     # Run ClickHouse migrations
+    kafka: true          # Create Kafka topics (idempotent, safe to re-run)
+    ent: true            # Run Ent framework migrations
+    seed: false          # Run seed data (optional, set to true to enable)
   resources:
     limits:
       cpu: "500m"
@@ -263,10 +368,14 @@ migration:
       memory: "128Mi"
 
 # Temporal Configuration
-# Set external.enabled=false to deploy Temporal internally
-temporal:
+# Deployment options (pick one):
+#   1. Official temporalio subchart (default) — temporal.enabled=true (top-level), temporal.external.enabled=false
+#   2. External managed / Temporal Cloud       — temporal.enabled=false (top-level), temporal.external.enabled=true
+#   3. Hand-rolled internal                   — temporal.enabled=false (top-level), temporal.external.enabled=false (legacy)
+temporalConfig:
+  enabled: true   # Set false to disable Temporal entirely (no worker, no workflows)
   external:
-    enabled: false  # Set to false to deploy Temporal internally
+    enabled: false  # Set true when pointing to an external Temporal or Temporal Cloud
   # External Temporal configuration (when external.enabled=true)
   address: "temporal-service:7233"  # Override when using external Temporal
   taskQueue: "billing-task-queue"
@@ -319,7 +428,14 @@ temporal:
 
 # Logging configuration
 logging:
-  level: "info" # "debug", "info", "warn", "error"
+  level: "info"    # "debug", "info", "warn", "error"
+  format: "json"   # "json" or "text"
+  otel:
+    enabled: false
+    endpoint: ""           # e.g. "ingest.in2.signoz.cloud:443"
+    insecure: false        # set true for non-TLS endpoints
+    authHeader: ""         # e.g. "signoz-ingestion-key"
+    authValue: ""          # Set via secret in production
 
 # Sentry configuration
 sentry:
@@ -350,9 +466,42 @@ s3:
     presignExpiryDuration: "1h"
     keyPrefix: ""
 
+# Redis Configuration
+# Deployment options (pick one):
+#   1. Bitnami subchart (default)  — redis.enabled=true (top-level), redis.external.enabled=false
+#   2. External managed service    — redis.enabled=false (top-level), redis.external.enabled=true
+#   3. Hand-rolled internal        — redis.enabled=false (top-level), redis.external.enabled=false (legacy)
+redisConfig:
+  external:
+    enabled: false  # Set true when pointing to an external/managed Redis
+  # External Redis configuration (when external.enabled=true)
+  host: "redis-service"
+  port: 6379
+  password: ""       # Set via secret if auth is enabled
+  db: 0
+  useTLS: false
+  timeout: "5s"
+  # Internal Redis configuration (when external.enabled=false and bitnami subchart disabled)
+  internal:
+    image:
+      repository: redis
+      tag: "7.2-alpine"
+      pullPolicy: IfNotPresent
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: ""
+    resources: {}
+
 # Cache configuration
 cache:
   enabled: false
+
+# Redis extended configuration (beyond host/port/db set above)
+redisExtended:
+  keyPrefix: ""         # e.g. "flexprice:prod" — namespaces all keys
+  clusterMode: false    # set true for AWS ElastiCache cluster mode (clustercfg. endpoint)
+  poolSize: 10          # connection pool size
 
 # Event processing configuration
 eventProcessing:
@@ -386,6 +535,14 @@ featureUsageTrackingLazy:
   rateLimit: 1
   consumerGroup: "v1_feature_tracking_service_lazy"
 
+# Raw event consumption configuration
+rawEventConsumption:
+  enabled: false
+  topic: "raw_events"
+  outputTopic: "events"
+  consumerGroup: "raw_events_consumer"
+  rateLimit: 100
+
 # DynamoDB configuration
 dynamodb:
   inUse: false
@@ -413,9 +570,95 @@ webhook:
     authToken: "" # Set via secret
     baseUrl: "https://api.us.svix.com"
 
-# Secrets configuration
+# ---------------------------------------------------------------------------
+# Secrets management
+# ---------------------------------------------------------------------------
+#
+# PRODUCTION — use one of these approaches (never commit real values here):
+#
+# ── Option A: AWS Secrets Manager + External Secrets Operator ────────────────
+# 1. Create a secret in AWS Secrets Manager with all keys as a JSON object:
+#
+#   aws secretsmanager create-secret \
+#     --name flexprice/prod \
+#     --region ap-south-1 \
+#     --secret-string '{
+#       "encryption-key":                "<openssl rand -hex 32>",
+#       "auth-secret":                   "<openssl rand -hex 32>",
+#       "postgres-password":             "<pg-password>",
+#       "clickhouse-password":           "<ch-password>",
+#       "kafka-sasl-password":           "<kafka-sasl-password>",
+#       "temporal-api-key":              "<temporal-cloud-api-key>",
+#       "supabase-service-key":          "<supabase-service-role-key>",
+#       "sentry-dsn":                    "<https://...@sentry.io/...>",
+#       "pyroscope-basic-auth-password": "<grafana-cloud-api-key>",
+#       "email-resend-api-key":          "<re_...>",
+#       "svix-auth-token":               "<sk_...>",
+#       "logging-otel-auth-value":       "<signoz-ingestion-key>"
+#     }'
+#
+# 2. Install External Secrets Operator (ESO) in the cluster:
+#   helm repo add external-secrets https://charts.external-secrets.io
+#   helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace
+#
+# 3. Create an ExternalSecret that syncs to a Kubernetes Secret named "flexprice-secrets":
+#   apiVersion: external-secrets.io/v1beta1
+#   kind: ExternalSecret
+#   metadata:
+#     name: flexprice-secrets
+#   spec:
+#     refreshInterval: 1h
+#     secretStoreRef:
+#       name: aws-secretsmanager
+#       kind: ClusterSecretStore
+#     target:
+#       name: flexprice-secrets   # ← this name goes into secrets.existingSecret below
+#     dataFrom:
+#       - extract:
+#           key: flexprice/prod
+#
+# 4. Set in values.yaml (or values-prod.yaml):
+#   secrets:
+#     existingSecret: "flexprice-secrets"
+#
+# ── Option B: kubectl (simpler, no ESO required) ─────────────────────────────
+#   kubectl create secret generic flexprice-secrets \
+#     --from-literal=encryption-key=$(openssl rand -hex 32) \
+#     --from-literal=auth-secret=$(openssl rand -hex 32) \
+#     --from-literal=postgres-password=$PG_PASSWORD \
+#     --from-literal=clickhouse-password=$CH_PASSWORD \
+#     --from-literal=kafka-sasl-password=$KAFKA_PASSWORD \
+#     --from-literal=temporal-api-key=$TEMPORAL_API_KEY \
+#     --from-literal=supabase-service-key=$SUPABASE_KEY \
+#     --from-literal=sentry-dsn=$SENTRY_DSN \
+#     --from-literal=pyroscope-basic-auth-password=$PYROSCOPE_PASSWORD \
+#     --from-literal=email-resend-api-key=$RESEND_KEY \
+#     --from-literal=svix-auth-token=$SVIX_TOKEN \
+#     --from-literal=logging-otel-auth-value=$SIGNOZ_KEY
+#   helm install flexprice ./flexprice --set secrets.existingSecret=flexprice-secrets
+#
+# ── Required keys (chart will error if missing when the feature is enabled) ──
+#   encryption-key                 always required
+#   auth-secret                    always required
+#   postgres-password              always required
+#   clickhouse-password            always required
+#   kafka-sasl-password            required if kafkaConfig.useSASL=true
+#   temporal-api-key               required if using Temporal Cloud
+#   supabase-service-key           required if auth.provider=supabase
+#   sentry-dsn                     required if sentry.enabled=true
+#   pyroscope-basic-auth-password  required if pyroscope.basicAuthUser is set
+#   email-resend-api-key           required if email.enabled=true
+#   svix-auth-token                required if webhook.svixConfig.enabled=true
+#   logging-otel-auth-value        required if logging.otel.enabled=true
+#   redis-password                 required if redisConfig.password is set
+#
+# ── Dev fallback ──────────────────────────────────────────────────────────────
+# Leave existingSecret empty — chart renders its own Secret from plaintext
+# values scattered in this file. NEVER use this in production.
+# ---------------------------------------------------------------------------
 secrets:
-  encryptionKey: "7aed5e6debca36958b84bf89e10d8c8005721c5d17e428512b37c73dcc70d5da" # Set via secret
+  existingSecret: ""   # name of a pre-created Secret (production). Takes precedence over fields below.
+  encryptionKey: ""    # dev-only fallback. Generate with: openssl rand -hex 32
 
 # Billing configuration
 billing:
@@ -430,6 +673,11 @@ email:
   replyTo: ""
   calendarUrl: ""
 
+# App URL configuration
+app:
+  customerPortalUrl: ""   # e.g. "https://admin.flexprice.io/customer-portal"
+  oauthRedirectUri: ""    # e.g. "https://admin.flexprice.io/tools/integrations/oauth/callback"
+
 # Feature flag configuration
 featureFlag:
   enableFeatureUsageForAnalytics: true
@@ -442,13 +690,50 @@ envAccess:
 # Pod annotations
 podAnnotations: {}
 
-# Node selector
+# ---------------------------------------------------------------------------
+# Node placement — nodeSelector, tolerations, affinity
+# ---------------------------------------------------------------------------
+# These apply globally to all pods (api, consumer, worker, migration).
+# On EKS, node groups expose labels you can use to pin workloads:
+#
+#   nodeSelector:
+#     eks.amazonaws.com/nodegroup: flexprice-app   # target a specific managed node group
+#     node.kubernetes.io/instance-type: t3.medium  # target an instance type
+#     kubernetes.io/arch: amd64
+#
+# If the node group has a taint (e.g. dedicated=flexprice:NoSchedule), add a matching toleration:
+#   tolerations:
+#     - key: dedicated
+#       operator: Equal
+#       value: flexprice
+#       effect: NoSchedule
+#
+# For HA: spread pods across AZs using topology spread constraints via affinity:
+#   affinity:
+#     podAntiAffinity:
+#       preferredDuringSchedulingIgnoredDuringExecution:
+#         - weight: 100
+#           podAffinityTerm:
+#             labelSelector:
+#               matchLabels:
+#                 app.kubernetes.io/name: flexprice
+#             topologyKey: topology.kubernetes.io/zone
+#
+# Per-component overrides (api/consumer/worker each accept the same three keys):
+#   api:
+#     nodeSelector:
+#       eks.amazonaws.com/nodegroup: flexprice-api
+#   consumer:
+#     nodeSelector:
+#       eks.amazonaws.com/nodegroup: flexprice-consumer
+#   worker:
+#     nodeSelector:
+#       eks.amazonaws.com/nodegroup: flexprice-worker
+# ---------------------------------------------------------------------------
+
+# Global defaults — used when per-component overrides are not set
 nodeSelector: {}
-
-# Tolerations
 tolerations: []
-
-# Affinity
 affinity: {}
 
 # Liveness probe
@@ -481,10 +766,23 @@ startupProbe:
   timeoutSeconds: 5
   failureThreshold: 30
 
-# Additional environment variables
+# Additional environment variables injected into all pods (api, consumer, worker).
+# Supports plain values and valueFrom (secretKeyRef, configMapKeyRef, fieldRef).
+# Example:
+#   extraEnv:
+#     - name: CUSTOM_VAR
+#       value: "custom-value"
+#     - name: SECRET_VAR
+#       valueFrom:
+#         secretKeyRef:
+#           name: my-secret
+#           key: my-key
+#     - name: CONFIGMAP_VAR
+#       valueFrom:
+#         configMapKeyRef:
+#           name: my-configmap
+#           key: my-key
 extraEnv: []
-# - name: CUSTOM_VAR
-#   value: "custom-value"
 
 # Additional volumes
 extraVolumes: []
@@ -507,3 +805,158 @@ serviceMonitor:
   scrapeTimeout: 10s
   labels: {}
 
+# ---------------------------------------------------------------------------
+# Subchart conditions
+# These top-level keys enable/disable Bitnami and official subcharts.
+# They correspond to the `condition:` fields in Chart.yaml dependencies.
+# ---------------------------------------------------------------------------
+
+# bitnami/postgresql subchart
+# When enabled, the hand-rolled infra/postgres.yaml is NOT rendered.
+# Configure postgres credentials above under the `postgres:` key.
+postgresql:
+  enabled: true
+  auth:
+    username: flexprice
+    password: flexprice123
+    database: flexprice
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+
+# bitnami/kafka subchart (KRaft mode, no Zookeeper)
+# When enabled, the hand-rolled infra/kafka.yaml is NOT rendered.
+kafka:
+  enabled: true
+  kraft:
+    enabled: true
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 20Gi
+  # Auto-create topics disabled — migration job handles topic creation
+  autoCreateTopicsEnable: false
+
+# bitnami/redis subchart
+# When enabled, the hand-rolled infra/redis.yaml is NOT rendered.
+# sentinel.enabled=false → standalone mode (no HA); set to true for HA sentinel setup.
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false  # Set to true and provide password if auth is required
+    password: ""
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+
+# temporalio/temporal subchart
+# When enabled, the hand-rolled infra/temporal.yaml is NOT rendered.
+# Temporal shares the same Postgres instance as FlexPrice (different DB: "temporal").
+# The connection is passed via server.config.persistence below.
+temporal:
+  enabled: true
+  server:
+    replicaCount: 1
+    config:
+      persistence:
+        default:
+          driver: sql
+          sql:
+            driver: postgres12
+            # IMPORTANT: This must be the Kubernetes service name for PostgreSQL.
+            # When using the bitnami/postgresql subchart with release name "flexprice",
+            # this is "flexprice-postgresql". Update if your release name differs or
+            # if using external postgres (set to postgres.host value).
+            host: "flexprice-postgresql"
+            port: 5432
+            database: temporal
+            user: "flexprice"
+            password: "flexprice123"
+            maxConns: 20
+            maxConnLifetime: "1h"
+        visibility:
+          driver: sql
+          sql:
+            driver: postgres12
+            host: "flexprice-postgresql"
+            port: 5432
+            database: temporal_visibility
+            user: "flexprice"
+            password: "flexprice123"
+            maxConns: 20
+            maxConnLifetime: "1h"
+  cassandra:
+    enabled: false
+  mysql:
+    enabled: false
+  postgresql:
+    enabled: false   # Temporal chart's own postgres — disabled, we share the bitnami subchart
+  schema:
+    setup:
+      enabled: true
+    update:
+      enabled: true
+  admintools:
+    enabled: true  # needed for schema setup jobs
+
+
+# ---------------------------------------------------------------------------
+# High Availability (HA) overrides
+# ---------------------------------------------------------------------------
+# HA is OFF by default. To enable HA for production, copy these overrides
+# into your own values-prod.yaml and apply with:
+#   helm upgrade flexprice . -f values.yaml -f values-prod.yaml
+#
+# What each setting does:
+#   api.replicaCount / consumer.replicaCount / worker.replicaCount
+#     → run multiple pods; api PDB ensures at least 1 is always available
+#
+#   postgresql.primary.replicaCount + readReplicas.replicaCount
+#     → bitnami postgres primary + read replica(s)
+#
+#   kafka.replicaCount + controller.replicaCount
+#     → multi-broker KRaft Kafka; requires replication factors to be bumped too
+#
+#   redis.architecture: replication  (vs standalone)
+#     → Redis primary + replica; use sentinel for automatic failover
+#
+#   temporal.server.replicaCount
+#     → multiple Temporal frontend/history/matching/worker pods
+#
+# Example HA values (paste into values-prod.yaml):
+#
+# api:
+#   replicaCount: 3
+#   autoscaling:
+#     enabled: true
+#     minReplicas: 3
+#     maxReplicas: 10
+#
+# consumer:
+#   replicaCount: 3
+#
+# worker:
+#   replicaCount: 2
+#
+# postgresql:
+#   primary:
+#     replicaCount: 1
+#   readReplicas:
+#     replicaCount: 1
+#
+# kafka:
+#   replicaCount: 3
+#   controller:
+#     replicaCount: 3
+#
+# redis:
+#   architecture: replication
+#   sentinel:
+#     enabled: true
+#
+# temporal:
+#   server:
+#     replicaCount: 2

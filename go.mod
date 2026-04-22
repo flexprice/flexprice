@@ -48,7 +48,6 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/stripe/stripe-go/v82 v82.5.0
 	github.com/svix/svix-webhooks v1.68.0
-	github.com/swaggo/files/v2 v2.0.2
 	github.com/swaggo/swag/v2 v2.0.0-rc5
 	github.com/teris-io/shortid v0.0.0-20220617161101-71ec9f2aa569
 	github.com/xdg-go/scram v1.1.1

@@ -15,8 +15,8 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
+        checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -68,7 +68,8 @@ spec:
             {{- toYaml .Values.consumer.resources | nindent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /app/config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
               readOnly: true
             - name: tmp
               mountPath: /tmp
@@ -84,15 +85,15 @@ spec:
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.nodeSelector }}
+      {{- with (default .Values.nodeSelector .Values.consumer.nodeSelector) }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with (default .Values.affinity .Values.consumer.affinity) }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with (default .Values.tolerations .Values.consumer.tolerations) }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

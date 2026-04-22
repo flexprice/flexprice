@@ -30,7 +30,7 @@ func (r *SanityRunner) runSubscriptionSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		customer := resp.Customer
+		customer := resp.CustomerResponse
 		if customer == nil || customer.ID == nil {
 			return fmt.Errorf("create customer returned no body")
 		}
@@ -59,7 +59,6 @@ func (r *SanityRunner) runSubscriptionSteps(ctx context.Context) {
 			CustomerID:         strPtr(r.customerID),
 			PlanID:             r.planID,
 			Currency:           "usd",
-			BillingCadence:     types.BillingCadenceRecurring,
 			BillingPeriod:      types.BillingPeriodMonthly,
 			BillingPeriodCount: int64Ptr(1),
 			BillingCycle:       &billingCycle,
@@ -88,7 +87,7 @@ func (r *SanityRunner) runSubscriptionSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		sub := resp.Subscription
+		sub := resp.SubscriptionResponse
 		if sub == nil || sub.ID == nil {
 			return fmt.Errorf("create subscription returned no body")
 		}
@@ -120,7 +119,7 @@ func (r *SanityRunner) runSubscriptionSteps(ctx context.Context) {
 		if err != nil {
 			return err
 		}
-		sub := resp.Subscription
+		sub := resp.SubscriptionResponse
 		if sub == nil {
 			return fmt.Errorf("get subscription returned no body")
 		}
@@ -144,7 +143,7 @@ func (r *SanityRunner) runSubscriptionSteps(ctx context.Context) {
 			if err != nil {
 				return fmt.Errorf("re-fetch after activate: %w", err)
 			}
-			sub = resp.Subscription
+			sub = resp.SubscriptionResponse
 			if sub != nil && sub.SubscriptionStatus != nil {
 				status = string(*sub.SubscriptionStatus)
 			}

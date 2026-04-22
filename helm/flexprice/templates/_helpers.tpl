@@ -65,21 +65,125 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-Create environment variables from configuration
+Resolve the Secret name holding FlexPrice credentials.
+If secrets.existingSecret is set, the user is responsible for creating and populating
+that Secret out-of-band (kubectl, ExternalSecrets, SOPS, Vault, etc). In that case the
+chart renders no Secret and only references this name from every secretKeyRef.
+If secrets.existingSecret is empty, the chart renders its own Secret named "<fullname>-secrets"
+from plaintext values — suitable for dev only.
+*/}}
+{{- define "flexprice.secretName" -}}
+{{- if .Values.secrets.existingSecret -}}
+{{- .Values.secrets.existingSecret }}
+{{- else -}}
+{{- printf "%s-secrets" (include "flexprice.fullname" .) }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve the PostgreSQL host.
+Uses the bitnami/postgresql subchart service name when internal, or the user-supplied host when external.
+*/}}
+{{- define "flexprice.postgresHost" -}}
+{{- if .Values.postgres.external.enabled -}}
+{{- .Values.postgres.host }}
+{{- else -}}
+{{- printf "%s-postgresql" .Release.Name }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve the PostgreSQL port.
+*/}}
+{{- define "flexprice.postgresPort" -}}
+{{- if .Values.postgres.external.enabled -}}
+{{- .Values.postgres.port | toString }}
+{{- else -}}
+5432
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve the Kafka brokers string.
+Uses the bitnami/kafka subchart service name when internal, or the user-supplied brokers when external.
+*/}}
+{{- define "flexprice.kafkaBrokers" -}}
+{{- if .Values.kafkaConfig.external.enabled -}}
+{{- join "," .Values.kafkaConfig.brokers }}
+{{- else -}}
+{{- printf "%s-kafka:9092" .Release.Name }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve the Redis host.
+Uses the bitnami/redis subchart service name when internal, or the user-supplied host when external.
+*/}}
+{{- define "flexprice.redisHost" -}}
+{{- if .Values.redisConfig.external.enabled -}}
+{{- .Values.redisConfig.host }}
+{{- else -}}
+{{- printf "%s-redis-master" .Release.Name }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve the Redis port.
+*/}}
+{{- define "flexprice.redisPort" -}}
+{{- if .Values.redisConfig.external.enabled -}}
+{{- .Values.redisConfig.port | toString }}
+{{- else -}}
+6379
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve the ClickHouse address (host:port) based on clickhouse.mode.
+  standalone — ClusterIP Service rendered by this chart: <fullname>-clickhouse:9000
+  altinity   — Altinity operator creates: chi-<fullname>-flexprice-0-0:9000
+  external   — user-supplied clickhouse.address
+*/}}
+{{- define "flexprice.clickhouseAddress" -}}
+{{- if eq .Values.clickhouse.mode "external" -}}
+{{- .Values.clickhouse.address }}
+{{- else if eq .Values.clickhouse.mode "altinity" -}}
+{{- printf "chi-%s-flexprice-0-0:9000" (include "flexprice.fullname" .) }}
+{{- else -}}
+{{- printf "%s-clickhouse:9000" (include "flexprice.fullname" .) }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve the Temporal address.
+Uses the temporalio/temporal subchart service name when internal, or user-supplied address when external.
+*/}}
+{{- define "flexprice.temporalAddress" -}}
+{{- if .Values.temporalConfig.external.enabled -}}
+{{- .Values.temporalConfig.address }}
+{{- else -}}
+{{- printf "%s-temporal-frontend:7233" .Release.Name }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Create environment variables from configuration.
+All service addresses are resolved via named templates above so this block stays clean.
 */}}
 {{- define "flexprice.env" -}}
 - name: FLEXPRICE_SERVER_ADDRESS
-  value: {{ .Values.server.address | quote }}
+  value: ":8080"
+{{- /* ---- PostgreSQL ---- */}}
 - name: FLEXPRICE_POSTGRES_HOST
-  value: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
+  value: {{ include "flexprice.postgresHost" . | quote }}
 - name: FLEXPRICE_POSTGRES_PORT
-  value: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.port | quote }}{{ else }}{{ .Values.postgres.internal.service.port | quote }}{{ end }}
+  value: {{ include "flexprice.postgresPort" . | quote }}
 - name: FLEXPRICE_POSTGRES_USER
   value: {{ .Values.postgres.user | quote }}
 - name: FLEXPRICE_POSTGRES_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: postgres-password
 - name: FLEXPRICE_POSTGRES_DBNAME
   value: {{ .Values.postgres.dbname | quote }}
@@ -99,57 +203,83 @@ Create environment variables from configuration
 - name: FLEXPRICE_POSTGRES_READER_PORT
   value: {{ .Values.postgres.readerPort | default "5432" | quote }}
 {{- end }}
+{{- /* ---- ClickHouse ---- */}}
 - name: FLEXPRICE_CLICKHOUSE_ADDRESS
-  value: {{ if .Values.clickhouse.external.enabled }}{{ .Values.clickhouse.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-clickhouse:{{ .Values.clickhouse.internal.service.nativePort }}{{ end }}
+  value: {{ include "flexprice.clickhouseAddress" . | quote }}
 - name: FLEXPRICE_CLICKHOUSE_USERNAME
   value: {{ .Values.clickhouse.username | quote }}
 - name: FLEXPRICE_CLICKHOUSE_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: clickhouse-password
 - name: FLEXPRICE_CLICKHOUSE_DATABASE
   value: {{ .Values.clickhouse.database | quote }}
 - name: FLEXPRICE_CLICKHOUSE_TLS
   value: {{ .Values.clickhouse.tls | quote }}
+{{- /* ---- Kafka ---- */}}
 - name: FLEXPRICE_KAFKA_BROKERS
-  value: {{ if .Values.kafka.external.enabled }}{{ join "," .Values.kafka.brokers | quote }}{{ else }}{{ include "flexprice.fullname" . }}-kafka:{{ .Values.kafka.internal.service.internalPort }}{{ end }}
+  value: {{ include "flexprice.kafkaBrokers" . | quote }}
 - name: FLEXPRICE_KAFKA_CONSUMER_GROUP
-  value: {{ .Values.kafka.consumerGroup | quote }}
+  value: {{ .Values.kafkaConfig.consumerGroup | quote }}
 - name: FLEXPRICE_KAFKA_TOPIC
-  value: {{ .Values.kafka.topic | quote }}
+  value: {{ .Values.kafkaConfig.topic | quote }}
 - name: FLEXPRICE_KAFKA_TOPIC_LAZY
-  value: {{ .Values.kafka.topicLazy | quote }}
+  value: {{ .Values.kafkaConfig.topicLazy | quote }}
 - name: FLEXPRICE_KAFKA_TLS
-  value: {{ .Values.kafka.tls | quote }}
+  value: {{ .Values.kafkaConfig.tls | quote }}
 - name: FLEXPRICE_KAFKA_USE_SASL
-  value: {{ .Values.kafka.useSASL | quote }}
+  value: {{ .Values.kafkaConfig.useSASL | quote }}
 - name: FLEXPRICE_KAFKA_CLIENT_ID
-  value: {{ .Values.kafka.clientId | quote }}
-{{- if .Values.kafka.useSASL }}
+  value: {{ .Values.kafkaConfig.clientId | quote }}
+{{- if .Values.kafkaConfig.useSASL }}
+- name: FLEXPRICE_KAFKA_SASL_MECHANISM
+  value: {{ .Values.kafkaConfig.saslMechanism | quote }}
 - name: FLEXPRICE_KAFKA_SASL_USER
-  value: {{ .Values.kafka.saslUser | quote }}
+  value: {{ .Values.kafkaConfig.saslUser | quote }}
 - name: FLEXPRICE_KAFKA_SASL_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: kafka-sasl-password
 {{- end }}
+{{- /* ---- Redis ---- */}}
+- name: FLEXPRICE_REDIS_HOST
+  value: {{ include "flexprice.redisHost" . | quote }}
+- name: FLEXPRICE_REDIS_PORT
+  value: {{ include "flexprice.redisPort" . | quote }}
+- name: FLEXPRICE_REDIS_DB
+  value: {{ .Values.redisConfig.db | default 0 | quote }}
+- name: FLEXPRICE_REDIS_USE_TLS
+  value: {{ .Values.redisConfig.useTLS | default false | quote }}
+- name: FLEXPRICE_REDIS_TIMEOUT
+  value: {{ .Values.redisConfig.timeout | default "5s" | quote }}
+{{- if .Values.redisConfig.password }}
+- name: FLEXPRICE_REDIS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: redis-password
+{{- end }}
+{{- /* ---- Temporal ---- */}}
+- name: FLEXPRICE_TEMPORAL_ENABLED
+  value: {{ .Values.temporalConfig.enabled | default true | quote }}
 - name: FLEXPRICE_TEMPORAL_ADDRESS
-  value: {{ if .Values.temporal.external.enabled }}{{ .Values.temporal.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-temporal:{{ .Values.temporal.internal.server.service.port }}{{ end }}
+  value: {{ include "flexprice.temporalAddress" . | quote }}
 - name: FLEXPRICE_TEMPORAL_TASK_QUEUE
-  value: {{ .Values.temporal.taskQueue | quote }}
+  value: {{ .Values.temporalConfig.taskQueue | quote }}
 - name: FLEXPRICE_TEMPORAL_NAMESPACE
-  value: {{ .Values.temporal.namespace | quote }}
+  value: {{ .Values.temporalConfig.namespace | quote }}
 - name: FLEXPRICE_TEMPORAL_TLS
-  value: {{ .Values.temporal.tls | quote }}
-{{- if .Values.temporal.apiKey }}
+  value: {{ .Values.temporalConfig.tls | quote }}
+{{- if .Values.temporalConfig.apiKey }}
 - name: FLEXPRICE_TEMPORAL_API_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: temporal-api-key
 {{- end }}
+{{- /* ---- Auth ---- */}}
 - name: FLEXPRICE_LOGGING_LEVEL
   value: {{ .Values.logging.level | quote }}
 - name: FLEXPRICE_AUTH_PROVIDER
@@ -157,7 +287,7 @@ Create environment variables from configuration
 - name: FLEXPRICE_AUTH_SECRET
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: auth-secret
 {{- if eq .Values.auth.provider "supabase" }}
 - name: FLEXPRICE_AUTH_SUPABASE_BASE_URL
@@ -165,27 +295,41 @@ Create environment variables from configuration
 - name: FLEXPRICE_AUTH_SUPABASE_SERVICE_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: supabase-service-key
 {{- end }}
 - name: FLEXPRICE_AUTH_API_KEY_HEADER
   value: {{ .Values.auth.apiKey.header | quote }}
-{{- if .Values.sentry.enabled }}
+{{- if .Values.auth.apiKey.keys }}
+- name: FLEXPRICE_AUTH_API_KEY_KEYS
+  value: {{ .Values.auth.apiKey.keys | toJson | quote }}
+{{- end }}
+{{- /* ---- Billing ---- */}}
+{{- if .Values.billing.tenantId }}
+- name: FLEXPRICE_BILLING_TENANT_ID
+  value: {{ .Values.billing.tenantId | quote }}
+{{- end }}
+{{- if .Values.billing.environmentId }}
+- name: FLEXPRICE_BILLING_ENVIRONMENT_ID
+  value: {{ .Values.billing.environmentId | quote }}
+{{- end }}
+{{- /* ---- Observability ---- */}}
 - name: FLEXPRICE_SENTRY_ENABLED
-  value: "true"
+  value: {{ .Values.sentry.enabled | quote }}
+{{- if .Values.sentry.enabled }}
 - name: FLEXPRICE_SENTRY_DSN
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: sentry-dsn
 - name: FLEXPRICE_SENTRY_ENVIRONMENT
   value: {{ .Values.sentry.environment | quote }}
 - name: FLEXPRICE_SENTRY_SAMPLE_RATE
   value: {{ .Values.sentry.sampleRate | quote }}
 {{- end }}
-{{- if .Values.pyroscope.enabled }}
 - name: FLEXPRICE_PYROSCOPE_ENABLED
-  value: "true"
+  value: {{ .Values.pyroscope.enabled | quote }}
+{{- if .Values.pyroscope.enabled }}
 - name: FLEXPRICE_PYROSCOPE_SERVER_ADDRESS
   value: {{ .Values.pyroscope.serverAddress | quote }}
 - name: FLEXPRICE_PYROSCOPE_APPLICATION_NAME
@@ -200,10 +344,11 @@ Create environment variables from configuration
 - name: FLEXPRICE_PYROSCOPE_BASIC_AUTH_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: pyroscope-basic-auth-password
 {{- end }}
 {{- end }}
+{{- /* ---- S3 ---- */}}
 {{- if .Values.s3.enabled }}
 - name: FLEXPRICE_S3_ENABLED
   value: "true"
@@ -214,10 +359,12 @@ Create environment variables from configuration
 - name: FLEXPRICE_S3_INVOICE_PRESIGN_EXPIRY_DURATION
   value: {{ .Values.s3.invoice.presignExpiryDuration | quote }}
 {{- end }}
+{{- /* ---- Cache ---- */}}
 {{- if .Values.cache.enabled }}
 - name: FLEXPRICE_CACHE_ENABLED
   value: "true"
 {{- end }}
+{{- /* ---- Encryption ---- */}}
 {{- if .Values.secrets.encryptionKey }}
 - name: FLEXPRICE_SECRETS_ENCRYPTION_KEY
   value: {{ .Values.secrets.encryptionKey | quote }}
@@ -225,16 +372,17 @@ Create environment variables from configuration
 - name: FLEXPRICE_SECRETS_ENCRYPTION_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: encryption-key
 {{- end }}
+{{- /* ---- Email ---- */}}
 {{- if .Values.email.enabled }}
 - name: FLEXPRICE_EMAIL_ENABLED
   value: "true"
 - name: FLEXPRICE_EMAIL_RESEND_API_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ include "flexprice.fullname" . }}-secrets
+      name: {{ include "flexprice.secretName" . }}
       key: email-resend-api-key
 - name: FLEXPRICE_EMAIL_FROM_ADDRESS
   value: {{ .Values.email.fromAddress | quote }}
@@ -243,15 +391,77 @@ Create environment variables from configuration
 - name: FLEXPRICE_EMAIL_CALENDAR_URL
   value: {{ .Values.email.calendarUrl | quote }}
 {{- end }}
+{{- /* ---- Event processing ---- */}}
 - name: FLEXPRICE_EVENT_PROCESSING_TOPIC
   value: {{ .Values.eventProcessing.topic | quote }}
 - name: FLEXPRICE_EVENT_PROCESSING_RATE_LIMIT
   value: {{ .Values.eventProcessing.rateLimit | quote }}
 - name: FLEXPRICE_EVENT_PROCESSING_CONSUMER_GROUP
   value: {{ .Values.eventProcessing.consumerGroup | quote }}
-{{- range $key, $value := .Values.extraEnv }}
-- name: {{ $key | quote }}
-  value: {{ $value | quote }}
+- name: FLEXPRICE_EVENT_PROCESSING_LAZY_CONSUMER_GROUP
+  value: {{ .Values.eventProcessingLazy.consumerGroup | quote }}
+{{- /* ---- Raw event consumption ---- */}}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_ENABLED
+  value: {{ .Values.rawEventConsumption.enabled | default false | quote }}
+{{- if .Values.rawEventConsumption.enabled }}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_TOPIC
+  value: {{ .Values.rawEventConsumption.topic | default "raw_events" | quote }}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_OUTPUT_TOPIC
+  value: {{ .Values.rawEventConsumption.outputTopic | default "events" | quote }}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_CONSUMER_GROUP
+  value: {{ .Values.rawEventConsumption.consumerGroup | default "raw_events_consumer" | quote }}
+- name: FLEXPRICE_RAW_EVENT_CONSUMPTION_RATE_LIMIT
+  value: {{ .Values.rawEventConsumption.rateLimit | default 100 | quote }}
+{{- end }}
+{{- /* ---- DynamoDB ---- */}}
+- name: FLEXPRICE_DYNAMODB_IN_USE
+  value: {{ .Values.dynamodb.inUse | quote }}
+{{- /* ---- Webhook / Svix ---- */}}
+{{- if .Values.webhook.svixConfig.enabled }}
+- name: FLEXPRICE_SVIX_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: svix-auth-token
+{{- end }}
+{{- /* ---- Redis extended ---- */}}
+{{- if .Values.redisExtended.keyPrefix }}
+- name: FLEXPRICE_REDIS_KEY_PREFIX
+  value: {{ .Values.redisExtended.keyPrefix | quote }}
+{{- end }}
+- name: FLEXPRICE_REDIS_CLUSTER_MODE
+  value: {{ .Values.redisExtended.clusterMode | quote }}
+- name: FLEXPRICE_REDIS_POOL_SIZE
+  value: {{ .Values.redisExtended.poolSize | quote }}
+{{- /* ---- Logging extended ---- */}}
+- name: FLEXPRICE_LOGGING_FORMAT
+  value: {{ .Values.logging.format | default "json" | quote }}
+{{- if .Values.logging.otel.enabled }}
+- name: FLEXPRICE_LOGGING_OTEL_ENABLED
+  value: "true"
+- name: FLEXPRICE_LOGGING_OTEL_ENDPOINT
+  value: {{ .Values.logging.otel.endpoint | quote }}
+- name: FLEXPRICE_LOGGING_OTEL_INSECURE
+  value: {{ .Values.logging.otel.insecure | quote }}
+- name: FLEXPRICE_LOGGING_OTEL_AUTH_HEADER
+  value: {{ .Values.logging.otel.authHeader | quote }}
+- name: FLEXPRICE_LOGGING_OTEL_AUTH_VALUE
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: logging-otel-auth-value
+{{- end }}
+{{- /* ---- App URLs ---- */}}
+{{- if .Values.app.customerPortalUrl }}
+- name: FLEXPRICE_CUSTOMER_PORTAL_URL
+  value: {{ .Values.app.customerPortalUrl | quote }}
+{{- end }}
+{{- if .Values.app.oauthRedirectUri }}
+- name: FLEXPRICE_OAUTH_REDIRECT_URI
+  value: {{ .Values.app.oauthRedirectUri | quote }}
+{{- end }}
+{{- /* ---- Extra env vars (passthrough) ---- */}}
+{{- with .Values.extraEnv }}
+{{- toYaml . }}
 {{- end }}
 {{- end }}
-
