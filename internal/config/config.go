@@ -455,6 +455,12 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.environment", "ENVIRONMENT")
 	_ = v.BindEnv("logging.region", "REGION")
 
+	// Explicitly bind keys where AutomaticEnv is ambiguous due to underscores in key segments
+	_ = v.BindEnv("clickhouse.password", "FLEXPRICE_CLICKHOUSE_PASSWORD")
+	_ = v.BindEnv("clickhouse.username", "FLEXPRICE_CLICKHOUSE_USERNAME")
+	_ = v.BindEnv("clickhouse.address", "FLEXPRICE_CLICKHOUSE_ADDRESS")
+	_ = v.BindEnv("clickhouse.database", "FLEXPRICE_CLICKHOUSE_DATABASE")
+
 	// Explicitly bind OTel logging vars — AutomaticEnv can miss nested keys with underscores
 	_ = v.BindEnv("logging.otel_enabled", "FLEXPRICE_LOGGING_OTEL_ENABLED")
 	_ = v.BindEnv("logging.otel_endpoint", "FLEXPRICE_LOGGING_OTEL_ENDPOINT")
