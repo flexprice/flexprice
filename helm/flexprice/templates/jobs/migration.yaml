@@ -399,9 +399,13 @@ spec:
               # All topics used by FlexPrice
               create_topic "{{ .Values.kafkaConfig.topic }}"
               create_topic "{{ .Values.kafkaConfig.topicLazy }}"
+              create_topic "{{ .Values.kafkaConfig.topicDLQ | default "events_dlq" }}"
               create_topic "{{ .Values.eventPostProcessing.topic }}"
               create_topic "{{ .Values.eventPostProcessing.topicBackfill }}"
               create_topic "{{ .Values.webhook.topic }}"
+              create_topic "events_backfill"
+              create_topic "wallet_alert"
+              create_topic "onboarding_events"
 
               echo "✅ Kafka topics ready"
               $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" --list
