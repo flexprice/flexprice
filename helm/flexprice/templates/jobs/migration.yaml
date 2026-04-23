@@ -76,60 +76,6 @@ spec:
               cpu: "50m"
               memory: "32Mi"
 
-        {{- if .Values.migration.steps.seed }}
-        # ── 1b. Seed PostgreSQL with default tenant, user, environments ───────
-        - name: seed-postgres
-          image: postgres:15.3-alpine
-          command:
-            - sh
-            - -c
-            - |
-              set -e
-              POSTGRES_HOST="{{ include "flexprice.postgresHost" . }}"
-              POSTGRES_PORT="{{ include "flexprice.postgresPort" . }}"
-              POSTGRES_USER="{{ .Values.postgres.user }}"
-              POSTGRES_DB="{{ .Values.postgres.dbname }}"
-              echo "Seeding default data into ${POSTGRES_DB}..."
-              psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB} <<'EOSQL'
-              INSERT INTO public.tenants (id, name, created_at, updated_at)
-              VALUES ('00000000-0000-0000-0000-000000000000', 'Default Tenant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT (id) DO NOTHING;
-
-              INSERT INTO public.users (id, email, tenant_id, created_at, updated_at, created_by, updated_by)
-              VALUES ('00000000-0000-0000-0000-000000000000', 'admin@flexprice.dev', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000')
-              ON CONFLICT (id) DO NOTHING;
-
-              INSERT INTO public.environments (id, name, type, tenant_id, status, created_by, updated_by, created_at, updated_at)
-              VALUES ('00000000-0000-0000-0000-000000000000', 'Sandbox', 'development', '00000000-0000-0000-0000-000000000000', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT (id) DO NOTHING;
-
-              INSERT INTO public.environments (id, name, type, tenant_id, status, created_by, updated_by, created_at, updated_at)
-              VALUES ('00000000-0000-0000-0000-000000000001', 'Production', 'production', '00000000-0000-0000-0000-000000000000', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT (id) DO NOTHING;
-
-              INSERT INTO public.auths (user_id, provider, token, status, created_at, updated_at)
-              VALUES ('00000000-0000-0000-0000-000000000000', 'flexprice', 'sk_local_flexprice_test_key', 'published', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT DO NOTHING;
-
-              INSERT INTO public.secrets (id, tenant_id, environment_id, name, type, provider, value, display_id, status, created_by, updated_by, created_at, updated_at)
-              VALUES ('sk_local_flexprice_test_key', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', 'Local Test Key', 'private_key', 'flexprice', '0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c', 'sk_local_****_test_key', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-              ON CONFLICT (id) DO NOTHING;
-              EOSQL
-              echo "✅ Seed data inserted"
-          env:
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "flexprice.secretName" . }}
-                  key: postgres-password
-          resources:
-            limits:
-              cpu: "100m"
-              memory: "64Mi"
-            requests:
-              cpu: "50m"
-              memory: "32Mi"
-        {{- end }}
 
         {{- if .Values.migration.steps.clickhouse }}
         # ── 2. Wait for ClickHouse ────────────────────────────────────────────
@@ -284,6 +230,8 @@ spec:
               if [ -d /migrations/clickhouse ]; then
                 for file in /migrations/clickhouse/*.sql; do
                   [ -f "$file" ] || continue
+                  # skip verification scripts — not migrations
+                  case "$(basename $file)" in verify_*) continue ;; esac
                   echo "Running: $file"
                   TEMP_OUTPUT="$(mktemp)"
                   EXIT_CODE=0
@@ -295,7 +243,7 @@ spec:
                     echo "✅ Done"
                   else
                     OUTPUT_NORMALIZED="$(echo "$OUTPUT" | tr '\n' ' ')"
-                    if echo "$OUTPUT_NORMALIZED" | grep -qiE "already exists|already exist|duplicate|ILLEGAL_COLUMN|Code: 44"; then
+                    if echo "$OUTPUT_NORMALIZED" | grep -qiE "already exists|already exist|duplicate|ILLEGAL_COLUMN|Code: 44|Code: 47|Missing columns"; then
                       echo "⚠️  Skipped (already exists): $(echo "$OUTPUT" | head -2)"
                     else
                       echo "❌ Failed: $OUTPUT"
@@ -327,8 +275,97 @@ spec:
               memory: "32Mi"
         {{- end }}
 
+        {{- if .Values.migration.steps.ent }}
+        # ── 7. Run Ent framework migrations ──────────────────────────────────
+        - name: run-ent-migrations
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Running Ent framework migrations..."
+              MIGRATE_BINARY=""
+              if [ -f /app/migrate ] && [ -x /app/migrate ]; then
+                MIGRATE_BINARY="/app/migrate"
+              elif [ -f /app/bin/migrate ] && [ -x /app/bin/migrate ]; then
+                MIGRATE_BINARY="/app/bin/migrate"
+              else
+                echo "❌ Migration binary not found at /app/migrate or /app/bin/migrate"
+                exit 1
+              fi
+              echo "Using: ${MIGRATE_BINARY}"
+              ${MIGRATE_BINARY} --timeout {{ .Values.migration.timeout | default 300 }} || exit 1
+              echo "✅ Ent migrations complete"
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+        {{- end }}
+
+        {{- if .Values.migration.steps.seed }}
+        # ── 8. Seed PostgreSQL with default tenant, user, environments ────────
+        - name: seed-postgres
+          image: postgres:15.3-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              POSTGRES_HOST="{{ include "flexprice.postgresHost" . }}"
+              POSTGRES_PORT="{{ include "flexprice.postgresPort" . }}"
+              POSTGRES_USER="{{ .Values.postgres.user }}"
+              POSTGRES_DB="{{ .Values.postgres.dbname }}"
+              echo "Seeding default data into ${POSTGRES_DB}..."
+              psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB} <<'EOSQL'
+              INSERT INTO public.tenants (id, name, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'Default Tenant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.users (id, email, tenant_id, created_at, updated_at, created_by, updated_by)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'admin@flexprice.dev', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000')
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.environments (id, name, type, tenant_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'Sandbox', 'development', '00000000-0000-0000-0000-000000000000', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.environments (id, name, type, tenant_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000001', 'Production', 'production', '00000000-0000-0000-0000-000000000000', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.auths (user_id, provider, token, status, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'flexprice', 'sk_local_flexprice_test_key', 'published', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT DO NOTHING;
+
+              INSERT INTO public.secrets (id, tenant_id, environment_id, name, type, provider, value, display_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('sk_local_flexprice_test_key', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', 'Local Test Key', 'private_key', 'flexprice', '0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c', 'sk_local_****_test_key', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+              EOSQL
+              echo "✅ Seed data inserted"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: postgres-password
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+
         {{- if .Values.migration.steps.kafka }}
-        # ── 7. Create Kafka topics ────────────────────────────────────────────
+        # ── 9. Create Kafka topics ────────────────────────────────────────────
         # Topics are NOT auto-created by the broker (autoCreateTopicsEnable: false).
         # This init container creates all required topics idempotently.
         - name: create-kafka-topics
@@ -378,7 +415,7 @@ spec:
         {{- end }}
 
       containers:
-        # ── Main: run Ent migrations + optional seed ──────────────────────────
+        # ── Main: all migration steps handled by init containers ──────────────
         - name: migration
           {{- with .Values.securityContext }}
           securityContext:
@@ -396,58 +433,6 @@ spec:
             - /bin/sh
             - -c
             - |
-              set -e
-              echo "=========================================="
-              echo "Starting Migration Process"
-              echo "=========================================="
-
-              {{- if .Values.migration.steps.postgresSetup }}
-              echo "Step 1: PostgreSQL schema setup — handled by init container ✅"
-              {{- else }}
-              echo "Step 1: PostgreSQL setup — skipped"
-              {{- end }}
-
-              {{- if .Values.migration.steps.clickhouse }}
-              echo "Step 2: ClickHouse migrations — handled by init container ✅"
-              {{- else }}
-              echo "Step 2: ClickHouse migrations — skipped"
-              {{- end }}
-
-              {{- if .Values.migration.steps.kafka }}
-              echo "Step 3: Kafka topics — handled by init container ✅"
-              {{- else }}
-              echo "Step 3: Kafka topics — skipped"
-              {{- end }}
-
-              {{- if .Values.migration.steps.ent }}
-              echo ""
-              echo "Step 4: Running Ent framework migrations..."
-              MIGRATE_BINARY=""
-              if [ -f /app/migrate ] && [ -x /app/migrate ]; then
-                MIGRATE_BINARY="/app/migrate"
-              elif [ -f /app/bin/migrate ] && [ -x /app/bin/migrate ]; then
-                MIGRATE_BINARY="/app/bin/migrate"
-              else
-                echo "❌ Migration binary not found at /app/migrate or /app/bin/migrate"
-                echo "Ensure your Dockerfile includes:"
-                echo "  RUN go build -ldflags='-w -s' -o migrate cmd/migrate/main.go"
-                echo "  COPY --from=builder /app/migrate /app/migrate"
-                exit 1
-              fi
-              echo "Using: ${MIGRATE_BINARY}"
-              ${MIGRATE_BINARY} --timeout {{ .Values.migration.timeout | default 300 }} || exit 1
-              echo "✅ Ent migrations complete"
-              {{- else }}
-              echo "Step 4: Ent migrations — skipped"
-              {{- end }}
-
-              {{- if .Values.migration.steps.seed }}
-              echo "Step 5: Seed data — handled by init container ✅"
-              {{- else }}
-              echo "Step 5: Seed data — skipped"
-              {{- end }}
-
-              echo ""
               echo "=========================================="
               echo "✅ All migrations completed successfully!"
               echo "=========================================="

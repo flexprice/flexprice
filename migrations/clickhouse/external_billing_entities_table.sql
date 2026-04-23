@@ -1,4 +1,4 @@
-CREATE TABLE default.billing_entries
+CREATE TABLE IF NOT EXISTS default.billing_entries
 (
     `id` UUID,
     `batch_uuid` Nullable(UUID),
