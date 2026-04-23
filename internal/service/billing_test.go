@@ -104,6 +104,7 @@ func (s *BillingServiceSuite) setupService() {
 		ProrationCalculator:      s.GetCalculator(),
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
 		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
+		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 	})
 }
 
@@ -371,6 +372,40 @@ func (s *BillingServiceSuite) setupTestData() {
 		MeterID:        s.testData.meters.apiCalls.ID,
 		QtyTotal:       decimal.NewFromInt(500), // 500 API calls to produce $10 (500 * $0.02 tier)
 	}))
+
+	// Populate meter_usage for tests that use GetMeterUsageBySubscription (period_end, cancel).
+	meterUsageStore := s.GetStores().MeterUsageRepo.(*testutil.InMemoryMeterUsageStore)
+	s.NoError(meterUsageStore.BulkInsertMeterUsage(s.GetContext(), []*events.MeterUsage{
+		{
+			Event: events.Event{
+				ID:                 s.GetUUID(),
+				TenantID:           s.testData.subscription.TenantID,
+				EnvironmentID:      s.testData.subscription.EnvironmentID,
+				EventName:          s.testData.meters.apiCalls.EventName,
+				ExternalCustomerID: s.testData.customer.ExternalID,
+				Timestamp:          s.testData.now.Add(-1 * time.Hour),
+			},
+			MeterID:  s.testData.meters.apiCalls.ID,
+			QtyTotal: decimal.NewFromInt(1), // 500 events each with qty 1 for COUNT aggregation
+		},
+	}))
+	// Insert 500 meter_usage records for COUNT aggregation (each record = 1 count)
+	for i := 1; i < 500; i++ {
+		s.NoError(meterUsageStore.BulkInsertMeterUsage(s.GetContext(), []*events.MeterUsage{
+			{
+				Event: events.Event{
+					ID:                 s.GetUUID(),
+					TenantID:           s.testData.subscription.TenantID,
+					EnvironmentID:      s.testData.subscription.EnvironmentID,
+					EventName:          s.testData.meters.apiCalls.EventName,
+					ExternalCustomerID: s.testData.customer.ExternalID,
+					Timestamp:          s.testData.now.Add(-1 * time.Hour),
+				},
+				MeterID:  s.testData.meters.apiCalls.ID,
+				QtyTotal: decimal.NewFromInt(1),
+			},
+		}))
+	}
 
 	// Create test events
 	for i := 0; i < 500; i++ {
@@ -2099,6 +2134,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 		EventPublisher:           s.GetPublisher(),
 		ProrationCalculator:      s.GetCalculator(),
 		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
+		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
 	})
 
 	tests := []struct {
