@@ -863,6 +863,23 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 			wantErr: false,
 		},
 		{
+			name: "metadata_is_persisted_on_create",
+			input: dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          lo.ToPtr(s.testData.now),
+				EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+				Currency:           "usd",
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+				Metadata: map[string]string{
+					"xyz": "123",
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "both_customer_id_and_external_id_present",
 			input: dto.CreateSubscriptionRequest{
 				CustomerID:         s.testData.customer.ID,
@@ -1031,6 +1048,10 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				s.Equal(s.testData.customer.ID, resp.CustomerID)
 			}
 			s.Equal(tc.input.PlanID, resp.PlanID)
+
+			if len(tc.input.Metadata) > 0 {
+				s.Equal(tc.input.Metadata, resp.Metadata)
+			}
 
 			// Verify collection method behavior
 			if tc.input.CollectionMethod != nil {
