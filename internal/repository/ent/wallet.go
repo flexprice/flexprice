@@ -826,7 +826,7 @@ func (o WalletTransactionQueryOptions) applyEntityQueryOptions(_ context.Context
 	}
 
 	// Apply filters using the generic function
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[WalletTransactionQuery, predicate.WalletTransaction](
 			query,
 			f.Filters,
@@ -839,10 +839,10 @@ func (o WalletTransactionQueryOptions) applyEntityQueryOptions(_ context.Context
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[WalletTransactionQuery, wallettransaction.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) wallettransaction.OrderOption { return wallettransaction.OrderOption(o) },
 		)

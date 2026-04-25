@@ -6,9 +6,8 @@ import ierr "github.com/flexprice/flexprice/internal/errors"
 type TaxAppliedFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
+	*DSLFilter
 	Expand           Expand             `json:"expand,omitempty" form:"expand" validate:"omitempty"`
-	Filters          []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort             []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 	TaxRateIDs       []string           `json:"taxrate_ids,omitempty" form:"taxrate_ids" validate:"omitempty"`
 	EntityType       TaxRateEntityType  `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
 	EntityID         string             `json:"entity_id,omitempty" form:"entity_id" validate:"omitempty"`
@@ -49,20 +48,8 @@ func (f *TaxAppliedFilter) Validate() error {
 		}
 	}
 
-	if f.Filters != nil {
-		for _, filter := range f.Filters {
-			if err := filter.Validate(); err != nil {
-				return err
-			}
-		}
-	}
-
-	if f.Sort != nil {
-		for _, sort := range f.Sort {
-			if err := sort.Validate(); err != nil {
-				return err
-			}
-		}
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	if f.TaxRateIDs != nil {

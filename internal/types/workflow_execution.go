@@ -8,9 +8,7 @@ type WorkflowExecutionFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	// filters allows complex filtering based on multiple fields (same as FeatureFilter)
-	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 
 	// Workflow-specific filters
 	WorkflowID     string `json:"workflow_id,omitempty" form:"workflow_id"`
@@ -54,19 +52,8 @@ func (f *WorkflowExecutionFilter) Validate() error {
 			return err
 		}
 	}
-	if f.Filters != nil {
-		for _, filter := range f.Filters {
-			if err := filter.Validate(); err != nil {
-				return err
-			}
-		}
-	}
-	if f.Sort != nil {
-		for _, sort := range f.Sort {
-			if err := sort.Validate(); err != nil {
-				return err
-			}
-		}
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 	return nil
 }

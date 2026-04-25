@@ -28,9 +28,8 @@ const (
 
 type CouponFilter struct {
 	*QueryFilter
+	*DSLFilter
 
-	Filters   []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort      []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 	CouponIDs []string           `json:"coupon_ids,omitempty" form:"coupon_ids" validate:"omitempty"`
 }
 
@@ -51,9 +50,7 @@ func NewNoLimitCouponFilter() *CouponFilter {
 // CouponAssociationFilter represents filters for coupon association queries
 type CouponAssociationFilter struct {
 	*QueryFilter
-
-	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 
 	// SubscriptionIDs filters by subscription IDs (can be a single ID in array)
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
@@ -103,16 +100,8 @@ func (f *CouponAssociationFilter) Validate() error {
 		}
 	}
 
-	for _, filter := range f.Filters {
-		if err := filter.Validate(); err != nil {
-			return err
-		}
-	}
-
-	for _, sort := range f.Sort {
-		if err := sort.Validate(); err != nil {
-			return err
-		}
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	return nil
@@ -181,20 +170,8 @@ func (f *CouponFilter) Validate() error {
 		}
 	}
 
-	for _, filter := range f.Filters {
-		if filter != nil {
-			if err := filter.Validate(); err != nil {
-				return err
-			}
-		}
-	}
-
-	for _, sort := range f.Sort {
-		if sort != nil {
-			if err := sort.Validate(); err != nil {
-				return err
-			}
-		}
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	return nil

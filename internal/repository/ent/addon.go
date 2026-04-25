@@ -488,7 +488,7 @@ func (o AddonQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.A
 	}
 
 	// Apply filters using the generic function
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[AddonQuery, predicate.Addon](
 			query,
 			f.Filters,
@@ -501,10 +501,10 @@ func (o AddonQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.A
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[AddonQuery, addon.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) addon.OrderOption { return addon.OrderOption(o) },
 		)

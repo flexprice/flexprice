@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -147,55 +148,167 @@ func BuildOrders(sort []*types.SortCondition, resolve FieldResolver) ([]OrderFun
 	return out, nil
 }
 
-func predicateFromFilter(f *types.FilterCondition, fi string) Predicate {
+// leafSQLPredicate builds a *sql.Predicate for a single FilterCondition.
+// Used by both BuildPredicates (flat path) and buildNodePredicate (tree path).
+func leafSQLPredicate(f *types.FilterCondition, fi string) *sql.Predicate {
 	if f.Operator == nil {
 		return nil
 	}
-
 	switch lo.FromPtr(f.Operator) {
 	case types.EQUAL:
-		return func(sel *sql.Selector) { sel.Where(sql.EQ(fi, valueAny(f))) }
-
-	// string operators
+		return sql.EQ(fi, valueAny(f))
 	case types.CONTAINS:
 		if v := valueString(f); v != nil {
-			return func(sel *sql.Selector) { sel.Where(sql.ContainsFold(fi, *v)) }
+			return sql.ContainsFold(fi, *v)
 		}
 	case types.NOT_CONTAINS:
 		if v := valueString(f); v != nil {
-			return func(sel *sql.Selector) { sel.Where(sql.Not(sql.ContainsFold(fi, *v))) }
+			return sql.Not(sql.ContainsFold(fi, *v))
 		}
 	case types.GREATER_THAN:
 		if num := valueNumber(f); num != nil {
-			return func(sel *sql.Selector) { sel.Where(sql.GT(fi, *num)) }
+			return sql.GT(fi, *num)
 		}
-
+	case types.GREATER_THAN_OR_EQUAL:
+		if num := valueNumber(f); num != nil {
+			return sql.GTE(fi, *num)
+		}
 	case types.LESS_THAN:
 		if num := valueNumber(f); num != nil {
-			return func(sel *sql.Selector) { sel.Where(sql.LT(fi, *num)) }
+			return sql.LT(fi, *num)
 		}
-
+	case types.LESS_THAN_OR_EQUAL:
+		if num := valueNumber(f); num != nil {
+			return sql.LTE(fi, *num)
+		}
 	case types.IN:
 		if arr := valueArray(f); len(arr) > 0 {
-			return func(sel *sql.Selector) { sel.Where(sql.In(fi, toAny(arr)...)) }
+			return sql.In(fi, toAny(arr)...)
 		}
-
 	case types.NOT_IN:
 		if arr := valueArray(f); len(arr) > 0 {
-			return func(sel *sql.Selector) { sel.Where(sql.NotIn(fi, toAny(arr)...)) }
+			return sql.NotIn(fi, toAny(arr)...)
 		}
-
 	case types.BEFORE:
 		if t := valueDate(f); t != nil {
-			return func(sel *sql.Selector) { sel.Where(sql.LT(fi, *t)) }
+			return sql.LT(fi, *t)
 		}
-
 	case types.AFTER:
 		if t := valueDate(f); t != nil {
-			return func(sel *sql.Selector) { sel.Where(sql.GT(fi, *t)) }
+			return sql.GT(fi, *t)
 		}
 	}
-	return nil // fell through → invalid combi
+	return nil
+}
+
+// predicateFromFilter wraps leafSQLPredicate into the Predicate (func(*sql.Selector)) type.
+// Unchanged external behaviour — existing call sites continue to work.
+func predicateFromFilter(f *types.FilterCondition, fi string) Predicate {
+	p := leafSQLPredicate(f, fi)
+	if p == nil {
+		return nil
+	}
+	return func(sel *sql.Selector) { sel.Where(p) }
+}
+
+// defaultBlockedFields is the set of fields blocked from filter trees by default.
+// Declared as a map to prevent slice-append mutation hazards.
+var defaultBlockedFields = map[string]bool{"tenant_id": true, "environment_id": true}
+
+// buildNodePredicate recursively builds a *sql.Predicate from a FilterNode tree.
+// node.Validate() must be called before this function.
+func buildNodePredicate(
+	node *types.FilterNode,
+	resolve FieldResolver,
+	blocked map[string]bool,
+) (*sql.Predicate, error) {
+	if node.IsLeaf() {
+		c := node.Condition
+		field := lo.FromPtr(c.Field)
+		if blocked[field] {
+			return nil, ierr.NewErrorf("field '%s' is not allowed in filter conditions", field).
+				WithHint("This field cannot be used as a filter").
+				Mark(ierr.ErrValidation)
+		}
+		fi, err := resolve(field)
+		if err != nil {
+			return nil, err
+		}
+		p := leafSQLPredicate(c, fi)
+		if p == nil {
+			return nil, ierr.NewErrorf("unsupported operator/value combination for field '%s'", field).
+				Mark(ierr.ErrValidation)
+		}
+		return p, nil
+	}
+
+	// group node
+	childPreds := make([]*sql.Predicate, 0, len(node.Conditions))
+	for _, child := range node.Conditions {
+		p, err := buildNodePredicate(child, resolve, blocked)
+		if err != nil {
+			return nil, err
+		}
+		childPreds = append(childPreds, p)
+	}
+
+	switch lo.FromPtr(node.Operator) {
+	case types.GroupOpAnd:
+		return sql.And(childPreds...), nil
+	case types.GroupOpOr:
+		return sql.Or(childPreds...), nil
+	case types.GroupOpNot:
+		return sql.Not(childPreds[0]), nil
+	default:
+		return nil, ierr.NewErrorf("unsupported group operator '%s'", lo.FromPtr(node.Operator)).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// ApplyFilterNode applies a grouped/nested FilterNode tree to a query.
+// This is a parallel entry point — existing ApplyFilters is unchanged.
+//
+// blockedFields: nil uses the default ["tenant_id", "environment_id"].
+// Pass a non-nil slice to replace the default per entity.
+func ApplyFilterNode[T any, P any](
+	query T,
+	node *types.FilterNode,
+	resolve FieldResolver,
+	predicateConverter func(Predicate) P,
+	blockedFields []string,
+) (T, error) {
+	if node == nil {
+		return query, nil
+	}
+	if err := node.Validate(); err != nil {
+		return query, err
+	}
+
+	var blocked map[string]bool
+	if blockedFields == nil {
+		blocked = defaultBlockedFields
+	} else {
+		blocked = make(map[string]bool, len(blockedFields))
+		for _, f := range blockedFields {
+			blocked[f] = true
+		}
+	}
+
+	sqlPred, err := buildNodePredicate(node, resolve, blocked)
+	if err != nil {
+		return query, err
+	}
+
+	entPred := predicateConverter(func(sel *sql.Selector) { sel.Where(sqlPred) })
+	// One composite predicate wraps the entire tree. Ent's Where is variadic AND-ed,
+	// so callers using ApplyFilters + ApplyFilterNode together get implicit AND semantics.
+	result := reflect.ValueOf(query).MethodByName("Where").Call(
+		[]reflect.Value{reflect.ValueOf(entPred)},
+	)
+	if len(result) > 0 {
+		query = result[0].Interface().(T)
+	}
+	return query, nil
 }
 
 func valueAny(f *types.FilterCondition) interface{} {

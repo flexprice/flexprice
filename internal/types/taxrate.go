@@ -144,8 +144,7 @@ func (s TaxRateAssignmentStatus) Validate() error {
 type TaxRateFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	Filters      []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort         []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 	TaxRateIDs   []string           `json:"taxrate_ids,omitempty" form:"taxrate_ids" validate:"omitempty"`
 	TaxRateCodes []string           `json:"taxrate_codes,omitempty" form:"taxrate_codes" validate:"omitempty"`
 	Scope        TaxRateScope       `json:"scope,omitempty" form:"scope" validate:"omitempty"`
@@ -185,20 +184,8 @@ func (f *TaxRateFilter) Validate() error {
 		}
 	}
 
-	if f.Filters != nil {
-		for _, filter := range f.Filters {
-			if err := filter.Validate(); err != nil {
-				return err
-			}
-		}
-	}
-
-	if f.Sort != nil {
-		for _, sort := range f.Sort {
-			if err := sort.Validate(); err != nil {
-				return err
-			}
-		}
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	if f.TaxRateIDs != nil {

@@ -51,9 +51,7 @@ type EntityIntegrationMappingFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	// filters allows complex filtering based on multiple fields
-	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 
 	// Entity-specific filters
 	EntityIDs  []string              `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
@@ -91,6 +89,10 @@ func (f EntityIntegrationMappingFilter) Validate() error {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	// Validate entity type if provided

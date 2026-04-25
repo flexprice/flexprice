@@ -200,8 +200,11 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		// Apply the exact same sort order as plans
-		if filter.Sort != nil {
-			entFilter.Sort = append(entFilter.Sort, filter.Sort...)
+		if filter.DSLFilter != nil && filter.DSLFilter.Sort != nil {
+			if entFilter.DSLFilter == nil {
+				entFilter.DSLFilter = &types.DSLFilter{}
+			}
+			entFilter.DSLFilter.Sort = append(entFilter.DSLFilter.Sort, filter.DSLFilter.Sort...)
 		}
 
 		entitlements, err := entitlementService.ListEntitlements(ctx, entFilter)

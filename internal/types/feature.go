@@ -53,9 +53,7 @@ type FeatureFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	// filters allows complex filtering based on multiple fields
-	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 
 	// Feature specific filters
 	FeatureIDs   []string `form:"feature_ids" json:"feature_ids"`
@@ -102,20 +100,8 @@ func (f *FeatureFilter) Validate() error {
 		}
 	}
 
-	if f.Filters != nil {
-		for _, filter := range f.Filters {
-			if err := filter.Validate(); err != nil {
-				return err
-			}
-		}
-	}
-
-	if f.Sort != nil {
-		for _, sort := range f.Sort {
-			if err := sort.Validate(); err != nil {
-				return err
-			}
-		}
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	return nil

@@ -595,7 +595,7 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.StartDateLT(*f.StartDateLT))
 	}
 
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[PriceQuery, predicate.Price](
 			query,
 			f.Filters,

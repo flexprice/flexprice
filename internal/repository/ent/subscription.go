@@ -603,7 +603,7 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 	}
 
 	// Default to active when the client did not constrain subscription_status (neither top-level nor DSL filters).
-	if f.SubscriptionStatus == nil && !o.filtersConstrainSubscriptionStatus(f.Filters) {
+	if f.SubscriptionStatus == nil && (f.DSLFilter == nil || !o.filtersConstrainSubscriptionStatus(f.Filters)) {
 		query = query.Where(subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive))
 	}
 
@@ -659,7 +659,7 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		)
 	}
 
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[SubscriptionQuery, predicate.Subscription](
 			query,
 			f.Filters,
@@ -672,10 +672,10 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[SubscriptionQuery, subscription.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) subscription.OrderOption { return subscription.OrderOption(o) },
 		)

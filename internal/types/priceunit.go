@@ -9,9 +9,7 @@ type PriceUnitFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	// filters allows complex filtering based on multiple fields
-	Filters      []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort         []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 	PriceUnitIDs []string           `json:"price_unit_ids,omitempty" form:"price_unit_ids" validate:"omitempty"`
 }
 
@@ -40,6 +38,10 @@ func (f *PriceUnitFilter) Validate() error {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	for _, priceUnitID := range f.PriceUnitIDs {

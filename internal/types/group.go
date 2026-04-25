@@ -5,9 +5,7 @@ type GroupFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	// filters allows complex filtering based on multiple fields
-	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 
 	// Group specific filters
 	GroupIDs   []string `form:"group_ids" json:"group_ids"`
@@ -90,20 +88,8 @@ func (f *GroupFilter) Validate() error {
 		}
 	}
 
-	if f.Filters != nil {
-		for _, filter := range f.Filters {
-			if err := filter.Validate(); err != nil {
-				return err
-			}
-		}
-	}
-
-	if f.Sort != nil {
-		for _, sort := range f.Sort {
-			if err := sort.Validate(); err != nil {
-				return err
-			}
-		}
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	return nil

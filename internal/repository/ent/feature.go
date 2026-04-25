@@ -554,7 +554,7 @@ func (o FeatureQueryOptions) applyEntityQueryOptions(ctx context.Context, f *typ
 	}
 
 	// Apply filters using the generic function
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[FeatureQuery, predicate.Feature](
 			query,
 			f.Filters,
@@ -567,10 +567,10 @@ func (o FeatureQueryOptions) applyEntityQueryOptions(ctx context.Context, f *typ
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[FeatureQuery, feature.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) feature.OrderOption { return feature.OrderOption(o) },
 		)

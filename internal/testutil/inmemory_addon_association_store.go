@@ -128,9 +128,11 @@ func addonAssociationFilterFn(ctx context.Context, aa *addonassociation.AddonAss
 	}
 
 	// Apply filter conditions
-	for _, condition := range f.Filters {
-		if !applyAddonAssociationFilterCondition(aa, condition) {
-			return false
+	if f.DSLFilter != nil {
+		for _, condition := range f.Filters {
+			if !applyAddonAssociationFilterCondition(aa, condition) {
+				return false
+			}
 		}
 	}
 

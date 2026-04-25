@@ -641,7 +641,7 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 		}
 	}
 
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[EntitlementQuery, predicate.Entitlement](
 			query,
 			f.Filters,
@@ -654,10 +654,10 @@ func (o EntitlementQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[EntitlementQuery, entitlement.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) entitlement.OrderOption { return entitlement.OrderOption(o) },
 		)

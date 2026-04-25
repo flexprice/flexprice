@@ -600,7 +600,7 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 		query = query.Where(connection.IDIn(f.ConnectionIDs...))
 	}
 
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[ConnectionQuery, predicate.Connection](
 			query,
 			f.Filters,
@@ -613,10 +613,10 @@ func (o ConnectionQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[ConnectionQuery, connection.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) connection.OrderOption { return connection.OrderOption(o) },
 		)

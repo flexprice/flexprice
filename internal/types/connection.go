@@ -440,10 +440,7 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 type ConnectionFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	// filters allows complex filtering based on multiple fields
-
-	Filters       []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort          []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 	ConnectionIDs []string           `json:"connection_ids,omitempty" form:"connection_ids" validate:"omitempty"`
 	ProviderType  SecretProvider     `json:"provider_type,omitempty" form:"provider_type" validate:"omitempty"`
 }
@@ -474,6 +471,10 @@ func (f ConnectionFilter) Validate() error {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	if f.ProviderType != "" {

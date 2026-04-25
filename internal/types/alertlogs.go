@@ -75,9 +75,7 @@ type AlertLogFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	// filters allows complex filtering based on multiple fields
-	Filters     []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort        []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 	EntityType  AlertEntityType    `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
 	EntityID    string             `json:"entity_id,omitempty" form:"entity_id" validate:"omitempty"`
 	AlertType   AlertType          `json:"alert_type,omitempty" form:"alert_type" validate:"omitempty"`
@@ -112,6 +110,10 @@ func (f *AlertLogFilter) Validate() error {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	if f.AlertType != "" {

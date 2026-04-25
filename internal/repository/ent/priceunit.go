@@ -462,7 +462,7 @@ func (o PriceUnitQueryOptions) applyEntityQueryOptions(ctx context.Context, f *t
 	}
 
 	// Apply filters using the generic function
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[PriceUnitQuery, predicate.PriceUnit](
 			query,
 			f.Filters,
@@ -475,10 +475,10 @@ func (o PriceUnitQueryOptions) applyEntityQueryOptions(ctx context.Context, f *t
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[PriceUnitQuery, priceunit.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) priceunit.OrderOption { return priceunit.OrderOption(o) },
 		)

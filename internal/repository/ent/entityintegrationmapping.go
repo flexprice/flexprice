@@ -480,7 +480,7 @@ func (o EntityIntegrationMappingQueryOptions) applyEntityQueryOptions(_ context.
 		query = query.Where(entityintegrationmapping.ProviderEntityIDIn(f.ProviderEntityIDs...))
 	}
 
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[EntityIntegrationMappingQuery, predicate.EntityIntegrationMapping](
 			query,
 			f.Filters,
@@ -493,10 +493,10 @@ func (o EntityIntegrationMappingQueryOptions) applyEntityQueryOptions(_ context.
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[EntityIntegrationMappingQuery, entityintegrationmapping.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) entityintegrationmapping.OrderOption {
 				return entityintegrationmapping.OrderOption(o)

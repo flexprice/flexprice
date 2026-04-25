@@ -7,9 +7,7 @@ type PlanFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	// filters allows complex filtering based on multiple fields
-	Filters   []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort      []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 	PlanIDs   []string           `json:"plan_ids,omitempty" form:"plan_ids" validate:"omitempty"`
 	LookupKey *string            `json:"lookup_key,omitempty" form:"lookup_key" validate:"omitempty"`
 }
@@ -39,6 +37,10 @@ func (f *PlanFilter) Validate() error {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	for _, planID := range f.PlanIDs {

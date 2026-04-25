@@ -149,7 +149,7 @@ func couponFilterFn(ctx context.Context, c *coupon.Coupon, filter interface{}) b
 	}
 
 	// Apply filters from filter conditions
-	if f.Filters != nil {
+	if f.DSLFilter != nil {
 		for _, filterCondition := range f.Filters {
 			if !applyFilterCondition(c, filterCondition) {
 				return false

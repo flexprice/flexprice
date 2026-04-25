@@ -78,9 +78,9 @@ type EntitlementFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
+	*DSLFilter
+
 	// Specific filters for entitlements
-	Filters     []*FilterCondition     `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort        []*SortCondition       `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 	EntityType  *EntitlementEntityType `form:"entity_type" json:"entity_type,omitempty"`
 	EntityIDs   []string               `form:"entity_ids" json:"entity_ids,omitempty"`
 	FeatureIDs  []string               `form:"feature_ids" json:"feature_ids,omitempty"`
@@ -115,6 +115,10 @@ func (f EntitlementFilter) Validate() error {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	return nil

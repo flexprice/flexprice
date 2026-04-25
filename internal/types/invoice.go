@@ -314,8 +314,7 @@ type InvoiceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 	// invoice_ids restricts results to invoices with the specified IDs
 	// Use this to retrieve specific invoices when you know their exact identifiers
 	InvoiceIDs []string `json:"invoice_ids,omitempty" form:"invoice_ids"`
@@ -393,6 +392,11 @@ func (f *InvoiceFilter) Validate() error {
 			return ierr.WithError(err).WithHint("invalid time range").Mark(ierr.ErrValidation)
 		}
 	}
+
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

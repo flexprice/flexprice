@@ -142,9 +142,7 @@ type WalletTransactionFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	// filters allows complex filtering based on multiple fields
-	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	*DSLFilter
 
 	WalletID           *string            `json:"id,omitempty" form:"id"`
 	Type               *TransactionType   `json:"type,omitempty" form:"type"`
@@ -200,6 +198,10 @@ func (f WalletTransactionFilter) Validate() error {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := f.DSLFilter.Validate(); err != nil {
+		return err
 	}
 
 	if f.ExpiryDateBefore != nil && f.ExpiryDateAfter != nil {

@@ -419,7 +419,7 @@ func (o TaxAppliedQueryOptions) applyEntityQueryOptions(_ context.Context, f *ty
 	}
 
 	// Apply custom filters
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		var err error
 		query, err = dsl.ApplyFilters[TaxAppliedQuery, predicate.TaxApplied](
 			query,

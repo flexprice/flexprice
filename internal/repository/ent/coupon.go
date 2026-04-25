@@ -443,7 +443,7 @@ func (o CouponQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 		query = query.Where(coupon.IDIn(f.CouponIDs...))
 	}
 
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[CouponQuery, predicate.Coupon](
 			query,
 			f.Filters,
@@ -456,10 +456,10 @@ func (o CouponQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[CouponQuery, coupon.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) coupon.OrderOption { return coupon.OrderOption(o) },
 		)

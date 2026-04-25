@@ -246,13 +246,15 @@ func (h *InvoiceHandler) processIncompleteSubscriptionsForEnvironment(
 		SubscriptionStatus: []types.SubscriptionStatus{
 			types.SubscriptionStatusIncomplete,
 		},
-		Filters: []*types.FilterCondition{
-			{
-				Field:    lo.ToPtr("created_at"),
-				Operator: lo.ToPtr(types.BEFORE),
-				DataType: lo.ToPtr(types.DataTypeDate),
-				Value: &types.Value{
-					Date: &cutoffTime,
+		DSLFilter: &types.DSLFilter{
+			Filters: []*types.FilterCondition{
+				{
+					Field:    lo.ToPtr("created_at"),
+					Operator: lo.ToPtr(types.BEFORE),
+					DataType: lo.ToPtr(types.DataTypeDate),
+					Value: &types.Value{
+						Date: &cutoffTime,
+					},
 				},
 			},
 		},

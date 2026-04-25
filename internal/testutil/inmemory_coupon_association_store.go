@@ -228,7 +228,7 @@ func couponAssociationFilterFn(ctx context.Context, ca *coupon_association.Coupo
 	}
 
 	// Apply filter conditions if any
-	if f.Filters != nil {
+	if f.DSLFilter != nil {
 		for _, condition := range f.Filters {
 			if !applyCouponAssociationFilterCondition(ca, condition) {
 				return false

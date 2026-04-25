@@ -242,7 +242,7 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 	t.Run("filter by code", func(t *testing.T) {
 		filter := &types.PriceUnitFilter{
 			QueryFilter: types.NewNoLimitQueryFilter(),
-			Filters: []*types.FilterCondition{
+			DSLFilter: &types.DSLFilter{Filters: []*types.FilterCondition{
 				{
 					Field:    lo.ToPtr("code"),
 					Operator: lo.ToPtr(types.EQUAL),
@@ -251,7 +251,7 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 						String: lo.ToPtr("TOKEN_A"),
 					},
 				},
-			},
+			}},
 		}
 		priceUnits, err := store.List(ctx, filter)
 		require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 	t.Run("filter by base currency", func(t *testing.T) {
 		filter := &types.PriceUnitFilter{
 			QueryFilter: types.NewNoLimitQueryFilter(),
-			Filters: []*types.FilterCondition{
+			DSLFilter: &types.DSLFilter{Filters: []*types.FilterCondition{
 				{
 					Field:    lo.ToPtr("base_currency"),
 					Operator: lo.ToPtr(types.EQUAL),
@@ -271,7 +271,7 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 						String: lo.ToPtr("USD"),
 					},
 				},
-			},
+			}},
 		}
 		priceUnits, err := store.List(ctx, filter)
 		require.NoError(t, err)
@@ -285,7 +285,7 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 	t.Run("filter by name contains", func(t *testing.T) {
 		filter := &types.PriceUnitFilter{
 			QueryFilter: types.NewNoLimitQueryFilter(),
-			Filters: []*types.FilterCondition{
+			DSLFilter: &types.DSLFilter{Filters: []*types.FilterCondition{
 				{
 					Field:    lo.ToPtr("name"),
 					Operator: lo.ToPtr(types.CONTAINS),
@@ -294,7 +294,7 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 						String: lo.ToPtr("Token A"),
 					},
 				},
-			},
+			}},
 		}
 		priceUnits, err := store.List(ctx, filter)
 		require.NoError(t, err)
@@ -305,7 +305,7 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 	t.Run("filter by status", func(t *testing.T) {
 		filter := &types.PriceUnitFilter{
 			QueryFilter: types.NewNoLimitQueryFilter(),
-			Filters: []*types.FilterCondition{
+			DSLFilter: &types.DSLFilter{Filters: []*types.FilterCondition{
 				{
 					Field:    lo.ToPtr("status"),
 					Operator: lo.ToPtr(types.EQUAL),
@@ -314,7 +314,7 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 						String: lo.ToPtr("archived"),
 					},
 				},
-			},
+			}},
 		}
 		priceUnits, err := store.List(ctx, filter)
 		require.NoError(t, err)

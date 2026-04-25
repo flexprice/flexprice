@@ -226,8 +226,8 @@ func (r *userRepository) ListByFilter(ctx context.Context, filter *types.UserFil
 	}
 
 	// Apply sorting
-	if len(filter.Sort) > 0 {
-		for _, sort := range filter.Sort {
+	if filter.DSLFilter != nil && len(filter.DSLFilter.Sort) > 0 {
+		for _, sort := range filter.DSLFilter.Sort {
 			switch sort.Field {
 			case "created_at":
 				if sort.Direction == types.SortDirectionDesc {

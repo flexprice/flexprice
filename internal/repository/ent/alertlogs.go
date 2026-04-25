@@ -475,7 +475,7 @@ func (o AlertLogQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		query = query.Where(alertlogs.CustomerID(f.CustomerID))
 	}
 
-	if f.Filters != nil {
+	if f.DSLFilter != nil && len(f.Filters) > 0 {
 		query, err = dsl.ApplyFilters[AlertLogQuery, predicate.AlertLogs](
 			query,
 			f.Filters,
@@ -488,10 +488,10 @@ func (o AlertLogQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 	}
 
 	// Apply sorts using the generic function
-	if f.Sort != nil {
+	if f.DSLFilter != nil && f.DSLFilter.Sort != nil {
 		query, err = dsl.ApplySorts[AlertLogQuery, alertlogs.OrderOption](
 			query,
-			f.Sort,
+			f.DSLFilter.Sort,
 			o.GetFieldResolver,
 			func(o dsl.OrderFunc) alertlogs.OrderOption { return alertlogs.OrderOption(o) },
 		)

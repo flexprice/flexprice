@@ -148,9 +148,11 @@ func addonFilterFn(ctx context.Context, a *addon.Addon, filter interface{}) bool
 	}
 
 	// Apply filter conditions
-	for _, condition := range f.Filters {
-		if !applyAddonFilterCondition(a, condition) {
-			return false
+	if f.DSLFilter != nil {
+		for _, condition := range f.Filters {
+			if !applyAddonFilterCondition(a, condition) {
+				return false
+			}
 		}
 	}
 
