@@ -29,6 +29,8 @@ type ListPlanLineItemsToCreateParams struct {
 	PlanID     string
 	Limit      int
 	AfterSubID string // Optional cursor: subscription_id from last row
+	// SubscriptionIDs when non-empty restricts subs_batch to these subscription IDs (plan sync subset).
+	SubscriptionIDs []string
 }
 
 type TerminateExpiredPlanPricesLineItemsParams struct {
