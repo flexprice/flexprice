@@ -2,6 +2,27 @@
 
 This file provides guidance to Claude Code when working with the Flexprice backend repository.
 
+## Security — Never Commit Secrets
+
+**Never hardcode credentials, tokens, or secrets in any file you create or modify.** This includes:
+- API keys (e.g. `sk_...`)
+- Database passwords
+- Private keys or tokens of any kind
+
+Scripts must read secrets from environment variables only. Use empty defaults so the script fails fast if they are unset:
+
+```bash
+API_KEY="${API_KEY:-}"
+CH_PASSWORD="${CH_PASSWORD:-}"
+
+if [ -z "$API_KEY" ] || [ -z "$CH_PASSWORD" ]; then
+  echo "ERROR: Set API_KEY and CH_PASSWORD as environment variables before running."
+  exit 1
+fi
+```
+
+Non-sensitive config (tenant IDs, environment IDs, costsheet IDs) is acceptable to hardcode in scripts when it is specific to a one-off validation task, but prefer env vars for anything that changes between environments.
+
 ## Project Overview
 
 Flexprice is a monetization infrastructure platform for AI-native and SaaS companies. It provides usage-based metering, credit management, flexible pricing, and automated invoicing.

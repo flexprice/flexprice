@@ -66,16 +66,13 @@ func (s *MeterUsageTrackingSuite) TestCheckMeterFilters_NoMatch_WrongValue() {
 // --- generateUniqueHash tests ---
 
 func (s *MeterUsageTrackingSuite) TestGenerateUniqueHash_NonCountUnique() {
+	// Non-COUNT_UNIQUE meters do not populate unique_hash — deduplication is handled
+	// by the ReplacingMergeTree ORDER BY key in ClickHouse.
 	event := &events.Event{ID: "evt_123", EventName: "api_call"}
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "duration"}}
 
 	hash := s.svc.generateUniqueHash(event, m)
-	assert.NotEmpty(s.T(), hash)
-	assert.Len(s.T(), hash, 64) // SHA256 hex
-
-	// Same input produces same hash
-	hash2 := s.svc.generateUniqueHash(event, m)
-	assert.Equal(s.T(), hash, hash2)
+	assert.Empty(s.T(), hash)
 }
 
 func (s *MeterUsageTrackingSuite) TestGenerateUniqueHash_CountUnique() {
@@ -334,12 +331,12 @@ func (s *MeterUsageTrackingSuite) TestProcessEvent_MatchesMeters() {
 	// Verify m3 does NOT match (filter fails)
 	assert.False(s.T(), s.svc.checkMeterFilters(event, m3.Filters))
 
-	// Verify unique hash is field-based for COUNT_UNIQUE
+	// COUNT_UNIQUE produces a field-based hash
 	hash2 := s.svc.generateUniqueHash(event, m2)
 	assert.NotEmpty(s.T(), hash2)
+	assert.Len(s.T(), hash2, 64)
 
-	// Verify unique hash is event-based for SUM
+	// SUM produces no hash — deduplication handled by ReplacingMergeTree ORDER BY key
 	hash1 := s.svc.generateUniqueHash(event, m1)
-	assert.NotEmpty(s.T(), hash1)
-	assert.NotEqual(s.T(), hash1, hash2)
+	assert.Empty(s.T(), hash1)
 }
