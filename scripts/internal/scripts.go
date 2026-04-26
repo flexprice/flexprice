@@ -62,11 +62,14 @@ func GenerateNewAPIKey() error {
 func AssignTenantToUser() error {
 	userID := os.Getenv("USER_ID")
 	tenantID := os.Getenv("TENANT_ID")
+
+	if userID == "" || tenantID == "" {
+    return fmt.Errorf("USER_ID and TENANT_ID environment variables must be set")
+	}
 	// Load configuration
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-		return err
+	    return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Create auth provider
@@ -75,8 +78,7 @@ func AssignTenantToUser() error {
 	// Assign tenant to user
 	err = authProvider.AssignUserToTenant(context.Background(), userID, tenantID)
 	if err != nil {
-		log.Fatalf("Failed to assign tenant to user: %v", err)
-		return err
+	    return fmt.Errorf("failed to assign tenant to user: %w", err)
 	}
 
 	fmt.Printf("Successfully assigned tenant %s to user %s\n", tenantID, userID)
