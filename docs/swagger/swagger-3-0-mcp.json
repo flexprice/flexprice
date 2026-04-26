@@ -7573,7 +7573,7 @@
           "transform_quantity": {
             "$ref": "#/components/schemas/price.TransformQuantity"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer"
           },
           "type": {
@@ -10919,7 +10919,7 @@
           "transform_quantity": {
             "$ref": "#/components/schemas/price.JSONBTransformQuantity"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer",
             "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)"
           },
@@ -11546,7 +11546,7 @@
           "tenant_id": {
             "type": "string"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer"
           },
           "updated_at": {
@@ -11818,7 +11818,7 @@
           "transform_quantity": {
             "$ref": "#/components/schemas/price.TransformQuantity"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer"
           },
           "type": {
@@ -15504,6 +15504,7 @@
           "SUBSCRIPTION_CREATE",
           "SUBSCRIPTION_CYCLE",
           "SUBSCRIPTION_UPDATE",
+          "SUBSCRIPTION_TRIAL_END",
           "PRORATION",
           "MANUAL"
         ],
@@ -15511,6 +15512,7 @@
           "InvoiceBillingReasonSubscriptionCreate",
           "InvoiceBillingReasonSubscriptionCycle",
           "InvoiceBillingReasonSubscriptionUpdate",
+          "InvoiceBillingReasonSubscriptionTrialEnd",
           "InvoiceBillingReasonProration",
           "InvoiceBillingReasonManual"
         ],
@@ -17633,7 +17635,7 @@
           "transform_quantity": {
             "$ref": "#/components/schemas/price.JSONBTransformQuantity"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer",
             "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)"
           },
@@ -17794,7 +17796,7 @@
           "tenant_id": {
             "type": "string"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer"
           },
           "updated_at": {

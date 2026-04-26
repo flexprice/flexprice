@@ -320,6 +320,9 @@ type SubscriptionFilter struct {
 	// current_period_end <= date OR (cancel_at IS NOT NULL AND cancel_at <= date).
 	// When nil, period/cancel cutoff logic is not applied by this field (see TimeRangeFilter for legacy period-end filtering).
 	EffectiveDateForUpdate *time.Time `json:"effective_date_for_update,omitempty" form:"effective_date_for_update"`
+	// TrialEndDueLTE, when set, restricts to subscriptions with trial_end not nil and trial_end <= trial_end_due_lte.
+	// Use with subscription_status trialing for trial-end cron processing.
+	TrialEndDueLTE *time.Time `json:"trial_end_due_lte,omitempty" form:"trial_end_due_lte"`
 	// SubscriptionType filters by subscription type
 	SubscriptionTypes []SubscriptionType `json:"subscription_type,omitempty" form:"subscription_type"`
 

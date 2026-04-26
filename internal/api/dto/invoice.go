@@ -1139,11 +1139,18 @@ type CreateSubscriptionInvoiceRequest struct {
 
 	// reference_point defines the point in time used for calculating usage and charges
 	ReferencePoint types.InvoiceReferencePoint `json:"reference_point"`
+
+	// BillingReason optional; when empty, ToDraftRequest defaults to subscription_cycle (subscription_creation flow still forces SUBSCRIPTION_CREATE).
+	BillingReason types.InvoiceBillingReason `json:"billing_reason,omitempty"`
 }
 
 // ToDraftRequest builds a CreateDraftInvoiceRequest from the subscription invoice request
 // and pre-fetched subscription fields, avoiding a redundant DB fetch.
 func (r *CreateSubscriptionInvoiceRequest) ToDraftRequest(customerID, subscriptionID, currency, billingPeriod string) CreateDraftInvoiceRequest {
+	billingReason := r.BillingReason
+	if billingReason == "" {
+		billingReason = types.InvoiceBillingReasonSubscriptionCycle
+	}
 	req := CreateDraftInvoiceRequest{
 		CustomerID:     customerID,
 		SubscriptionID: lo.ToPtr(subscriptionID),
@@ -1152,7 +1159,7 @@ func (r *CreateSubscriptionInvoiceRequest) ToDraftRequest(customerID, subscripti
 		BillingPeriod:  &billingPeriod,
 		PeriodStart:    &r.PeriodStart,
 		PeriodEnd:      &r.PeriodEnd,
-		BillingReason:  types.InvoiceBillingReasonSubscriptionCycle,
+		BillingReason:  billingReason,
 	}
 	if r.ReferencePoint == types.ReferencePointCancel {
 		req.BillingReason = types.InvoiceBillingReasonProration
@@ -1163,6 +1170,12 @@ func (r *CreateSubscriptionInvoiceRequest) ToDraftRequest(customerID, subscripti
 func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.BillingReason != "" {
+		if err := r.BillingReason.Validate(); err != nil {
+			return err
+		}
 	}
 
 	if err := r.ReferencePoint.Validate(); err != nil {

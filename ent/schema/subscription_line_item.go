@@ -122,8 +122,6 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			Immutable().
 			Optional().
 			GoType(types.InvoiceCadence("")), // TODO: Remove this once we have migrated all the data
-		field.Int("trial_period").
-			Default(0),
 		field.Time("start_date").
 			Optional().
 			Nillable(),

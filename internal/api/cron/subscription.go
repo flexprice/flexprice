@@ -46,6 +46,21 @@ func (h *SubscriptionHandler) UpdateBillingPeriods(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// ProcessTrialEndDue is bound to POST /v1/cron/subscriptions/process-trial-end-due.
+//
+// Deprecated: the same work is run by the Temporal server schedule subscription-trial-end-due.
+func (h *SubscriptionHandler) ProcessTrialEndDue(c *gin.Context) {
+	ctx := c.Request.Context()
+	response, err := h.subscriptionService.ProcessTrialEndDue(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to process trial end due subscriptions",
+			"error", err)
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response)
+}
+
 // ProcessAutoCancellationSubscriptions processes subscriptions that are eligible for auto-cancellation
 // We need to get all unpaid invoices and check if the grace period has expired.
 //

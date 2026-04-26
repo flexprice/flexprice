@@ -30,7 +30,6 @@ type SubscriptionLineItem struct {
 	BillingPeriod       types.BillingPeriod                  `db:"billing_period" json:"billing_period"`
 	BillingPeriodCount  int                                  `db:"billing_period_count" json:"billing_period_count"` // from price at create; default 1
 	InvoiceCadence      types.InvoiceCadence                 `db:"invoice_cadence" json:"invoice_cadence"`
-	TrialPeriod         int                                  `db:"trial_period" json:"trial_period"`
 	StartDate           time.Time                            `db:"start_date" json:"start_date,omitempty"`
 	EndDate             time.Time                            `db:"end_date" json:"end_date,omitempty"`
 	SubscriptionPhaseID *string                              `db:"subscription_phase_id" json:"subscription_phase_id,omitempty"`
@@ -177,7 +176,6 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		BillingPeriod:           e.BillingPeriod,
 		BillingPeriodCount:      billingPeriodCount,
 		InvoiceCadence:          e.InvoiceCadence,
-		TrialPeriod:             e.TrialPeriod,
 		StartDate:               startDate,
 		EndDate:                 endDate,
 		SubscriptionPhaseID:     subscriptionPhaseID,

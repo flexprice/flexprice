@@ -401,7 +401,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		refPoint := types.ReferencePointPeriodEnd
 		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate:
+		case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd:
 			refPoint = types.ReferencePointPeriodStart
 		case types.InvoiceBillingReasonProration:
 			refPoint = types.ReferencePointCancel
@@ -1707,8 +1707,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 
 		inv.PaidAt = &now
 
-		// Check if this is the first invoice (billing_reason = subscription_create)
-		if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCreate) {
+		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
 			s.HandleIncompleteSubscriptionPayment(ctx, inv)
 		}
 
@@ -1723,8 +1722,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		if inv.PaidAt == nil {
 			inv.PaidAt = &now
 		}
-		// Check if this is the first invoice (billing_reason = subscription_create)
-		if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCreate) {
+		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
 			s.HandleIncompleteSubscriptionPayment(ctx, inv)
 		}
 	case types.PaymentStatusFailed:
@@ -3443,32 +3441,27 @@ func (s *invoiceService) TriggerWebhook(ctx context.Context, invoiceID string, e
 	return nil
 }
 
-// HandleIncompleteSubscriptionPayment checks if the paid invoice is the first invoice for a subscription
-// and activates the subscription if it's currently in incomplete status
+// HandleIncompleteSubscriptionPayment runs subscription activation / trial conversion when a qualifying
+// invoice is fully paid (SUBSCRIPTION_CREATE or SUBSCRIPTION_TRIAL_END).
 func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error {
 	// Only process subscription invoices that are fully paid
 	if invoice.SubscriptionID == nil || !invoice.AmountRemaining.IsZero() {
 		return nil
 	}
 
-	// Check if this is the first invoice (billing_reason = subscription_create)
-	if invoice.BillingReason != string(types.InvoiceBillingReasonSubscriptionCreate) {
+	if !types.InvoiceBillingReason(invoice.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
 		return nil
 	}
 
-	s.Logger.InfowCtx(ctx, "processing first invoice payment for subscription activation",
+	s.Logger.InfowCtx(ctx, "processing subscription activation after invoice payment",
 		"invoice_id", invoice.ID,
 		"subscription_id", *invoice.SubscriptionID,
 		"billing_reason", invoice.BillingReason)
 
-	// Get the subscription service
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
-
-	// Activate the incomplete subscription
-	err := subscriptionService.ActivateIncompleteSubscription(ctx, *invoice.SubscriptionID)
-	if err != nil {
+	if err := subscriptionService.HandleSubscriptionActivatingInvoicePaid(ctx, invoice); err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to activate incomplete subscription after first invoice payment").
+			WithHint("Failed to complete subscription activation after invoice payment").
 			WithReportableDetails(map[string]interface{}{
 				"subscription_id": *invoice.SubscriptionID,
 				"invoice_id":      invoice.ID,
@@ -3476,7 +3469,7 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	s.Logger.InfowCtx(ctx, "successfully activated subscription after first invoice payment",
+	s.Logger.InfowCtx(ctx, "successfully processed subscription activation after invoice payment",
 		"invoice_id", invoice.ID,
 		"subscription_id", *invoice.SubscriptionID)
 

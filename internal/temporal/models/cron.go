@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 // ===================== Credit Grant Processing =====================
 
 // CreditGrantProcessingWorkflowInput is the input for CreditGrantProcessingWorkflow.
@@ -47,3 +49,13 @@ type SubscriptionRenewalDueAlertsWorkflowInput struct{}
 
 // SubscriptionRenewalDueAlertsWorkflowResult is a placeholder.
 type SubscriptionRenewalDueAlertsWorkflowResult struct{}
+
+// SubscriptionTrialEndDueWorkflowInput is the input for SubscriptionTrialEndDueWorkflow.
+type SubscriptionTrialEndDueWorkflowInput struct{}
+
+// SubscriptionTrialEndDueWorkflowResult mirrors key counts from ProcessTrialEndDue for schedule runs.
+type SubscriptionTrialEndDueWorkflowResult struct {
+	TotalSuccess int       `json:"total_success"`
+	TotalFailed  int       `json:"total_failed"`
+	StartAt      time.Time `json:"start_at"`
+}

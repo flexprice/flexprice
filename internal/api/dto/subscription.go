@@ -307,13 +307,20 @@ type CreateSubscriptionRequest struct {
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string `json:"external_customer_id"`
 
-	PlanID             string               `json:"plan_id" validate:"required"`
-	Currency           string               `json:"currency" validate:"required,len=3"`
-	LookupKey          string               `json:"lookup_key"`
-	StartDate          *time.Time           `json:"start_date,omitempty"`
-	EndDate            *time.Time           `json:"end_date,omitempty"`
-	TrialStart         *time.Time           `json:"trial_start,omitempty"`
-	TrialEnd           *time.Time           `json:"trial_end,omitempty"`
+	PlanID    string     `json:"plan_id" validate:"required"`
+	Currency  string     `json:"currency" validate:"required,len=3"`
+	LookupKey string     `json:"lookup_key"`
+	StartDate *time.Time `json:"start_date,omitempty"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
+
+	// TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).
+	// 0 = explicitly no trial (overrides catalog). >0 = override duration in days.
+	TrialPeriodDays *int `json:"trial_period_days,omitempty"`
+
+	// TrialStart/TrialEnd are for internal integrations only (e.g. Stripe sync); not accepted from public JSON.
+	TrialStart *time.Time `json:"-"`
+	TrialEnd   *time.Time `json:"-"`
+
 	BillingCadence     types.BillingCadence `json:"-"`
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                  `json:"billing_period_count" default:"1"`
@@ -759,7 +766,37 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.TrialStart != nil && r.TrialStart.After(*r.StartDate) {
+	if r.StartDate != nil && r.StartDate.After(time.Now().UTC()) {
+		return ierr.NewError("start_date cannot be in the future").
+			WithHint("Start date must be in the past or present").
+			WithReportableDetails(map[string]interface{}{
+				"start_date": *r.StartDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.TrialPeriodDays != nil && lo.FromPtr(r.TrialPeriodDays) < 0 {
+		return ierr.NewError("trial_period_days must be non-negative").
+			WithHint("Use 0 to disable trial or omit to inherit from plan prices").
+			WithReportableDetails(map[string]interface{}{
+				"trial_period_days": lo.FromPtr(r.TrialPeriodDays),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if (r.TrialStart != nil) != (r.TrialEnd != nil) {
+		return ierr.NewError("trial_start and trial_end must both be set").
+			WithHint("Internal use only: provide both bounds or neither").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.TrialPeriodDays != nil && lo.FromPtr(r.TrialPeriodDays) > 0 && (r.TrialStart != nil || r.TrialEnd != nil) {
+		return ierr.NewError("cannot set trial_period_days together with trial_start/trial_end").
+			WithHint("Use trial_period_days for API creates, or trial_start/trial_end for gateway sync only").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.StartDate != nil && r.TrialStart != nil && r.TrialStart.After(*r.StartDate) {
 		return ierr.NewError("trial_start cannot be after start_date").
 			WithHint("Trial start date must be before or equal to start date").
 			WithReportableDetails(map[string]interface{}{
@@ -769,13 +806,19 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.TrialEnd != nil && r.TrialEnd.Before(*r.StartDate) {
+	if r.StartDate != nil && r.TrialEnd != nil && r.TrialEnd.Before(*r.StartDate) {
 		return ierr.NewError("trial_end cannot be before start_date").
 			WithHint("Trial end date must be after or equal to start date").
 			WithReportableDetails(map[string]interface{}{
 				"start_date": *r.StartDate,
 				"trial_end":  *r.TrialEnd,
 			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.TrialStart != nil && r.TrialEnd != nil && r.TrialEnd.Before(*r.TrialStart) {
+		return ierr.NewError("trial_end cannot be before trial_start").
+			WithHint("trial_end must be on or after trial_start").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1113,6 +1156,11 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		parentSubscriptionID = lo.ToPtr(r.Inheritance.ParentSubscriptionID)
 	}
 
+	var trialStart, trialEnd *time.Time
+	if r.TrialStart != nil && r.TrialEnd != nil {
+		trialStart, trialEnd = r.TrialStart, r.TrialEnd
+	}
+
 	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		CustomerID:         r.CustomerID,
@@ -1122,8 +1170,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		SubscriptionStatus: initialStatus,
 		StartDate:          startDate,
 		EndDate:            endDate,
-		TrialStart:         r.TrialStart,
-		TrialEnd:           r.TrialEnd,
+		TrialStart:         trialStart,
+		TrialEnd:           trialEnd,
 		BillingCadence:     r.BillingCadence,
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,

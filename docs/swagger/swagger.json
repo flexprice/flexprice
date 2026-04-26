@@ -7623,187 +7623,6 @@
                 "x-scope": "read"
             }
         },
-        "/subscriptions/{id}/pause": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when temporarily stopping a subscription (e.g. customer hold or seasonal pause). Billing and access pause; resume when ready.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "Pause a subscription",
-                "operationId": "pauseSubscription",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Pause subscription request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/PauseSubscriptionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/SubscriptionPauseResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/subscriptions/{id}/pauses": {
-            "get": {
-                "description": "Use when showing pause history for a subscription (e.g. support or audit). Returns all past and future pauses.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "List all pauses for a subscription",
-                "operationId": "listSubscriptionPauses",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ListSubscriptionPausesResponse"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/subscriptions/{id}/resume": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when reactivating a paused subscription (e.g. end of hold). Billing and access resume from the resume date.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "Resume a paused subscription",
-                "operationId": "resumeSubscription",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Resume subscription request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/ResumeSubscriptionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/SubscriptionPauseResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/subscriptions/{id}/v2": {
             "get": {
                 "security": [
@@ -14061,7 +13880,7 @@
                 "transform_quantity": {
                     "$ref": "#/definitions/price.TransformQuantity"
                 },
-                "trial_period": {
+                "trial_period_days": {
                     "type": "integer"
                 },
                 "type": {
@@ -14429,11 +14248,9 @@
                         "$ref": "#/definitions/TaxRateOverride"
                     }
                 },
-                "trial_end": {
-                    "type": "string"
-                },
-                "trial_start": {
-                    "type": "string"
+                "trial_period_days": {
+                    "description": "TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).\n0 = explicitly no trial (overrides catalog). \u003e0 = override duration in days.",
+                    "type": "integer"
                 }
             }
         },
@@ -16746,23 +16563,6 @@
                 }
             }
         },
-        "ListSubscriptionPausesResponse": {
-            "description": "Response object for listing subscription pauses with total count",
-            "type": "object",
-            "properties": {
-                "items": {
-                    "description": "List of subscription pause objects\n@Description Array of subscription pauses",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/SubscriptionPauseResponse"
-                    }
-                },
-                "total": {
-                    "description": "Total number of pauses\n@Description Total count of subscription pauses in the response",
-                    "type": "integer"
-                }
-            }
-        },
         "ListTasksResponse": {
             "type": "object",
             "properties": {
@@ -17110,47 +16910,6 @@
                 "transform_quantity": {
                     "description": "TransformQuantity determines how to transform the quantity for this line item",
                     "$ref": "#/definitions/price.TransformQuantity"
-                }
-            }
-        },
-        "PauseSubscriptionRequest": {
-            "description": "Request object for pausing an active subscription with various pause modes and options",
-            "type": "object",
-            "required": [
-                "pause_mode"
-            ],
-            "properties": {
-                "dry_run": {
-                    "description": "Whether to perform a dry run\n@Description If true, validates the request and shows impact without actually pausing the subscription\n@Example false",
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "description": "Additional metadata as key-value pairs\n@Description Optional metadata for storing additional information about the pause\n@Example {\"requested_by\": \"customer\", \"channel\": \"support_ticket\"}",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "pause_days": {
-                    "description": "Duration of the pause in days\n@Description Number of days to pause the subscription. Cannot be used together with pause_end. Must be greater than 0\n@Example 30",
-                    "type": "integer"
-                },
-                "pause_end": {
-                    "description": "End date for the subscription pause\n@Description ISO 8601 timestamp when the pause should end. Cannot be used together with pause_days. Must be after pause_start\n@Example \"2024-02-15T00:00:00Z\"",
-                    "type": "string"
-                },
-                "pause_mode": {
-                    "description": "Mode for pausing the subscription\n@Description Determines when the pause takes effect. \"immediate\" pauses right away, \"scheduled\" pauses at a specified time\n@Enum immediate,scheduled",
-                    "$ref": "#/definitions/types.PauseMode"
-                },
-                "pause_start": {
-                    "description": "Start date for the subscription pause\n@Description ISO 8601 timestamp when the pause should begin. Required when pause_mode is \"scheduled\"\n@Example \"2024-01-15T00:00:00Z\"",
-                    "type": "string"
-                },
-                "reason": {
-                    "description": "Reason for pausing the subscription\n@Description Optional reason for the pause. Maximum 255 characters\n@Example \"Customer requested temporary suspension\"",
-                    "type": "string",
-                    "maxLength": 255
                 }
             }
         },
@@ -17540,8 +17299,8 @@
                 "transform_quantity": {
                     "$ref": "#/definitions/price.JSONBTransformQuantity"
                 },
-                "trial_period": {
-                    "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
+                "trial_period_days": {
+                    "description": "TrialPeriodDays is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
                     "type": "integer"
                 },
                 "type": {
@@ -17718,30 +17477,6 @@
                 },
                 "reason": {
                     "type": "string"
-                }
-            }
-        },
-        "ResumeSubscriptionRequest": {
-            "description": "Request object for resuming a paused subscription",
-            "type": "object",
-            "required": [
-                "resume_mode"
-            ],
-            "properties": {
-                "dry_run": {
-                    "description": "Whether to perform a dry run\n@Description If true, validates the request and shows impact without actually resuming the subscription\n@Example false",
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "description": "Additional metadata as key-value pairs\n@Description Optional metadata for storing additional information about the resume operation\n@Example {\"resumed_by\": \"admin\", \"reason\": \"issue_resolved\"}",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "resume_mode": {
-                    "description": "Mode for resuming the subscription\n@Description Determines how the subscription should be resumed\n@Enum immediate,scheduled",
-                    "$ref": "#/definitions/types.ResumeMode"
                 }
             }
         },
@@ -18209,9 +17944,6 @@
                 "tenant_id": {
                     "type": "string"
                 },
-                "trial_period": {
-                    "type": "integer"
-                },
                 "updated_at": {
                     "type": "string"
                 },
@@ -18243,78 +17975,6 @@
                 "SubscriptionModifyTypeInheritance",
                 "SubscriptionModifyTypeQuantityChange"
             ]
-        },
-        "SubscriptionPauseResponse": {
-            "description": "Response object containing subscription pause information",
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "environment_id": {
-                    "description": "EnvironmentID is the environment identifier for the pause",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "ID is the unique identifier for the subscription pause",
-                    "type": "string"
-                },
-                "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
-                },
-                "original_period_end": {
-                    "description": "OriginalPeriodEnd is the end of the billing period when the pause was created",
-                    "type": "string"
-                },
-                "original_period_start": {
-                    "description": "OriginalPeriodStart is the start of the billing period when the pause was created",
-                    "type": "string"
-                },
-                "pause_end": {
-                    "description": "PauseEnd is when the pause will end (null for indefinite)",
-                    "type": "string"
-                },
-                "pause_mode": {
-                    "$ref": "#/definitions/types.PauseMode"
-                },
-                "pause_start": {
-                    "description": "PauseStart is when the pause actually started",
-                    "type": "string"
-                },
-                "pause_status": {
-                    "$ref": "#/definitions/types.PauseStatus"
-                },
-                "reason": {
-                    "description": "Reason is the reason for pausing",
-                    "type": "string"
-                },
-                "resume_mode": {
-                    "$ref": "#/definitions/types.ResumeMode"
-                },
-                "resumed_at": {
-                    "description": "ResumedAt is when the pause was actually ended (if manually resumed)",
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "subscription_id": {
-                    "description": "SubscriptionID is the identifier for the subscription",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
-                }
-            }
         },
         "SubscriptionPhaseCreateRequest": {
             "type": "object",
@@ -18493,7 +18153,7 @@
                 "transform_quantity": {
                     "$ref": "#/definitions/price.TransformQuantity"
                 },
-                "trial_period": {
+                "trial_period_days": {
                     "type": "integer"
                 },
                 "type": {
@@ -22052,6 +21712,7 @@
                 "SUBSCRIPTION_CREATE",
                 "SUBSCRIPTION_CYCLE",
                 "SUBSCRIPTION_UPDATE",
+                "SUBSCRIPTION_TRIAL_END",
                 "PRORATION",
                 "MANUAL"
             ],
@@ -22059,6 +21720,7 @@
                 "InvoiceBillingReasonSubscriptionCreate",
                 "InvoiceBillingReasonSubscriptionCycle",
                 "InvoiceBillingReasonSubscriptionUpdate",
+                "InvoiceBillingReasonSubscriptionTrialEnd",
                 "InvoiceBillingReasonProration",
                 "InvoiceBillingReasonManual"
             ]
@@ -23017,6 +22679,10 @@
                     "items": {
                         "$ref": "#/definitions/types.SubscriptionType"
                     }
+                },
+                "trial_end_due_lte": {
+                    "description": "TrialEndDueLTE, when set, restricts to subscriptions with trial_end not nil and trial_end \u003c= trial_end_due_lte.\nUse with subscription_status trialing for trial-end cron processing.",
+                    "type": "string"
                 },
                 "with_line_items": {
                     "description": "WithLineItems includes line items in the response",
@@ -24121,8 +23787,8 @@
                 "transform_quantity": {
                     "$ref": "#/definitions/price.JSONBTransformQuantity"
                 },
-                "trial_period": {
-                    "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
+                "trial_period_days": {
+                    "description": "TrialPeriodDays is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
                     "type": "integer"
                 },
                 "type": {
@@ -24281,9 +23947,6 @@
                 },
                 "tenant_id": {
                     "type": "string"
-                },
-                "trial_period": {
-                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"

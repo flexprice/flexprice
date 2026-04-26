@@ -439,6 +439,7 @@ func buildWorkerConfig(
 			cronWorkflows.WalletCreditExpiryWorkflow,
 			cronWorkflows.SubscriptionBillingPeriodsWorkflow,
 			cronWorkflows.SubscriptionRenewalDueAlertsWorkflow,
+			cronWorkflows.SubscriptionTrialEndDueWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -446,6 +447,7 @@ func buildWorkerConfig(
 			cron.walletCreditExpiry.ExpireCreditsActivity,
 			cron.subscription.UpdateBillingPeriodsActivity,
 			cron.subscription.ProcessRenewalDueAlertsActivity,
+			cron.subscription.ProcessTrialEndDueActivity,
 		)
 	}
 	return WorkerConfig{

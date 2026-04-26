@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS flexprice.subscription_line_items (
     billing_period            LowCardinality(String) NOT NULL,
     billing_period_count      Int64 NOT NULL DEFAULT 1,
     invoice_cadence           Nullable(String),
-    trial_period              Int64 NOT NULL DEFAULT 0,
+    trial_period_days         Int64 NOT NULL DEFAULT 0,
     start_date                Nullable(DateTime64(3)),
     end_date                  Nullable(DateTime64(3)),
     subscription_phase_id     Nullable(String),

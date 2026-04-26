@@ -49,6 +49,21 @@ func (a *SubscriptionCronActivities) UpdateBillingPeriodsActivity(ctx context.Co
 	return &cronModels.SubscriptionBillingPeriodsWorkflowResult{}, nil
 }
 
+// ProcessTrialEndDueActivity runs the same work as POST /v1/cron/subscriptions/process-trial-end-due.
+func (a *SubscriptionCronActivities) ProcessTrialEndDueActivity(ctx context.Context) (*cronModels.SubscriptionTrialEndDueWorkflowResult, error) {
+	log := activity.GetLogger(ctx)
+	log.Info("Processing trial end due subscriptions (cron activity)")
+	resp, err := a.subscriptionService.ProcessTrialEndDue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &cronModels.SubscriptionTrialEndDueWorkflowResult{
+		TotalSuccess: resp.TotalSuccess,
+		TotalFailed:  resp.TotalFailed,
+		StartAt:      resp.StartAt,
+	}, nil
+}
+
 // ProcessRenewalDueAlertsActivity runs the same work as POST /v1/cron/subscriptions/renewal-due-alerts.
 func (a *SubscriptionCronActivities) ProcessRenewalDueAlertsActivity(ctx context.Context) (*cronModels.SubscriptionRenewalDueAlertsWorkflowResult, error) {
 	log := activity.GetLogger(ctx)

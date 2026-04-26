@@ -618,6 +618,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	subscriptionGroup := cron.Group("/subscriptions")
 	{
 		subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
+		// Deprecated: automation uses Temporal schedule subscription-trial-end-due.
+		subscriptionGroup.POST("/process-trial-end-due", handlers.CronSubscription.ProcessTrialEndDue)
 		subscriptionGroup.POST("/process-auto-cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
 		subscriptionGroup.POST("/renewal-due-alerts", handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
 	}

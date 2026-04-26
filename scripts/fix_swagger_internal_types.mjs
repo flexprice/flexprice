@@ -129,7 +129,7 @@ function main() {
   //    contains the format info (required for the ≥150 validation criterion) in
   //    addition to the overlay patches that Speakeasy applies at generation time.
   // Note: do not use _period — e.g. billing_period is types.BillingPeriod (MONTHLY), not a timestamp.
-  const TIMESTAMP_RE = /(_at|_date|_start|_end|_time|_anchor|expires_at|expiry|due_date|close_time|archived_at|applied_at|executed_at|failed_at|finalized_at|completed_at|last_used_at|balance_updated_at)$/;
+  const TIMESTAMP_RE = /(_at|_date|_start|_end|_time|_anchor|expires_at|expiry|due_date|close_time|archived_at|applied_at|executed_at|failed_at|finalized_at|completed_at|last_used_at|balance_updated_at|_due_lte)$/;
 
   function getProperties(schema) {
     const props = Object.assign({}, schema.properties || {});

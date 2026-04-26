@@ -55,6 +55,13 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.SubscriptionRenewalDueAlertsWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			ID:        types.ScheduleIDSubscriptionTrialEndDue,
+			Interval:  15 * time.Minute,
+			Workflow:  cronWorkflows.SubscriptionTrialEndDueWorkflow,
+			Input:     models.SubscriptionTrialEndDueWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 

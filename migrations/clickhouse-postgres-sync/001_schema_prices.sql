@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS flexprice.prices (
     billing_model             LowCardinality(String) NOT NULL,
     billing_cadence           LowCardinality(String) NOT NULL,
     invoice_cadence           Nullable(String),
-    trial_period              Int64 NOT NULL DEFAULT 0,
+    trial_period_days         Int64 NOT NULL DEFAULT 0,
     meter_id                  Nullable(String),
     filter_values             Nullable(String) CODEC(ZSTD),
     tier_mode                 Nullable(String),

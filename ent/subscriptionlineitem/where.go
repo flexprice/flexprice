@@ -191,11 +191,6 @@ func InvoiceCadence(v types.InvoiceCadence) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldInvoiceCadence, vc))
 }
 
-// TrialPeriod applies equality check predicate on the "trial_period" field. It's identical to TrialPeriodEQ.
-func TrialPeriod(v int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldTrialPeriod, v))
-}
-
 // StartDate applies equality check predicate on the "start_date" field. It's identical to StartDateEQ.
 func StartDate(v time.Time) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldStartDate, v))
@@ -1906,46 +1901,6 @@ func InvoiceCadenceEqualFold(v types.InvoiceCadence) predicate.SubscriptionLineI
 func InvoiceCadenceContainsFold(v types.InvoiceCadence) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldInvoiceCadence, vc))
-}
-
-// TrialPeriodEQ applies the EQ predicate on the "trial_period" field.
-func TrialPeriodEQ(v int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldTrialPeriod, v))
-}
-
-// TrialPeriodNEQ applies the NEQ predicate on the "trial_period" field.
-func TrialPeriodNEQ(v int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldTrialPeriod, v))
-}
-
-// TrialPeriodIn applies the In predicate on the "trial_period" field.
-func TrialPeriodIn(vs ...int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldIn(FieldTrialPeriod, vs...))
-}
-
-// TrialPeriodNotIn applies the NotIn predicate on the "trial_period" field.
-func TrialPeriodNotIn(vs ...int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldTrialPeriod, vs...))
-}
-
-// TrialPeriodGT applies the GT predicate on the "trial_period" field.
-func TrialPeriodGT(v int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldGT(FieldTrialPeriod, v))
-}
-
-// TrialPeriodGTE applies the GTE predicate on the "trial_period" field.
-func TrialPeriodGTE(v int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldTrialPeriod, v))
-}
-
-// TrialPeriodLT applies the LT predicate on the "trial_period" field.
-func TrialPeriodLT(v int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldLT(FieldTrialPeriod, v))
-}
-
-// TrialPeriodLTE applies the LTE predicate on the "trial_period" field.
-func TrialPeriodLTE(v int) predicate.SubscriptionLineItem {
-	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldTrialPeriod, v))
 }
 
 // StartDateEQ applies the EQ predicate on the "start_date" field.
