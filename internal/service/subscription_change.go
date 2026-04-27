@@ -858,7 +858,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		IsPlanChangeNewSubscription: true,
 	}
 	tc := archivedSub.TotalCreditAmount
-	createSubReq.ProrationCreditForOpeningInvoice = &tc
+	createSubReq.OpeningInvoiceAdjustmentAmount = &tc
 
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	response, err := subscriptionService.CreateSubscription(ctx, createSubReq)

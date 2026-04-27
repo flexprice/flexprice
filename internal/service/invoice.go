@@ -477,9 +477,9 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		// Apply coupons/discounts. For one-off and credit invoices, also apply
 		// credits and taxes here because they are created and finalized in one
 		// shot and RecalculateTaxesOnInvoice is a no-op for non-subscription
-		// invoices. For subscription invoices: opening proration credit (if any) is
-		// applied to line amounts first, then coupons — wallet/prepaid credits
-		// and taxes are deferred to finalization.
+		// invoices. For subscription invoices, credits and taxes are deferred
+		// to the finalization step so wallet debits only happen when the
+		// invoice is actually sealed.
 		if applyReq != nil {
 			if inv.InvoiceType == types.InvoiceTypeOneOff || inv.InvoiceType == types.InvoiceTypeCredit {
 				// One-off / credit: apply coupons + credits + taxes now
@@ -490,14 +490,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 					return err
 				}
 			} else {
-				// Subscription: opening proration on gross lines, then coupon discounts; prepaid wallet credits at finalize
-				var openingCredit *decimal.Decimal
-				if applyReq != nil {
-					openingCredit = applyReq.OpeningProrationCredit
-				}
-				if err := s.applyOpeningProrationCreditBeforeCoupons(txCtx, inv, openingCredit); err != nil {
-					return err
-				}
+				// Subscription: coupons only — credits and taxes deferred to finalization
 				if err := s.applyCouponsToInvoice(txCtx, inv, *applyReq); err != nil {
 					return err
 				}
@@ -510,85 +503,6 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return s.InvoiceRepo.Update(txCtx, inv)
 	})
 	return skipped, err
-}
-
-// applyOpeningProrationCreditBeforeCoupons runs before applyCouponsToInvoice: reduces line Amounts by the opening
-// proration credit (larger positive nets first) and refreshes inv subtotal/totals. Coupon discounts are not applied yet
-// in the usual path, so line discount fields are typically zero; capping still applies if they are non-zero.
-// credit comes from InvoiceComputeRequest.OpeningProrationCredit (e.g. plan-change via CreateSubscriptionInvoice).
-func (s *invoiceService) applyOpeningProrationCreditBeforeCoupons(ctx context.Context, inv *invoice.Invoice, credit *decimal.Decimal) error {
-	if inv.InvoiceType != types.InvoiceTypeSubscription {
-		return nil
-	}
-	if credit == nil || !credit.GreaterThan(decimal.Zero) {
-		return nil
-	}
-	if len(inv.LineItems) == 0 {
-		return nil
-	}
-
-	type netItem struct {
-		li  *invoice.InvoiceLineItem
-		net decimal.Decimal
-	}
-	nets := lo.Map(inv.LineItems, func(li *invoice.InvoiceLineItem, _ int) netItem {
-		net := li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
-		if net.IsNegative() {
-			net = decimal.Zero
-		}
-		return netItem{li: li, net: net}
-	})
-	remaining := decimal.Min(*credit, lo.Reduce(nets, func(agg decimal.Decimal, n netItem, _ int) decimal.Decimal { return agg.Add(n.net) }, decimal.Zero))
-	if remaining.IsZero() {
-		return nil
-	}
-
-	sort.SliceStable(nets, func(i, j int) bool {
-		if !nets[i].net.Equal(nets[j].net) {
-			return nets[i].net.GreaterThan(nets[j].net)
-		}
-		return nets[i].li.ID < nets[j].li.ID
-	})
-
-	for _, n := range nets {
-		if remaining.IsZero() {
-			break
-		}
-		if n.net.IsZero() {
-			continue
-		}
-		take := decimal.Min(remaining, n.net)
-		n.li.Amount = n.li.Amount.Sub(take)
-		remaining = remaining.Sub(take)
-		if n.li.LineItemDiscount.GreaterThan(n.li.Amount) {
-			n.li.LineItemDiscount = n.li.Amount
-		}
-		room := n.li.Amount.Sub(n.li.LineItemDiscount)
-		if n.li.InvoiceLevelDiscount.GreaterThan(room) {
-			n.li.InvoiceLevelDiscount = decimal.Max(decimal.Zero, room)
-		}
-	}
-
-	inv.Subtotal = lo.Reduce(inv.LineItems, func(agg decimal.Decimal, li *invoice.InvoiceLineItem, _ int) decimal.Decimal {
-		return agg.Add(li.Amount)
-	}, decimal.Zero)
-	inv.TotalDiscount = lo.Reduce(inv.LineItems, func(agg decimal.Decimal, li *invoice.InvoiceLineItem, _ int) decimal.Decimal {
-		return agg.Add(li.LineItemDiscount).Add(li.InvoiceLevelDiscount)
-	}, decimal.Zero)
-	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount)
-	if inv.Total.IsNegative() {
-		inv.Total = decimal.Zero
-	}
-	inv.AmountDue = inv.Total
-	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
-
-	for _, li := range inv.LineItems {
-		if err := s.InvoiceLineItemRepo.Update(ctx, li); err != nil {
-			return ierr.WithError(err).WithHint("failed to update line item after opening proration credit").Mark(ierr.ErrDatabase)
-		}
-	}
-
-	return nil
 }
 
 // getInvoiceWithLineItems fetches an invoice and populates its LineItems from the dedicated repo.
@@ -1906,8 +1820,8 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 
 	// Populate draft with usage and line items; if zero-dollar, marked SKIPPED
 	var computeOverride *dto.InvoiceComputeRequest
-	if req.ProrationCreditForOpeningInvoice != nil && req.ProrationCreditForOpeningInvoice.GreaterThan(decimal.Zero) {
-		computeOverride = &dto.InvoiceComputeRequest{OpeningProrationCredit: req.ProrationCreditForOpeningInvoice}
+	if req.OpeningInvoiceAdjustmentAmount != nil && req.OpeningInvoiceAdjustmentAmount.GreaterThan(decimal.Zero) {
+		computeOverride = &dto.InvoiceComputeRequest{OpeningInvoiceAdjustmentAmount: req.OpeningInvoiceAdjustmentAmount}
 	}
 	skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
 	if err != nil {

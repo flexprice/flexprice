@@ -424,7 +424,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 			if req.IsPlanChangeNewSubscription {
 				invReq.BillingReason = types.InvoiceBillingReasonSubscriptionUpdate
-				invReq.ProrationCreditForOpeningInvoice = req.ProrationCreditForOpeningInvoice
+				invReq.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
 			}
 			invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, invReq, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
 			if err != nil {

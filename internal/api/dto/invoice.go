@@ -138,7 +138,7 @@ func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 
 // ToComputeRequest converts a CreateInvoiceRequest to an InvoiceComputeRequest,
 // extracting only the fields needed for invoice computation (line items, amounts, coupons, taxes).
-// If overlay is non-nil and overlay.OpeningProrationCredit is set, it is merged in (e.g. ComputeInvoice caller override for plan-change opening invoices).
+// If overlay is non-nil and overlay.OpeningInvoiceAdjustmentAmount is set, it is merged in (e.g. ComputeInvoice caller override for plan-change opening invoices).
 func (r *CreateInvoiceRequest) ToComputeRequest(overlay *InvoiceComputeRequest) InvoiceComputeRequest {
 	out := InvoiceComputeRequest{
 		LineItems:        r.LineItems,
@@ -151,8 +151,8 @@ func (r *CreateInvoiceRequest) ToComputeRequest(overlay *InvoiceComputeRequest) 
 		LineItemCoupons:  r.LineItemCoupons,
 		PreparedTaxRates: r.PreparedTaxRates,
 	}
-	if overlay != nil && overlay.OpeningProrationCredit != nil {
-		out.OpeningProrationCredit = overlay.OpeningProrationCredit
+	if overlay != nil && overlay.OpeningInvoiceAdjustmentAmount != nil {
+		out.OpeningInvoiceAdjustmentAmount = overlay.OpeningInvoiceAdjustmentAmount
 	}
 	return out
 }
@@ -268,8 +268,8 @@ type InvoiceComputeRequest struct {
 	InvoiceCoupons   []InvoiceCoupon                `json:"invoice_coupons,omitempty"`
 	LineItemCoupons  []InvoiceLineItemCoupon        `json:"line_item_coupons,omitempty"`
 	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
-	// OpeningProrationCredit is internal (plan-change opening invoice). Applied before coupons by reducing line amounts; not from public JSON.
-	OpeningProrationCredit *decimal.Decimal `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is internal: proration/cancel credit applied to the opening subscription invoice (reduces line amounts before coupons). Not persisted invoice adjustment_amount (credit notes). Not in public JSON.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // ComputeInvoiceResponse is the API response after recomputing a draft invoice with ComputeInvoice.
@@ -1149,8 +1149,8 @@ type CreateSubscriptionInvoiceRequest struct {
 
 	// BillingReason optional; when empty, ToDraftRequest defaults to subscription_cycle (subscription_creation flow still forces SUBSCRIPTION_CREATE).
 	BillingReason types.InvoiceBillingReason `json:"billing_reason,omitempty"`
-	// ProrationCreditForOpeningInvoice is internal: cancel proration to apply to this invoice by reducing line amounts.
-	ProrationCreditForOpeningInvoice *decimal.Decimal `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is internal: same as InvoiceComputeRequest. Not in public JSON.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // ToDraftRequest builds a CreateDraftInvoiceRequest from the subscription invoice request

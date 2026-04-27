@@ -418,8 +418,8 @@ type CreateSubscriptionRequest struct {
 
 	// IsPlanChangeNewSubscription is true when this create is the new subscription after an immediate plan change.
 	IsPlanChangeNewSubscription bool `json:"-"`
-	// ProrationCreditForOpeningInvoice is the cancel proration credit to net against the first invoice (from CancelSubscriptionResponse.TotalCreditAmount).
-	ProrationCreditForOpeningInvoice *decimal.Decimal `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is internal: proration/cancel credit to net the new subscription's first (opening) invoice (e.g. CancelSubscriptionResponse.TotalCreditAmount on immediate plan change). Not in public JSON.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
