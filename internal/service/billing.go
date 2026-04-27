@@ -62,6 +62,9 @@ type PrepareSubscriptionInvoiceRequestParams struct {
 	ReferencePoint types.InvoiceReferencePoint `validate:"required" binding:"required"`
 	// ExcludeInvoiceID excludes lines already invoiced for the same price/period (empty = no exclusion).
 	ExcludeInvoiceID string `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is the credit from the cancelled subscription to apply to the first invoice.
+	// Applied as FixedChargeAdjustment (reduces fixed line item amounts before coupons).
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // Validate enforces struct tags, period order, and reference point.
@@ -2155,11 +2158,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		calculationResult, err = s.CalculateCharges(ctx, CalculateChargesParams{
-			Subscription: params.Subscription,
-			LineItems:    advanceLineItems,
-			PeriodStart:  params.PeriodStart,
-			PeriodEnd:    params.PeriodEnd,
-			IncludeUsage: false, // No usage for advance
+			Subscription:          params.Subscription,
+			LineItems:             advanceLineItems,
+			PeriodStart:           params.PeriodStart,
+			PeriodEnd:             params.PeriodEnd,
+			IncludeUsage:          false, // No usage for advance
+			FixedChargeAdjustment: params.OpeningInvoiceAdjustmentAmount,
 		})
 		if err != nil {
 			return nil, err

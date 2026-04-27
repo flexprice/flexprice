@@ -400,13 +400,17 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			return false, err
 		}
 		billingService := NewBillingService(s.ServiceParams)
-		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		prepareParams := PrepareSubscriptionInvoiceRequestParams{
 			Subscription:     sub,
 			PeriodStart:      *inv.PeriodStart,
 			PeriodEnd:        *inv.PeriodEnd,
 			ReferencePoint:   referencePointForSubscriptionComputeInvoice(types.InvoiceBillingReason(inv.BillingReason)),
 			ExcludeInvoiceID: inv.ID,
-		})
+		}
+		if req != nil && req.OpeningInvoiceAdjustmentAmount != nil {
+			prepareParams.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
+		}
+		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, prepareParams)
 		if err != nil {
 			return false, err
 		}
