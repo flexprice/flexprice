@@ -266,7 +266,7 @@ type InvoiceComputeRequest struct {
 	InvoiceCoupons   []InvoiceCoupon                `json:"invoice_coupons,omitempty"`
 	LineItemCoupons  []InvoiceLineItemCoupon        `json:"line_item_coupons,omitempty"`
 	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
-	// OpeningInvoiceAdjustmentAmount is internal: proration/cancel credit applied to the opening subscription invoice (reduces line amounts before coupons). Not persisted invoice adjustment_amount (credit notes). Not in public JSON.
+	// OpeningInvoiceAdjustmentAmount is internal: proration/cancel credit applied to the opening subscription invoice (reduces line amounts before coupons)
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
