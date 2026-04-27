@@ -872,6 +872,18 @@ func (s *subscriptionChangeService) createNewSubscription(
 		return nil, err
 	}
 
+	// Refund excess credit to wallet when the opening adjustment exceeds the new plan's gross charge.
+	// This happens on downgrades where the unused credit from the old plan is larger than the new plan price.
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && archivedSub.TotalCreditAmount.GreaterThan(decimal.Zero) {
+		if err := s.refundExcessOpeningCredit(ctx, currentSub, newSub, response, archivedSub.TotalCreditAmount); err != nil {
+			s.serviceParams.Logger.Errorw("failed to refund excess opening invoice credit to wallet",
+				"error", err,
+				"old_subscription_id", currentSub.ID,
+				"new_subscription_id", newSub.ID,
+				"total_credit_amount", archivedSub.TotalCreditAmount.String())
+		}
+	}
+
 	// Handle entitlement proration for subscription changes
 	// This handles both anniversary and calendar billing cycles
 	s.serviceParams.Logger.Infow("checking entitlement proration condition",
@@ -903,6 +915,50 @@ func (s *subscriptionChangeService) createNewSubscription(
 	}
 
 	return newSub, nil
+}
+
+// refundExcessOpeningCredit credits any portion of the opening invoice adjustment that exceeded the
+// new subscription's gross charge back to the customer's wallet.
+// This happens on downgrades: e.g. $2000 credit applied to a $600 plan → $1400 excess goes to wallet.
+func (s *subscriptionChangeService) refundExcessOpeningCredit(
+	ctx context.Context,
+	oldSub *subscription.Subscription,
+	newSub *subscription.Subscription,
+	newSubResponse *dto.SubscriptionResponse,
+	totalCredit decimal.Decimal,
+) error {
+	// Determine which invoice ID to exclude so FilterLineItemsToBeInvoiced re-includes the line items.
+	// If the invoice was skipped (zero-dollar) it won't be in the finalized list anyway, so "" is fine.
+	excludeInvoiceID := ""
+	if newSubResponse.LatestInvoice != nil {
+		excludeInvoiceID = newSubResponse.LatestInvoice.ID
+	}
+
+	billingService := NewBillingService(s.serviceParams)
+	grossReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     newSub,
+		PeriodStart:      newSub.CurrentPeriodStart,
+		PeriodEnd:        newSub.CurrentPeriodEnd,
+		ReferencePoint:   types.ReferencePointPeriodStart,
+		ExcludeInvoiceID: excludeInvoiceID,
+	})
+	if err != nil {
+		return err
+	}
+
+	excess := decimal.Max(decimal.Zero, totalCredit.Sub(grossReq.Subtotal))
+	if !excess.GreaterThan(decimal.Zero) {
+		return nil
+	}
+
+	walletService := NewWalletService(s.serviceParams)
+	idempotencyKey := fmt.Sprintf("plan_change_excess_credit|%s|%s", oldSub.ID, newSub.ID)
+	_, err = walletService.TopUpWalletForProratedCharge(ctx, newSub.GetInvoicingCustomerID(), excess, newSub.Currency, idempotencyKey)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // handleSubscriptionChangeEntitlementProration handles entitlement proration for subscription plan changes
