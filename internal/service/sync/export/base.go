@@ -96,6 +96,12 @@ func (s *ExportService) Export(ctx context.Context, request *dto.ExportRequest) 
 	ctx = types.SetTenantID(ctx, request.TenantID)
 	ctx = types.SetEnvironmentID(ctx, request.EnvID)
 
+	if request.JobConfig == nil {
+		return nil, ierr.NewError("job configuration is required").
+			WithHint("job configuration must be provided for exports").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Export metadata fields are only supported for credit_usage exports
 	if len(request.JobConfig.GetExportMetadataFields()) > 0 && request.EntityType != types.ScheduledTaskEntityTypeCreditUsage {
 		return nil, ierr.NewError("export metadata fields not supported for this entity type").
