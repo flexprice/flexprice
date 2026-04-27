@@ -288,7 +288,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	}
 
 	// Compute to assign invoice number and apply coupons/taxes
-	computeReq := req.ToComputeRequest()
+	computeReq := req.ToComputeRequest(nil)
 	skipped, err := s.ComputeInvoice(ctx, draft.ID, &computeReq)
 	if err != nil {
 		return nil, err
@@ -399,19 +399,18 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if err != nil {
 			return false, err
 		}
-		refPoint := types.ReferencePointPeriodEnd
-		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd:
-			refPoint = types.ReferencePointPeriodStart
-		case types.InvoiceBillingReasonProration:
-			refPoint = types.ReferencePointCancel
-		}
 		billingService := NewBillingService(s.ServiceParams)
-		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, sub, *inv.PeriodStart, *inv.PeriodEnd, refPoint, inv.ID)
+		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+			Subscription:     sub,
+			PeriodStart:      *inv.PeriodStart,
+			PeriodEnd:        *inv.PeriodEnd,
+			ReferencePoint:   referencePointForSubscriptionComputeInvoice(types.InvoiceBillingReason(inv.BillingReason)),
+			ExcludeInvoiceID: inv.ID,
+		})
 		if err != nil {
 			return false, err
 		}
-		computeReq := subInvReq.ToComputeRequest()
+		computeReq := subInvReq.ToComputeRequest(req)
 		applyReq = &computeReq
 	} else if req != nil {
 		// One-off or credit: line items and amounts come from the caller's request
@@ -478,9 +477,9 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		// Apply coupons/discounts. For one-off and credit invoices, also apply
 		// credits and taxes here because they are created and finalized in one
 		// shot and RecalculateTaxesOnInvoice is a no-op for non-subscription
-		// invoices. For subscription invoices, credits and taxes are deferred
-		// to the finalization step so wallet debits only happen when the
-		// invoice is actually sealed.
+		// invoices. For subscription invoices: opening proration credit (if any) is
+		// applied to line amounts first, then coupons — wallet/prepaid credits
+		// and taxes are deferred to finalization.
 		if applyReq != nil {
 			if inv.InvoiceType == types.InvoiceTypeOneOff || inv.InvoiceType == types.InvoiceTypeCredit {
 				// One-off / credit: apply coupons + credits + taxes now
@@ -491,7 +490,14 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 					return err
 				}
 			} else {
-				// Subscription: coupons only — credits and taxes deferred to finalization
+				// Subscription: opening proration on gross lines, then coupon discounts; prepaid wallet credits at finalize
+				var openingCredit *decimal.Decimal
+				if applyReq != nil {
+					openingCredit = applyReq.OpeningProrationCredit
+				}
+				if err := s.applyOpeningProrationCreditBeforeCoupons(txCtx, inv, openingCredit); err != nil {
+					return err
+				}
 				if err := s.applyCouponsToInvoice(txCtx, inv, *applyReq); err != nil {
 					return err
 				}
@@ -504,6 +510,85 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		return s.InvoiceRepo.Update(txCtx, inv)
 	})
 	return skipped, err
+}
+
+// applyOpeningProrationCreditBeforeCoupons runs before applyCouponsToInvoice: reduces line Amounts by the opening
+// proration credit (larger positive nets first) and refreshes inv subtotal/totals. Coupon discounts are not applied yet
+// in the usual path, so line discount fields are typically zero; capping still applies if they are non-zero.
+// credit comes from InvoiceComputeRequest.OpeningProrationCredit (e.g. plan-change via CreateSubscriptionInvoice).
+func (s *invoiceService) applyOpeningProrationCreditBeforeCoupons(ctx context.Context, inv *invoice.Invoice, credit *decimal.Decimal) error {
+	if inv.InvoiceType != types.InvoiceTypeSubscription {
+		return nil
+	}
+	if credit == nil || !credit.GreaterThan(decimal.Zero) {
+		return nil
+	}
+	if len(inv.LineItems) == 0 {
+		return nil
+	}
+
+	type netItem struct {
+		li  *invoice.InvoiceLineItem
+		net decimal.Decimal
+	}
+	nets := lo.Map(inv.LineItems, func(li *invoice.InvoiceLineItem, _ int) netItem {
+		net := li.Amount.Sub(li.LineItemDiscount).Sub(li.InvoiceLevelDiscount)
+		if net.IsNegative() {
+			net = decimal.Zero
+		}
+		return netItem{li: li, net: net}
+	})
+	remaining := decimal.Min(*credit, lo.Reduce(nets, func(agg decimal.Decimal, n netItem, _ int) decimal.Decimal { return agg.Add(n.net) }, decimal.Zero))
+	if remaining.IsZero() {
+		return nil
+	}
+
+	sort.SliceStable(nets, func(i, j int) bool {
+		if !nets[i].net.Equal(nets[j].net) {
+			return nets[i].net.GreaterThan(nets[j].net)
+		}
+		return nets[i].li.ID < nets[j].li.ID
+	})
+
+	for _, n := range nets {
+		if remaining.IsZero() {
+			break
+		}
+		if n.net.IsZero() {
+			continue
+		}
+		take := decimal.Min(remaining, n.net)
+		n.li.Amount = n.li.Amount.Sub(take)
+		remaining = remaining.Sub(take)
+		if n.li.LineItemDiscount.GreaterThan(n.li.Amount) {
+			n.li.LineItemDiscount = n.li.Amount
+		}
+		room := n.li.Amount.Sub(n.li.LineItemDiscount)
+		if n.li.InvoiceLevelDiscount.GreaterThan(room) {
+			n.li.InvoiceLevelDiscount = decimal.Max(decimal.Zero, room)
+		}
+	}
+
+	inv.Subtotal = lo.Reduce(inv.LineItems, func(agg decimal.Decimal, li *invoice.InvoiceLineItem, _ int) decimal.Decimal {
+		return agg.Add(li.Amount)
+	}, decimal.Zero)
+	inv.TotalDiscount = lo.Reduce(inv.LineItems, func(agg decimal.Decimal, li *invoice.InvoiceLineItem, _ int) decimal.Decimal {
+		return agg.Add(li.LineItemDiscount).Add(li.InvoiceLevelDiscount)
+	}, decimal.Zero)
+	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount)
+	if inv.Total.IsNegative() {
+		inv.Total = decimal.Zero
+	}
+	inv.AmountDue = inv.Total
+	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
+
+	for _, li := range inv.LineItems {
+		if err := s.InvoiceLineItemRepo.Update(ctx, li); err != nil {
+			return ierr.WithError(err).WithHint("failed to update line item after opening proration credit").Mark(ierr.ErrDatabase)
+		}
+	}
+
+	return nil
 }
 
 // getInvoiceWithLineItems fetches an invoice and populates its LineItems from the dedicated repo.
@@ -1707,7 +1792,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 
 		inv.PaidAt = &now
 
-		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+		if types.IsFirstSubscriptionOpenInvoiceReason(inv.BillingReason, inv.InvoiceType) {
 			s.HandleIncompleteSubscriptionPayment(ctx, inv)
 		}
 
@@ -1722,7 +1807,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		if inv.PaidAt == nil {
 			inv.PaidAt = &now
 		}
-		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+		if types.IsFirstSubscriptionOpenInvoiceReason(inv.BillingReason, inv.InvoiceType) {
 			s.HandleIncompleteSubscriptionPayment(ctx, inv)
 		}
 	case types.PaymentStatusFailed:
@@ -1807,7 +1892,11 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		string(subscription.BillingPeriod),
 	)
 	if flowType == types.InvoiceFlowSubscriptionCreation {
-		draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
+		if req.BillingReason != "" {
+			draftReq.BillingReason = req.BillingReason
+		} else {
+			draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
+		}
 	}
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
@@ -1816,8 +1905,11 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	}
 
 	// Populate draft with usage and line items; if zero-dollar, marked SKIPPED
-	// Pass nil for subscription invoices - coupons/taxes come from billing service
-	skipped, err := s.ComputeInvoice(ctx, draft.ID, nil)
+	var computeOverride *dto.InvoiceComputeRequest
+	if req.ProrationCreditForOpeningInvoice != nil && req.ProrationCreditForOpeningInvoice.GreaterThan(decimal.Zero) {
+		computeOverride = &dto.InvoiceComputeRequest{OpeningProrationCredit: req.ProrationCreditForOpeningInvoice}
+	}
+	skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1855,8 +1947,13 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 	}
 
 	// Prepare invoice request using billing service with the preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointPreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      *req.PeriodStart,
+		PeriodEnd:        *req.PeriodEnd,
+		ReferencePoint:   types.ReferencePointPreview,
+		ExcludeInvoiceID: "",
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1906,8 +2003,13 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 	}
 
 	// Prepare invoice request using billing service with the internal preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointInternalPreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      *req.PeriodStart,
+		PeriodEnd:        *req.PeriodEnd,
+		ReferencePoint:   types.ReferencePointInternalPreview,
+		ExcludeInvoiceID: "",
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1958,8 +2060,13 @@ func (s *invoiceService) GetMeterUsagePreviewInvoice(ctx context.Context, req dt
 	}
 
 	// Prepare invoice request using billing service with the meter usage preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointMeterUsagePreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      *req.PeriodStart,
+		PeriodEnd:        *req.PeriodEnd,
+		ReferencePoint:   types.ReferencePointMeterUsagePreview,
+		ExcludeInvoiceID: "",
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -3013,17 +3120,13 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		// Since we removed existing line items, the billing service will see no already
 		// invoiced items and will recalculate everything completely
 		billingService := NewBillingService(s.ServiceParams)
-
-		// Use period_end reference point to include both arrear and advance charges
-		referencePoint := types.ReferencePointPeriodEnd
-
-		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx,
-			sub,
-			*inv.PeriodStart,
-			*inv.PeriodEnd,
-			referencePoint,
-			"",
-		)
+		// ReferencePointPeriodEnd: include both arrear and advance charges.
+		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx, PrepareSubscriptionInvoiceRequestParams{
+			Subscription:   sub,
+			PeriodStart:    *inv.PeriodStart,
+			PeriodEnd:      *inv.PeriodEnd,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+		})
 		if err != nil {
 			return err
 		}
@@ -3098,7 +3201,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		}
 
 		// STEP 6b: Apply credits and coupons (same order as CreateInvoice: coupons first, then credit adjustment)
-		computeReq := newInvoiceReq.ToComputeRequest()
+		computeReq := newInvoiceReq.ToComputeRequest(nil)
 		if err := s.applyCreditsAndCouponsToInvoice(txCtx, inv, computeReq); err != nil {
 			return err
 		}
@@ -3449,7 +3552,7 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 		return nil
 	}
 
-	if !types.InvoiceBillingReason(invoice.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+	if !types.IsFirstSubscriptionOpenInvoiceReason(invoice.BillingReason, invoice.InvoiceType) {
 		return nil
 	}
 
@@ -4305,4 +4408,16 @@ func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lin
 	}
 
 	return nil
+}
+
+// referencePointForSubscriptionComputeInvoice maps invoice billing reason to the billing reference point.
+func referencePointForSubscriptionComputeInvoice(billingReason types.InvoiceBillingReason) types.InvoiceReferencePoint {
+	switch billingReason {
+	case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd, types.InvoiceBillingReasonSubscriptionUpdate:
+		return types.ReferencePointPeriodStart
+	case types.InvoiceBillingReasonProration:
+		return types.ReferencePointCancel
+	default:
+		return types.ReferencePointPeriodEnd
+	}
 }

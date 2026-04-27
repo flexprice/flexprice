@@ -691,16 +691,23 @@ func (s *billingService) buildCumulativeCommitmentCharges(
 // through MeterUsageRepo.
 func (s *billingService) calculateAllMeterUsageCharges(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	usage *dto.GetUsageBySubscriptionResponse,
-	periodStart, periodEnd time.Time,
+	params CalculateAllChargesParams,
 ) (*BillingCalculationResult, error) {
-	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, sub, periodStart, periodEnd)
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
+	sub := params.Subscription
+	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, CalculateFixedChargesParams{
+		Subscription:          sub,
+		PeriodStart:           params.PeriodStart,
+		PeriodEnd:             params.PeriodEnd,
+		FixedChargeAdjustment: params.FixedChargeAdjustment,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	usageCharges, usageTotal, err := s.CalculateMeterUsageCharges(ctx, sub, usage, periodStart, periodEnd,
+	usageCharges, usageTotal, err := s.CalculateMeterUsageCharges(ctx, sub, params.Usage, params.PeriodStart, params.PeriodEnd,
 		&CalculateFeatureUsageChargesOpts{Source: types.UsageSourceInvoiceCreation})
 	if err != nil {
 		return nil, err

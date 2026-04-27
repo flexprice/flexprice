@@ -138,8 +138,9 @@ func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 
 // ToComputeRequest converts a CreateInvoiceRequest to an InvoiceComputeRequest,
 // extracting only the fields needed for invoice computation (line items, amounts, coupons, taxes).
-func (r *CreateInvoiceRequest) ToComputeRequest() InvoiceComputeRequest {
-	return InvoiceComputeRequest{
+// If overlay is non-nil and overlay.OpeningProrationCredit is set, it is merged in (e.g. ComputeInvoice caller override for plan-change opening invoices).
+func (r *CreateInvoiceRequest) ToComputeRequest(overlay *InvoiceComputeRequest) InvoiceComputeRequest {
+	out := InvoiceComputeRequest{
 		LineItems:        r.LineItems,
 		Subtotal:         r.Subtotal,
 		Total:            r.Total,
@@ -150,6 +151,10 @@ func (r *CreateInvoiceRequest) ToComputeRequest() InvoiceComputeRequest {
 		LineItemCoupons:  r.LineItemCoupons,
 		PreparedTaxRates: r.PreparedTaxRates,
 	}
+	if overlay != nil && overlay.OpeningProrationCredit != nil {
+		out.OpeningProrationCredit = overlay.OpeningProrationCredit
+	}
+	return out
 }
 
 // ===================== Draft Invoice Creation DTO =====================
@@ -263,6 +268,8 @@ type InvoiceComputeRequest struct {
 	InvoiceCoupons   []InvoiceCoupon                `json:"invoice_coupons,omitempty"`
 	LineItemCoupons  []InvoiceLineItemCoupon        `json:"line_item_coupons,omitempty"`
 	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
+	// OpeningProrationCredit is internal (plan-change opening invoice). Applied before coupons by reducing line amounts; not from public JSON.
+	OpeningProrationCredit *decimal.Decimal `json:"-"`
 }
 
 // ComputeInvoiceResponse is the API response after recomputing a draft invoice with ComputeInvoice.
@@ -1142,6 +1149,8 @@ type CreateSubscriptionInvoiceRequest struct {
 
 	// BillingReason optional; when empty, ToDraftRequest defaults to subscription_cycle (subscription_creation flow still forces SUBSCRIPTION_CREATE).
 	BillingReason types.InvoiceBillingReason `json:"billing_reason,omitempty"`
+	// ProrationCreditForOpeningInvoice is internal: cancel proration to apply to this invoice by reducing line amounts.
+	ProrationCreditForOpeningInvoice *decimal.Decimal `json:"-"`
 }
 
 // ToDraftRequest builds a CreateDraftInvoiceRequest from the subscription invoice request
@@ -1161,7 +1170,9 @@ func (r *CreateSubscriptionInvoiceRequest) ToDraftRequest(customerID, subscripti
 		PeriodEnd:      &r.PeriodEnd,
 		BillingReason:  billingReason,
 	}
-	if r.ReferencePoint == types.ReferencePointCancel {
+	if r.BillingReason != "" {
+		req.BillingReason = r.BillingReason
+	} else if r.ReferencePoint == types.ReferencePointCancel {
 		req.BillingReason = types.InvoiceBillingReasonProration
 	}
 	return req
@@ -1186,6 +1197,11 @@ func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 		return ierr.NewError("period_start must be before period_end").
 			WithHint("Invoice period start must be before period end").
 			Mark(ierr.ErrValidation)
+	}
+	if r.BillingReason != "" {
+		if err := r.BillingReason.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

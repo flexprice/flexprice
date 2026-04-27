@@ -833,7 +833,12 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 				return nil, err
 			}
 
-			usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+			usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, service.CalculateUsageChargesParams{
+				Subscription: sub,
+				Usage:        usage,
+				PeriodStart:  periodStart,
+				PeriodEnd:    periodEnd,
+			})
 			if err != nil {
 				return nil, err
 			}

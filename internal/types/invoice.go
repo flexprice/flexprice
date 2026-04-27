@@ -203,12 +203,16 @@ func (r InvoiceBillingReason) Validate() error {
 	return nil
 }
 
-// TriggersSubscriptionActivationOnFullPayment reports whether paying this invoice in full should run
-// subscription activation logic (e.g. incomplete → active, or trialing → active after trial-end conversion).
-func (r InvoiceBillingReason) TriggersSubscriptionActivationOnFullPayment() bool {
-	switch r {
+// IsFirstSubscriptionOpenInvoiceReason reports whether paying this invoice should run first-invoice
+// activation for a subscription. SUBSCRIPTION_CREATE and SUBSCRIPTION_TRIAL_END always qualify;
+// SUBSCRIPTION_UPDATE qualifies only for subscription-type invoices (e.g. immediate plan-change opening).
+// One-off proration invoices use SUBSCRIPTION_UPDATE but a different invoice type, so they are excluded.
+func IsFirstSubscriptionOpenInvoiceReason(billingReason string, invoiceType InvoiceType) bool {
+	switch InvoiceBillingReason(billingReason) {
 	case InvoiceBillingReasonSubscriptionCreate, InvoiceBillingReasonSubscriptionTrialEnd:
 		return true
+	case InvoiceBillingReasonSubscriptionUpdate:
+		return invoiceType == InvoiceTypeSubscription
 	default:
 		return false
 	}

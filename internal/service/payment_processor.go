@@ -952,7 +952,7 @@ func (p *paymentProcessor) handleIncompleteSubscriptionPayment(ctx context.Conte
 		return nil
 	}
 
-	if !types.InvoiceBillingReason(invoice.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+	if !types.IsFirstSubscriptionOpenInvoiceReason(invoice.BillingReason, invoice.InvoiceType) {
 		return nil
 	}
 
