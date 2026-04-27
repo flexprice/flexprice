@@ -157,8 +157,6 @@ func (r *CreateInvoiceRequest) ToComputeRequest(overlay *InvoiceComputeRequest) 
 	return out
 }
 
-// ===================== Draft Invoice Creation DTO =====================
-
 // CreateDraftInvoiceRequest contains only the fields needed to create an empty zero-dollar
 // draft invoice. No amounts, no line items, no coupons, no taxes — those are populated
 // later by ComputeInvoice. Used by CreateEmptyDraftInvoice and CreateDraftInvoiceForSubscription.
