@@ -138,9 +138,8 @@ func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 
 // ToComputeRequest converts a CreateInvoiceRequest to an InvoiceComputeRequest,
 // extracting only the fields needed for invoice computation (line items, amounts, coupons, taxes).
-// If overlay is non-nil and overlay.OpeningInvoiceAdjustmentAmount is set, it is merged in (e.g. ComputeInvoice caller override for plan-change opening invoices).
-func (r *CreateInvoiceRequest) ToComputeRequest(overlay *InvoiceComputeRequest) InvoiceComputeRequest {
-	out := InvoiceComputeRequest{
+func (r *CreateInvoiceRequest) ToComputeRequest() InvoiceComputeRequest {
+	return InvoiceComputeRequest{
 		LineItems:        r.LineItems,
 		Subtotal:         r.Subtotal,
 		Total:            r.Total,
@@ -151,10 +150,6 @@ func (r *CreateInvoiceRequest) ToComputeRequest(overlay *InvoiceComputeRequest) 
 		LineItemCoupons:  r.LineItemCoupons,
 		PreparedTaxRates: r.PreparedTaxRates,
 	}
-	if overlay != nil && overlay.OpeningInvoiceAdjustmentAmount != nil {
-		out.OpeningInvoiceAdjustmentAmount = overlay.OpeningInvoiceAdjustmentAmount
-	}
-	return out
 }
 
 // CreateDraftInvoiceRequest contains only the fields needed to create an empty zero-dollar
@@ -266,7 +261,9 @@ type InvoiceComputeRequest struct {
 	InvoiceCoupons   []InvoiceCoupon                `json:"invoice_coupons,omitempty"`
 	LineItemCoupons  []InvoiceLineItemCoupon        `json:"line_item_coupons,omitempty"`
 	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
-	// OpeningInvoiceAdjustmentAmount is internal: proration/cancel credit applied to the opening subscription invoice (reduces line amounts before coupons)
+	// OpeningInvoiceAdjustmentAmount is internal: transport field only — read by ComputeInvoice and
+	// forwarded to PrepareSubscriptionInvoiceRequestParams, which applies it as FixedChargeAdjustment
+	// in CalculateFixedCharges (reducing line item amounts directly). Not applied inside ComputeInvoice itself.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 

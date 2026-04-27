@@ -288,7 +288,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 	}
 
 	// Compute to assign invoice number and apply coupons/taxes
-	computeReq := req.ToComputeRequest(nil)
+	computeReq := req.ToComputeRequest()
 	skipped, err := s.ComputeInvoice(ctx, draft.ID, &computeReq)
 	if err != nil {
 		return nil, err
@@ -414,7 +414,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if err != nil {
 			return false, err
 		}
-		computeReq := subInvReq.ToComputeRequest(req)
+		computeReq := subInvReq.ToComputeRequest()
 		applyReq = &computeReq
 	} else if req != nil {
 		// One-off or credit: line items and amounts come from the caller's request
@@ -3119,7 +3119,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		}
 
 		// STEP 6b: Apply credits and coupons (same order as CreateInvoice: coupons first, then credit adjustment)
-		computeReq := newInvoiceReq.ToComputeRequest(nil)
+		computeReq := newInvoiceReq.ToComputeRequest()
 		if err := s.applyCreditsAndCouponsToInvoice(txCtx, inv, computeReq); err != nil {
 			return err
 		}
