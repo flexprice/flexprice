@@ -68,7 +68,7 @@ func (e ScheduledTaskEntityType) Validate() error {
 		}
 	}
 	return ierr.NewError("invalid entity type").
-		WithHint("Entity type must be one of: events, invoices, credit_topups").
+		WithHint("Entity type must be one of: events, invoices, credit_topups, credit_usage").
 		Mark(ierr.ErrValidation)
 }
 
@@ -292,6 +292,28 @@ const (
 	ExportMetadataEntityTypeWallet   ExportMetadataEntityType = "wallet"
 )
 
+func (e ExportMetadataEntityType) Validate() error {
+	allowedTypes := []ExportMetadataEntityType{
+		ExportMetadataEntityTypeCustomer,
+		ExportMetadataEntityTypeWallet,
+	}
+	if e == "" {
+		return nil // Optional field
+	}
+	for _, entityType := range allowedTypes {
+		if e == entityType {
+			return nil
+		}
+	}
+	return ierr.NewError("invalid export metadata field entity_type").
+		WithHint("invalid export metadata field entity_type").
+		WithReportableDetails(map[string]interface{}{
+			"entity_type":   e,
+			"allowed_types": allowedTypes,
+		}).
+		Mark(ierr.ErrValidation)
+}
+
 // ExportMetadataField describes one user-selected metadata field to append to an export CSV.
 type ExportMetadataField struct {
 	EntityType ExportMetadataEntityType `json:"entity_type" validate:"required"` // which entity's metadata to read from
@@ -311,6 +333,12 @@ func (fields ExportMetadataFields) ValidateAndDefault() error {
 				WithHintf("field at index %d is missing entity_type (customer or wallet)", i).
 				Mark(ierr.ErrValidation)
 		}
+		if err := f.EntityType.Validate(); err != nil {
+			// Add field index context without replacing the original validation details.
+			return ierr.WithError(err).
+				WithHintf("export_metadata_fields[%d].entity_type is invalid", i).
+				Mark(ierr.ErrValidation)
+		}
 		if f.FieldKey == "" {
 			return ierr.NewError("export metadata field field_key is required").
 				WithHintf("field at index %d is missing field_key", i).
@@ -325,7 +353,7 @@ func (fields ExportMetadataFields) ValidateAndDefault() error {
 	return nil
 }
 
-// GetCustomFields returns the custom fields slice, safe to call on nil config.
+// GetExportMetadataFields returns the export metadata fields slice, safe to call on nil config.
 func (s *S3JobConfig) GetExportMetadataFields() ExportMetadataFields {
 	if s == nil {
 		return nil
