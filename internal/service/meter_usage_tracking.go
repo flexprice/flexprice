@@ -350,22 +350,17 @@ func (s *meterUsageTrackingService) checkMeterFilters(event *events.Event, filte
 // Two cases:
 //  1. COUNT_UNIQUE: hash(eventName + fieldName + fieldValue) — two events with
 //     the same field value produce the same hash and are deduplicated.
-//  2. All other types: hash(eventName + eventID) — every distinct event is unique.
+//  2. All other types: the hash will be empty
 func (s *meterUsageTrackingService) generateUniqueHash(event *events.Event, m *meter.Meter) string {
-	var hashStr string
-
 	if m.Aggregation.Type == types.AggregationCountUnique && m.Aggregation.Field != "" {
 		if fieldValue, ok := event.Properties[m.Aggregation.Field]; ok {
-			hashStr = fmt.Sprintf("%s:%s:%v", event.EventName, m.Aggregation.Field, fieldValue)
+			hashStr := fmt.Sprintf("%s:%s:%v", event.EventName, m.Aggregation.Field, fieldValue)
+			hash := sha256.Sum256([]byte(hashStr))
+			return hex.EncodeToString(hash[:])
 		}
 	}
 
-	if hashStr == "" {
-		hashStr = event.EventName + ":" + event.ID
-	}
-
-	hash := sha256.Sum256([]byte(hashStr))
-	return hex.EncodeToString(hash[:])
+	return ""
 }
 
 // extractQuantity extracts the quantity from event properties based on the meter's aggregation config.
