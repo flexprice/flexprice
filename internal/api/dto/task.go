@@ -70,6 +70,7 @@ func NewTaskResponse(t *task.Task) *TaskResponse {
 			ID:                t.ID,
 			TaskType:          t.TaskType,
 			EntityType:        t.EntityType,
+			EnvironmentID:     t.EnvironmentID,
 			FileURL:           t.FileURL,
 			FileName:          t.FileName,
 			FileType:          t.FileType,
