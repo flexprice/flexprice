@@ -196,6 +196,7 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 			)
 		}
 	}
+
 }
 
 // processMessage processes a single webhook message from the system_events topic:
@@ -229,12 +230,14 @@ func (h *handler) processMessage(msg *message.Message) error {
 	)
 
 	if h.config.Svix.Enabled {
-		h.absorbDeliveryError(ctx, "svix", h.deliverSvix(ctx, &event, msg.UUID), &event, msg.UUID)
-		return nil
+		err := h.deliverSvix(ctx, &event, msg.UUID)
+		h.absorbDeliveryError(ctx, "svix", err, &event, msg.UUID)
+		return err
 	}
 
-	h.absorbDeliveryError(ctx, "native", h.deliverNative(ctx, &event, msg.UUID), &event, msg.UUID)
-	return nil
+	err := h.deliverNative(ctx, &event, msg.UUID)
+	h.absorbDeliveryError(ctx, "native", err, &event, msg.UUID)
+	return err
 }
 
 // deliverSvix sends a webhook via Svix.
