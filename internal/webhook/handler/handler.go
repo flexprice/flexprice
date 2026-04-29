@@ -231,25 +231,11 @@ func (h *handler) processMessage(msg *message.Message) error {
 
 	if h.config.Svix.Enabled {
 		err := h.deliverSvix(ctx, &event, msg.UUID)
-		h.logger.Errorw("failed to deliver webhook via Svix (processMessage)",
-			"error", err,
-			"event_id", event.ID,
-			"event_name", event.EventName,
-			"tenant_id", event.TenantID,
-			"message_uuid", msg.UUID,
-		)
 		h.absorbDeliveryError(ctx, "svix", err, &event, msg.UUID)
 		return err
 	}
 
 	err := h.deliverNative(ctx, &event, msg.UUID)
-	h.logger.Errorw("failed to deliver webhook via native (processMessage)",
-		"error", err,
-		"event_id", event.ID,
-		"event_name", event.EventName,
-		"tenant_id", event.TenantID,
-		"message_uuid", msg.UUID,
-	)
 	h.absorbDeliveryError(ctx, "native", err, &event, msg.UUID)
 	return err
 }
