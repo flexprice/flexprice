@@ -161,9 +161,10 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 		return false
 	}
 
-	// Apply metadata filter (all key-value pairs must match — AND semantics)
+	// Apply metadata filter (all key-value pairs must match — AND semantics, mirrors @> JSONB semantics)
 	for k, v := range f.MetadataFilter {
-		if c.Metadata[k] != v {
+		actual, ok := c.Metadata[k]
+		if !ok || actual != v {
 			return false
 		}
 	}
