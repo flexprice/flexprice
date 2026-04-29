@@ -19,6 +19,7 @@ type CustomerFilter struct {
 	ExternalIDs       []string           `json:"external_ids,omitempty" form:"external_ids" validate:"omitempty"`
 	ExternalID        string             `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
 	Email             string             `json:"email,omitempty" form:"email" validate:"omitempty,email"`
+	MetadataFilter    map[string]string  `json:"metadata,omitempty" form:"metadata"`
 }
 
 // NewCustomerFilter creates a new CustomerFilter with default values

@@ -161,6 +161,13 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 		return false
 	}
 
+	// Apply metadata filter (all key-value pairs must match — AND semantics)
+	for k, v := range f.MetadataFilter {
+		if c.Metadata[k] != v {
+			return false
+		}
+	}
+
 	// Apply time range filter if present
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && c.CreatedAt.Before(*f.StartTime) {

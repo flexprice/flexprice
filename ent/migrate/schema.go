@@ -711,6 +711,14 @@ var (
 					Where: "email IS NOT NULL AND email != '' AND status = 'published'",
 				},
 			},
+			{
+				Name:    "idx_customer_metadata_gin",
+				Unique:  false,
+				Columns: []*schema.Column{CustomersColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Type: "GIN",
+				},
+			},
 		},
 	}
 	// EntitlementsColumns holds the columns for the "entitlements" table.

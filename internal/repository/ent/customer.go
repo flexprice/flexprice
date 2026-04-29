@@ -505,6 +505,10 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		query = query.Where(customer.ExternalIDIn(f.ExternalIDs...))
 	}
 
+	if len(f.MetadataFilter) > 0 {
+		query = query.Where(predicate.Customer(JSONBContains("metadata", f.MetadataFilter)))
+	}
+
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[CustomerQuery, predicate.Customer](
 			query,

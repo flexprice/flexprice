@@ -99,5 +99,9 @@ func (Customer) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "email").
 			Annotations(entsql.IndexWhere("email IS NOT NULL AND email != '' AND status = 'published'")).
 			StorageKey("idx_customer_tenant_environment_email"),
+		// GIN index for efficient JSONB containment queries on metadata (@> operator)
+		index.Fields("metadata").
+			Annotations(entsql.IndexAnnotation{Type: "GIN"}).
+			StorageKey("idx_customer_metadata_gin"),
 	}
 }
