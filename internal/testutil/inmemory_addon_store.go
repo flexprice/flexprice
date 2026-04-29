@@ -35,7 +35,6 @@ func copyAddon(a *addon.Addon) *addon.Addon {
 		LookupKey:     a.LookupKey,
 		Name:          a.Name,
 		Description:   a.Description,
-		Type:          a.Type,
 		Metadata:      lo.Assign(map[string]interface{}{}, a.Metadata),
 		BaseModel: types.BaseModel{
 			TenantID:  a.TenantID,
@@ -162,12 +161,6 @@ func addonFilterFn(ctx context.Context, a *addon.Addon, filter interface{}) bool
 		}
 	}
 
-	if f.AddonType != "" {
-		if a.Type != f.AddonType {
-			return false
-		}
-	}
-
 	if len(f.LookupKeys) > 0 {
 		if !lo.Contains(f.LookupKeys, a.LookupKey) {
 			return false
@@ -194,10 +187,6 @@ func applyAddonFilterCondition(a *addon.Addon, condition *types.FilterCondition)
 	case "lookup_key":
 		if condition.Value != nil && condition.Value.String != nil {
 			return strings.Contains(strings.ToLower(a.LookupKey), strings.ToLower(*condition.Value.String))
-		}
-	case "type":
-		if condition.Value != nil && condition.Value.String != nil {
-			return string(a.Type) == *condition.Value.String
 		}
 	case "status":
 		if condition.Value != nil && condition.Value.String != nil {

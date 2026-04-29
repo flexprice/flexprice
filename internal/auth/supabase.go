@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/nedpals/supabase-go"
+	"github.com/sethvargo/go-password/password"
 )
 
 type supabaseAuth struct {
@@ -184,4 +185,40 @@ func (s *supabaseAuth) GenerateSessionToken(customerID, externalCustomerID, tena
 func (s *supabaseAuth) ValidateSessionToken(ctx context.Context, token string) (*auth.SessionClaims, error) {
 	// Not Implemented yet
 	return nil, nil
+}
+
+// UserInvite provisions a user in the configured auth provider and returns the newly created user ID and password.
+func (s *supabaseAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*UserInviteResponse, error) {
+	if req.Email == "" {
+		return nil, ierr.NewError("email is required").
+			WithHint("Provide a valid email to invite/create a user").
+			Mark(ierr.ErrValidation)
+	}
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		return nil, ierr.NewError("tenant id is required").
+			WithHint("Provide tenant id in request context to associate the user in app_metadata").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Generate an initial password (no auth token issuance here).
+	createdPassword, err := password.Generate(16, 4, 2, false, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create in Supabase first. We intentionally do NOT return any auth token here.
+	supabaseUser, err := s.client.Admin.CreateUser(ctx, supabase.AdminUserParams{
+		Email:        req.Email,
+		Password:     &createdPassword,
+		EmailConfirm: true,
+		AppMetadata: map[string]interface{}{
+			"tenant_id": tenantID,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &UserInviteResponse{ID: supabaseUser.ID, Password: createdPassword, AuthRecord: nil}, nil
 }

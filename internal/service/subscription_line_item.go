@@ -87,6 +87,61 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 	if err != nil {
 		return nil, err
 	}
+
+	// Apply proration for the add if requested. Skip usage prices (unknown future consumption).
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
+		lineItem.PriceType != types.PRICE_TYPE_USAGE {
+
+		effectiveDate := time.Now().UTC()
+		if req.StartDate != nil {
+			effectiveDate = req.StartDate.UTC()
+		}
+
+		// Find the billing period that contains effectiveDate so proration uses the right boundaries.
+		period, err := types.FindPeriodForDate(
+			effectiveDate,
+			sub.CurrentPeriodStart,
+			sub.CurrentPeriodEnd,
+			sub.BillingAnchor,
+			sub.BillingPeriodCount,
+			sub.BillingPeriod,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		priceSvc := NewPriceService(s.ServiceParams)
+		priceResp, err := priceSvc.GetPrice(ctx, lineItem.PriceID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Temporarily override current period on a copy so LineItemProrationService
+		// uses the period that actually contains effectiveDate.
+		subCopy := *sub
+		subCopy.CurrentPeriodStart = period.Start
+		subCopy.CurrentPeriodEnd = period.End
+
+		prorationReq := LineItemProrationRequest{
+			Subscription:  &subCopy,
+			EffectiveDate: effectiveDate,
+			Behavior:      req.ProrationBehavior,
+			IdempotencyKey: types.GenerateUUIDWithPrefix("proration_add"),
+			Entries: []LineItemProrationEntry{
+				{
+					LineItem:    lineItem,
+					Price:       priceResp.Price,
+					Action:      types.ProrationActionAddItem,
+					NewQuantity: lineItem.Quantity,
+				},
+			},
+		}
+		if applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
+			s.Logger.WarnwCtx(ctx, "proration apply failed for line item add",
+				"line_item_id", lineItem.ID, "error", applyErr)
+		}
+	}
+
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
 }
 
@@ -240,10 +295,68 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
+	// Capture a snapshot before mutating EndDate — the proration service uses EndDate==zero
+	// to distinguish "active recurring" from "onetime" (pre-existing EndDate at period boundary).
+	lineItemForProration := *lineItem
+
 	lineItem.EndDate = effectiveFrom
 
 	if err := s.SubscriptionLineItemRepo.Update(ctx, lineItem); err != nil {
 		return nil, err
+	}
+
+	// Apply proration for the removal if requested. Skip usage prices.
+	// Use lineItemForProration (EndDate still zero) so Compute doesn't treat this as onetime.
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
+		lineItemForProration.PriceType != types.PRICE_TYPE_USAGE {
+
+		sub, err := s.SubRepo.Get(ctx, lineItem.SubscriptionID)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "could not load subscription for delete proration",
+				"line_item_id", lineItemID, "error", err)
+		} else {
+			period, err := types.FindPeriodForDate(
+				effectiveFrom,
+				sub.CurrentPeriodStart,
+				sub.CurrentPeriodEnd,
+				sub.BillingAnchor,
+				sub.BillingPeriodCount,
+				sub.BillingPeriod,
+			)
+			if err != nil {
+				s.Logger.WarnwCtx(ctx, "could not find period for delete proration",
+					"line_item_id", lineItemID, "error", err)
+			} else {
+				priceSvc := NewPriceService(s.ServiceParams)
+				priceResp, err := priceSvc.GetPrice(ctx, lineItem.PriceID)
+				if err != nil {
+					s.Logger.WarnwCtx(ctx, "could not load price for delete proration",
+						"line_item_id", lineItemID, "error", err)
+				} else {
+					subCopy := *sub
+					subCopy.CurrentPeriodStart = period.Start
+					subCopy.CurrentPeriodEnd = period.End
+
+					prorationReq := LineItemProrationRequest{
+						Subscription:   &subCopy,
+						EffectiveDate:  effectiveFrom,
+						Behavior:       req.ProrationBehavior,
+						IdempotencyKey: types.GenerateUUIDWithPrefix("proration_del"),
+						Entries: []LineItemProrationEntry{
+							{
+								LineItem: &lineItemForProration,
+								Price:    priceResp.Price,
+								Action:   types.ProrationActionRemoveItem,
+							},
+						},
+					}
+					if applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
+						s.Logger.WarnwCtx(ctx, "proration apply failed for line item delete",
+							"line_item_id", lineItemID, "error", applyErr)
+					}
+				}
+			}
+		}
 	}
 
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil

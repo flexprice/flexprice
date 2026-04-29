@@ -790,7 +790,6 @@ func testCreateAddon(ctx context.Context, client *flexprice.Flexprice) {
 		Name:        testAddonName,
 		LookupKey:   testAddonLookupKey,
 		Description: strPtr("This is a test addon created by SDK tests"),
-		Type:        types.AddonTypeOnetime,
 		Metadata: map[string]any{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),

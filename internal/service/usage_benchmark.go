@@ -50,7 +50,7 @@ func NewUsageBenchmarkService(
 		params.Config.UsageBenchmark.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create pubsub for usage benchmark", "error", err)
+		params.Logger.Warnw("usage benchmark: kafka unavailable, benchmark event publishing disabled", "error", err)
 		return svc
 	}
 	svc.pubSub = ps

@@ -13,55 +13,54 @@ import (
 )
 
 type Handlers struct {
-	Events                 *v1.EventsHandler
-	Meter                  *v1.MeterHandler
-	Auth                   *v1.AuthHandler
-	User                   *v1.UserHandler
-	Environment            *v1.EnvironmentHandler
-	Health                 *v1.HealthHandler
-	Price                  *v1.PriceHandler
-	PriceUnit              *v1.PriceUnitHandler
-	Customer               *v1.CustomerHandler
-	Connection             *v1.ConnectionHandler
-	Plan                   *v1.PlanHandler
-	Subscription           *v1.SubscriptionHandler
-	SubscriptionPause      *v1.SubscriptionPauseHandler
-	SubscriptionChange         *v1.SubscriptionChangeHandler
-	SubscriptionModification   *v1.SubscriptionModificationHandler
-	SubscriptionSchedule   *v1.SubscriptionScheduleHandler
-	Wallet                 *v1.WalletHandler
-	Tenant                 *v1.TenantHandler
-	Invoice                *v1.InvoiceHandler
-	Feature                *v1.FeatureHandler
-	Entitlement            *v1.EntitlementHandler
-	CreditGrant            *v1.CreditGrantHandler
-	Payment                *v1.PaymentHandler
-	Task                   *v1.TaskHandler
-	Secret                 *v1.SecretHandler
-	Costsheet              *v1.CostsheetHandler
-	RevenueAnalytics       *v1.RevenueAnalyticsHandler
-	CreditNote             *v1.CreditNoteHandler
-	Tax                    *v1.TaxHandler
-	Coupon                 *v1.CouponHandler
-	Webhook                *v1.WebhookHandler
-	Addon                  *v1.AddonHandler
-	IntegrationMappingLink *v1.IntegrationMappingLinkHandler
-	Settings               *v1.SettingsHandler
-	SetupIntent            *v1.SetupIntentHandler
-	Group                  *v1.GroupHandler
-	ScheduledTask          *v1.ScheduledTaskHandler
-	AlertLogsHandler       *v1.AlertLogsHandler
-	RBAC                   *v1.RBACHandler
-	OAuth                  *v1.OAuthHandler
-	Dashboard              *v1.DashboardHandler
-	Workflow               *v1.WorkflowHandler
-	MeterUsage             *v1.MeterUsageHandler
+	Events                   *v1.EventsHandler
+	Meter                    *v1.MeterHandler
+	Auth                     *v1.AuthHandler
+	User                     *v1.UserHandler
+	Environment              *v1.EnvironmentHandler
+	Health                   *v1.HealthHandler
+	Price                    *v1.PriceHandler
+	PriceUnit                *v1.PriceUnitHandler
+	Customer                 *v1.CustomerHandler
+	Connection               *v1.ConnectionHandler
+	Plan                     *v1.PlanHandler
+	Subscription             *v1.SubscriptionHandler
+	SubscriptionChange       *v1.SubscriptionChangeHandler
+	SubscriptionModification *v1.SubscriptionModificationHandler
+	SubscriptionSchedule     *v1.SubscriptionScheduleHandler
+	Wallet                   *v1.WalletHandler
+	Tenant                   *v1.TenantHandler
+	Invoice                  *v1.InvoiceHandler
+	Feature                  *v1.FeatureHandler
+	Entitlement              *v1.EntitlementHandler
+	CreditGrant              *v1.CreditGrantHandler
+	Payment                  *v1.PaymentHandler
+	Task                     *v1.TaskHandler
+	Secret                   *v1.SecretHandler
+	Costsheet                *v1.CostsheetHandler
+	RevenueAnalytics         *v1.RevenueAnalyticsHandler
+	CreditNote               *v1.CreditNoteHandler
+	Tax                      *v1.TaxHandler
+	Coupon                   *v1.CouponHandler
+	Webhook                  *v1.WebhookHandler
+	Addon                    *v1.AddonHandler
+	IntegrationMappingLink   *v1.IntegrationMappingLinkHandler
+	Settings                 *v1.SettingsHandler
+	SetupIntent              *v1.SetupIntentHandler
+	Group                    *v1.GroupHandler
+	ScheduledTask            *v1.ScheduledTaskHandler
+	AlertLogsHandler         *v1.AlertLogsHandler
+	RBAC                     *v1.RBACHandler
+	OAuth                    *v1.OAuthHandler
+	Dashboard                *v1.DashboardHandler
+	Workflow                 *v1.WorkflowHandler
+	MeterUsage               *v1.MeterUsageHandler
 
 	// Portal handlers
 	Onboarding     *v1.OnboardingHandler
 	AIPricing      *v1.AIPricingHandler
 	CustomerPortal *v1.CustomerPortalHandler
-	// Cron jobs : TODO: move crons out of API based architecture
+	// Cron jobs: optional HTTP /v1/cron/... manual triggers; same work is automated via Temporal server schedules (worker creates them on startup).
 	CronSubscription       *cron.SubscriptionHandler
 	CronWallet             *cron.WalletCronHandler
 	CronCreditGrant        *cron.CreditGrantCronHandler
@@ -286,9 +285,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("/:id/cancel", handlers.Subscription.CancelSubscription)
 			subscription.POST("/usage", handlers.Subscription.GetUsageBySubscription)
 
-			subscription.POST("/:id/pause", handlers.SubscriptionPause.PauseSubscription)
-			subscription.POST("/:id/resume", handlers.SubscriptionPause.ResumeSubscription)
-			subscription.GET("/:id/pauses", handlers.SubscriptionPause.ListPauses)
 			subscription.GET("/:id/entitlements", handlers.Subscription.GetSubscriptionEntitlements)
 			subscription.GET("/:id/grants/upcoming", handlers.Subscription.GetUpcomingCreditGrantApplications)
 
@@ -555,6 +551,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		webhookGroup := v1Private.Group("/webhooks")
 		{
 			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
+			webhookGroup.POST("/retry", handlers.Webhook.RetryOutboundWebhook)
 		}
 	}
 
@@ -616,35 +613,28 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		webhooks.POST("/zoho_books/:tenant_id/:environment_id", handlers.Webhook.HandleZohoBooksWebhook)
 	}
 
-	// Cron routes
-	// TODO: move crons out of API based architecture
+	// HTTP cron: optional manual/legacy triggers (deprecated for automation; Temporal workers ensure server schedules on startup).
 	cron := v1Private.Group("/cron")
-	// Subscription related cron jobs
 	subscriptionGroup := cron.Group("/subscriptions")
 	{
 		subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
+		// Deprecated: automation uses Temporal schedule subscription-trial-end-due.
+		subscriptionGroup.POST("/process-trial-end-due", handlers.CronSubscription.ProcessTrialEndDue)
 		subscriptionGroup.POST("/process-auto-cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
 		subscriptionGroup.POST("/renewal-due-alerts", handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
 	}
-
-	// Wallet related cron jobs
 	walletGroup := cron.Group("/wallets")
 	{
 		walletGroup.POST("/expire-credits", handlers.CronWallet.ExpireCredits)
 	}
-
-	// Credit grant related cron jobs
 	creditGrantGroup := cron.Group("/creditgrants")
 	{
 		creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
 	}
-
-	// Invoice related cron jobs
 	invoiceGroup := cron.Group("/invoices")
 	{
 		invoiceGroup.POST("/void-old-pending", handlers.CronInvoice.VoidOldPendingInvoices)
 	}
-	// Kafka lag monitoring related cron jobs
 	kafkaLagMonitoringGroup := cron.Group("/events")
 	{
 		kafkaLagMonitoringGroup.POST("/monitoring", handlers.CronKafkaLagMonitoring.HandleKafkaLagMonitoring)

@@ -54,7 +54,7 @@ func (s *EnvironmentServiceSuite) SetupTest() {
 func (s *EnvironmentServiceSuite) TestCreateEnvironment() {
 	req := dto.CreateEnvironmentRequest{
 		Name: "Production",
-		Type: "production",
+		Type: "development",
 	}
 
 	resp, err := s.environmentService.CreateEnvironment(s.ctx, req)
@@ -86,6 +86,7 @@ func (s *EnvironmentServiceSuite) TestGetEnvironmentByID() {
 func (s *EnvironmentServiceSuite) TestListEnvironments() {
 	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-1", Name: "Production", Type: types.EnvironmentProduction})
 	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-2", Name: "Development", Type: types.EnvironmentDevelopment})
+	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-deleted", Name: "Deleted", Type: types.EnvironmentDevelopment, BaseModel: types.BaseModel{Status: types.StatusDeleted}})
 
 	resp, err := s.environmentService.GetEnvironments(s.ctx, types.Filter{Offset: 0, Limit: 10})
 	s.NoError(err)

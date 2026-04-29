@@ -33,7 +33,11 @@ func NewInvoiceSyncActivities(
 	}
 }
 
-// SyncInvoiceToPaddle syncs an invoice to Paddle
+// SyncInvoiceToPaddle syncs an invoice to Paddle.
+//
+// Validation errors (e.g. missing Paddle address) are returned as NonRetryableApplicationError
+// because retrying cannot fix a data-quality problem — the operator must update the customer
+// first and then re-trigger the workflow.
 func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 	ctx context.Context,
 	input models.PaddleInvoiceSyncWorkflowInput,
@@ -52,7 +56,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 	paddleIntegration, err := a.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debugw("Paddle connection not configured",
+			a.logger.Warnw("Paddle connection not configured",
 				"invoice_id", input.InvoiceID,
 				"customer_id", input.CustomerID)
 			return temporal.NewNonRetryableApplicationError(
@@ -68,13 +72,23 @@ func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 		return err
 	}
 
-	// Perform the sync using the existing service (customerService for EnsureCustomerSyncedToPaddle)
+	// Sync the invoice to Paddle.
 	syncReq := paddle.PaddleInvoiceSyncRequest{
 		InvoiceID: input.InvoiceID,
 	}
 
 	_, err = paddleIntegration.InvoiceSyncSvc.SyncInvoiceToPaddle(ctx, syncReq, a.customerService)
 	if err != nil {
+		if ierr.IsValidation(err) {
+			a.logger.Warnw("invoice cannot be synced to Paddle: validation error (non-retryable)",
+				"invoice_id", input.InvoiceID,
+				"error", err)
+			return temporal.NewNonRetryableApplicationError(
+				err.Error(),
+				"InvoiceValidationError",
+				err,
+			)
+		}
 		a.logger.Errorw("failed to sync invoice to Paddle",
 			"error", err,
 			"invoice_id", input.InvoiceID)

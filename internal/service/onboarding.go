@@ -9,27 +9,26 @@ import (
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-const (
-	OnboardingEventsTopic = "onboarding_events"
-)
-
 // OnboardingService handles onboarding-related operations
 type OnboardingService interface {
 	GenerateEvents(ctx context.Context, req *dto.OnboardingEventsRequest) (*dto.OnboardingEventsResponse, error)
-	RegisterHandler(router *pubsubRouter.Router)
+	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
 	OnboardNewUserWithTenant(ctx context.Context, userID, email, tenantName, tenantID string) error
 	SetupSandboxEnvironment(ctx context.Context, tenantID, userID, envID string) error
 }
@@ -42,12 +41,23 @@ type onboardingService struct {
 // NewOnboardingService creates a new onboarding service
 func NewOnboardingService(
 	params ServiceParams,
-	pubSub pubsub.PubSub,
 ) OnboardingService {
-	return &onboardingService{
+	svc := &onboardingService{
 		ServiceParams: params,
-		pubSub:        pubSub,
 	}
+
+	pubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.OnboardingEvents.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Warnw("failed to create pubsub for onboarding events, event generation will be unavailable", "error", err)
+	} else {
+		svc.pubSub = pubSub
+	}
+
+	return svc
 }
 
 // GenerateEvents generates events for a specific customer and feature or subscription
@@ -148,7 +158,11 @@ func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.Onboard
 		"duration", req.Duration,
 	)
 
-	if err := s.pubSub.Publish(ctx, OnboardingEventsTopic, watermillMsg); err != nil {
+	topic := s.Config.OnboardingEvents.Topic
+	if s.pubSub == nil {
+		s.Logger.Infow("onboarding events pubsub unavailable, skipping message publication")
+	}
+	if err := s.pubSub.Publish(ctx, topic, watermillMsg); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to publish message").
 			Mark(ierr.ErrValidation)
@@ -187,12 +201,33 @@ func createMeterInfoFromMeter(m *dto.MeterResponse) types.MeterInfo {
 }
 
 // RegisterHandler registers a handler for onboarding events
-func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router) {
+func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.OnboardingEvents.Enabled {
+		s.Logger.Info("onboarding events handler disabled by configuration, skipping registration")
+		return
+	}
+	if s.pubSub == nil {
+		s.Logger.Errorw("onboarding events pubsub is nil, skipping handler registration — check Kafka connectivity at startup")
+	}
+	rateLimit := cfg.OnboardingEvents.RateLimit
+	if rateLimit <= 0 {
+		s.Logger.Errorw("onboarding events rate limit is invalid", "rate_limit", rateLimit)
+		return
+	}
+	throttle := middleware.NewThrottle(rateLimit, time.Second)
+
 	router.AddNoPublishHandler(
 		"onboarding_events_handler",
-		OnboardingEventsTopic,
+		cfg.OnboardingEvents.Topic,
 		s.pubSub,
 		s.processMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Debugw("registered onboarding events handler",
+		"topic", cfg.OnboardingEvents.Topic,
+		"consumer_group", cfg.OnboardingEvents.ConsumerGroup,
+		"rate_limit", rateLimit,
 	)
 }
 
@@ -218,6 +253,8 @@ func (s *onboardingService) processMessage(msg *message.Message) error {
 		"subscription_id", eventMsg.SubscriptionID,
 		"duration", eventMsg.Duration,
 		"meters_count", len(eventMsg.Meters),
+		"tenant_id", eventMsg.TenantID,
+		"environment_id", eventMsg.EnvironmentID,
 	)
 
 	// Create a new background context instead of using the message context
@@ -436,11 +473,11 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 			return err
 		}
 
-		if envType == types.EnvironmentDevelopment {
-			if err := s.SetupSandboxEnvironment(ctx, tenantID, userID, env.ID); err != nil {
-				return err
-			}
-		}
+		// if envType == types.EnvironmentDevelopment {
+		// 	if err := s.SetupSandboxEnvironment(ctx, tenantID, userID, env.ID); err != nil {
+		// 		return err
+		// 	}
+		// }
 	}
 
 	// Send Zapier webhook for onboarding (never fails - errors are logged internally)

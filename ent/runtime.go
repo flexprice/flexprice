@@ -98,10 +98,6 @@ func init() {
 	addonDescName := addonFields[2].Descriptor()
 	// addon.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	addon.NameValidator = addonDescName.Validators[0].(func(string) error)
-	// addonDescType is the schema descriptor for type field.
-	addonDescType := addonFields[4].Descriptor()
-	// addon.TypeValidator is a validator for the "type" field. It is called by the builders before save.
-	addon.TypeValidator = addonDescType.Validators[0].(func(string) error)
 	addonassociationMixin := schema.AddonAssociation{}.Mixin()
 	addonassociationMixinFields0 := addonassociationMixin[0].Fields()
 	_ = addonassociationMixinFields0
@@ -1356,10 +1352,12 @@ func init() {
 	price.DefaultBillingCadence = types.BillingCadence(priceDescBillingCadence.Default.(string))
 	// price.BillingCadenceValidator is a validator for the "billing_cadence" field. It is called by the builders before save.
 	price.BillingCadenceValidator = priceDescBillingCadence.Validators[0].(func(string) error)
-	// priceDescTrialPeriod is the schema descriptor for trial_period field.
-	priceDescTrialPeriod := priceFields[18].Descriptor()
-	// price.DefaultTrialPeriod holds the default value on creation for the trial_period field.
-	price.DefaultTrialPeriod = priceDescTrialPeriod.Default.(int)
+	// priceDescTrialPeriodDays is the schema descriptor for trial_period_days field.
+	priceDescTrialPeriodDays := priceFields[18].Descriptor()
+	// price.DefaultTrialPeriodDays holds the default value on creation for the trial_period_days field.
+	price.DefaultTrialPeriodDays = priceDescTrialPeriodDays.Default.(int)
+	// price.TrialPeriodDaysValidator is a validator for the "trial_period_days" field. It is called by the builders before save.
+	price.TrialPeriodDaysValidator = priceDescTrialPeriodDays.Validators[0].(func(int) error)
 	// priceDescEntityType is the schema descriptor for entity_type field.
 	priceDescEntityType := priceFields[28].Descriptor()
 	// price.DefaultEntityType holds the default value on creation for the entity_type field.
@@ -1736,10 +1734,6 @@ func init() {
 	subscriptionlineitemDescBillingPeriodCount := subscriptionlineitemFields[16].Descriptor()
 	// subscriptionlineitem.DefaultBillingPeriodCount holds the default value on creation for the billing_period_count field.
 	subscriptionlineitem.DefaultBillingPeriodCount = subscriptionlineitemDescBillingPeriodCount.Default.(int)
-	// subscriptionlineitemDescTrialPeriod is the schema descriptor for trial_period field.
-	subscriptionlineitemDescTrialPeriod := subscriptionlineitemFields[18].Descriptor()
-	// subscriptionlineitem.DefaultTrialPeriod holds the default value on creation for the trial_period field.
-	subscriptionlineitem.DefaultTrialPeriod = subscriptionlineitemDescTrialPeriod.Default.(int)
 	// subscriptionlineitemDescCommitmentTrueUpEnabled is the schema descriptor for commitment_true_up_enabled field.
 	subscriptionlineitemDescCommitmentTrueUpEnabled := subscriptionlineitemFields[27].Descriptor()
 	// subscriptionlineitem.DefaultCommitmentTrueUpEnabled holds the default value on creation for the commitment_true_up_enabled field.
@@ -1918,6 +1912,10 @@ func init() {
 	systemeventDescEntityID := systemeventFields[3].Descriptor()
 	// systemevent.DefaultEntityID holds the default value on creation for the entity_id field.
 	systemevent.DefaultEntityID = systemeventDescEntityID.Default.(string)
+	// systemeventDescFailureCount is the schema descriptor for failure_count field.
+	systemeventDescFailureCount := systemeventFields[7].Descriptor()
+	// systemevent.DefaultFailureCount holds the default value on creation for the failure_count field.
+	systemevent.DefaultFailureCount = systemeventDescFailureCount.Default.(int)
 	taskMixin := schema.Task{}.Mixin()
 	taskMixinFields0 := taskMixin[0].Fields()
 	_ = taskMixinFields0

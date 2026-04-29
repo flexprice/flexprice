@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -72,7 +73,7 @@ func ToMeterResponse(m *meter.Meter) *MeterResponse {
 // Convert CreateMeterRequest to domain Meter
 func (r *CreateMeterRequest) ToMeter(tenantID, createdBy string) *meter.Meter {
 	m := meter.NewMeter(r.Name, tenantID, createdBy)
-	m.EventName = r.EventName
+	m.EventName = strings.TrimSpace(r.EventName)
 	m.Aggregation = r.Aggregation
 	m.Filters = r.Filters
 	m.ResetUsage = r.ResetUsage

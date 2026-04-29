@@ -117,7 +117,6 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscriptionLineItemCommitments
 			LookupKey:   addonID,
 			Name:        "Test Addon",
 			Description: "Test Addon Description",
-			Type:        types.AddonTypeOnetime,
 			BaseModel:   types.GetDefaultBaseModel(ctx),
 		}
 		s.NoError(subService.AddonRepo.Create(ctx, a))
@@ -1793,7 +1792,6 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			LookupKey:   addonID,
 			Name:        "Addon to cancel",
 			Description: "Addon cancelled with subscription",
-			Type:        types.AddonTypeOnetime,
 			BaseModel:   types.GetDefaultBaseModel(ctx),
 		}
 		s.NoError(subService.AddonRepo.Create(ctx, a))

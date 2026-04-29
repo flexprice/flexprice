@@ -320,7 +320,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
-	s.Logger.Debugw("processing event from message queue",
+	s.Logger.Debugw("processing event from message queue in feature usage tracking service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -354,6 +354,8 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	if environmentID == "" && event.EnvironmentID != "" {
 		environmentID = event.EnvironmentID
 	}
+
+	event.EventName = strings.TrimSpace(event.EventName)
 
 	// Create a background context with tenant ID
 	ctx := context.Background()
@@ -403,7 +405,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 
 // Process a single event for feature usage tracking
 func (s *featureUsageTrackingService) processEvent(ctx context.Context, event *events.Event) error {
-	s.Logger.DebugwCtx(ctx, "processing event",
+	s.Logger.DebugwCtx(ctx, "processing event in feature usage tracking service",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"external_customer_id", event.ExternalCustomerID,

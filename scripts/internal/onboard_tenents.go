@@ -62,12 +62,13 @@ func SyncBillingCustomers() error {
 	entitlementRepo := ent.NewEntitlementRepository(client, logger, cache)
 	featureRepo := ent.NewFeatureRepository(client, logger, cache)
 	authRepo := ent.NewAuthRepository(client, logger)
+	systemEventRepo := ent.NewSystemEventRepository(client)
 
 	// Initialize pubsub for webhook publisher
 	ps := memory.NewPubSub(cfg, logger)
 
 	// Initialize webhook publisher
-	webhookPublisher, err := publisher.NewPublisher(ps, cfg, logger)
+	webhookPublisher, err := publisher.NewPublisher(ps, cfg, logger, systemEventRepo)
 	if err != nil {
 		log.Fatalf("Failed to create webhook publisher: %v", err)
 	}

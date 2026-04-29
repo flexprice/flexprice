@@ -171,14 +171,13 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 		params.CollectionMethod = stripe.String(string(stripe.InvoiceCollectionMethodChargeAutomatically))
 	}
 
-	// Set due date only for send_invoice collection method.
-	// Stripe rejects past due dates; clamp to at least 15 minutes from now so
-	// that wallet top-up invoices (DueDate = time.Now()) don't fail on sync.
-	if flexInvoice.DueDate != nil && collectionMethod == types.CollectionMethodSendInvoice {
+	// Stripe requires due_date when collection_method is send_invoice.
+	// Use the invoice due date if it's at least 15 minutes from now; otherwise default.
+	if collectionMethod == types.CollectionMethodSendInvoice {
 		minDueDate := time.Now().UTC().Add(15 * time.Minute)
-		dueDate := *flexInvoice.DueDate
-		if dueDate.Before(minDueDate) {
-			dueDate = minDueDate
+		dueDate := time.Now().UTC().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
+		if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(minDueDate) {
+			dueDate = *flexInvoice.DueDate
 		}
 		params.DueDate = stripe.Int64(dueDate.Unix())
 	}

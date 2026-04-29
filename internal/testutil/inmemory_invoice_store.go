@@ -380,6 +380,17 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
+	// Filter by subscription customer IDs (parent / invoiced-to subscription customer)
+	if len(f.SubscriptionCustomerIDs) > 0 {
+		subCust := ""
+		if inv.SubscriptionCustomerID != nil {
+			subCust = *inv.SubscriptionCustomerID
+		}
+		if !lo.Contains(f.SubscriptionCustomerIDs, subCust) {
+			return false
+		}
+	}
+
 	// Filter by subscription ID
 	if f.SubscriptionID != "" {
 		if inv.SubscriptionID == nil || *inv.SubscriptionID != f.SubscriptionID {

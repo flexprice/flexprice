@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
+	repoent "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
@@ -76,6 +77,7 @@ func provideWebhookPublisher(
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	producer *kafkaProducerPkg.Producer,
+	systemEventRepo *repoent.SystemEventRepository,
 ) (publisher.WebhookPublisher, error) {
-	return publisher.NewPublisherFromProducer(producer, cfg, logger)
+	return publisher.NewPublisherFromProducer(producer, cfg, logger, systemEventRepo)
 }

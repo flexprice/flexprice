@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"go.temporal.io/api/common/v1"
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/interceptor"
@@ -103,18 +104,20 @@ func (o *WorkerOptions) ToSDKOptions() worker.Options {
 
 // CreateScheduleOptions represents options for creating a schedule
 type CreateScheduleOptions struct {
-	ID     string
-	Spec   client.ScheduleSpec
-	Action *client.ScheduleWorkflowAction
-	Paused bool
+	ID      string
+	Spec    client.ScheduleSpec
+	Overlap enumspb.ScheduleOverlapPolicy
+	Action  *client.ScheduleWorkflowAction
+	Paused  bool
 }
 
 // ToSDKOptions converts CreateScheduleOptions to Temporal SDK client.ScheduleOptions
 func (o *CreateScheduleOptions) ToSDKOptions() client.ScheduleOptions {
 	return client.ScheduleOptions{
-		ID:     o.ID,
-		Spec:   o.Spec,
-		Action: o.Action,
-		Paused: o.Paused,
+		ID:      o.ID,
+		Spec:    o.Spec,
+		Overlap: o.Overlap,
+		Action:  o.Action,
+		Paused:  o.Paused,
 	}
 }

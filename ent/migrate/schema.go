@@ -22,7 +22,6 @@ var (
 		{Name: "lookup_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// AddonsTable holds the schema information for the "addons" table.
@@ -1370,7 +1369,7 @@ var (
 		{Name: "billing_model", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "billing_cadence", Type: field.TypeString, Default: "RECURRING", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "invoice_cadence", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "trial_period", Type: field.TypeInt, Default: 0},
+		{Name: "trial_period_days", Type: field.TypeInt, Default: 0},
 		{Name: "meter_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "filter_values", Type: field.TypeJSON, Nullable: true},
 		{Name: "tier_mode", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -1687,10 +1686,10 @@ var (
 		{Name: "billing_period", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "billing_period_count", Type: field.TypeInt, Default: 1},
 		{Name: "invoice_cadence", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "trial_period", Type: field.TypeInt, Default: 0},
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "subscription_phase_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "addon_association_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "commitment_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "commitment_quantity", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
@@ -1743,7 +1742,7 @@ var (
 			{
 				Name:    "subscriptionlineitem_start_date_end_date",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[25], SubscriptionLineItemsColumns[26]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[24], SubscriptionLineItemsColumns[25]},
 			},
 			{
 				Name:    "subscriptionlineitem_subscription_id_status",
@@ -1927,6 +1926,8 @@ var (
 		{Name: "webhook_message_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(128)"}},
 		{Name: "published_at", Type: field.TypeTime, Nullable: true},
 		{Name: "payload", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "failure_count", Type: field.TypeInt, Default: 0},
+		{Name: "failure_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 	}
 	// SystemEventsTable holds the schema information for the "system_events" table.
 	SystemEventsTable = &schema.Table{

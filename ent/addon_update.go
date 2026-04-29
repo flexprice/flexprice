@@ -103,20 +103,6 @@ func (au *AddonUpdate) ClearDescription() *AddonUpdate {
 	return au
 }
 
-// SetType sets the "type" field.
-func (au *AddonUpdate) SetType(s string) *AddonUpdate {
-	au.mutation.SetType(s)
-	return au
-}
-
-// SetNillableType sets the "type" field if the given value is not nil.
-func (au *AddonUpdate) SetNillableType(s *string) *AddonUpdate {
-	if s != nil {
-		au.SetType(*s)
-	}
-	return au
-}
-
 // SetMetadata sets the "metadata" field.
 func (au *AddonUpdate) SetMetadata(m map[string]interface{}) *AddonUpdate {
 	au.mutation.SetMetadata(m)
@@ -213,11 +199,6 @@ func (au *AddonUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Addon.name": %w`, err)}
 		}
 	}
-	if v, ok := au.mutation.GetType(); ok {
-		if err := addon.TypeValidator(v); err != nil {
-			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Addon.type": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -259,9 +240,6 @@ func (au *AddonUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if au.mutation.DescriptionCleared() {
 		_spec.ClearField(addon.FieldDescription, field.TypeString)
-	}
-	if value, ok := au.mutation.GetType(); ok {
-		_spec.SetField(addon.FieldType, field.TypeString, value)
 	}
 	if value, ok := au.mutation.Metadata(); ok {
 		_spec.SetField(addon.FieldMetadata, field.TypeJSON, value)
@@ -408,20 +386,6 @@ func (auo *AddonUpdateOne) ClearDescription() *AddonUpdateOne {
 	return auo
 }
 
-// SetType sets the "type" field.
-func (auo *AddonUpdateOne) SetType(s string) *AddonUpdateOne {
-	auo.mutation.SetType(s)
-	return auo
-}
-
-// SetNillableType sets the "type" field if the given value is not nil.
-func (auo *AddonUpdateOne) SetNillableType(s *string) *AddonUpdateOne {
-	if s != nil {
-		auo.SetType(*s)
-	}
-	return auo
-}
-
 // SetMetadata sets the "metadata" field.
 func (auo *AddonUpdateOne) SetMetadata(m map[string]interface{}) *AddonUpdateOne {
 	auo.mutation.SetMetadata(m)
@@ -531,11 +495,6 @@ func (auo *AddonUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Addon.name": %w`, err)}
 		}
 	}
-	if v, ok := auo.mutation.GetType(); ok {
-		if err := addon.TypeValidator(v); err != nil {
-			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Addon.type": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -594,9 +553,6 @@ func (auo *AddonUpdateOne) sqlSave(ctx context.Context) (_node *Addon, err error
 	}
 	if auo.mutation.DescriptionCleared() {
 		_spec.ClearField(addon.FieldDescription, field.TypeString)
-	}
-	if value, ok := auo.mutation.GetType(); ok {
-		_spec.SetField(addon.FieldType, field.TypeString, value)
 	}
 	if value, ok := auo.mutation.Metadata(); ok {
 		_spec.SetField(addon.FieldMetadata, field.TypeJSON, value)

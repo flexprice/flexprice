@@ -43,8 +43,12 @@ type SystemEvent struct {
 	// PublishedAt holds the value of the "published_at" field.
 	PublishedAt *time.Time `json:"published_at,omitempty"`
 	// Payload holds the value of the "payload" field.
-	Payload      map[string]interface{} `json:"payload,omitempty"`
-	selectValues sql.SelectValues
+	Payload map[string]interface{} `json:"payload,omitempty"`
+	// FailureCount holds the value of the "failure_count" field.
+	FailureCount int `json:"failure_count,omitempty"`
+	// FailureReason holds the value of the "failure_reason" field.
+	FailureReason *string `json:"failure_reason,omitempty"`
+	selectValues  sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -54,7 +58,9 @@ func (*SystemEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case systemevent.FieldPayload:
 			values[i] = new([]byte)
-		case systemevent.FieldID, systemevent.FieldTenantID, systemevent.FieldStatus, systemevent.FieldCreatedBy, systemevent.FieldUpdatedBy, systemevent.FieldEnvironmentID, systemevent.FieldEventName, systemevent.FieldEntityType, systemevent.FieldEntityID, systemevent.FieldWebhookMessageID:
+		case systemevent.FieldFailureCount:
+			values[i] = new(sql.NullInt64)
+		case systemevent.FieldID, systemevent.FieldTenantID, systemevent.FieldStatus, systemevent.FieldCreatedBy, systemevent.FieldUpdatedBy, systemevent.FieldEnvironmentID, systemevent.FieldEventName, systemevent.FieldEntityType, systemevent.FieldEntityID, systemevent.FieldWebhookMessageID, systemevent.FieldFailureReason:
 			values[i] = new(sql.NullString)
 		case systemevent.FieldCreatedAt, systemevent.FieldUpdatedAt, systemevent.FieldPublishedAt:
 			values[i] = new(sql.NullTime)
@@ -161,6 +167,19 @@ func (se *SystemEvent) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field payload: %w", err)
 				}
 			}
+		case systemevent.FieldFailureCount:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field failure_count", values[i])
+			} else if value.Valid {
+				se.FailureCount = int(value.Int64)
+			}
+		case systemevent.FieldFailureReason:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field failure_reason", values[i])
+			} else if value.Valid {
+				se.FailureReason = new(string)
+				*se.FailureReason = value.String
+			}
 		default:
 			se.selectValues.Set(columns[i], values[i])
 		}
@@ -239,6 +258,14 @@ func (se *SystemEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("payload=")
 	builder.WriteString(fmt.Sprintf("%v", se.Payload))
+	builder.WriteString(", ")
+	builder.WriteString("failure_count=")
+	builder.WriteString(fmt.Sprintf("%v", se.FailureCount))
+	builder.WriteString(", ")
+	if v := se.FailureReason; v != nil {
+		builder.WriteString("failure_reason=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

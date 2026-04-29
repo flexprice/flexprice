@@ -65,7 +65,6 @@ func (r *addonRepository) Create(ctx context.Context, a *domainAddon.Addon) erro
 		SetStatus(string(a.Status)).
 		SetName(a.Name).
 		SetDescription(a.Description).
-		SetType(string(a.Type)).
 		SetLookupKey(a.LookupKey).
 		SetMetadata(a.Metadata).
 		SetCreatedBy(types.GetUserID(ctx)).
@@ -318,7 +317,6 @@ func (r *addonRepository) Update(ctx context.Context, a *domainAddon.Addon) erro
 		SetName(a.Name).
 		SetDescription(a.Description).
 		SetStatus(string(a.Status)).
-		SetType(string(a.Type)).
 		SetMetadata(a.Metadata).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -472,11 +470,6 @@ func (o AddonQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.A
 	// Apply addon IDs filter if specified
 	if len(f.AddonIDs) > 0 {
 		query = query.Where(addon.IDIn(f.AddonIDs...))
-	}
-
-	// Apply addon type filter if specified
-	if f.AddonType != "" {
-		query = query.Where(addon.Type(string(f.AddonType)))
 	}
 
 	// Apply lookup keys filter if specified

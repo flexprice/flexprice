@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type subscriptionRepository struct {
@@ -659,6 +660,15 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		)
 	}
 
+	if f.TrialEndDueLTE != nil {
+		query = query.Where(
+			subscription.And(
+				subscription.TrialEndNotNil(),
+				subscription.TrialEndLTE(lo.FromPtr(f.TrialEndDueLTE)),
+			),
+		)
+	}
+
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[SubscriptionQuery, predicate.Subscription](
 			query,
@@ -744,7 +754,6 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 				SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 				SetInvoiceCadence(item.InvoiceCadence).
-				SetTrialPeriod(item.TrialPeriod).
 				SetNillableCommitmentAmount(item.CommitmentAmount).
 				SetNillableCommitmentQuantity(item.CommitmentQuantity).
 				SetNillableCommitmentType(types.ToNillableString(string(item.CommitmentType))).

@@ -186,6 +186,34 @@ func (sec *SystemEventCreate) SetPayload(m map[string]interface{}) *SystemEventC
 	return sec
 }
 
+// SetFailureCount sets the "failure_count" field.
+func (sec *SystemEventCreate) SetFailureCount(i int) *SystemEventCreate {
+	sec.mutation.SetFailureCount(i)
+	return sec
+}
+
+// SetNillableFailureCount sets the "failure_count" field if the given value is not nil.
+func (sec *SystemEventCreate) SetNillableFailureCount(i *int) *SystemEventCreate {
+	if i != nil {
+		sec.SetFailureCount(*i)
+	}
+	return sec
+}
+
+// SetFailureReason sets the "failure_reason" field.
+func (sec *SystemEventCreate) SetFailureReason(s string) *SystemEventCreate {
+	sec.mutation.SetFailureReason(s)
+	return sec
+}
+
+// SetNillableFailureReason sets the "failure_reason" field if the given value is not nil.
+func (sec *SystemEventCreate) SetNillableFailureReason(s *string) *SystemEventCreate {
+	if s != nil {
+		sec.SetFailureReason(*s)
+	}
+	return sec
+}
+
 // SetID sets the "id" field.
 func (sec *SystemEventCreate) SetID(s string) *SystemEventCreate {
 	sec.mutation.SetID(s)
@@ -255,6 +283,10 @@ func (sec *SystemEventCreate) defaults() {
 		v := systemevent.DefaultEntityID
 		sec.mutation.SetEntityID(v)
 	}
+	if _, ok := sec.mutation.FailureCount(); !ok {
+		v := systemevent.DefaultFailureCount
+		sec.mutation.SetFailureCount(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -275,6 +307,9 @@ func (sec *SystemEventCreate) check() error {
 	}
 	if _, ok := sec.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "SystemEvent.updated_at"`)}
+	}
+	if _, ok := sec.mutation.FailureCount(); !ok {
+		return &ValidationError{Name: "failure_count", err: errors.New(`ent: missing required field "SystemEvent.failure_count"`)}
 	}
 	return nil
 }
@@ -362,6 +397,14 @@ func (sec *SystemEventCreate) createSpec() (*SystemEvent, *sqlgraph.CreateSpec) 
 	if value, ok := sec.mutation.Payload(); ok {
 		_spec.SetField(systemevent.FieldPayload, field.TypeJSON, value)
 		_node.Payload = value
+	}
+	if value, ok := sec.mutation.FailureCount(); ok {
+		_spec.SetField(systemevent.FieldFailureCount, field.TypeInt, value)
+		_node.FailureCount = value
+	}
+	if value, ok := sec.mutation.FailureReason(); ok {
+		_spec.SetField(systemevent.FieldFailureReason, field.TypeString, value)
+		_node.FailureReason = &value
 	}
 	return _node, _spec
 }

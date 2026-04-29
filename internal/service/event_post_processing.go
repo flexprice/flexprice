@@ -224,7 +224,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 		return nil
 	}
 
-	s.Logger.Debugw("processing event from message queue",
+	s.Logger.Debugw("processing event from message queue in event post processing service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -312,7 +312,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 
 // Process a single event
 func (s *eventPostProcessingService) processEvent(ctx context.Context, event *events.Event) error {
-	s.Logger.DebugwCtx(ctx, "processing event",
+	s.Logger.DebugwCtx(ctx, "processing event in event post processing service",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"external_customer_id", event.ExternalCustomerID,

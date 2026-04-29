@@ -1,0 +1,166 @@
+# Deletes remote branches whose tip commit is older than 2 months (committer date).
+# Skips the default branch, common protected names, and any branch that is the head of an open PR.
+
+name: Delete stale branches
+
+on:
+  schedule:
+    - cron: "0 7 * * 0" # 07:00 UTC every Sunday
+  workflow_dispatch:
+
+concurrency:
+  group: delete-stale-branches
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  delete-stale:
+    name: Remove remote branches inactive 2+ months
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history (for per-ref commit dates)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete stale remote branches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git fetch --prune origin
+
+          CUTOFF=$(date -u -d '2 months ago' +%s)
+
+          DEFAULT=$(gh repo view "${GITHUB_REPOSITORY}" --json defaultBranchRef --jq '.defaultBranchRef.name')
+
+          # Branches that must never be deleted here (plus default branch above)
+          PROTECTED_NAMES=(main master develop)
+
+          # Only same-repo PR heads: fork PRs use branches on the fork, not on this repo
+          mapfile -t OPEN_PR_BRANCHES < <(
+            gh api "repos/${GITHUB_REPOSITORY}/pulls" -f state=open --paginate \
+              --jq --arg r "${GITHUB_REPOSITORY}" '.[] | select(.head.repo.full_name == $r) | .head.ref' \
+              | sort -u
+          )
+
+          is_protected() {
+            local b="$1"
+            [ "$b" = "$DEFAULT" ] && return 0
+            local n
+            for n in "${PROTECTED_NAMES[@]}"; do
+              [ "$b" = "$n" ] && return 0
+            done
+            return 1
+          }
+
+          is_open_pr_head() {
+            local b="$1"
+            local h
+            for h in "${OPEN_PR_BRANCHES[@]}"; do
+              [ "$b" = "$h" ] && return 0
+            done
+            return 1
+          }
+
+          # Derive GitHub username from a noreply email when possible (common for GitHub web commits)
+          github_handle_from_email() {
+            local e="$1"
+            if [[ "$e" =~ ^[0-9]+\+([^@]+)@users\.noreply\.github\.com$ ]]; then
+              printf '@%s' "${BASH_REMATCH[1]}"
+            elif [[ "$e" =~ ^([^@]+)@users\.noreply\.github\.com$ ]]; then
+              printf '@%s' "${BASH_REMATCH[1]}"
+            else
+              printf ''
+            fi
+          }
+
+          DELETED=0
+          {
+            echo "## Stale branch deletion"
+            echo ""
+            echo "**Rule:** delete remote \`refs/heads/*\` whose tip \`committer\` date is **before** $(date -u -d '2 months ago' -Iseconds) (UTC)."
+            echo ""
+            echo "**Skipped:** default branch (\`${DEFAULT}\`), named long-lived branches (\`main\` / \`master\` / \`develop\`), and any branch that is the **head** of an **open** PR."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          declare -a TO_DELETE=()
+
+          while IFS='|' read -r ref_short ts; do
+            [ -z "$ref_short" ] && continue
+            branch="${ref_short#origin/}"
+            [ -z "$branch" ] && continue
+            [ "$branch" = "HEAD" ] && continue
+            [[ "$ref_short" == origin/HEAD ]] && continue
+
+            is_protected "$branch" && continue
+            is_open_pr_head "$branch" && continue
+
+            if [ "$ts" -lt "$CUTOFF" ] 2>/dev/null; then
+              TO_DELETE+=("$branch")
+            fi
+          done < <(
+            git for-each-ref refs/remotes/origin/ \
+              --format='%(refname:short)|%(committerdate:unix)'
+          )
+
+          if [ ${#TO_DELETE[@]} -eq 0 ]; then
+            echo "No stale remote branches to delete."
+            {
+              echo "### Summary"
+              echo "**0** branch(es) deleted."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "Deleting ${#TO_DELETE[@]} stale remote branch(es)."
+          echo ""
+
+          {
+            echo "### Deleted branches"
+            echo ""
+            echo "| Branch | Tip \`sha\` | Author (last commit) | Email | GitHub user (from noreply) |"
+            echo "| --- | --- | --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          BASE_URL="https://github.com/${GITHUB_REPOSITORY}"
+
+          for branch in "${TO_DELETE[@]}"; do
+            REF="origin/${branch}"
+            # Must read tip before deleting the remote ref (separate fields: author/email may contain |)
+            SHA=$(git rev-parse --short "$REF" 2>/dev/null || echo "???????")
+            AUTHOR=$(git log -1 --format='%an' "$REF" 2>/dev/null || echo "?")
+            EMAIL=$(git log -1 --format='%ae' "$REF" 2>/dev/null || echo "?")
+            GH_HANDLE="$(github_handle_from_email "$EMAIL")"
+
+            echo "Deleting origin/${branch} (tip ${SHA} by ${AUTHOR})"
+            git push origin --delete "$branch"
+
+            # Markdown table row: escape pipes in text fields
+            AUTH_ESC="${AUTHOR//|/\\|}"
+            EMAIL_ESC="${EMAIL//|/\\|}"
+            echo "| \`${branch}\` | \`${SHA}\` | ${AUTH_ESC} | ${EMAIL_ESC} | ${GH_HANDLE:-—} |" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "  Removed \`refs/heads/${branch}\` — tip ${SHA}, author: ${AUTHOR} <${EMAIL}> ${GH_HANDLE:+(GitHub ${GH_HANDLE})}"
+            echo "  (was ${BASE_URL}/tree/${branch})"
+            DELETED=$((DELETED + 1))
+          done
+
+          echo ""
+          echo "=== Summary: ${DELETED} remote branch(es) deleted ==="
+          for branch in "${TO_DELETE[@]}"; do
+            echo "${branch}"
+          done
+
+          {
+            echo ""
+            echo "### Summary"
+            echo "**${DELETED}** remote branch(es) deleted this run. The table above lists each branch with the **last commit** author and email from the tip before deletion."
+            echo ""
+            echo "When the email is a GitHub \`users.noreply.github.com\` address, the **GitHub user** column shows the inferred handle (e.g. \`@octocat\`). Other emails show — in that column."
+          } >> "$GITHUB_STEP_SUMMARY"

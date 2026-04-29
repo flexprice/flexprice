@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -57,6 +58,7 @@ type Configuration struct {
 	RawEventsReprocessing      RawEventsReprocessingConfig      `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
 	IntegrationEvents          IntegrationEventsConfig          `mapstructure:"integration_events" validate:"omitempty"`
+	OnboardingEvents           OnboardingEventsConfig           `mapstructure:"onboarding_events" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 }
 
@@ -142,6 +144,7 @@ type LoggingConfig struct {
 	// Service identity fields added to every log line
 	ServiceName string `mapstructure:"service_name" validate:"omitempty"`
 	Environment string `mapstructure:"environment" validate:"omitempty"`
+	Region      string `mapstructure:"region" validate:"omitempty"`
 
 	// Fluentd configuration
 	FluentdEnabled bool   `mapstructure:"fluentd_enabled" default:"false"`
@@ -346,6 +349,14 @@ type RawEventConsumptionConfig struct {
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_raw_event_processing"`
 }
 
+type OnboardingEventsConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"staging_onboarding_events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"100"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"onboarding_events_consumer"`
+	MaxRetries    int    `mapstructure:"max_retries" default:"3"`
+}
+
 type EnvAccessConfig struct {
 	UserEnvMapping map[string]map[string][]string `mapstructure:"user_env_mapping" json:"user_env_mapping" validate:"omitempty"`
 }
@@ -405,7 +416,7 @@ type RedisConfig struct {
 func NewConfig() (*Configuration, error) {
 	v := viper.New()
 
-	// Step 1: Load `.env` if it exists
+	// Step 1: Load `.env` then `.env.local` if they exist.
 	_ = godotenv.Load()
 
 	// Step 2: Initialize Viper
@@ -424,6 +435,7 @@ func NewConfig() (*Configuration, error) {
 	// Bind bare env vars (no FLEXPRICE_ prefix) for service identity fields
 	_ = v.BindEnv("logging.service_name", "SERVICE_NAME")
 	_ = v.BindEnv("logging.environment", "ENVIRONMENT")
+	_ = v.BindEnv("logging.region", "REGION")
 
 	// Explicitly bind keys where AutomaticEnv is ambiguous due to underscores in key segments
 	_ = v.BindEnv("clickhouse.password", "FLEXPRICE_CLICKHOUSE_PASSWORD")
@@ -440,6 +452,11 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.otel_auth_value", "FLEXPRICE_LOGGING_OTEL_AUTH_VALUE")
 	_ = v.BindEnv("logging.otel_debug", "FLEXPRICE_LOGGING_OTEL_DEBUG")
 
+	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
+	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
+	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
+	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
+
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
 		fmt.Printf("Error reading config file: %v\n", err)
@@ -455,13 +472,15 @@ func NewConfig() (*Configuration, error) {
 		return nil, fmt.Errorf("unable to decode into config struct, %v", err)
 	}
 
-	// Step 6: Parse API keys
-	apiKeysStr := v.GetString("auth.api_key.keys")
-	// Parse API keys JSON if present
-	if apiKeysStr != "" {
+	// Step 6: Parse API keys from env var (JSON string override).
+	// We read the OS env var directly instead of via Viper because the value is a JSON
+	// string — Viper/mapstructure would try to decode it as a map and panic during
+	// Unmarshal. Reading it here (after Unmarshal) avoids that conflict.
+	apiKeysEnv := os.Getenv("FLEXPRICE_AUTH_API_KEY_KEYS")
+	if apiKeysEnv != "" {
 		var apiKeys map[string]APIKeyDetails
-		if err := json.Unmarshal([]byte(apiKeysStr), &apiKeys); err != nil {
-			return nil, fmt.Errorf("failed to parse API keys JSON: %v", err)
+		if err := json.Unmarshal([]byte(apiKeysEnv), &apiKeys); err != nil {
+			return nil, fmt.Errorf("failed to parse FLEXPRICE_AUTH_API_KEY_KEYS JSON: %v", err)
 		}
 		cfg.Auth.APIKey.Keys = apiKeys
 	}

@@ -192,7 +192,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
-	s.Logger.Debugw("processing event from message queue",
+	s.Logger.Debugw("processing event from message queue in event consumption service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -234,15 +234,23 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
-	s.Logger.Debugw("processing event",
+	s.Logger.Debugw("processing event in event consumption service",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
+		"environment_id", event.EnvironmentID,
+		"external_customer_id", event.ExternalCustomerID,
 		"timestamp", event.Timestamp,
 	)
 
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}
+
+	s.Logger.Debugw("creating billing event",
+		"tenant_id", s.Config.Billing.TenantID,
+		"environment_id", s.Config.Billing.EnvironmentID,
+		"external_customer_id", event.ExternalCustomerID,
+	)
 
 	// Create billing event if configured
 	if s.Config.Billing.TenantID != "" {
@@ -258,15 +266,26 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 				"source":              event.Source,
 			},
 			time.Now(),
-			"", // Customer ID will be looked up by external ID
 			"", // Generate new ID
+			"", // Customer ID will be looked up by external ID
 			"system",
 			s.Config.Billing.EnvironmentID,
 		)
+		s.Logger.Debugw("appending billing event",
+			"tenant_id", s.Config.Billing.TenantID,
+			"environment_id", s.Config.Billing.EnvironmentID,
+			"external_customer_id", event.ExternalCustomerID,
+		)
+
 		eventsToInsert = append(eventsToInsert, billingEvent)
 	}
 
 	// Insert events into ClickHouse
+	s.Logger.Debugw("inserting events into ClickHouse",
+		"event_id", event.ID,
+		"events_to_insert_count", len(eventsToInsert),
+	)
+
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
 		s.Logger.Errorw("failed to insert events",
 			"error", err,

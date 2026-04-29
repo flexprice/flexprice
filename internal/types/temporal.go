@@ -20,6 +20,7 @@ const (
 	TemporalTaskQueueSubscription    TemporalTaskQueue = "subscription"
 	TemporalTaskQueueInvoice         TemporalTaskQueue = "invoice"
 	TemporalTaskQueueReprocessEvents TemporalTaskQueue = "events"
+	TemporalTaskQueueCron            TemporalTaskQueue = "cron"
 )
 
 // String returns the string representation of the task queue
@@ -37,6 +38,7 @@ func (tq TemporalTaskQueue) Validate() error {
 		TemporalTaskQueueWorkflows,
 		TemporalTaskQueueInvoice,
 		TemporalTaskQueueReprocessEvents,
+		TemporalTaskQueueCron,
 	}
 	if lo.Contains(allowedQueues, tq) {
 		return nil
@@ -51,6 +53,12 @@ type TemporalWorkflowType string
 
 const (
 	// Workflow Types - only include implemented workflows
+	TemporalCreditGrantProcessingWorkflow              TemporalWorkflowType = "CreditGrantProcessingWorkflow"
+	TemporalSubscriptionAutoCancellationWorkflow       TemporalWorkflowType = "SubscriptionAutoCancellationWorkflow"
+	TemporalWalletCreditExpiryWorkflow                 TemporalWorkflowType = "WalletCreditExpiryWorkflow"
+	TemporalSubscriptionBillingPeriodsWorkflow         TemporalWorkflowType = "SubscriptionBillingPeriodsWorkflow"
+	TemporalSubscriptionRenewalDueAlertsWorkflow       TemporalWorkflowType = "SubscriptionRenewalDueAlertsWorkflow"
+	TemporalOutboundWebhookStaleRetryWorkflow          TemporalWorkflowType = "OutboundWebhookStaleRetryWorkflow"
 	TemporalChargebeeCustomerSyncWorkflow              TemporalWorkflowType = "ChargebeeCustomerSyncWorkflow"
 	TemporalChargebeeInvoiceSyncWorkflow               TemporalWorkflowType = "ChargebeeInvoiceSyncWorkflow"
 	TemporalComputeInvoiceWorkflow                     TemporalWorkflowType = "ComputeInvoiceWorkflow"
@@ -91,15 +99,31 @@ const (
 	TemporalTaskProcessingWorkflow                     TemporalWorkflowType = "TaskProcessingWorkflow"
 )
 
-// WorkflowTypesExcludedFromTracking are workflow types that are not persisted to the
-// workflow_execution table and do not run start/end tracking in the interceptor.
-// Use the existing TemporalWorkflowType enums so the list stays type-safe and discoverable.
-var WorkflowTypesExcludedFromTracking = []TemporalWorkflowType{
+// temporalCronWorkflowTypes is the single list of schedule/worker cron workflows (keeps
+// task queue, tracking exclusions, and Validate in sync when adding a cron workflow).
+var temporalCronWorkflowTypes = []TemporalWorkflowType{
+	TemporalCreditGrantProcessingWorkflow,
+	TemporalSubscriptionAutoCancellationWorkflow,
+	TemporalWalletCreditExpiryWorkflow,
+	TemporalSubscriptionBillingPeriodsWorkflow,
+	TemporalSubscriptionRenewalDueAlertsWorkflow,
+	TemporalOutboundWebhookStaleRetryWorkflow,
+}
+
+var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{
 	TemporalScheduleSubscriptionBillingWorkflow,
 	TemporalProcessSubscriptionBillingWorkflow,
 	TemporalProcessInvoiceWorkflow,
 	TemporalScheduleDraftFinalizationWorkflow,
 }
+
+// WorkflowTypesExcludedFromTracking are workflow types that are not persisted to the
+// workflow_execution table and do not run start/end tracking in the interceptor.
+// Use the existing TemporalWorkflowType enums so the list stays type-safe and discoverable.
+var WorkflowTypesExcludedFromTracking = append(
+	append([]TemporalWorkflowType{}, workflowTypesExcludedFromTrackingCore...),
+	temporalCronWorkflowTypes...,
+)
 
 // ShouldTrackWorkflowType returns false if this workflow type is excluded from tracking
 // (no DB save, no interceptor start/end logic). Used by the workflow tracking interceptor.
@@ -114,7 +138,7 @@ func (w TemporalWorkflowType) String() string {
 
 // Validate validates the workflow type
 func (w TemporalWorkflowType) Validate() error {
-	allowedWorkflows := []TemporalWorkflowType{
+	allowedWorkflows := append(append([]TemporalWorkflowType{}, temporalCronWorkflowTypes...), []TemporalWorkflowType{
 		TemporalChargebeeCustomerSyncWorkflow,
 		TemporalChargebeeInvoiceSyncWorkflow,
 		TemporalComputeInvoiceWorkflow,
@@ -153,7 +177,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalSubscriptionChangeWorkflow,
 		TemporalSubscriptionCreationWorkflow,
 		TemporalTaskProcessingWorkflow,
-	}
+	}...)
 	if lo.Contains(allowedWorkflows, w) {
 		return nil
 	}
@@ -165,6 +189,9 @@ func (w TemporalWorkflowType) Validate() error {
 
 // TaskQueue returns the logical task queue for the workflow
 func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
+	if lo.Contains(temporalCronWorkflowTypes, w) {
+		return TemporalTaskQueueCron
+	}
 	switch w {
 	case TemporalTaskProcessingWorkflow, TemporalSubscriptionChangeWorkflow, TemporalSubscriptionCreationWorkflow, TemporalStripeIntegrationWorkflow, TemporalHubSpotDealSyncWorkflow, TemporalHubSpotInvoiceSyncWorkflow, TemporalHubSpotQuoteSyncWorkflow, TemporalNomodInvoiceSyncWorkflow, TemporalMoyasarInvoiceSyncWorkflow, TemporalPaddleInvoiceSyncWorkflow, TemporalStripeInvoiceSyncWorkflow, TemporalRazorpayInvoiceSyncWorkflow, TemporalChargebeeInvoiceSyncWorkflow, TemporalQuickBooksInvoiceSyncWorkflow, TemporalZohoBooksInvoiceSyncWorkflow, TemporalStripeCustomerSyncWorkflow, TemporalRazorpayCustomerSyncWorkflow, TemporalChargebeeCustomerSyncWorkflow, TemporalQuickBooksCustomerSyncWorkflow, TemporalNomodCustomerSyncWorkflow, TemporalPaddleCustomerSyncWorkflow:
 		return TemporalTaskQueueTask
@@ -261,6 +288,10 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 			TemporalReprocessRawEventsWorkflow,
 			TemporalReprocessEventsForPlanWorkflow,
 		}
+	case TemporalTaskQueueCron:
+		out := make([]TemporalWorkflowType, len(temporalCronWorkflowTypes))
+		copy(out, temporalCronWorkflowTypes)
+		return out
 	default:
 		return []TemporalWorkflowType{}
 	}
@@ -276,6 +307,7 @@ func GetAllTaskQueues() []TemporalTaskQueue {
 		TemporalTaskQueueInvoice,
 		TemporalTaskQueueWorkflows,
 		TemporalTaskQueueReprocessEvents,
+		TemporalTaskQueueCron,
 	}
 }
 

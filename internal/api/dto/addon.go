@@ -16,7 +16,6 @@ type CreateAddonRequest struct {
 	Name        string                 `json:"name" validate:"required"`
 	LookupKey   string                 `json:"lookup_key" validate:"required"`
 	Description string                 `json:"description"`
-	Type        types.AddonType        `json:"type" validate:"required"`
 	Metadata    map[string]interface{} `json:"metadata"`
 }
 
@@ -25,11 +24,6 @@ func (r *CreateAddonRequest) Validate() error {
 	if err != nil {
 		return err
 	}
-
-	if err := r.Type.Validate(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -39,7 +33,6 @@ func (r *CreateAddonRequest) ToAddon(ctx context.Context) *addon.Addon {
 		Name:          r.Name,
 		LookupKey:     r.LookupKey,
 		Description:   r.Description,
-		Type:          r.Type,
 		Metadata:      r.Metadata,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
@@ -81,9 +74,11 @@ type ListAddonsResponse = types.ListResponse[*AddonResponse] // @name ListAddons
 
 // AddAddonToSubscriptionRequest represents the request to add an addon to a subscription
 type AddAddonToSubscriptionRequest struct {
-	AddonID   string                 `json:"addon_id" validate:"required"`
-	StartDate *time.Time             `json:"start_date,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata"`
+	AddonID           string                  `json:"addon_id" validate:"required"`
+	Cadence           types.AddonCadence      `json:"cadence"`
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
+	StartDate         *time.Time              `json:"start_date,omitempty"`
+	Metadata          map[string]interface{}  `json:"metadata"`
 
 	// LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
@@ -116,9 +111,23 @@ func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, 
 }
 
 func (r *AddAddonToSubscriptionRequest) Validate() error {
-	err := validator.ValidateRequest(r)
-	if err != nil {
+	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	// Default to recurring when not provided for backward compatibility.
+	if r.Cadence == "" {
+		r.Cadence = types.AddonCadenceRecurring
+	}
+
+	if err := r.Cadence.Validate(); err != nil {
+		return err
+	}
+
+	if r.ProrationBehavior != "" {
+		if err := r.ProrationBehavior.Validate(); err != nil {
+			return err
+		}
 	}
 
 	if err := validateLineItemCommitments(r.LineItemCommitments); err != nil {

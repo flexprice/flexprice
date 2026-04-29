@@ -1,0 +1,90 @@
+# Closes open pull requests with no activity for more than 15 days (non-draft).
+# Schedule: daily; manual runs via workflow_dispatch.
+
+name: Close stale PRs
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: close-stale-prs
+  cancel-in-progress: false
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close:
+    name: Close inactive PRs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close PRs with no updates for 15+ days (excluding drafts)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          CUTOFF=$(date -u -d '15 days ago' +%s)
+
+          # List open PRs; raise --limit if the repo routinely has >500 open PRs
+          PR_JSON=$(gh pr list --state open --json number,updatedAt,title,url,isDraft --limit 500)
+
+          mapfile -t TO_CLOSE < <(echo "$PR_JSON" | jq -r --argjson cutoff "$CUTOFF" '
+            .[]
+            | select(.isDraft == false)
+            | select((.updatedAt | fromdateiso8601) < $cutoff)
+            | .number
+          ')
+
+          CLOSED=0
+          {
+            echo "## Stale PR closure"
+            echo ""
+            echo "**Cutoff:** no \`updatedAt\` since $(date -u -d '15 days ago' -Iseconds) (UTC)"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ ${#TO_CLOSE[@]} -eq 0 ] || [ -z "${TO_CLOSE[0]:-}" ]; then
+            echo "No matching PRs to close."
+            {
+              echo "### Summary"
+              echo "No pull requests matched the stale criteria (**0** closed)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          COMMENT="This pull request was closed automatically because it has had no activity for more than 15 days. Reopen or open a new PR when you are ready to continue."
+
+          {
+            echo "### Closed pull requests"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Closing ${#TO_CLOSE[@]} pull request(s); links will appear in the step summary and below."
+          echo ""
+
+          for num in "${TO_CLOSE[@]}"; do
+            echo "Closing PR #$num"
+            gh pr close "$num" --comment "$COMMENT"
+            # Step summary: one markdown line per PR (jq avoids shell quoting issues with titles)
+            echo "$PR_JSON" | jq -r --argjson n "$num" '.[] | select(.number == $n) | "- **#\(.number)** — [\(.title)](\(.url))"' >> "$GITHUB_STEP_SUMMARY"
+            URL=$(echo "$PR_JSON" | jq -r --argjson n "$num" '.[] | select(.number == $n) | .url')
+            echo "  Closed: ${URL}"
+            CLOSED=$((CLOSED + 1))
+          done
+
+          echo ""
+          echo "=== Summary: ${CLOSED} PR(s) closed (GitHub URLs) ==="
+          for num in "${TO_CLOSE[@]}"; do
+            echo "$PR_JSON" | jq -r --argjson n "$num" '.[] | select(.number == $n) | .url'
+          done
+
+          {
+            echo ""
+            echo "### Summary"
+            echo "**${CLOSED}** pull request(s) closed this run."
+            echo ""
+            echo "Each item under **Closed pull requests** is a link to the PR on GitHub."
+          } >> "$GITHUB_STEP_SUMMARY"

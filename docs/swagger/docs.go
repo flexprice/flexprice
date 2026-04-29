@@ -2659,6 +2659,72 @@ const docTemplate = `{
                 }
             }
         },
+        "/environments/{id}/clone": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Clone all published features and plans from the source environment into a target environment. If target_environment_id is provided, entities are cloned into that existing environment. Otherwise a new environment is created from name and type first.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Environments"
+                ],
+                "summary": "Clone an environment",
+                "operationId": "cloneEnvironment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source Environment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Clone configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CloneEnvironmentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/models.TemporalWorkflowResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
         "/events": {
             "post": {
                 "security": [
@@ -3283,6 +3349,78 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/features/{id}/clone": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Clone an existing feature",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Features"
+                ],
+                "summary": "Clone a feature",
+                "operationId": "cloneFeature",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source Feature ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Clone configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CloneFeatureRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/FeatureResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
             }
         },
         "/groups": {
@@ -5159,6 +5297,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Clone a plan",
+                "operationId": "clonePlan",
                 "parameters": [
                     {
                         "type": "string",
@@ -5208,7 +5347,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "write"
             }
         },
         "/plans/{id}/creditgrants": {
@@ -7485,187 +7625,6 @@ const docTemplate = `{
                     }
                 },
                 "x-scope": "read"
-            }
-        },
-        "/subscriptions/{id}/pause": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when temporarily stopping a subscription (e.g. customer hold or seasonal pause). Billing and access pause; resume when ready.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "Pause a subscription",
-                "operationId": "pauseSubscription",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Pause subscription request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/PauseSubscriptionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/SubscriptionPauseResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/subscriptions/{id}/pauses": {
-            "get": {
-                "description": "Use when showing pause history for a subscription (e.g. support or audit). Returns all past and future pauses.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "List all pauses for a subscription",
-                "operationId": "listSubscriptionPauses",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ListSubscriptionPausesResponse"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/subscriptions/{id}/resume": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when reactivating a paused subscription (e.g. end of hold). Billing and access resume from the resume date.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "Resume a paused subscription",
-                "operationId": "resumeSubscription",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Resume subscription request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/ResumeSubscriptionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/SubscriptionPauseResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
             }
         },
         "/subscriptions/{id}/v2": {
@@ -11886,6 +11845,9 @@ const docTemplate = `{
                 "addon_id": {
                     "type": "string"
                 },
+                "cadence": {
+                    "$ref": "#/definitions/types.AddonCadence"
+                },
                 "line_item_commitments": {
                     "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
                     "type": "object",
@@ -11896,6 +11858,9 @@ const docTemplate = `{
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
+                },
+                "proration_behavior": {
+                    "$ref": "#/definitions/types.ProrationBehavior"
                 },
                 "start_date": {
                     "type": "string"
@@ -11914,6 +11879,9 @@ const docTemplate = `{
                 "addon_id": {
                     "type": "string"
                 },
+                "cadence": {
+                    "$ref": "#/definitions/types.AddonCadence"
+                },
                 "line_item_commitments": {
                     "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
                     "type": "object",
@@ -11924,6 +11892,9 @@ const docTemplate = `{
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
+                },
+                "proration_behavior": {
+                    "$ref": "#/definitions/types.ProrationBehavior"
                 },
                 "start_date": {
                     "type": "string"
@@ -12039,9 +12010,6 @@ const docTemplate = `{
                 },
                 "tenant_id": {
                     "type": "string"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.AddonType"
                 },
                 "updated_at": {
                     "type": "string"
@@ -12384,23 +12352,80 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "action": {
-                    "description": "\"created\" | \"wallet_credit\"",
-                    "type": "string"
+                    "description": "Action is created for a proration charge invoice, wallet_credit for downgrade credit.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ChangedInvoiceAction"
+                        }
+                    ]
                 },
                 "id": {
                     "type": "string"
                 },
+                "invoice": {
+                    "description": "Invoice is set for proration charges: preview returns a synthetic invoice; execute returns the persisted invoice when created.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/InvoiceResponse"
+                        }
+                    ]
+                },
                 "status": {
-                    "type": "string"
+                    "description": "Status is preview (dry-run), issued (wallet credit applied), or a PaymentStatus string for real invoices.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ChangedInvoiceStatus"
+                        }
+                    ]
+                },
+                "wallet_transaction": {
+                    "description": "WalletTransaction is set for downgrade wallet credits: preview is synthetic; execute returns the transaction from the top-up.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/WalletTransactionResponse"
+                        }
+                    ]
                 }
             }
+        },
+        "ChangedInvoiceAction": {
+            "description": "created (proration invoice) | wallet_credit (downgrade credit)",
+            "type": "string",
+            "enum": [
+                "created",
+                "wallet_credit"
+            ],
+            "x-enum-varnames": [
+                "ChangedInvoiceActionCreated",
+                "ChangedInvoiceActionWalletCredit"
+            ]
+        },
+        "ChangedInvoiceStatus": {
+            "description": "preview | issued | INITIATED | PENDING | PROCESSING | SUCCEEDED | OVERPAID | FAILED | REFUNDED | PARTIALLY_REFUNDED",
+            "type": "string",
+            "enum": [
+                "preview",
+                "issued"
+            ],
+            "x-enum-varnames": [
+                "ChangedInvoiceStatusPreview",
+                "ChangedInvoiceStatusWalletIssued"
+            ]
         },
         "ChangedLineItem": {
             "type": "object",
             "properties": {
                 "change_action": {
-                    "description": "\"created\" | \"updated\" | \"ended\"",
-                    "type": "string"
+                    "enum": [
+                        "created",
+                        "updated",
+                        "ended"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ChangedLineItemAction"
+                        }
+                    ]
                 },
                 "end_date": {
                     "type": "string"
@@ -12418,6 +12443,20 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "ChangedLineItemAction": {
+            "description": "created | updated | ended",
+            "type": "string",
+            "enum": [
+                "created",
+                "updated",
+                "ended"
+            ],
+            "x-enum-varnames": [
+                "ChangedLineItemActionCreated",
+                "ChangedLineItemActionUpdated",
+                "ChangedLineItemActionEnded"
+            ]
         },
         "ChangedResources": {
             "type": "object",
@@ -12446,14 +12485,71 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "action": {
-                    "description": "\"created\" | \"updated\"",
-                    "type": "string"
+                    "$ref": "#/definitions/ChangedSubscriptionAction"
                 },
                 "id": {
                     "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.SubscriptionStatus"
+                }
+            }
+        },
+        "ChangedSubscriptionAction": {
+            "description": "created | updated",
+            "type": "string",
+            "enum": [
+                "created",
+                "updated"
+            ],
+            "x-enum-varnames": [
+                "ChangedSubscriptionActionCreated",
+                "ChangedSubscriptionActionUpdated"
+            ]
+        },
+        "CloneEnvironmentRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the new environment (required when target_environment_id is not provided)",
+                    "type": "string"
+                },
+                "target_environment_id": {
+                    "description": "TargetEnvironmentID is the ID of an existing environment to clone into (optional).\nWhen provided, Name and Type are ignored. When omitted, Name and Type are required.",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type of the new environment, e.g. \"production\" or \"development\" (required when target_environment_id is not provided)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.EnvironmentType"
+                        }
+                    ]
+                }
+            }
+        },
+        "CloneFeatureRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "Description overrides the source feature's description when provided",
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "description": "LookupKey is required and must be unique across published features",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata overrides the source feature's metadata when provided",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "Name is required and must be different from the source feature's name",
+                    "type": "string"
                 }
             }
         },
@@ -12861,8 +12957,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "lookup_key",
-                "name",
-                "type"
+                "name"
             ],
             "properties": {
                 "description": {
@@ -12877,9 +12972,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.AddonType"
                 }
             }
         },
@@ -12929,9 +13021,6 @@ const docTemplate = `{
                 },
                 "tenant_id": {
                     "type": "string"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.AddonType"
                 },
                 "updated_at": {
                     "type": "string"
@@ -13927,7 +14016,7 @@ const docTemplate = `{
                 "transform_quantity": {
                     "$ref": "#/definitions/price.TransformQuantity"
                 },
-                "trial_period": {
+                "trial_period_days": {
                     "type": "integer"
                 },
                 "type": {
@@ -14118,6 +14207,14 @@ const docTemplate = `{
                     "description": "PriceID references an existing price (plan, addon, or subscription-scoped). Exactly one of price_id or price must be set.",
                     "type": "string"
                 },
+                "proration_behavior": {
+                    "description": "ProrationBehavior controls mid-period charge creation. Defaults to none.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
                 "quantity": {
                     "type": "number"
                 },
@@ -14143,6 +14240,10 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/AddAddonToSubscriptionRequest"
                     }
+                },
+                "billing_anchor": {
+                    "description": "BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.\nFor monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date\nis before that day in the month, the first billing period ends on the next occurrence of that\nday in the same month (a shorter first period); subsequent periods follow the usual interval.",
+                    "type": "string"
                 },
                 "billing_cycle": {
                     "description": "BillingCycle is the cycle of the billing anchor.\nThis is used to determine the billing date for the subscription (i.e set the billing anchor)\nIf not set, the default value is anniversary. Possible values are anniversary and calendar.\nAnniversary billing means the billing anchor will be the start date of the subscription.\nCalendar billing means the billing anchor will be the appropriate date based on the billing period.\nFor example, if the billing period is month and the start date is 2025-04-15 then in case of\ncalendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.",
@@ -14327,11 +14428,9 @@ const docTemplate = `{
                         "$ref": "#/definitions/TaxRateOverride"
                     }
                 },
-                "trial_end": {
-                    "type": "string"
-                },
-                "trial_start": {
-                    "type": "string"
+                "trial_period_days": {
+                    "description": "TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).\n0 = explicitly no trial (overrides catalog). \u003e0 = override duration in days.",
+                    "type": "integer"
                 }
             }
         },
@@ -15143,6 +15242,14 @@ const docTemplate = `{
             "properties": {
                 "effective_from": {
                     "type": "string"
+                },
+                "proration_behavior": {
+                    "description": "ProrationBehavior controls mid-period credit issuance. Defaults to none.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
                 }
             }
         },
@@ -16736,23 +16843,6 @@ const docTemplate = `{
                 }
             }
         },
-        "ListSubscriptionPausesResponse": {
-            "description": "Response object for listing subscription pauses with total count",
-            "type": "object",
-            "properties": {
-                "items": {
-                    "description": "List of subscription pause objects\n@Description Array of subscription pauses",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/SubscriptionPauseResponse"
-                    }
-                },
-                "total": {
-                    "description": "Total number of pauses\n@Description Total count of subscription pauses in the response",
-                    "type": "integer"
-                }
-            }
-        },
         "ListTasksResponse": {
             "type": "object",
             "properties": {
@@ -17128,51 +17218,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/price.TransformQuantity"
                         }
                     ]
-                }
-            }
-        },
-        "PauseSubscriptionRequest": {
-            "description": "Request object for pausing an active subscription with various pause modes and options",
-            "type": "object",
-            "required": [
-                "pause_mode"
-            ],
-            "properties": {
-                "dry_run": {
-                    "description": "Whether to perform a dry run\n@Description If true, validates the request and shows impact without actually pausing the subscription\n@Example false",
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "description": "Additional metadata as key-value pairs\n@Description Optional metadata for storing additional information about the pause\n@Example {\"requested_by\": \"customer\", \"channel\": \"support_ticket\"}",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "pause_days": {
-                    "description": "Duration of the pause in days\n@Description Number of days to pause the subscription. Cannot be used together with pause_end. Must be greater than 0\n@Example 30",
-                    "type": "integer"
-                },
-                "pause_end": {
-                    "description": "End date for the subscription pause\n@Description ISO 8601 timestamp when the pause should end. Cannot be used together with pause_days. Must be after pause_start\n@Example \"2024-02-15T00:00:00Z\"",
-                    "type": "string"
-                },
-                "pause_mode": {
-                    "description": "Mode for pausing the subscription\n@Description Determines when the pause takes effect. \"immediate\" pauses right away, \"scheduled\" pauses at a specified time\n@Enum immediate,scheduled",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.PauseMode"
-                        }
-                    ]
-                },
-                "pause_start": {
-                    "description": "Start date for the subscription pause\n@Description ISO 8601 timestamp when the pause should begin. Required when pause_mode is \"scheduled\"\n@Example \"2024-01-15T00:00:00Z\"",
-                    "type": "string"
-                },
-                "reason": {
-                    "description": "Reason for pausing the subscription\n@Description Optional reason for the pause. Maximum 255 characters\n@Example \"Customer requested temporary suspension\"",
-                    "type": "string",
-                    "maxLength": 255
                 }
             }
         },
@@ -17570,8 +17615,8 @@ const docTemplate = `{
                 "transform_quantity": {
                     "$ref": "#/definitions/price.JSONBTransformQuantity"
                 },
-                "trial_period": {
-                    "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
+                "trial_period_days": {
+                    "description": "TrialPeriodDays is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
                     "type": "integer"
                 },
                 "type": {
@@ -17739,36 +17784,15 @@ const docTemplate = `{
                 "addon_association_id": {
                     "type": "string"
                 },
+                "effective_date": {
+                    "description": "EffectiveDate is the date the cancellation takes effect.\nWhen nil the addon is cancelled at the end of the current period.\nWhen provided it must fall within [CurrentPeriodStart, CurrentPeriodEnd]; mid-period\nvalues combined with create_prorations will issue a wallet credit for unused time.",
+                    "type": "string"
+                },
+                "proration_behavior": {
+                    "$ref": "#/definitions/types.ProrationBehavior"
+                },
                 "reason": {
                     "type": "string"
-                }
-            }
-        },
-        "ResumeSubscriptionRequest": {
-            "description": "Request object for resuming a paused subscription",
-            "type": "object",
-            "required": [
-                "resume_mode"
-            ],
-            "properties": {
-                "dry_run": {
-                    "description": "Whether to perform a dry run\n@Description If true, validates the request and shows impact without actually resuming the subscription\n@Example false",
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "description": "Additional metadata as key-value pairs\n@Description Optional metadata for storing additional information about the resume operation\n@Example {\"resumed_by\": \"admin\", \"reason\": \"issue_resolved\"}",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "resume_mode": {
-                    "description": "Mode for resuming the subscription\n@Description Determines how the subscription should be resumed\n@Enum immediate,scheduled",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ResumeMode"
-                        }
-                    ]
                 }
             }
         },
@@ -18195,6 +18219,9 @@ const docTemplate = `{
         "SubscriptionLineItemResponse": {
             "type": "object",
             "properties": {
+                "addon_association_id": {
+                    "type": "string"
+                },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
@@ -18305,9 +18332,6 @@ const docTemplate = `{
                 "tenant_id": {
                     "type": "string"
                 },
-                "trial_period": {
-                    "type": "integer"
-                },
                 "updated_at": {
                     "type": "string"
                 },
@@ -18347,78 +18371,6 @@ const docTemplate = `{
                 "SubscriptionModifyTypeInheritance",
                 "SubscriptionModifyTypeQuantityChange"
             ]
-        },
-        "SubscriptionPauseResponse": {
-            "description": "Response object containing subscription pause information",
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "environment_id": {
-                    "description": "EnvironmentID is the environment identifier for the pause",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "ID is the unique identifier for the subscription pause",
-                    "type": "string"
-                },
-                "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
-                },
-                "original_period_end": {
-                    "description": "OriginalPeriodEnd is the end of the billing period when the pause was created",
-                    "type": "string"
-                },
-                "original_period_start": {
-                    "description": "OriginalPeriodStart is the start of the billing period when the pause was created",
-                    "type": "string"
-                },
-                "pause_end": {
-                    "description": "PauseEnd is when the pause will end (null for indefinite)",
-                    "type": "string"
-                },
-                "pause_mode": {
-                    "$ref": "#/definitions/types.PauseMode"
-                },
-                "pause_start": {
-                    "description": "PauseStart is when the pause actually started",
-                    "type": "string"
-                },
-                "pause_status": {
-                    "$ref": "#/definitions/types.PauseStatus"
-                },
-                "reason": {
-                    "description": "Reason is the reason for pausing",
-                    "type": "string"
-                },
-                "resume_mode": {
-                    "$ref": "#/definitions/types.ResumeMode"
-                },
-                "resumed_at": {
-                    "description": "ResumedAt is when the pause was actually ended (if manually resumed)",
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "subscription_id": {
-                    "description": "SubscriptionID is the identifier for the subscription",
-                    "type": "string"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
-                }
-            }
         },
         "SubscriptionPhaseCreateRequest": {
             "type": "object",
@@ -18601,7 +18553,7 @@ const docTemplate = `{
                 "transform_quantity": {
                     "$ref": "#/definitions/price.TransformQuantity"
                 },
-                "trial_period": {
+                "trial_period_days": {
                     "type": "integer"
                 },
                 "type": {
@@ -20852,9 +20804,6 @@ const docTemplate = `{
                 "tenant_id": {
                     "type": "string"
                 },
-                "type": {
-                    "$ref": "#/definitions/types.AddonType"
-                },
                 "updated_at": {
                     "type": "string"
                 },
@@ -21176,9 +21125,6 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "addon_type": {
-                    "$ref": "#/definitions/types.AddonType"
-                },
                 "end_time": {
                     "type": "string"
                 },
@@ -21233,23 +21179,12 @@ const docTemplate = `{
             "enum": [
                 "active",
                 "cancelled",
-                "paused"
+                "pending"
             ],
             "x-enum-varnames": [
                 "AddonStatusActive",
                 "AddonStatusCancelled",
-                "AddonStatusPaused"
-            ]
-        },
-        "types.AddonType": {
-            "type": "string",
-            "enum": [
-                "onetime",
-                "multiple_instance"
-            ],
-            "x-enum-varnames": [
-                "AddonTypeOnetime",
-                "AddonTypeMultipleInstance"
+                "AddonStatusPending"
             ]
         },
         "types.AggregationType": {
@@ -22317,6 +22252,7 @@ const docTemplate = `{
                 "SUBSCRIPTION_CREATE",
                 "SUBSCRIPTION_CYCLE",
                 "SUBSCRIPTION_UPDATE",
+                "SUBSCRIPTION_TRIAL_END",
                 "PRORATION",
                 "MANUAL"
             ],
@@ -22324,6 +22260,7 @@ const docTemplate = `{
                 "InvoiceBillingReasonSubscriptionCreate",
                 "InvoiceBillingReasonSubscriptionCycle",
                 "InvoiceBillingReasonSubscriptionUpdate",
+                "InvoiceBillingReasonSubscriptionTrialEnd",
                 "InvoiceBillingReasonProration",
                 "InvoiceBillingReasonManual"
             ]
@@ -23295,6 +23232,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.SubscriptionType"
                     }
                 },
+                "trial_end_due_lte": {
+                    "description": "TrialEndDueLTE, when set, restricts to subscriptions with trial_end not nil and trial_end \u003c= trial_end_due_lte.\nUse with subscription_status trialing for trial-end cron processing.",
+                    "type": "string"
+                },
                 "with_line_items": {
                     "description": "WithLineItems includes line items in the response",
                     "type": "boolean"
@@ -23877,6 +23818,7 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
+                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -23886,10 +23828,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
-                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
+                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -23899,8 +23841,7 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth",
-                "DefaultWindowSize"
+                "WindowSizeMonth"
             ]
         },
         "types.WorkflowExecutionFilter": {
@@ -24426,8 +24367,8 @@ const docTemplate = `{
                 "transform_quantity": {
                     "$ref": "#/definitions/price.JSONBTransformQuantity"
                 },
-                "trial_period": {
-                    "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
+                "trial_period_days": {
+                    "description": "TrialPeriodDays is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)",
                     "type": "integer"
                 },
                 "type": {
@@ -24478,6 +24419,9 @@ const docTemplate = `{
         "subscription.SubscriptionLineItem": {
             "type": "object",
             "properties": {
+                "addon_association_id": {
+                    "type": "string"
+                },
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
@@ -24587,9 +24531,6 @@ const docTemplate = `{
                 },
                 "tenant_id": {
                     "type": "string"
-                },
-                "trial_period": {
-                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"
@@ -24720,6 +24661,28 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "types.AddonCadence": {
+            "type": "string",
+            "enum": [
+                "onetime",
+                "recurring"
+            ],
+            "x-enum-varnames": [
+                "AddonCadenceOnetime",
+                "AddonCadenceRecurring"
+            ]
+        },
+        "types.EnvironmentType": {
+            "type": "string",
+            "enum": [
+                "development",
+                "production"
+            ],
+            "x-enum-varnames": [
+                "EnvironmentDevelopment",
+                "EnvironmentProduction"
+            ]
         },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",

@@ -106,6 +106,10 @@ func (s *environmentService) GetEnvironment(ctx context.Context, id string) (*dt
 }
 
 func (s *environmentService) GetEnvironments(ctx context.Context, filter types.Filter) (*dto.ListEnvironmentsResponse, error) {
+
+	// explicitly set status to published
+	filter.Status = types.StatusPublished
+
 	environments, err := s.repo.List(ctx, filter)
 	if err != nil {
 		return nil, err

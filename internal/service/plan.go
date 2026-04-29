@@ -9,8 +9,6 @@ import (
 	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
-	domainGroup "github.com/flexprice/flexprice/internal/domain/group"
-	domainFeature "github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
@@ -792,7 +790,8 @@ func createPlanLineItem(
 }
 
 // ClonePlan clones a plan and its associated active prices, published entitlements,
-// and published credit grants into a new plan with a distinct name and lookup_key.
+// and published credit grants into a new plan within the same environment.
+// Cross-env plan cloning is handled exclusively by the environment clone Temporal workflow.
 func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePlanRequest) (*dto.PlanResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("plan ID is required").
@@ -809,22 +808,9 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		return nil, err
 	}
 
-	// Determine target environment: use request override or source plan's environment
-	targetEnvID := sourcePlan.EnvironmentID
-	if req.TargetEnvironmentID != "" {
-		// Validate target environment exists before rebinding context
-		if _, err := s.EnvironmentRepo.Get(ctx, req.TargetEnvironmentID); err != nil {
-			return nil, err
-		}
-		targetEnvID = req.TargetEnvironmentID
-	}
-
-	// Use target environment context for uniqueness checks and entity creation
-	targetCtx := types.SetEnvironmentID(ctx, targetEnvID)
-
 	// GetByLookupKey only matches published plans, so a successful lookup means the
 	// key is already taken — covers both "same as source" and "taken by another plan".
-	existing, err := s.PlanRepo.GetByLookupKey(targetCtx, req.LookupKey)
+	existing, err := s.PlanRepo.GetByLookupKey(ctx, req.LookupKey)
 	if err != nil && !ierr.IsNotFound(err) {
 		return nil, err
 	}
@@ -837,7 +823,7 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 			Mark(ierr.ErrAlreadyExists)
 	}
 
-	// Active prices: published + not expired (fetched from source environment)
+	// Active prices: published + not expired
 	sourcePrices, err := s.PriceRepo.List(ctx, types.NewNoLimitPriceFilter().
 		WithEntityIDs([]string{id}).
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
@@ -866,6 +852,11 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		return nil, err
 	}
 
+	// Resolve fields: request overrides take precedence over source values
+	description := sourcePlan.Description
+	if req.Description != nil {
+		description = *req.Description
+	}
 	// Merge metadata: source plan first, then req overlay (req overwrites/adds), then source_plan_id
 	merged := make(types.Metadata, len(sourcePlan.Metadata)+len(req.Metadata)+1)
 	for k, v := range sourcePlan.Metadata {
@@ -875,50 +866,22 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		merged[k] = v
 	}
 	merged["source_plan_id"] = id
+	metadata := merged
 
-	newPlan := sourcePlan.CopyWith(targetCtx, &plan.PlanCloneOverrides{
-		ID:            lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN)),
-		Name:          &req.Name,
-		LookupKey:     &req.LookupKey,
-		Description:   req.Description,
-		EnvironmentID: &targetEnvID,
-		Metadata:      merged,
-		DisplayOrder:  req.DisplayOrder,
-	})
-
-	// For cross-env cloning, resolve price groups in the target environment.
-	// Build a mapping from source group ID → target group ID.
-	// Note: group resolution happens outside the main transaction. This is acceptable
-	// because groups are idempotent by lookup_key — orphan groups from a failed clone
-	// are harmless and will be reused by subsequent clone attempts.
-	groupIDMap := make(map[string]string)
-	if req.TargetEnvironmentID != "" {
-		uniqueGroupIDs := lo.Uniq(lo.FilterMap(sourcePrices, func(p *domainPrice.Price, _ int) (string, bool) {
-			return p.GroupID, p.GroupID != ""
-		}))
-		for _, srcGroupID := range uniqueGroupIDs {
-			targetGID, err := s.resolveOrCreateGroup(ctx, targetCtx, srcGroupID)
-			if err != nil {
-				s.Logger.Warnw("failed to resolve group in target environment, clearing group_id",
-					"source_group_id", srcGroupID,
-					"error", err,
-				)
-				groupIDMap[srcGroupID] = ""
-				continue
-			}
-			groupIDMap[srcGroupID] = targetGID
-		}
+	displayOrder := sourcePlan.DisplayOrder
+	if req.DisplayOrder != nil {
+		displayOrder = req.DisplayOrder
 	}
 
-	// For cross-env cloning, resolve feature/meter ID mappings by looking up each source
-	// feature's lookup_key in the target environment. This is the single source of truth —
-	// whether called from the env-clone workflow or a direct API call, the same resolution
-	// logic runs so entitlement FeatureIDs and usage-price MeterIDs always point to the
-	// correct target-env entities.
-	featureIDMap := make(map[string]string)
-	meterIDMap := make(map[string]string)
-	if req.TargetEnvironmentID != "" {
-		featureIDMap, meterIDMap = s.buildCrossEnvIDMaps(ctx, targetCtx)
+	newPlan := &plan.Plan{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:          req.Name,
+		LookupKey:     req.LookupKey,
+		Description:   description,
+		EnvironmentID: sourcePlan.EnvironmentID,
+		Metadata:      metadata,
+		DisplayOrder:  displayOrder,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 
 	emptyLookupKey := ""
@@ -928,47 +891,27 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 
 	newPrices := make([]*domainPrice.Price, 0, len(sourcePrices))
 	for _, p := range sourcePrices {
-		overrides := &domainPrice.PriceCloneOverrides{
+		newPrices = append(newPrices, p.CopyWith(ctx, &domainPrice.PriceCloneOverrides{
 			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
 			EntityType: &entityTypePlan,
 			EntityID:   &newPlan.ID,
 			LookupKey:  lo.ToPtr(emptyLookupKey),
-		}
-		// Remap group ID for cross-env cloning
-		if req.TargetEnvironmentID != "" && p.GroupID != "" {
-			if newGID, ok := groupIDMap[p.GroupID]; ok {
-				overrides.GroupID = lo.ToPtr(newGID)
-			}
-		}
-		// Remap meter ID: either from workflow-provided map or from lookup-key resolution above.
-		if p.MeterID != "" {
-			if newMID, ok := meterIDMap[p.MeterID]; ok && newMID != "" {
-				overrides.MeterID = &newMID
-			}
-		}
-		newPrices = append(newPrices, p.CopyWith(targetCtx, overrides))
+		}))
 	}
 
 	newEntitlements := make([]*domainEntitlement.Entitlement, 0, len(sourceEntitlements))
 	for _, e := range sourceEntitlements {
-		entOverrides := &domainEntitlement.EntitlementCloneOverrides{
+		newEntitlements = append(newEntitlements, e.CopyWith(ctx, &domainEntitlement.EntitlementCloneOverrides{
 			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT)),
 			EntityType: &entEntityTypePlan,
 			EntityID:   &newPlan.ID,
-		}
-		// Remap feature ID: either from workflow-provided map or from lookup-key resolution above.
-		if e.FeatureID != "" {
-			if newFID, ok := featureIDMap[e.FeatureID]; ok && newFID != "" {
-				entOverrides.FeatureID = &newFID
-			}
-		}
-		newEntitlements = append(newEntitlements, e.CopyWith(targetCtx, entOverrides))
+		}))
 	}
 
 	newGrants := make([]*domainCreditGrant.CreditGrant, 0, len(sourceGrants))
 	newPlanID := newPlan.ID
 	for _, cg := range sourceGrants {
-		newGrants = append(newGrants, cg.CopyWith(targetCtx, &domainCreditGrant.CreditGrantCloneOverrides{
+		newGrants = append(newGrants, cg.CopyWith(ctx, &domainCreditGrant.CreditGrantCloneOverrides{
 			ID:     lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT)),
 			Scope:  &scopePlan,
 			PlanID: &newPlanID,
@@ -981,7 +924,7 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 	// Inside tx: plan create then batched bulk creates
 	var entitlementsCreated []*domainEntitlement.Entitlement
 	var grantsCreated []*domainCreditGrant.CreditGrant
-	err = s.DB.WithTx(targetCtx, func(txCtx context.Context) error {
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.PlanRepo.Create(txCtx, newPlan); err != nil {
 			return err
 		}
@@ -1013,7 +956,6 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 	s.Logger.InfowCtx(ctx, "plan cloned successfully",
 		"source_plan_id", id,
 		"new_plan_id", newPlan.ID,
-		"target_environment_id", targetEnvID,
 		"prices_cloned", len(newPrices),
 		"entitlements_cloned", len(entitlementsCreated),
 		"grants_cloned", len(grantsCreated),
@@ -1040,82 +982,3 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 	}, nil
 }
 
-// buildCrossEnvIDMaps resolves feature and meter ID translations for cross-env plan cloning.
-// lookup_key is the stable identifier across environments — this function fetches all published
-// features from source and target, joins them by lookup_key, and returns two simple maps:
-//   - featureIDMap: srcFeatureID → tgtFeatureID (for entitlements)
-//   - meterIDMap:   srcMeterID   → tgtMeterID   (for usage prices)
-func (s *planService) buildCrossEnvIDMaps(
-	sourceCtx, targetCtx context.Context,
-) (featureIDMap, meterIDMap map[string]string) {
-	featureIDMap = make(map[string]string)
-	meterIDMap = make(map[string]string)
-
-	publishedFilter := types.NewNoLimitFeatureFilter()
-	publishedFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-
-	sourceFeatures, err := s.FeatureRepo.List(sourceCtx, publishedFilter)
-	if err != nil {
-		s.Logger.Warnw("buildCrossEnvIDMaps: failed to fetch source features", "error", err)
-		return
-	}
-
-	targetFeatures, err := s.FeatureRepo.List(targetCtx, publishedFilter)
-	if err != nil {
-		s.Logger.Warnw("buildCrossEnvIDMaps: failed to fetch target features", "error", err)
-		return
-	}
-
-	// Index target features by lookup_key
-	tgtByKey := make(map[string]*domainFeature.Feature, len(targetFeatures))
-	for _, f := range targetFeatures {
-		tgtByKey[f.LookupKey] = f
-	}
-
-	// Join source → target by lookup_key
-	for _, src := range sourceFeatures {
-		tgt, ok := tgtByKey[src.LookupKey]
-		if !ok {
-			continue
-		}
-		featureIDMap[src.ID] = tgt.ID
-		if src.MeterID != "" && tgt.MeterID != "" {
-			meterIDMap[src.MeterID] = tgt.MeterID
-		}
-	}
-
-	return
-}
-
-// resolveOrCreateGroup looks up the source group and finds or creates a matching
-// group in the target environment (by lookup_key). Returns the target group ID.
-func (s *planService) resolveOrCreateGroup(sourceCtx, targetCtx context.Context, sourceGroupID string) (string, error) {
-	sourceGroup, err := s.GroupRepo.Get(sourceCtx, sourceGroupID)
-	if err != nil {
-		return "", err
-	}
-
-	// Try to find a group with the same lookup_key in the target environment
-	existingGroup, err := s.GroupRepo.GetByLookupKey(targetCtx, sourceGroup.LookupKey)
-	if err == nil && existingGroup != nil {
-		return existingGroup.ID, nil
-	}
-	if err != nil && !ierr.IsNotFound(err) {
-		return "", err
-	}
-
-	// Group doesn't exist in target env — create it
-	newGroup := &domainGroup.Group{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_GROUP),
-		Name:          sourceGroup.Name,
-		EntityType:    sourceGroup.EntityType,
-		EnvironmentID: types.GetEnvironmentID(targetCtx),
-		LookupKey:     sourceGroup.LookupKey,
-		Metadata:      sourceGroup.Metadata,
-		BaseModel:     types.GetDefaultBaseModel(targetCtx),
-	}
-	if err := s.GroupRepo.Create(targetCtx, newGroup); err != nil {
-		return "", err
-	}
-	return newGroup.ID, nil
-}

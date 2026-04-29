@@ -170,6 +170,8 @@ const (
 	InvoiceBillingReasonSubscriptionCycle InvoiceBillingReason = "SUBSCRIPTION_CYCLE"
 	// InvoiceBillingReasonSubscriptionUpdate indicates invoice is for subscription changes (upgrades, downgrades)
 	InvoiceBillingReasonSubscriptionUpdate InvoiceBillingReason = "SUBSCRIPTION_UPDATE"
+	// InvoiceBillingReasonSubscriptionTrialEnd indicates the converting invoice when a trialing subscription ends
+	InvoiceBillingReasonSubscriptionTrialEnd InvoiceBillingReason = "SUBSCRIPTION_TRIAL_END"
 	// InvoiceBillingReasonProration indicates invoice is for proration credits/charges (cancellations, plan changes)
 	InvoiceBillingReasonProration InvoiceBillingReason = "PRORATION"
 	// InvoiceBillingReasonManual indicates invoice was created manually by an administrator
@@ -185,6 +187,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionCreate,
 		InvoiceBillingReasonSubscriptionCycle,
 		InvoiceBillingReasonSubscriptionUpdate,
+		InvoiceBillingReasonSubscriptionTrialEnd,
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
 	}
@@ -198,6 +201,17 @@ func (r InvoiceBillingReason) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// TriggersSubscriptionActivationOnFullPayment reports whether paying this invoice in full should run
+// subscription activation logic (e.g. incomplete → active, or trialing → active after trial-end conversion).
+func (r InvoiceBillingReason) TriggersSubscriptionActivationOnFullPayment() bool {
+	switch r {
+	case InvoiceBillingReasonSubscriptionCreate, InvoiceBillingReasonSubscriptionTrialEnd:
+		return true
+	default:
+		return false
+	}
 }
 
 const (

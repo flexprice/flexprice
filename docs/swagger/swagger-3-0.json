@@ -3220,6 +3220,87 @@
         ]
       }
     },
+    "/environments/{id}/clone": {
+      "post": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Clone an environment",
+        "description": "Clone all published features and plans from the source environment into a target environment. If target_environment_id is provided, entities are cloned into that existing environment. Otherwise a new environment is created from name and type first.",
+        "operationId": "cloneEnvironment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Clone configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneEnvironmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.TemporalWorkflowResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
     "/events": {
       "post": {
         "tags": [
@@ -3947,6 +4028,97 @@
             "ApiKeyAuth": []
           }
         ]
+      }
+    },
+    "/features/{id}/clone": {
+      "post": {
+        "tags": [
+          "Features"
+        ],
+        "summary": "Clone a feature",
+        "description": "Clone an existing feature",
+        "operationId": "cloneFeature",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Source Feature ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Clone configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneFeatureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
       }
     },
     "/groups": {
@@ -6187,6 +6359,7 @@
         ],
         "summary": "Clone a plan",
         "description": "Clone an existing plan, copying its active prices, published entitlements, and published credit grants",
+        "operationId": "clonePlan",
         "parameters": [
           {
             "name": "id",
@@ -6266,6 +6439,7 @@
             "ApiKeyAuth": []
           }
         ],
+        "x-scope": "write",
         "x-codegen-request-body-name": "request"
       }
     },
@@ -8967,232 +9141,6 @@
           }
         ],
         "x-scope": "read",
-        "x-codegen-request-body-name": "request"
-      }
-    },
-    "/subscriptions/{id}/pause": {
-      "post": {
-        "tags": [
-          "Subscriptions"
-        ],
-        "summary": "Pause a subscription",
-        "description": "Use when temporarily stopping a subscription (e.g. customer hold or seasonal pause). Billing and access pause; resume when ready.",
-        "operationId": "pauseSubscription",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Subscription ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Pause subscription request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PauseSubscriptionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubscriptionPauseResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "request"
-      }
-    },
-    "/subscriptions/{id}/pauses": {
-      "get": {
-        "tags": [
-          "Subscriptions"
-        ],
-        "summary": "List all pauses for a subscription",
-        "description": "Use when showing pause history for a subscription (e.g. support or audit). Returns all past and future pauses.",
-        "operationId": "listSubscriptionPauses",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Subscription ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ListSubscriptionPausesResponse"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/subscriptions/{id}/resume": {
-      "post": {
-        "tags": [
-          "Subscriptions"
-        ],
-        "summary": "Resume a paused subscription",
-        "description": "Use when reactivating a paused subscription (e.g. end of hold). Billing and access resume from the resume date.",
-        "operationId": "resumeSubscription",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Subscription ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Resume subscription request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResumeSubscriptionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubscriptionPauseResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
         "x-codegen-request-body-name": "request"
       }
     },
@@ -13891,6 +13839,9 @@
           "addon_id": {
             "type": "string"
           },
+          "cadence": {
+            "$ref": "#/components/schemas/types.AddonCadence"
+          },
           "line_item_commitments": {
             "type": "object",
             "additionalProperties": {
@@ -13901,6 +13852,9 @@
           "metadata": {
             "type": "object",
             "additionalProperties": true
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "start_date": {
             "type": "string",
@@ -13920,6 +13874,9 @@
           "addon_id": {
             "type": "string"
           },
+          "cadence": {
+            "$ref": "#/components/schemas/types.AddonCadence"
+          },
           "line_item_commitments": {
             "type": "object",
             "additionalProperties": {
@@ -13930,6 +13887,9 @@
           "metadata": {
             "type": "object",
             "additionalProperties": true
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "start_date": {
             "type": "string",
@@ -14052,9 +14012,6 @@
           },
           "tenant_id": {
             "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/types.AddonType"
           },
           "updated_at": {
             "type": "string",
@@ -14362,23 +14319,51 @@
         "type": "object",
         "properties": {
           "action": {
-            "type": "string",
-            "description": "\"created\" | \"wallet_credit\""
+            "$ref": "#/components/schemas/ChangedInvoiceAction"
           },
           "id": {
             "type": "string"
           },
+          "invoice": {
+            "$ref": "#/components/schemas/InvoiceResponse"
+          },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/ChangedInvoiceStatus"
+          },
+          "wallet_transaction": {
+            "$ref": "#/components/schemas/WalletTransactionResponse"
           }
         }
+      },
+      "ChangedInvoiceAction": {
+        "type": "string",
+        "description": "created (proration invoice) | wallet_credit (downgrade credit)",
+        "enum": [
+          "created",
+          "wallet_credit"
+        ],
+        "x-enum-varnames": [
+          "ChangedInvoiceActionCreated",
+          "ChangedInvoiceActionWalletCredit"
+        ]
+      },
+      "ChangedInvoiceStatus": {
+        "type": "string",
+        "description": "preview | issued | INITIATED | PENDING | PROCESSING | SUCCEEDED | OVERPAID | FAILED | REFUNDED | PARTIALLY_REFUNDED",
+        "enum": [
+          "preview",
+          "issued"
+        ],
+        "x-enum-varnames": [
+          "ChangedInvoiceStatusPreview",
+          "ChangedInvoiceStatusWalletIssued"
+        ]
       },
       "ChangedLineItem": {
         "type": "object",
         "properties": {
           "change_action": {
-            "type": "string",
-            "description": "\"created\" | \"updated\" | \"ended\""
+            "$ref": "#/components/schemas/ChangedLineItemAction"
           },
           "end_date": {
             "type": "string",
@@ -14398,6 +14383,20 @@
             "format": "date-time"
           }
         }
+      },
+      "ChangedLineItemAction": {
+        "type": "string",
+        "description": "created | updated | ended",
+        "enum": [
+          "created",
+          "updated",
+          "ended"
+        ],
+        "x-enum-varnames": [
+          "ChangedLineItemActionCreated",
+          "ChangedLineItemActionUpdated",
+          "ChangedLineItemActionEnded"
+        ]
       },
       "ChangedResources": {
         "type": "object",
@@ -14426,14 +14425,61 @@
         "type": "object",
         "properties": {
           "action": {
-            "type": "string",
-            "description": "\"created\" | \"updated\""
+            "$ref": "#/components/schemas/ChangedSubscriptionAction"
           },
           "id": {
             "type": "string"
           },
           "status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
+          }
+        }
+      },
+      "ChangedSubscriptionAction": {
+        "type": "string",
+        "description": "created | updated",
+        "enum": [
+          "created",
+          "updated"
+        ],
+        "x-enum-varnames": [
+          "ChangedSubscriptionActionCreated",
+          "ChangedSubscriptionActionUpdated"
+        ]
+      },
+      "CloneEnvironmentRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the new environment (required when target_environment_id is not provided)"
+          },
+          "target_environment_id": {
+            "type": "string",
+            "description": "TargetEnvironmentID is the ID of an existing environment to clone into (optional).\nWhen provided, Name and Type are ignored. When omitted, Name and Type are required."
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.EnvironmentType"
+          }
+        }
+      },
+      "CloneFeatureRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Description overrides the source feature's description when provided"
+          },
+          "lookup_key": {
+            "type": "string",
+            "description": "LookupKey is required and must be unique across published features"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/types.Metadata"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name is required and must be different from the source feature's name"
           }
         }
       },
@@ -14842,8 +14888,7 @@
       "CreateAddonRequest": {
         "required": [
           "lookup_key",
-          "name",
-          "type"
+          "name"
         ],
         "type": "object",
         "properties": {
@@ -14859,9 +14904,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/types.AddonType"
           }
         }
       },
@@ -14912,9 +14954,6 @@
           },
           "tenant_id": {
             "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/types.AddonType"
           },
           "updated_at": {
             "type": "string",
@@ -15854,7 +15893,7 @@
           "transform_quantity": {
             "$ref": "#/components/schemas/price.TransformQuantity"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer"
           },
           "type": {
@@ -16034,6 +16073,9 @@
             "type": "string",
             "description": "PriceID references an existing price (plan, addon, or subscription-scoped). Exactly one of price_id or price must be set."
           },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
           "quantity": {
             "type": "number"
           },
@@ -16060,6 +16102,11 @@
             "items": {
               "$ref": "#/components/schemas/AddAddonToSubscriptionRequest"
             }
+          },
+          "billing_anchor": {
+            "type": "string",
+            "description": "BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.\nFor monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date\nis before that day in the month, the first billing period ends on the next occurrence of that\nday in the same month (a shorter first period); subsequent periods follow the usual interval.",
+            "format": "date-time"
           },
           "billing_cycle": {
             "$ref": "#/components/schemas/types.BillingCycle"
@@ -16205,13 +16252,9 @@
               "$ref": "#/components/schemas/TaxRateOverride"
             }
           },
-          "trial_end": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "trial_start": {
-            "type": "string",
-            "format": "date-time"
+          "trial_period_days": {
+            "type": "integer",
+            "description": "TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).\n0 = explicitly no trial (overrides catalog). >0 = override duration in days."
           }
         }
       },
@@ -16976,6 +17019,9 @@
         "properties": {
           "effective_from": {
             "type": "string"
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
           }
         }
       },
@@ -18561,23 +18607,6 @@
           }
         }
       },
-      "ListSubscriptionPausesResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "description": "List of subscription pause objects\n@Description Array of subscription pauses",
-            "items": {
-              "$ref": "#/components/schemas/SubscriptionPauseResponse"
-            }
-          },
-          "total": {
-            "type": "integer",
-            "description": "Total number of pauses\n@Description Total count of subscription pauses in the response"
-          }
-        },
-        "description": "Response object for listing subscription pauses with total count"
-      },
       "ListTasksResponse": {
         "type": "object",
         "properties": {
@@ -18930,48 +18959,6 @@
             "$ref": "#/components/schemas/price.TransformQuantity"
           }
         }
-      },
-      "PauseSubscriptionRequest": {
-        "required": [
-          "pause_mode"
-        ],
-        "type": "object",
-        "properties": {
-          "dry_run": {
-            "type": "boolean",
-            "description": "Whether to perform a dry run\n@Description If true, validates the request and shows impact without actually pausing the subscription\n@Example false"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Additional metadata as key-value pairs\n@Description Optional metadata for storing additional information about the pause\n@Example {\"requested_by\": \"customer\", \"channel\": \"support_ticket\"}"
-          },
-          "pause_days": {
-            "type": "integer",
-            "description": "Duration of the pause in days\n@Description Number of days to pause the subscription. Cannot be used together with pause_end. Must be greater than 0\n@Example 30"
-          },
-          "pause_end": {
-            "type": "string",
-            "description": "End date for the subscription pause\n@Description ISO 8601 timestamp when the pause should end. Cannot be used together with pause_days. Must be after pause_start\n@Example \"2024-02-15T00:00:00Z\"",
-            "format": "date-time"
-          },
-          "pause_mode": {
-            "$ref": "#/components/schemas/types.PauseMode"
-          },
-          "pause_start": {
-            "type": "string",
-            "description": "Start date for the subscription pause\n@Description ISO 8601 timestamp when the pause should begin. Required when pause_mode is \"scheduled\"\n@Example \"2024-01-15T00:00:00Z\"",
-            "format": "date-time"
-          },
-          "reason": {
-            "maxLength": 255,
-            "type": "string",
-            "description": "Reason for pausing the subscription\n@Description Optional reason for the pause. Maximum 255 characters\n@Example \"Customer requested temporary suspension\""
-          }
-        },
-        "description": "Request object for pausing an active subscription with various pause modes and options"
       },
       "PaymentAttemptResponse": {
         "type": "object",
@@ -19368,9 +19355,9 @@
           "transform_quantity": {
             "$ref": "#/components/schemas/price.JSONBTransformQuantity"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer",
-            "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)"
+            "description": "TrialPeriodDays is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)"
           },
           "type": {
             "$ref": "#/components/schemas/types.PriceType"
@@ -19543,33 +19530,18 @@
           "addon_association_id": {
             "type": "string"
           },
+          "effective_date": {
+            "type": "string",
+            "description": "EffectiveDate is the date the cancellation takes effect.\nWhen nil the addon is cancelled at the end of the current period.\nWhen provided it must fall within [CurrentPeriodStart, CurrentPeriodEnd]; mid-period\nvalues combined with create_prorations will issue a wallet credit for unused time.",
+            "format": "date-time"
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
+          },
           "reason": {
             "type": "string"
           }
         }
-      },
-      "ResumeSubscriptionRequest": {
-        "required": [
-          "resume_mode"
-        ],
-        "type": "object",
-        "properties": {
-          "dry_run": {
-            "type": "boolean",
-            "description": "Whether to perform a dry run\n@Description If true, validates the request and shows impact without actually resuming the subscription\n@Example false"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Additional metadata as key-value pairs\n@Description Optional metadata for storing additional information about the resume operation\n@Example {\"resumed_by\": \"admin\", \"reason\": \"issue_resolved\"}"
-          },
-          "resume_mode": {
-            "$ref": "#/components/schemas/types.ResumeMode"
-          }
-        },
-        "description": "Request object for resuming a paused subscription"
       },
       "ScheduledTaskResponse": {
         "type": "object",
@@ -19908,6 +19880,9 @@
       "SubscriptionLineItemResponse": {
         "type": "object",
         "properties": {
+          "addon_association_id": {
+            "type": "string"
+          },
           "billing_period": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
@@ -20021,9 +19996,6 @@
           "tenant_id": {
             "type": "string"
           },
-          "trial_period": {
-            "type": "integer"
-          },
           "updated_at": {
             "type": "string",
             "format": "date-time"
@@ -20054,85 +20026,6 @@
           "SubscriptionModifyTypeInheritance",
           "SubscriptionModifyTypeQuantityChange"
         ]
-      },
-      "SubscriptionPauseResponse": {
-        "type": "object",
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "created_by": {
-            "type": "string"
-          },
-          "environment_id": {
-            "type": "string",
-            "description": "EnvironmentID is the environment identifier for the pause"
-          },
-          "id": {
-            "type": "string",
-            "description": "ID is the unique identifier for the subscription pause"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/types.Metadata"
-          },
-          "original_period_end": {
-            "type": "string",
-            "description": "OriginalPeriodEnd is the end of the billing period when the pause was created",
-            "format": "date-time"
-          },
-          "original_period_start": {
-            "type": "string",
-            "description": "OriginalPeriodStart is the start of the billing period when the pause was created",
-            "format": "date-time"
-          },
-          "pause_end": {
-            "type": "string",
-            "description": "PauseEnd is when the pause will end (null for indefinite)",
-            "format": "date-time"
-          },
-          "pause_mode": {
-            "$ref": "#/components/schemas/types.PauseMode"
-          },
-          "pause_start": {
-            "type": "string",
-            "description": "PauseStart is when the pause actually started",
-            "format": "date-time"
-          },
-          "pause_status": {
-            "$ref": "#/components/schemas/types.PauseStatus"
-          },
-          "reason": {
-            "type": "string",
-            "description": "Reason is the reason for pausing"
-          },
-          "resume_mode": {
-            "$ref": "#/components/schemas/types.ResumeMode"
-          },
-          "resumed_at": {
-            "type": "string",
-            "description": "ResumedAt is when the pause was actually ended (if manually resumed)",
-            "format": "date-time"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "subscription_id": {
-            "type": "string",
-            "description": "SubscriptionID is the identifier for the subscription"
-          },
-          "tenant_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_by": {
-            "type": "string"
-          }
-        },
-        "description": "Response object containing subscription pause information"
       },
       "SubscriptionPhaseCreateRequest": {
         "required": [
@@ -20318,7 +20211,7 @@
           "transform_quantity": {
             "$ref": "#/components/schemas/price.TransformQuantity"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer"
           },
           "type": {
@@ -22464,9 +22357,6 @@
           "tenant_id": {
             "type": "string"
           },
-          "type": {
-            "$ref": "#/components/schemas/types.AddonType"
-          },
           "updated_at": {
             "type": "string",
             "format": "date-time"
@@ -22796,9 +22686,6 @@
               "type": "string"
             }
           },
-          "addon_type": {
-            "$ref": "#/components/schemas/types.AddonType"
-          },
           "end_time": {
             "type": "string",
             "format": "date-time"
@@ -22856,26 +22743,14 @@
         "enum": [
           "active",
           "cancelled",
-          "paused"
+          "pending"
         ],
         "x-enum-varnames": [
           "AddonStatusActive",
           "AddonStatusCancelled",
-          "AddonStatusPaused"
+          "AddonStatusPending"
         ],
         "x-speakeasy-name-override": "AddonStatus"
-      },
-      "types.AddonType": {
-        "type": "string",
-        "enum": [
-          "onetime",
-          "multiple_instance"
-        ],
-        "x-enum-varnames": [
-          "AddonTypeOnetime",
-          "AddonTypeMultipleInstance"
-        ],
-        "x-speakeasy-name-override": "AddonType"
       },
       "types.AggregationType": {
         "type": "string",
@@ -24004,6 +23879,7 @@
           "SUBSCRIPTION_CREATE",
           "SUBSCRIPTION_CYCLE",
           "SUBSCRIPTION_UPDATE",
+          "SUBSCRIPTION_TRIAL_END",
           "PRORATION",
           "MANUAL"
         ],
@@ -24011,6 +23887,7 @@
           "InvoiceBillingReasonSubscriptionCreate",
           "InvoiceBillingReasonSubscriptionCycle",
           "InvoiceBillingReasonSubscriptionUpdate",
+          "InvoiceBillingReasonSubscriptionTrialEnd",
           "InvoiceBillingReasonProration",
           "InvoiceBillingReasonManual"
         ],
@@ -25017,6 +24894,11 @@
               "$ref": "#/components/schemas/types.SubscriptionType"
             }
           },
+          "trial_end_due_lte": {
+            "type": "string",
+            "description": "TrialEndDueLTE, when set, restricts to subscriptions with trial_end not nil and trial_end <= trial_end_due_lte.\nUse with subscription_status trialing for trial-end cron processing.",
+            "format": "date-time"
+          },
           "with_line_items": {
             "type": "boolean",
             "description": "WithLineItems includes line items in the response"
@@ -25623,6 +25505,7 @@
       "types.WindowSize": {
         "type": "string",
         "enum": [
+          "MONTH",
           "MINUTE",
           "15MIN",
           "30MIN",
@@ -25632,10 +25515,10 @@
           "12HOUR",
           "DAY",
           "WEEK",
-          "MONTH",
           "MONTH"
         ],
         "x-enum-varnames": [
+          "DefaultWindowSize",
           "WindowSizeMinute",
           "WindowSize15Min",
           "WindowSize30Min",
@@ -25645,8 +25528,7 @@
           "WindowSize12Hour",
           "WindowSizeDay",
           "WindowSizeWeek",
-          "WindowSizeMonth",
-          "DefaultWindowSize"
+          "WindowSizeMonth"
         ],
         "x-speakeasy-name-override": "WindowSize"
       },
@@ -26156,9 +26038,9 @@
           "transform_quantity": {
             "$ref": "#/components/schemas/price.JSONBTransformQuantity"
           },
-          "trial_period": {
+          "trial_period_days": {
             "type": "integer",
-            "description": "TrialPeriod is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)"
+            "description": "TrialPeriodDays is the number of days for the trial period\nNote: This is only applicable for recurring prices (BILLING_CADENCE_RECURRING)"
           },
           "type": {
             "$ref": "#/components/schemas/types.PriceType"
@@ -26204,6 +26086,9 @@
       "subscription.SubscriptionLineItem": {
         "type": "object",
         "properties": {
+          "addon_association_id": {
+            "type": "string"
+          },
           "billing_period": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
@@ -26316,9 +26201,6 @@
           },
           "tenant_id": {
             "type": "string"
-          },
-          "trial_period": {
-            "type": "integer"
           },
           "updated_at": {
             "type": "string",
@@ -26456,6 +26338,30 @@
             "type": "string"
           }
         }
+      },
+      "types.AddonCadence": {
+        "type": "string",
+        "enum": [
+          "onetime",
+          "recurring"
+        ],
+        "x-enum-varnames": [
+          "AddonCadenceOnetime",
+          "AddonCadenceRecurring"
+        ],
+        "x-speakeasy-name-override": "AddonCadence"
+      },
+      "types.EnvironmentType": {
+        "type": "string",
+        "enum": [
+          "development",
+          "production"
+        ],
+        "x-enum-varnames": [
+          "EnvironmentDevelopment",
+          "EnvironmentProduction"
+        ],
+        "x-speakeasy-name-override": "EnvironmentType"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",

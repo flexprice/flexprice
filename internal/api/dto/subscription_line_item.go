@@ -24,7 +24,7 @@ type SubscriptionPriceCreateRequest struct {
 	MeterID            string                   `json:"meter_id,omitempty"`
 	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
 	LookupKey          string                   `json:"lookup_key,omitempty"`
-	TrialPeriod        int                      `json:"trial_period"`
+	TrialPeriodDays    int                      `json:"trial_period_days"`
 	Description        string                   `json:"description,omitempty"`
 	Metadata           map[string]string        `json:"metadata,omitempty"`
 	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
@@ -56,7 +56,7 @@ func (p *SubscriptionPriceCreateRequest) ToCreatePriceRequest(sub *subscription.
 		MeterID:              p.MeterID,
 		FilterValues:         p.FilterValues,
 		LookupKey:            p.LookupKey,
-		TrialPeriod:          p.TrialPeriod,
+		TrialPeriodDays:      p.TrialPeriodDays,
 		Description:          p.Description,
 		Metadata:             p.Metadata,
 		TierMode:             p.TierMode,
@@ -93,6 +93,9 @@ type CreateSubscriptionLineItemRequest struct {
 	SubscriptionPhaseID  *string                         `json:"subscription_phase_id,omitempty"`
 	SkipEntitlementCheck bool                            `json:"-"` // This is used to skip entitlement check when creating a subscription line item
 
+	// ProrationBehavior controls mid-period charge creation. Defaults to none.
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
+
 	// Commitment fields
 	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
 	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
@@ -106,6 +109,9 @@ type CreateSubscriptionLineItemRequest struct {
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
 type DeleteSubscriptionLineItemRequest struct {
 	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
+
+	// ProrationBehavior controls mid-period credit issuance. Defaults to none.
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 }
 
 type UpdateSubscriptionLineItemRequest struct {
@@ -460,7 +466,6 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		Currency:            params.Subscription.Currency,
 		BillingPeriod:       params.Price.BillingPeriod,
 		InvoiceCadence:      invoiceCadence,
-		TrialPeriod:         params.Price.TrialPeriod,
 		EntityType:          params.EntityType,
 		Metadata:            r.Metadata,
 		SubscriptionPhaseID: r.SubscriptionPhaseID,
@@ -630,7 +635,6 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		Currency:         existingLineItem.Currency,
 		BillingPeriod:    existingLineItem.BillingPeriod,
 		InvoiceCadence:   existingLineItem.InvoiceCadence,
-		TrialPeriod:      existingLineItem.TrialPeriod,
 		EntityType:       existingLineItem.EntityType,
 		EntityID:         existingLineItem.EntityID,
 		PlanDisplayName:  existingLineItem.PlanDisplayName,

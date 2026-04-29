@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -33,6 +34,7 @@ func (s *meterService) CreateMeter(ctx context.Context, req *dto.CreateMeterRequ
 			Mark(ierr.ErrValidation)
 	}
 
+	req.EventName = strings.TrimSpace(req.EventName)
 	if req.EventName == "" {
 		return nil, ierr.NewError("event_name is required").
 			WithHint("Event name is required").

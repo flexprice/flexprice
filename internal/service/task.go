@@ -793,9 +793,9 @@ func (p *PricesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 				priceReq.LookupKey = value
 			case "invoice_cadence":
 				priceReq.InvoiceCadence = types.InvoiceCadence(value)
-			case "trial_period":
+			case "trial_period_days", "trial_period":
 				trial, _ := strconv.Atoi(value)
-				priceReq.TrialPeriod = trial
+				priceReq.TrialPeriodDays = trial
 			case "description":
 				priceReq.Description = value
 			case "tier_mode":

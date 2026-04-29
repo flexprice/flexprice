@@ -1,6 +1,7 @@
 package events
 
 import (
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -186,7 +187,7 @@ func NewEvent(
 		CustomerID:         customerID,
 		ExternalCustomerID: externalCustomerID,
 		Source:             source,
-		EventName:          eventName,
+		EventName:          strings.TrimSpace(eventName),
 		Timestamp:          timestamp,
 		Properties:         properties,
 		EnvironmentID:      environmentID,

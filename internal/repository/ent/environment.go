@@ -136,6 +136,7 @@ func (r *environmentRepository) List(ctx context.Context, filter types.Filter) (
 		Query().
 		Where(
 			entEnvironment.TenantID(tenantID),
+			entEnvironment.StatusIn(string(types.StatusPublished)),
 		).
 		Order(ent.Desc(entEnvironment.FieldCreatedAt)).
 		Limit(filter.Limit).
@@ -229,7 +230,7 @@ func (r *environmentRepository) CountByType(ctx context.Context, envType types.E
 		return 0, ierr.WithError(err).
 			WithHint("Failed to count environments by type").
 			WithReportableDetails(map[string]interface{}{
-				"tenant_id":       tenantID,
+				"tenant_id":        tenantID,
 				"environment_type": envType,
 			}).
 			Mark(ierr.ErrDatabase)

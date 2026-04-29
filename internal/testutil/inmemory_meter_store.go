@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -57,6 +58,8 @@ func (s *InMemoryMeterStore) CreateMeter(ctx context.Context, m *meter.Meter) er
 	if m.EnvironmentID == "" {
 		m.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
+
+	m.EventName = strings.TrimSpace(m.EventName)
 
 	err := s.InMemoryStore.Create(ctx, m.ID, copyMeter(m))
 	if err != nil {
@@ -221,8 +224,8 @@ func meterFilterFn(ctx context.Context, m *meter.Meter, filter interface{}) bool
 		return false
 	}
 
-	// Apply event name filter
-	if f.EventName != "" && m.EventName != f.EventName {
+	// Apply event name filter (trimmed, consistent with ent meter List)
+	if f.EventName != "" && strings.TrimSpace(m.EventName) != strings.TrimSpace(f.EventName) {
 		return false
 	}
 

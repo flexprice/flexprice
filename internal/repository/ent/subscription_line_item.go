@@ -108,8 +108,8 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 		SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 		SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
+		SetNillableAddonAssociationID(item.AddonAssociationID).
 		SetInvoiceCadence(item.InvoiceCadence).
-		SetTrialPeriod(item.TrialPeriod).
 		SetMetadata(item.Metadata).
 		// Commitment fields
 		SetNillableCommitmentAmount(item.CommitmentAmount).
@@ -369,15 +369,14 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetCurrency(item.Currency).
 			SetBillingPeriod(item.BillingPeriod).
 			SetInvoiceCadence(item.InvoiceCadence).
-			SetTrialPeriod(item.TrialPeriod).
 			SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
+			SetNillableAddonAssociationID(item.AddonAssociationID).
 			SetQuantity(item.Quantity).
 			SetCurrency(item.Currency).
 			SetBillingPeriod(item.BillingPeriod).
 			SetInvoiceCadence(item.InvoiceCadence).
-			SetTrialPeriod(item.TrialPeriod).
 			SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
@@ -634,6 +633,11 @@ func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Con
 	}
 	if f.EntityType != nil {
 		query = query.Where(subscriptionlineitem.EntityType(types.InvoiceLineItemEntityType(*f.EntityType)))
+	}
+
+	// Apply addon association IDs filter if specified
+	if len(f.AddonAssociationIDs) > 0 {
+		query = query.Where(subscriptionlineitem.AddonAssociationIDIn(f.AddonAssociationIDs...))
 	}
 
 	// Apply price IDs filter if specified

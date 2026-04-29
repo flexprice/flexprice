@@ -193,9 +193,9 @@ func InvoiceCadence(v types.InvoiceCadence) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldInvoiceCadence, vc))
 }
 
-// TrialPeriod applies equality check predicate on the "trial_period" field. It's identical to TrialPeriodEQ.
-func TrialPeriod(v int) predicate.Price {
-	return predicate.Price(sql.FieldEQ(FieldTrialPeriod, v))
+// TrialPeriodDays applies equality check predicate on the "trial_period_days" field. It's identical to TrialPeriodDaysEQ.
+func TrialPeriodDays(v int) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldTrialPeriodDays, v))
 }
 
 // MeterID applies equality check predicate on the "meter_id" field. It's identical to MeterIDEQ.
@@ -1869,44 +1869,44 @@ func InvoiceCadenceContainsFold(v types.InvoiceCadence) predicate.Price {
 	return predicate.Price(sql.FieldContainsFold(FieldInvoiceCadence, vc))
 }
 
-// TrialPeriodEQ applies the EQ predicate on the "trial_period" field.
-func TrialPeriodEQ(v int) predicate.Price {
-	return predicate.Price(sql.FieldEQ(FieldTrialPeriod, v))
+// TrialPeriodDaysEQ applies the EQ predicate on the "trial_period_days" field.
+func TrialPeriodDaysEQ(v int) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldTrialPeriodDays, v))
 }
 
-// TrialPeriodNEQ applies the NEQ predicate on the "trial_period" field.
-func TrialPeriodNEQ(v int) predicate.Price {
-	return predicate.Price(sql.FieldNEQ(FieldTrialPeriod, v))
+// TrialPeriodDaysNEQ applies the NEQ predicate on the "trial_period_days" field.
+func TrialPeriodDaysNEQ(v int) predicate.Price {
+	return predicate.Price(sql.FieldNEQ(FieldTrialPeriodDays, v))
 }
 
-// TrialPeriodIn applies the In predicate on the "trial_period" field.
-func TrialPeriodIn(vs ...int) predicate.Price {
-	return predicate.Price(sql.FieldIn(FieldTrialPeriod, vs...))
+// TrialPeriodDaysIn applies the In predicate on the "trial_period_days" field.
+func TrialPeriodDaysIn(vs ...int) predicate.Price {
+	return predicate.Price(sql.FieldIn(FieldTrialPeriodDays, vs...))
 }
 
-// TrialPeriodNotIn applies the NotIn predicate on the "trial_period" field.
-func TrialPeriodNotIn(vs ...int) predicate.Price {
-	return predicate.Price(sql.FieldNotIn(FieldTrialPeriod, vs...))
+// TrialPeriodDaysNotIn applies the NotIn predicate on the "trial_period_days" field.
+func TrialPeriodDaysNotIn(vs ...int) predicate.Price {
+	return predicate.Price(sql.FieldNotIn(FieldTrialPeriodDays, vs...))
 }
 
-// TrialPeriodGT applies the GT predicate on the "trial_period" field.
-func TrialPeriodGT(v int) predicate.Price {
-	return predicate.Price(sql.FieldGT(FieldTrialPeriod, v))
+// TrialPeriodDaysGT applies the GT predicate on the "trial_period_days" field.
+func TrialPeriodDaysGT(v int) predicate.Price {
+	return predicate.Price(sql.FieldGT(FieldTrialPeriodDays, v))
 }
 
-// TrialPeriodGTE applies the GTE predicate on the "trial_period" field.
-func TrialPeriodGTE(v int) predicate.Price {
-	return predicate.Price(sql.FieldGTE(FieldTrialPeriod, v))
+// TrialPeriodDaysGTE applies the GTE predicate on the "trial_period_days" field.
+func TrialPeriodDaysGTE(v int) predicate.Price {
+	return predicate.Price(sql.FieldGTE(FieldTrialPeriodDays, v))
 }
 
-// TrialPeriodLT applies the LT predicate on the "trial_period" field.
-func TrialPeriodLT(v int) predicate.Price {
-	return predicate.Price(sql.FieldLT(FieldTrialPeriod, v))
+// TrialPeriodDaysLT applies the LT predicate on the "trial_period_days" field.
+func TrialPeriodDaysLT(v int) predicate.Price {
+	return predicate.Price(sql.FieldLT(FieldTrialPeriodDays, v))
 }
 
-// TrialPeriodLTE applies the LTE predicate on the "trial_period" field.
-func TrialPeriodLTE(v int) predicate.Price {
-	return predicate.Price(sql.FieldLTE(FieldTrialPeriod, v))
+// TrialPeriodDaysLTE applies the LTE predicate on the "trial_period_days" field.
+func TrialPeriodDaysLTE(v int) predicate.Price {
+	return predicate.Price(sql.FieldLTE(FieldTrialPeriodDays, v))
 }
 
 // MeterIDEQ applies the EQ predicate on the "meter_id" field.

@@ -361,6 +361,7 @@ func provideHandlers(
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
 	geminiPricingService service.GeminiPricingService,
+	webhookService *webhook.WebhookService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, cfg, logger),
@@ -374,7 +375,6 @@ func provideHandlers(
 		Customer:                 v1.NewCustomerHandler(customerService, billingService, entityIntegrationMappingService, logger),
 		Plan:                     v1.NewPlanHandler(planService, entitlementService, creditGrantService, temporalService, logger),
 		Subscription:             v1.NewSubscriptionHandler(subscriptionService, logger),
-		SubscriptionPause:        v1.NewSubscriptionPauseHandler(subscriptionService, logger),
 		SubscriptionChange:       v1.NewSubscriptionChangeHandler(subscriptionChangeService, logger),
 		SubscriptionModification: v1.NewSubscriptionModificationHandler(subscriptionModificationService, logger),
 		SubscriptionSchedule:     v1.NewSubscriptionScheduleHandler(subscriptionScheduleService),
@@ -399,7 +399,7 @@ func provideHandlers(
 		CreditNote:               v1.NewCreditNoteHandler(creditNoteService, logger),
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
 		IntegrationMappingLink:   v1.NewIntegrationMappingLinkHandler(entityIntegrationMappingService, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService),
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
@@ -518,7 +518,7 @@ func startServer(
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, usageBenchmarkSvc, cfg, true)
 		startRouter(lc, router, log)
-		startTemporalWorker(lc, temporalService, params)
+		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 
@@ -532,7 +532,7 @@ func startServer(
 		// consumed and delivered via Svix/native in the same process.
 		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, usageBenchmarkSvc, cfg, false)
 		startRouter(lc, router, log)
-		startTemporalWorker(lc, temporalService, params)
+		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
@@ -548,13 +548,20 @@ func startServer(
 
 func startTemporalWorker(
 	lc fx.Lifecycle,
+	log *logger.Logger,
+	temporalClient client.TemporalClient,
 	temporalService temporalservice.TemporalService,
 	params service.ServiceParams,
+	webhookService *webhook.WebhookService,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
+			if err := temporalservice.EnsureSchedules(ctx, temporalClient, log); err != nil {
+				return fmt.Errorf("ensure temporal server schedules: %w", err)
+			}
+
 			// Register workflows and activities first (this creates the workers)
-			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params); err != nil {
+			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params, webhookService); err != nil {
 				return fmt.Errorf("failed to register workflows and activities: %w", err)
 			}
 
@@ -615,7 +622,7 @@ func registerRouterHandlers(
 	includeProcessingHandlers bool,
 ) {
 	if includeProcessingHandlers {
-		onboardingService.RegisterHandler(router)
+		onboardingService.RegisterHandler(router, cfg)
 		webhookService.RegisterHandler(router)
 		integrationEventService.RegisterHandler(router)
 		eventConsumptionSvc.RegisterHandler(router, cfg)

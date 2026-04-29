@@ -655,8 +655,16 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 		})
 	}
 
-	// Apply common query options
-	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+	// Apply common query options.
+	// Important: if callers use the DSL-style `filter.Sort`, we must not apply the legacy
+	// QueryFilter sort first (it would become the primary ORDER BY and "override" the user sort).
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
+
+	if filter == nil || len(filter.Sort) == 0 {
+		query = ApplySorting(query, filter, r.queryOpts)
+	}
+	query = ApplyPagination(query, filter, r.queryOpts)
+
 	// Apply entity-specific filters
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
@@ -706,6 +714,12 @@ func (r *invoiceRepository) ListAllTenant(ctx context.Context, filter *types.Inv
 	client := r.client.Reader(ctx)
 	query := client.Invoice.Query()
 
+	if filter == nil || len(filter.Sort) == 0 {
+		query = ApplySorting(query, filter, r.queryOpts)
+	}
+	query = ApplyPagination(query, filter, r.queryOpts)
+	query = r.queryOpts.ApplyStatusFilter(query, filter.GetStatus())
+
 	// Apply entity-specific filters (status, type, etc.) but NOT tenant/environment
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
@@ -714,10 +728,6 @@ func (r *invoiceRepository) ListAllTenant(ctx context.Context, filter *types.Inv
 			WithHint("Failed to apply query options").
 			Mark(ierr.ErrDatabase)
 	}
-
-	query = ApplySorting(query, filter, r.queryOpts)
-	query = ApplyPagination(query, filter, r.queryOpts)
-	query = r.queryOpts.ApplyStatusFilter(query, filter.GetStatus())
 
 	invoices, err := query.All(ctx)
 	if err != nil {

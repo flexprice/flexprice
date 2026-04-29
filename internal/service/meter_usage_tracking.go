@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -169,6 +170,8 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 		environmentID = event.EnvironmentID
 	}
 
+	event.EventName = strings.TrimSpace(event.EventName)
+
 	if tenantID == "" || environmentID == "" {
 		s.Logger.Errorw("tenant_id and environment_id are required for meter usage tracking",
 			"event_id", event.ID,
@@ -198,6 +201,7 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 // on every Kafka message. The cache is nil-safe: if the service was constructed
 // without a cache (e.g. directly in unit tests) it falls through to the repo.
 func (s *meterUsageTrackingService) getMetersForEvent(ctx context.Context, eventName string) ([]*meter.Meter, error) {
+	eventName = strings.TrimSpace(eventName)
 	if s.meterListCache != nil {
 		tenantID := types.GetTenantID(ctx)
 		environmentID := types.GetEnvironmentID(ctx)

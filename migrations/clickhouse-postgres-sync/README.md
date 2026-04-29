@@ -11,6 +11,17 @@ so analytics queries can JOIN them with `feature_usage` / `events_processed` wit
 | subscriptions | ~thousands | `subscription_id` | `_version` (PG `version` is a business field) |
 | subscription_line_items | ~120M+ | `sub_line_item_id` | `version` |
 
+## Upgrading existing ClickHouse (trial column rename)
+
+PostgreSQL uses `trial_period_days` on `prices` and `subscription_line_items`. If your ClickHouse tables still have `trial_period`, rename before running updated sync SQL:
+
+```sql
+ALTER TABLE flexprice.prices RENAME COLUMN trial_period TO trial_period_days;
+ALTER TABLE flexprice.subscription_line_items RENAME COLUMN trial_period TO trial_period_days;
+```
+
+New deployments should apply `001_schema_*.sql` / `003_schema_*.sql` as-is.
+
 ## Setup
 
 1. Create tables in ClickHouse:

@@ -5,27 +5,23 @@ import (
 	"github.com/samber/lo"
 )
 
-// AddonType represents the type of addon
-type AddonType string
+// AddonCadence controls whether an addon line item ends at the current period end
+// (onetime — billed once for the period) or has no end date and recurs each period (recurring).
+// This is set per-add request, not on the addon entity itself.
+type AddonCadence string
 
 const (
-	AddonTypeOnetime          AddonType = "onetime"
-	AddonTypeMultipleInstance AddonType = "multiple_instance"
+	AddonCadenceOnetime   AddonCadence = "onetime"
+	AddonCadenceRecurring AddonCadence = "recurring"
 )
 
-func (at AddonType) Validate() error {
-
-	allowedTypes := []AddonType{
-		AddonTypeOnetime,
-		AddonTypeMultipleInstance,
-	}
-
-	if !lo.Contains(allowedTypes, at) {
-		return ierr.NewError("invalid addon type").
-			WithHint("Addon type must be onetime or multiple_instance").
+func (c AddonCadence) Validate() error {
+	allowed := []AddonCadence{AddonCadenceOnetime, AddonCadenceRecurring}
+	if !lo.Contains(allowed, c) {
+		return ierr.NewError("invalid addon cadence").
+			WithHint("Addon cadence must be onetime or recurring").
 			Mark(ierr.ErrValidation)
 	}
-
 	return nil
 }
 
@@ -35,8 +31,22 @@ type AddonStatus string
 const (
 	AddonStatusActive    AddonStatus = "active"
 	AddonStatusCancelled AddonStatus = "cancelled"
-	AddonStatusPaused    AddonStatus = "paused"
+	AddonStatusPending   AddonStatus = "pending"
 )
+
+func (s AddonStatus) Validate() error {
+	allowed := []AddonStatus{
+		AddonStatusActive,
+		AddonStatusCancelled,
+		AddonStatusPending,
+	}
+	if !lo.Contains(allowed, s) {
+		return ierr.NewError("invalid addon status").
+			WithHint("Addon status must be active, cancelled or pending").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
 
 // AddonFilter represents the filter options for addons
 type AddonFilter struct {
@@ -47,9 +57,8 @@ type AddonFilter struct {
 	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
 	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 
-	AddonIDs   []string  `json:"addon_ids,omitempty" form:"addon_ids" validate:"omitempty"`
-	AddonType  AddonType `json:"addon_type,omitempty" form:"addon_type" validate:"omitempty"`
-	LookupKeys []string  `json:"lookup_keys,omitempty" form:"lookup_keys" validate:"omitempty"`
+	AddonIDs   []string `json:"addon_ids,omitempty" form:"addon_ids" validate:"omitempty"`
+	LookupKeys []string `json:"lookup_keys,omitempty" form:"lookup_keys" validate:"omitempty"`
 }
 
 // NewAddonFilter creates a new addon filter with default options
@@ -92,12 +101,6 @@ func (f *AddonFilter) Validate() error {
 			return ierr.NewError("lookup key can not be empty").
 				WithHint("Lookup key can not be empty").
 				Mark(ierr.ErrValidation)
-		}
-	}
-
-	if f.AddonType != "" {
-		if err := f.AddonType.Validate(); err != nil {
-			return err
 		}
 	}
 

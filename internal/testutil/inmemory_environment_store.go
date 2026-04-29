@@ -64,6 +64,9 @@ func (s *InMemoryEnvironmentStore) List(ctx context.Context, filter types.Filter
 	limit := filter.Limit
 
 	for _, env := range s.environments {
+		if env.Status == types.StatusDeleted {
+			continue
+		}
 		if offset > 0 {
 			offset--
 			continue

@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/service"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
+	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"
 	environmentActivities "github.com/flexprice/flexprice/internal/temporal/activities/environment"
 	eventsActivities "github.com/flexprice/flexprice/internal/temporal/activities/events"
@@ -25,11 +26,13 @@ import (
 	zohoActivities "github.com/flexprice/flexprice/internal/temporal/activities/zoho"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
+	cronWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/cron"
 	eventsWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/events"
 	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
 	invoiceWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/invoice"
 	subscriptionWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/subscription"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/webhook"
 )
 
 // WorkerConfig defines the configuration for a specific task queue worker
@@ -39,8 +42,16 @@ type WorkerConfig struct {
 	Activities []interface{}
 }
 
+// cronActivityBundle groups activities registered on the Temporal "cron" task queue only.
+type cronActivityBundle struct {
+	creditGrant          *cronActivities.CreditGrantActivities
+	subscription         *cronActivities.SubscriptionCronActivities
+	walletCreditExpiry   *cronActivities.WalletCreditExpiryActivities
+	webhookOutboundRetry *cronActivities.WebhookOutboundRetryActivities
+}
+
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
-func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalService, params service.ServiceParams) error {
+func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalService, params service.ServiceParams, webhookService *webhook.WebhookService) error {
 	// Create workflow tracking activity (follows standard activity pattern)
 	workflowTrackingActivities := workflowActivities.NewWorkflowTrackingActivities(
 		params,
@@ -147,6 +158,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	paddleCustomerSyncActivities := paddleActivities.NewCustomerSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		params.InvoiceRepo,
 		params.Logger,
 	)
 
@@ -198,8 +210,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 
 	// Environment clone activities
-	featureService := service.NewFeatureService(params)
-	envActivities := environmentActivities.NewEnvironmentActivities(featureService, planService)
+	envActivities := environmentActivities.NewEnvironmentActivities(params)
 
 	// Reprocess events activities
 	featureUsageTrackingService := service.NewFeatureUsageTrackingService(
@@ -213,9 +224,22 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
 	reprocessRawEventsActivities := eventsActivities.NewReprocessRawEventsActivities(rawEventsReprocessingService)
 
+	// Cron workflow activities (reuses subscriptionService and walletService from above)
+	creditGrantService := service.NewCreditGrantService(params)
+	tenantService := service.NewTenantService(params)
+	envAccessService := service.NewEnvAccessService(params.Config)
+	settingsService := service.NewSettingsService(params)
+	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
+	cronBundle := &cronActivityBundle{
+		creditGrant:          cronActivities.NewCreditGrantActivities(creditGrantService),
+		subscription:         cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
+		walletCreditExpiry:   cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
+		webhookOutboundRetry: cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
+	}
+
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities, envActivities)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities, envActivities, cronBundle)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -259,6 +283,7 @@ func buildWorkerConfig(
 	reprocessEventsActivities *eventsActivities.ReprocessEventsActivities,
 	reprocessRawEventsActivities *eventsActivities.ReprocessRawEventsActivities,
 	envActivities *environmentActivities.EnvironmentActivities,
+	cron *cronActivityBundle,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
 	// Add tracking activity to all task queues
@@ -310,6 +335,7 @@ func buildWorkerConfig(
 			qbCustomerSyncActivities.SyncCustomerToQuickBooks,
 			nomodCustomerSyncActivities.SyncCustomerToNomod,
 			paddleCustomerSyncActivities.SyncCustomerToPaddle,
+			paddleCustomerSyncActivities.EnsureCustomerSyncedToPaddle,
 			prepareEventsActivities.CreateFeatureAndPriceActivity,
 			prepareEventsActivities.RolloutToSubscriptionsActivity,
 		)
@@ -409,6 +435,26 @@ func buildWorkerConfig(
 			reprocessEventsActivities.ReprocessEvents,
 			reprocessRawEventsActivities.ReprocessRawEvents,
 			planActivities.ReprocessEventsForPlan,
+		)
+
+	case types.TemporalTaskQueueCron:
+		workflowsList = append(workflowsList,
+			cronWorkflows.CreditGrantProcessingWorkflow,
+			cronWorkflows.SubscriptionAutoCancellationWorkflow,
+			cronWorkflows.WalletCreditExpiryWorkflow,
+			cronWorkflows.SubscriptionBillingPeriodsWorkflow,
+			cronWorkflows.SubscriptionRenewalDueAlertsWorkflow,
+			cronWorkflows.SubscriptionTrialEndDueWorkflow,
+			cronWorkflows.OutboundWebhookStaleRetryWorkflow,
+		)
+		activitiesList = append(activitiesList,
+			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
+			cron.subscription.ProcessAutoCancellationActivity,
+			cron.walletCreditExpiry.ExpireCreditsActivity,
+			cron.subscription.UpdateBillingPeriodsActivity,
+			cron.subscription.ProcessRenewalDueAlertsActivity,
+			cron.subscription.ProcessTrialEndDueActivity,
+			cron.webhookOutboundRetry.RetryStaleOutboundWebhooksActivity,
 		)
 	}
 	return WorkerConfig{

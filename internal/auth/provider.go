@@ -31,10 +31,27 @@ type AuthResponse struct {
 	ID string
 }
 
+// UserInviteRequest is used to create/invite a user in the configured auth provider.
+// This flow provisions a user identity and sets the initial password (no auth token issuance).
+type UserInviteRequest struct {
+	Email string
+}
+
+type UserInviteResponse struct {
+	// ID is the provider user ID (or generated user ID for Flexprice).
+	ID string
+	// Password is the generated initial password for the user (returned so it can be shown once).
+	Password string
+	// AuthRecord is optional provider-specific auth material that must be persisted server-side.
+	// For Flexprice this contains the bcrypt hash; for Supabase it will be nil.
+	AuthRecord *auth.Auth
+}
+
 type Provider interface {
 
 	// User Management
 	GetProvider() types.AuthProvider
+	UserInvite(ctx context.Context, req UserInviteRequest) (*UserInviteResponse, error)
 	SignUp(ctx context.Context, req AuthRequest) (*AuthResponse, error)
 	Login(ctx context.Context, req AuthRequest, userAuthInfo *auth.Auth) (*AuthResponse, error)
 	ValidateToken(ctx context.Context, token string) (*auth.Claims, error)

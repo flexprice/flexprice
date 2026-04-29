@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -90,6 +91,10 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 
 	// Check if subscription is in a valid state for changes
 	if err := s.validateSubscriptionForChange(currentSub); err != nil {
+		return nil, err
+	}
+
+	if err := s.validateProrationForSubscriptionChange(currentSub, req.ProrationBehavior); err != nil {
 		return nil, err
 	}
 
@@ -226,6 +231,10 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChangeInternal(
 
 		// Validate the change
 		if err := s.validateSubscriptionForChange(currentSub); err != nil {
+			return err
+		}
+
+		if err := s.validateProrationForSubscriptionChange(currentSub, req.ProrationBehavior); err != nil {
 			return err
 		}
 
@@ -391,6 +400,24 @@ func (s *subscriptionChangeService) scheduleChangeForPeriodEnd(
 	}
 
 	return response, nil
+}
+
+// validateProrationForSubscriptionChange aligns plan-change proration with CancelSubscription rules
+// so preview and execute both fail when cancellation proration is unsupported.
+func (s *subscriptionChangeService) validateProrationForSubscriptionChange(
+	sub *subscription.Subscription,
+	behavior types.ProrationBehavior,
+) error {
+	if behavior == types.ProrationBehaviorCreateProrations && sub.HasMixedBillingPeriods() {
+		return ierr.NewError("proration is not supported for subscriptions with mixed billing periods").
+			WithHint("Set proration_behavior to 'none' when changing a subscription with different billing periods").
+			WithReportableDetails(map[string]any{
+				"subscription_id":    sub.ID,
+				"proration_behavior": behavior,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // validateSubscriptionForChange checks if subscription can be changed
@@ -630,11 +657,12 @@ func (s *subscriptionChangeService) executeChange(
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
-	// Cancel the old subscription
+	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
-		CancellationType: types.CancellationTypeImmediate,
-		Reason:           "subscription_change",
+		CancellationType:  types.CancellationTypeImmediate,
+		Reason:            "subscription_change",
+		ProrationBehavior: req.ProrationBehavior,
 	})
 	if err != nil {
 		return nil, err
@@ -646,7 +674,7 @@ func (s *subscriptionChangeService) executeChange(
 		return nil, err
 	}
 
-	return &dto.SubscriptionChangeExecuteResponse{
+	out := &dto.SubscriptionChangeExecuteResponse{
 		OldSubscription: dto.SubscriptionSummary{
 			ID:     archivedSub.SubscriptionID,
 			Status: archivedSub.Status,
@@ -663,7 +691,17 @@ func (s *subscriptionChangeService) executeChange(
 		ChangeType:    changeType,
 		EffectiveDate: effectiveDate,
 		Metadata:      req.Metadata,
-	}, nil
+	}
+
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+		prorationApplied, calcErr := s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
+		if calcErr != nil {
+			return nil, calcErr
+		}
+		out.ProrationApplied = prorationApplied
+	}
+
+	return out, nil
 }
 
 // createNewSubscription creates a new subscription with the target plan using the existing subscription service
@@ -675,6 +713,74 @@ func (s *subscriptionChangeService) createNewSubscription(
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
 ) (*subscription.Subscription, error) {
+	// Carry over inherited child subscriptions and invoicing customer via Inheritance config.
+	// ExternalCustomerIDsToInheritSubscription and InvoicingCustomerExternalID are mutually exclusive,
+	// so children take priority (a parent sub with children typically has no separate invoicing customer).
+	var inheritance *dto.SubscriptionInheritanceConfig
+
+	if currentSub.SubscriptionType == types.SubscriptionTypeParent {
+		inheritedFilter := types.NewNoLimitSubscriptionFilter()
+		inheritedFilter.ParentSubscriptionIDs = []string{currentSub.ID}
+		inheritedFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+		inheritedFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+		}
+		childSubs, err := s.serviceParams.SubRepo.List(ctx, inheritedFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(childSubs) > 0 {
+			customerIDs := lo.Uniq(lo.Map(childSubs, func(ch *subscription.Subscription, _ int) string {
+				return ch.CustomerID
+			}))
+			custFilter := types.NewNoLimitCustomerFilter()
+			custFilter.CustomerIDs = customerIDs
+			customers, err := s.serviceParams.CustomerRepo.List(ctx, custFilter)
+			if err != nil {
+				return nil, err
+			}
+			byID := lo.KeyBy(customers, func(c *customer.Customer) string { return c.ID })
+			childExternalIDs := make([]string, 0, len(childSubs))
+			for _, ch := range childSubs {
+				c, ok := byID[ch.CustomerID]
+				if !ok {
+					return nil, ierr.NewErrorf("customer not found for child subscription (customer_id=%s)", ch.CustomerID).
+						WithHint("Customer not found").
+						WithReportableDetails(map[string]any{
+							"customer_id":         ch.CustomerID,
+							"child_subscription_id": ch.ID,
+						}).
+						Mark(ierr.ErrNotFound)
+				}
+				childExternalIDs = append(childExternalIDs, c.ExternalID)
+			}
+			inheritance = &dto.SubscriptionInheritanceConfig{
+				ExternalCustomerIDsToInheritSubscription: childExternalIDs,
+			}
+		}
+	}
+
+	if currentSub.InvoicingCustomerID != nil {
+		invoicingCustomer, err := s.serviceParams.CustomerRepo.Get(ctx, *currentSub.InvoicingCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		inheritance = &dto.SubscriptionInheritanceConfig{
+			InvoicingCustomerExternalID: &invoicingCustomer.ExternalID,
+		}
+	}
+
+	// For anniversary billing, anchor the new subscription to the effective (upgrade) date,
+	// not the old sub's anchor. Inheriting the old anchor would create a short first billing
+	// period (old-anchor-day vs effective-day), causing prorated advance charges instead of
+	// a full-period invoice.
+	var newBillingAnchor *time.Time
+	if req.BillingCycle == types.BillingCycleAnniversary {
+		newBillingAnchor = &effectiveDate
+	}
+
 	// Create new subscription request
 	createSubReq := dto.CreateSubscriptionRequest{
 		CustomerID:         currentSub.CustomerID,
@@ -685,7 +791,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		BillingPeriod:      req.BillingPeriod,
 		BillingPeriodCount: req.BillingPeriodCount,
 		BillingCycle:       req.BillingCycle,
-		BillingAnchor:      &currentSub.BillingAnchor,
+		BillingAnchor:      newBillingAnchor,
 		StartDate:          &effectiveDate,
 		Metadata:           req.Metadata,
 		ProrationBehavior:  req.ProrationBehavior,
@@ -694,6 +800,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		OverageFactor:      currentSub.OverageFactor,
 		PaymentTerms:       currentSub.PaymentTerms,
 		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
+		Inheritance:        inheritance,
 	}
 
 	subscriptionService := NewSubscriptionService(s.serviceParams)

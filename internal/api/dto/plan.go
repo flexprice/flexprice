@@ -204,9 +204,6 @@ type ClonePlanRequest struct {
 	DisplayOrder *int `json:"display_order,omitempty"`
 	// Metadata overrides the source plan's metadata when provided
 	Metadata types.Metadata `json:"metadata,omitempty"`
-	// TargetEnvironmentID optionally specifies the target environment for cross-env cloning.
-	// When empty, the plan is cloned within the same environment.
-	TargetEnvironmentID string `json:"target_environment_id,omitempty"`
 }
 
 func (r *ClonePlanRequest) Validate() error {

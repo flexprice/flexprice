@@ -307,13 +307,20 @@ type CreateSubscriptionRequest struct {
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string `json:"external_customer_id"`
 
-	PlanID             string               `json:"plan_id" validate:"required"`
-	Currency           string               `json:"currency" validate:"required,len=3"`
-	LookupKey          string               `json:"lookup_key"`
-	StartDate          *time.Time           `json:"start_date,omitempty"`
-	EndDate            *time.Time           `json:"end_date,omitempty"`
-	TrialStart         *time.Time           `json:"trial_start,omitempty"`
-	TrialEnd           *time.Time           `json:"trial_end,omitempty"`
+	PlanID    string     `json:"plan_id" validate:"required"`
+	Currency  string     `json:"currency" validate:"required,len=3"`
+	LookupKey string     `json:"lookup_key"`
+	StartDate *time.Time `json:"start_date,omitempty"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
+
+	// TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).
+	// 0 = explicitly no trial (overrides catalog). >0 = override duration in days.
+	TrialPeriodDays *int `json:"trial_period_days,omitempty"`
+
+	// TrialStart/TrialEnd are for internal integrations only (e.g. Stripe sync); not accepted from public JSON.
+	TrialStart *time.Time `json:"-"`
+	TrialEnd   *time.Time `json:"-"`
+
 	BillingCadence     types.BillingCadence `json:"-"`
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                  `json:"billing_period_count" default:"1"`
@@ -383,8 +390,11 @@ type CreateSubscriptionRequest struct {
 	// If not set, the default value is UTC.
 	CustomerTimezone string `json:"customer_timezone" validate:"omitempty,timezone"`
 
-	//Billing Anchor
-	BillingAnchor *time.Time `json:"-"`
+	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
+	// For monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date
+	// is before that day in the month, the first billing period ends on the next occurrence of that
+	// day in the same month (a shorter first period); subsequent periods follow the usual interval.
+	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
 
 	// Workflow
 	Workflow *types.TemporalWorkflowType `json:"-"`
@@ -415,13 +425,24 @@ type AddAddonRequest struct {
 
 // RemoveAddonRequest is used by body-based endpoint /subscriptions/addon (DELETE)
 type RemoveAddonRequest struct {
-	AddonAssociationID string `json:"addon_association_id" validate:"required"`
-	Reason             string `json:"reason,omitempty"`
+	AddonAssociationID string                  `json:"addon_association_id" validate:"required"`
+	Reason             string                  `json:"reason,omitempty"`
+	ProrationBehavior  types.ProrationBehavior `json:"proration_behavior,omitempty"`
+	// EffectiveDate is the date the cancellation takes effect.
+	// When nil the addon is cancelled at the end of the current period.
+	// When provided it must fall within [CurrentPeriodStart, CurrentPeriodEnd]; mid-period
+	// values combined with create_prorations will issue a wallet credit for unused time.
+	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 }
 
 func (r *RemoveAddonRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+	if r.ProrationBehavior != "" {
+		if err := r.ProrationBehavior.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -587,6 +608,12 @@ type SubscriptionResponseV2 struct {
 }
 
 func (r *CreateSubscriptionRequest) Validate() error {
+
+	err := validator.ValidateRequest(r)
+	if err != nil {
+		return err
+	}
+
 	// Case- Both are absent
 	if r.CustomerID == "" && r.ExternalCustomerID == "" {
 		return ierr.NewError("either customer_id or external_customer_id is required").
@@ -598,11 +625,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		if err := r.Inheritance.Validate(); err != nil {
 			return err
 		}
-	}
-
-	err := validator.ValidateRequest(r)
-	if err != nil {
-		return err
 	}
 
 	// Validate currency
@@ -623,6 +645,15 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	if err := r.BillingCycle.Validate(); err != nil {
 		return err
+	}
+	if r.BillingAnchor != nil && r.BillingCycle != types.BillingCycleAnniversary {
+		return ierr.NewError("invalid billing_anchor for billing_cycle").
+			WithHint("billing_anchor can only be passed when billing_cycle is anniversary").
+			WithReportableDetails(map[string]any{
+				"billing_cycle":  r.BillingCycle,
+				"billing_anchor": r.BillingAnchor,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Handle legacy collection method conversion and validation
@@ -744,7 +775,28 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.TrialStart != nil && r.TrialStart.After(*r.StartDate) {
+	if r.TrialPeriodDays != nil && lo.FromPtr(r.TrialPeriodDays) < 0 {
+		return ierr.NewError("trial_period_days must be non-negative").
+			WithHint("Use 0 to disable trial or omit to inherit from plan prices").
+			WithReportableDetails(map[string]interface{}{
+				"trial_period_days": lo.FromPtr(r.TrialPeriodDays),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if (r.TrialStart != nil) != (r.TrialEnd != nil) {
+		return ierr.NewError("trial_start and trial_end must both be set").
+			WithHint("Internal use only: provide both bounds or neither").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.TrialPeriodDays != nil && lo.FromPtr(r.TrialPeriodDays) > 0 && (r.TrialStart != nil || r.TrialEnd != nil) {
+		return ierr.NewError("cannot set trial_period_days together with trial_start/trial_end").
+			WithHint("Use trial_period_days for API creates, or trial_start/trial_end for gateway sync only").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.StartDate != nil && r.TrialStart != nil && r.TrialStart.After(*r.StartDate) {
 		return ierr.NewError("trial_start cannot be after start_date").
 			WithHint("Trial start date must be before or equal to start date").
 			WithReportableDetails(map[string]interface{}{
@@ -754,13 +806,19 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.TrialEnd != nil && r.TrialEnd.Before(*r.StartDate) {
+	if r.StartDate != nil && r.TrialEnd != nil && r.TrialEnd.Before(*r.StartDate) {
 		return ierr.NewError("trial_end cannot be before start_date").
 			WithHint("Trial end date must be after or equal to start date").
 			WithReportableDetails(map[string]interface{}{
 				"start_date": *r.StartDate,
 				"trial_end":  *r.TrialEnd,
 			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.TrialStart != nil && r.TrialEnd != nil && r.TrialEnd.Before(*r.TrialStart) {
+		return ierr.NewError("trial_end cannot be before trial_start").
+			WithHint("trial_end must be on or after trial_start").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1084,6 +1142,9 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		}
 		endDate = r.EndDate
 	}
+	if r.BillingAnchor != nil {
+		billingAnchor = *r.BillingAnchor
+	}
 
 	subscriptionType := r.SubscriptionType
 	if subscriptionType == "" {
@@ -1095,6 +1156,11 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		parentSubscriptionID = lo.ToPtr(r.Inheritance.ParentSubscriptionID)
 	}
 
+	var trialStart, trialEnd *time.Time
+	if r.TrialStart != nil && r.TrialEnd != nil {
+		trialStart, trialEnd = r.TrialStart, r.TrialEnd
+	}
+
 	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		CustomerID:         r.CustomerID,
@@ -1104,8 +1170,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		SubscriptionStatus: initialStatus,
 		StartDate:          startDate,
 		EndDate:            endDate,
-		TrialStart:         r.TrialStart,
-		TrialEnd:           r.TrialEnd,
+		TrialStart:         trialStart,
+		TrialEnd:           trialEnd,
 		BillingCadence:     r.BillingCadence,
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,

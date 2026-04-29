@@ -154,7 +154,7 @@ var ProrationBehaviorValues = []ProrationBehavior{
 func (p ProrationBehavior) Validate() error {
 	if !lo.Contains(ProrationBehaviorValues, p) {
 		return ierr.NewError("invalid proration behavior").
-			WithHint("Proration behavior must be create_prorations, always_invoice, or none").
+			WithHint("Proration behavior must be create_prorations or none").
 			WithReportableDetails(map[string]any{
 				"allowed_values": ProrationBehaviorValues,
 				"provided_value": p,

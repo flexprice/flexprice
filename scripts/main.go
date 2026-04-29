@@ -66,7 +66,7 @@ var commands = []Command{
 	{
 		Name:        "reprocess-events",
 		Description: "Reprocess events",
-		Run:         internal.ReprocessEventsFromEnv,
+		Run:         internal.ReprocessFeatureUsageTrackingFromEnv,
 	},
 	{
 		Name:        "assign-plan",
@@ -286,6 +286,7 @@ func main() {
 	}
 	if apiKey != "" {
 		os.Setenv("SCRIPT_FLEXPRICE_API_KEY", apiKey)
+		os.Setenv("FLEXPRICE_API_KEY", apiKey)
 	}
 	if externalCustomerID != "" {
 		os.Setenv("EXTERNAL_CUSTOMER_ID", externalCustomerID)

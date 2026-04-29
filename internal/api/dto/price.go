@@ -28,7 +28,7 @@ type CreatePriceRequest struct {
 	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
 	LookupKey          string                   `json:"lookup_key,omitempty"`
 	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence" validate:"required"`
-	TrialPeriod        int                      `json:"trial_period"`
+	TrialPeriodDays    int                      `json:"trial_period_days"`
 	Description        string                   `json:"description,omitempty"`
 	Metadata           map[string]string        `json:"metadata,omitempty"`
 	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
@@ -367,15 +367,15 @@ func (r *CreatePriceRequest) Validate() error {
 	}
 
 	// 11. Validate trial period
-	if r.TrialPeriod < 0 {
-		return ierr.NewError("trial period must be non-negative").
-			WithHint("Please provide a non-negative trial period").
+	if r.TrialPeriodDays < 0 {
+		return ierr.NewError("trial_period_days must be non-negative").
+			WithHint("Please provide a non-negative trial_period_days").
 			Mark(ierr.ErrValidation)
 	}
-	if r.TrialPeriod > 0 &&
+	if r.TrialPeriodDays > 0 &&
 		(r.BillingPeriod == types.BILLING_PERIOD_ONETIME || r.Type != types.PRICE_TYPE_FIXED) {
-		return ierr.NewError("trial period can only be set for recurring fixed prices").
-			WithHint("Trial period can only be set for recurring fixed prices").
+		return ierr.NewError("trial_period_days can only be set for recurring fixed prices").
+			WithHint("trial_period_days can only be set for recurring fixed prices").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -439,7 +439,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		BillingModel:       r.BillingModel,
 		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     r.InvoiceCadence,
-		TrialPeriod:        r.TrialPeriod,
+		TrialPeriodDays:    r.TrialPeriodDays,
 		MeterID:            lo.Ternary(r.Type == types.PRICE_TYPE_USAGE, r.MeterID, ""),
 		LookupKey:          r.LookupKey,
 		Description:        r.Description,
@@ -574,7 +574,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.BillingPeriod = existingPrice.BillingPeriod
 	createReq.BillingPeriodCount = existingPrice.BillingPeriodCount
 	createReq.InvoiceCadence = existingPrice.InvoiceCadence
-	createReq.TrialPeriod = existingPrice.TrialPeriod
+	createReq.TrialPeriodDays = existingPrice.TrialPeriodDays
 	createReq.MeterID = lo.Ternary(existingPrice.Type == types.PRICE_TYPE_USAGE, existingPrice.MeterID, "")
 	createReq.ParentPriceID = existingPrice.GetRootPriceID()
 	createReq.DisplayName = existingPrice.DisplayName

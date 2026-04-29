@@ -36,6 +36,9 @@ func (b SubscriptionPayloadBuilder) BuildPayload(ctx context.Context, eventType 
 		return nil, err
 	}
 
+	// TODO: remove this once we have a proper way to handle too large json payloads
+	subscriptionData.Plan = nil
+
 	payload := webhookDto.NewSubscriptionWebhookPayload(subscriptionData, eventType)
 
 	// Marshal payload

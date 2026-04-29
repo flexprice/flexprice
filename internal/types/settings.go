@@ -385,7 +385,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	}
 
 	defaultTenantConfig := TenantConfig{
-		Production:  1,
+		Production:  0,
 		Development: 2,
 		MaxUsers:    10,
 	}

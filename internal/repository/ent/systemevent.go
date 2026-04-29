@@ -6,6 +6,7 @@ import (
 	"time"
 
 	flexent "github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/systemevent"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -17,6 +18,38 @@ type SystemEventRepository struct {
 
 func NewSystemEventRepository(client postgres.IClient) *SystemEventRepository {
 	return &SystemEventRepository{client: client}
+}
+
+// GetByID returns a system_events row only when id matches tenant and environment.
+func (r *SystemEventRepository) GetByID(ctx context.Context, tenantID, environmentID, id string) (*flexent.SystemEvent, error) {
+	return r.client.Reader(ctx).SystemEvent.Query().
+		Where(
+			systemevent.IDEQ(id),
+			systemevent.TenantIDEQ(tenantID),
+			systemevent.EnvironmentIDEQ(environmentID),
+		).
+		Only(ctx)
+}
+
+// ListStaleUndeliveredWebhooks returns system_events rows that were consumed but never
+// delivered (no published_at / webhook_message_id), with created_at strictly before olderThan.
+// Results are ordered by created_at ascending. Pass limit > 0 (caller caps page size).
+func (r *SystemEventRepository) ListStaleUndeliveredWebhooks(ctx context.Context, olderThan time.Time, limit int) ([]*flexent.SystemEvent, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	return r.client.Reader(ctx).SystemEvent.Query().
+		Where(
+			systemevent.WebhookMessageIDIsNil(),
+			systemevent.PublishedAtIsNil(),
+			systemevent.CreatedAtLT(olderThan),
+			systemevent.EventNameNotNil(),
+			systemevent.EventNameNEQ(""),
+			systemevent.FailureCountLT(4),
+		).
+		Order(flexent.Asc(systemevent.FieldCreatedAt)).
+		Limit(limit).
+		All(ctx)
 }
 
 // OnConsumed creates a full system_events row when the consumer reads the Kafka message.
@@ -87,6 +120,19 @@ func (r *SystemEventRepository) OnDelivered(ctx context.Context, eventID string,
 		SetUpdatedAt(now).
 		SetNillableWebhookMessageID(webhookMessageID).
 		SetPublishedAt(now).
+		Exec(ctx)
+}
+
+// OnFailed records the reason a webhook delivery failed. It overwrites any
+// previous failure_reason and never clears it — not even on later success.
+func (r *SystemEventRepository) OnFailed(ctx context.Context, eventID, reason string) error {
+	if eventID == "" {
+		return nil
+	}
+	return r.client.Writer(ctx).SystemEvent.UpdateOneID(eventID).
+		SetUpdatedAt(time.Now().UTC()).
+		SetFailureReason(reason).
+		AddFailureCount(1).
 		Exec(ctx)
 }
 

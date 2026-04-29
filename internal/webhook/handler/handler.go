@@ -25,6 +25,9 @@ import (
 // Handler interface for processing webhook events
 type Handler interface {
 	RegisterHandler(router *pubsubRouter.Router)
+	// DeliverWebhook builds the outbound payload and delivers it (Svix or native HTTP)
+	// without publishing to Kafka. Used for synchronous retries (e.g. API retrigger).
+	DeliverWebhook(ctx context.Context, event *types.WebhookEvent) error
 }
 
 // handler implements handler.Handler using watermill's gochannel
@@ -87,6 +90,56 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	)
 }
 
+// DeliverWebhook implements synchronous delivery for API-driven retries.
+func (h *handler) DeliverWebhook(ctx context.Context, event *types.WebhookEvent) error {
+	if !h.config.Enabled {
+		return ierr.NewError("webhook delivery is disabled").
+			WithHint("Enable webhooks in configuration to retrigger system events.").
+			Mark(ierr.ErrInvalidOperation)
+	}
+	if event == nil {
+		return ierr.NewError("webhook event is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
+	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
+
+	messageUUID := types.GenerateUUID()
+	h.logger.Debugw("delivering webhook synchronously",
+		"message_uuid", messageUUID,
+		"event_name", event.EventName,
+		"tenant_id", event.TenantID,
+		"event_id", event.ID,
+	)
+
+	var deliveryErr error
+	if h.config.Svix.Enabled {
+		deliveryErr = h.deliverSvix(ctx, event, messageUUID)
+	} else {
+		deliveryErr = h.deliverNative(ctx, event, messageUUID)
+	}
+	if deliveryErr != nil {
+		h.logger.Errorw("failed to deliver webhook synchronously",
+			"error", deliveryErr,
+			"event_id", event.ID,
+			"event_name", event.EventName,
+			"tenant_id", event.TenantID,
+			"message_uuid", messageUUID,
+		)
+		if h.systemEventRepo != nil && event.ID != "" {
+			if dbErr := h.systemEventRepo.OnFailed(ctx, event.ID, deliveryErr.Error()); dbErr != nil {
+				h.logger.Warnw("failed to persist webhook failure_reason",
+					"error", dbErr,
+					"event_id", event.ID,
+				)
+			}
+		}
+	}
+	return deliveryErr
+}
+
 // webhookMissingDataError is true when the failure is permanent (referenced entity missing).
 // Those cases should ack and not consume router-level retries or DLQ.
 func webhookMissingDataError(err error) bool {
@@ -96,27 +149,41 @@ func webhookMissingDataError(err error) bool {
 	return ierr.IsNotFound(err) || ent.IsNotFound(err)
 }
 
-// processWebhookError turns missing-data errors into nil so the Kafka offset commits.
-// Other errors propagate to pubsub.Router middleware (Retry, then PoisonQueue / ack).
-func (h *handler) processWebhookError(err error, event *types.WebhookEvent, messageUUID, step string) error {
+// absorbDeliveryError logs delivery failures for the Kafka consumer path and always acks.
+// It also persists the failure reason on the system_events row so it is never silently dropped.
+func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err error, event *types.WebhookEvent, messageUUID string) {
 	if err == nil {
-		return nil
+		return
 	}
-	if !webhookMissingDataError(err) {
-		return err
+	if webhookMissingDataError(err) {
+		h.logger.Errorw("skipping webhook; referenced data not found (ack, no retry)",
+			"transport", transport,
+			"error", err,
+			"message_uuid", messageUUID,
+			"event_name", event.EventName,
+			"tenant_id", event.TenantID,
+		)
+	} else {
+		h.logger.Errorw("failed to send webhook",
+			"transport", transport,
+			"error", err,
+			"message_uuid", messageUUID,
+			"tenant_id", event.TenantID,
+			"event", event.EventName,
+		)
 	}
-	h.logger.Errorw("skipping webhook; referenced data not found (ack, no retry)",
-		"error", err,
-		"step", step,
-		"message_uuid", messageUUID,
-		"event_name", event.EventName,
-		"tenant_id", event.TenantID,
-	)
-	return nil
+	if h.systemEventRepo != nil && event.ID != "" {
+		if dbErr := h.systemEventRepo.OnFailed(ctx, event.ID, err.Error()); dbErr != nil {
+			h.logger.Warnw("failed to persist webhook failure_reason",
+				"error", dbErr,
+				"event_id", event.ID,
+			)
+		}
+	}
 }
 
 // processMessage processes a single webhook message from the system_events topic:
-// 1) unmarshal and verify, 2) call deliverWebhook to send to Svix or native HTTP.
+// 1) unmarshal and verify, 2) call deliverSvix/deliverNative to send to Svix or native HTTP.
 func (h *handler) processMessage(msg *message.Message) error {
 	ctx := msg.Context()
 
@@ -145,43 +212,30 @@ func (h *handler) processMessage(msg *message.Message) error {
 		"tenant_id", event.TenantID,
 	)
 
-	// Log inbound — create a bare system_events row (entity info populated on delivery).
-	if err := h.systemEventRepo.OnConsumed(ctx, &event); err != nil {
-		h.logger.Warnw("system_events OnConsumed failed",
-			"error", err,
-			"event_id", event.ID,
-			"event_name", event.EventName,
-		)
-	}
-
-	// After verify: deliver the webhook (Svix or native endpoint)
 	if h.config.Svix.Enabled {
-		return h.processMessageSvix(ctx, &event, msg.UUID)
+		h.absorbDeliveryError(ctx, "svix", h.deliverSvix(ctx, &event, msg.UUID), &event, msg.UUID)
+		return nil
 	}
 
-	return h.processMessageNative(ctx, &event, msg.UUID)
+	h.absorbDeliveryError(ctx, "native", h.deliverNative(ctx, &event, msg.UUID), &event, msg.UUID)
+	return nil
 }
 
-// processMessageSvix processes a webhook message using Svix
-func (h *handler) processMessageSvix(ctx context.Context, event *types.WebhookEvent, messageUUID string) error {
-	// Get or create Svix application
+// deliverSvix sends a webhook via Svix.
+func (h *handler) deliverSvix(ctx context.Context, event *types.WebhookEvent, messageUUID string) error {
 	appID, err := h.svixClient.GetOrCreateApplication(ctx, event.TenantID, event.EnvironmentID)
 	if err != nil {
-		// If error indicates no application exists, silently continue
 		if err.Error() == "application not found" {
-			h.logger.Debugw("no Svix application found, skipping webhook",
-				"tenant_id", event.TenantID,
-				"environment_id", event.EnvironmentID,
-			)
-			return nil
+			return ierr.NewError("Svix application not found for this tenant and environment").
+				WithHint("Configure Svix before retriggering this webhook.").
+				Mark(ierr.ErrInvalidOperation)
 		}
 		return err
 	}
 
-	// Build event payload
 	builder, err := h.factory.GetBuilder(event.EventName)
 	if err != nil {
-		return h.processWebhookError(err, event, messageUUID, "get_builder")
+		return err
 	}
 
 	h.logger.Debugw("building webhook payload",
@@ -191,25 +245,18 @@ func (h *handler) processMessageSvix(ctx context.Context, event *types.WebhookEv
 
 	webHookPayload, err := builder.BuildPayload(ctx, event.EventName, event.Payload)
 	if err != nil {
-		return h.processWebhookError(err, event, messageUUID, "build_payload")
-	}
-
-	// Send to Svix — capture the Svix message id.
-	svixOut, err := h.svixClient.SendMessage(ctx, appID, event.EventName, json.RawMessage(webHookPayload))
-	if err != nil {
-		h.logger.Errorw("failed to send webhook via Svix",
-			"error", err,
-			"message_uuid", messageUUID,
-			"tenant_id", event.TenantID,
-			"event", event.EventName,
-		)
 		return err
 	}
 
-	// svixOut == "" means Svix was disabled or had no application for this tenant — message was not sent.
-	// OnConsumed already recorded the row; don't mark it as published.
+	svixOut, err := h.svixClient.SendMessage(ctx, appID, event.EventName, json.RawMessage(webHookPayload))
+	if err != nil {
+		return err
+	}
+
 	if svixOut == "" {
-		return nil
+		return ierr.NewError("webhook was not delivered (Svix returned no message id)").
+			WithHint("Check Svix configuration and application status for this environment.").
+			Mark(ierr.ErrInvalidOperation)
 	}
 
 	if err := h.systemEventRepo.OnDelivered(ctx, event.ID, lo.ToPtr(svixOut)); err != nil {
@@ -218,6 +265,7 @@ func (h *handler) processMessageSvix(ctx context.Context, event *types.WebhookEv
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
+		return err
 	}
 
 	h.logger.Infow("webhook sent successfully via Svix",
@@ -229,43 +277,30 @@ func (h *handler) processMessageSvix(ctx context.Context, event *types.WebhookEv
 	return nil
 }
 
-// processMessageNative processes a webhook message using native webhook system
-func (h *handler) processMessageNative(ctx context.Context, event *types.WebhookEvent, messageUUID string) error {
-	// Get tenant config
+// deliverNative sends a webhook to the configured HTTP endpoint.
+func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, messageUUID string) error {
 	tenantCfg, ok := h.config.Tenants[event.TenantID]
 	if !ok {
-		h.logger.Warnw("tenant config not found",
-			"tenant_id", event.TenantID,
-			"message_uuid", messageUUID,
-		)
-		// Don't retry if tenant not found
-		return nil
+		return ierr.NewError("native webhook is not configured for this tenant").
+			WithHint("Add the tenant to webhook.tenants in configuration.").
+			Mark(ierr.ErrNotFound)
 	}
 
-	// Check if tenant webhooks are enabled
 	if !tenantCfg.Enabled {
-		h.logger.Debugw("webhooks disabled for tenant",
-			"tenant_id", event.TenantID,
-			"message_uuid", messageUUID,
-		)
-		return nil
+		return ierr.NewError("webhooks are disabled for this tenant in native configuration").
+			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Check if event is excluded
 	for _, excludedEvent := range tenantCfg.ExcludedEvents {
 		if excludedEvent == event.EventName {
-			h.logger.Debugw("event excluded for tenant",
-				"tenant_id", event.TenantID,
-				"event", event.EventName,
-			)
-			return nil
+			return ierr.NewErrorf("event %q is excluded from native webhooks for this tenant", event.EventName).
+				Mark(ierr.ErrInvalidOperation)
 		}
 	}
 
-	// Build event payload
 	builder, err := h.factory.GetBuilder(event.EventName)
 	if err != nil {
-		return h.processWebhookError(err, event, messageUUID, "get_builder")
+		return err
 	}
 
 	h.logger.Debugw("building webhook payload",
@@ -275,7 +310,7 @@ func (h *handler) processMessageNative(ctx context.Context, event *types.Webhook
 
 	webHookPayload, err := builder.BuildPayload(ctx, event.EventName, event.Payload)
 	if err != nil {
-		return h.processWebhookError(err, event, messageUUID, "build_payload")
+		return err
 	}
 
 	h.logger.Debugw("built webhook payload",
@@ -283,7 +318,6 @@ func (h *handler) processMessageNative(ctx context.Context, event *types.Webhook
 		"payload", string(webHookPayload),
 	)
 
-	// Send webhook
 	req := &httpclient.Request{
 		Method:  "POST",
 		URL:     tenantCfg.Endpoint,
@@ -293,12 +327,6 @@ func (h *handler) processMessageNative(ctx context.Context, event *types.Webhook
 
 	resp, err := h.client.Send(ctx, req)
 	if err != nil {
-		h.logger.Errorw("failed to send webhook",
-			"error", err,
-			"message_uuid", messageUUID,
-			"tenant_id", event.TenantID,
-			"event", event.EventName,
-		)
 		return err
 	}
 
@@ -315,6 +343,7 @@ func (h *handler) processMessageNative(ctx context.Context, event *types.Webhook
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
+		return err
 	}
 
 	return nil

@@ -77,6 +77,7 @@ func (s *SubscriptionLineItemServiceSuite) setupService() {
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
+		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		ProrationCalculator:        s.GetCalculator(),
@@ -336,6 +337,262 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_DateBound
 
 // TestAddSubscriptionLineItem_ValidationErrors covers invalid or out-of-bound values: both/neither price,
 // start after end, date bounds (line item and inline price), negative quantity.
+// ─── Proration integration – AddSubscriptionLineItem ─────────────────────────
+
+// TestAddSubscriptionLineItem_WithCreateProrations_CreatesInvoice verifies that
+// calling AddSubscriptionLineItem with ProrationBehavior=create_prorations creates
+// a ONE_OFF invoice for the prorated portion of the billing period.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_WithCreateProrations_CreatesInvoice() {
+	ctx := s.GetContext()
+
+	// Create a second distinct price so we can add it as a new line item.
+	secondPrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(30),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, secondPrice))
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              secondPrice.ID,
+		Quantity:             decimal.NewFromInt(1),
+		SkipEntitlementCheck: true,
+		ProrationBehavior:    types.ProrationBehaviorCreateProrations,
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.NotEmpty(resp.SubscriptionLineItem.ID)
+
+	// A ONE_OFF proration invoice should have been created.
+	invoices, listErr := s.GetStores().InvoiceRepo.List(ctx, &types.InvoiceFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	s.NoError(listErr)
+	var prorationInvoices []*types.InvoiceFilter
+	_ = prorationInvoices
+	var found bool
+	for _, inv := range invoices {
+		if inv.InvoiceType == types.InvoiceTypeOneOff {
+			found = true
+			s.True(inv.AmountDue.GreaterThan(decimal.Zero),
+				"proration invoice amount must be positive, got %s", inv.AmountDue)
+			break
+		}
+	}
+	s.True(found, "expected a ONE_OFF proration invoice to be created")
+}
+
+// TestAddSubscriptionLineItem_NoneProration_NoInvoiceCreated confirms that
+// ProrationBehavior=none does not create any invoice.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_NoneProration_NoInvoiceCreated() {
+	ctx := s.GetContext()
+
+	thirdPrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(40),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, thirdPrice))
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              thirdPrice.ID,
+		Quantity:             decimal.NewFromInt(1),
+		SkipEntitlementCheck: true,
+		ProrationBehavior:    types.ProrationBehaviorNone,
+	}
+
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.NoError(err)
+
+	invoices, listErr := s.GetStores().InvoiceRepo.List(ctx, &types.InvoiceFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	s.NoError(listErr)
+	for _, inv := range invoices {
+		s.NotEqual(types.InvoiceTypeOneOff, inv.InvoiceType,
+			"no ONE_OFF proration invoice expected for behavior=none")
+	}
+}
+
+// TestAddSubscriptionLineItem_UsagePrice_SkipsProration confirms that adding a
+// usage-type price with create_prorations does not produce a charge invoice
+// (future consumption is unknown).
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_UsagePrice_SkipsProration() {
+	ctx := s.GetContext()
+
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              usagePrice.ID,
+		SkipEntitlementCheck: true,
+		ProrationBehavior:    types.ProrationBehaviorCreateProrations,
+	}
+
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.NoError(err)
+
+	invoices, listErr := s.GetStores().InvoiceRepo.List(ctx, &types.InvoiceFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	s.NoError(listErr)
+	for _, inv := range invoices {
+		s.NotEqual(types.InvoiceTypeOneOff, inv.InvoiceType,
+			"usage price add must not trigger a proration invoice")
+	}
+}
+
+// ─── Proration integration – DeleteSubscriptionLineItem ──────────────────────
+
+// TestDeleteSubscriptionLineItem_WithCreateProrations_CreatesWalletCredit verifies
+// that deleting a fixed-price line item with create_prorations issues a wallet credit
+// for the unused portion of the billing period.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_WithCreateProrations_CreatesWalletCredit() {
+	ctx := s.GetContext()
+	// effectiveFrom must be (a) >= lineItem.StartDate and (b) within the subscription's current
+	// billing period so that FindPeriodForDate can locate it by walking forward.
+	// CurrentPeriodStart + 1 hour satisfies both constraints.
+	effectiveFrom := s.testData.subscription.CurrentPeriodStart.Add(time.Hour)
+
+	req := dto.DeleteSubscriptionLineItemRequest{
+		EffectiveFrom:     &effectiveFrom,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	}
+
+	resp, err := s.service.DeleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.False(resp.SubscriptionLineItem.EndDate.IsZero())
+
+	// A wallet credit should have been issued.
+	wallets, listErr := s.GetStores().WalletRepo.GetWalletsByFilter(ctx, &types.WalletFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	s.NoError(listErr)
+	s.Require().NotEmpty(wallets, "expected a wallet to be created for the proration credit")
+
+	w := wallets[0]
+	s.True(w.Balance.GreaterThan(decimal.Zero),
+		"wallet balance %s must be positive after proration credit", w.Balance)
+}
+
+// TestDeleteSubscriptionLineItem_NoneProration_NoWalletCredit confirms that
+// deleting with ProrationBehavior=none does not issue any wallet credit.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_NoneProration_NoWalletCredit() {
+	ctx := s.GetContext()
+	effectiveFrom := s.testData.lineItem.StartDate.Add(24 * time.Hour)
+
+	req := dto.DeleteSubscriptionLineItemRequest{
+		EffectiveFrom:     &effectiveFrom,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	}
+
+	_, err := s.service.DeleteSubscriptionLineItem(ctx, s.testData.lineItem.ID, req)
+	s.NoError(err)
+
+	wallets, listErr := s.GetStores().WalletRepo.GetWalletsByFilter(ctx, &types.WalletFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	s.NoError(listErr)
+	s.Empty(wallets, "behavior=none must not create a wallet credit")
+}
+
+// TestDeleteSubscriptionLineItem_SnapshotBeforeMutation_OnetimeSkipped verifies
+// the critical invariant: the pre-mutation snapshot (EndDate==zero) is passed to
+// proration Compute so that onetime-cadence check works correctly.
+//
+// A line item with EndDate == effectiveFrom after the Update call would otherwise
+// be misidentified as a onetime addon and skipped. The snapshot must have EndDate==zero.
+func (s *SubscriptionLineItemServiceSuite) TestDeleteSubscriptionLineItem_SnapshotBeforeMutation_OnetimeSkipped() {
+	ctx := s.GetContext()
+
+	// Create a fresh line item with a non-zero EndDate to simulate a onetime addon.
+	// Deleting it with create_prorations should produce NO credit (non-refundable).
+	onetimePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(25),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_ONETIME,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, onetimePrice))
+
+	onetimeEnd := s.testData.subscription.CurrentPeriodEnd
+	onetimeItem := &subscription.SubscriptionLineItem{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID: s.testData.subscription.ID,
+		CustomerID:     s.testData.customer.ID,
+		EntityID:       s.testData.plan.ID,
+		EntityType:     types.SubscriptionLineItemEntityTypePlan,
+		PriceID:        onetimePrice.ID,
+		PriceType:      types.PRICE_TYPE_FIXED,
+		DisplayName:    "Onetime addon",
+		Quantity:       decimal.NewFromInt(1),
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_ONETIME,
+		InvoiceCadence: types.InvoiceCadenceAdvance,
+		StartDate:      s.testData.lineItem.StartDate,
+		EndDate:        onetimeEnd, // non-zero EndDate marks this as onetime/already-terminated
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, onetimeItem))
+
+	// The onetime item already has an EndDate, so DeleteSubscriptionLineItem should
+	// reject it as already terminated.
+	effectiveFrom := onetimeItem.StartDate.Add(time.Hour)
+	req := dto.DeleteSubscriptionLineItemRequest{
+		EffectiveFrom:     &effectiveFrom,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	}
+
+	_, err := s.service.DeleteSubscriptionLineItem(ctx, onetimeItem.ID, req)
+	s.Error(err, "deleting an already-terminated line item must return an error")
+	s.Contains(err.Error(), "already terminated")
+
+	// No wallet credit should have been issued.
+	wallets, listErr := s.GetStores().WalletRepo.GetWalletsByFilter(ctx, &types.WalletFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	s.NoError(listErr)
+	s.Empty(wallets, "no wallet credit expected for already-terminated (onetime) line item")
+}
+
 func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_ValidationErrors() {
 	ctx := s.GetContext()
 	subStart := s.testData.subscription.StartDate

@@ -1,12 +1,17 @@
 package v1
 
-import webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+import (
+	apidto "github.com/flexprice/flexprice/internal/api/dto"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+)
 
 // Doc-only webhook event stubs for OpenAPI / SDK generation. These handlers are not registered on the router.
 // Payload types live in internal/webhook/dto (package webhookDto).
 //
 // Anchor webhookDto types so swag can resolve @Success references in this file.
 var _ = []any{
+	(*apidto.RetryOutboundWebhookRequest)(nil),
+	(*apidto.RetryOutboundWebhookResponse)(nil),
 	(*webhookDto.InvoiceWebhookPayload)(nil),
 	(*webhookDto.CommunicationWebhookPayload)(nil),
 	(*webhookDto.SubscriptionWebhookPayload)(nil),

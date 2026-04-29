@@ -179,6 +179,8 @@ func (h *EnvironmentHandler) CloneEnvironment(c *gin.Context) {
 		temporalmodels.EnvironmentCloneWorkflowInput{
 			SourceEnvironmentID: sourceEnvID,
 			TargetEnvironmentID: targetEnvID,
+			TenantID:            types.GetTenantID(c.Request.Context()),
+			UserID:              types.GetUserID(c.Request.Context()),
 		},
 	)
 	if err != nil {

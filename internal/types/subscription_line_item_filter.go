@@ -14,8 +14,9 @@ type SubscriptionLineItemFilter struct {
 	MeterIDs           []string                        `json:"meter_ids,omitempty" form:"meter_ids"`
 	Currencies         []string                        `json:"currencies,omitempty" form:"currencies"`
 	BillingPeriods     []string                        `json:"billing_periods,omitempty" form:"billing_periods"`
-	EntityIDs          []string                        `json:"entity_ids,omitempty" form:"entity_ids"`
-	EntityType         *SubscriptionLineItemEntityType `json:"entity_type,omitempty" form:"entity_type"`
+	EntityIDs            []string                        `json:"entity_ids,omitempty" form:"entity_ids"`
+	EntityType           *SubscriptionLineItemEntityType `json:"entity_type,omitempty" form:"entity_type"`
+	AddonAssociationIDs  []string                        `json:"addon_association_ids,omitempty" form:"addon_association_ids"`
 	ActiveFilter       bool                            `json:"active_filter,omitempty" form:"active_filter" default:"true"`
 	CurrentPeriodStart *time.Time                      `json:"current_period_start,omitempty" form:"current_period_start"`
 }
