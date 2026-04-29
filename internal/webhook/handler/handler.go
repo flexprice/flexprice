@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/ent"
@@ -76,11 +77,26 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 		return
 	}
 	throttle := middleware.NewThrottle(rateLimit, time.Second)
+
+	// Retry transient failures (e.g. publish-before-commit race: invoice not yet visible
+	// when consumer picks up the Kafka message). processMessage returns nil for permanent
+	// errors so only genuinely transient errors reach this middleware.
+	retryMiddleware := middleware.Retry{
+		MaxRetries:          5,
+		InitialInterval:     5 * time.Second,
+		MaxInterval:         30 * time.Second,
+		Multiplier:          2.0,
+		RandomizationFactor: 0.3,
+		Logger:              watermill.NewStdLogger(false, false),
+	}.Middleware
+
+	// Add the handler
 	router.AddNoPublishHandler(
 		"webhook_handler",
 		h.config.Topic,
 		h.pubSub,
 		h.processMessage,
+		retryMiddleware,
 		throttle.Middleware,
 	)
 	h.logger.Debugw("registered webhook handler",
