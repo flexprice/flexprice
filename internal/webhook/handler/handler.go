@@ -264,11 +264,22 @@ func (h *handler) deliverSvix(ctx context.Context, event *types.WebhookEvent, me
 
 	webHookPayload, err := builder.BuildPayload(ctx, event.EventName, event.Payload)
 	if err != nil {
+		h.logger.Errorw("failed to build webhook payload (deliverSvix)",
+			"error", err,
+			"event_name", event.EventName,
+			"builder", builder,
+			"payload", string(event.Payload),
+		)
 		return err
 	}
 
 	svixOut, err := h.svixClient.SendMessage(ctx, appID, event.EventName, json.RawMessage(webHookPayload))
 	if err != nil {
+		h.logger.Errorw("failed to send webhook message via Svix (deliverSvix)",
+			"error", err,
+			"event_name", event.EventName,
+			"app_id", appID,
+		)
 		return err
 	}
 
