@@ -766,15 +766,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.StartDate != nil && r.StartDate.After(time.Now().UTC()) {
-		return ierr.NewError("start_date cannot be in the future").
-			WithHint("Start date must be in the past or present").
-			WithReportableDetails(map[string]interface{}{
-				"start_date": *r.StartDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
 	if r.TrialPeriodDays != nil && lo.FromPtr(r.TrialPeriodDays) < 0 {
 		return ierr.NewError("trial_period_days must be non-negative").
 			WithHint("Use 0 to disable trial or omit to inherit from plan prices").
