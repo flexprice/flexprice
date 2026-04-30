@@ -33,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	domainsystemevent "github.com/flexprice/flexprice/internal/domain/systemevent"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
@@ -232,6 +233,10 @@ func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
 
 func NewSystemEventRepository(p RepositoryParams) *entRepo.SystemEventRepository {
 	return entRepo.NewSystemEventRepository(p.EntClient)
+}
+
+func NewSystemEventDomainRepository(repo *entRepo.SystemEventRepository) domainsystemevent.Repository {
+	return repo
 }
 
 func NewGroupRepository(p RepositoryParams) group.Repository {
