@@ -25,11 +25,14 @@ on:
 permissions:
   id-token: write
   contents: read
+  packages: write
 
 env:
   AWS_REGION: us-east-1
   HELM_REGISTRY: oci://public.ecr.aws/l7n1c1i5/flexprice
   HELM_REPOSITORY: helm-charts
+  GHCR_HOST: ghcr.io
+  GHCR_REPOSITORY: charts
 
 jobs:
   publish-chart:
@@ -131,11 +134,48 @@ jobs:
           # Output for summary
           echo "CHART_URL=${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:$CHART_VERSION" >> $GITHUB_ENV
 
-      - name: Verify Published Chart
+      - name: Login to GHCR
+        if: ${{ github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: ${{ github.actor }}
+          GHCR_HOST: ${{ env.GHCR_HOST }}
+        run: |
+          echo "$GH_TOKEN" | helm registry login "$GHCR_HOST" -u "$GH_USER" --password-stdin
+
+      - name: Push Helm Chart to GHCR
+        if: ${{ (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
+        env:
+          CHART_NAME: ${{ steps.chart-name.outputs.name }}
+          CHART_VERSION: ${{ steps.chart-version.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+          GHCR_HOST: ${{ env.GHCR_HOST }}
+          GHCR_REPOSITORY: ${{ env.GHCR_REPOSITORY }}
+        run: |
+          CHART_FILE="${CHART_NAME}-${CHART_VERSION}.tgz"
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          TARGET="oci://${GHCR_HOST}/${OWNER_LC}/${GHCR_REPOSITORY}"
+          echo "Pushing $CHART_FILE to $TARGET"
+          helm push "$CHART_FILE" "$TARGET"
+          echo "::notice::Published $CHART_NAME:$CHART_VERSION to $TARGET"
+
+      - name: Verify Published Chart (ECR)
         if: ${{ steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true' }}
         run: |
           helm show chart ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }} || \
           helm show chart oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }}
+
+      - name: Verify Published Chart (GHCR)
+        if: ${{ (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
+        env:
+          CHART_NAME: ${{ steps.chart-name.outputs.name }}
+          CHART_VERSION: ${{ steps.chart-version.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+          GHCR_HOST: ${{ env.GHCR_HOST }}
+          GHCR_REPOSITORY: ${{ env.GHCR_REPOSITORY }}
+        run: |
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          helm show chart "oci://${GHCR_HOST}/${OWNER_LC}/${GHCR_REPOSITORY}/${CHART_NAME}" --version "$CHART_VERSION"
 
       - name: Create Summary
         if: always()

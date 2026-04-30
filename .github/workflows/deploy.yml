@@ -3,6 +3,7 @@ name: Build, Push & Deploy to AWS ECS
 on:
   push:
     branches: [develop, main]
+    tags: ['v*']
   # Manual trigger: lets you validate config or force-deploy without a push
   workflow_dispatch:
     inputs:
@@ -23,10 +24,12 @@ concurrency:
 permissions:
   id-token: write
   contents: read
+  packages: write
 
 env:
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  GHCR_IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
@@ -43,6 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -55,23 +61,51 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Prepare image tag
+      - name: Login to GitHub Container Registry
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare image tags
         id: image-tag
         env:
           ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
           GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           echo "tag=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          {
+            echo "tags<<TAGS_EOF"
+            echo "${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}"
+            if [ "$IS_RELEASE" = "true" ]; then
+              echo "${GHCR_IMAGE}:${GITHUB_SHA}"
+              echo "${GHCR_IMAGE}:${GITHUB_REF_NAME}"
+              echo "${GHCR_IMAGE}:latest"
+            fi
+            echo "TAGS_EOF"
+          } >> $GITHUB_OUTPUT
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            echo "platforms=linux/amd64,linux/arm64,linux/arm/v7" >> $GITHUB_OUTPUT
+          else
+            echo "platforms=linux/arm64" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build & push image
         uses: docker/build-push-action@v4
         with:
           context: .
           file: Dockerfile.ecs
-          platforms: linux/arm64
+          platforms: ${{ steps.image-tag.outputs.platforms }}
           push: true
-          tags: ${{ steps.image-tag.outputs.tag }}
+          tags: ${{ steps.image-tag.outputs.tags }}
+          provenance: false
 
       - name: Set image output
         id: set-image
