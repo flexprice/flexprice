@@ -159,6 +159,11 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 	}, nil
 }
 
+// NewNoopLogger returns a logger that discards all output. For use in tests only.
+func NewNoopLogger() *Logger {
+	return &Logger{SugaredLogger: zap.NewNop().Sugar()}
+}
+
 // newOtelLogProvider builds a sdklog.LoggerProvider that exports via OTLP (gRPC or HTTP).
 func newOtelLogProvider(ctx context.Context, cfg *config.Configuration) (*sdklog.LoggerProvider, error) {
 	headers := map[string]string{}

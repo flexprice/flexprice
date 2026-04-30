@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -45,8 +46,17 @@ func (b *InvoicePayloadBuilder) BuildPayload(ctx context.Context, eventType type
 
 	// Get invoice details
 	invoice, err := b.services.InvoiceService.GetInvoice(ctx, invoiceID)
-	if err != nil {
+	if err != nil && !ierr.IsNotFound(err) {
 		return nil, err
+	}
+
+	// TODO: this is a temporary fix to handle the invoice not found error.
+	if ierr.IsNotFound(err) {
+		time.Sleep(15 * time.Second)
+		invoice, err = b.services.InvoiceService.GetInvoice(ctx, invoiceID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// inject the invoice pdf url into the invoice response

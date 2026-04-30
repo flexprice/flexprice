@@ -117,6 +117,13 @@ webhook:
     auth_token: "svix_auth_token"
     base_url: "https://api.us.svix.com"
 
+webhook_retry_job:
+  enabled: true
+  max_attempts: 5
+  rate_limit: 5
+  excluded_tenants: []
+  allowed_event_types: []
+
 temporal:
   address: "127.0.0.1:7233" # For local mode
   # Will be overridden by TEMPORAL_ADDRESS env var in Docker

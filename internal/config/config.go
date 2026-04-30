@@ -59,6 +59,7 @@ type Configuration struct {
 	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
 	IntegrationEvents          IntegrationEventsConfig          `mapstructure:"integration_events" validate:"omitempty"`
 	OnboardingEvents           OnboardingEventsConfig           `mapstructure:"onboarding_events" validate:"omitempty"`
+	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
 }
 
@@ -355,6 +356,23 @@ type OnboardingEventsConfig struct {
 	RateLimit     int64  `mapstructure:"rate_limit" default:"100"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"onboarding_events_consumer"`
 	MaxRetries    int    `mapstructure:"max_retries" default:"3"`
+}
+
+// WebhookRetryJobConfig configures the Temporal stale-webhook retry cron job.
+// All filtering is applied by the activity after the DB query.
+type WebhookRetryJobConfig struct {
+	// Enabled is a kill switch — false exits the activity immediately with zero counts.
+	Enabled bool `mapstructure:"enabled" default:"true"`
+	// MaxAttempts is the maximum number of delivery failures before a system_event is
+	// abandoned by the retry job. Replaces the hardcoded FailureCountLT(4) in the query.
+	MaxAttempts int `mapstructure:"max_attempts" default:"5"`
+	// RateLimit is the maximum number of webhook deliveries per second within a single
+	// cron job run (token-bucket, golang.org/x/time/rate).
+	RateLimit int `mapstructure:"rate_limit" default:"5"`
+	// ExcludedTenants is a flat list of tenant IDs to skip entirely. Empty = process all.
+	ExcludedTenants []string `mapstructure:"excluded_tenants"`
+	// AllowedEventTypes is a whitelist of event_name values to retry. Empty = retry all.
+	AllowedEventTypes []string `mapstructure:"allowed_event_types"`
 }
 
 type EnvAccessConfig struct {

@@ -6,7 +6,9 @@ import (
 	"time"
 
 	flexent "github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/systemevent"
+	domainsystemevent "github.com/flexprice/flexprice/internal/domain/systemevent"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -34,21 +36,31 @@ func (r *SystemEventRepository) GetByID(ctx context.Context, tenantID, environme
 // ListStaleUndeliveredWebhooks returns system_events rows that were consumed but never
 // delivered (no published_at / webhook_message_id), with created_at strictly before olderThan.
 // Results are ordered by created_at ascending. Pass limit > 0 (caller caps page size).
-func (r *SystemEventRepository) ListStaleUndeliveredWebhooks(ctx context.Context, olderThan time.Time, limit int) ([]*flexent.SystemEvent, error) {
-	if limit <= 0 {
+func (r *SystemEventRepository) ListStaleUndeliveredWebhooks(ctx context.Context, params domainsystemevent.ListStaleUndeliveredWebhooksParams) ([]*flexent.SystemEvent, error) {
+	if params.Limit <= 0 {
 		return nil, nil
 	}
+	if params.MaxAttempts <= 0 {
+		params.MaxAttempts = 5
+	}
+	preds := []predicate.SystemEvent{
+		systemevent.WebhookMessageIDIsNil(),
+		systemevent.PublishedAtIsNil(),
+		systemevent.CreatedAtLT(params.OlderThan),
+		systemevent.EventNameNotNil(),
+		systemevent.EventNameNEQ(""),
+		systemevent.FailureCountLT(params.MaxAttempts),
+	}
+	if len(params.ExcludedTenants) > 0 {
+		preds = append(preds, systemevent.TenantIDNotIn(params.ExcludedTenants...))
+	}
+	if len(params.AllowedEventTypes) > 0 {
+		preds = append(preds, systemevent.EventNameIn(params.AllowedEventTypes...))
+	}
 	return r.client.Reader(ctx).SystemEvent.Query().
-		Where(
-			systemevent.WebhookMessageIDIsNil(),
-			systemevent.PublishedAtIsNil(),
-			systemevent.CreatedAtLT(olderThan),
-			systemevent.EventNameNotNil(),
-			systemevent.EventNameNEQ(""),
-			systemevent.FailureCountLT(4),
-		).
+		Where(preds...).
 		Order(flexent.Asc(systemevent.FieldCreatedAt)).
-		Limit(limit).
+		Limit(params.Limit).
 		All(ctx)
 }
 
