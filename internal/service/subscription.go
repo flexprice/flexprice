@@ -2183,8 +2183,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		return nil, err
 	}
 
-	// Get customer
-	customer, err := s.CustomerRepo.Get(ctx, subscription.CustomerID)
+	externalCustomerIDs, err := s.ExternalCustomerIDsForSubscription(ctx, subscription)
 	if err != nil {
 		return nil, err
 	}
@@ -2259,12 +2258,12 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	// Performance optimization: Get distinct event names for this customer
 	// to filter out meters that have no events, reducing processing from potentially
 	// 400-500 meters down to only 5-7 that have actual usage
-	distinctEventNames, err := s.EventRepo.GetDistinctEventNames(ctx, []string{customer.ExternalID}, usageStartTime, usageEndTime)
+	distinctEventNames, err := s.EventRepo.GetDistinctEventNames(ctx, externalCustomerIDs, usageStartTime, usageEndTime)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to get distinct event names",
 			"error", err,
-			"external_customer_id", customer.ExternalID)
-		return nil, fmt.Errorf("failed to get distinct event names for customer %s: %w", customer.ExternalID, err)
+			"subscription_id", req.SubscriptionID)
+		return nil, fmt.Errorf("failed to get distinct event names for subscription %s: %w", req.SubscriptionID, err)
 	}
 
 	// Create a map for fast event name lookup
@@ -2274,7 +2273,8 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	}
 
 	s.Logger.DebugwCtx(ctx, "distinct event names optimization",
-		"external_customer_id", customer.ExternalID,
+		"subscription_id", req.SubscriptionID,
+		"external_customer_ids", externalCustomerIDs,
 		"total_distinct_events", len(distinctEventNames),
 		"total_line_items", len(lineItems),
 		"distinct_event_names", distinctEventNames)
@@ -2299,12 +2299,6 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			// which means there is no event data in the database
 			// this is a fallback to ensure that we don't process all meters
 			// if the event data is not available
-			s.Logger.DebugwCtx(ctx, "skipping meter as there are no events",
-				"meter_id", lineItem.MeterID,
-				"event_name", meter.EventName,
-				"customer_id", customer.ID,
-				"external_customer_id", customer.ExternalID,
-				"subscription_id", req.SubscriptionID)
 			continue
 		}
 
@@ -2313,24 +2307,18 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		// so we fall back to processing all meters. A non-nil empty slice means the query
 		// succeeded but found no events, so we can safely skip.
 		if distinctEventNames != nil && !eventNameExists[meter.EventName] {
-			s.Logger.DebugwCtx(ctx, "skipping meter with no events",
-				"meter_id", lineItem.MeterID,
-				"event_name", meter.EventName,
-				"customer_id", customer.ID,
-				"external_customer_id", customer.ExternalID,
-				"subscription_id", req.SubscriptionID)
 			continue
 		}
 
 		meterID := lineItem.MeterID
 		usageRequest := &dto.GetUsageByMeterRequest{
-			MeterID:            meterID,
-			PriceID:            lineItem.PriceID,
-			Meter:              meter.ToMeter(),
-			ExternalCustomerID: customer.ExternalID,
-			StartTime:          lineItem.GetPeriodStart(usageStartTime),
-			EndTime:            lineItem.GetPeriodEnd(usageEndTime),
-			Filters:            make(map[string][]string),
+			MeterID:             meterID,
+			PriceID:             lineItem.PriceID,
+			Meter:               meter.ToMeter(),
+			ExternalCustomerIDs: externalCustomerIDs,
+			StartTime:           lineItem.GetPeriodStart(usageStartTime),
+			EndTime:             lineItem.GetPeriodEnd(usageEndTime),
+			Filters:             make(map[string][]string),
 		}
 
 		for _, filter := range meter.Filters {
@@ -2341,7 +2329,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 	s.Logger.InfowCtx(ctx, "performance optimization results",
 		"subscription_id", req.SubscriptionID,
-		"external_customer_id", customer.ExternalID,
+		"external_customer_ids", externalCustomerIDs,
 		"total_line_items", len(lineItems),
 		"total_usage_line_items", len(priceIDs),
 		"meters_with_events", len(meterUsageRequests),

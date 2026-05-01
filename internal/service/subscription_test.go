@@ -6224,3 +6224,70 @@ func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {
 		})
 	}
 }
+
+func (s *SubscriptionServiceSuite) TestGetUsageBySubscription_ParentIncludesChildUsage() {
+	ctx := s.GetContext()
+	now := s.testData.now
+
+	// Create child customer
+	childCust := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_usage",
+		Name:       "Child Customer",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, childCust))
+
+	// Promote existing subscription to parent
+	parentSub := s.testData.subscription
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, parentSub))
+
+	// Create inherited subscription for child (no line items needed — line items live on parent)
+	childSub := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           childCust.ID,
+		PlanID:               parentSub.PlanID,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		ParentSubscriptionID: lo.ToPtr(parentSub.ID),
+		Currency:             parentSub.Currency,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, childSub))
+
+	// Ingest 500 api_call events for the child customer
+	for i := 0; i < 500; i++ {
+		event := &events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           parentSub.TenantID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			ExternalCustomerID: childCust.ExternalID,
+			Timestamp:          now.Add(-1 * time.Hour),
+			Properties:         map[string]interface{}{},
+		}
+		s.NoError(s.GetStores().EventRepo.InsertEvent(ctx, event))
+	}
+
+	// Parent already has 1500 api_call events from setupTestData.
+	// After this test: parent=1500 + child=500 = 2000 total api_calls.
+	// Cost at tiered pricing: (1000*0.02) + (1000*0.005) = 20 + 5 = 25
+	resp, err := s.service.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: parentSub.ID,
+		StartTime:      now.Add(-48 * time.Hour),
+		EndTime:        now,
+	})
+	s.NoError(err)
+
+	// Find api_calls charge
+	var apiCharge *dto.SubscriptionUsageByMetersResponse
+	for _, c := range resp.Charges {
+		if c.MeterDisplayName == "API Calls" {
+			apiCharge = c
+			break
+		}
+	}
+	s.Require().NotNil(apiCharge, "expected API Calls charge in response")
+	s.Equal(float64(2000), apiCharge.Quantity)
+	s.Equal(25.0, apiCharge.Amount) // (1000*0.02) + (1000*0.005)
+}
