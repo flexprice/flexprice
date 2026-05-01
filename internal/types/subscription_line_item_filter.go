@@ -7,18 +7,21 @@ type SubscriptionLineItemFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+
 	// Specific filters
-	SubscriptionIDs    []string                        `json:"subscription_ids,omitempty" form:"subscription_ids"`
-	CustomerIDs        []string                        `json:"customer_ids,omitempty" form:"customer_ids"`
-	PriceIDs           []string                        `json:"price_ids,omitempty" form:"price_ids"`
-	MeterIDs           []string                        `json:"meter_ids,omitempty" form:"meter_ids"`
-	Currencies         []string                        `json:"currencies,omitempty" form:"currencies"`
-	BillingPeriods     []string                        `json:"billing_periods,omitempty" form:"billing_periods"`
-	EntityIDs            []string                        `json:"entity_ids,omitempty" form:"entity_ids"`
-	EntityType           *SubscriptionLineItemEntityType `json:"entity_type,omitempty" form:"entity_type"`
-	AddonAssociationIDs  []string                        `json:"addon_association_ids,omitempty" form:"addon_association_ids"`
-	ActiveFilter       bool                            `json:"active_filter,omitempty" form:"active_filter" default:"true"`
-	CurrentPeriodStart *time.Time                      `json:"current_period_start,omitempty" form:"current_period_start"`
+	SubscriptionIDs     []string                        `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	CustomerIDs         []string                        `json:"customer_ids,omitempty" form:"customer_ids"`
+	PriceIDs            []string                        `json:"price_ids,omitempty" form:"price_ids"`
+	MeterIDs            []string                        `json:"meter_ids,omitempty" form:"meter_ids"`
+	Currencies          []string                        `json:"currencies,omitempty" form:"currencies"`
+	BillingPeriods      []string                        `json:"billing_periods,omitempty" form:"billing_periods"`
+	EntityIDs           []string                        `json:"entity_ids,omitempty" form:"entity_ids"`
+	EntityType          *SubscriptionLineItemEntityType `json:"entity_type,omitempty" form:"entity_type"`
+	AddonAssociationIDs []string                        `json:"addon_association_ids,omitempty" form:"addon_association_ids"`
+	ActiveFilter        bool                            `json:"active_filter,omitempty" form:"active_filter" default:"true"`
+	CurrentPeriodStart  *time.Time                      `json:"current_period_start,omitempty" form:"current_period_start"`
 }
 
 // NewSubscriptionLineItemFilter creates a new subscription line item filter with default options

@@ -1224,6 +1224,9 @@ type SubscriptionLineItemResponse struct {
 	Price *PriceResponse `json:"price,omitempty"`
 }
 
+// ListSubscriptionLineItemsResponse represents the response for listing subscription line items
+type ListSubscriptionLineItemsResponse = types.ListResponse[*SubscriptionLineItemResponse] // @name ListSubscriptionLineItemsResponse
+
 // OverrideLineItemRequest represents a price override for a specific subscription
 type OverrideLineItemRequest struct {
 	// PriceID references the plan price to override

@@ -173,6 +173,16 @@ var (
 			ExpandAddons: {},
 		},
 	}
+
+	// SubscriptionLineItemListExpandConfig defines expands for listing subscription line items (collection APIs).
+	// Supports top-level prices (and nested price fields) and subscription_line_items.prices for parity with subscription expand strings.
+	SubscriptionLineItemListExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandPrices, ExpandSubscriptionLineItems},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandPrices:                {ExpandMeters, ExpandPriceUnit, ExpandPlan, ExpandAddons, ExpandGroups},
+			ExpandSubscriptionLineItems: {ExpandPrices},
+		},
+	}
 )
 
 // Expand represents the expand parameter in API requests
