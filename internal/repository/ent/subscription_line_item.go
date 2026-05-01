@@ -459,25 +459,6 @@ func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context,
 
 // List retrieves subscription line items based on filter
 func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types.SubscriptionLineItemFilter) ([]*subscription.SubscriptionLineItem, error) {
-	if filter == nil {
-		filter = &types.SubscriptionLineItemFilter{
-			QueryFilter: types.NewDefaultQueryFilter(),
-		}
-	}
-
-	if err := filter.Validate(); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Invalid filter parameters").
-			Mark(ierr.ErrValidation)
-	}
-
-	client := r.client.Reader(ctx)
-	if client == nil {
-		err := ierr.NewError("failed to get database client").
-			WithHint("Database client is not available").
-			Mark(ierr.ErrDatabase)
-		return nil, err
-	}
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription_line_item", "list", map[string]interface{}{
@@ -488,7 +469,11 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 	})
 	defer FinishSpan(span)
 
+	client := r.client.Reader(ctx)
 	query := client.SubscriptionLineItem.Query()
+
+	// Apply common query options (includes pagination)
+	query = ApplyQueryOptions(ctx, query, filter.QueryFilter, r.queryOpts)
 
 	// Apply entity-specific filters
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
@@ -499,14 +484,14 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Apply common query options
-	query = ApplyQueryOptions(ctx, query, filter.QueryFilter, r.queryOpts)
-
 	items, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list subscription line items").
+			WithReportableDetails(map[string]interface{}{
+				"cause": err.Error(),
+			}).
 			Mark(ierr.ErrDatabase)
 	}
 
@@ -516,25 +501,6 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 
 // Count counts subscription line items based on filter
 func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *types.SubscriptionLineItemFilter) (int, error) {
-	if filter == nil {
-		filter = &types.SubscriptionLineItemFilter{
-			QueryFilter: types.NewDefaultQueryFilter(),
-		}
-	}
-
-	if err := filter.Validate(); err != nil {
-		return 0, ierr.WithError(err).
-			WithHint("Invalid filter parameters").
-			Mark(ierr.ErrValidation)
-	}
-
-	client := r.client.Reader(ctx)
-	if client == nil {
-		err := ierr.NewError("failed to get database client").
-			WithHint("Database client is not available").
-			Mark(ierr.ErrDatabase)
-		return 0, err
-	}
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription_line_item", "count", map[string]interface{}{
@@ -545,7 +511,11 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 	})
 	defer FinishSpan(span)
 
+	client := r.client.Reader(ctx)
 	query := client.SubscriptionLineItem.Query()
+
+	// Apply base filters only (no pagination for count)
+	query = ApplyBaseFilters(ctx, query, filter.QueryFilter, r.queryOpts)
 
 	// Apply entity-specific filters
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
@@ -556,14 +526,14 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Apply common query options
-	query = ApplyQueryOptions(ctx, query, filter.QueryFilter, r.queryOpts)
-
 	count, err := query.Count(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return 0, ierr.WithError(err).
 			WithHint("Failed to count subscription line items").
+			WithReportableDetails(map[string]interface{}{
+				"cause": err.Error(),
+			}).
 			Mark(ierr.ErrDatabase)
 	}
 
