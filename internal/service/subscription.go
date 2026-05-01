@@ -7435,7 +7435,6 @@ func (s *subscriptionService) getInheritedSubscriptions(ctx context.Context, par
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
 		types.SubscriptionStatusDraft,
-		types.SubscriptionStatusPaused,
 	}
 
 	return s.SubRepo.List(ctx, filter)
