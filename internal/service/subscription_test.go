@@ -6131,3 +6131,94 @@ func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Can
 	_, errCancelNone := s.service.CancelSubscription(ctx, resp.ID, cancelReqNone)
 	s.NoError(errCancelNone, "E.3.2: cancel with mixed + none should succeed")
 }
+
+func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {
+	ctx := s.GetContext()
+	svc := s.service
+
+	tests := []struct {
+		name    string
+		setup   func() *subscription.Subscription
+		wantIDs []string
+	}{
+		{
+			name: "standalone subscription returns only owner external ID",
+			setup: func() *subscription.Subscription {
+				return s.testData.subscription // already standalone, ExternalID = "ext_cust_123"
+			},
+			wantIDs: []string{"ext_cust_123"},
+		},
+		{
+			name: "parent subscription includes active child external IDs",
+			setup: func() *subscription.Subscription {
+				// promote the existing sub to parent
+				parentSub := s.testData.subscription
+				parentSub.SubscriptionType = types.SubscriptionTypeParent
+
+				// create a child customer
+				childCust := &customer.Customer{
+					ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+					ExternalID: "ext_child_1",
+					Name:       "Child Customer",
+					BaseModel:  types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().CustomerRepo.Create(ctx, childCust))
+
+				// create an inherited subscription for the child
+				childSub := &subscription.Subscription{
+					ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+					CustomerID:           childCust.ID,
+					PlanID:               parentSub.PlanID,
+					SubscriptionStatus:   types.SubscriptionStatusActive,
+					SubscriptionType:     types.SubscriptionTypeInherited,
+					ParentSubscriptionID: lo.ToPtr(parentSub.ID),
+					Currency:             parentSub.Currency,
+					BaseModel:            types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, childSub))
+				return parentSub
+			},
+			wantIDs: []string{"ext_cust_123", "ext_child_1"},
+		},
+		{
+			name: "parent subscription excludes paused child",
+			setup: func() *subscription.Subscription {
+				parentSub := s.testData.subscription
+				parentSub.SubscriptionType = types.SubscriptionTypeParent
+
+				pausedCust := &customer.Customer{
+					ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+					ExternalID: "ext_paused_child",
+					Name:       "Paused Child Customer",
+					BaseModel:  types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().CustomerRepo.Create(ctx, pausedCust))
+
+				pausedSub := &subscription.Subscription{
+					ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+					CustomerID:           pausedCust.ID,
+					PlanID:               parentSub.PlanID,
+					SubscriptionStatus:   types.SubscriptionStatusPaused,
+					SubscriptionType:     types.SubscriptionTypeInherited,
+					ParentSubscriptionID: lo.ToPtr(parentSub.ID),
+					Currency:             parentSub.Currency,
+					BaseModel:            types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, pausedSub))
+				return parentSub
+			},
+			wantIDs: []string{"ext_cust_123"}, // paused child excluded
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.ClearStores()
+			s.setupTestData()
+			sub := tt.setup()
+			got, err := svc.ExternalCustomerIDsForSubscription(ctx, sub)
+			s.NoError(err)
+			s.ElementsMatch(tt.wantIDs, got)
+		})
+	}
+}

@@ -7426,6 +7426,28 @@ func (s *subscriptionService) usageCustomerIDsForSubscription(ctx context.Contex
 	return lo.Uniq(ids), nil
 }
 
+// ExternalCustomerIDsForSubscription returns distinct non-empty external customer IDs
+// for the subscription owner plus all active/trialing/draft inherited children.
+func (s *subscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+	internalIDs, err := s.usageCustomerIDsForSubscription(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+	custFilter := types.NewNoLimitCustomerFilter()
+	custFilter.CustomerIDs = internalIDs
+	customers, err := s.CustomerRepo.List(ctx, custFilter)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(customers))
+	for _, c := range customers {
+		if c.ExternalID != "" {
+			out = append(out, c.ExternalID)
+		}
+	}
+	return lo.Uniq(out), nil
+}
+
 // getInheritedSubscriptions retrieves all INHERITED child subscriptions for a parent subscription.
 func (s *subscriptionService) getInheritedSubscriptions(ctx context.Context, parentSubID string) ([]*subscription.Subscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
