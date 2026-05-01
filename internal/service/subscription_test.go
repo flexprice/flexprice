@@ -6131,3 +6131,163 @@ func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Can
 	_, errCancelNone := s.service.CancelSubscription(ctx, resp.ID, cancelReqNone)
 	s.NoError(errCancelNone, "E.3.2: cancel with mixed + none should succeed")
 }
+
+func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {
+	ctx := s.GetContext()
+	svc := s.service
+
+	tests := []struct {
+		name    string
+		setup   func() *subscription.Subscription
+		wantIDs []string
+	}{
+		{
+			name: "standalone subscription returns only owner external ID",
+			setup: func() *subscription.Subscription {
+				return s.testData.subscription // already standalone, ExternalID = "ext_cust_123"
+			},
+			wantIDs: []string{"ext_cust_123"},
+		},
+		{
+			name: "parent subscription includes active child external IDs",
+			setup: func() *subscription.Subscription {
+				// promote the existing sub to parent
+				parentSub := s.testData.subscription
+				parentSub.SubscriptionType = types.SubscriptionTypeParent
+				s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, parentSub))
+
+				// create a child customer
+				childCust := &customer.Customer{
+					ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+					ExternalID: "ext_child_1",
+					Name:       "Child Customer",
+					BaseModel:  types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().CustomerRepo.Create(ctx, childCust))
+
+				// create an inherited subscription for the child
+				childSub := &subscription.Subscription{
+					ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+					CustomerID:           childCust.ID,
+					PlanID:               parentSub.PlanID,
+					SubscriptionStatus:   types.SubscriptionStatusActive,
+					SubscriptionType:     types.SubscriptionTypeInherited,
+					ParentSubscriptionID: lo.ToPtr(parentSub.ID),
+					Currency:             parentSub.Currency,
+					BaseModel:            types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, childSub))
+				return parentSub
+			},
+			wantIDs: []string{"ext_cust_123", "ext_child_1"},
+		},
+		{
+			name: "parent subscription excludes paused child",
+			setup: func() *subscription.Subscription {
+				parentSub := s.testData.subscription
+				parentSub.SubscriptionType = types.SubscriptionTypeParent
+				s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, parentSub))
+
+				pausedCust := &customer.Customer{
+					ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+					ExternalID: "ext_paused_child",
+					Name:       "Paused Child Customer",
+					BaseModel:  types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().CustomerRepo.Create(ctx, pausedCust))
+
+				pausedSub := &subscription.Subscription{
+					ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+					CustomerID:           pausedCust.ID,
+					PlanID:               parentSub.PlanID,
+					SubscriptionStatus:   types.SubscriptionStatusPaused,
+					SubscriptionType:     types.SubscriptionTypeInherited,
+					ParentSubscriptionID: lo.ToPtr(parentSub.ID),
+					Currency:             parentSub.Currency,
+					BaseModel:            types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, pausedSub))
+				return parentSub
+			},
+			wantIDs: []string{"ext_cust_123"}, // paused child excluded
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.ClearStores()
+			s.setupTestData()
+			sub := tt.setup()
+			got, err := svc.ExternalCustomerIDsForSubscription(ctx, sub)
+			s.NoError(err)
+			s.ElementsMatch(tt.wantIDs, got)
+		})
+	}
+}
+
+func (s *SubscriptionServiceSuite) TestGetUsageBySubscription_ParentIncludesChildUsage() {
+	ctx := s.GetContext()
+	now := s.testData.now
+
+	// Create child customer
+	childCust := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_usage",
+		Name:       "Child Customer",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, childCust))
+
+	// Promote existing subscription to parent
+	parentSub := s.testData.subscription
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, parentSub))
+
+	// Create inherited subscription for child (no line items needed — line items live on parent)
+	childSub := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           childCust.ID,
+		PlanID:               parentSub.PlanID,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		ParentSubscriptionID: lo.ToPtr(parentSub.ID),
+		Currency:             parentSub.Currency,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, childSub))
+
+	// Ingest 500 api_call events for the child customer
+	for i := 0; i < 500; i++ {
+		event := &events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           parentSub.TenantID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			ExternalCustomerID: childCust.ExternalID,
+			Timestamp:          now.Add(-1 * time.Hour),
+			Properties:         map[string]interface{}{},
+		}
+		s.NoError(s.GetStores().EventRepo.InsertEvent(ctx, event))
+	}
+
+	// Parent already has 1500 api_call events from setupTestData.
+	// After this test: parent=1500 + child=500 = 2000 total api_calls.
+	// Cost at tiered pricing: (1000*0.02) + (1000*0.005) = 20 + 5 = 25
+	resp, err := s.service.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: parentSub.ID,
+		StartTime:      now.Add(-48 * time.Hour),
+		EndTime:        now,
+	})
+	s.NoError(err)
+
+	// Find api_calls charge
+	var apiCharge *dto.SubscriptionUsageByMetersResponse
+	for _, c := range resp.Charges {
+		if c.MeterDisplayName == "API Calls" {
+			apiCharge = c
+			break
+		}
+	}
+	s.Require().NotNil(apiCharge, "expected API Calls charge in response")
+	s.Equal(float64(2000), apiCharge.Quantity)
+	s.Equal(25.0, apiCharge.Amount) // (1000*0.02) + (1000*0.005)
+}

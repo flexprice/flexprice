@@ -4796,7 +4796,8 @@ func (s *BillingServiceSuite) TestUsageExternalCustomerIDsForSubscription_Parent
 	}
 	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
 
-	ext, err := b.getChildExternalCustomerIDsForSubscription(ctx, &parentSub)
+	subscriptionService := NewSubscriptionService(b.ServiceParams)
+	ext, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, &parentSub)
 	s.NoError(err)
 	s.ElementsMatch([]string{s.testData.customer.ExternalID, child.ExternalID}, ext)
 }

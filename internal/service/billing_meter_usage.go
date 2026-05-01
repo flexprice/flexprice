@@ -110,7 +110,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 		meterMap[m.ID] = m
 	}
 
-	extCustomerIDs, err := s.getChildExternalCustomerIDsForSubscription(ctx, sub)
+	extCustomerIDs, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, sub)
 	if err != nil {
 		return nil, decimal.Zero, err
 	}

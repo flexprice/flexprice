@@ -437,7 +437,7 @@ func (s *billingService) CalculateUsageCharges(
 		meterMap[m.ID] = m
 	}
 
-	extCustomerIDsForUsage, err := s.getChildExternalCustomerIDsForSubscription(ctx, sub)
+	extCustomerIDsForUsage, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, sub)
 	if err != nil {
 		return nil, decimal.Zero, err
 	}
@@ -1154,7 +1154,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 		meterMap[m.ID] = m
 	}
 
-	extCustomerIDsForUsage, err := s.getChildExternalCustomerIDsForSubscription(ctx, sub)
+	extCustomerIDsForUsage, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, sub)
 	if err != nil {
 		return nil, decimal.Zero, err
 	}
@@ -3095,44 +3095,6 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 	return response, nil
 }
 
-// getChildExternalCustomerIDsForSubscription returns distinct non-empty external customer IDs for every
-// internal customer whose usage counts toward this subscription (owner plus inherited children for parent subs).
-func (s *billingService) getChildExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
-	internalIDs := []string{sub.CustomerID}
-	if sub.SubscriptionType == types.SubscriptionTypeParent {
-		filter := types.NewNoLimitSubscriptionFilter()
-		filter.ParentSubscriptionIDs = []string{sub.ID}
-		filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-		filter.SubscriptionStatus = []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusTrialing,
-			types.SubscriptionStatusDraft,
-		}
-		children, err := s.SubRepo.List(ctx, filter)
-		if err != nil {
-			return nil, err
-		}
-		for _, ch := range children {
-			internalIDs = append(internalIDs, ch.CustomerID)
-		}
-	}
-	internalIDs = lo.Uniq(internalIDs)
-
-	custFilter := types.NewNoLimitCustomerFilter()
-	custFilter.CustomerIDs = internalIDs
-	customers, err := s.CustomerRepo.List(ctx, custFilter)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(customers))
-	for _, cust := range customers {
-		if cust.ExternalID != "" {
-			out = append(out, cust.ExternalID)
-		}
-	}
-	return lo.Uniq(out), nil
-}
-
 func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error) {
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
@@ -3227,7 +3189,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			continue
 		}
 
-		extCustomerIDsForMeter, err := s.getChildExternalCustomerIDsForSubscription(ctx, sub)
+		extCustomerIDsForMeter, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, sub)
 		if err != nil {
 			return nil, err
 		}
