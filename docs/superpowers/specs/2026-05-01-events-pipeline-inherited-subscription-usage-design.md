@@ -68,10 +68,11 @@ func (s *subscriptionService) externalCustomerIDsForSubscription(
 
 Replace the single-customer usage pattern:
 
-- `CustomerRepo.Get` is kept for logging purposes, but `customer.ExternalID` is no longer used for query fan-out.
+- Remove the `CustomerRepo.Get(ctx, subscription.CustomerID)` call entirely — the single customer lookup was only used for log lines (debug/info) and the single-ID query fan-out. Only error logs are enabled in prod so the debug/info lines carry no value.
 - Call `s.externalCustomerIDsForSubscription(ctx, subscription)` right after fetching the subscription.
 - Pass the resulting `[]string` to `GetDistinctEventNames` (already accepts `[]string`).
 - Set `ExternalCustomerIDs` (not `ExternalCustomerID`) on each `GetUsageByMeterRequest` (field already exists on the struct).
+- Any remaining error message that referenced `customer.ExternalID` references `req.SubscriptionID` instead.
 
 ### 4. Delete `getChildExternalCustomerIDsForSubscription()` from billingService
 
