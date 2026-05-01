@@ -108,6 +108,7 @@ type SubscriptionService interface {
 	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 	DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 	UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
+	ListSubscriptionLineItems(ctx context.Context, filter *types.SubscriptionLineItemFilter) (*dto.ListSubscriptionLineItemsResponse, error)
 
 	// Auto-cancellation methods
 	ProcessAutoCancellationSubscriptions(ctx context.Context) error

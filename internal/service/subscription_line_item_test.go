@@ -733,3 +733,50 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 		})
 	}
 }
+
+func (s *SubscriptionLineItemServiceSuite) TestListSubscriptionLineItems_BySubscriptionID() {
+	ctx := s.GetContext()
+	filter := types.NewSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+
+	resp, err := s.service.ListSubscriptionLineItems(ctx, filter)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	found := lo.ContainsBy(resp.Items, func(item *dto.SubscriptionLineItemResponse) bool {
+		return item.SubscriptionLineItem.ID == s.testData.lineItem.ID
+	})
+	s.True(found)
+	s.GreaterOrEqual(resp.Pagination.Total, 1)
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestListSubscriptionLineItems_InvalidExpand() {
+	ctx := s.GetContext()
+	filter := types.NewSubscriptionLineItemFilter()
+	filter.QueryFilter = types.NewDefaultQueryFilter()
+	filter.QueryFilter.Expand = lo.ToPtr("plan")
+
+	_, err := s.service.ListSubscriptionLineItems(ctx, filter)
+	s.Error(err)
+}
+
+func (s *SubscriptionLineItemServiceSuite) TestListSubscriptionLineItems_ExpandPrices() {
+	ctx := s.GetContext()
+	filter := types.NewSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{s.testData.subscription.ID}
+	filter.QueryFilter = types.NewDefaultQueryFilter()
+	filter.QueryFilter.Expand = lo.ToPtr("prices")
+
+	resp, err := s.service.ListSubscriptionLineItems(ctx, filter)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	var target *dto.SubscriptionLineItemResponse
+	for _, item := range resp.Items {
+		if item.SubscriptionLineItem.ID == s.testData.lineItem.ID {
+			target = item
+			break
+		}
+	}
+	s.Require().NotNil(target)
+	s.Require().NotNil(target.Price)
+	s.Equal(s.testData.price.ID, target.Price.ID)
+}

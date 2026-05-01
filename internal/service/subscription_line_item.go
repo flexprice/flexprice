@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -718,6 +719,92 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	}
 
 	return nil
+}
+
+// ListSubscriptionLineItems returns subscription line items matching the filter with pagination and optional price expansion.
+func (s *subscriptionService) ListSubscriptionLineItems(ctx context.Context, filter *types.SubscriptionLineItemFilter) (*dto.ListSubscriptionLineItemsResponse, error) {
+	if filter == nil {
+		filter = types.NewSubscriptionLineItemFilter()
+	}
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	expand := filter.GetExpand()
+	if !expand.IsEmpty() {
+		if err := expand.Validate(types.SubscriptionLineItemListExpandConfig); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
+	items, err := s.SubscriptionLineItemRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	count, err := s.SubscriptionLineItemRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	shouldExpandPrices := expand.Has(types.ExpandPrices) ||
+		expand.GetNested(types.ExpandSubscriptionLineItems).Has(types.ExpandPrices)
+
+	responses := make([]*dto.SubscriptionLineItemResponse, len(items))
+	if shouldExpandPrices && len(items) > 0 {
+		priceIDs := lo.Uniq(lo.Map(items, func(item *subscription.SubscriptionLineItem, _ int) string {
+			return item.PriceID
+		}))
+		priceService := NewPriceService(s.ServiceParams)
+		priceFilter := types.NewNoLimitPriceFilter().
+			WithPriceIDs(priceIDs).
+			WithAllowExpiredPrices(true)
+
+		var priceExpand types.Expand
+		if expand.Has(types.ExpandPrices) {
+			priceExpand = expand.GetNested(types.ExpandPrices)
+		} else if expand.GetNested(types.ExpandSubscriptionLineItems).Has(types.ExpandPrices) {
+			priceExpand = expand.GetNested(types.ExpandSubscriptionLineItems).GetNested(types.ExpandPrices)
+		}
+		if !priceExpand.IsEmpty() {
+			priceFilter = priceFilter.WithExpand(priceExpand.String())
+		}
+
+		prices, err := priceService.GetPrices(ctx, priceFilter)
+		if err != nil {
+			return nil, err
+		}
+		priceMap := make(map[string]*dto.PriceResponse, len(prices.Items))
+		for _, p := range prices.Items {
+			priceMap[p.ID] = p
+		}
+		for i, lineItem := range items {
+			responses[i] = &dto.SubscriptionLineItemResponse{
+				SubscriptionLineItem: lineItem,
+				Price:                priceMap[lineItem.PriceID],
+			}
+		}
+	} else {
+		for i, lineItem := range items {
+			responses[i] = &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}
+		}
+	}
+
+	return &dto.ListSubscriptionLineItemsResponse{
+		Items: responses,
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}, nil
 }
 
 // validateMultiCadence enforces mutual exclusion between multi-cadence and proration.
