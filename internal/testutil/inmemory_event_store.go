@@ -85,24 +85,16 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 
 	var filteredEvents []*events.Event
 
+	// Build a deduplicated union of both customer ID sources once, outside the loop.
+	allCustomerIDs := lo.Uniq(lo.Without(append(params.ExternalCustomerIDs, params.ExternalCustomerID), ""))
+
 	// Filter events based on basic criteria
 	for _, event := range s.events {
 		if event.EventName != params.EventName {
 			continue
 		}
 
-		if len(params.ExternalCustomerIDs) > 0 {
-			matched := false
-			for _, id := range params.ExternalCustomerIDs {
-				if event.ExternalCustomerID == id {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				continue
-			}
-		} else if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
+		if len(allCustomerIDs) > 0 && !lo.Contains(allCustomerIDs, event.ExternalCustomerID) {
 			continue
 		}
 
@@ -647,19 +639,9 @@ func (s *InMemoryEventStore) matchesBaseFilters(ctx context.Context, event *even
 		return false
 	}
 
-	// Check customer ID
-	if len(params.ExternalCustomerIDs) > 0 {
-		matched := false
-		for _, id := range params.ExternalCustomerIDs {
-			if event.ExternalCustomerID == id {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
-	} else if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
+	// Check customer ID — union of ExternalCustomerIDs and ExternalCustomerID
+	allCustomerIDs := lo.Uniq(lo.Without(append(params.ExternalCustomerIDs, params.ExternalCustomerID), ""))
+	if len(allCustomerIDs) > 0 && !lo.Contains(allCustomerIDs, event.ExternalCustomerID) {
 		return false
 	}
 
