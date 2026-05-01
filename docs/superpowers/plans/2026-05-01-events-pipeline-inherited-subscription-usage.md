@@ -14,7 +14,8 @@
 
 | File | Change |
 |------|--------|
-| `internal/service/subscription.go` | Fix status filter in `getInheritedSubscriptions`; add `externalCustomerIDsForSubscription`; refactor `GetUsageBySubscription` |
+| `internal/interfaces/service.go` | Add `ExternalCustomerIDsForSubscription` to `SubscriptionService` interface |
+| `internal/service/subscription.go` | Fix status filter in `getInheritedSubscriptions`; add `ExternalCustomerIDsForSubscription`; refactor `GetUsageBySubscription` |
 | `internal/service/billing.go` | Replace 3 call sites of `getChildExternalCustomerIDsForSubscription`; delete the method |
 | `internal/service/subscription_test.go` | Add 3 new test cases |
 
@@ -67,19 +68,28 @@ git commit -m "fix(subscription): exclude paused children from usage customer ID
 
 ---
 
-### Task 2: Add `externalCustomerIDsForSubscription()` to subscriptionService
+### Task 2: Add `ExternalCustomerIDsForSubscription()` to subscriptionService and interface
 
 **Files:**
+- Modify: `internal/interfaces/service.go` (add to SubscriptionService interface ~line 89)
 - Modify: `internal/service/subscription.go` (insert after line 7427)
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Add the method signature to the `SubscriptionService` interface**
+
+In `internal/interfaces/service.go`, inside the `SubscriptionService` interface (near line 89, alongside the other usage methods), add:
+
+```go
+ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error)
+```
+
+- [ ] **Step 2: Write the failing test**
 
 At the bottom of `internal/service/subscription_test.go`, add:
 
 ```go
 func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {
     ctx := s.GetContext()
-    svc := s.service.(*subscriptionService)
+    svc := s.service
 
     tests := []struct {
         name    string
@@ -161,7 +171,7 @@ func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {
             s.ClearStores()
             s.setupTestData()
             sub := tt.setup()
-            got, err := svc.externalCustomerIDsForSubscription(ctx, sub)
+            got, err := svc.ExternalCustomerIDsForSubscription(ctx, sub)
             s.NoError(err)
             s.ElementsMatch(tt.wantIDs, got)
         })
@@ -175,16 +185,16 @@ func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {
 go test -v -run TestSubscriptionService/TestExternalCustomerIDsForSubscription ./internal/service/...
 ```
 
-Expected: compile error — `svc.externalCustomerIDsForSubscription undefined`.
+Expected: compile error — `ExternalCustomerIDsForSubscription` not defined on the interface yet (added in Step 1) or not implemented by the concrete type yet.
 
-- [ ] **Step 3: Add `externalCustomerIDsForSubscription()` to subscriptionService**
+- [ ] **Step 3: Add `ExternalCustomerIDsForSubscription()` to subscriptionService**
 
 In `internal/service/subscription.go`, insert after the closing brace of `usageCustomerIDsForSubscription` (~line 7427):
 
 ```go
-// externalCustomerIDsForSubscription returns distinct non-empty external customer IDs
+// ExternalCustomerIDsForSubscription returns distinct non-empty external customer IDs
 // for the subscription owner plus all active/trialing/draft inherited children.
-func (s *subscriptionService) externalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+func (s *subscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
 	internalIDs, err := s.usageCustomerIDsForSubscription(ctx, sub)
 	if err != nil {
 		return nil, err
@@ -216,8 +226,8 @@ Expected: `PASS` for all 3 sub-tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/service/subscription.go internal/service/subscription_test.go
-git commit -m "feat(subscription): add externalCustomerIDsForSubscription helper for parent+child external ID resolution"
+git add internal/interfaces/service.go internal/service/subscription.go internal/service/subscription_test.go
+git commit -m "feat(subscription): add ExternalCustomerIDsForSubscription to interface and service for parent+child external ID resolution"
 ```
 
 ---
@@ -326,7 +336,7 @@ if err != nil {
 **3b.** In its place, add the external ID resolution right after the subscription fetch:
 
 ```go
-externalCustomerIDs, err := s.externalCustomerIDsForSubscription(ctx, subscription)
+externalCustomerIDs, err := s.ExternalCustomerIDsForSubscription(ctx, subscription)
 if err != nil {
     return nil, err
 }
@@ -486,50 +496,29 @@ There are 3 call sites in billing.go. In all 3, `subscriptionService` is already
 
 - [ ] **Step 1: Replace the 3 call sites**
 
-**Call site 1** (~line 440):
+`ExternalCustomerIDsForSubscription` is now on the `SubscriptionService` interface, so each billing method that already has a local `subscriptionService := NewSubscriptionService(s.ServiceParams)` can call it directly. Apply the replacement at all 3 call sites:
 
 ```go
-// Before:
-extCustomerIDsForUsage, err := s.getChildExternalCustomerIDsForSubscription(ctx, sub)
-
-// After:
-extCustomerIDsForUsage, err := subscriptionService.(*subscriptionService).externalCustomerIDsForSubscription(ctx, sub)
-```
-
-Wait — `subscriptionService` is typed as `SubscriptionService` (interface). Since `externalCustomerIDsForSubscription` is a private method it is NOT on the interface. You need to call it differently.
-
-The simplest fix: inline the call as a local helper in the billing function, OR expose it via a new unexported-but-accessible approach.
-
-**Correct approach:** Since `externalCustomerIDsForSubscription` is private, and `billingService` has direct access to the same repos (`SubRepo`, `CustomerRepo`), call the shared logic by constructing a temporary `subscriptionService` and using a type assertion:
-
-```go
-extCustomerIDsForUsage, err := NewSubscriptionService(s.ServiceParams).(*subscriptionService).externalCustomerIDsForSubscription(ctx, sub)
-if err != nil {
-    return nil, decimal.Zero, err
-}
-```
-
-Apply the same pattern to all 3 call sites (~lines 440, 1157, 3230):
-
-```go
-// Line ~440
-extCustomerIDsForUsage, err := NewSubscriptionService(s.ServiceParams).(*subscriptionService).externalCustomerIDsForSubscription(ctx, sub)
+// Line ~440 (error return signature: return nil, decimal.Zero, err)
+extCustomerIDsForUsage, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, sub)
 if err != nil {
     return nil, decimal.Zero, err
 }
 
-// Line ~1157
-extCustomerIDsForUsage, err := NewSubscriptionService(s.ServiceParams).(*subscriptionService).externalCustomerIDsForSubscription(ctx, sub)
+// Line ~1157 (error return signature: return nil, decimal.Zero, err)
+extCustomerIDsForUsage, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, sub)
 if err != nil {
     return nil, decimal.Zero, err
 }
 
-// Line ~3230 (error return is `return nil, err` in this function — match the surrounding pattern)
-extCustomerIDsForMeter, err := NewSubscriptionService(s.ServiceParams).(*subscriptionService).externalCustomerIDsForSubscription(ctx, sub)
+// Line ~3230 (error return signature: return nil, err)
+extCustomerIDsForMeter, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, sub)
 if err != nil {
     return nil, err
 }
 ```
+
+At call sites 1 and 2, verify that `subscriptionService` is already declared earlier in the same function body (it is — via `NewSubscriptionService(s.ServiceParams)`). At call site 3 (~line 3230), check whether a local `subscriptionService` variable already exists in scope; if not, add `subscriptionService := NewSubscriptionService(s.ServiceParams)` immediately before the call.
 
 - [ ] **Step 2: Delete `getChildExternalCustomerIDsForSubscription` from billingService**
 
