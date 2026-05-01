@@ -6154,6 +6154,7 @@ func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {
 				// promote the existing sub to parent
 				parentSub := s.testData.subscription
 				parentSub.SubscriptionType = types.SubscriptionTypeParent
+				s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, parentSub))
 
 				// create a child customer
 				childCust := &customer.Customer{
@@ -6185,6 +6186,7 @@ func (s *SubscriptionServiceSuite) TestExternalCustomerIDsForSubscription() {
 			setup: func() *subscription.Subscription {
 				parentSub := s.testData.subscription
 				parentSub.SubscriptionType = types.SubscriptionTypeParent
+				s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, parentSub))
 
 				pausedCust := &customer.Customer{
 					ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
