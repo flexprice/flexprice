@@ -5,9 +5,11 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -585,6 +587,16 @@ func (o SubscriptionLineItemQueryOptions) GetFieldName(field string) string {
 	return ""
 }
 
+func (o SubscriptionLineItemQueryOptions) GetFieldResolver(field string) (string, error) {
+	fieldName := o.GetFieldName(field)
+	if fieldName == "" {
+		return "", ierr.NewErrorf("unknown field '%s' in subscription line item query", field).
+			WithHintf("Unknown field '%s' in subscription line item query", field).
+			Mark(ierr.ErrValidation)
+	}
+	return fieldName, nil
+}
+
 // applyEntityQueryOptions applies subscription line item-specific filters to the query
 func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.SubscriptionLineItemFilter, query SubscriptionLineItemQuery) (SubscriptionLineItemQuery, error) {
 	// Apply subscription IDs filter if specified
@@ -630,6 +642,32 @@ func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Con
 
 	if f.ActiveFilter {
 		query = o.applyActiveLineItemFilter(query, f.CurrentPeriodStart)
+	}
+
+	if len(f.Filters) > 0 {
+		var err error
+		query, err = dsl.ApplyFilters[SubscriptionLineItemQuery, predicate.SubscriptionLineItem](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.SubscriptionLineItem { return predicate.SubscriptionLineItem(p) },
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(f.Sort) > 0 {
+		var err error
+		query, err = dsl.ApplySorts[SubscriptionLineItemQuery, subscriptionlineitem.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) subscriptionlineitem.OrderOption { return subscriptionlineitem.OrderOption(o) },
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return query, nil
