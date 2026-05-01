@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "flexprice.fullname" . }}-config
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    server:
+      address: ":8080"
+    
+    auth:
+      provider: {{ .Values.auth.provider | quote }}
+      api_key:
+        header: {{ .Values.auth.apiKey.header | quote }}
+    {{- if eq .Values.auth.provider "supabase" }}
+      supabase:
+        base_url: {{ .Values.auth.supabase.baseUrl | quote }}
+    {{- end }}
+    
+    postgres:
+      host: {{ include "flexprice.postgresHost" . | quote }}
+      port: {{ include "flexprice.postgresPort" . }}
+      user: {{ .Values.postgres.user | quote }}
+      # Password is injected via FLEXPRICE_POSTGRES_PASSWORD env var from the secret
+      password: ""
+      dbname: {{ .Values.postgres.dbname | quote }}
+      sslmode: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.sslmode | quote }}{{ else }}"disable"{{ end }}
+      max_open_conns: {{ .Values.postgres.maxOpenConns }}
+      max_idle_conns: {{ .Values.postgres.maxIdleConns }}
+      conn_max_lifetime_minutes: {{ .Values.postgres.connMaxLifetimeMinutes }}
+      auto_migrate: {{ .Values.postgres.autoMigrate }}
+    {{- if .Values.postgres.readerHost }}
+      reader_host: {{ .Values.postgres.readerHost | quote }}
+      reader_port: {{ .Values.postgres.readerPort }}
+    {{- end }}
+
+    clickhouse:
+      address: {{ include "flexprice.clickhouseAddress" . | quote }}
+      tls: {{ .Values.clickhouse.tls }}
+      username: {{ .Values.clickhouse.username | quote }}
+      database: {{ .Values.clickhouse.database | quote }}
+
+    redis:
+      host: {{ include "flexprice.redisHost" . | quote }}
+      port: {{ include "flexprice.redisPort" . }}
+      db: {{ .Values.redisConfig.db | default 0 }}
+      use_tls: {{ .Values.redisConfig.useTLS | default false }}
+      timeout: {{ .Values.redisConfig.timeout | default "5s" | quote }}
+
+    kafka:
+      brokers:
+        - {{ include "flexprice.kafkaBrokers" . | quote }}
+      consumer_group: {{ .Values.kafkaConfig.consumerGroup | quote }}
+      topic: {{ .Values.kafkaConfig.topic | quote }}
+      topic_lazy: {{ .Values.kafkaConfig.topicLazy | quote }}
+      tls: {{ .Values.kafkaConfig.tls }}
+      use_sasl: {{ .Values.kafkaConfig.useSASL }}
+      sasl_mechanism: {{ .Values.kafkaConfig.saslMechanism | quote }}
+      client_id: {{ .Values.kafkaConfig.clientId | quote }}
+    {{- if .Values.kafkaConfig.routeTenantsOnLazyMode }}
+      route_tenants_on_lazy_mode:
+        {{- range .Values.kafkaConfig.routeTenantsOnLazyMode }}
+        - {{ . | quote }}
+        {{- end }}
+    {{- end }}
+    
+    temporal:
+      address: {{ include "flexprice.temporalAddress" . | quote }}
+      task_queue: {{ .Values.temporalConfig.taskQueue | quote }}
+      namespace: {{ .Values.temporalConfig.namespace | quote }}
+      tls: {{ .Values.temporalConfig.tls }}
+    {{- if .Values.temporalConfig.apiKeyName }}
+      api_key_name: {{ .Values.temporalConfig.apiKeyName | quote }}
+    {{- end }}
+    
+    logging:
+      level: {{ .Values.logging.level | quote }}
+    
+    sentry:
+      enabled: {{ .Values.sentry.enabled }}
+      environment: {{ .Values.sentry.environment | quote }}
+      sample_rate: {{ .Values.sentry.sampleRate }}
+    
+    pyroscope:
+      enabled: {{ .Values.pyroscope.enabled }}
+      server_address: {{ .Values.pyroscope.serverAddress | quote }}
+      application_name: {{ .Values.pyroscope.applicationName | quote }}
+      sample_rate: {{ .Values.pyroscope.sampleRate }}
+      disable_gc_runs: {{ .Values.pyroscope.disableGCRuns }}
+    {{- if .Values.pyroscope.profileTypes }}
+      profile_types:
+        {{- range .Values.pyroscope.profileTypes }}
+        - {{ . | quote }}
+        {{- end }}
+    {{- end }}
+    
+    s3:
+      enabled: {{ .Values.s3.enabled }}
+      region: {{ .Values.s3.region | quote }}
+      invoice:
+        bucket: {{ .Values.s3.invoice.bucket | quote }}
+        presign_expiry_duration: {{ .Values.s3.invoice.presignExpiryDuration | quote }}
+    {{- if .Values.s3.invoice.keyPrefix }}
+        key_prefix: {{ .Values.s3.invoice.keyPrefix | quote }}
+    {{- end }}
+    
+    cache:
+      enabled: {{ .Values.cache.enabled }}
+    
+    event:
+      publish_destination: {{ .Values.event.publishDestination | quote }}
+    
+    dynamodb:
+      in_use: {{ .Values.dynamodb.inUse }}
+      region: {{ .Values.dynamodb.region | quote }}
+      event_table_name: {{ .Values.dynamodb.eventTableName | quote }}
+    
+    event_processing:
+      topic: {{ .Values.eventProcessing.topic | quote }}
+      rate_limit: {{ .Values.eventProcessing.rateLimit }}
+      consumer_group: {{ .Values.eventProcessing.consumerGroup | quote }}
+    
+    event_processing_lazy:
+      topic: {{ .Values.eventProcessingLazy.topic | quote }}
+      rate_limit: {{ .Values.eventProcessingLazy.rateLimit }}
+      consumer_group: {{ .Values.eventProcessingLazy.consumerGroup | quote }}
+    
+    event_post_processing:
+      topic: {{ .Values.eventPostProcessing.topic | quote }}
+      rate_limit: {{ .Values.eventPostProcessing.rateLimit }}
+      consumer_group: {{ .Values.eventPostProcessing.consumerGroup | quote }}
+      topic_backfill: {{ .Values.eventPostProcessing.topicBackfill | quote }}
+      rate_limit_backfill: {{ .Values.eventPostProcessing.rateLimitBackfill }}
+      consumer_group_backfill: {{ .Values.eventPostProcessing.consumerGroupBackfill | quote }}
+    
+    feature_usage_tracking:
+      topic: {{ .Values.featureUsageTracking.topic | quote }}
+      rate_limit: {{ .Values.featureUsageTracking.rateLimit }}
+      consumer_group: {{ .Values.featureUsageTracking.consumerGroup | quote }}
+      topic_backfill: {{ .Values.featureUsageTracking.topicBackfill | quote }}
+      rate_limit_backfill: {{ .Values.featureUsageTracking.rateLimitBackfill }}
+      consumer_group_backfill: {{ .Values.featureUsageTracking.consumerGroupBackfill | quote }}
+    
+    feature_usage_tracking_lazy:
+      topic: {{ .Values.featureUsageTrackingLazy.topic | quote }}
+      rate_limit: {{ .Values.featureUsageTrackingLazy.rateLimit }}
+      consumer_group: {{ .Values.featureUsageTrackingLazy.consumerGroup | quote }}
+    
+    webhook:
+      enabled: {{ .Values.webhook.enabled }}
+      topic: {{ .Values.webhook.topic | quote }}
+      pubsub: {{ .Values.webhook.pubsub | quote }}
+      consumer_group: {{ .Values.webhook.consumerGroup | quote }}
+      max_retries: {{ .Values.webhook.maxRetries }}
+      initial_interval: {{ .Values.webhook.initialInterval | quote }}
+      max_interval: {{ .Values.webhook.maxInterval | quote }}
+      multiplier: {{ .Values.webhook.multiplier }}
+      max_elapsed_time: {{ .Values.webhook.maxElapsedTime | quote }}
+    {{- if .Values.webhook.svixConfig.enabled }}
+      svix_config:
+        enabled: {{ .Values.webhook.svixConfig.enabled }}
+        base_url: {{ .Values.webhook.svixConfig.baseUrl | quote }}
+    {{- end }}
+    
+    billing:
+      tenant_id: {{ .Values.billing.tenantId | quote }}
+      environment_id: {{ .Values.billing.environmentId | quote }}
+    
+    email:
+      enabled: {{ .Values.email.enabled }}
+      from_address: {{ .Values.email.fromAddress | quote }}
+      reply_to: {{ .Values.email.replyTo | quote }}
+      calendar_url: {{ .Values.email.calendarUrl | quote }}
+    
+    feature_flag:
+      enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
+      force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}
+    
+    secrets:
+      encryption_key: {{ .Values.secrets.encryptionKey | quote }}
+    
+    # Note: secrets.encryption_key should be set via environment variable FLEXPRICE_SECRETS_ENCRYPTION_KEY
+    # for security reasons. It's not included in this configmap.
+
