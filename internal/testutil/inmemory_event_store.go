@@ -91,7 +91,18 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 			continue
 		}
 
-		if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
+		if len(params.ExternalCustomerIDs) > 0 {
+			matched := false
+			for _, id := range params.ExternalCustomerIDs {
+				if event.ExternalCustomerID == id {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		} else if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
 			continue
 		}
 
@@ -637,7 +648,18 @@ func (s *InMemoryEventStore) matchesBaseFilters(ctx context.Context, event *even
 	}
 
 	// Check customer ID
-	if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
+	if len(params.ExternalCustomerIDs) > 0 {
+		matched := false
+		for _, id := range params.ExternalCustomerIDs {
+			if event.ExternalCustomerID == id {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	} else if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
 		return false
 	}
 
