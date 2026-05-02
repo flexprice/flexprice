@@ -458,6 +458,15 @@ func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.Pl
 		query = query.Where(plan.LookupKeyEQ(*f.LookupKey))
 	}
 
+	query, err = dsl.ApplyMetadataFilter[PlanQuery, predicate.Plan](
+		query,
+		f.MetadataFilter,
+		func(p dsl.Predicate) predicate.Plan { return predicate.Plan(p) },
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[PlanQuery, predicate.Plan](
 			query,
