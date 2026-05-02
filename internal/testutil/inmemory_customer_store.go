@@ -161,6 +161,11 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 		return false
 	}
 
+	// Apply metadata filter (all key-value pairs must match — AND semantics, mirrors @> JSONB semantics)
+	if !f.MetadataFilter.Match(c.Metadata) {
+		return false
+	}
+
 	// Apply time range filter if present
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil && c.CreatedAt.Before(*f.StartTime) {
