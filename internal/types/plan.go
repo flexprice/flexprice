@@ -6,6 +6,7 @@ import ierr "github.com/flexprice/flexprice/internal/errors"
 type PlanFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
+	*MetadataFilter
 
 	// filters allows complex filtering based on multiple fields
 	Filters   []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
@@ -37,6 +38,11 @@ func (f *PlanFilter) Validate() error {
 	}
 	if f.TimeRangeFilter != nil {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+	if f.MetadataFilter != nil {
+		if err := f.MetadataFilter.Validate(); err != nil {
 			return err
 		}
 	}
