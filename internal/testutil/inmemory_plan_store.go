@@ -58,6 +58,10 @@ func planFilterFn(ctx context.Context, p *plan.Plan, filter interface{}) bool {
 		}
 	}
 
+	if !f.MetadataFilter.Match(p.Metadata) {
+		return false
+	}
+
 	return true
 }
 
