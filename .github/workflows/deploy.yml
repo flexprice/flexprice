@@ -28,6 +28,21 @@ env:
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 
+# Ent migrations before ECS deploy (job migrate-ent):
+#
+# Repository secrets — JSON object mapping AWS region → Postgres DSN (same keys as
+# each target's "region" in STAGING_DEPLOY_TARGETS / PROD_DEPLOY_TARGETS):
+#
+#   STAGING_ENT_MIGRATE_DSNS
+#     Example: {"ap-south-1":"postgres://user:pass@host:5432/db?sslmode=require"}
+#
+#   PRODUCTION_ENT_MIGRATE_DSNS
+#     Example: {"ap-south-1":"postgres://...","us-west-2":"postgres://..."}
+#
+# DSN formats: postgres:// or postgresql:// URL, or lib/pq key=value (user=... password=... host=...).
+# Every region listed in the deploy targets array for that environment must have a matching key.
+# Extra keys in the JSON are ignored. Migrations run sequentially in one job (one region after another).
+
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
   # Job 1: Build the Docker image and push it to ECR
@@ -119,6 +134,7 @@ jobs:
     outputs:
       targets: ${{ steps.config.outputs.targets }}
       dry_run: ${{ steps.config.outputs.dry_run }}
+      environment: ${{ steps.config.outputs.environment }}
 
     steps:
       - name: Select targets based on branch / input
@@ -155,6 +171,66 @@ jobs:
           fi
 
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job: Ent schema migrate (must pass before ECS deploy jobs)
+  # ──────────────────────────────────────────────────────────────────────────
+  migrate-ent:
+    name: Ent DB migrations
+    needs: [resolve-config]
+    if: ${{ github.event.inputs.dry_run != 'true' && needs.resolve-config.result == 'success' }}
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24.0"
+          cache: true
+
+      - name: Install Go dependencies
+        run: go mod download
+
+      - name: Run Ent migrations per deploy region
+        env:
+          TARGETS_JSON: ${{ needs.resolve-config.outputs.targets }}
+          DEPLOY_ENV: ${{ needs.resolve-config.outputs.environment }}
+          STAGING_ENT_MIGRATE_DSNS: ${{ secrets.STAGING_ENT_MIGRATE_DSNS }}
+          PRODUCTION_ENT_MIGRATE_DSNS: ${{ secrets.PRODUCTION_ENT_MIGRATE_DSNS }}
+        run: |
+          set -euo pipefail
+          if [ "$DEPLOY_ENV" = "production" ]; then
+            JSON="$PRODUCTION_ENT_MIGRATE_DSNS"
+            SECRET_NAME="PRODUCTION_ENT_MIGRATE_DSNS"
+          else
+            JSON="$STAGING_ENT_MIGRATE_DSNS"
+            SECRET_NAME="STAGING_ENT_MIGRATE_DSNS"
+          fi
+          if [ -z "${JSON:-}" ]; then
+            echo "::error::Repository secret $SECRET_NAME is empty. Set it to a JSON object: {\"<region>\":\"postgres://...\"}."
+            exit 1
+          fi
+          echo "$TARGETS_JSON" | jq -e 'type == "array"' >/dev/null
+          count=$(echo "$TARGETS_JSON" | jq 'length')
+          i=0
+          while [ "$i" -lt "$count" ]; do
+            region=$(echo "$TARGETS_JSON" | jq -r ".[$i].region")
+            i=$((i + 1))
+            if [ -z "$region" ] || [ "$region" = "null" ]; then
+              echo "::error::Invalid or missing region at deploy target index $((i - 1))"
+              exit 1
+            fi
+            dsn=$(echo "$JSON" | jq -r --arg r "$region" '.[$r] // empty')
+            if [ -z "$dsn" ] || [ "$dsn" = "null" ]; then
+              echo "::error::No DSN for region \"$region\" in secret $SECRET_NAME. Add .\"$region\" to the JSON (must match deploy target region)."
+              exit 1
+            fi
+            echo "Running Ent migration for region=$region"
+            ENT_MIGRATE_POSTGRES_DSN="$dsn" go run ./cmd/migrate-env -timeout 300
+          done
 
   # ──────────────────────────────────────────────────────────────────────────
   # Jobs 3a–3c: Deploy API, Consumer, Worker — one job per service type,
@@ -167,8 +243,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   deploy-api:
     name: Deploy API (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, migrate-ent]
+    if: ${{ always() && needs.resolve-config.result == 'success' && (needs.migrate-ent.result == 'success' || needs.migrate-ent.result == 'skipped') }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -195,8 +271,8 @@ jobs:
 
   deploy-consumer:
     name: Deploy Consumer (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, migrate-ent]
+    if: ${{ always() && needs.resolve-config.result == 'success' && (needs.migrate-ent.result == 'success' || needs.migrate-ent.result == 'skipped') }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -223,8 +299,8 @@ jobs:
 
   deploy-worker:
     name: Deploy Worker (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, migrate-ent]
+    if: ${{ always() && needs.resolve-config.result == 'success' && (needs.migrate-ent.result == 'success' || needs.migrate-ent.result == 'skipped') }}
     runs-on: self-hosted
     strategy:
       matrix:
