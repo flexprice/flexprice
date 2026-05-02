@@ -119,6 +119,7 @@ func (s *InMemoryPlanStore) ListAll(ctx context.Context, filter *types.PlanFilte
 	unlimitedFilter := &types.PlanFilter{
 		QueryFilter:     types.NewNoLimitQueryFilter(),
 		TimeRangeFilter: filter.TimeRangeFilter,
+		MetadataFilter:  filter.MetadataFilter,
 	}
 
 	return s.List(ctx, unlimitedFilter)
