@@ -152,8 +152,6 @@ func (r *CreateInvoiceRequest) ToComputeRequest() InvoiceComputeRequest {
 	}
 }
 
-// ===================== Draft Invoice Creation DTO =====================
-
 // CreateDraftInvoiceRequest contains only the fields needed to create an empty zero-dollar
 // draft invoice. No amounts, no line items, no coupons, no taxes — those are populated
 // later by ComputeInvoice. Used by CreateEmptyDraftInvoice and CreateDraftInvoiceForSubscription.
@@ -263,6 +261,10 @@ type InvoiceComputeRequest struct {
 	InvoiceCoupons   []InvoiceCoupon                `json:"invoice_coupons,omitempty"`
 	LineItemCoupons  []InvoiceLineItemCoupon        `json:"line_item_coupons,omitempty"`
 	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
+	// OpeningInvoiceAdjustmentAmount is internal: transport field only — read by ComputeInvoice and
+	// forwarded to PrepareSubscriptionInvoiceRequestParams, which applies it as FixedChargeAdjustment
+	// in CalculateFixedCharges (reducing line item amounts directly). Not applied inside ComputeInvoice itself.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // ComputeInvoiceResponse is the API response after recomputing a draft invoice with ComputeInvoice.
@@ -1142,6 +1144,8 @@ type CreateSubscriptionInvoiceRequest struct {
 
 	// BillingReason optional; when empty, ToDraftRequest defaults to subscription_cycle (subscription_creation flow still forces SUBSCRIPTION_CREATE).
 	BillingReason types.InvoiceBillingReason `json:"billing_reason,omitempty"`
+	// OpeningInvoiceAdjustmentAmount is internal: same as InvoiceComputeRequest. Not in public JSON.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // ToDraftRequest builds a CreateDraftInvoiceRequest from the subscription invoice request
@@ -1161,7 +1165,9 @@ func (r *CreateSubscriptionInvoiceRequest) ToDraftRequest(customerID, subscripti
 		PeriodEnd:      &r.PeriodEnd,
 		BillingReason:  billingReason,
 	}
-	if r.ReferencePoint == types.ReferencePointCancel {
+	if r.BillingReason != "" {
+		req.BillingReason = r.BillingReason
+	} else if r.ReferencePoint == types.ReferencePointCancel {
 		req.BillingReason = types.InvoiceBillingReasonProration
 	}
 	return req
@@ -1186,6 +1192,11 @@ func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 		return ierr.NewError("period_start must be before period_end").
 			WithHint("Invoice period start must be before period end").
 			Mark(ierr.ErrValidation)
+	}
+	if r.BillingReason != "" {
+		if err := r.BillingReason.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

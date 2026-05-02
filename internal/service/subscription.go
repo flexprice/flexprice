@@ -416,12 +416,17 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
 		if sub.SubscriptionStatus != types.SubscriptionStatusDraft && sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
 			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
-			invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+			invReq := &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: sub.ID,
 				PeriodStart:    sub.CurrentPeriodStart,
 				PeriodEnd:      sub.CurrentPeriodEnd,
 				ReferencePoint: types.ReferencePointPeriodStart,
-			}, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
+			}
+			if req.IsPlanChangeNewSubscription {
+				invReq.BillingReason = types.InvoiceBillingReasonSubscriptionUpdate
+				invReq.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
+			}
+			invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, invReq, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
 			if err != nil {
 				return err
 			}
@@ -1814,6 +1819,7 @@ func (s *subscriptionService) CancelSubscription(
 
 	var prorationDetails []dto.ProrationDetail
 	totalCreditAmount := decimal.Zero
+	var cancellationProrationResult *proration.SubscriptionProrationResult
 
 	// Step 5: Execute in transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
@@ -1826,6 +1832,7 @@ func (s *subscriptionService) CancelSubscription(
 			if err != nil {
 				return err
 			}
+			cancellationProrationResult = prorationResult
 
 			// Convert proration result to response format
 			prorationDetails, totalCreditAmount = s.convertProrationResultToDetails(prorationResult)
@@ -1920,8 +1927,8 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
-		// Step 9: Top up wallet for proration credit (only if there's a credit amount)
-		if totalCreditAmount.GreaterThan(decimal.Zero) {
+		// Step 9: Top up wallet for proration credit (only if there's a credit amount and not skipped for opening-invoice settlement)
+		if totalCreditAmount.GreaterThan(decimal.Zero) && !req.SkipProrationWalletCredit {
 			walletService := NewWalletService(s.ServiceParams)
 			cancelKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
 			_, err = walletService.TopUpWalletForProratedCharge(ctx, subscription.GetInvoicingCustomerID(), totalCreditAmount.Abs(), subscription.Currency, cancelKey)
@@ -1955,6 +1962,7 @@ func (s *subscriptionService) CancelSubscription(
 		ProrationDetails:  prorationDetails,
 		TotalCreditAmount: totalCreditAmount,
 		ProcessedAt:       time.Now().UTC(),
+		ChangeProration:   prorationDetailsFromSubscriptionProrationResult(cancellationProrationResult, effectiveDate, subscription),
 	}
 
 	// Note: Proration invoice is no longer created during cancellation
@@ -4784,17 +4792,17 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 }
 
 // HandleSubscriptionActivatingInvoicePaid completes subscription lifecycle when an activating invoice
-// (subscription create or trial-end conversion) is fully paid.
+// (subscription create, immediate plan-change opening, or trial-end conversion) is fully paid.
 func (s *subscriptionService) HandleSubscriptionActivatingInvoicePaid(ctx context.Context, inv *invoice.Invoice) error {
 	if inv == nil || inv.SubscriptionID == nil {
 		return nil
 	}
-	reason := types.InvoiceBillingReason(inv.BillingReason)
-	if !reason.TriggersSubscriptionActivationOnFullPayment() {
+	if !types.IsFirstSubscriptionOpenInvoiceReason(inv.BillingReason, inv.InvoiceType) {
 		return nil
 	}
+	reason := types.InvoiceBillingReason(inv.BillingReason)
 	switch reason {
-	case types.InvoiceBillingReasonSubscriptionCreate:
+	case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionUpdate:
 		return s.ActivateIncompleteSubscription(ctx, *inv.SubscriptionID)
 	case types.InvoiceBillingReasonSubscriptionTrialEnd:
 		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
@@ -5243,6 +5251,51 @@ func (s *subscriptionService) convertProrationResultToDetails(
 	}
 
 	return prorationDetails, totalCreditAmount
+}
+
+// prorationDetailsFromSubscriptionProrationResult builds the subscription-change ProrationDetails DTO from the same proration result as cancel (single source of truth).
+func prorationDetailsFromSubscriptionProrationResult(
+	prorationResult *proration.SubscriptionProrationResult,
+	effectiveDate time.Time,
+	currentSub *subscription.Subscription,
+) *dto.ProrationDetails {
+	if prorationResult == nil {
+		return nil
+	}
+
+	creditAmount := decimal.Zero
+	chargeAmount := decimal.Zero
+
+	for _, lineResult := range prorationResult.LineItemResults {
+		for _, creditItem := range lineResult.CreditItems {
+			creditAmount = creditAmount.Add(creditItem.Amount.Abs())
+		}
+		for _, chargeItem := range lineResult.ChargeItems {
+			chargeAmount = chargeAmount.Add(chargeItem.Amount)
+		}
+	}
+
+	netAmount := prorationResult.TotalProrationAmount
+
+	daysUsed := int(effectiveDate.Sub(currentSub.CurrentPeriodStart).Hours() / 24)
+	daysRemaining := int(currentSub.CurrentPeriodEnd.Sub(effectiveDate).Hours() / 24)
+	if daysRemaining < 0 {
+		daysRemaining = 0
+	}
+
+	return &dto.ProrationDetails{
+		CreditAmount:       creditAmount,
+		CreditDescription:  fmt.Sprintf("Credit for unused time on plan %s", currentSub.PlanID),
+		ChargeAmount:       chargeAmount,
+		ChargeDescription:  fmt.Sprintf("Charge for plan change from %s", effectiveDate.Format("2006-01-02")),
+		NetAmount:          netAmount,
+		ProrationDate:      effectiveDate,
+		CurrentPeriodStart: currentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:   currentSub.CurrentPeriodEnd,
+		DaysUsed:           daysUsed,
+		DaysRemaining:      daysRemaining,
+		Currency:           currentSub.Currency,
+	}
 }
 
 // updateSubscriptionForCancellation updates the subscription with cancellation details

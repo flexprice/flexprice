@@ -399,15 +399,18 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if err != nil {
 			return false, err
 		}
-		refPoint := types.ReferencePointPeriodEnd
-		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd:
-			refPoint = types.ReferencePointPeriodStart
-		case types.InvoiceBillingReasonProration:
-			refPoint = types.ReferencePointCancel
-		}
 		billingService := NewBillingService(s.ServiceParams)
-		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, sub, *inv.PeriodStart, *inv.PeriodEnd, refPoint, inv.ID)
+		prepareParams := PrepareSubscriptionInvoiceRequestParams{
+			Subscription:     sub,
+			PeriodStart:      *inv.PeriodStart,
+			PeriodEnd:        *inv.PeriodEnd,
+			ReferencePoint:   referencePointForSubscriptionComputeInvoice(types.InvoiceBillingReason(inv.BillingReason)),
+			ExcludeInvoiceID: inv.ID,
+		}
+		if req != nil && req.OpeningInvoiceAdjustmentAmount != nil {
+			prepareParams.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
+		}
+		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, prepareParams)
 		if err != nil {
 			return false, err
 		}
@@ -1707,7 +1710,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 
 		inv.PaidAt = &now
 
-		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+		if types.IsFirstSubscriptionOpenInvoiceReason(inv.BillingReason, inv.InvoiceType) {
 			s.HandleIncompleteSubscriptionPayment(ctx, inv)
 		}
 
@@ -1722,7 +1725,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		if inv.PaidAt == nil {
 			inv.PaidAt = &now
 		}
-		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+		if types.IsFirstSubscriptionOpenInvoiceReason(inv.BillingReason, inv.InvoiceType) {
 			s.HandleIncompleteSubscriptionPayment(ctx, inv)
 		}
 	case types.PaymentStatusFailed:
@@ -1807,7 +1810,11 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		string(subscription.BillingPeriod),
 	)
 	if flowType == types.InvoiceFlowSubscriptionCreation {
-		draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
+		if req.BillingReason != "" {
+			draftReq.BillingReason = req.BillingReason
+		} else {
+			draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
+		}
 	}
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
@@ -1816,8 +1823,11 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	}
 
 	// Populate draft with usage and line items; if zero-dollar, marked SKIPPED
-	// Pass nil for subscription invoices - coupons/taxes come from billing service
-	skipped, err := s.ComputeInvoice(ctx, draft.ID, nil)
+	var computeOverride *dto.InvoiceComputeRequest
+	if req.OpeningInvoiceAdjustmentAmount != nil && req.OpeningInvoiceAdjustmentAmount.GreaterThan(decimal.Zero) {
+		computeOverride = &dto.InvoiceComputeRequest{OpeningInvoiceAdjustmentAmount: req.OpeningInvoiceAdjustmentAmount}
+	}
+	skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1855,8 +1865,13 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 	}
 
 	// Prepare invoice request using billing service with the preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointPreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      *req.PeriodStart,
+		PeriodEnd:        *req.PeriodEnd,
+		ReferencePoint:   types.ReferencePointPreview,
+		ExcludeInvoiceID: "",
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1906,8 +1921,13 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 	}
 
 	// Prepare invoice request using billing service with the internal preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointInternalPreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      *req.PeriodStart,
+		PeriodEnd:        *req.PeriodEnd,
+		ReferencePoint:   types.ReferencePointInternalPreview,
+		ExcludeInvoiceID: "",
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1958,8 +1978,13 @@ func (s *invoiceService) GetMeterUsagePreviewInvoice(ctx context.Context, req dt
 	}
 
 	// Prepare invoice request using billing service with the meter usage preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointMeterUsagePreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      *req.PeriodStart,
+		PeriodEnd:        *req.PeriodEnd,
+		ReferencePoint:   types.ReferencePointMeterUsagePreview,
+		ExcludeInvoiceID: "",
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -3013,17 +3038,13 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		// Since we removed existing line items, the billing service will see no already
 		// invoiced items and will recalculate everything completely
 		billingService := NewBillingService(s.ServiceParams)
-
-		// Use period_end reference point to include both arrear and advance charges
-		referencePoint := types.ReferencePointPeriodEnd
-
-		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx,
-			sub,
-			*inv.PeriodStart,
-			*inv.PeriodEnd,
-			referencePoint,
-			"",
-		)
+		// ReferencePointPeriodEnd: include both arrear and advance charges.
+		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx, PrepareSubscriptionInvoiceRequestParams{
+			Subscription:   sub,
+			PeriodStart:    *inv.PeriodStart,
+			PeriodEnd:      *inv.PeriodEnd,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+		})
 		if err != nil {
 			return err
 		}
@@ -3449,7 +3470,7 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 		return nil
 	}
 
-	if !types.InvoiceBillingReason(invoice.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+	if !types.IsFirstSubscriptionOpenInvoiceReason(invoice.BillingReason, invoice.InvoiceType) {
 		return nil
 	}
 
@@ -4305,4 +4326,16 @@ func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lin
 	}
 
 	return nil
+}
+
+// referencePointForSubscriptionComputeInvoice maps invoice billing reason to the billing reference point.
+func referencePointForSubscriptionComputeInvoice(billingReason types.InvoiceBillingReason) types.InvoiceReferencePoint {
+	switch billingReason {
+	case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd, types.InvoiceBillingReasonSubscriptionUpdate:
+		return types.ReferencePointPeriodStart
+	case types.InvoiceBillingReasonProration:
+		return types.ReferencePointCancel
+	default:
+		return types.ReferencePointPeriodEnd
+	}
 }

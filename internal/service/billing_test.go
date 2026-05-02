@@ -588,14 +588,13 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 			periodEnd := sub.CurrentPeriodEnd
 
 			// Prepare invoice request
-			req, err := s.service.PrepareSubscriptionInvoiceRequest(
-				s.GetContext(),
-				sub,
-				periodStart,
-				periodEnd,
-				tt.referencePoint,
-				"",
-			)
+			req, err := s.service.PrepareSubscriptionInvoiceRequest(s.GetContext(), PrepareSubscriptionInvoiceRequestParams{
+				Subscription:     sub,
+				PeriodStart:      periodStart,
+				PeriodEnd:        periodEnd,
+				ReferencePoint:   tt.referencePoint,
+				ExcludeInvoiceID: "",
+			})
 
 			// Check error
 			if tt.wantErr {
@@ -684,7 +683,13 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_IncludesHist
 	}
 	s.False(foundAPI, "GetWithLineItems should omit line item whose EndDate is before new CurrentPeriodStart")
 
-	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, oldStart, oldEnd, types.ReferencePointPeriodEnd, "")
+	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      oldStart,
+		PeriodEnd:        oldEnd,
+		ReferencePoint:   types.ReferencePointPeriodEnd,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.NotNil(req)
 
@@ -886,14 +891,14 @@ func (s *BillingServiceSuite) TestCalculateFixedCharges_MixedCadence() {
 
 	// Arrear rule: period end in (periodStart, periodEnd] (start exclusive, end inclusive).
 	// Excluded: invoice period Apr 1 - May 1. Quarter from Jan 1 ends Apr 1; Apr 1 is not in (Apr 1, May 1] -> no quarterly line
-	lineItems, total, err := s.service.CalculateFixedCharges(ctx, sub, apr1, may1)
+	lineItems, total, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: apr1, PeriodEnd: may1})
 	s.NoError(err)
 	s.Require().Len(lineItems, 1, "expected 1 fixed line item (monthly only; quarterly arrear excluded when period end equals invoice start)")
 	s.Equal(priceMonthly.ID, lo.FromPtr(lineItems[0].PriceID))
 	s.True(total.GreaterThanOrEqual(decimal.NewFromInt(0)) && total.LessThanOrEqual(decimal.NewFromInt(10)), "total should be 0–10 (monthly only, may be prorated)")
 
 	// Included: invoice period Mar 1 - Apr 1. Quarter end Apr 1 is in (Mar 1, Apr 1] -> include quarterly with period Jan 1 - Apr 1
-	lineItems2, total2, err2 := s.service.CalculateFixedCharges(ctx, sub, mar1, apr1)
+	lineItems2, total2, err2 := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: mar1, PeriodEnd: apr1})
 	s.NoError(err2)
 	s.Require().Len(lineItems2, 2, "expected 2 fixed line items (monthly + quarterly)")
 	var monthlyLine, quarterlyLine *dto.CreateInvoiceLineItemRequest
@@ -1134,9 +1139,9 @@ func (s *BillingServiceSuite) TestScenario1_DailySub_12Invoices() {
 	for i := 0; i < 12; i++ {
 		start := time.Date(2026, time.January, 1+i, 0, 0, 0, 0, time.UTC)
 		end := time.Date(2026, time.January, 2+i, 0, 0, 0, 0, time.UTC)
-		_, totalAdvance, err := s.service.CalculateFixedCharges(ctx, &subAdvance, start, end)
+		_, totalAdvance, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: &subAdvance, PeriodStart: start, PeriodEnd: end})
 		s.NoError(err, "invoice %d advance", i+1)
-		_, totalArrear, err := s.service.CalculateFixedCharges(ctx, &subArrear, start, end)
+		_, totalArrear, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: &subArrear, PeriodStart: start, PeriodEnd: end})
 		s.NoError(err, "invoice %d arrear", i+1)
 		got := totalAdvance.Add(totalArrear)
 		expected := decimal.NewFromInt(int64(scenario1DailyExpectedTotals[i]))
@@ -1178,7 +1183,7 @@ func (s *BillingServiceSuite) TestScenario2_MonthlySub_12Invoices() {
 		time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
 	}
 	for i := 0; i < 12; i++ {
-		_, total, err := s.service.CalculateFixedCharges(ctx, sub, monthStarts[i], monthEnds[i])
+		_, total, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: monthStarts[i], PeriodEnd: monthEnds[i]})
 		s.NoError(err, "invoice %d", i+1)
 		expected := decimal.NewFromInt(int64(scenario2MonthlyExpectedTotals[i]))
 		s.True(total.Equal(expected), "invoice %d: expected fixed total %s, got %s", i+1, expected, total)
@@ -1472,12 +1477,24 @@ func (s *BillingServiceSuite) TestSubscriptionLineItemPeriodScenarios() {
 
 			for i, p := range periods {
 				// Period-end reference point
-				reqEnd, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPeriodEnd, "")
+				reqEnd, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+					Subscription:     sub,
+					PeriodStart:      p.Start,
+					PeriodEnd:        p.End,
+					ReferencePoint:   types.ReferencePointPeriodEnd,
+					ExcludeInvoiceID: "",
+				})
 				s.NoError(err, "period %d PeriodEnd", i+1)
 				s.assertInvoiceRequestFixedLines(reqEnd, tt.expectedPerPeriod[i])
 
 				// Preview (same window; no already-invoiced filter)
-				reqPreview, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPreview, "")
+				reqPreview, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+					Subscription:     sub,
+					PeriodStart:      p.Start,
+					PeriodEnd:        p.End,
+					ReferencePoint:   types.ReferencePointPreview,
+					ExcludeInvoiceID: "",
+				})
 				s.NoError(err, "period %d Preview", i+1)
 				s.assertInvoiceRequestFixedLines(reqPreview, tt.expectedPerPeriod[i])
 			}
@@ -1485,7 +1502,13 @@ func (s *BillingServiceSuite) TestSubscriptionLineItemPeriodScenarios() {
 			// For monthly scenario only: assert ReferencePointPeriodStart for first period (advance-only, correct periods)
 			if tt.name == "monthly_sub_monthly_quarterly_advance_arrear" {
 				p := periods[0]
-				reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPeriodStart, "")
+				reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+					Subscription:     sub,
+					PeriodStart:      p.Start,
+					PeriodEnd:        p.End,
+					ReferencePoint:   types.ReferencePointPeriodStart,
+					ExcludeInvoiceID: "",
+				})
 				s.NoError(err)
 				// Period start = only advance for current period: monthly (Jan1-Feb1), quarterly (Jan1-Apr1, natural period end)
 				s.assertInvoiceRequestFixedLines(reqStart, []expectedLineForPeriodTests{
@@ -2400,13 +2423,12 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 			s.Equal(float64(10), usage.Charges[0].Amount, "Should have $10 of charges")
 
 			// Calculate charges
-			lineItems, totalAmount, err := s.service.CalculateUsageCharges(
-				s.GetContext(),
-				s.testData.subscription,
-				usage,
-				s.testData.subscription.CurrentPeriodStart,
-				s.testData.subscription.CurrentPeriodEnd,
-			)
+			lineItems, totalAmount, err := s.service.CalculateUsageCharges(s.GetContext(), CalculateUsageChargesParams{
+				Subscription: s.testData.subscription,
+				Usage:        usage,
+				PeriodStart:  s.testData.subscription.CurrentPeriodStart,
+				PeriodEnd:    s.testData.subscription.CurrentPeriodEnd,
+			})
 
 			if tt.wantErr {
 				s.Error(err)
@@ -2514,13 +2536,12 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithDailyReset() {
 	}
 
 	// Calculate charges
-	lineItems, totalAmount, err := s.service.CalculateUsageCharges(
-		ctx,
-		s.testData.subscription,
-		usage,
-		s.testData.subscription.CurrentPeriodStart,
-		s.testData.subscription.CurrentPeriodEnd,
-	)
+	lineItems, totalAmount, err := s.service.CalculateUsageCharges(ctx, CalculateUsageChargesParams{
+		Subscription: s.testData.subscription,
+		Usage:        usage,
+		PeriodStart:  s.testData.subscription.CurrentPeriodStart,
+		PeriodEnd:    s.testData.subscription.CurrentPeriodEnd,
+	})
 
 	s.NoError(err)
 	s.Len(lineItems, 1, "Should have one line item for daily usage")
@@ -2766,13 +2787,12 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 			}
 
 			// Calculate charges
-			lineItems, totalAmount, err := s.service.CalculateUsageCharges(
-				ctx,
-				&subscriptionWithLineItems,
-				usage,
-				subscriptionWithLineItems.CurrentPeriodStart,
-				subscriptionWithLineItems.CurrentPeriodEnd,
-			)
+			lineItems, totalAmount, err := s.service.CalculateUsageCharges(ctx, CalculateUsageChargesParams{
+				Subscription: &subscriptionWithLineItems,
+				Usage:        usage,
+				PeriodStart:  subscriptionWithLineItems.CurrentPeriodStart,
+				PeriodEnd:    subscriptionWithLineItems.CurrentPeriodEnd,
+			})
 
 			s.NoError(err, "Should not error for %s", tt.name)
 			s.Len(lineItems, 1, "Should have one line item for %s", tt.name)
@@ -3697,7 +3717,7 @@ func (s *BillingServiceSuite) TestApplyProrationToLineItem_RuntimeSafetyNet_Mixe
 
 	// E.3.4 case 1: create_prorations + HasMixedPeriods -> return original amount (no proration)
 	// Invoice period Mar 1 - Apr 1: quarterly (Jan 1 - Apr 1) included; should be full $300
-	lineItems, total, err := s.service.CalculateFixedCharges(ctx, sub, mar1, apr1)
+	lineItems, total, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: mar1, PeriodEnd: apr1})
 	s.NoError(err)
 	s.Require().Len(lineItems, 2)
 	var quarterlyAmt decimal.Decimal
@@ -3887,7 +3907,7 @@ func (s *BillingServiceSuite) TestMultiCadence_12MonthSchedule_MQH_Arrear() {
 	}
 	for i := 0; i < 12; i++ {
 		periodEnd := periodStarts[i].AddDate(0, 1, 0)
-		lineItems, total, err := s.service.CalculateFixedCharges(ctx, sub, periodStarts[i], periodEnd)
+		lineItems, total, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: periodStarts[i], PeriodEnd: periodEnd})
 		s.NoError(err, "invoice %d", i+1)
 		s.True(total.Equal(decimal.NewFromInt(int64(expectedTotals[i]))),
 			"invoice %d: expected total %d, got %s (line count %d)", i+1, expectedTotals[i], total.String(), len(lineItems))
@@ -4057,7 +4077,7 @@ func (s *BillingServiceSuite) TestMultiCadence_Stress_AllSamePeriod() {
 	for month := 0; month < 3; month++ {
 		periodStart := jan1.AddDate(0, month, 0)
 		periodEnd := jan1.AddDate(0, month+1, 0)
-		lineItemsOut, total, err := s.service.CalculateFixedCharges(ctx, sub3m, periodStart, periodEnd)
+		lineItemsOut, total, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub3m, PeriodStart: periodStart, PeriodEnd: periodEnd})
 		s.NoError(err)
 		s.Len(lineItemsOut, 3, "E.14.2: every month should have 3 line items")
 		s.True(total.Equal(decimal.NewFromInt(60)), "10+20+30=60")
@@ -4099,7 +4119,13 @@ func (s *BillingServiceSuite) TestMultiCadence_FilterLineItems_QuarterlyDeduplic
 	}
 	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(ctx, inv))
 
-	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, apr1, may1, types.ReferencePointPeriodEnd, "")
+	req, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      apr1,
+		PeriodEnd:        may1,
+		ReferencePoint:   types.ReferencePointPeriodEnd,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(req)
 	s.Len(req.LineItems, 1, "E.15.1: Q already invoiced for Jan-Apr, Apr 1 invoice should have only M")
@@ -4209,7 +4235,7 @@ func (s *BillingServiceSuite) TestMultiCadence_12MonthSchedule_MQA_Arrear() {
 	}
 	for i := 0; i < 12; i++ {
 		periodEnd := periodStarts[i].AddDate(0, 1, 0)
-		_, total, err := s.service.CalculateFixedCharges(ctx, sub, periodStarts[i], periodEnd)
+		_, total, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: periodStarts[i], PeriodEnd: periodEnd})
 		s.NoError(err, "invoice %d", i+1)
 		s.True(total.Equal(decimal.NewFromInt(int64(expectedTotals[i]))),
 			"invoice %d: expected %d, got %s", i+1, expectedTotals[i], total.String())
@@ -4323,7 +4349,7 @@ func (s *BillingServiceSuite) TestMultiCadence_4InvoiceSchedule_QA_Arrear() {
 		if i == 3 {
 			periodEnd = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 		}
-		_, total, err := s.service.CalculateFixedCharges(ctx, sub, p.start, periodEnd)
+		_, total, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: p.start, PeriodEnd: periodEnd})
 		s.NoError(err, "invoice %d", i+1)
 		s.True(total.Equal(decimal.NewFromInt(int64(p.total))), "invoice %d: expected %d, got %s", i+1, p.total, total.String())
 	}
@@ -4343,26 +4369,50 @@ func (s *BillingServiceSuite) TestMultiCadence_12MonthSchedule_MixedAdvanceArrea
 	s.Require().NotNil(sub)
 
 	// E.6.3: Creation (period_start) — M-ADV (Jan) + A-ADV (Year 1) = $2420
-	reqCreate, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodStart, "")
+	reqCreate, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      jan1,
+		PeriodEnd:        feb1,
+		ReferencePoint:   types.ReferencePointPeriodStart,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(reqCreate)
 	s.True(reqCreate.AmountDue.Equal(decimal.NewFromInt(2420)), "creation: expected $2420, got %s", reqCreate.AmountDue.String())
 
 	// Feb 1 period_end — M-ADV (Feb next) = $20
-	reqFeb, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodEnd, "")
+	reqFeb, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      jan1,
+		PeriodEnd:        feb1,
+		ReferencePoint:   types.ReferencePointPeriodEnd,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(reqFeb)
 	s.True(reqFeb.AmountDue.Equal(decimal.NewFromInt(20)), "Feb 1: expected $20, got %s", reqFeb.AmountDue.String())
 
 	// Apr 1 period_end — M-ADV (Apr) + Q-ARR (Q1) = $170
-	reqApr, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), apr1, types.ReferencePointPeriodEnd, "")
+	reqApr, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:        apr1,
+		ReferencePoint:   types.ReferencePointPeriodEnd,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(reqApr)
 	s.True(reqApr.AmountDue.Equal(decimal.NewFromInt(170)), "Apr 1: expected $170, got %s", reqApr.AmountDue.String())
 
 	// Jan 1 yr2 period_end — M-ADV (Jan yr2) + Q-ARR (Q4) + A-ADV (Year 2) = $2570
 	dec1 := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
-	reqJan2, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, dec1, jan1yr2, types.ReferencePointPeriodEnd, "")
+	reqJan2, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      dec1,
+		PeriodEnd:        jan1yr2,
+		ReferencePoint:   types.ReferencePointPeriodEnd,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(reqJan2)
 	s.True(reqJan2.AmountDue.Equal(decimal.NewFromInt(2570)), "Jan 1 yr2: expected $2570, got %s", reqJan2.AmountDue.String())
@@ -4385,25 +4435,49 @@ func (s *BillingServiceSuite) TestMultiCadence_PreviewInvoice_OrbStyle() {
 	s.Require().NotNil(sub)
 
 	// D.8.1 #1: Preview in period Jan 1 - Feb 1 → only M (next invoice Feb 1 has only M)
-	req1, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPreview, "")
+	req1, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      jan1,
+		PeriodEnd:        feb1,
+		ReferencePoint:   types.ReferencePointPreview,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(req1)
 	s.Len(req1.LineItems, 1, "D.8.1: Jan period preview shows only M")
 
 	// D.8.1 #3: Preview in period Mar 1 - Apr 1 → M + Q
-	req3, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, mar1, apr1, types.ReferencePointPreview, "")
+	req3, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      mar1,
+		PeriodEnd:        apr1,
+		ReferencePoint:   types.ReferencePointPreview,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(req3)
 	s.Len(req3.LineItems, 2, "D.8.1: Mar-Apr period preview shows M + Q")
 
 	// D.8.1 #4: Preview in period Jun 1 - Jul 1 → M + Q + H
-	req4, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jun1, jul1, types.ReferencePointPreview, "")
+	req4, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      jun1,
+		PeriodEnd:        jul1,
+		ReferencePoint:   types.ReferencePointPreview,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(req4)
 	s.Len(req4.LineItems, 3, "D.8.1: Jun-Jul period preview shows M + Q + H")
 
 	// D.8.1 #5: Preview in period Apr 1 - May 1 → only M (Q period ends Jul 1)
-	req5, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, apr1, may1, types.ReferencePointPreview, "")
+	req5, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      apr1,
+		PeriodEnd:        may1,
+		ReferencePoint:   types.ReferencePointPreview,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(req5)
 	s.Len(req5.LineItems, 1, "D.8.1: Apr-May period preview shows only M")
@@ -4425,21 +4499,39 @@ func (s *BillingServiceSuite) TestMultiCadence_ReferencePoints() {
 	s.Require().NotNil(sub)
 
 	// D.9.1 period_start: only ADVANCE (H $200)
-	reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodStart, "")
+	reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      jan1,
+		PeriodEnd:        feb1,
+		ReferencePoint:   types.ReferencePointPeriodStart,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(reqStart)
 	s.True(reqStart.AmountDue.Equal(decimal.NewFromInt(200)), "D.9.1: creation invoice $200 (H ADVANCE only)")
 	s.Len(reqStart.LineItems, 1, "D.9.1: one line item (H ADVANCE)")
 
 	// D.9.2 period_end Feb 1: M ARREAR $10 only
-	reqFeb, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jan1, feb1, types.ReferencePointPeriodEnd, "")
+	reqFeb, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      jan1,
+		PeriodEnd:        feb1,
+		ReferencePoint:   types.ReferencePointPeriodEnd,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(reqFeb)
 	s.True(reqFeb.AmountDue.Equal(decimal.NewFromInt(10)), "D.9.2: Feb 1 invoice $10")
 	s.Len(reqFeb.LineItems, 1, "D.9.2: M ARREAR only")
 
 	// D.9.3 period_end Jul 1: M ARREAR + Q ARREAR + H ADVANCE (next) = $310
-	reqJul, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, jun1, jul1, types.ReferencePointPeriodEnd, "")
+	reqJul, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     sub,
+		PeriodStart:      jun1,
+		PeriodEnd:        jul1,
+		ReferencePoint:   types.ReferencePointPeriodEnd,
+		ExcludeInvoiceID: "",
+	})
 	s.NoError(err)
 	s.Require().NotNil(reqJul)
 	s.True(reqJul.AmountDue.Equal(decimal.NewFromInt(310)), "D.9.3: Jul 1 invoice $310")
@@ -4537,22 +4629,22 @@ func (s *BillingServiceSuite) TestMultiCadence_MidMonthStart() {
 	sub.LineItems = lineItems
 
 	// D.10.1: Feb 15 invoice — M only ($10)
-	_, total1, err := s.service.CalculateFixedCharges(ctx, sub, jan15, feb15)
+	_, total1, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: jan15, PeriodEnd: feb15})
 	s.NoError(err)
 	s.True(total1.Equal(decimal.NewFromInt(10)), "Feb 15: M $10")
 
 	// Mar 15 — M only
-	_, total2, err := s.service.CalculateFixedCharges(ctx, sub, feb15, mar15)
+	_, total2, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: feb15, PeriodEnd: mar15})
 	s.NoError(err)
 	s.True(total2.Equal(decimal.NewFromInt(10)), "Mar 15: M $10")
 
 	// Apr 15 — M + Q (Q period Jan 15 - Apr 15 ends in this window)
-	_, total3, err := s.service.CalculateFixedCharges(ctx, sub, mar15, apr15)
+	_, total3, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: mar15, PeriodEnd: apr15})
 	s.NoError(err)
 	s.True(total3.Equal(decimal.NewFromInt(110)), "Apr 15: M $10 + Q $100 = $110")
 
 	// May 15 — M only
-	_, total4, err := s.service.CalculateFixedCharges(ctx, sub, apr15, may15)
+	_, total4, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: apr15, PeriodEnd: may15})
 	s.NoError(err)
 	s.True(total4.Equal(decimal.NewFromInt(10)), "May 15: M $10")
 
@@ -4665,7 +4757,7 @@ func (s *BillingServiceSuite) TestMultiCadence_Stress_MQHA() {
 	}
 	for i := 0; i < 12; i++ {
 		periodEnd := periodStarts[i].AddDate(0, 1, 0)
-		lineItems, _, err := s.service.CalculateFixedCharges(ctx, sub, periodStarts[i], periodEnd)
+		lineItems, _, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: sub, PeriodStart: periodStarts[i], PeriodEnd: periodEnd})
 		s.NoError(err, "invoice %d", i+1)
 		s.Len(lineItems, expectedCounts[i], "E.14.1: invoice %d expected %d line items", i+1, expectedCounts[i])
 	}
@@ -4750,7 +4842,7 @@ func (s *BillingServiceSuite) TestMultiCadence_SingleQuarterlyLine() {
 		{time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC), 100},
 	}
 	for i, pr := range periods {
-		_, total, err := s.service.CalculateFixedCharges(ctx, subQ, pr.start, pr.end)
+		_, total, err := s.service.CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: subQ, PeriodStart: pr.start, PeriodEnd: pr.end})
 		s.NoError(err, "invoice %d", i+1)
 		s.True(total.Equal(decimal.NewFromInt(int64(pr.total))), "E.14.3: invoice %d expected $100", i+1)
 	}
@@ -4800,4 +4892,51 @@ func (s *BillingServiceSuite) TestUsageExternalCustomerIDsForSubscription_Parent
 	ext, err := subscriptionService.ExternalCustomerIDsForSubscription(ctx, &parentSub)
 	s.NoError(err)
 	s.ElementsMatch([]string{s.testData.customer.ExternalID, child.ExternalID}, ext)
+}
+
+func TestApplyFixedChargeAdjustmentToLineItems(t *testing.T) {
+	t.Run("slice_order_partial_credit", func(t *testing.T) {
+		items := []dto.CreateInvoiceLineItemRequest{
+			{Amount: decimal.NewFromInt(30)},
+			{Amount: decimal.NewFromInt(50)},
+		}
+		out := applyFixedChargeAdjustmentToLineItems(items, decimal.NewFromInt(40))
+		if len(out) != 2 {
+			t.Fatalf("len %d", len(out))
+		}
+		// 30, then 10 from 50
+		if !out[0].Amount.IsZero() || !out[1].Amount.Equal(decimal.NewFromInt(40)) {
+			t.Fatalf("amounts %s / %s", out[0].Amount, out[1].Amount)
+		}
+	})
+	t.Run("credit_exceeds_sum_caps", func(t *testing.T) {
+		items := []dto.CreateInvoiceLineItemRequest{
+			{Amount: decimal.NewFromInt(10)},
+			{Amount: decimal.NewFromInt(20)},
+		}
+		out := applyFixedChargeAdjustmentToLineItems(items, decimal.NewFromInt(1000))
+		if !out[0].Amount.IsZero() || !out[1].Amount.IsZero() {
+			t.Fatalf("expected both zero, got %s %s", out[0].Amount, out[1].Amount)
+		}
+	})
+	t.Run("nil_and_zero_credit_noop", func(t *testing.T) {
+		items := []dto.CreateInvoiceLineItemRequest{{Amount: decimal.NewFromInt(5)}}
+		out := applyFixedChargeAdjustmentToLineItems(items, decimal.Zero)
+		if !out[0].Amount.Equal(decimal.NewFromInt(5)) {
+			t.Fatalf("zero credit should not change: %+v", out[0].Amount)
+		}
+	})
+}
+
+func TestCalculateFixedChargesParamsValidate_NegativeAdjustment(t *testing.T) {
+	neg := decimal.NewFromInt(-1)
+	p := CalculateFixedChargesParams{
+		Subscription:          &subscription.Subscription{ID: "s"},
+		PeriodStart:           time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:             time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC),
+		FixedChargeAdjustment: &neg,
+	}
+	if err := p.Validate(); err == nil {
+		t.Fatal("expected validation error for negative adjustment")
+	}
 }

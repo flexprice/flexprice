@@ -440,7 +440,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_FullAmountNoProration()
 		},
 	}
 
-	lineItems, total, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	lineItems, total, err := s.billingService().CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
 	s.Len(lineItems, 1)
 	s.Equal("500", total.String(), "ONETIME charge must be full $500, no proration")
@@ -466,7 +466,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_LineItemPeriodIsBilling
 		},
 	}
 
-	lineItems, _, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	lineItems, _, err := s.billingService().CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
 	s.Require().Len(lineItems, 1)
 	li := lineItems[0]
@@ -496,7 +496,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_WithQuantity3() {
 		},
 	}
 
-	_, total, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	_, total, err := s.billingService().CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
 	s.Equal("1500", total.String(), "3 × $500 = $1500")
 }
@@ -521,7 +521,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_SkippedIfStartDateAfter
 		},
 	}
 
-	lineItems, total, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	lineItems, total, err := s.billingService().CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
 	s.Empty(lineItems, "StartDate after period end should be skipped")
 	s.True(total.IsZero())
@@ -549,7 +549,7 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_Recurring_StillProratesNormally
 		},
 	}
 
-	_, total, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	_, total, err := s.billingService().CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
 	// Amount may be prorated (< $100) or $100 depending on ProrationBehavior; just confirm it's > 0
 	s.True(total.GreaterThan(decimal.Zero), "recurring fixed charge should produce a non-zero amount")
@@ -591,7 +591,7 @@ func (s *BillingOnetimeSuite) TestOnetime_ZeroDurationLineItemPeriod() {
 		},
 	}
 
-	lineItems, _, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	lineItems, _, err := s.billingService().CalculateFixedCharges(ctx, CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
 	s.Require().Len(lineItems, 1)
 	// PeriodStart == PeriodEnd == line item StartDate

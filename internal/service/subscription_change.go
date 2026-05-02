@@ -118,7 +118,7 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	}
 
 	// Calculate next invoice preview
-	nextInvoice, err := s.calculateNextInvoicePreview(ctx, currentSub, targetPlan, effectiveDate)
+	nextInvoice, err := s.calculateNextInvoicePreview(ctx, currentSub, targetPlan, effectiveDate, prorationDetails, req.ChangeAt)
 	if err != nil {
 		logger.Error("failed to calculate next invoice preview", zap.Error(err))
 		return nil, err
@@ -522,12 +522,16 @@ func (s *subscriptionChangeService) calculateProrationPreview(
 	return s.convertCancellationProrationToDetails(prorationResult, effectiveDate, currentSub), nil
 }
 
-// calculateNextInvoicePreview calculates how the next regular invoice would be affected
+// calculateNextInvoicePreview calculates how the next regular invoice would be affected.
+// For an immediate change with proration, nets cancellation credit against gross subtotal (aligns with execute:
+// opening credit applied to line amounts before coupons; preview has no coupon lines, only gross plan charges).
 func (s *subscriptionChangeService) calculateNextInvoicePreview(
 	ctx context.Context,
 	currentSub *subscription.Subscription,
 	targetPlan *plan.Plan,
 	effectiveDate time.Time,
+	prorationDetails *dto.ProrationDetails,
+	changeAt *types.ScheduleType,
 ) (*dto.InvoicePreview, error) {
 	// Get target plan prices
 	priceService := NewPriceService(s.serviceParams)
@@ -561,13 +565,42 @@ func (s *subscriptionChangeService) calculateNextInvoicePreview(
 		}
 	}
 
-	return &dto.InvoicePreview{
+	preview := &dto.InvoicePreview{
 		Subtotal:  subtotal,
 		TaxAmount: decimal.Zero,
 		Total:     subtotal,
 		Currency:  currentSub.Currency,
 		LineItems: lineItems,
-	}, nil
+	}
+
+	credit := decimal.Zero
+	if prorationDetails != nil {
+		credit = prorationDetails.CreditAmount
+	}
+	netSubtotal := netSubscriptionChangeInvoicePreviewSubtotal(preview.Subtotal, credit, changeAt)
+	if !netSubtotal.Equal(preview.Subtotal) {
+		preview.Subtotal = netSubtotal
+		preview.Total = netSubtotal.Add(preview.TaxAmount)
+	}
+
+	return preview, nil
+}
+
+// netSubscriptionChangeInvoicePreviewSubtotal returns the post-credit subtotal for next-invoice preview
+// (immediate plan change with proration). Scheduled period_end leaves gross subtotal unchanged.
+func netSubscriptionChangeInvoicePreviewSubtotal(
+	grossSubtotal, creditAmount decimal.Decimal,
+	changeAt *types.ScheduleType,
+) decimal.Decimal {
+	isImmediate := changeAt == nil || *changeAt == types.ScheduleTypeImmediate
+	if !isImmediate || !creditAmount.GreaterThan(decimal.Zero) {
+		return grossSubtotal
+	}
+	net := grossSubtotal.Sub(creditAmount)
+	if net.IsNegative() {
+		return decimal.Zero
+	}
+	return net
 }
 
 // calculateNewBillingCycle calculates the new billing cycle information
@@ -657,19 +690,43 @@ func (s *subscriptionChangeService) executeChange(
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
-	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
+	// Block if the target plan was modified after the request began (no silent price drift mid-change).
+	freshTarget, err := s.serviceParams.PlanRepo.Get(ctx, targetPlan.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !freshTarget.UpdatedAt.Equal(targetPlan.UpdatedAt) {
+		return nil, ierr.NewError("target plan was updated during the change; re-run preview and try again").
+			WithHint("The plan changed while the subscription change was in progress. Aborting so pricing stays consistent.").
+			Mark(ierr.ErrValidation)
+	}
+	targetPlan = freshTarget
+
+	skipWallet := req.ProrationBehavior == types.ProrationBehaviorCreateProrations
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
-		CancellationType:  types.CancellationTypeImmediate,
-		Reason:            "subscription_change",
-		ProrationBehavior: req.ProrationBehavior,
+		CancellationType:          types.CancellationTypeImmediate,
+		Reason:                    "subscription_change",
+		ProrationBehavior:         req.ProrationBehavior,
+		SkipProrationWalletCredit: skipWallet,
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	// Re-verify target plan after cancel so no edits slip in between.
+	freshTarget2, err := s.serviceParams.PlanRepo.Get(ctx, targetPlan.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !freshTarget2.UpdatedAt.Equal(targetPlan.UpdatedAt) {
+		return nil, ierr.NewError("target plan was updated during the change; re-run preview and try again").
+			WithHint("The plan changed while the subscription change was in progress. Aborting so pricing stays consistent.").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Create new subscription
-	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate)
+	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, archivedSub)
 	if err != nil {
 		return nil, err
 	}
@@ -693,12 +750,8 @@ func (s *subscriptionChangeService) executeChange(
 		Metadata:      req.Metadata,
 	}
 
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
-		prorationApplied, calcErr := s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
-		if calcErr != nil {
-			return nil, calcErr
-		}
-		out.ProrationApplied = prorationApplied
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && archivedSub.ChangeProration != nil {
+		out.ProrationApplied = archivedSub.ChangeProration
 	}
 
 	return out, nil
@@ -712,6 +765,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 	targetPlan *plan.Plan,
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
+	archivedSub *dto.CancelSubscriptionResponse,
 ) (*subscription.Subscription, error) {
 	// Carry over inherited child subscriptions and invoicing customer via Inheritance config.
 	// ExternalCustomerIDsToInheritSubscription and InvoicingCustomerExternalID are mutually exclusive,
@@ -749,7 +803,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 					return nil, ierr.NewErrorf("customer not found for child subscription (customer_id=%s)", ch.CustomerID).
 						WithHint("Customer not found").
 						WithReportableDetails(map[string]any{
-							"customer_id":         ch.CustomerID,
+							"customer_id":           ch.CustomerID,
 							"child_subscription_id": ch.ID,
 						}).
 						Mark(ierr.ErrNotFound)
@@ -783,25 +837,28 @@ func (s *subscriptionChangeService) createNewSubscription(
 
 	// Create new subscription request
 	createSubReq := dto.CreateSubscriptionRequest{
-		CustomerID:         currentSub.CustomerID,
-		PlanID:             targetPlan.ID,
-		Currency:           currentSub.Currency,
-		LookupKey:          currentSub.LookupKey,
-		BillingCadence:     req.BillingCadence,
-		BillingPeriod:      req.BillingPeriod,
-		BillingPeriodCount: req.BillingPeriodCount,
-		BillingCycle:       req.BillingCycle,
-		BillingAnchor:      newBillingAnchor,
-		StartDate:          &effectiveDate,
-		Metadata:           req.Metadata,
-		ProrationBehavior:  req.ProrationBehavior,
-		CustomerTimezone:   currentSub.CustomerTimezone,
-		CommitmentAmount:   currentSub.CommitmentAmount,
-		OverageFactor:      currentSub.OverageFactor,
-		PaymentTerms:       currentSub.PaymentTerms,
-		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
-		Inheritance:        inheritance,
+		CustomerID:                  currentSub.CustomerID,
+		PlanID:                      targetPlan.ID,
+		Currency:                    currentSub.Currency,
+		LookupKey:                   currentSub.LookupKey,
+		BillingCadence:              req.BillingCadence,
+		BillingPeriod:               req.BillingPeriod,
+		BillingPeriodCount:          req.BillingPeriodCount,
+		BillingCycle:                req.BillingCycle,
+		BillingAnchor:               newBillingAnchor,
+		StartDate:                   &effectiveDate,
+		Metadata:                    req.Metadata,
+		ProrationBehavior:           req.ProrationBehavior,
+		CustomerTimezone:            currentSub.CustomerTimezone,
+		CommitmentAmount:            currentSub.CommitmentAmount,
+		OverageFactor:               currentSub.OverageFactor,
+		PaymentTerms:                currentSub.PaymentTerms,
+		Workflow:                    lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
+		Inheritance:                 inheritance,
+		IsPlanChangeNewSubscription: true,
 	}
+	tc := archivedSub.TotalCreditAmount
+	createSubReq.OpeningInvoiceAdjustmentAmount = &tc
 
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	response, err := subscriptionService.CreateSubscription(ctx, createSubReq)
@@ -813,6 +870,18 @@ func (s *subscriptionChangeService) createNewSubscription(
 	newSub, newLineItems, err := s.serviceParams.SubRepo.GetWithLineItems(ctx, response.Subscription.ID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Refund excess credit to wallet when the opening adjustment exceeds the new plan's gross charge.
+	// This happens on downgrades where the unused credit from the old plan is larger than the new plan price.
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && archivedSub.TotalCreditAmount.GreaterThan(decimal.Zero) {
+		if err := s.refundExcessOpeningCredit(ctx, currentSub, newSub, response, archivedSub.TotalCreditAmount); err != nil {
+			s.serviceParams.Logger.Errorw("failed to refund excess opening invoice credit to wallet",
+				"error", err,
+				"old_subscription_id", currentSub.ID,
+				"new_subscription_id", newSub.ID,
+				"total_credit_amount", archivedSub.TotalCreditAmount.String())
+		}
 	}
 
 	// Handle entitlement proration for subscription changes
@@ -846,6 +915,50 @@ func (s *subscriptionChangeService) createNewSubscription(
 	}
 
 	return newSub, nil
+}
+
+// refundExcessOpeningCredit credits any portion of the opening invoice adjustment that exceeded the
+// new subscription's gross charge back to the customer's wallet.
+// This happens on downgrades: e.g. $2000 credit applied to a $600 plan → $1400 excess goes to wallet.
+func (s *subscriptionChangeService) refundExcessOpeningCredit(
+	ctx context.Context,
+	oldSub *subscription.Subscription,
+	newSub *subscription.Subscription,
+	newSubResponse *dto.SubscriptionResponse,
+	totalCredit decimal.Decimal,
+) error {
+	// Determine which invoice ID to exclude so FilterLineItemsToBeInvoiced re-includes the line items.
+	// If the invoice was skipped (zero-dollar) it won't be in the finalized list anyway, so "" is fine.
+	excludeInvoiceID := ""
+	if newSubResponse.LatestInvoice != nil {
+		excludeInvoiceID = newSubResponse.LatestInvoice.ID
+	}
+
+	billingService := NewBillingService(s.serviceParams)
+	grossReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, PrepareSubscriptionInvoiceRequestParams{
+		Subscription:     newSub,
+		PeriodStart:      newSub.CurrentPeriodStart,
+		PeriodEnd:        newSub.CurrentPeriodEnd,
+		ReferencePoint:   types.ReferencePointPeriodStart,
+		ExcludeInvoiceID: excludeInvoiceID,
+	})
+	if err != nil {
+		return err
+	}
+
+	excess := decimal.Max(decimal.Zero, totalCredit.Sub(grossReq.Subtotal))
+	if !excess.GreaterThan(decimal.Zero) {
+		return nil
+	}
+
+	walletService := NewWalletService(s.serviceParams)
+	idempotencyKey := fmt.Sprintf("plan_change_excess_credit|%s|%s", oldSub.ID, newSub.ID)
+	_, err = walletService.TopUpWalletForProratedCharge(ctx, newSub.GetInvoicingCustomerID(), excess, newSub.Currency, idempotencyKey)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // handleSubscriptionChangeEntitlementProration handles entitlement proration for subscription plan changes

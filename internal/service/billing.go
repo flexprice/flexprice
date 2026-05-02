@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -52,20 +54,131 @@ type FindMatchingLineItemPeriodResult struct {
 	Ok                  bool
 }
 
+// PrepareSubscriptionInvoiceRequestParams holds inputs for PrepareSubscriptionInvoiceRequest.
+type PrepareSubscriptionInvoiceRequestParams struct {
+	Subscription   *subscription.Subscription  `validate:"required" binding:"required"`
+	PeriodStart    time.Time                   `validate:"required" binding:"required"`
+	PeriodEnd      time.Time                   `validate:"required" binding:"required"`
+	ReferencePoint types.InvoiceReferencePoint `validate:"required" binding:"required"`
+	// ExcludeInvoiceID excludes lines already invoiced for the same price/period (empty = no exclusion).
+	ExcludeInvoiceID string `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is the credit from the cancelled subscription to apply to the first invoice.
+	// Applied as FixedChargeAdjustment (reduces fixed line item amounts before coupons).
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+}
+
+// Validate enforces struct tags, period order, and reference point.
+func (p *PrepareSubscriptionInvoiceRequestParams) Validate() error {
+	if err := validator.ValidateRequest(p); err != nil {
+		return err
+	}
+
+	if err := p.ReferencePoint.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CalculateFixedChargesParams holds inputs for CalculateFixedCharges.
+type CalculateFixedChargesParams struct {
+	Subscription *subscription.Subscription `validate:"required" binding:"required"`
+	PeriodStart  time.Time                  `validate:"required" binding:"required"`
+	PeriodEnd    time.Time                  `validate:"required" binding:"required"`
+	// FixedChargeAdjustment optional credit (e.g. opening/plan-change) applied only to fixed line Amounts after rounding.
+	FixedChargeAdjustment *decimal.Decimal `json:"-"`
+}
+
+// Validate enforces struct tags, period order, and non-negative optional adjustment.
+func (p *CalculateFixedChargesParams) Validate() error {
+	if err := validator.ValidateRequest(p); err != nil {
+		return err
+	}
+
+	if p.FixedChargeAdjustment != nil && p.FixedChargeAdjustment.IsNegative() {
+		return ierr.NewError("fixed_charge_adjustment must not be negative").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// CalculateUsageChargesParams holds inputs for CalculateUsageCharges.
+type CalculateUsageChargesParams struct {
+	Subscription *subscription.Subscription `validate:"required" binding:"required"`
+	Usage        *dto.GetUsageBySubscriptionResponse
+	PeriodStart  time.Time `validate:"required" binding:"required"`
+	PeriodEnd    time.Time `validate:"required" binding:"required"`
+}
+
+// Validate enforces struct tags and period order.
+func (p *CalculateUsageChargesParams) Validate() error {
+	if err := validator.ValidateRequest(p); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// CalculateAllChargesParams holds inputs for CalculateAllCharges.
+type CalculateAllChargesParams struct {
+	Subscription *subscription.Subscription `validate:"required" binding:"required"`
+	Usage        *dto.GetUsageBySubscriptionResponse
+	PeriodStart  time.Time `validate:"required" binding:"required"`
+	PeriodEnd    time.Time `validate:"required" binding:"required"`
+	// FixedChargeAdjustment optional; forwarded to CalculateFixedCharges only (usage unchanged).
+	FixedChargeAdjustment *decimal.Decimal `json:"-"`
+}
+
+// Validate enforces struct tags, period order, and non-negative optional adjustment.
+func (p *CalculateAllChargesParams) Validate() error {
+	if err := validator.ValidateRequest(p); err != nil {
+		return err
+	}
+
+	if p.FixedChargeAdjustment != nil && p.FixedChargeAdjustment.IsNegative() {
+		return ierr.NewError("fixed_charge_adjustment must not be negative").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// CalculateChargesParams holds inputs for CalculateCharges.
+type CalculateChargesParams struct {
+	Subscription *subscription.Subscription `validate:"required" binding:"required"`
+	LineItems    []*subscription.SubscriptionLineItem
+	PeriodStart  time.Time `validate:"required" binding:"required"`
+	PeriodEnd    time.Time `validate:"required" binding:"required"`
+	IncludeUsage bool
+	// FixedChargeAdjustment optional; forwarded to fixed-charge calculation only.
+	FixedChargeAdjustment *decimal.Decimal `json:"-"`
+}
+
+// Validate enforces struct tags, period order, and non-negative optional adjustment.
+func (p *CalculateChargesParams) Validate() error {
+	if err := validator.ValidateRequest(p); err != nil {
+		return err
+	}
+
+	if p.FixedChargeAdjustment != nil && p.FixedChargeAdjustment.IsNegative() {
+		return ierr.NewError("fixed_charge_adjustment must not be negative").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // BillingService handles all billing calculations
 type BillingService interface {
 	// CalculateFixedCharges calculates all fixed charges for a subscription
-	CalculateFixedCharges(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
+	CalculateFixedCharges(ctx context.Context, params CalculateFixedChargesParams) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 
 	// CalculateUsageCharges calculates all usage-based charges
-	CalculateUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
+	CalculateUsageCharges(ctx context.Context, params CalculateUsageChargesParams) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 
 	// CalculateAllCharges calculates both fixed and usage charges
-	CalculateAllCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time) (*BillingCalculationResult, error)
+	CalculateAllCharges(ctx context.Context, params CalculateAllChargesParams) (*BillingCalculationResult, error)
 
 	// PrepareSubscriptionInvoiceRequest prepares a complete invoice request for a subscription period
 	// using the reference point to determine which charges to include
-	PrepareSubscriptionInvoiceRequest(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint, excludeInvoiceID string) (*dto.CreateInvoiceRequest, error)
+	PrepareSubscriptionInvoiceRequest(ctx context.Context, params PrepareSubscriptionInvoiceRequestParams) (*dto.CreateInvoiceRequest, error)
 
 	// ClassifyLineItems classifies line items based on cadence and type
 	ClassifyLineItems(sub *subscription.Subscription, currentPeriodStart, currentPeriodEnd time.Time, nextPeriodStart, nextPeriodEnd time.Time) *LineItemClassification
@@ -74,7 +187,7 @@ type BillingService interface {
 	FilterLineItemsToBeInvoiced(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time, lineItems []*subscription.SubscriptionLineItem, excludeInvoiceID string) ([]*subscription.SubscriptionLineItem, error)
 
 	// CalculateCharges calculates charges for the given line items and period
-	CalculateCharges(ctx context.Context, sub *subscription.Subscription, lineItems []*subscription.SubscriptionLineItem, periodStart, periodEnd time.Time, includeUsage bool) (*BillingCalculationResult, error)
+	CalculateCharges(ctx context.Context, params CalculateChargesParams) (*BillingCalculationResult, error)
 
 	// CreateInvoiceRequestForCharges creates an invoice creation request for the given charges
 	CreateInvoiceRequestForCharges(ctx context.Context, sub *subscription.Subscription, result *BillingCalculationResult, periodStart, periodEnd time.Time, description string, metadata types.Metadata) (*dto.CreateInvoiceRequest, error)
@@ -148,10 +261,14 @@ func calculateBucketedMeterCost(
 }
 func (s *billingService) CalculateFixedCharges(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	periodStart,
-	periodEnd time.Time,
+	params CalculateFixedChargesParams,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
+	if err := params.Validate(); err != nil {
+		return nil, decimal.Zero, err
+	}
+	sub := params.Subscription
+	periodStart := params.PeriodStart
+	periodEnd := params.PeriodEnd
 	fixedCost := decimal.Zero
 	fixedCostLineItems := make([]dto.CreateInvoiceLineItemRequest, 0)
 
@@ -304,7 +421,44 @@ func (s *billingService) CalculateFixedCharges(
 		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
+	if params.FixedChargeAdjustment != nil && params.FixedChargeAdjustment.GreaterThan(decimal.Zero) && len(fixedCostLineItems) > 0 {
+		fixedCostLineItems = applyFixedChargeAdjustmentToLineItems(fixedCostLineItems, *params.FixedChargeAdjustment)
+	}
+	fixedCost = lo.Reduce(fixedCostLineItems, func(agg decimal.Decimal, li dto.CreateInvoiceLineItemRequest, _ int) decimal.Decimal {
+		return agg.Add(li.Amount)
+	}, decimal.Zero)
+
 	return fixedCostLineItems, fixedCost, nil
+}
+
+// applyFixedChargeAdjustmentToLineItems reduces line Amounts in slice order: for each line,
+// take min(remaining credit, line amount). Each take is capped by the line, so total reduction
+// cannot exceed the sum of line amounts even when credit is larger.
+func applyFixedChargeAdjustmentToLineItems(
+	items []dto.CreateInvoiceLineItemRequest,
+	credit decimal.Decimal,
+) []dto.CreateInvoiceLineItemRequest {
+	updated := slices.Clone(items)
+	if len(updated) == 0 {
+		return updated
+	}
+	remaining := credit
+	if !remaining.GreaterThan(decimal.Zero) {
+		return updated
+	}
+	for i := range updated {
+		if remaining.IsZero() {
+			break
+		}
+		amt := updated[i].Amount
+		if !amt.IsPositive() {
+			continue
+		}
+		take := decimal.Min(remaining, amt)
+		updated[i].Amount = amt.Sub(take)
+		remaining = remaining.Sub(take)
+	}
+	return updated
 }
 
 // endDateBoundaryForMatching returns periodEnd + one billing period length so that
@@ -382,11 +536,15 @@ func FindMatchingLineItemPeriodForInvoice(in FindMatchingLineItemPeriodInput) (F
 
 func (s *billingService) CalculateUsageCharges(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	usage *dto.GetUsageBySubscriptionResponse,
-	periodStart,
-	periodEnd time.Time,
+	params CalculateUsageChargesParams,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
+	if err := params.Validate(); err != nil {
+		return nil, decimal.Zero, err
+	}
+	sub := params.Subscription
+	usage := params.Usage
+	periodStart := params.PeriodStart
+	periodEnd := params.PeriodEnd
 
 	if usage == nil {
 		return nil, decimal.Zero, nil
@@ -1826,19 +1984,30 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 func (s *billingService) CalculateAllCharges(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	usage *dto.GetUsageBySubscriptionResponse,
-	periodStart,
-	periodEnd time.Time,
+	params CalculateAllChargesParams,
 ) (*BillingCalculationResult, error) {
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
+	sub := params.Subscription
 	// Calculate fixed charges
-	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, sub, periodStart, periodEnd)
+	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, CalculateFixedChargesParams{
+		Subscription:          sub,
+		PeriodStart:           params.PeriodStart,
+		PeriodEnd:             params.PeriodEnd,
+		FixedChargeAdjustment: params.FixedChargeAdjustment,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	// Calculate usage charges
-	usageCharges, usageTotal, err := s.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+	usageCharges, usageTotal, err := s.CalculateUsageCharges(ctx, CalculateUsageChargesParams{
+		Subscription: sub,
+		Usage:        params.Usage,
+		PeriodStart:  params.PeriodStart,
+		PeriodEnd:    params.PeriodEnd,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1853,18 +2022,24 @@ func (s *billingService) CalculateAllCharges(
 
 func (s *billingService) calculateAllFeatureUsageCharges(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	usage *dto.GetUsageBySubscriptionResponse,
-	periodStart,
-	periodEnd time.Time,
+	params CalculateAllChargesParams,
 ) (*BillingCalculationResult, error) {
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
+	sub := params.Subscription
 	// Calculate fixed charges
-	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, sub, periodStart, periodEnd)
+	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, CalculateFixedChargesParams{
+		Subscription:          sub,
+		PeriodStart:           params.PeriodStart,
+		PeriodEnd:             params.PeriodEnd,
+		FixedChargeAdjustment: params.FixedChargeAdjustment,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	usageCharges, usageTotal, err := s.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd, &CalculateFeatureUsageChargesOpts{Source: types.UsageSourceInvoiceCreation})
+	usageCharges, usageTotal, err := s.CalculateFeatureUsageCharges(ctx, sub, params.Usage, params.PeriodStart, params.PeriodEnd, &CalculateFeatureUsageChargesOpts{Source: types.UsageSourceInvoiceCreation})
 	if err != nil {
 		return nil, err
 	}
@@ -1915,67 +2090,65 @@ func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems 
 
 func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	periodStart,
-	periodEnd time.Time,
-	referencePoint types.InvoiceReferencePoint,
-	excludeInvoiceID string,
+	params PrepareSubscriptionInvoiceRequestParams,
 ) (*dto.CreateInvoiceRequest, error) {
-	// Validate that the billing period respects subscription end date
-	if err := s.validatePeriodAgainstSubscriptionEndDate(sub, periodStart, periodEnd); err != nil {
+	if err := params.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart; for historical
+	// Validate that the billing period respects subscription end date
+	if err := s.validatePeriodAgainstSubscriptionEndDate(params.Subscription, params.PeriodStart, params.PeriodEnd); err != nil {
+		return nil, err
+	}
+
+	// Line items loaded via GetWithLineItems are filtered by subscription CurrentPeriodStart; for historical
 	// periods (recalculation, past invoices) reload using the invoice billing period start.
 	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
-	lineItemFilter.SubscriptionIDs = []string{sub.ID}
+	lineItemFilter.SubscriptionIDs = []string{params.Subscription.ID}
 	lineItemFilter.ActiveFilter = true
-	lineItemFilter.CurrentPeriodStart = &periodStart
+	lineItemFilter.CurrentPeriodStart = &params.PeriodStart
 	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
 	if err != nil {
 		return nil, err
 	}
-	sub.LineItems = lineItems
+	params.Subscription.LineItems = lineItems
 
 	// Attach prices so cost calculations (CalculateFixedCharges, tiers, etc.) have the full price object.
-	if err := s.attachPricesToLineItems(ctx, sub.LineItems); err != nil {
+	if err := s.attachPricesToLineItems(ctx, params.Subscription.LineItems); err != nil {
 		return nil, err
 	}
 
 	// nothing to invoice default response 0$ invoice
 	zeroAmountInvoice, err := s.CreateInvoiceRequestForCharges(ctx,
-		sub, nil, periodStart, periodEnd, "", types.Metadata{})
+		params.Subscription, nil, params.PeriodStart, params.PeriodEnd, "", types.Metadata{})
 	if err != nil {
 		return nil, err
 	}
 
 	// Calculate next period for advance charges
-	nextPeriodStart := periodEnd
+	nextPeriodStart := params.PeriodEnd
 	nextPeriodEnd, err := types.NextBillingDate(
 		nextPeriodStart,
-		sub.BillingAnchor,
-		sub.BillingPeriodCount,
-		sub.BillingPeriod,
-		sub.EndDate,
+		params.Subscription.BillingAnchor,
+		params.Subscription.BillingPeriodCount,
+		params.Subscription.BillingPeriod,
+		params.Subscription.EndDate,
 	)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("failed to calculate next billing date").
-			Mark(ierr.ErrSystem)
+		return nil, err
 	}
 
 	// Classify line items
-	classification := s.ClassifyLineItems(sub, periodStart, periodEnd, nextPeriodStart, nextPeriodEnd)
+	classification := s.ClassifyLineItems(params.Subscription, params.PeriodStart, params.PeriodEnd, nextPeriodStart, nextPeriodEnd)
 
 	var calculationResult *BillingCalculationResult
 	var metadata types.Metadata = make(types.Metadata)
 	var description string
 
-	switch referencePoint {
+	switch params.ReferencePoint {
 	case types.ReferencePointPeriodStart:
 		// Only include advance charges for current period
-		advanceLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodAdvance, excludeInvoiceID)
+		advanceLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, params.Subscription, params.PeriodStart, params.PeriodEnd, classification.CurrentPeriodAdvance, params.ExcludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
@@ -1984,30 +2157,30 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		calculationResult, err = s.CalculateCharges(
-			ctx,
-			sub,
-			advanceLineItems,
-			periodStart,
-			periodEnd,
-			false, // No usage for advance
-		)
+		calculationResult, err = s.CalculateCharges(ctx, CalculateChargesParams{
+			Subscription:          params.Subscription,
+			LineItems:             advanceLineItems,
+			PeriodStart:           params.PeriodStart,
+			PeriodEnd:             params.PeriodEnd,
+			IncludeUsage:          false, // No usage for advance
+			FixedChargeAdjustment: params.OpeningInvoiceAdjustmentAmount,
+		})
 		if err != nil {
 			return nil, err
 		}
 
-		description = fmt.Sprintf("Invoice for advance charges - subscription %s", sub.ID)
+		description = fmt.Sprintf("Invoice for advance charges - subscription %s", params.Subscription.ID)
 
 	case types.ReferencePointPeriodEnd:
 		// Include both arrear charges for current period and advance charges for next period
 		// Use calculateFeatureUsageCharges for arrear so cumulative commitment is applied (feature_usage path)
-		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear, excludeInvoiceID)
+		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, params.Subscription, params.PeriodStart, params.PeriodEnd, classification.CurrentPeriodArrear, params.ExcludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
 
 		// Then, process advance charges for next period
-		advanceLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, nextPeriodStart, nextPeriodEnd, classification.NextPeriodAdvance, excludeInvoiceID)
+		advanceLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, params.Subscription, nextPeriodStart, nextPeriodEnd, classification.NextPeriodAdvance, params.ExcludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
@@ -2019,27 +2192,25 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges (feature_usage path for cumulative commitment support)
-		arrearResult, err := s.CalculateCharges(
-			ctx,
-			sub,
-			arrearLineItems,
-			periodStart,
-			periodEnd,
-			classification.HasUsageCharges, // Include usage for arrear
-		)
+		arrearResult, err := s.CalculateCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    arrearLineItems,
+			PeriodStart:  params.PeriodStart,
+			PeriodEnd:    params.PeriodEnd,
+			IncludeUsage: classification.HasUsageCharges, // Include usage for arrear
+		})
 		if err != nil {
 			return nil, err
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(
-			ctx,
-			sub,
-			advanceLineItems,
-			nextPeriodStart,
-			nextPeriodEnd,
-			false, // No usage for advance
-		)
+		advanceResult, err := s.CalculateCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    advanceLineItems,
+			PeriodStart:  nextPeriodStart,
+			PeriodEnd:    nextPeriodEnd,
+			IncludeUsage: false, // No usage for advance
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -2049,37 +2220,35 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			FixedCharges: append(arrearResult.FixedCharges, advanceResult.FixedCharges...),
 			UsageCharges: arrearResult.UsageCharges, // Only arrear has usage
 			TotalAmount:  arrearResult.TotalAmount.Add(advanceResult.TotalAmount),
-			Currency:     sub.Currency,
+			Currency:     params.Subscription.Currency,
 		}
 
-		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
+		description = fmt.Sprintf("Invoice for subscription %s", params.Subscription.ID)
 
 	case types.ReferencePointPreview:
 		// For preview, include both current period arrear and next period advance
 		// but don't filter out already invoiced items
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateFeatureUsageCharges(
-			ctx,
-			sub,
-			classification.CurrentPeriodArrear,
-			periodStart,
-			periodEnd,
-			classification.HasUsageCharges, // Include usage for arrear
-		)
+		arrearResult, err := s.calculateFeatureUsageCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    classification.CurrentPeriodArrear,
+			PeriodStart:  params.PeriodStart,
+			PeriodEnd:    params.PeriodEnd,
+			IncludeUsage: classification.HasUsageCharges, // Include usage for arrear
+		})
 		if err != nil {
 			return nil, err
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.calculateFeatureUsageCharges(
-			ctx,
-			sub,
-			classification.NextPeriodAdvance,
-			nextPeriodStart,
-			nextPeriodEnd,
-			false, // No usage for advance
-		)
+		advanceResult, err := s.calculateFeatureUsageCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    classification.NextPeriodAdvance,
+			PeriodStart:  nextPeriodStart,
+			PeriodEnd:    nextPeriodEnd,
+			IncludeUsage: false, // No usage for advance
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -2089,10 +2258,10 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			FixedCharges: append(arrearResult.FixedCharges, advanceResult.FixedCharges...),
 			UsageCharges: arrearResult.UsageCharges, // Only arrear has usage
 			TotalAmount:  arrearResult.TotalAmount.Add(advanceResult.TotalAmount),
-			Currency:     sub.Currency,
+			Currency:     params.Subscription.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
+		description = fmt.Sprintf("Preview invoice for subscription %s", params.Subscription.ID)
 		metadata["is_preview"] = "true"
 
 	case types.ReferencePointInternalPreview:
@@ -2100,27 +2269,25 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// instead of calculateFeatureUsageCharges (ClickHouse FINAL feature_usage path).
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
-			ctx,
-			sub,
-			classification.CurrentPeriodArrear,
-			periodStart,
-			periodEnd,
-			classification.HasUsageCharges, // Include usage for arrear
-		)
+		arrearResult, err := s.CalculateCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    classification.CurrentPeriodArrear,
+			PeriodStart:  params.PeriodStart,
+			PeriodEnd:    params.PeriodEnd,
+			IncludeUsage: classification.HasUsageCharges, // Include usage for arrear
+		})
 		if err != nil {
 			return nil, err
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(
-			ctx,
-			sub,
-			classification.NextPeriodAdvance,
-			nextPeriodStart,
-			nextPeriodEnd,
-			false, // No usage for advance
-		)
+		advanceResult, err := s.CalculateCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    classification.NextPeriodAdvance,
+			PeriodStart:  nextPeriodStart,
+			PeriodEnd:    nextPeriodEnd,
+			IncludeUsage: false, // No usage for advance
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -2130,10 +2297,10 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			FixedCharges: append(arrearResult.FixedCharges, advanceResult.FixedCharges...),
 			UsageCharges: arrearResult.UsageCharges, // Only arrear has usage
 			TotalAmount:  arrearResult.TotalAmount.Add(advanceResult.TotalAmount),
-			Currency:     sub.Currency,
+			Currency:     params.Subscription.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
+		description = fmt.Sprintf("Preview invoice for subscription %s", params.Subscription.ID)
 		metadata["is_preview"] = "true"
 
 	case types.ReferencePointMeterUsagePreview:
@@ -2141,27 +2308,25 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// instead of the feature_usage ClickHouse FINAL path.
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateMeterUsageCharges(
-			ctx,
-			sub,
-			classification.CurrentPeriodArrear,
-			periodStart,
-			periodEnd,
-			classification.HasUsageCharges, // Include usage for arrear
-		)
+		arrearResult, err := s.calculateMeterUsageCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    classification.CurrentPeriodArrear,
+			PeriodStart:  params.PeriodStart,
+			PeriodEnd:    params.PeriodEnd,
+			IncludeUsage: classification.HasUsageCharges, // Include usage for arrear
+		})
 		if err != nil {
 			return nil, err
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.calculateMeterUsageCharges(
-			ctx,
-			sub,
-			classification.NextPeriodAdvance,
-			nextPeriodStart,
-			nextPeriodEnd,
-			false, // No usage for advance
-		)
+		advanceResult, err := s.calculateMeterUsageCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    classification.NextPeriodAdvance,
+			PeriodStart:  nextPeriodStart,
+			PeriodEnd:    nextPeriodEnd,
+			IncludeUsage: false, // No usage for advance
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -2171,28 +2336,27 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			FixedCharges: append(arrearResult.FixedCharges, advanceResult.FixedCharges...),
 			UsageCharges: arrearResult.UsageCharges, // Only arrear has usage
 			TotalAmount:  arrearResult.TotalAmount.Add(advanceResult.TotalAmount),
-			Currency:     sub.Currency,
+			Currency:     params.Subscription.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
+		description = fmt.Sprintf("Preview invoice for subscription %s", params.Subscription.ID)
 		metadata["is_preview"] = "true"
 
 	case types.ReferencePointCancel:
 		// for cancel, include arrear line items only (feature_usage path for cumulative commitment)
-		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear, excludeInvoiceID)
+		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, params.Subscription, params.PeriodStart, params.PeriodEnd, classification.CurrentPeriodArrear, params.ExcludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateFeatureUsageCharges(
-			ctx,
-			sub,
-			arrearLineItems,
-			periodStart,
-			periodEnd,
-			true, // Include usage for arrear
-		)
+		arrearResult, err := s.calculateFeatureUsageCharges(ctx, CalculateChargesParams{
+			Subscription: params.Subscription,
+			LineItems:    arrearLineItems,
+			PeriodStart:  params.PeriodStart,
+			PeriodEnd:    params.PeriodEnd,
+			IncludeUsage: true, // Include usage for arrear
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -2201,24 +2365,24 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			FixedCharges: arrearResult.FixedCharges,
 			UsageCharges: arrearResult.UsageCharges, // Only arrear has usage
 			TotalAmount:  arrearResult.TotalAmount,
-			Currency:     sub.Currency,
+			Currency:     params.Subscription.Currency,
 		}
 
-		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
+		description = fmt.Sprintf("Invoice for subscription %s", params.Subscription.ID)
 
 	default:
 		return nil, ierr.NewError("invalid reference point").
-			WithHint(fmt.Sprintf("Reference point '%s' is not supported", referencePoint)).
+			WithHint(fmt.Sprintf("Reference point '%s' is not supported", params.ReferencePoint)).
 			Mark(ierr.ErrValidation)
 	}
 
 	// Create invoice request for the calculated charges
 	return s.CreateInvoiceRequestForCharges(
 		ctx,
-		sub,
+		params.Subscription,
 		calculationResult,
-		periodStart,
-		periodEnd,
+		params.PeriodStart,
+		params.PeriodEnd,
 		description,
 		metadata,
 	)
@@ -2481,12 +2645,16 @@ func (s *billingService) FilterLineItemsToBeInvoiced(
 
 func (s *billingService) calculateFeatureUsageCharges(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	lineItems []*subscription.SubscriptionLineItem,
-	periodStart,
-	periodEnd time.Time,
-	includeUsage bool,
+	params CalculateChargesParams,
 ) (*BillingCalculationResult, error) {
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
+	sub := params.Subscription
+	lineItems := params.LineItems
+	periodStart := params.PeriodStart
+	periodEnd := params.PeriodEnd
+	includeUsage := params.IncludeUsage
 	// Create a filtered subscription with only the specified line items
 	filteredSub := *sub
 	filteredSub.LineItems = lineItems
@@ -2508,19 +2676,28 @@ func (s *billingService) calculateFeatureUsageCharges(
 		}
 	}
 
-	// Calculate charges
-	return s.calculateAllFeatureUsageCharges(ctx, &filteredSub, usage, periodStart, periodEnd)
+	return s.calculateAllFeatureUsageCharges(ctx, CalculateAllChargesParams{
+		Subscription:          &filteredSub,
+		Usage:                 usage,
+		PeriodStart:           periodStart,
+		PeriodEnd:             periodEnd,
+		FixedChargeAdjustment: params.FixedChargeAdjustment,
+	})
 }
 
 // CalculateCharges calculates charges for the given line items and period
 func (s *billingService) CalculateCharges(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	lineItems []*subscription.SubscriptionLineItem,
-	periodStart,
-	periodEnd time.Time,
-	includeUsage bool,
+	params CalculateChargesParams,
 ) (*BillingCalculationResult, error) {
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
+	sub := params.Subscription
+	lineItems := params.LineItems
+	periodStart := params.PeriodStart
+	periodEnd := params.PeriodEnd
+	includeUsage := params.IncludeUsage
 	// Create a filtered subscription with only the specified line items
 	filteredSub := *sub
 	filteredSub.LineItems = lineItems
@@ -2541,8 +2718,13 @@ func (s *billingService) CalculateCharges(
 		}
 	}
 
-	// Calculate charges
-	return s.CalculateAllCharges(ctx, &filteredSub, usage, periodStart, periodEnd)
+	return s.CalculateAllCharges(ctx, CalculateAllChargesParams{
+		Subscription:          &filteredSub,
+		Usage:                 usage,
+		PeriodStart:           periodStart,
+		PeriodEnd:             periodEnd,
+		FixedChargeAdjustment: params.FixedChargeAdjustment,
+	})
 }
 
 // calculateMeterUsageCharges fetches usage from the meter_usage table via
@@ -2550,12 +2732,16 @@ func (s *billingService) CalculateCharges(
 // existing charge calculation pipeline.
 func (s *billingService) calculateMeterUsageCharges(
 	ctx context.Context,
-	sub *subscription.Subscription,
-	lineItems []*subscription.SubscriptionLineItem,
-	periodStart,
-	periodEnd time.Time,
-	includeUsage bool,
+	params CalculateChargesParams,
 ) (*BillingCalculationResult, error) {
+	if err := params.Validate(); err != nil {
+		return nil, err
+	}
+	sub := params.Subscription
+	lineItems := params.LineItems
+	periodStart := params.PeriodStart
+	periodEnd := params.PeriodEnd
+	includeUsage := params.IncludeUsage
 	filteredSub := *sub
 	filteredSub.LineItems = lineItems
 
@@ -2575,7 +2761,13 @@ func (s *billingService) calculateMeterUsageCharges(
 		}
 	}
 
-	return s.calculateAllMeterUsageCharges(ctx, &filteredSub, usage, periodStart, periodEnd)
+	return s.calculateAllMeterUsageCharges(ctx, CalculateAllChargesParams{
+		Subscription:          &filteredSub,
+		Usage:                 usage,
+		PeriodStart:           periodStart,
+		PeriodEnd:             periodEnd,
+		FixedChargeAdjustment: params.FixedChargeAdjustment,
+	})
 }
 
 // CreateInvoiceRequestForCharges creates an invoice for the given charges
