@@ -505,12 +505,14 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		query = query.Where(customer.ExternalIDIn(f.ExternalIDs...))
 	}
 
-	// TODO: Task 5 - replace with dsl.ApplyMetadataFilter
-	// query, err = dsl.ApplyMetadataFilter[CustomerQuery, predicate.Customer](
-	// 	query,
-	// 	f.MetadataFilter,
-	// 	func(p dsl.Predicate) predicate.Customer { return predicate.Customer(p) },
-	// )
+	query, err = dsl.ApplyMetadataFilter[CustomerQuery, predicate.Customer](
+		query,
+		f.MetadataFilter,
+		func(p dsl.Predicate) predicate.Customer { return predicate.Customer(p) },
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[CustomerQuery, predicate.Customer](

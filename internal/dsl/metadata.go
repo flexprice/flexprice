@@ -33,7 +33,9 @@ func ApplyMetadataFilter[T any, P any](
 	args := []reflect.Value{reflect.ValueOf(pred)}
 	result := reflect.ValueOf(query).MethodByName("Where").Call(args)
 	if len(result) > 0 {
-		query = result[0].Interface().(T)
+		if q, ok := result[0].Interface().(T); ok {
+			query = q
+		}
 	}
 	return query, nil
 }
