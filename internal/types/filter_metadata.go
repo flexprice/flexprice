@@ -20,3 +20,8 @@ func (f *MetadataFilter) Match(entityMetadata map[string]string) bool {
 	}
 	return true
 }
+
+// Validate validates the metadata filter (currently a no-op for symmetry with other embeddable filters)
+func (f *MetadataFilter) Validate() error {
+	return nil
+}

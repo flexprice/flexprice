@@ -11,15 +11,14 @@ import (
 type CustomerFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	// filters allows complex filtering based on multiple fields
+	*MetadataFilter
 
-	Filters           []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort              []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
-	CustomerIDs       []string           `json:"customer_ids,omitempty" form:"customer_ids" validate:"omitempty"`
-	ExternalIDs       []string           `json:"external_ids,omitempty" form:"external_ids" validate:"omitempty"`
-	ExternalID        string             `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
-	Email             string             `json:"email,omitempty" form:"email" validate:"omitempty,email"`
-	MetadataFilter    map[string]string  `json:"metadata,omitempty" form:"metadata"`
+	Filters     []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort        []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	CustomerIDs []string           `json:"customer_ids,omitempty" form:"customer_ids" validate:"omitempty"`
+	ExternalIDs []string           `json:"external_ids,omitempty" form:"external_ids" validate:"omitempty"`
+	ExternalID  string             `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
+	Email       string             `json:"email,omitempty" form:"email" validate:"omitempty,email"`
 }
 
 // NewCustomerFilter creates a new CustomerFilter with default values
@@ -46,6 +45,12 @@ func (f CustomerFilter) Validate() error {
 
 	if f.TimeRangeFilter != nil {
 		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.MetadataFilter != nil {
+		if err := f.MetadataFilter.Validate(); err != nil {
 			return err
 		}
 	}

@@ -511,10 +511,13 @@ func (s *CustomerServiceSuite) TestGetCustomersMetadataFilter() {
 	}
 
 	baseFilter := func(meta map[string]string) *types.CustomerFilter {
-		return &types.CustomerFilter{
-			QueryFilter:    types.NewDefaultQueryFilter(),
-			MetadataFilter: meta,
+		f := &types.CustomerFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
 		}
+		if len(meta) > 0 {
+			f.MetadataFilter = &types.MetadataFilter{Metadata: meta}
+		}
+		return f
 	}
 
 	testCases := []struct {
