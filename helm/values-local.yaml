@@ -1,0 +1,259 @@
+# Local development overrides for kind cluster.
+# DO NOT COMMIT — this file is gitignored.
+# It contains inline dev secrets and is safe only for local use.
+
+image:
+  repository: flexprice-app
+  tag: "local"
+  pullPolicy: Never  # loaded directly into kind via `kind load docker-image`
+
+# Relaxed pod security for kind (images may not have a non-root user)
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: false
+  runAsUser: 0
+
+# ── App resources (trimmed for laptop) ───────────────────────────────────────
+
+api:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+consumer:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+worker:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+# Requires: echo "127.0.0.1 flexprice.local api.flexprice.local temporal.flexprice.local" | sudo tee -a /etc/hosts
+
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: api.flexprice.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+frontendIngress:
+  enabled: true
+  className: "nginx"
+  host: "flexprice.local"
+
+temporalIngress:
+  enabled: true
+  className: "nginx"
+  host: "temporal.flexprice.local"
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+
+frontend:
+  enabled: true
+  image:
+    repository: flexprice-frontend
+    tag: "local"
+    pullPolicy: Never  # loaded directly into kind, not pulled from a registry
+  env:
+    apiUrl: "http://api.flexprice.local/v1"
+    environment: "self-hosted"
+
+# ── Secrets (dev-only inline values) ─────────────────────────────────────────
+
+secrets:
+  encryptionKey: "0000000000000000000000000000000000000000000000000000000000000001"
+
+# ── Auth (API-key mode, no Supabase needed) ───────────────────────────────────
+# Key: sk_local_flexprice_test_key  (SHA-256 hash stored below)
+
+auth:
+  provider: "api_key"
+  secret: "local-dev-secret-not-used-in-api-key-mode"
+  apiKey:
+    header: "x-api-key"
+    keys:
+      0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c:
+        tenant_id: "00000000-0000-0000-0000-000000000000"
+        user_id: "local-dev-user"
+        name: "local-dev-key"
+        is_active: true
+
+# ── Billing seed IDs ──────────────────────────────────────────────────────────
+
+billing:
+  tenantId: "00000000-0000-0000-0000-000000000000"
+  environmentId: "00000000-0000-0000-0000-000000000000"
+
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
+
+postgres:
+  password: "flexprice123"
+  sslmode: "disable"   # Bitnami subchart has no TLS; production default 'require' would fail
+
+postgresql:
+  image:
+    registry: docker.io
+    repository: bitnami/postgresql
+    tag: "latest"
+  primary:
+    persistence:
+      size: 5Gi
+      storageClass: "standard"  # kind default StorageClass
+  auth:
+    password: "flexprice123"
+    postgresPassword: "flexprice123"
+
+# ── ClickHouse ────────────────────────────────────────────────────────────────
+
+clickhouse:
+  mode: standalone
+  password: "flexprice123" # user is default
+  standalone:
+    persistence:
+      size: 5Gi
+      storageClass: "standard"  # override from gp3 (EKS-only)
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1"
+
+# ── Kafka ─────────────────────────────────────────────────────────────────────
+
+kafkaConfig:
+  saslPassword: "flexprice123"
+
+kafka:
+  enabled: false  # disable Bitnami subchart; hand-rolled template uses confluentinc/cp-kafka
+
+kafkaConfig:
+  internal:
+    persistence:
+      storageClass: "standard"
+      size: 2Gi
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "512Mi"
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+
+redis:
+  enabled: true
+  architecture: standalone
+  image:
+    registry: docker.io
+    repository: bitnami/redis
+    tag: "latest"
+  master:
+    persistence:
+      size: 1Gi
+      storageClass: "standard"
+
+temporalConfig:
+  enabled: true  # disables hand-rolled temporal.yaml template; we use the temporal subchart
+
+# ── Temporal (official subchart keys, not temporalConfig which is app config) ──
+
+temporal:
+  prometheus:
+    enabled: false
+  elasticsearch:
+    enabled: false
+  grafana:
+    enabled: false
+  ui:
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+  cassandra:
+    enabled: false
+  mysql:
+    enabled: false
+  postgresql:
+    enabled: false  # use FlexPrice's own postgresql subchart
+  server:
+    configMapsToMount: "sprig"
+    setConfigFilePath: true
+    useEntrypointScript: false
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+    config:
+      persistence:
+        default:
+          driver: sql
+          sql:
+            driver: postgres12
+            host: flexprice-postgresql
+            port: 5432
+            database: temporal
+            user: flexprice
+            password: flexprice123
+            maxConns: 20
+            maxIdleConns: 20
+            maxConnLifetime: 1h
+        visibility:
+          driver: sql
+          sql:
+            driver: postgres12
+            host: flexprice-postgresql
+            port: 5432
+            database: temporal_visibility
+            user: flexprice
+            password: flexprice123
+            maxConns: 10
+            maxIdleConns: 10
+            maxConnLifetime: 1h
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+# ── Migration ─────────────────────────────────────────────────────────────────
+
+migration:
+  enabled: true
+  steps:
+    postgresSetup: true
+    clickhouse: true
+    kafka: true
+    ent: true
+    seed: true
