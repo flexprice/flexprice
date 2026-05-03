@@ -9,6 +9,7 @@ import (
 )
 
 var Idx_tenant_environment_external_id_unique = "idx_tenant_environment_external_id_unique"
+var Idx_customer_metadata_gin = "idx_customer_metadata_gin"
 
 // Customer holds the schema definition for the Customer entity.
 type Customer struct {
@@ -99,5 +100,9 @@ func (Customer) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "email").
 			Annotations(entsql.IndexWhere("email IS NOT NULL AND email != '' AND status = 'published'")).
 			StorageKey("idx_customer_tenant_environment_email"),
+		// GIN index for efficient JSONB containment queries on metadata (@> operator)
+		index.Fields("metadata").
+			Annotations(entsql.IndexAnnotation{Type: "GIN"}).
+			StorageKey(Idx_customer_metadata_gin),
 	}
 }
