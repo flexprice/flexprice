@@ -190,6 +190,95 @@ func (s *PriceServiceSuite) TestGetPrices() {
 	s.Len(resp.Items, 0) // Ensure no prices are retrieved
 }
 
+// TestGetPrices_EmptyEntityIDsDoesNotSuppressResults is a regression test for the bug where
+// an empty (non-nil) EntityIDs slice caused the ent query builder to emit
+// "WHERE entity_id IN ()" which PostgreSQL evaluates as WHERE FALSE, silently
+// returning zero rows regardless of any other filters (e.g. price_ids).
+// Root fix: guard changed from `f.EntityIDs != nil` to `len(f.EntityIDs) > 0`
+// in internal/repository/ent/price.go (applyEntityQueryOptions).
+func (s *PriceServiceSuite) TestGetPrices_EmptyEntityIDsDoesNotSuppressResults() {
+	_ = s.priceRepo.Create(s.ctx, &price.Price{
+		ID:         "price-reg-1",
+		Amount:     decimal.NewFromInt(100),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-1",
+		BaseModel:  types.GetDefaultBaseModel(s.ctx),
+	})
+	_ = s.priceRepo.Create(s.ctx, &price.Price{
+		ID:         "price-reg-2",
+		Amount:     decimal.NewFromInt(200),
+		Currency:   "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:   "plan-2",
+		BaseModel:  types.GetDefaultBaseModel(s.ctx),
+	})
+
+	tests := []struct {
+		name      string
+		filter    *types.PriceFilter
+		wantTotal int
+		wantIDs   []string
+	}{
+		{
+			name: "price_ids only - baseline",
+			filter: &types.PriceFilter{
+				QueryFilter: types.NewDefaultQueryFilter(),
+				PriceIDs:    []string{"price-reg-1"},
+			},
+			wantTotal: 1,
+			wantIDs:   []string{"price-reg-1"},
+		},
+		{
+			name: "price_ids with empty entity_ids (the regression case - was WHERE FALSE)",
+			filter: &types.PriceFilter{
+				QueryFilter: types.NewDefaultQueryFilter(),
+				PriceIDs:    []string{"price-reg-1"},
+				EntityIDs:   []string{}, // explicitly empty, non-nil - the actual bug trigger
+			},
+			wantTotal: 1,
+			wantIDs:   []string{"price-reg-1"},
+		},
+		{
+			name: "price_ids with matching entity_ids - both filters satisfied",
+			filter: &types.PriceFilter{
+				QueryFilter: types.NewDefaultQueryFilter(),
+				PriceIDs:    []string{"price-reg-1"},
+				EntityIDs:   []string{"plan-1"},
+			},
+			wantTotal: 1,
+			wantIDs:   []string{"price-reg-1"},
+		},
+		{
+			name: "price_ids with non-matching entity_ids - AND produces empty result",
+			filter: &types.PriceFilter{
+				QueryFilter: types.NewDefaultQueryFilter(),
+				PriceIDs:    []string{"price-reg-1"},
+				EntityIDs:   []string{"plan-2"}, // price-reg-1 belongs to plan-1, not plan-2
+			},
+			wantTotal: 0,
+			wantIDs:   []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			resp, err := s.priceService.GetPrices(s.ctx, tt.filter)
+			s.NoError(err)
+			s.NotNil(resp)
+			s.Equal(tt.wantTotal, resp.Pagination.Total, "unexpected total count")
+			s.Len(resp.Items, len(tt.wantIDs), "unexpected items count")
+			if len(tt.wantIDs) > 0 {
+				gotIDs := make([]string, len(resp.Items))
+				for i, item := range resp.Items {
+					gotIDs[i] = item.ID
+				}
+				s.ElementsMatch(tt.wantIDs, gotIDs)
+			}
+		})
+	}
+}
+
 func (s *PriceServiceSuite) TestUpdatePrice() {
 	// Create a price
 	price := &price.Price{
