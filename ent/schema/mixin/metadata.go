@@ -2,9 +2,7 @@ package mixin
 
 import (
 	"entgo.io/ent"
-	entsql "entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
-	"entgo.io/ent/schema/index"
 	"entgo.io/ent/schema/mixin"
 )
 
@@ -27,10 +25,7 @@ func (MetadataMixin) Fields() []ent.Field {
 
 // Indexes of the MetadataMixin.
 func (MetadataMixin) Indexes() []ent.Index {
-	return []ent.Index{
-		index.Fields("metadata").
-			Annotations(entsql.IndexAnnotation{Type: "GIN"}),
-	}
+	return []ent.Index{}
 }
 
 // Hooks of the MetadataMixin.

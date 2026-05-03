@@ -248,14 +248,6 @@ var (
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "costsheet_metadata",
-				Unique:  false,
-				Columns: []*schema.Column{CostsheetsColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Type: "GIN",
-				},
-			},
-			{
 				Name:    "idx_costsheet_tenant_environment_lookup_key",
 				Unique:  true,
 				Columns: []*schema.Column{CostsheetsColumns[1], CostsheetsColumns[7], CostsheetsColumns[10]},
@@ -699,14 +691,6 @@ var (
 		PrimaryKey: []*schema.Column{CustomersColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "customer_metadata",
-				Unique:  false,
-				Columns: []*schema.Column{CustomersColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Type: "GIN",
-				},
-			},
-			{
 				Name:    "idx_tenant_environment_external_id_unique",
 				Unique:  true,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[9]},
@@ -962,14 +946,6 @@ var (
 		Columns:    GroupsColumns,
 		PrimaryKey: []*schema.Column{GroupsColumns[0]},
 		Indexes: []*schema.Index{
-			{
-				Name:    "group_metadata",
-				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Type: "GIN",
-				},
-			},
 			{
 				Name:    "idx_group_tenant_environment_lookup_key",
 				Unique:  true,
@@ -1353,14 +1329,6 @@ var (
 		PrimaryKey: []*schema.Column{PlansColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "plan_metadata",
-				Unique:  false,
-				Columns: []*schema.Column{PlansColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Type: "GIN",
-				},
-			},
-			{
 				Name:    "idx_tenant_environment_lookup_key",
 				Unique:  true,
 				Columns: []*schema.Column{PlansColumns[1], PlansColumns[7], PlansColumns[9]},
@@ -1481,14 +1449,6 @@ var (
 		Columns:    PriceUnitsColumns,
 		PrimaryKey: []*schema.Column{PriceUnitsColumns[0]},
 		Indexes: []*schema.Index{
-			{
-				Name:    "priceunit_metadata",
-				Unique:  false,
-				Columns: []*schema.Column{PriceUnitsColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Type: "GIN",
-				},
-			},
 			{
 				Name:    "priceunit_tenant_id_environment_id_code",
 				Unique:  true,
@@ -1874,14 +1834,6 @@ var (
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "subscriptionphase_metadata",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionPhasesColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Type: "GIN",
-				},
-			},
-			{
 				Name:    "subscriptionphase_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionPhasesColumns[1], SubscriptionPhasesColumns[7]},
@@ -1922,14 +1874,6 @@ var (
 			},
 		},
 		Indexes: []*schema.Index{
-			{
-				Name:    "subscriptionschedule_metadata",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionSchedulesColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Type: "GIN",
-				},
-			},
 			{
 				Name:    "subscriptionschedule_subscription_id",
 				Unique:  false,
