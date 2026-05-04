@@ -20,6 +20,7 @@ const (
 	ScheduleIDSubscriptionRenewalAlerts    ScheduleID = "subscription-renewal-due-alerts"
 	ScheduleIDSubscriptionTrialEndDue      ScheduleID = "subscription-trial-end-due"
 	ScheduleIDOutboundWebhookStaleRetry    ScheduleID = "webhook-stale-retry"
+	ScheduleIDVoidOldPendingInvoices       ScheduleID = "void-old-pending-invoices"
 )
 
 // String returns the raw schedule id.
@@ -36,6 +37,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDSubscriptionRenewalAlerts,
 		ScheduleIDSubscriptionTrialEndDue,
 		ScheduleIDOutboundWebhookStaleRetry,
+		ScheduleIDVoidOldPendingInvoices,
 	}
 }
 
