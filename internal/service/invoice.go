@@ -4320,7 +4320,6 @@ func (s *invoiceService) VoidOldPendingInvoices(ctx context.Context) error {
 	envAccessSvc := NewEnvAccessService(s.Config)
 	settingsSvc := NewSettingsService(s.ServiceParams)
 	environmentSvc := NewEnvironmentService(s.EnvironmentRepo, envAccessSvc, settingsSvc, s.ServiceParams)
-	subscriptionSvc := NewSubscriptionService(s.ServiceParams)
 
 	tenants, err := tenantSvc.GetAllTenants(ctx)
 	if err != nil {
@@ -4342,7 +4341,7 @@ func (s *invoiceService) VoidOldPendingInvoices(ctx context.Context) error {
 		for _, env := range environments.Environments {
 			envCtx := context.WithValue(tenantCtx, types.CtxEnvironmentID, env.ID)
 
-			if err := s.voidOldPendingInvoicesForEnvironment(envCtx, tenant.ID, env.ID, subscriptionSvc); err != nil {
+			if err := s.voidOldPendingInvoicesForEnvironment(envCtx); err != nil {
 				s.Logger.Errorw("VoidOldPendingInvoices: failed to process environment",
 					"tenant_id", tenant.ID,
 					"environment_id", env.ID,
@@ -4357,11 +4356,10 @@ func (s *invoiceService) VoidOldPendingInvoices(ctx context.Context) error {
 }
 
 // voidOldPendingInvoicesForEnvironment processes a single tenant+environment pair.
-func (s *invoiceService) voidOldPendingInvoicesForEnvironment(
-	ctx context.Context,
-	tenantID, environmentID string,
-	subscriptionSvc SubscriptionService,
-) error {
+// Tenant and environment IDs are expected to be set on ctx via context.WithValue.
+func (s *invoiceService) voidOldPendingInvoicesForEnvironment(ctx context.Context) error {
+	subscriptionSvc := NewSubscriptionService(s.ServiceParams)
+
 	// Find incomplete subscriptions older than 24 hours
 	cutoffTime := time.Now().UTC().Add(-24 * time.Hour)
 	subscriptionFilter := &types.SubscriptionFilter{
@@ -4386,13 +4384,13 @@ func (s *invoiceService) voidOldPendingInvoicesForEnvironment(
 	}
 
 	s.Logger.Infow("voidOldPendingInvoicesForEnvironment: found old incomplete subscriptions",
-		"tenant_id", tenantID,
-		"environment_id", environmentID,
+		"tenant_id", types.GetTenantID(ctx),
+		"environment_id", types.GetEnvironmentID(ctx),
 		"count", len(subscriptions.Items),
 		"cutoff_time", cutoffTime.Format(time.RFC3339))
 
 	for _, sub := range subscriptions.Items {
-		if err := s.processOldIncompleteSubscription(ctx, sub, subscriptionSvc); err != nil {
+		if err := s.processOldIncompleteSubscription(ctx, sub); err != nil {
 			s.Logger.Errorw("voidOldPendingInvoicesForEnvironment: failed to process subscription",
 				"subscription_id", sub.ID,
 				"error", err)
@@ -4407,7 +4405,6 @@ func (s *invoiceService) voidOldPendingInvoicesForEnvironment(
 func (s *invoiceService) processOldIncompleteSubscription(
 	ctx context.Context,
 	sub *dto.SubscriptionResponse,
-	subscriptionSvc SubscriptionService,
 ) error {
 	invoiceFilter := &types.InvoiceFilter{
 		SubscriptionID: sub.ID,
@@ -4435,10 +4432,10 @@ func (s *invoiceService) processOldIncompleteSubscription(
 		// No pending invoices — cancel subscription immediately
 		s.Logger.Infow("processOldIncompleteSubscription: no pending invoices, cancelling subscription",
 			"subscription_id", sub.ID)
-		return s.cancelIncompleteSubscriptionForVoid(ctx, sub, subscriptionSvc)
+		return s.cancelIncompleteSubscriptionForVoid(ctx, sub)
 
 	case 1:
-		return s.processSingleOldInvoice(ctx, sub, invoices.Items[0], subscriptionSvc)
+		return s.processSingleOldInvoice(ctx, sub, invoices.Items[0])
 
 	default:
 		// 2+ pending invoices — skip
@@ -4454,7 +4451,6 @@ func (s *invoiceService) processSingleOldInvoice(
 	ctx context.Context,
 	sub *dto.SubscriptionResponse,
 	inv *dto.InvoiceResponse,
-	subscriptionSvc SubscriptionService,
 ) error {
 	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
@@ -4512,15 +4508,15 @@ func (s *invoiceService) processSingleOldInvoice(
 	}
 
 	// Cancel the subscription
-	return s.cancelIncompleteSubscriptionForVoid(ctx, sub, subscriptionSvc)
+	return s.cancelIncompleteSubscriptionForVoid(ctx, sub)
 }
 
 // cancelIncompleteSubscriptionForVoid cancels an incomplete subscription.
 func (s *invoiceService) cancelIncompleteSubscriptionForVoid(
 	ctx context.Context,
 	sub *dto.SubscriptionResponse,
-	subscriptionSvc SubscriptionService,
 ) error {
+	subscriptionSvc := NewSubscriptionService(s.ServiceParams)
 	s.Logger.Infow("cancelIncompleteSubscriptionForVoid",
 		"subscription_id", sub.ID,
 		"customer_id", sub.CustomerID)
