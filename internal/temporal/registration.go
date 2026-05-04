@@ -48,6 +48,7 @@ type cronActivityBundle struct {
 	subscription         *cronActivities.SubscriptionCronActivities
 	walletCreditExpiry   *cronActivities.WalletCreditExpiryActivities
 	webhookOutboundRetry *cronActivities.WebhookOutboundRetryActivities
+	invoice              *cronActivities.InvoiceCronActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -235,6 +236,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		subscription:         cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
 		walletCreditExpiry:   cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
 		webhookOutboundRetry: cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
+		invoice:              cronActivities.NewInvoiceCronActivities(service.NewInvoiceService(params), params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -442,19 +444,19 @@ func buildWorkerConfig(
 			cronWorkflows.CreditGrantProcessingWorkflow,
 			cronWorkflows.SubscriptionAutoCancellationWorkflow,
 			cronWorkflows.WalletCreditExpiryWorkflow,
-			cronWorkflows.SubscriptionBillingPeriodsWorkflow,
 			cronWorkflows.SubscriptionRenewalDueAlertsWorkflow,
 			cronWorkflows.SubscriptionTrialEndDueWorkflow,
 			cronWorkflows.OutboundWebhookStaleRetryWorkflow,
+			cronWorkflows.VoidOldPendingInvoicesWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
 			cron.subscription.ProcessAutoCancellationActivity,
 			cron.walletCreditExpiry.ExpireCreditsActivity,
-			cron.subscription.UpdateBillingPeriodsActivity,
 			cron.subscription.ProcessRenewalDueAlertsActivity,
 			cron.subscription.ProcessTrialEndDueActivity,
 			cron.webhookOutboundRetry.RetryStaleOutboundWebhooksActivity,
+			cron.invoice.VoidOldPendingInvoicesActivity,
 		)
 	}
 	return WorkerConfig{
