@@ -4362,23 +4362,6 @@ func (s *invoiceService) voidOldPendingInvoicesForEnvironment(
 	tenantID, environmentID string,
 	subscriptionSvc SubscriptionService,
 ) error {
-	// Only process environments that have an active Stripe connection
-	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
-	if err != nil {
-		s.Logger.Infow("voidOldPendingInvoicesForEnvironment: Stripe integration not available, skipping",
-			"tenant_id", tenantID,
-			"environment_id", environmentID,
-			"error", err)
-		return nil
-	}
-
-	if !stripeIntegration.Client.HasStripeConnection(ctx) {
-		s.Logger.Infow("voidOldPendingInvoicesForEnvironment: no Stripe connection, skipping",
-			"tenant_id", tenantID,
-			"environment_id", environmentID)
-		return nil
-	}
-
 	// Find incomplete subscriptions older than 24 hours
 	cutoffTime := time.Now().UTC().Add(-24 * time.Hour)
 	subscriptionFilter := &types.SubscriptionFilter{
@@ -4409,7 +4392,7 @@ func (s *invoiceService) voidOldPendingInvoicesForEnvironment(
 		"cutoff_time", cutoffTime.Format(time.RFC3339))
 
 	for _, sub := range subscriptions.Items {
-		if err := s.processOldIncompleteSubscription(ctx, sub, subscriptionSvc, cutoffTime); err != nil {
+		if err := s.processOldIncompleteSubscription(ctx, sub, subscriptionSvc); err != nil {
 			s.Logger.Errorw("voidOldPendingInvoicesForEnvironment: failed to process subscription",
 				"subscription_id", sub.ID,
 				"error", err)
@@ -4420,12 +4403,11 @@ func (s *invoiceService) voidOldPendingInvoicesForEnvironment(
 	return nil
 }
 
-// processOldIncompleteSubscription decides what to do based on the number of old invoices.
+// processOldIncompleteSubscription decides what to do based on the number of pending invoices.
 func (s *invoiceService) processOldIncompleteSubscription(
 	ctx context.Context,
 	sub *dto.SubscriptionResponse,
 	subscriptionSvc SubscriptionService,
-	cutoffTime time.Time,
 ) error {
 	invoiceFilter := &types.InvoiceFilter{
 		SubscriptionID: sub.ID,
@@ -4444,33 +4426,25 @@ func (s *invoiceService) processOldIncompleteSubscription(
 		return nil
 	}
 
-	var oldInvoices []*dto.InvoiceResponse
-	for _, inv := range invoices.Items {
-		if inv.CreatedAt.Before(cutoffTime) {
-			oldInvoices = append(oldInvoices, inv)
-		}
-	}
-
 	s.Logger.Infow("processOldIncompleteSubscription",
 		"subscription_id", sub.ID,
-		"total_invoices", len(invoices.Items),
-		"old_invoices", len(oldInvoices))
+		"pending_invoices", len(invoices.Items))
 
-	switch len(oldInvoices) {
+	switch len(invoices.Items) {
 	case 0:
-		// No old invoices — cancel subscription immediately
-		s.Logger.Infow("processOldIncompleteSubscription: no old invoices, cancelling subscription",
+		// No pending invoices — cancel subscription immediately
+		s.Logger.Infow("processOldIncompleteSubscription: no pending invoices, cancelling subscription",
 			"subscription_id", sub.ID)
 		return s.cancelIncompleteSubscriptionForVoid(ctx, sub, subscriptionSvc)
 
 	case 1:
-		return s.processSingleOldInvoice(ctx, sub, oldInvoices[0], subscriptionSvc)
+		return s.processSingleOldInvoice(ctx, sub, invoices.Items[0], subscriptionSvc)
 
 	default:
-		// 2+ old invoices — skip
-		s.Logger.Infow("processOldIncompleteSubscription: multiple old invoices, skipping",
+		// 2+ pending invoices — skip
+		s.Logger.Infow("processOldIncompleteSubscription: multiple pending invoices, skipping",
 			"subscription_id", sub.ID,
-			"invoice_count", len(oldInvoices))
+			"invoice_count", len(invoices.Items))
 		return nil
 	}
 }
