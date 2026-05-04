@@ -52,7 +52,7 @@ docker buildx build \
   --platform linux/arm64 \
   --load \
   -t "${IMAGE_URI}" \
-  -f Dockerfile.ecs .
+  -f Dockerfile .
 
 # Push the image
 echo "Pushing image to ECR: ${IMAGE_URI}"

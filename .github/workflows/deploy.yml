@@ -68,7 +68,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: Dockerfile.ecs
+          file: Dockerfile
           platforms: linux/arm64
           push: true
           tags: ${{ steps.image-tag.outputs.tag }}

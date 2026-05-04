@@ -118,7 +118,7 @@ services:
     image: flexprice-app:local
     build:
       context: .
-      dockerfile: Dockerfile.local
+      dockerfile: Dockerfile
     profiles:
       - build-only
     command: ["echo", "Build complete"]
