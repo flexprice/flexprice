@@ -71,3 +71,12 @@ type OutboundWebhookStaleRetryWorkflowResult struct {
 	Succeeded int `json:"succeeded"`
 	Failed    int `json:"failed"`
 }
+
+// ===================== Void Old Pending Invoices =====================
+
+// VoidOldPendingInvoicesWorkflowInput is the input for VoidOldPendingInvoicesWorkflow.
+// No fields required — the activity iterates all tenants internally.
+type VoidOldPendingInvoicesWorkflowInput struct{}
+
+// VoidOldPendingInvoicesWorkflowResult is returned by the void-old-pending activity.
+type VoidOldPendingInvoicesWorkflowResult struct{}
