@@ -15,7 +15,8 @@ COPY . .
 # Build with optimizations
 ENV CGO_ENABLED=0 \
     GOOS=linux
-RUN go build -ldflags="-w -s" -o app cmd/server/main.go
+RUN go build -ldflags="-w -s" -o app cmd/server/main.go && \
+    go build -ldflags="-w -s" -o migrate cmd/migrate/main.go
 
 # Final stage
 FROM ghcr.io/typst/typst:v0.13.1 AS typst
@@ -24,8 +25,10 @@ RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 COPY --from=builder /app/app .
-COPY --from=builder /app/internal/config/* ./config/
+COPY --from=builder /app/migrate .
+COPY --from=builder /app/internal/config/ ./config/
 COPY --from=builder /app/assets/* ./assets/
+COPY --from=builder /app/migrations ./migrations/
 COPY --from=typst /bin/typst /usr/local/bin/
 
 ENV TZ=UTC 

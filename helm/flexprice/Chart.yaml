@@ -1,0 +1,53 @@
+apiVersion: v2
+name: flexprice
+description: A Helm chart for FlexPrice billing and pricing platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - billing
+  - pricing
+  - subscription
+  - invoicing
+maintainers:
+  - name: FlexPrice Team
+    email: support@flexprice.io
+    url: https://flexprice.io
+home: https://github.com/flexprice/flexprice
+sources:
+  - https://github.com/flexprice/flexprice
+kubeVersion: ">=1.24.0"
+
+# ClickHouse is managed by the Altinity operator (clickhouse.altinity.com/v1).
+# The operator is cluster-scoped and CANNOT be a Helm subchart dependency.
+# Install it once per cluster before deploying this chart:
+#   kubectl apply -f shared/clickhouse/operator/install-bundle.yaml
+# Current tested version: 0.24.5 (see shared/clickhouse/operator/install-bundle.yaml)
+# Upgrade path documented in: docs/CLICKHOUSE-REPLICATION-PLAN.md
+
+dependencies:
+  # PostgreSQL — replaces infra/postgres.yaml when postgres.internal.enabled=true
+  # Condition: postgres.internal.enabled (inverted from old postgres.external.enabled=false)
+  - name: postgresql
+    version: "16.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+
+  # Kafka (KRaft mode) — replaces infra/kafka.yaml when kafka.internal.enabled=true
+  - name: kafka
+    version: "32.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: kafka.enabled
+
+  # Redis — was missing entirely, used by internal/cache/ and internal/redis/
+  - name: redis
+    version: "20.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+
+  # Temporal — replaces infra/temporal.yaml when temporal.internal.enabled=true
+  # Official temporalio chart; has its own postgres dependency (disabled — we share ours)
+  - name: temporal
+    version: "0.x.x"
+    repository: "https://go.temporal.io/helm-charts"
+    condition: temporal.enabled

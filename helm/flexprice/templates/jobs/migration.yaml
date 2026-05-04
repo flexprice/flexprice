@@ -1,0 +1,484 @@
+{{- if .Values.migration.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "flexprice.fullname" . }}-migration-{{ include "flexprice/templates/app/configmap.yaml" . | sha256sum | trunc 8 }}
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    checksum/config: {{ include "flexprice/templates/app/configmap.yaml" . | sha256sum }}
+    checksum/secret: {{ include "flexprice/templates/app/secret.yaml" . | sha256sum }}
+    "helm.sh/hook": pre-upgrade,pre-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit | default 3 }}
+  {{- if .Values.migration.activeDeadlineSeconds }}
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  {{- end }}
+  ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished | default 3600 }}
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Never
+      initContainers:
+
+        # ── 1. Wait for PostgreSQL ────────────────────────────────────────────
+        - name: wait-for-postgres
+          image: postgres:15.3-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              POSTGRES_HOST="{{ include "flexprice.postgresHost" . }}"
+              POSTGRES_PORT="{{ include "flexprice.postgresPort" . }}"
+              POSTGRES_USER="{{ .Values.postgres.user }}"
+              echo "Waiting for PostgreSQL at ${POSTGRES_HOST}:${POSTGRES_PORT}..."
+              RETRIES=60
+              i=1
+              while [ $i -le ${RETRIES} ]; do
+                if pg_isready -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" >/dev/null 2>&1; then
+                  echo "✅ PostgreSQL is ready!"
+                  exit 0
+                fi
+                echo "[$i/${RETRIES}] Not ready yet..."
+                sleep 2
+                i=$((i + 1))
+              done
+              echo "❌ PostgreSQL failed to become ready"
+              exit 1
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: postgres-password
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+
+
+        {{- if .Values.migration.steps.clickhouse }}
+        # ── 2. Wait for ClickHouse ────────────────────────────────────────────
+        - name: wait-for-clickhouse
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ split ":" .Values.clickhouse.address | first }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
+              CLICKHOUSE_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ split ":" .Values.clickhouse.address | last }}{{ else if eq .Values.clickhouse.mode "altinity" }}8123{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
+              echo "Waiting for ClickHouse at ${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}..."
+              until nc -z "${CLICKHOUSE_HOST}" "${CLICKHOUSE_HTTP_PORT}"; do
+                echo "Not ready yet..."
+                sleep 2
+              done
+              echo "✅ ClickHouse is ready!"
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+
+        # ── 3. Wait for Kafka ─────────────────────────────────────────────────
+        {{- if .Values.migration.steps.kafka }}
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              KAFKA_HOST="{{ if .Values.kafkaConfig.external.enabled }}{{ index .Values.kafkaConfig.brokers 0 | splitList ":" | first }}{{ else }}{{ printf "%s-kafka" .Release.Name }}{{ end }}"
+              KAFKA_PORT="{{ if .Values.kafkaConfig.external.enabled }}{{ index .Values.kafkaConfig.brokers 0 | splitList ":" | last }}{{ else }}9092{{ end }}"
+              echo "Waiting for Kafka at ${KAFKA_HOST}:${KAFKA_PORT}..."
+              RETRIES=60
+              i=1
+              while [ $i -le ${RETRIES} ]; do
+                if nc -z "${KAFKA_HOST}" "${KAFKA_PORT}" >/dev/null 2>&1; then
+                  echo "✅ Kafka is ready!"
+                  exit 0
+                fi
+                echo "[$i/${RETRIES}] Not ready yet..."
+                sleep 3
+                i=$((i + 1))
+              done
+              echo "❌ Kafka failed to become ready"
+              exit 1
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+
+        {{- if .Values.migration.steps.postgresSetup }}
+        # ── 4. PostgreSQL schema + extensions setup ───────────────────────────
+        - name: setup-postgres-schema
+          image: postgres:15.3-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              POSTGRES_HOST="{{ include "flexprice.postgresHost" . }}"
+              POSTGRES_PORT="{{ include "flexprice.postgresPort" . }}"
+              POSTGRES_USER="{{ .Values.postgres.user }}"
+              POSTGRES_DB="{{ .Values.postgres.dbname }}"
+              echo "Setting up PostgreSQL schema and extensions at ${POSTGRES_HOST}:${POSTGRES_PORT}..."
+              psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB} \
+                -c "CREATE SCHEMA IF NOT EXISTS extensions;" || exit 1
+              psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB} \
+                -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" SCHEMA extensions;" || exit 1
+              echo "✅ PostgreSQL schema and extensions ready"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: postgres-password
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+
+        {{- if .Values.migration.steps.clickhouse }}
+        # ── 5. Copy ClickHouse migrations from app image ──────────────────────
+        - name: copy-clickhouse-migrations
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "Copying ClickHouse migrations to shared volume..."
+              if [ -d /app/migrations/clickhouse ]; then
+                mkdir -p /migrations/clickhouse
+                cp -r /app/migrations/clickhouse/* /migrations/clickhouse/ 2>/dev/null || true
+                echo "✅ ClickHouse migrations copied"
+                ls -la /migrations/clickhouse/
+              else
+                echo "⚠️  No ClickHouse migrations found at /app/migrations/clickhouse"
+              fi
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+
+        # ── 6. Run ClickHouse migrations ──────────────────────────────────────
+        - name: run-clickhouse-migrations
+          image: clickhouse/clickhouse-server:{{ .Values.clickhouse.standalone.image.tag | default "24.8-alpine" }}
+          command:
+            - sh
+            - -c
+            - |
+              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ split ":" .Values.clickhouse.address | first }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
+              CLICKHOUSE_PORT="{{ if eq .Values.clickhouse.mode "external" }}9000{{ else }}{{ .Values.clickhouse.standalone.service.nativePort | default 9000 }}{{ end }}"
+              CLICKHOUSE_USER="{{ .Values.clickhouse.username }}"
+              CLICKHOUSE_DB="{{ .Values.clickhouse.database }}"
+              echo "Running ClickHouse migrations at ${CLICKHOUSE_HOST}:${CLICKHOUSE_PORT}..."
+              RETRIES=60
+              i=1
+              while [ $i -le ${RETRIES} ]; do
+                if clickhouse-client --host=${CLICKHOUSE_HOST} --port=${CLICKHOUSE_PORT} \
+                    --user=${CLICKHOUSE_USER} --password=${FLEXPRICE_CLICKHOUSE_PASSWORD} \
+                    --query="SELECT 1" >/dev/null 2>&1; then
+                  echo "✅ ClickHouse ready!"
+                  break
+                fi
+                echo "[$i/${RETRIES}] Waiting..."
+                sleep 2
+                i=$((i + 1))
+              done
+              if [ $i -gt ${RETRIES} ]; then
+                echo "❌ ClickHouse failed to become ready"
+                exit 1
+              fi
+              if [ -d /migrations/clickhouse ]; then
+                for file in /migrations/clickhouse/*.sql; do
+                  [ -f "$file" ] || continue
+                  # skip verification scripts — not migrations
+                  case "$(basename $file)" in verify_*) continue ;; esac
+                  echo "Running: $file"
+                  TEMP_OUTPUT="$(mktemp)"
+                  EXIT_CODE=0
+                  clickhouse-client --host=${CLICKHOUSE_HOST} --port=${CLICKHOUSE_PORT} \
+                    --user=${CLICKHOUSE_USER} --password=${FLEXPRICE_CLICKHOUSE_PASSWORD} \
+                    --database=${CLICKHOUSE_DB} --multiquery < "$file" > "$TEMP_OUTPUT" 2>&1 || EXIT_CODE=$?
+                  OUTPUT="$(cat "$TEMP_OUTPUT")"; rm -f "$TEMP_OUTPUT"
+                  if [ $EXIT_CODE -eq 0 ]; then
+                    echo "✅ Done"
+                  else
+                    OUTPUT_NORMALIZED="$(echo "$OUTPUT" | tr '\n' ' ')"
+                    if echo "$OUTPUT_NORMALIZED" | grep -qiE "already exists|already exist|duplicate|ILLEGAL_COLUMN|Code: 44|Code: 47|Missing columns"; then
+                      echo "⚠️  Skipped (already exists): $(echo "$OUTPUT" | head -2)"
+                    else
+                      echo "❌ Failed: $OUTPUT"
+                      exit 1
+                    fi
+                  fi
+                done
+                echo "✅ ClickHouse migrations complete"
+              else
+                echo "⚠️  No /migrations/clickhouse directory found"
+                exit 1
+              fi
+          env:
+            - name: FLEXPRICE_CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: clickhouse-password
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+
+        {{- if .Values.migration.steps.ent }}
+        # ── 7. Run Ent framework migrations ──────────────────────────────────
+        - name: run-ent-migrations
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Running Ent framework migrations..."
+              MIGRATE_BINARY=""
+              if [ -f /app/migrate ] && [ -x /app/migrate ]; then
+                MIGRATE_BINARY="/app/migrate"
+              elif [ -f /app/bin/migrate ] && [ -x /app/bin/migrate ]; then
+                MIGRATE_BINARY="/app/bin/migrate"
+              else
+                echo "❌ Migration binary not found at /app/migrate or /app/bin/migrate"
+                exit 1
+              fi
+              echo "Using: ${MIGRATE_BINARY}"
+              ${MIGRATE_BINARY} --timeout {{ .Values.migration.timeout | default 300 }} || exit 1
+              echo "✅ Ent migrations complete"
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+        {{- end }}
+
+        {{- if .Values.migration.steps.seed }}
+        # ── 8. Seed PostgreSQL with default tenant, user, environments ────────
+        - name: seed-postgres
+          image: postgres:15.3-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              POSTGRES_HOST="{{ include "flexprice.postgresHost" . }}"
+              POSTGRES_PORT="{{ include "flexprice.postgresPort" . }}"
+              POSTGRES_USER="{{ .Values.postgres.user }}"
+              POSTGRES_DB="{{ .Values.postgres.dbname }}"
+              echo "Seeding default data into ${POSTGRES_DB}..."
+              psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DB} <<'EOSQL'
+              INSERT INTO public.tenants (id, name, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'Default Tenant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.users (id, email, tenant_id, created_at, updated_at, created_by, updated_by)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'admin@flexprice.dev', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000')
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.environments (id, name, type, tenant_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'Sandbox', 'development', '00000000-0000-0000-0000-000000000000', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.environments (id, name, type, tenant_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000001', 'Production', 'production', '00000000-0000-0000-0000-000000000000', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO public.auths (user_id, provider, token, status, created_at, updated_at)
+              VALUES ('00000000-0000-0000-0000-000000000000', 'flexprice', 'sk_local_flexprice_test_key', 'published', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT DO NOTHING;
+
+              INSERT INTO public.secrets (id, tenant_id, environment_id, name, type, provider, value, display_id, status, created_by, updated_by, created_at, updated_at)
+              VALUES ('sk_local_flexprice_test_key', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', 'Local Test Key', 'private_key', 'flexprice', '0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c', 'sk_local_****_test_key', 'published', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              ON CONFLICT (id) DO NOTHING;
+              EOSQL
+              echo "✅ Seed data inserted"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: postgres-password
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+
+        {{- if .Values.migration.steps.kafka }}
+        # ── 9. Create Kafka topics ────────────────────────────────────────────
+        # Topics are NOT auto-created by the broker (autoCreateTopicsEnable: false).
+        # This init container creates all required topics idempotently.
+        - name: create-kafka-topics
+          image: "{{ if .Values.kafkaConfig.enabled }}bitnami/kafka:latest{{ else }}confluentinc/cp-kafka:{{ .Values.kafkaConfig.internal.image.tag | default "7.7.1" }}{{ end }}"
+          command:
+            - sh
+            - -c
+            - |
+              KAFKA_BROKER="{{ include "flexprice.kafkaBrokers" . }}"
+              echo "Creating Kafka topics on ${KAFKA_BROKER}..."
+
+              # cp-kafka uses /usr/bin/kafka-topics; bitnami uses kafka-topics.sh
+              KAFKA_TOPICS_CMD="kafka-topics"
+              if command -v kafka-topics.sh >/dev/null 2>&1; then
+                KAFKA_TOPICS_CMD="kafka-topics.sh"
+              fi
+
+              # Helper: create topic if it does not exist
+              create_topic() {
+                TOPIC=$1
+                PARTITIONS=${2:-1}
+                REPLICATION=${3:-1}
+                echo "→ Creating topic: ${TOPIC} (partitions=${PARTITIONS}, replication=${REPLICATION})"
+                $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" \
+                  --create --if-not-exists \
+                  --topic "${TOPIC}" \
+                  --partitions "${PARTITIONS}" \
+                  --replication-factor "${REPLICATION}" || true
+              }
+
+              # All topics used by FlexPrice
+              create_topic "{{ .Values.kafkaConfig.topic }}"
+              create_topic "{{ .Values.kafkaConfig.topicLazy }}"
+              create_topic "{{ .Values.kafkaConfig.topicDLQ | default "events_dlq" }}"
+              create_topic "{{ .Values.eventPostProcessing.topic }}"
+              create_topic "{{ .Values.eventPostProcessing.topicBackfill }}"
+              create_topic "{{ .Values.webhook.topic }}"
+              create_topic "events_backfill"
+              create_topic "wallet_alert"
+              create_topic "onboarding_events"
+
+              echo "✅ Kafka topics ready"
+              $KAFKA_TOPICS_CMD --bootstrap-server "${KAFKA_BROKER}" --list
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+        {{- end }}
+
+      containers:
+        # ── Main: all migration steps handled by init containers ──────────────
+        - name: migration
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.migration.command }}
+          command:
+            - /bin/sh
+            - -c
+            - {{ .Values.migration.command | quote }}
+          {{- else }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "=========================================="
+              echo "✅ All migrations completed successfully!"
+              echo "=========================================="
+          {{- end }}
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: tools
+              mountPath: /tools
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "flexprice.fullname" . }}-config
+        - name: tools
+          emptyDir: {}
+        {{- if .Values.migration.steps.clickhouse }}
+        - name: migrations
+          emptyDir: {}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

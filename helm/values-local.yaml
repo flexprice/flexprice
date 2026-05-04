@@ -1,0 +1,85 @@
+global:
+  # Bitnami security check rejects non-standard registries (ECR); this disables that check
+  security:
+    allowInsecureImages: true
+
+# Override ingress hostnames for local development (/etc/hosts → 192.168.139.2)
+ingress:
+  hosts:
+    - host: api.flexprice.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+temporalIngress:
+  host: temporal.flexprice.local
+
+secrets:
+  encryptionKey: "dev-encryption-key-32-chars-here"
+
+auth:
+  provider: "flexprice"
+  secret: "dev-auth-secret-local"
+
+postgres:
+  password: "flexprice123"
+
+clickhouse:
+  password: "flexprice123"
+  standalone:
+    # Reduce from default 4Gi to 1Gi for local dev (fits within 6GiB OrbStack node)
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
+
+# Bitnami removed images from Docker Hub; pull from ECR Public (amd64)
+postgresql:
+  image:
+    registry: public.ecr.aws
+  primary:
+    # Bitnami default (192Mi) is too low when temporal runs schema migrations against it
+    resources:
+      requests:
+        memory: "256Mi"
+      limits:
+        memory: "512Mi"
+
+redis:
+  image:
+    registry: public.ecr.aws
+
+kafka:
+  image:
+    registry: public.ecr.aws
+  # Reduce from 3 controller replicas to 1 for local dev (saves ~1.5 GiB RAM)
+  controller:
+    replicaCount: 1
+    resources:
+      limits:
+        memory: "512Mi"
+  broker:
+    resources:
+      limits:
+        memory: "512Mi"
+
+# Temporal uses PostgreSQL visibility (configured in values.yaml) — no Elasticsearch needed
+# Disable monitoring stack to reduce memory pressure on local cluster (~2 GiB savings)
+temporal:
+  elasticsearch:
+    enabled: false
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+  server:
+    # server v1.30+ supports built-in sprig templating; use sprig ConfigMap
+    # with setConfigFilePath so it reads the chart-generated config (not the embedded Cassandra template)
+    setConfigFilePath: true
+    configMapsToMount: "sprig"
+
+frontend:
+  enabled: false
