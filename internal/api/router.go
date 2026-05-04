@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/flexprice/flexprice/docs/swagger"
-	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -60,12 +59,6 @@ type Handlers struct {
 	Onboarding     *v1.OnboardingHandler
 	AIPricing      *v1.AIPricingHandler
 	CustomerPortal *v1.CustomerPortalHandler
-	// Cron jobs: optional HTTP /v1/cron/... manual triggers; same work is automated via Temporal server schedules (worker creates them on startup).
-	CronSubscription       *cron.SubscriptionHandler
-	CronWallet             *cron.WalletCronHandler
-	CronCreditGrant        *cron.CreditGrantCronHandler
-	CronInvoice            *cron.InvoiceHandler
-	CronKafkaLagMonitoring *cron.KafkaLagMonitoringHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
@@ -612,33 +605,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		webhooks.POST("/paddle/:tenant_id/:environment_id", handlers.Webhook.HandlePaddleWebhook)
 		// Zoho Books webhook endpoint: POST /v1/webhooks/zoho_books/{tenant_id}/{environment_id}
 		webhooks.POST("/zoho_books/:tenant_id/:environment_id", handlers.Webhook.HandleZohoBooksWebhook)
-	}
-
-	// HTTP cron: optional manual/legacy triggers (deprecated for automation; Temporal workers ensure server schedules on startup).
-	cron := v1Private.Group("/cron")
-	subscriptionGroup := cron.Group("/subscriptions")
-	{
-		subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
-		// Deprecated: automation uses Temporal schedule subscription-trial-end-due.
-		subscriptionGroup.POST("/process-trial-end-due", handlers.CronSubscription.ProcessTrialEndDue)
-		subscriptionGroup.POST("/process-auto-cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
-		subscriptionGroup.POST("/renewal-due-alerts", handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
-	}
-	walletGroup := cron.Group("/wallets")
-	{
-		walletGroup.POST("/expire-credits", handlers.CronWallet.ExpireCredits)
-	}
-	creditGrantGroup := cron.Group("/creditgrants")
-	{
-		creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
-	}
-	invoiceGroup := cron.Group("/invoices")
-	{
-		invoiceGroup.POST("/void-old-pending", handlers.CronInvoice.VoidOldPendingInvoices)
-	}
-	kafkaLagMonitoringGroup := cron.Group("/events")
-	{
-		kafkaLagMonitoringGroup.POST("/monitoring", handlers.CronKafkaLagMonitoring.HandleKafkaLagMonitoring)
 	}
 
 	// Settings routes

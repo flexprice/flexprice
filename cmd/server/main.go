@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
-	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -390,13 +389,9 @@ func provideHandlers(
 		Tax:                      v1.NewTaxHandler(taxService, logger),
 		Onboarding:               v1.NewOnboardingHandler(onboardingService, logger),
 		AIPricing:                v1.NewAIPricingHandler(geminiPricingService, logger),
-		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, logger),
-		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService, featureService, alertLogsService),
-		CronInvoice:              cron.NewInvoiceHandler(invoiceService, subscriptionService, connectionService, tenantService, environmentService, integrationFactory, logger),
 		CreditGrant:              v1.NewCreditGrantHandler(creditGrantService, logger),
 		Costsheet:                v1.NewCostsheetHandler(costsheetService, logger),
 		RevenueAnalytics:         v1.NewRevenueAnalyticsHandler(revenueAnalyticsService, costsheetUsageTrackingService, cfg, logger),
-		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:               v1.NewCreditNoteHandler(creditNoteService, logger),
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
 		IntegrationMappingLink:   v1.NewIntegrationMappingLinkHandler(entityIntegrationMappingService, logger),
@@ -410,7 +405,6 @@ func provideHandlers(
 		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
 		RBAC:                     v1.NewRBACHandler(rbacService, userService, logger),
 		OAuth:                    v1.NewOAuthHandler(oauthService, cfg.OAuth.RedirectURI, logger),
-		CronKafkaLagMonitoring:   cron.NewKafkaLagMonitoringHandler(logger, eventService),
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
