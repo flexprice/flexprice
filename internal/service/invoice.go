@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -23,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
+	stripeSDK "github.com/stripe/stripe-go/v82"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/types"
@@ -63,7 +65,8 @@ type InvoiceService interface {
 	TriggerWebhook(ctx context.Context, invoiceID string, eventName types.WebhookEventName) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
 
-	// Cron methods
+	// Cron / Temporal activity methods
+	VoidOldPendingInvoices(ctx context.Context) error
 	SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error
 	SyncInvoiceToStripeIfEnabled(ctx context.Context, invoiceID string, collectionMethod string) error
 	SyncInvoiceToRazorpayIfEnabled(ctx context.Context, invoiceID string) error
@@ -4304,5 +4307,354 @@ func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lin
 		lastItem.InvoiceLevelDiscount = lastItemShare
 	}
 
+	return nil
+}
+
+// VoidOldPendingInvoices processes all tenants/environments and voids old pending invoices
+// for incomplete subscriptions (>24h old). This is the Temporal-friendly version of the
+// HTTP cron handler at internal/api/cron/invoice.go.
+func (s *invoiceService) VoidOldPendingInvoices(ctx context.Context) error {
+	s.Logger.Infow("starting VoidOldPendingInvoices", "time", time.Now().UTC().Format(time.RFC3339))
+
+	tenantSvc := NewTenantService(s.ServiceParams)
+	envAccessSvc := NewEnvAccessService(s.Config)
+	settingsSvc := NewSettingsService(s.ServiceParams)
+	environmentSvc := NewEnvironmentService(s.EnvironmentRepo, envAccessSvc, settingsSvc, s.ServiceParams)
+	subscriptionSvc := NewSubscriptionService(s.ServiceParams)
+
+	tenants, err := tenantSvc.GetAllTenants(ctx)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("VoidOldPendingInvoices: processing all tenants", "count", len(tenants))
+
+	for _, tenant := range tenants {
+		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenant.ID)
+
+		environments, err := environmentSvc.GetEnvironments(tenantCtx, types.GetDefaultFilter())
+		if err != nil {
+			s.Logger.Errorw("VoidOldPendingInvoices: failed to get environments for tenant",
+				"tenant_id", tenant.ID, "error", err)
+			continue
+		}
+
+		for _, env := range environments.Environments {
+			envCtx := context.WithValue(tenantCtx, types.CtxEnvironmentID, env.ID)
+
+			if err := s.voidOldPendingInvoicesForEnvironment(envCtx, tenant.ID, env.ID, subscriptionSvc); err != nil {
+				s.Logger.Errorw("VoidOldPendingInvoices: failed to process environment",
+					"tenant_id", tenant.ID,
+					"environment_id", env.ID,
+					"error", err)
+				// continue to next environment; don't abort the whole run
+			}
+		}
+	}
+
+	s.Logger.Infow("VoidOldPendingInvoices: completed")
+	return nil
+}
+
+// voidOldPendingInvoicesForEnvironment processes a single tenant+environment pair.
+func (s *invoiceService) voidOldPendingInvoicesForEnvironment(
+	ctx context.Context,
+	tenantID, environmentID string,
+	subscriptionSvc SubscriptionService,
+) error {
+	// Only process environments that have an active Stripe connection
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Infow("voidOldPendingInvoicesForEnvironment: Stripe integration not available, skipping",
+			"tenant_id", tenantID,
+			"environment_id", environmentID,
+			"error", err)
+		return nil
+	}
+
+	if !stripeIntegration.Client.HasStripeConnection(ctx) {
+		s.Logger.Infow("voidOldPendingInvoicesForEnvironment: no Stripe connection, skipping",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return nil
+	}
+
+	// Find incomplete subscriptions older than 24 hours
+	cutoffTime := time.Now().UTC().Add(-24 * time.Hour)
+	subscriptionFilter := &types.SubscriptionFilter{
+		SubscriptionStatus: []types.SubscriptionStatus{
+			types.SubscriptionStatusIncomplete,
+		},
+		Filters: []*types.FilterCondition{
+			{
+				Field:    lo.ToPtr("created_at"),
+				Operator: lo.ToPtr(types.BEFORE),
+				DataType: lo.ToPtr(types.DataTypeDate),
+				Value: &types.Value{
+					Date: &cutoffTime,
+				},
+			},
+		},
+	}
+
+	subscriptions, err := subscriptionSvc.ListSubscriptions(ctx, subscriptionFilter)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("voidOldPendingInvoicesForEnvironment: found old incomplete subscriptions",
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+		"count", len(subscriptions.Items),
+		"cutoff_time", cutoffTime.Format(time.RFC3339))
+
+	for _, sub := range subscriptions.Items {
+		if err := s.processOldIncompleteSubscription(ctx, sub, subscriptionSvc, cutoffTime); err != nil {
+			s.Logger.Errorw("voidOldPendingInvoicesForEnvironment: failed to process subscription",
+				"subscription_id", sub.ID,
+				"error", err)
+			// continue processing remaining subscriptions
+		}
+	}
+
+	return nil
+}
+
+// processOldIncompleteSubscription decides what to do based on the number of old invoices.
+func (s *invoiceService) processOldIncompleteSubscription(
+	ctx context.Context,
+	sub *dto.SubscriptionResponse,
+	subscriptionSvc SubscriptionService,
+	cutoffTime time.Time,
+) error {
+	invoiceFilter := &types.InvoiceFilter{
+		SubscriptionID: sub.ID,
+		InvoiceStatus: []types.InvoiceStatus{
+			types.InvoiceStatusDraft,
+			types.InvoiceStatusFinalized,
+		},
+	}
+
+	invoices, err := s.ListInvoices(ctx, invoiceFilter)
+	if err != nil {
+		s.Logger.Errorw("processOldIncompleteSubscription: failed to list invoices, skipping",
+			"subscription_id", sub.ID,
+			"error", err)
+		// treat as success — don't increment failed count
+		return nil
+	}
+
+	var oldInvoices []*dto.InvoiceResponse
+	for _, inv := range invoices.Items {
+		if inv.CreatedAt.Before(cutoffTime) {
+			oldInvoices = append(oldInvoices, inv)
+		}
+	}
+
+	s.Logger.Infow("processOldIncompleteSubscription",
+		"subscription_id", sub.ID,
+		"total_invoices", len(invoices.Items),
+		"old_invoices", len(oldInvoices))
+
+	switch len(oldInvoices) {
+	case 0:
+		// No old invoices — cancel subscription immediately
+		s.Logger.Infow("processOldIncompleteSubscription: no old invoices, cancelling subscription",
+			"subscription_id", sub.ID)
+		return s.cancelIncompleteSubscriptionForVoid(ctx, sub, subscriptionSvc)
+
+	case 1:
+		return s.processSingleOldInvoice(ctx, sub, oldInvoices[0], subscriptionSvc)
+
+	default:
+		// 2+ old invoices — skip
+		s.Logger.Infow("processOldIncompleteSubscription: multiple old invoices, skipping",
+			"subscription_id", sub.ID,
+			"invoice_count", len(oldInvoices))
+		return nil
+	}
+}
+
+// processSingleOldInvoice handles the "exactly one old invoice" case.
+func (s *invoiceService) processSingleOldInvoice(
+	ctx context.Context,
+	sub *dto.SubscriptionResponse,
+	inv *dto.InvoiceResponse,
+	subscriptionSvc SubscriptionService,
+) error {
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Errorw("processSingleOldInvoice: failed to get Stripe integration",
+			"error", err,
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	// Only process invoices that are synced to Stripe
+	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, inv.ID)
+	if err != nil || mapping == nil {
+		s.Logger.Infow("processSingleOldInvoice: invoice not synced to Stripe, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	// Skip if there is a partial payment in FlexPrice
+	if inv.AmountPaid.IsPositive() {
+		s.Logger.Infow("processSingleOldInvoice: invoice has partial payment in FlexPrice, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	// Skip if there is a partial payment in Stripe
+	if hasPartial, err := s.stripeHasPartialPayment(ctx, inv.ID); err != nil || hasPartial {
+		if hasPartial {
+			s.Logger.Infow("processSingleOldInvoice: invoice has partial payment in Stripe, skipping",
+				"invoice_id", inv.ID)
+		}
+		return nil
+	}
+
+	// Void the invoice in FlexPrice
+	voidRequest := dto.InvoiceVoidRequest{
+		Metadata: types.Metadata{
+			"voided_by":   "temporal_cron",
+			"void_reason": "old_pending_invoice_cleanup",
+			"voided_at":   time.Now().UTC().Format(time.RFC3339),
+		},
+	}
+	if err := s.VoidInvoice(ctx, inv.ID, voidRequest); err != nil {
+		s.Logger.Errorw("processSingleOldInvoice: failed to void invoice in FlexPrice, continuing",
+			"invoice_id", inv.ID,
+			"error", err)
+		// Best-effort — don't abort
+	}
+
+	// Void in Stripe (best-effort)
+	if err := s.voidStripeInvoice(ctx, inv.ID); err != nil {
+		s.Logger.Errorw("processSingleOldInvoice: failed to void invoice in Stripe",
+			"invoice_id", inv.ID,
+			"error", err)
+		// Don't return; still cancel the subscription
+	}
+
+	// Cancel the subscription
+	return s.cancelIncompleteSubscriptionForVoid(ctx, sub, subscriptionSvc)
+}
+
+// cancelIncompleteSubscriptionForVoid cancels an incomplete subscription.
+func (s *invoiceService) cancelIncompleteSubscriptionForVoid(
+	ctx context.Context,
+	sub *dto.SubscriptionResponse,
+	subscriptionSvc SubscriptionService,
+) error {
+	s.Logger.Infow("cancelIncompleteSubscriptionForVoid",
+		"subscription_id", sub.ID,
+		"customer_id", sub.CustomerID)
+
+	cancelRequest := dto.CancelSubscriptionRequest{
+		CancellationType:  types.CancellationTypeImmediate,
+		Reason:            "Automatic cancellation due to old pending invoices",
+		ProrationBehavior: types.ProrationBehaviorNone,
+	}
+
+	_, err := subscriptionSvc.CancelSubscription(ctx, sub.ID, &cancelRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "subscription not found") || strings.Contains(err.Error(), "not found") {
+			s.Logger.Infow("cancelIncompleteSubscriptionForVoid: subscription already cancelled or not found, treating as success",
+				"subscription_id", sub.ID)
+			return nil
+		}
+		s.Logger.Errorw("cancelIncompleteSubscriptionForVoid: failed to cancel subscription, continuing",
+			"subscription_id", sub.ID,
+			"error", err)
+		return nil
+	}
+
+	s.Logger.Infow("cancelIncompleteSubscriptionForVoid: successfully cancelled subscription",
+		"subscription_id", sub.ID,
+		"customer_id", sub.CustomerID)
+	return nil
+}
+
+// stripeHasPartialPayment returns true if the Stripe invoice has been partially paid.
+func (s *invoiceService) stripeHasPartialPayment(ctx context.Context, invoiceID string) (bool, error) {
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Errorw("stripeHasPartialPayment: failed to get Stripe integration",
+			"error", err,
+			"invoice_id", invoiceID)
+		return false, err
+	}
+
+	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, invoiceID)
+	if err != nil {
+		s.Logger.Debugw("stripeHasPartialPayment: no Stripe mapping, assuming no partial payments",
+			"invoice_id", invoiceID)
+		return false, nil
+	}
+
+	stripeInvoiceID := mapping.ProviderEntityID
+
+	stripeClient, _, err := stripeIntegration.Client.GetStripeClient(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	stripeInvoice, err := stripeClient.V1Invoices.Retrieve(ctx, stripeInvoiceID, nil)
+	if err != nil {
+		s.Logger.Warnw("stripeHasPartialPayment: failed to retrieve Stripe invoice, assuming no partial payments",
+			"invoice_id", invoiceID,
+			"stripe_invoice_id", stripeInvoiceID,
+			"error", err)
+		return false, nil
+	}
+
+	hasPartial := stripeInvoice.AmountPaid > 0 && stripeInvoice.AmountPaid < stripeInvoice.Total
+	if hasPartial {
+		s.Logger.Infow("stripeHasPartialPayment: found partial payment",
+			"invoice_id", invoiceID,
+			"stripe_invoice_id", stripeInvoiceID,
+			"amount_paid", stripeInvoice.AmountPaid,
+			"total", stripeInvoice.Total)
+	}
+
+	return hasPartial, nil
+}
+
+// voidStripeInvoice voids an invoice in Stripe (best-effort).
+func (s *invoiceService) voidStripeInvoice(ctx context.Context, invoiceID string) error {
+	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		s.Logger.Errorw("voidStripeInvoice: failed to get Stripe integration",
+			"error", err,
+			"invoice_id", invoiceID)
+		return err
+	}
+
+	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, invoiceID)
+	if err != nil {
+		s.Logger.Debugw("voidStripeInvoice: no Stripe mapping found, nothing to void",
+			"invoice_id", invoiceID)
+		return nil
+	}
+
+	stripeInvoiceID := mapping.ProviderEntityID
+	s.Logger.Infow("voidStripeInvoice: voiding invoice in Stripe",
+		"invoice_id", invoiceID,
+		"stripe_invoice_id", stripeInvoiceID)
+
+	stripeClient, _, err := stripeIntegration.Client.GetStripeClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = stripeClient.V1Invoices.VoidInvoice(ctx, stripeInvoiceID, &stripeSDK.InvoiceVoidInvoiceParams{})
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("voidStripeInvoice: successfully voided invoice in Stripe",
+		"invoice_id", invoiceID,
+		"stripe_invoice_id", stripeInvoiceID)
 	return nil
 }
