@@ -703,9 +703,10 @@ func (s *subscriptionChangeService) executeChange(
 	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
-		CancellationType:  types.CancellationTypeImmediate,
-		Reason:            "subscription_change",
-		ProrationBehavior: req.ProrationBehavior,
+		CancellationType:          types.CancellationTypeImmediate,
+		Reason:                    "subscription_change",
+		ProrationBehavior:         req.ProrationBehavior,
+		SkipProrationWalletCredit: true, // we always skip the wallet credit refund since we will apply it as adjustment to the new subscription 1st invoice
 	})
 	if err != nil {
 		return nil, err
