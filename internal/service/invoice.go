@@ -407,18 +407,26 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			refPoint = types.ReferencePointCancel
 		}
 		billingService := NewBillingService(s.ServiceParams)
-		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		params := &dto.PrepareSubscriptionInvoiceRequestParams{
 			Subscription:     sub,
 			PeriodStart:      *inv.PeriodStart,
 			PeriodEnd:        *inv.PeriodEnd,
 			ReferencePoint:   refPoint,
 			ExcludeInvoiceID: inv.ID,
-		})
+		}
+
+		if req != nil {
+			if req.OpeningInvoiceAdjustmentAmount != nil {
+				params.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
+			}
+		}
+		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, params)
 		if err != nil {
 			return false, err
 		}
 		computeReq := subInvReq.ToComputeRequest()
 		applyReq = &computeReq
+		applyReq.OpeningInvoiceAdjustmentAmount = params.OpeningInvoiceAdjustmentAmount
 	} else if req != nil {
 		// One-off or credit: line items and amounts come from the caller's request
 		applyReq = req
