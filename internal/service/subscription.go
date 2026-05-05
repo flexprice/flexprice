@@ -4790,7 +4790,7 @@ func (s *subscriptionService) HandleSubscriptionActivatingInvoicePaid(ctx contex
 		return nil
 	}
 	reason := types.InvoiceBillingReason(inv.BillingReason)
-	if !reason.TriggersSubscriptionActivationOnFullPayment() {
+	if !reason.IsFirstSubscriptionOpenInvoiceReason() {
 		return nil
 	}
 	switch reason {
