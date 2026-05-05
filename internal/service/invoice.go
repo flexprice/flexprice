@@ -1812,9 +1812,17 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		subscription.Currency,
 		string(subscription.BillingPeriod),
 	)
+
+	// If the flow type is subscription creation, set the billing reason to the request billing reason
+	// or default to subscription create
 	if flowType == types.InvoiceFlowSubscriptionCreation {
-		draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
+		if req.BillingReason != "" {
+			draftReq.BillingReason = req.BillingReason
+		} else {
+			draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
+		}
 	}
+
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
 	if err != nil {
@@ -1822,8 +1830,11 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	}
 
 	// Populate draft with usage and line items; if zero-dollar, marked SKIPPED
-	// Pass nil for subscription invoices - coupons/taxes come from billing service
-	skipped, err := s.ComputeInvoice(ctx, draft.ID, nil)
+	var computeOverride *dto.InvoiceComputeRequest
+	if req.OpeningInvoiceAdjustmentAmount != nil && req.OpeningInvoiceAdjustmentAmount.GreaterThan(decimal.Zero) {
+		computeOverride = &dto.InvoiceComputeRequest{OpeningInvoiceAdjustmentAmount: req.OpeningInvoiceAdjustmentAmount}
+	}
+	skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
 	if err != nil {
 		return nil, nil, err
 	}

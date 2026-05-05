@@ -4803,10 +4803,10 @@ func (s *subscriptionService) HandleSubscriptionActivatingInvoicePaid(ctx contex
 		return nil
 	}
 	switch reason {
-	case types.InvoiceBillingReasonSubscriptionCreate:
-		return s.ActivateIncompleteSubscription(ctx, *inv.SubscriptionID)
+	case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionUpdate:
+		return s.ActivateIncompleteSubscription(ctx, lo.FromPtr(inv.SubscriptionID))
 	case types.InvoiceBillingReasonSubscriptionTrialEnd:
-		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+		sub, err := s.SubRepo.Get(ctx, lo.FromPtr(inv.SubscriptionID))
 		if err != nil {
 			return err
 		}
