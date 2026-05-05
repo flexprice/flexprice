@@ -38,6 +38,9 @@ type CalculateFixedChargesParams struct {
 	// FixedChargeAdjustment is an optional credit (e.g. opening/plan-change) applied only to
 	// fixed line amounts after rounding.
 	FixedChargeAdjustment *decimal.Decimal `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is the credit from the cancelled subscription to apply to the
+	// first invoice. Applied as FixedChargeAdjustment (reduces fixed line item amounts before coupons).
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // Validate enforces struct tags and a non-negative optional adjustment.
