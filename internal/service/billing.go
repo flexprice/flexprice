@@ -1551,10 +1551,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								},
 							}
 
-						fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
-						if fetchErr != nil {
-							return nil, fetchErr
-						}
+							fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
+							if fetchErr != nil {
+								return nil, fetchErr
+							}
 							commitmentUsageResult = fetchedResult
 						}
 
