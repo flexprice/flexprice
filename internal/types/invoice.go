@@ -203,10 +203,13 @@ func (r InvoiceBillingReason) Validate() error {
 	return nil
 }
 
-// IsFirstSubscriptionOpenInvoiceReason reports whether paying this invoice should run first-invoice
-// activation for a subscription. SUBSCRIPTION_CREATE, SUBSCRIPTION_TRIAL_END, and SUBSCRIPTION_UPDATE always qualify;
-// SUBSCRIPTION_UPDATE qualifies only for subscription-type invoices (e.g. immediate plan-change opening).
-// One-off proration invoices use SUBSCRIPTION_UPDATE but a different invoice type, so they are excluded.
+// IsFirstSubscriptionOpenInvoiceReason reports whether paying an invoice should run first-invoice
+// activation for a subscription.
+//
+// Qualifying reasons:
+//   - SUBSCRIPTION_CREATE
+//   - SUBSCRIPTION_TRIAL_END
+//   - SUBSCRIPTION_UPDATE
 func (r InvoiceBillingReason) IsFirstSubscriptionOpenInvoiceReason() bool {
 	switch r {
 	case InvoiceBillingReasonSubscriptionCreate, InvoiceBillingReasonSubscriptionTrialEnd, InvoiceBillingReasonSubscriptionUpdate:
