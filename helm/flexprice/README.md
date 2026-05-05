@@ -387,7 +387,7 @@ To switch from internal to external for any component, flip two flags — no tem
 
 ## Provisioning Script
 
-[`../provision.sh`](../provision.sh) provisions the full cluster in the correct order. It handles the dependency chain that Helm hooks alone cannot guarantee on a cold cluster.
+[`../provision.sh`](../provision.sh) `--mode prod` provisions the full cluster in the correct order. It handles the dependency chain that Helm hooks alone cannot guarantee on a cold cluster.
 
 ### Running order
 
@@ -416,16 +416,16 @@ export KAFKA_SASL_PASSWORD=...
 export INGRESS_HOST=api.your-domain.com
 
 # Run
-./helm/provision.sh \
+./helm/provision.sh --mode prod \
   --release flexprice \
   --namespace flexprice \
   --values ./helm/flexprice/values.yaml
 
 # Dry-run (prints commands, executes nothing)
-./helm/provision.sh --dry-run
+./helm/provision.sh --mode prod --dry-run
 
 # Upgrade only — skip infra deploy, still pings and re-runs migrations
-./helm/provision.sh --skip-infra
+./helm/provision.sh --mode prod --skip-infra
 ```
 
 ### Why not rely solely on the migration hook?

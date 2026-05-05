@@ -1,7 +1,6 @@
 # Claude Code session data
 .claude/
 # Local environment overrides (may contain real secrets)
-values.local.yaml
 values-prod.yaml
 values-staging.yaml
 values-dev.yaml

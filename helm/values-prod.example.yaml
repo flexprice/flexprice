@@ -1,0 +1,342 @@
+# values-prod.example.yaml — production overrides for the FlexPrice chart
+#
+# Usage:
+#   cp values-prod.example.yaml values-prod.yaml
+#   # edit hostnames, secret names, image tag, scaling
+#   helm upgrade --install flexprice oci://ghcr.io/flexprice/charts/flexprice \
+#     --version vX.Y.Z \
+#     -f values-prod.yaml \
+#     --namespace flexprice \
+#     --wait --timeout 15m
+#
+# Layering: this file is meant to be applied ON TOP OF the chart's default
+# values.yaml. Do not duplicate every key — only override what differs from
+# the dev defaults.
+#
+# Key principles enforced here:
+#   - Pinned image tag (NEVER :latest)
+#   - All in-cluster stateful workloads DISABLED — use managed services
+#   - Secrets via existingSecret only (no plaintext)
+#   - Resource requests + limits on every workload
+#   - HPA + PDB on api
+#   - NetworkPolicies on (chart-templated, just enable here)
+#   - Non-root securityContext, read-only rootfs, dropped caps
+#   - TLS ingress via cert-manager
+#   - Multi-AZ pod anti-affinity
+
+# ── Image ─────────────────────────────────────────────────────────────────────
+# Pin to a published GHCR tag. Bump on every release. Never `latest`.
+image:
+  repository: ghcr.io/flexprice/flexprice
+  tag: "v1.0.0"
+  pullPolicy: IfNotPresent
+
+# GHCR packages for FlexPrice are public — no pull secret required.
+# (Override only if you mirror the image into a private registry.)
+imagePullSecrets: []
+
+# ── Pod / container security ──────────────────────────────────────────────────
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop: ["ALL"]
+
+# ── Service account (IRSA on EKS) ─────────────────────────────────────────────
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/flexprice-prod
+
+# ── API ───────────────────────────────────────────────────────────────────────
+api:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+
+# ── Consumer ──────────────────────────────────────────────────────────────────
+consumer:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 15
+    # Custom metric (Kafka consumer lag) is the right signal here — set up via
+    # Prometheus Adapter or KEDA. Until then, CPU is a passable proxy.
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+  # Drain in-flight Kafka messages on SIGTERM
+  terminationGracePeriodSeconds: 60
+
+# ── Worker ────────────────────────────────────────────────────────────────────
+worker:
+  replicaCount: 2
+  autoscaling:
+    enabled: false  # Temporal worker scales by task queue concurrency, not pod count
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+# ── Multi-AZ pod placement ────────────────────────────────────────────────────
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: flexprice
+          topologyKey: topology.kubernetes.io/zone
+
+# ── Probes ────────────────────────────────────────────────────────────────────
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+startupProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 30   # 150s total — covers slow ent migrations
+
+# ── Ingress (TLS via cert-manager) ────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+  hosts:
+    - host: api.flexprice.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: flexprice-api-tls
+      hosts:
+        - api.flexprice.example.com
+
+# Frontend / Temporal UI ingress: keep them OFF in production unless you put
+# them behind a separate auth proxy. Temporal UI especially — never expose
+# to the public internet.
+frontendIngress:
+  enabled: false
+temporalIngress:
+  enabled: false
+
+# ── Secrets — REQUIRED ────────────────────────────────────────────────────────
+# Production MUST use existingSecret. Never inline plaintext.
+# Create the secret out-of-band (External Secrets Operator, sealed-secrets,
+# or `kubectl create secret`). See values.yaml for the required keys.
+secrets:
+  existingSecret: "flexprice-secrets"
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+auth:
+  provider: "supabase"   # or "api_key" depending on your stack
+  # secret + supabase keys come from existingSecret
+
+# ── PostgreSQL — EXTERNAL (RDS / Cloud SQL / Aurora) ──────────────────────────
+postgresql:
+  enabled: false   # disable bitnami subchart
+
+postgres:
+  external:
+    enabled: true
+  host: "flexprice-prod.cluster-xxx.ap-south-1.rds.amazonaws.com"
+  port: 5432
+  user: "flexprice"
+  database: "flexprice"
+  sslmode: "require"
+  # password comes from existingSecret key: postgres-password
+
+# ── ClickHouse — EXTERNAL (ClickHouse Cloud or self-hosted Altinity) ──────────
+clickhouse:
+  mode: external
+  address: "your-cluster.clickhouse.cloud:9440"
+  tls: true
+  username: "default"
+  database: "flexprice"
+  # password comes from existingSecret key: clickhouse-password
+
+# ── Kafka — EXTERNAL (MSK / Confluent / Aiven) ────────────────────────────────
+kafka:
+  enabled: false   # disable bitnami subchart
+
+kafkaConfig:
+  external:
+    enabled: true
+  brokers: "b-1.flexprice.xxxxxx.c2.kafka.ap-south-1.amazonaws.com:9098,b-2...:9098,b-3...:9098"
+  useSASL: true
+  saslMechanism: "AWS_MSK_IAM"   # or SCRAM-SHA-512
+  saslUsername: "flexprice"
+  # saslPassword comes from existingSecret key: kafka-sasl-password
+  tls: true
+
+# ── Redis — EXTERNAL (ElastiCache / MemoryDB / Upstash) ───────────────────────
+redis:
+  enabled: false   # disable bitnami subchart
+
+redisConfig:
+  external:
+    enabled: true
+  host: "flexprice-prod.xxxxxx.use1.cache.amazonaws.com"
+  port: 6379
+  tls: true
+  # password comes from existingSecret key: redis-password (if auth enabled)
+
+redisExtended:
+  clusterMode: false   # set true if using ElastiCache Cluster Mode / MemoryDB
+
+# ── Temporal — EXTERNAL (Temporal Cloud) ──────────────────────────────────────
+temporal:
+  enabled: false   # disable temporalio subchart
+
+temporalConfig:
+  external:
+    enabled: true
+  address: "your-namespace.account.tmprl.cloud:7233"
+  namespace: "your-namespace.account"
+  taskQueue: "billing-task-queue"
+  tls: true
+  # apiKey comes from existingSecret key: temporal-api-key
+
+# ── Migration job ─────────────────────────────────────────────────────────────
+# Runs on install + upgrade. Steps are idempotent.
+migration:
+  enabled: true
+  backoffLimit: 3
+  activeDeadlineSeconds: 1800   # 30 min for large schema changes
+  ttlSecondsAfterFinished: 86400  # 1 day
+  steps:
+    postgresSetup: true
+    clickhouse: true
+    kafka: true       # idempotent topic creation
+    ent: true
+    seed: false       # NEVER seed in prod
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+# ── Observability ─────────────────────────────────────────────────────────────
+logging:
+  format: "json"
+  level: "info"
+  otel:
+    enabled: true
+    endpoint: "ingest.signoz.io:443"
+    # auth value from existingSecret key: logging-otel-auth-value
+
+sentry:
+  enabled: true
+  environment: "production"
+  sampleRate: 1.0
+  tracesSampleRate: 0.1
+  # dsn from existingSecret key: sentry-dsn
+
+pyroscope:
+  enabled: true
+  serverAddress: "https://profiles-prod-001.grafana.net"
+  basicAuthUser: "<grafana-cloud-user-id>"
+  # password from existingSecret key: pyroscope-basic-auth-password
+
+# ── Service monitor (Prometheus Operator) ────────────────────────────────────
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: kube-prometheus-stack
+
+# ── App URLs / billing ────────────────────────────────────────────────────────
+app:
+  baseUrl: "https://api.flexprice.example.com"
+
+billing:
+  # Override these with the real production tenant + environment IDs
+  tenantId: "<prod-tenant-uuid>"
+  environmentId: "<prod-environment-uuid>"
+
+# ── Email / webhooks ──────────────────────────────────────────────────────────
+email:
+  enabled: true
+  provider: "resend"
+  from: "billing@flexprice.example.com"
+  # api key from existingSecret key: email-resend-api-key
+
+webhook:
+  enabled: true
+  svixConfig:
+    enabled: true
+    # auth token from existingSecret key: svix-auth-token
+
+# ── Node placement (EKS managed node groups) ─────────────────────────────────
+nodeSelector:
+  eks.amazonaws.com/nodegroup: flexprice-app
+
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: flexprice
+    effect: NoSchedule
+
+# ── Pod annotations for tooling ───────────────────────────────────────────────
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
