@@ -8,6 +8,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -41,6 +42,10 @@ type SubscriptionChangeRequest struct {
 	// If "immediate": change executes immediately (explicit)
 	// If "period_end": change is scheduled for the end of the current billing period
 	ChangeAt *types.ScheduleType `json:"change_at,omitempty"`
+
+	// AdjustmentAmount is internal-only (set by trusted callers). Not accepted from public JSON.
+	// When set, must not be combined with change_at=period_end (validated in Validate).
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // Validate validates the subscription change request
@@ -72,6 +77,16 @@ func (r *SubscriptionChangeRequest) Validate() error {
 		if err := r.ChangeAt.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if r.OpeningInvoiceAdjustmentAmount != nil && lo.FromPtr(r.ChangeAt) == types.ScheduleTypePeriodEnd {
+		return ierr.NewError("opening_invoice_adjustment_amount must not be combined with change_at=period_end").
+			WithHint("Opening invoice adjustment amount must not be combined with change_at=period_end").
+			WithReportableDetails(map[string]any{
+				"opening_invoice_adjustment_amount": r.OpeningInvoiceAdjustmentAmount.String(),
+				"change_at":                         lo.FromPtr(r.ChangeAt).String(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
