@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -118,7 +119,7 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	}
 
 	// Calculate next invoice preview
-	nextInvoice, err := s.calculateNextInvoicePreview(ctx, currentSub, targetPlan, effectiveDate)
+	nextInvoice, err := s.calculateNextInvoicePreview(ctx, currentSub, targetPlan, effectiveDate, prorationDetails, req.ChangeAt)
 	if err != nil {
 		logger.Error("failed to calculate next invoice preview", zap.Error(err))
 		return nil, err
@@ -528,6 +529,8 @@ func (s *subscriptionChangeService) calculateNextInvoicePreview(
 	currentSub *subscription.Subscription,
 	targetPlan *plan.Plan,
 	effectiveDate time.Time,
+	prorationDetails *dto.ProrationDetails,
+	changeAt *types.ScheduleType,
 ) (*dto.InvoicePreview, error) {
 	// Get target plan prices
 	priceService := NewPriceService(s.serviceParams)
@@ -561,13 +564,53 @@ func (s *subscriptionChangeService) calculateNextInvoicePreview(
 		}
 	}
 
-	return &dto.InvoicePreview{
+	preview := &dto.InvoicePreview{
 		Subtotal:  subtotal,
 		TaxAmount: decimal.Zero,
 		Total:     subtotal,
 		Currency:  currentSub.Currency,
 		LineItems: lineItems,
-	}, nil
+	}
+
+	applySubscriptionChangePreviewCredit(preview, prorationDetails, changeAt)
+
+	return preview, nil
+}
+
+// applySubscriptionChangePreviewCredit applies immediate proration credit to the next-invoice preview.
+// It reduces line item amounts in slice order (capped per line) and keeps Subtotal/Total consistent.
+func applySubscriptionChangePreviewCredit(preview *dto.InvoicePreview, prorationDetails *dto.ProrationDetails, changeAt *types.ScheduleType) {
+	if preview == nil || prorationDetails == nil {
+		return
+	}
+
+	creditAmount := prorationDetails.CreditAmount
+	isImmediate := lo.FromPtr(changeAt) == types.ScheduleTypeImmediate
+	if !(isImmediate && creditAmount.GreaterThan(decimal.Zero) && len(preview.LineItems) > 0) {
+		return
+	}
+
+	// Apply credit across line items in order.
+	preview.LineItems = slices.Clone(preview.LineItems)
+	remaining := creditAmount
+	for i := range preview.LineItems {
+		if remaining.IsZero() {
+			break
+		}
+		take := decimal.Min(remaining, preview.LineItems[i].Amount)
+		preview.LineItems[i].Amount = preview.LineItems[i].Amount.Sub(take)
+		// Keep unit price aligned for quantity==1 previews.
+		preview.LineItems[i].UnitPrice = preview.LineItems[i].Amount
+		remaining = remaining.Sub(take)
+	}
+
+	// Subtotal equals sum of adjusted line items; clamp to zero for safety.
+	subtotal := lo.Reduce(preview.LineItems, func(acc decimal.Decimal, li dto.InvoiceLineItemPreview, _ int) decimal.Decimal {
+		return acc.Add(li.Amount)
+	}, decimal.Zero)
+
+	preview.Subtotal = decimal.Max(decimal.Zero, subtotal)
+	preview.Total = subtotal.Add(preview.TaxAmount)
 }
 
 // calculateNewBillingCycle calculates the new billing cycle information
@@ -749,7 +792,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 					return nil, ierr.NewErrorf("customer not found for child subscription (customer_id=%s)", ch.CustomerID).
 						WithHint("Customer not found").
 						WithReportableDetails(map[string]any{
-							"customer_id":         ch.CustomerID,
+							"customer_id":           ch.CustomerID,
 							"child_subscription_id": ch.ID,
 						}).
 						Mark(ierr.ErrNotFound)
