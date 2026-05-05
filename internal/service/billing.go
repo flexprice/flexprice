@@ -307,6 +307,28 @@ func (s *billingService) CalculateFixedCharges(
 	return fixedCostLineItems, fixedCost, nil
 }
 
+// applyFixedChargeAdjustmentToLineItems reduces line Amounts in slice order: for each line,
+// take min(remaining credit, line amount). Each take is capped by the line, so total reduction
+// cannot exceed the sum of line amounts even when credit is larger.
+func applyFixedChargeAdjustmentToLineItems(
+	items []dto.CreateInvoiceLineItemRequest,
+	creditsToAdjust decimal.Decimal,
+) []dto.CreateInvoiceLineItemRequest {
+	if len(items) == 0 || !creditsToAdjust.GreaterThan(decimal.Zero) {
+		return slices.Clone(items)
+	}
+	remaining := creditsToAdjust
+	return lo.Map(items, func(item dto.CreateInvoiceLineItemRequest, _ int) dto.CreateInvoiceLineItemRequest {
+		if remaining.IsZero() {
+			return item
+		}
+		take := decimal.Min(remaining, item.Amount)
+		item.Amount = item.Amount.Sub(take)
+		remaining = remaining.Sub(take)
+		return item
+	})
+}
+
 // endDateBoundaryForMatching returns periodEnd + one billing period length so that
 // CalculateBillingPeriods generates enough periods to cover the invoice window without
 // generating an excessive number (e.g. 365 for daily with a 1-year buffer).
