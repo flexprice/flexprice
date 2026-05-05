@@ -407,7 +407,13 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			refPoint = types.ReferencePointCancel
 		}
 		billingService := NewBillingService(s.ServiceParams)
-		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, sub, *inv.PeriodStart, *inv.PeriodEnd, refPoint, inv.ID)
+		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+			Subscription:     sub,
+			PeriodStart:      *inv.PeriodStart,
+			PeriodEnd:        *inv.PeriodEnd,
+			ReferencePoint:   refPoint,
+			ExcludeInvoiceID: inv.ID,
+		})
 		if err != nil {
 			return false, err
 		}
@@ -1855,8 +1861,12 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 	}
 
 	// Prepare invoice request using billing service with the preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointPreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   sub,
+		PeriodStart:    *req.PeriodStart,
+		PeriodEnd:      *req.PeriodEnd,
+		ReferencePoint: types.ReferencePointPreview,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1906,8 +1916,12 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 	}
 
 	// Prepare invoice request using billing service with the internal preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointInternalPreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   sub,
+		PeriodStart:    *req.PeriodStart,
+		PeriodEnd:      *req.PeriodEnd,
+		ReferencePoint: types.ReferencePointInternalPreview,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1958,8 +1972,12 @@ func (s *invoiceService) GetMeterUsagePreviewInvoice(ctx context.Context, req dt
 	}
 
 	// Prepare invoice request using billing service with the meter usage preview reference point
-	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointMeterUsagePreview, "")
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   sub,
+		PeriodStart:    *req.PeriodStart,
+		PeriodEnd:      *req.PeriodEnd,
+		ReferencePoint: types.ReferencePointMeterUsagePreview,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -3017,13 +3035,12 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		// Use period_end reference point to include both arrear and advance charges
 		referencePoint := types.ReferencePointPeriodEnd
 
-		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx,
-			sub,
-			*inv.PeriodStart,
-			*inv.PeriodEnd,
-			referencePoint,
-			"",
-		)
+		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx, &dto.PrepareSubscriptionInvoiceRequestParams{
+			Subscription:   sub,
+			PeriodStart:    *inv.PeriodStart,
+			PeriodEnd:      *inv.PeriodEnd,
+			ReferencePoint: referencePoint,
+		})
 		if err != nil {
 			return err
 		}

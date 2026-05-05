@@ -4832,11 +4832,12 @@ func (s *SubscriptionServiceSuite) TestFilterLineItemsWithEndDate() {
 		s.Run(tt.name, func() {
 			filtered, err := billingService.FilterLineItemsToBeInvoiced(
 				s.GetContext(),
-				sub,
-				tt.periodStart,
-				tt.periodEnd,
-				lineItems,
-				"",
+				&dto.FilterLineItemsToBeInvoicedParams{
+					Subscription: sub,
+					PeriodStart:  tt.periodStart,
+					PeriodEnd:    tt.periodEnd,
+					LineItems:    lineItems,
+				},
 			)
 			s.NoError(err)
 

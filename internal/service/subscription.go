@@ -6573,7 +6573,10 @@ func (s *subscriptionService) GetAggregatedSubscriptionEntitlements(ctx context.
 
 	// Use the generic aggregation function from billing service
 	billingService := NewBillingService(s.ServiceParams)
-	aggregatedFeatures := billingService.AggregateEntitlements(entitlements, subscriptionID)
+	aggregatedFeatures := billingService.AggregateEntitlements(&dto.AggregateEntitlementsParams{
+		Entitlements:   entitlements,
+		SubscriptionID: subscriptionID,
+	})
 
 	// Ensure subscription ID is set in all sources
 	for _, feature := range aggregatedFeatures {

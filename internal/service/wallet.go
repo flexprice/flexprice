@@ -1212,17 +1212,22 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			}
 
 			// Calculate usage charges
-			usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+			usageResult, err := billingService.CalculateUsageCharges(ctx, &dto.CalculateUsageChargesParams{
+				Subscription: sub,
+				Usage:        usage,
+				PeriodStart:  periodStart,
+				PeriodEnd:    periodEnd,
+			})
 			if err != nil {
 				return nil, err
 			}
 
 			s.Logger.InfowCtx(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", usageTotal,
-				"num_usage_charges", len(usageCharges))
+				"usage_total", usageResult.TotalAmount,
+				"num_usage_charges", len(usageResult.LineItems))
 
-			totalPendingCharges = totalPendingCharges.Add(usageTotal)
+			totalPendingCharges = totalPendingCharges.Add(usageResult.TotalAmount)
 		}
 	}
 
@@ -2429,17 +2434,22 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			// s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
 
 			// Calculate usage charges for feature usage data
-			usageCharges, usageTotal, err := billingService.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd, nil)
+			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
+				Subscription: sub,
+				Usage:        usage,
+				PeriodStart:  periodStart,
+				PeriodEnd:    periodEnd,
+			})
 			if err != nil {
 				return nil, err
 			}
 
 			s.Logger.InfowCtx(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", usageTotal,
-				"num_usage_charges", len(usageCharges))
+				"usage_total", featureUsageResult.TotalAmount,
+				"num_usage_charges", len(featureUsageResult.LineItems))
 
-			totalPendingCharges = totalPendingCharges.Add(usageTotal)
+			totalPendingCharges = totalPendingCharges.Add(featureUsageResult.TotalAmount)
 		}
 	}
 
@@ -2597,17 +2607,22 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 			}
 			// s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
 			// Calculate usage charges for feature usage data
-			usageCharges, usageTotal, err := billingService.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd, nil)
+			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
+				Subscription: sub,
+				Usage:        usage,
+				PeriodStart:  periodStart,
+				PeriodEnd:    periodEnd,
+			})
 			if err != nil {
 				return nil, err
 			}
 
 			s.Logger.InfowCtx(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", usageTotal,
-				"num_usage_charges", len(usageCharges))
+				"usage_total", featureUsageResult.TotalAmount,
+				"num_usage_charges", len(featureUsageResult.LineItems))
 
-			totalPendingCharges = totalPendingCharges.Add(usageTotal)
+			totalPendingCharges = totalPendingCharges.Add(featureUsageResult.TotalAmount)
 		}
 	}
 

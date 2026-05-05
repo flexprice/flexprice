@@ -5,6 +5,7 @@ import (
 	"time"
 
 	entpkg "github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -240,7 +241,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeAdvance_BillingDateAtPeriodSta
 	item := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, s.jan1)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Len(result.CurrentPeriodAdvance, 1, "StartDate == period start should be in CurrentPeriodAdvance")
 	s.Empty(result.CurrentPeriodArrear)
@@ -252,7 +259,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeAdvance_BillingDateMidPeriod()
 	item := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, s.jan15)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Len(result.CurrentPeriodAdvance, 1)
 	s.Empty(result.CurrentPeriodArrear)
@@ -265,7 +278,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeAdvance_BillingDateAtPeriodEnd
 	item := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, s.feb1)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Empty(result.CurrentPeriodAdvance, "period end is exclusive for ADVANCE — should not be in current")
 	s.Len(result.NextPeriodAdvance, 1, "should land in next period (Feb 1 is next period start)")
@@ -276,7 +295,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeAdvance_BillingDateInNextPerio
 	item := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, s.feb15)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Empty(result.CurrentPeriodAdvance)
 	s.Len(result.NextPeriodAdvance, 1, "StartDate in next period should land in NextPeriodAdvance")
@@ -288,7 +313,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeAdvance_BillingDateOutsideBoth
 	item := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, dec15)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Empty(result.CurrentPeriodAdvance)
 	s.Empty(result.NextPeriodAdvance)
@@ -300,7 +331,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeArrear_BillingDateMidPeriod() 
 	item := s.makeOnetimeLineItem("price_onetime_arrear", types.InvoiceCadenceArrear, s.jan15)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Len(result.CurrentPeriodArrear, 1)
 	s.Empty(result.CurrentPeriodAdvance)
@@ -312,7 +349,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeArrear_BillingDateAtPeriodStar
 	item := s.makeOnetimeLineItem("price_onetime_arrear", types.InvoiceCadenceArrear, s.jan1)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Empty(result.CurrentPeriodArrear, "period start is exclusive for ARREAR")
 }
@@ -322,7 +365,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeArrear_BillingDateAtPeriodEnd(
 	item := s.makeOnetimeLineItem("price_onetime_arrear", types.InvoiceCadenceArrear, s.feb1)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Len(result.CurrentPeriodArrear, 1, "period end is inclusive for ARREAR")
 }
@@ -332,7 +381,13 @@ func (s *BillingOnetimeSuite) TestClassify_OneTimeAdvance_InCurrent_NotInNext() 
 	item := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, s.jan15)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Len(result.CurrentPeriodAdvance, 1)
 	s.Empty(result.NextPeriodAdvance, "ONETIME in current period must not appear in NextPeriodAdvance")
@@ -344,7 +399,13 @@ func (s *BillingOnetimeSuite) TestClassify_MixedRecurringAndOnetime() {
 	onetime := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, s.jan15)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{recurring, onetime}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Len(result.CurrentPeriodAdvance, 2, "both recurring and onetime should be in current advance")
 	s.Len(result.NextPeriodAdvance, 1, "only recurring should be in next advance")
@@ -440,10 +501,10 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_FullAmountNoProration()
 		},
 	}
 
-	lineItems, total, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	result, err := s.billingService().CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
-	s.Len(lineItems, 1)
-	s.Equal("500", total.String(), "ONETIME charge must be full $500, no proration")
+	s.Len(result.LineItems, 1)
+	s.Equal("500", result.TotalAmount.String(), "ONETIME charge must be full $500, no proration")
 }
 
 func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_LineItemPeriodIsBillingDate() {
@@ -466,10 +527,10 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_LineItemPeriodIsBilling
 		},
 	}
 
-	lineItems, _, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	result, err := s.billingService().CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
-	s.Require().Len(lineItems, 1)
-	li := lineItems[0]
+	s.Require().Len(result.LineItems, 1)
+	li := result.LineItems[0]
 	s.NotNil(li.PeriodStart)
 	s.NotNil(li.PeriodEnd)
 	s.True(li.PeriodStart.Equal(s.jan15), "PeriodStart should equal line item StartDate")
@@ -496,9 +557,9 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_WithQuantity3() {
 		},
 	}
 
-	_, total, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	result, err := s.billingService().CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
-	s.Equal("1500", total.String(), "3 × $500 = $1500")
+	s.Equal("1500", result.TotalAmount.String(), "3 × $500 = $1500")
 }
 
 func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_SkippedIfStartDateAfterPeriodEnd() {
@@ -521,10 +582,10 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_OneTime_SkippedIfStartDateAfter
 		},
 	}
 
-	lineItems, total, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	result, err := s.billingService().CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
-	s.Empty(lineItems, "StartDate after period end should be skipped")
-	s.True(total.IsZero())
+	s.Empty(result.LineItems, "StartDate after period end should be skipped")
+	s.True(result.TotalAmount.IsZero())
 }
 
 func (s *BillingOnetimeSuite) TestCalculateFixed_Recurring_StillProratesNormally() {
@@ -549,10 +610,10 @@ func (s *BillingOnetimeSuite) TestCalculateFixed_Recurring_StillProratesNormally
 		},
 	}
 
-	_, total, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	result, err := s.billingService().CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
 	// Amount may be prorated (< $100) or $100 depending on ProrationBehavior; just confirm it's > 0
-	s.True(total.GreaterThan(decimal.Zero), "recurring fixed charge should produce a non-zero amount")
+	s.True(result.TotalAmount.GreaterThan(decimal.Zero), "recurring fixed charge should produce a non-zero amount")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -566,7 +627,13 @@ func (s *BillingOnetimeSuite) TestOnetime_MultipleChargesInSamePeriod() {
 	item2.ID = "li_ot2"
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item1, item2}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Len(result.CurrentPeriodAdvance, 2, "two ONETIME charges in same period should both be classified")
 }
@@ -591,12 +658,12 @@ func (s *BillingOnetimeSuite) TestOnetime_ZeroDurationLineItemPeriod() {
 		},
 	}
 
-	lineItems, _, err := s.billingService().CalculateFixedCharges(ctx, &sub, s.jan1, s.feb1)
+	result, err := s.billingService().CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: &sub, PeriodStart: s.jan1, PeriodEnd: s.feb1})
 	s.NoError(err)
-	s.Require().Len(lineItems, 1)
+	s.Require().Len(result.LineItems, 1)
 	// PeriodStart == PeriodEnd == line item StartDate
-	s.True(lo.FromPtr(lineItems[0].PeriodStart).Equal(s.jan1))
-	s.True(lo.FromPtr(lineItems[0].PeriodEnd).Equal(s.jan1))
+	s.True(lo.FromPtr(result.LineItems[0].PeriodStart).Equal(s.jan1))
+	s.True(lo.FromPtr(result.LineItems[0].PeriodEnd).Equal(s.jan1))
 }
 
 func (s *BillingOnetimeSuite) TestOnetime_NeitherCurrentNorNext_WhenFarFuture() {
@@ -604,7 +671,13 @@ func (s *BillingOnetimeSuite) TestOnetime_NeitherCurrentNorNext_WhenFarFuture() 
 	item := s.makeOnetimeLineItem("price_onetime_advance", types.InvoiceCadenceAdvance, apr1)
 	s.sub.LineItems = []*subscription.SubscriptionLineItem{item}
 
-	result := s.billingService().ClassifyLineItems(s.sub, s.jan1, s.feb1, s.feb1, s.mar1)
+	result := s.billingService().ClassifyLineItems(&dto.ClassifyLineItemsParams{
+		Subscription:       s.sub,
+		CurrentPeriodStart: s.jan1,
+		CurrentPeriodEnd:   s.feb1,
+		NextPeriodStart:    s.feb1,
+		NextPeriodEnd:      s.mar1,
+	})
 
 	s.Empty(result.CurrentPeriodAdvance)
 	s.Empty(result.NextPeriodAdvance)

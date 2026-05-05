@@ -37,16 +37,13 @@ func (s *billingService) CalculateMeterUsageCharges(
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
 	periodStart, periodEnd time.Time,
-	opts *CalculateFeatureUsageChargesOpts,
+	source types.UsageSource,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
 	if usage == nil {
 		return nil, decimal.Zero, nil
 	}
 
-	var querySource types.UsageSource
-	if opts != nil {
-		querySource = opts.Source
-	}
+	querySource := source
 
 	asOf := time.Now().UTC()
 
@@ -694,22 +691,26 @@ func (s *billingService) calculateAllMeterUsageCharges(
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
 	periodStart, periodEnd time.Time,
-) (*BillingCalculationResult, error) {
-	fixedCharges, fixedTotal, err := s.CalculateFixedCharges(ctx, sub, periodStart, periodEnd)
+) (*dto.BillingCalculationResult, error) {
+	fixedResult, err := s.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: sub,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	usageCharges, usageTotal, err := s.CalculateMeterUsageCharges(ctx, sub, usage, periodStart, periodEnd,
-		&CalculateFeatureUsageChargesOpts{Source: types.UsageSourceInvoiceCreation})
+		types.UsageSourceInvoiceCreation)
 	if err != nil {
 		return nil, err
 	}
 
-	return &BillingCalculationResult{
-		FixedCharges: fixedCharges,
+	return &dto.BillingCalculationResult{
+		FixedCharges: fixedResult.LineItems,
 		UsageCharges: usageCharges,
-		TotalAmount:  fixedTotal.Add(usageTotal),
+		TotalAmount:  fixedResult.TotalAmount.Add(usageTotal),
 		Currency:     sub.Currency,
 	}, nil
 }
