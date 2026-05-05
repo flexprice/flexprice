@@ -1707,7 +1707,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 
 		inv.PaidAt = &now
 
-		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+		if types.InvoiceBillingReason(inv.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
 			s.HandleIncompleteSubscriptionPayment(ctx, inv)
 		}
 
@@ -1722,7 +1722,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		if inv.PaidAt == nil {
 			inv.PaidAt = &now
 		}
-		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+		if types.InvoiceBillingReason(inv.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
 			s.HandleIncompleteSubscriptionPayment(ctx, inv)
 		}
 	case types.PaymentStatusFailed:
@@ -3449,7 +3449,7 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 		return nil
 	}
 
-	if !types.InvoiceBillingReason(invoice.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+	if !types.InvoiceBillingReason(invoice.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
 		return nil
 	}
 
