@@ -288,6 +288,12 @@ func (s *billingService) CalculateFixedCharges(
 		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
+	// if there is an opening invoice adjustment amount, apply it to the line items
+	if params.OpeningInvoiceAdjustmentAmount != nil {
+		fixedCostLineItems = applyFixedChargeAdjustmentToLineItems(fixedCostLineItems, lo.FromPtr(params.OpeningInvoiceAdjustmentAmount))
+		fixedCost = fixedCost.Sub(lo.FromPtr(params.OpeningInvoiceAdjustmentAmount))
+	}
+
 	return &dto.CalculateFixedChargesResult{LineItems: fixedCostLineItems, TotalAmount: fixedCost}, nil
 }
 
