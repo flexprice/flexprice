@@ -2000,7 +2000,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	case types.ReferencePointPeriodEnd:
 		// Include both arrear charges for current period and advance charges for next period
-		// Use calculateFeatureUsageCharges for arrear so cumulative commitment is applied (feature_usage path)
+		// Use calculateMeterUsageCharges for arrear so cumulative commitment is applied (meter_usage path)
 		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear, excludeInvoiceID)
 		if err != nil {
 			return nil, err
@@ -2018,8 +2018,8 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		// For current period arrear charges (feature_usage path for cumulative commitment support)
-		arrearResult, err := s.CalculateCharges(
+		// For current period arrear charges (meter_usage path for cumulative commitment support)
+		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -2032,7 +2032,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(
+		advanceResult, err := s.calculateMeterUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -2178,14 +2178,14 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		metadata["is_preview"] = "true"
 
 	case types.ReferencePointCancel:
-		// for cancel, include arrear line items only (feature_usage path for cumulative commitment)
+		// for cancel, include arrear line items only (meter_usage path for cumulative commitment)
 		arrearLineItems, err := s.FilterLineItemsToBeInvoiced(ctx, sub, periodStart, periodEnd, classification.CurrentPeriodArrear, excludeInvoiceID)
 		if err != nil {
 			return nil, err
 		}
 
-		// For current period arrear charges
-		arrearResult, err := s.calculateFeatureUsageCharges(
+		// For current period arrear charges (meter_usage path)
+		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
