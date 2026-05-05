@@ -713,7 +713,7 @@ func (s *subscriptionChangeService) executeChange(
 	}
 
 	// Create new subscription
-	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate)
+	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, archivedSub.TotalCreditAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -756,6 +756,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 	targetPlan *plan.Plan,
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
+	cancelledSubTotalCreditAmount decimal.Decimal,
 ) (*subscription.Subscription, error) {
 	// Carry over inherited child subscriptions and invoicing customer via Inheritance config.
 	// ExternalCustomerIDsToInheritSubscription and InvoicingCustomerExternalID are mutually exclusive,
@@ -845,6 +846,13 @@ func (s *subscriptionChangeService) createNewSubscription(
 		PaymentTerms:       currentSub.PaymentTerms,
 		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
 		Inheritance:        inheritance,
+	}
+
+	// When doing an immediate plan change, we cancel the old subscription with proration but
+	// skip wallet credit issuance. Instead, we net that credit against the new subscription's
+	// opening invoice as an adjustment.
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !cancelledSubTotalCreditAmount.IsZero() {
+		createSubReq.OpeningInvoiceAdjustmentAmount = &cancelledSubTotalCreditAmount
 	}
 
 	subscriptionService := NewSubscriptionService(s.serviceParams)
