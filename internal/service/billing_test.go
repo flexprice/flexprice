@@ -893,16 +893,16 @@ func (s *BillingServiceSuite) TestCalculateFixedCharges_MixedCadence() {
 	// Arrear rule: period end in (periodStart, periodEnd] (start exclusive, end inclusive).
 	// Excluded: invoice period Apr 1 - May 1. Quarter from Jan 1 ends Apr 1; Apr 1 is not in (Apr 1, May 1] -> no quarterly line
 	aprMayResult, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: sub, PeriodStart: apr1, PeriodEnd: may1})
-	aprMayLineItems, aprMayTotal := aprMayResult.LineItems, aprMayResult.TotalAmount
 	s.NoError(err)
+	aprMayLineItems, aprMayTotal := aprMayResult.LineItems, aprMayResult.TotalAmount
 	s.Require().Len(aprMayLineItems, 1, "expected 1 fixed line item (monthly only; quarterly arrear excluded when period end equals invoice start)")
 	s.Equal(priceMonthly.ID, lo.FromPtr(aprMayLineItems[0].PriceID))
 	s.True(aprMayTotal.GreaterThanOrEqual(decimal.NewFromInt(0)) && aprMayTotal.LessThanOrEqual(decimal.NewFromInt(10)), "total should be 0–10 (monthly only, may be prorated)")
 
 	// Included: invoice period Mar 1 - Apr 1. Quarter end Apr 1 is in (Mar 1, Apr 1] -> include quarterly with period Jan 1 - Apr 1
 	marAprResult, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{Subscription: sub, PeriodStart: mar1, PeriodEnd: apr1})
-	marAprLineItems, marAprTotal := marAprResult.LineItems, marAprResult.TotalAmount
 	s.NoError(err)
+	marAprLineItems, marAprTotal := marAprResult.LineItems, marAprResult.TotalAmount
 	s.Require().Len(marAprLineItems, 2, "expected 2 fixed line items (monthly + quarterly)")
 	var monthlyLine, quarterlyLine *dto.CreateInvoiceLineItemRequest
 	for i := range marAprLineItems {

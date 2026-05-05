@@ -1551,10 +1551,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								},
 							}
 
-						fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
-						if fetchErr != nil {
-							return nil, fetchErr
-						}
+							fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
+							if fetchErr != nil {
+								return nil, fetchErr
+							}
 							commitmentUsageResult = fetchedResult
 						}
 
@@ -3197,6 +3197,9 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	}
 	if req == nil {
 		req = &dto.GetCustomerUsageSummaryRequest{}
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
 	}
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
