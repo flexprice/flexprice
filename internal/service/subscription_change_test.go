@@ -2,21 +2,29 @@ package service
 
 import (
 	"strings"
+	"testing"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	invoicedomain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
+
+// Blank identifiers to keep invoicedomain and walletdomain imports alive until Task 2 uses them.
+var _ = invoicedomain.Invoice{}
+var _ = walletdomain.Wallet{}
 
 type SubscriptionChangeServiceTestSuite struct {
 	testutil.BaseServiceTestSuite
@@ -50,7 +58,11 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		PlanRepo:                   s.GetStores().PlanRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
+		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,
+		SubScheduleRepo:            s.GetStores().SubscriptionScheduleRepo,
 		WalletRepo:                 s.GetStores().WalletRepo,
+		InvoiceLineItemRepo:        s.GetStores().InvoiceLineItemRepo,
 		TenantRepo:                 s.GetStores().TenantRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
 		FeatureRepo:                s.GetStores().FeatureRepo,
@@ -68,11 +80,15 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		CreditNoteRepo:             s.GetStores().CreditNoteRepo,
 		CreditNoteLineItemRepo:     s.GetStores().CreditNoteLineItemRepo,
-		ConnectionRepo:             s.GetStores().ConnectionRepo,
-		SettingsRepo:               s.GetStores().SettingsRepo,
-		EventPublisher:             s.GetPublisher(),
-		WebhookPublisher:           s.GetWebhookPublisher(),
-		ProrationCalculator:        s.GetCalculator(), // Use the correct method from BaseServiceTestSuite
+		ConnectionRepo:               s.GetStores().ConnectionRepo,
+		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
+		SettingsRepo:                 s.GetStores().SettingsRepo,
+		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
+		FeatureUsageRepo:             s.GetStores().FeatureUsageRepo,
+		EventPublisher:               s.GetPublisher(),
+		WebhookPublisher:             s.GetWebhookPublisher(),
+		ProrationCalculator:          s.GetCalculator(),
+		IntegrationFactory:           s.GetIntegrationFactory(),
 	}
 
 	s.subscriptionChangeService = NewSubscriptionChangeService(serviceParams).(*subscriptionChangeService)
@@ -601,8 +617,8 @@ func (s *SubscriptionChangeServiceTestSuite) TestCalculatePeriodEndHelper() {
 func (s *SubscriptionChangeServiceTestSuite) TestGenerateWarningsHelper() {
 	service := s.subscriptionChangeService
 
-	// Create test subscription with trial end after the hardcoded date in the service
-	futureTime := time.Date(2025, 12, 25, 0, 0, 0, 0, time.UTC)
+	// Create test subscription with trial end in the future
+	futureTime := time.Now().UTC().AddDate(1, 0, 0) // one year from now
 	testSub := &subscription.Subscription{
 		TrialEnd: &futureTime,
 	}
@@ -1281,7 +1297,6 @@ func (s *SubscriptionChangeServiceTestSuite) TestFixedToUsagePlanTransition() {
 // }
 
 // TestSubscriptionChangeServiceTestSuite runs the subscription change suite.
-// Uncomment to run; requires integration deps (e.g. IntegrationFactory) for full subscription creation.
-// func TestSubscriptionChangeServiceTestSuite(t *testing.T) {
-// 	suite.Run(t, new(SubscriptionChangeServiceTestSuite))
-// }
+func TestSubscriptionChangeServiceTestSuite(t *testing.T) {
+	suite.Run(t, new(SubscriptionChangeServiceTestSuite))
+}
