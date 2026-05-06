@@ -258,3 +258,32 @@ func (s *subscriptionService) cascadeTrialActivationToInherited(ctx context.Cont
 	}
 	return nil
 }
+
+// createTrialStartInvoice creates the $0 trial-start invoice for a newly-created trialing subscription.
+// The invoice is finalized with an invoice number and auto-paid immediately.
+// Only parent subscriptions get this invoice; inherited subscriptions are skipped.
+func (s *subscriptionService) createTrialStartInvoice(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	invoiceService InvoiceService,
+) error {
+	if sub.SubscriptionType == types.SubscriptionTypeInherited {
+		return nil
+	}
+	if sub.TrialStart == nil || sub.TrialEnd == nil {
+		return nil
+	}
+
+	paymentParams := dto.NewPaymentParametersFromSubscription(
+		sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID,
+	).NormalizePaymentParameters()
+
+	_, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+		SubscriptionID: sub.ID,
+		PeriodStart:    lo.FromPtr(sub.TrialStart),
+		PeriodEnd:      lo.FromPtr(sub.TrialEnd),
+		ReferencePoint: types.ReferencePointPeriodStart,
+		BillingReason:  types.InvoiceBillingReasonSubscriptionTrialStart,
+	}, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
+	return err
+}
