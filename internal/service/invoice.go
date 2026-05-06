@@ -401,7 +401,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		refPoint := types.ReferencePointPeriodEnd
 		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd:
+		case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd, types.InvoiceBillingReasonSubscriptionTrialStart:
 			refPoint = types.ReferencePointPeriodStart
 		case types.InvoiceBillingReasonProration:
 			refPoint = types.ReferencePointCancel
@@ -461,10 +461,19 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 				}
 			}
 
-			inv.Subtotal = applyReq.Subtotal
-			inv.Total = applyReq.Total
-			inv.AmountDue = applyReq.AmountDue
-			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+			isTrialStartInv := types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart
+			if isTrialStartInv {
+				// Trial-start invoices show post-trial line items but amount is always $0.
+				inv.Subtotal = decimal.Zero
+				inv.Total = decimal.Zero
+				inv.AmountDue = decimal.Zero
+				inv.AmountRemaining = decimal.Zero
+			} else {
+				inv.Subtotal = applyReq.Subtotal
+				inv.Total = applyReq.Total
+				inv.AmountDue = applyReq.AmountDue
+				inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+			}
 			inv.Description = applyReq.Description
 			inv.DueDate = applyReq.DueDate
 			inv.LineItems = lineItemDomains
@@ -1813,7 +1822,7 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		subscription.Currency,
 		string(subscription.BillingPeriod),
 	)
-	if flowType == types.InvoiceFlowSubscriptionCreation {
+	if flowType == types.InvoiceFlowSubscriptionCreation && draftReq.BillingReason != types.InvoiceBillingReasonSubscriptionTrialStart {
 		draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
 	}
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
