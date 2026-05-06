@@ -1351,6 +1351,77 @@ func (s *SubscriptionChangeServiceTestSuite) TestFixedToUsagePlanTransition() {
 // 	}
 // }
 
+// TestUpgradeWithCreateProrations verifies that when a customer upgrades plans
+// immediately with ProrationBehaviorCreateProrations:
+//   - The preview shows the correct credit amount (~$300 for 15/30 days of $600/mo)
+//   - The preview next invoice total is reduced by that credit (~$2000 - $300 = $1700)
+//   - The old subscription is cancelled and no wallet credit is created
+//   - The new subscription's opening invoice has BillingReason=SUBSCRIPTION_UPDATE
+func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
+	ctx := s.GetContext()
+
+	// Setup: customer, $600/month plan, $2000/month plan
+	cust := s.createTestCustomer()
+	sourcePlan := s.createTestPlan("Source600", decimal.NewFromFloat(600))
+	targetPlan := s.createTestPlan("Target2000", decimal.NewFromFloat(2000))
+
+	// Create subscription on the $600 plan
+	sub := s.createTestSubscription(sourcePlan.ID, cust.ID)
+
+	// Backdate: 15 days used of 30 days total
+	sub = s.backdateSub(sub, 15, 30)
+
+	// Build request with create_prorations
+	req := s.createSubscriptionChangeRequest(targetPlan.ID, types.ProrationBehaviorCreateProrations)
+
+	// --- Preview ---
+	previewResp, err := s.subscriptionChangeService.PreviewSubscriptionChange(ctx, sub.ID, req)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), previewResp)
+
+	s.Run("preview/shows_proration_details", func() {
+		assert.NotNil(s.T(), previewResp.ProrationDetails)
+	})
+
+	s.Run("preview/credit_amount_near_300", func() {
+		require.NotNil(s.T(), previewResp.ProrationDetails)
+		s.assertAmountNear(decimal.NewFromFloat(300), previewResp.ProrationDetails.CreditAmount, 1.0, "credit amount")
+	})
+
+	s.Run("preview/next_invoice_total_near_1700", func() {
+		require.NotNil(s.T(), previewResp.NextInvoicePreview)
+		s.assertAmountNear(decimal.NewFromFloat(1700), previewResp.NextInvoicePreview.Total, 1.0, "next invoice total")
+	})
+
+	// --- Execute ---
+	execResp, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, sub.ID, req)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), execResp)
+
+	s.Run("execute/old_sub_cancelled", func() {
+		assert.Equal(s.T(), types.SubscriptionStatusCancelled, execResp.OldSubscription.Status)
+	})
+
+	s.Run("execute/new_sub_active_on_target_plan", func() {
+		assert.Equal(s.T(), types.SubscriptionStatusActive, execResp.NewSubscription.Status)
+		assert.Equal(s.T(), targetPlan.ID, execResp.NewSubscription.PlanID)
+	})
+
+	s.Run("execute/opening_invoice_billing_reason", func() {
+		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
+		require.NotEmpty(s.T(), invoices, "expected at least one invoice for new subscription")
+		assert.Equal(s.T(), string(types.InvoiceBillingReasonSubscriptionUpdate), string(invoices[0].BillingReason))
+	})
+
+	s.Run("execute/no_wallet_credit", func() {
+		wallet := s.getWalletForCustomer(cust.ID)
+		if wallet != nil {
+			assert.True(s.T(), wallet.Balance.IsZero(), "wallet balance should be zero, got %s", wallet.Balance)
+		}
+		// nil wallet also satisfies the requirement
+	})
+}
+
 // TestApplyFixedChargeAdjustmentToLineItems verifies the billing helper that
 // distributes a proration credit across invoice line items in order.
 func (s *SubscriptionChangeServiceTestSuite) TestApplyFixedChargeAdjustmentToLineItems() {

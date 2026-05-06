@@ -1929,7 +1929,9 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
-		// Step 9: Top up wallet for proration credit (only if there's a credit amount)
+		// Step 9: Top up wallet for proration credit (only if there's a credit amount).
+		// During plan changes with create_prorations, the caller sets SkipProrationWalletCredit
+		// so the credit is instead applied as OpeningInvoiceAdjustmentAmount on the new subscription.
 		if totalCreditAmount.GreaterThan(decimal.Zero) && !req.SkipProrationWalletCredit {
 			walletService := NewWalletService(s.ServiceParams)
 			cancelKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)

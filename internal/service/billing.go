@@ -2044,11 +2044,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		calculationResult, err = s.CalculateCharges(ctx, &dto.CalculateChargesParams{
-			Subscription: sub,
-			LineItems:    advanceLineItems,
-			PeriodStart:  periodStart,
-			PeriodEnd:    periodEnd,
-			IncludeUsage: false, // No usage for advance
+			Subscription:          sub,
+			LineItems:             advanceLineItems,
+			PeriodStart:           periodStart,
+			PeriodEnd:             periodEnd,
+			IncludeUsage:          false, // No usage for advance
+			FixedChargeAdjustment: params.OpeningInvoiceAdjustmentAmount,
 		})
 		if err != nil {
 			return nil, err
@@ -3643,30 +3644,4 @@ func (s *billingService) calculateNeverResetUsage(
 		"billable_quantity", billableQuantity)
 
 	return billableQuantity, nil
-}
-
-// applyFixedChargeAdjustmentToLineItems reduces the Amount on fixed line items in order
-// (first item first) by the given credit until the credit is exhausted, never letting any
-// item go below zero. It returns a new slice with adjusted amounts; the originals' Amount
-// fields are not modified.
-func applyFixedChargeAdjustmentToLineItems(items []dto.CreateInvoiceLineItemRequest, credit decimal.Decimal) []dto.CreateInvoiceLineItemRequest {
-	if credit.IsZero() || credit.IsNegative() || len(items) == 0 {
-		result := make([]dto.CreateInvoiceLineItemRequest, len(items))
-		copy(result, items)
-		return result
-	}
-
-	result := make([]dto.CreateInvoiceLineItemRequest, len(items))
-	copy(result, items)
-
-	remaining := credit
-	for i := range result {
-		if remaining.IsZero() {
-			break
-		}
-		reduction := decimal.Min(result[i].Amount, remaining)
-		result[i].Amount = result[i].Amount.Sub(reduction)
-		remaining = remaining.Sub(reduction)
-	}
-	return result
 }

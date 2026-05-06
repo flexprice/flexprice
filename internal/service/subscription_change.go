@@ -135,6 +135,20 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	// Generate warnings
 	warnings := s.generateWarnings(currentSub, targetPlan, changeType, req.ProrationBehavior)
 
+	// For immediate create_prorations changes, reduce the next invoice preview total by the
+	// proration credit so the customer sees the net amount they will actually be charged.
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations &&
+		prorationDetails != nil &&
+		nextInvoice != nil &&
+		prorationDetails.CreditAmount.GreaterThan(decimal.Zero) {
+		reduction := prorationDetails.CreditAmount
+		if nextInvoice.Total.LessThan(reduction) {
+			reduction = nextInvoice.Total
+		}
+		nextInvoice.Total = nextInvoice.Total.Sub(reduction)
+		nextInvoice.Subtotal = nextInvoice.Subtotal.Sub(reduction)
+	}
+
 	response := &dto.SubscriptionChangePreviewResponse{
 		SubscriptionID: subscriptionID,
 		CurrentPlan: dto.PlanSummary{
@@ -701,19 +715,28 @@ func (s *subscriptionChangeService) executeChange(
 	effectiveDate time.Time,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
 	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
+	// When create_prorations is active, skip the wallet top-up so the credit is applied
+	// directly against the new subscription's opening invoice instead.
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
 		CancellationType:          types.CancellationTypeImmediate,
 		Reason:                    "subscription_change",
 		ProrationBehavior:         req.ProrationBehavior,
-		SkipProrationWalletCredit: true, // we always skip the wallet credit refund since we will apply it as adjustment to the new subscription 1st invoice
+		SkipProrationWalletCredit: req.ProrationBehavior == types.ProrationBehaviorCreateProrations,
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	// If create_prorations, carry the unused credit from the old subscription to the
+	// opening invoice of the new one (reducing the amount due instead of topping up the wallet).
+	var openingCreditAmount *decimal.Decimal
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && archivedSub.TotalCreditAmount.GreaterThan(decimal.Zero) {
+		openingCreditAmount = lo.ToPtr(archivedSub.TotalCreditAmount)
+	}
+
 	// Create new subscription
-	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, archivedSub.TotalCreditAmount)
+	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, openingCreditAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -748,7 +771,9 @@ func (s *subscriptionChangeService) executeChange(
 	return out, nil
 }
 
-// createNewSubscription creates a new subscription with the target plan using the existing subscription service
+// createNewSubscription creates a new subscription with the target plan using the existing subscription service.
+// openingCreditAmount, when non-nil and positive, is applied as a FixedChargeAdjustment on the first invoice
+// (reducing the amount due instead of issuing a wallet credit).
 func (s *subscriptionChangeService) createNewSubscription(
 	ctx context.Context,
 	currentSub *subscription.Subscription,
@@ -756,7 +781,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 	targetPlan *plan.Plan,
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
-	cancelledSubTotalCreditAmount decimal.Decimal,
+	openingCreditAmount *decimal.Decimal,
 ) (*subscription.Subscription, error) {
 	// Carry over inherited child subscriptions and invoicing customer via Inheritance config.
 	// ExternalCustomerIDsToInheritSubscription and InvoicingCustomerExternalID are mutually exclusive,
@@ -828,31 +853,25 @@ func (s *subscriptionChangeService) createNewSubscription(
 
 	// Create new subscription request
 	createSubReq := dto.CreateSubscriptionRequest{
-		CustomerID:         currentSub.CustomerID,
-		PlanID:             targetPlan.ID,
-		Currency:           currentSub.Currency,
-		LookupKey:          currentSub.LookupKey,
-		BillingCadence:     req.BillingCadence,
-		BillingPeriod:      req.BillingPeriod,
-		BillingPeriodCount: req.BillingPeriodCount,
-		BillingCycle:       req.BillingCycle,
-		BillingAnchor:      newBillingAnchor,
-		StartDate:          &effectiveDate,
-		Metadata:           req.Metadata,
-		ProrationBehavior:  req.ProrationBehavior,
-		CustomerTimezone:   currentSub.CustomerTimezone,
-		CommitmentAmount:   currentSub.CommitmentAmount,
-		OverageFactor:      currentSub.OverageFactor,
-		PaymentTerms:       currentSub.PaymentTerms,
-		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
-		Inheritance:        inheritance,
-	}
-
-	// When doing an immediate plan change, we cancel the old subscription with proration but
-	// skip wallet credit issuance. Instead, we net that credit against the new subscription's
-	// opening invoice as an adjustment.
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !cancelledSubTotalCreditAmount.IsZero() {
-		createSubReq.OpeningInvoiceAdjustmentAmount = &cancelledSubTotalCreditAmount
+		CustomerID:                     currentSub.CustomerID,
+		PlanID:                         targetPlan.ID,
+		Currency:                       currentSub.Currency,
+		LookupKey:                      currentSub.LookupKey,
+		BillingCadence:                 req.BillingCadence,
+		BillingPeriod:                  req.BillingPeriod,
+		BillingPeriodCount:             req.BillingPeriodCount,
+		BillingCycle:                   req.BillingCycle,
+		BillingAnchor:                  newBillingAnchor,
+		StartDate:                      &effectiveDate,
+		Metadata:                       req.Metadata,
+		ProrationBehavior:              req.ProrationBehavior,
+		CustomerTimezone:               currentSub.CustomerTimezone,
+		CommitmentAmount:               currentSub.CommitmentAmount,
+		OverageFactor:                  currentSub.OverageFactor,
+		PaymentTerms:                   currentSub.PaymentTerms,
+		Workflow:                       lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
+		Inheritance:                    inheritance,
+		OpeningInvoiceAdjustmentAmount: openingCreditAmount,
 	}
 
 	subscriptionService := NewSubscriptionService(s.serviceParams)

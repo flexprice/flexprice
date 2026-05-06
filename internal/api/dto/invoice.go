@@ -1148,7 +1148,9 @@ type CreateSubscriptionInvoiceRequest struct {
 	// BillingReason optional; when empty, ToDraftRequest defaults to subscription_cycle (subscription_creation flow still forces SUBSCRIPTION_CREATE).
 	BillingReason types.InvoiceBillingReason `json:"billing_reason,omitempty"`
 
-	// OpeningInvoiceAdjustmentAmount is internal: same as InvoiceComputeRequest. Not in public JSON.
+	// OpeningInvoiceAdjustmentAmount is an internal field set during plan changes with create_prorations.
+	// When non-nil, it is applied as a FixedChargeAdjustment that reduces fixed line-item amounts
+	// on the opening invoice, and the BillingReason is set to SUBSCRIPTION_UPDATE.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
