@@ -1351,6 +1351,51 @@ func (s *SubscriptionChangeServiceTestSuite) TestFixedToUsagePlanTransition() {
 // 	}
 // }
 
+// TestCancelWithCreateProrations verifies that when a customer cancels mid-period
+// with ProrationBehaviorCreateProrations (the normal cancel path, NOT a plan change):
+//   - The response TotalCreditAmount is ~$300 (15/30 days of $600/mo)
+//   - A wallet is created for the customer
+//   - The wallet balance matches the credit (~$300)
+//   - The subscription ends up in the "cancelled" state
+func (s *SubscriptionChangeServiceTestSuite) TestCancelWithCreateProrations() {
+	ctx := s.GetContext()
+
+	// Setup: customer, $600/month plan, subscription backdated 15/30 days
+	cust := s.createTestCustomer()
+	plan600 := s.createTestPlan("Plan600", decimal.NewFromFloat(600))
+	sub := s.createTestSubscription(plan600.ID, cust.ID)
+	sub = s.backdateSub(sub, 15, 30)
+
+	// Call CancelSubscription with create_prorations — no SkipProrationWalletCredit
+	cancelResp, err := s.subscriptionService.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		CancellationType:  types.CancellationTypeImmediate,
+	})
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), cancelResp)
+
+	s.Run("cancel/response_total_credit_amount", func() {
+		s.assertAmountNear(decimal.NewFromFloat(300), cancelResp.TotalCreditAmount, 1.0, "response TotalCreditAmount")
+	})
+
+	w := s.getWalletForCustomer(cust.ID)
+
+	s.Run("cancel/wallet_exists_for_customer", func() {
+		assert.NotNil(s.T(), w, "expected a wallet to be created for customer")
+	})
+
+	s.Run("cancel/wallet_balance_matches_credit", func() {
+		require.NotNil(s.T(), w, "wallet must exist to check balance")
+		s.assertAmountNear(decimal.NewFromFloat(300), w.Balance, 1.0, "wallet balance")
+	})
+
+	s.Run("cancel/subscription_is_cancelled", func() {
+		refreshed, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
+		require.NoError(s.T(), err)
+		assert.Equal(s.T(), types.SubscriptionStatusCancelled, refreshed.SubscriptionStatus)
+	})
+}
+
 // TestUpgradeWithCreateProrations verifies that when a customer upgrades plans
 // immediately with ProrationBehaviorCreateProrations:
 //   - The preview shows the correct credit amount (~$300 for 15/30 days of $600/mo)
