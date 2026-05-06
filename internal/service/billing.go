@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -287,7 +288,35 @@ func (s *billingService) CalculateFixedCharges(
 		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
+	// if there is an opening invoice adjustment amount, apply it to the line items
+	if params.OpeningInvoiceAdjustmentAmount != nil {
+		fixedCostLineItems = applyFixedChargeAdjustmentToLineItems(fixedCostLineItems, lo.FromPtr(params.OpeningInvoiceAdjustmentAmount))
+		fixedCost = fixedCost.Sub(lo.FromPtr(params.OpeningInvoiceAdjustmentAmount))
+	}
+
 	return &dto.CalculateFixedChargesResult{LineItems: fixedCostLineItems, TotalAmount: fixedCost}, nil
+}
+
+// applyFixedChargeAdjustmentToLineItems reduces line Amounts in slice order: for each line,
+// take min(remaining credit, line amount). Each take is capped by the line, so total reduction
+// cannot exceed the sum of line amounts even when credit is larger.
+func applyFixedChargeAdjustmentToLineItems(
+	items []dto.CreateInvoiceLineItemRequest,
+	creditsToAdjust decimal.Decimal,
+) []dto.CreateInvoiceLineItemRequest {
+	if len(items) == 0 || !creditsToAdjust.GreaterThan(decimal.Zero) {
+		return slices.Clone(items)
+	}
+	remaining := creditsToAdjust
+	return lo.Map(items, func(item dto.CreateInvoiceLineItemRequest, _ int) dto.CreateInvoiceLineItemRequest {
+		if remaining.IsZero() {
+			return item
+		}
+		take := decimal.Min(remaining, item.Amount)
+		item.Amount = item.Amount.Sub(take)
+		remaining = remaining.Sub(take)
+		return item
+	})
 }
 
 // endDateBoundaryForMatching returns periodEnd + one billing period length so that
@@ -1528,10 +1557,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								},
 							}
 
-						fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
-						if fetchErr != nil {
-							return nil, fetchErr
-						}
+							fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
+							if fetchErr != nil {
+								return nil, fetchErr
+							}
 							commitmentUsageResult = fetchedResult
 						}
 

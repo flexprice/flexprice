@@ -416,12 +416,20 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		// Create invoice for non-draft, non-trialing subscriptions (trial conversion invoice is created at trial end).
 		if sub.SubscriptionStatus != types.SubscriptionStatusDraft && sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
 			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
-			invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+
+			createReq := &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: sub.ID,
 				PeriodStart:    sub.CurrentPeriodStart,
 				PeriodEnd:      sub.CurrentPeriodEnd,
 				ReferencePoint: types.ReferencePointPeriodStart,
-			}, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
+			}
+
+			if req.OpeningInvoiceAdjustmentAmount != nil {
+				createReq.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
+				createReq.BillingReason = types.InvoiceBillingReasonSubscriptionUpdate
+			}
+
+			invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, createReq, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
 			if err != nil {
 				return err
 			}
@@ -1922,7 +1930,7 @@ func (s *subscriptionService) CancelSubscription(
 		}
 
 		// Step 9: Top up wallet for proration credit (only if there's a credit amount)
-		if totalCreditAmount.GreaterThan(decimal.Zero) {
+		if totalCreditAmount.GreaterThan(decimal.Zero) && !req.SkipProrationWalletCredit {
 			walletService := NewWalletService(s.ServiceParams)
 			cancelKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
 			_, err = walletService.TopUpWalletForProratedCharge(ctx, subscription.GetInvoicingCustomerID(), totalCreditAmount.Abs(), subscription.Currency, cancelKey)
@@ -4791,14 +4799,14 @@ func (s *subscriptionService) HandleSubscriptionActivatingInvoicePaid(ctx contex
 		return nil
 	}
 	reason := types.InvoiceBillingReason(inv.BillingReason)
-	if !reason.TriggersSubscriptionActivationOnFullPayment() {
+	if !reason.IsFirstSubscriptionOpenInvoiceReason() {
 		return nil
 	}
 	switch reason {
-	case types.InvoiceBillingReasonSubscriptionCreate:
-		return s.ActivateIncompleteSubscription(ctx, *inv.SubscriptionID)
+	case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionUpdate:
+		return s.ActivateIncompleteSubscription(ctx, lo.FromPtr(inv.SubscriptionID))
 	case types.InvoiceBillingReasonSubscriptionTrialEnd:
-		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+		sub, err := s.SubRepo.Get(ctx, lo.FromPtr(inv.SubscriptionID))
 		if err != nil {
 			return err
 		}

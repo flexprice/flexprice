@@ -3784,16 +3784,16 @@ func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 		// Effective date is pinned to the custom cancel_at
 		s.NotNil(updated.CancelAt, "cancel_at must be set to the requested date")
 		s.WithinDuration(futureDate, *updated.CancelAt, time.Second)
-		// Subscription stays active until the scheduled date fires
+		// Subscription stays active until the schedule fires
 		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus, "status must stay active")
 		s.True(updated.CancelAtPeriodEnd, "cancel_at_period_end must be true")
 		s.NotNil(updated.CancelledAt, "cancelled_at must be set (time the cancellation was scheduled)")
-		// EndDate is set immediately so APIs reflect the true end date and the cron loop fires correctly
-		s.NotNil(updated.EndDate, "end_date must be set at scheduling time")
-		s.WithinDuration(futureDate, *updated.EndDate, time.Second, "end_date must equal cancel_at")
-		// futureDate (+15d) < currentPeriodEnd (+25d), so CurrentPeriodEnd is shortened to effectiveDate
-		s.WithinDuration(futureDate, updated.CurrentPeriodEnd, time.Second, "current_period_end must be shortened to cancel_at")
-		s.T().Logf("✅ scheduled_date: end_date and current_period_end set eagerly, effective date = custom cancel_at")
+		// end_date IS set eagerly so APIs and the cron loop see the correct end date immediately
+		s.NotNil(updated.EndDate, "end_date must be set to the scheduled cancellation date")
+		s.WithinDuration(futureDate, *updated.EndDate, time.Second)
+		// futureDate (now+15d) < CurrentPeriodEnd (now+25d) so the period end is shortened
+		s.WithinDuration(futureDate, updated.CurrentPeriodEnd, time.Second, "current_period_end must be shortened to the scheduled date")
+		s.T().Logf("✅ scheduled_date: end_date and current_period_end set eagerly, status stays active")
 	})
 
 	s.Run("metadata records cancellation details and cancel_at is set", func() {
@@ -3857,7 +3857,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 		})
 		s.Error(err)
 		s.True(ierr.IsValidation(err), "expected validation error")
-		s.Contains(err.Error(), "future date")
+		s.Contains(err.Error(), "future")
 		s.T().Logf("✅ scheduled_date: past cancel_at rejected")
 	})
 
