@@ -3647,10 +3647,10 @@ func (s *billingService) calculateNeverResetUsage(
 
 // applyFixedChargeAdjustmentToLineItems reduces the Amount on fixed line items in order
 // (first item first) by the given credit until the credit is exhausted, never letting any
-// item go below zero. It returns a new slice with adjusted amounts; the originals are not
-// mutated.
+// item go below zero. It returns a new slice with adjusted amounts; the originals' Amount
+// fields are not modified.
 func applyFixedChargeAdjustmentToLineItems(items []dto.CreateInvoiceLineItemRequest, credit decimal.Decimal) []dto.CreateInvoiceLineItemRequest {
-	if credit.IsZero() || len(items) == 0 {
+	if credit.IsZero() || credit.IsNegative() || len(items) == 0 {
 		result := make([]dto.CreateInvoiceLineItemRequest, len(items))
 		copy(result, items)
 		return result
