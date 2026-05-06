@@ -1351,6 +1351,31 @@ func (s *SubscriptionChangeServiceTestSuite) TestFixedToUsagePlanTransition() {
 // 	}
 // }
 
+// TestIsFirstSubscriptionOpenInvoiceReason verifies that the billing-reason helper
+// correctly identifies which reasons trigger subscription activation on full payment.
+// SUBSCRIPTION_UPDATE was added in PR #1733 (plan-change opening invoice).
+func (s *SubscriptionChangeServiceTestSuite) TestIsFirstSubscriptionOpenInvoiceReason() {
+	cases := []struct {
+		reason   types.InvoiceBillingReason
+		wantTrue bool
+	}{
+		{types.InvoiceBillingReasonSubscriptionCreate, true},
+		{types.InvoiceBillingReasonSubscriptionTrialEnd, true},
+		{types.InvoiceBillingReasonSubscriptionUpdate, true}, // added in PR #1733
+		{types.InvoiceBillingReasonSubscriptionCycle, false},
+		{types.InvoiceBillingReasonProration, false},
+		{types.InvoiceBillingReasonManual, false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		s.Run(string(tc.reason), func() {
+			got := tc.reason.IsFirstSubscriptionOpenInvoiceReason()
+			assert.Equal(s.T(), tc.wantTrue, got,
+				"IsFirstSubscriptionOpenInvoiceReason() for reason %q", tc.reason)
+		})
+	}
+}
+
 // TestSubscriptionChangeServiceTestSuite runs the subscription change suite.
 func TestSubscriptionChangeServiceTestSuite(t *testing.T) {
 	suite.Run(t, new(SubscriptionChangeServiceTestSuite))
