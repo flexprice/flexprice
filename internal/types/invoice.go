@@ -172,6 +172,8 @@ const (
 	InvoiceBillingReasonSubscriptionUpdate InvoiceBillingReason = "SUBSCRIPTION_UPDATE"
 	// InvoiceBillingReasonSubscriptionTrialEnd indicates the converting invoice when a trialing subscription ends
 	InvoiceBillingReasonSubscriptionTrialEnd InvoiceBillingReason = "SUBSCRIPTION_TRIAL_END"
+	// InvoiceBillingReasonSubscriptionTrialStart indicates the $0 invoice created when a trialing subscription starts
+	InvoiceBillingReasonSubscriptionTrialStart InvoiceBillingReason = "SUBSCRIPTION_TRIAL_START"
 	// InvoiceBillingReasonProration indicates invoice is for proration credits/charges (cancellations, plan changes)
 	InvoiceBillingReasonProration InvoiceBillingReason = "PRORATION"
 	// InvoiceBillingReasonManual indicates invoice was created manually by an administrator
@@ -188,6 +190,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionCycle,
 		InvoiceBillingReasonSubscriptionUpdate,
 		InvoiceBillingReasonSubscriptionTrialEnd,
+		InvoiceBillingReasonSubscriptionTrialStart,
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
 	}
