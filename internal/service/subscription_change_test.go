@@ -1351,6 +1351,74 @@ func (s *SubscriptionChangeServiceTestSuite) TestFixedToUsagePlanTransition() {
 // 	}
 // }
 
+// TestApplyFixedChargeAdjustmentToLineItems verifies the billing helper that
+// distributes a proration credit across invoice line items in order.
+func (s *SubscriptionChangeServiceTestSuite) TestApplyFixedChargeAdjustmentToLineItems() {
+	mkItem := func(amount float64) dto.CreateInvoiceLineItemRequest {
+		return dto.CreateInvoiceLineItemRequest{Amount: decimal.NewFromFloat(amount)}
+	}
+
+	cases := []struct {
+		name     string
+		credit   decimal.Decimal
+		items    []dto.CreateInvoiceLineItemRequest
+		wantAmts []float64 // expected Amount per output item
+	}{
+		{
+			name:     "credit_smaller_than_single_item",
+			credit:   decimal.NewFromFloat(300),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(2000)},
+			wantAmts: []float64{1700},
+		},
+		{
+			name:     "credit_spans_two_items_exhausts_first",
+			credit:   decimal.NewFromFloat(300),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts: []float64{0, 100},
+		},
+		{
+			name:     "credit_equals_total",
+			credit:   decimal.NewFromFloat(400),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts: []float64{0, 0},
+		},
+		{
+			name:     "credit_exceeds_total_capped_at_zero",
+			credit:   decimal.NewFromFloat(500),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts: []float64{0, 0},
+		},
+		{
+			name:     "zero_credit_leaves_items_unchanged",
+			credit:   decimal.Zero,
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200)},
+			wantAmts: []float64{200},
+		},
+		{
+			name:     "empty_items_returns_empty",
+			credit:   decimal.NewFromFloat(300),
+			items:    []dto.CreateInvoiceLineItemRequest{},
+			wantAmts: []float64{},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		s.Run(tc.name, func() {
+			result := applyFixedChargeAdjustmentToLineItems(tc.items, tc.credit)
+			require.Len(s.T(), result, len(tc.wantAmts),
+				"result length mismatch for case %q", tc.name)
+			for i, wantF := range tc.wantAmts {
+				want := decimal.NewFromFloat(wantF)
+				assert.True(s.T(), result[i].Amount.Equal(want),
+					"item[%d] amount: want %s got %s", i, want, result[i].Amount)
+				assert.False(s.T(), result[i].Amount.IsNegative(),
+					"item[%d] must not be negative", i)
+			}
+		})
+	}
+}
+
 // TestIsFirstSubscriptionOpenInvoiceReason verifies that the billing-reason helper
 // correctly identifies which reasons trigger subscription activation on full payment.
 // SUBSCRIPTION_UPDATE was added in PR #1733 (plan-change opening invoice).
