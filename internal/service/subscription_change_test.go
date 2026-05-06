@@ -22,10 +22,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// Blank identifiers to keep invoicedomain and walletdomain imports alive until Task 2 uses them.
-var _ = invoicedomain.Invoice{}
-var _ = walletdomain.Wallet{}
-
 type SubscriptionChangeServiceTestSuite struct {
 	testutil.BaseServiceTestSuite
 	subscriptionChangeService *subscriptionChangeService
@@ -378,6 +374,65 @@ func (s *SubscriptionChangeServiceTestSuite) createMultiMeterUsagePlan(name stri
 	}
 
 	return planResponse.Plan, createdMeters
+}
+
+// backdateSub pins CurrentPeriodStart/CurrentPeriodEnd on the subscription so that
+// daysUsed days have already elapsed out of a totalDays-long billing period.
+// This gives deterministic proration amounts regardless of when the test runs.
+// Returns the refreshed subscription.
+func (s *SubscriptionChangeServiceTestSuite) backdateSub(
+	sub *subscription.Subscription,
+	daysUsed, totalDays int,
+) *subscription.Subscription {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	sub.CurrentPeriodStart = now.AddDate(0, 0, -daysUsed)
+	sub.CurrentPeriodEnd = now.AddDate(0, 0, totalDays-daysUsed)
+	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, sub))
+	refreshed, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
+	require.NoError(s.T(), err)
+	return refreshed
+}
+
+// getInvoicesForSub lists all invoices (any status) for the given subscription ID.
+// Results are returned in repository order (typically insertion order).
+// The opening invoice is always [0] because it is created first.
+func (s *SubscriptionChangeServiceTestSuite) getInvoicesForSub(subID string) []*invoicedomain.Invoice {
+	ctx := s.GetContext()
+	filter := &types.InvoiceFilter{
+		QueryFilter:    types.NewDefaultQueryFilter(),
+		SubscriptionID: subID,
+	}
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	require.NoError(s.T(), err)
+	return invoices
+}
+
+// getWalletForCustomer returns the first wallet whose CustomerID matches,
+// or nil if no wallet exists yet. Tests run with an isolated in-memory store
+// so the only wallets present belong to the current test's customer(s).
+func (s *SubscriptionChangeServiceTestSuite) getWalletForCustomer(customerID string) *walletdomain.Wallet {
+	ctx := s.GetContext()
+	wallets, err := s.GetStores().WalletRepo.GetWalletsByFilter(ctx, &types.WalletFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	require.NoError(s.T(), err)
+	for _, w := range wallets {
+		if w.CustomerID == customerID {
+			return w
+		}
+	}
+	return nil
+}
+
+// assertAmountNear fails the test if |actual - expected| >= tol.
+// Use for proration amounts where wall-clock timing introduces sub-cent variance.
+func (s *SubscriptionChangeServiceTestSuite) assertAmountNear(expected, actual decimal.Decimal, tol float64, msg string) {
+	s.T().Helper()
+	diff := actual.Sub(expected).Abs()
+	tolDec := decimal.NewFromFloat(tol)
+	assert.True(s.T(), diff.LessThan(tolDec),
+		"%s: expected %s ≈ %s (tol=%s), got diff=%s", msg, expected, actual, tolDec, diff)
 }
 
 func (s *SubscriptionChangeServiceTestSuite) TestPreviewSubscriptionUpgrade() {
