@@ -63,6 +63,21 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 		"payment_behavior", behavior,
 	)
 
+	// Trial-start invoices are always $0. Process payment (marks invoice paid) but do NOT
+	// update subscription status — subscription must stay TRIALING until trial ends.
+	if types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart {
+		if !inv.AmountDue.IsZero() {
+			s.Logger.ErrorwCtx(ctx, "trial-start invoice has non-zero amount_due, skipping payment",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"amount_due", inv.AmountDue,
+			)
+			return nil
+		}
+		s.processPayment(ctx, sub, inv, types.PaymentBehaviorDefaultActive, flowType)
+		return nil
+	}
+
 	// For manual flows, attempt payment and update subscription status based on result
 	if flowType == types.InvoiceFlowManual {
 		s.Logger.Infow("manual flow - attempting payment",
