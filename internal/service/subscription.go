@@ -439,6 +439,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			}
 		}
 
+		// Create $0 trial-start invoice for trialing subscriptions.
+		if sub.SubscriptionStatus == types.SubscriptionStatusTrialing {
+			if err := s.createTrialStartInvoice(ctx, sub, invoiceService); err != nil {
+				return err
+			}
+		}
+
 		// Inherited children must see the parent's final status/period fields after invoice + activation.
 		for _, childID := range childCustomerIDs {
 			if err := s.createInheritedSubscriptions(ctx, sub, childID); err != nil {
