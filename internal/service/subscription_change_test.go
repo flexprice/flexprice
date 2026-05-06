@@ -1351,6 +1351,53 @@ func (s *SubscriptionChangeServiceTestSuite) TestFixedToUsagePlanTransition() {
 // 	}
 // }
 
+// TestUpgradeNoneProration verifies that when a customer upgrades plans with
+// ProrationBehaviorNone, no proration credit is applied: the opening invoice for the
+// new subscription reflects the full new plan price, no wallet is created, and
+// ProrationApplied is nil on the execute response.
+func (s *SubscriptionChangeServiceTestSuite) TestUpgradeNoneProration() {
+	ctx := s.GetContext()
+
+	// Setup
+	cust := s.createTestCustomer()
+	plan600 := s.createTestPlan("Plan600NP", decimal.NewFromFloat(600))
+	plan2000 := s.createTestPlan("Plan2000NP", decimal.NewFromFloat(2000))
+	sub := s.createTestSubscription(plan600.ID, cust.ID)
+
+	// Execute upgrade with no proration
+	req := s.createSubscriptionChangeRequest(plan2000.ID, types.ProrationBehaviorNone)
+	execResp, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, sub.ID, req)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), execResp)
+
+	s.Run("execute/new_sub_active", func() {
+		require.NotNil(s.T(), execResp.NewSubscription)
+		assert.Equal(s.T(), types.SubscriptionStatusActive, execResp.NewSubscription.Status)
+		assert.Equal(s.T(), plan2000.ID, execResp.NewSubscription.PlanID)
+	})
+
+	s.Run("execute/opening_invoice_full_price", func() {
+		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
+		require.NotEmpty(s.T(), invoices, "expected at least one invoice for the new subscription")
+		assert.True(s.T(), invoices[0].AmountDue.Equal(decimal.NewFromFloat(2000)),
+			"expected opening invoice AmountDue to be 2000, got %s", invoices[0].AmountDue.String())
+	})
+
+	s.Run("execute/no_wallet_credit", func() {
+		wallet := s.getWalletForCustomer(cust.ID)
+		if wallet != nil {
+			assert.True(s.T(), wallet.Balance.IsZero(),
+				"expected wallet balance to be 0 for ProrationBehaviorNone, got %s", wallet.Balance.String())
+		}
+		// wallet == nil is also acceptable (no wallet created at all)
+	})
+
+	s.Run("execute/no_proration_applied", func() {
+		assert.Nil(s.T(), execResp.ProrationApplied,
+			"expected ProrationApplied to be nil for ProrationBehaviorNone")
+	})
+}
+
 // TestCancelWithCreateProrations verifies that when a customer cancels mid-period
 // with ProrationBehaviorCreateProrations (the normal cancel path, NOT a plan change):
 //   - The response TotalCreditAmount is ~$300 (15/30 days of $600/mo)
