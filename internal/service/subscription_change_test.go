@@ -1413,6 +1413,12 @@ func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
 		assert.Equal(s.T(), string(types.InvoiceBillingReasonSubscriptionUpdate), string(invoices[0].BillingReason))
 	})
 
+	s.Run("execute/opening_invoice_amount_near_1700", func() {
+		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
+		require.GreaterOrEqual(s.T(), len(invoices), 1, "expected at least one invoice for new subscription")
+		s.assertAmountNear(decimal.NewFromFloat(1700), invoices[0].AmountDue, 1.0, "opening invoice total")
+	})
+
 	s.Run("execute/no_wallet_credit", func() {
 		wallet := s.getWalletForCustomer(cust.ID)
 		if wallet != nil {

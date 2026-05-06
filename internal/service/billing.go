@@ -287,6 +287,17 @@ func (s *billingService) CalculateFixedCharges(
 		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
+	// Apply FixedChargeAdjustment (e.g. opening-invoice proration credit for plan changes)
+	// after all line items are built so the credit reduces item amounts before coupons/tax.
+	if params.FixedChargeAdjustment != nil && params.FixedChargeAdjustment.IsPositive() {
+		fixedCostLineItems = applyFixedChargeAdjustmentToLineItems(fixedCostLineItems, *params.FixedChargeAdjustment)
+		// Recompute total from adjusted items
+		fixedCost = decimal.Zero
+		for _, item := range fixedCostLineItems {
+			fixedCost = fixedCost.Add(item.Amount)
+		}
+	}
+
 	return &dto.CalculateFixedChargesResult{LineItems: fixedCostLineItems, TotalAmount: fixedCost}, nil
 }
 
