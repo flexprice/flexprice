@@ -1400,6 +1400,12 @@ func (s *SubscriptionChangeServiceTestSuite) TestApplyFixedChargeAdjustmentToLin
 			items:    []dto.CreateInvoiceLineItemRequest{},
 			wantAmts: []float64{},
 		},
+		{
+			name:     "negative_credit_treated_as_zero",
+			credit:   decimal.NewFromInt(-100),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200)},
+			wantAmts: []float64{200}, // unchanged
+		},
 	}
 
 	for _, tc := range cases {
