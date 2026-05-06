@@ -39,23 +39,16 @@ InvoiceBillingReasonSubscriptionTrialStart InvoiceBillingReason = "SUBSCRIPTION_
 - Add to `Validate()` allowed list
 - Do NOT add to `TriggersSubscriptionActivationOnFullPayment()` — subscription stays `TRIALING` after this invoice; only activates at trial end
 
-### 2. `internal/service/invoice.go` — `ComputeInvoice` (~line 473)
+### 2. `internal/service/invoice.go` — `ComputeInvoice` (~line 472)
 
-Surgical change to the zero-amount guard: when billing reason is `SUBSCRIPTION_TRIAL_START` and subtotal is zero, mark as `paid` instead of `skipped`.
+Add a one-line condition so `SUBSCRIPTION_TRIAL_START` invoices bypass the zero-amount skip guard and fall through to normal computation. All other zero-amount subscription invoices continue to be marked `SKIPPED` as before.
 
 ```go
-if inv.InvoiceType == types.InvoiceTypeSubscription && inv.Subtotal.IsZero() {
+isTrialStart := inv.BillingReason == types.InvoiceBillingReasonSubscriptionTrialStart
+if inv.InvoiceType == types.InvoiceTypeSubscription && inv.Subtotal.IsZero() && !isTrialStart {
     now := time.Now().UTC()
     inv.LastComputedAt = &now
-
-    if inv.BillingReason == types.InvoiceBillingReasonSubscriptionTrialStart {
-        inv.InvoiceStatus = types.InvoiceStatusPaid
-        inv.PaymentStatus = types.PaymentStatusSucceeded
-        inv.AmountPaid = inv.Subtotal   // $0
-    } else {
-        inv.InvoiceStatus = types.InvoiceStatusSkipped
-    }
-
+    inv.InvoiceStatus = types.InvoiceStatusSkipped
     if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
         return err
     }
@@ -64,7 +57,30 @@ if inv.InvoiceType == types.InvoiceTypeSubscription && inv.Subtotal.IsZero() {
 }
 ```
 
-`skipped = true` is still returned so the caller does not attempt payment processing.
+With this change, a `SUBSCRIPTION_TRIAL_START` invoice with `$0` subtotal returns `skipped=false`, causing `CreateSubscriptionInvoice` to call `ProcessDraftInvoice` → `FinalizeInvoice` (assigns invoice number, sets `FINALIZED`) → `HandlePaymentBehavior`.
+
+### 2b. `internal/service/subscription_payment_processor.go` — `HandlePaymentBehavior` (~line 66)
+
+Add an early path at the top of `HandlePaymentBehavior` for `SUBSCRIPTION_TRIAL_START` invoices. Process the $0 payment (marks invoice `paid`) but do NOT update subscription status — subscription must stay `TRIALING`.
+
+```go
+// Trial-start invoices are always $0 and auto-paid. Subscription must stay TRIALING.
+if inv.BillingReason == types.InvoiceBillingReasonSubscriptionTrialStart {
+    if !inv.AmountDue.IsZero() {
+        // Defensive: trial-start invoice should never be non-zero. Skip payment, leave pending.
+        s.Logger.ErrorwCtx(ctx, "trial-start invoice has non-zero amount, skipping payment",
+            "subscription_id", sub.ID,
+            "invoice_id", inv.ID,
+            "amount_due", inv.AmountDue,
+        )
+        return nil
+    }
+    s.processPayment(ctx, sub, inv, types.PaymentBehaviorDefaultActive, flowType)
+    return nil  // do NOT update subscription status
+}
+```
+
+This guard must be placed before the `flowType == InvoiceFlowManual` check and the `CollectionMethod` switch.
 
 ### 3. `internal/service/subscription_trial.go` — new function
 
@@ -85,29 +101,14 @@ func (s *subscriptionService) createTrialStartInvoice(
         sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID,
     ).NormalizePaymentParameters()
 
-    inv, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+    _, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
         SubscriptionID: sub.ID,
         PeriodStart:    lo.FromPtr(sub.TrialStart),
         PeriodEnd:      lo.FromPtr(sub.TrialEnd),
         ReferencePoint: types.ReferencePointPeriodStart,
         BillingReason:  types.InvoiceBillingReasonSubscriptionTrialStart,
     }, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
-    if err != nil {
-        return err
-    }
-
-    // Trial-start invoices must always be $0. If ComputeInvoice did not mark it as paid+skipped
-    // (i.e. inv is non-nil, meaning it went through ProcessDraftInvoice), something is wrong —
-    // log and return without letting it affect subscription state.
-    if inv != nil && !inv.Subtotal.IsZero() {
-        s.Logger.ErrorwCtx(ctx, "trial-start invoice computed non-zero subtotal, ignoring",
-            "subscription_id", sub.ID,
-            "invoice_id", inv.ID,
-            "subtotal", inv.Subtotal)
-        return nil
-    }
-
-    return nil
+    return err
 }
 ```
 
@@ -131,20 +132,22 @@ if sub.SubscriptionStatus == types.SubscriptionStatusTrialing {
 
 ## Scenario Dry-Run
 
-**Key invariant:** `CreateSubscriptionInvoice` returns `(nil, subscription, nil)` when `ComputeInvoice` returns `skipped=true`. This means `ProcessDraftInvoice` and `HandlePaymentBehavior` are **never called** for the trial-start invoice — the subscription always stays `TRIALING`.
+**Key invariants:**
+- `ComputeInvoice` skips the zero-amount guard for `SUBSCRIPTION_TRIAL_START` → returns `skipped=false` → `ProcessDraftInvoice` runs → invoice gets finalized (invoice number assigned, `FINALIZED` status) and paid
+- `HandlePaymentBehavior` detects `SUBSCRIPTION_TRIAL_START` early → calls `processPayment` ($0 → always succeeds, marks invoice paid) → returns `nil` WITHOUT updating subscription status → sub stays `TRIALING`
 
-| # | Scenario | Invoice result | Sub status | `HandlePaymentBehavior` called? |
-|---|----------|---------------|------------|--------------------------------|
-| 1 | `charge_automatically` + `allow_incomplete` + no gateway | `paid` | stays `TRIALING` | No |
-| 2 | `charge_automatically` + `default_incomplete` + no gateway | `paid` | stays `TRIALING` | No |
-| 3 | `charge_automatically` + `error_if_incomplete` + no gateway | `paid` | stays `TRIALING` | No |
-| 4 | `charge_automatically` + `default_active` + no gateway | `paid` | stays `TRIALING` | No |
-| 5 | `send_invoice` + `default_active` | `paid` | stays `TRIALING` | No |
-| 6 | `send_invoice` + `default_incomplete` | `paid` | stays `TRIALING` | No |
-| 7 | Stripe gateway (any behavior) | `paid` (internal); Stripe handles SetupIntent via its own workflow | stays `TRIALING` | No — skipped=true before sync check |
-| 8 | **Inherited** subscription | No invoice created (guard) | stays `TRIALING` | No |
+| # | Scenario | Invoice result | Sub status | Sub status update? |
+|---|----------|---------------|------------|-------------------|
+| 1 | `charge_automatically` + `allow_incomplete` + no gateway | `FINALIZED` + `paid` | stays `TRIALING` | No — early return in `HandlePaymentBehavior` |
+| 2 | `charge_automatically` + `default_incomplete` + no gateway | `FINALIZED` + `paid` | stays `TRIALING` | No |
+| 3 | `charge_automatically` + `error_if_incomplete` + no gateway | `FINALIZED` + `paid` | stays `TRIALING` | No |
+| 4 | `charge_automatically` + `default_active` + no gateway | `FINALIZED` + `paid` | stays `TRIALING` | No |
+| 5 | `send_invoice` + `default_active` | `FINALIZED` + `paid` | stays `TRIALING` | No |
+| 6 | `send_invoice` + `default_incomplete` | `FINALIZED` + `paid` | stays `TRIALING` | No |
+| 7 | Stripe gateway (any behavior) | `FINALIZED` + `paid` (internal); Stripe handles SetupIntent via its own workflow | stays `TRIALING` | No |
+| 8 | **Inherited** subscription | No invoice created (guard at top of function) | stays `TRIALING` | No |
 | 9 | Non-trialing subscription | No invoice created (call site guard) | unchanged | No |
-| 10 | Trial subtotal non-zero (misconfiguration) | `inv != nil` — logged as error, no-op | stays `TRIALING` | Safety guard prevents leak |
+| 10 | Trial subtotal non-zero (misconfiguration) | `FINALIZED` but `PaymentStatus=pending` — `HandlePaymentBehavior` logs error and skips payment | stays `TRIALING` | No — safety guard |
 
 **On gateway card collection:** For Stripe/Paddle/Orb integrations, card collection (SetupIntent) is handled by the gateway's own workflow independently. Flexprice's internal trial-start invoice being `paid` immediately is correct — it is a billing record, not the card collection mechanism. Keeping it `pending` would only be needed to gate trial access on card entry, which is a separate feature.
 
