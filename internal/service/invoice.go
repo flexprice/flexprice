@@ -386,14 +386,46 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 	var applyReq *dto.InvoiceComputeRequest
 
 	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
-		// Subscription: compute line items from billing service
-		if inv.PeriodStart == nil || inv.PeriodEnd == nil {
-			return false, ierr.NewError("subscription invoice missing period dates").
-				WithHint("PeriodStart and PeriodEnd are required for subscription invoices").
-				WithReportableDetails(map[string]interface{}{
-					"invoice_id": inv.ID,
-				}).
-				Mark(ierr.ErrValidation)
+		// Subscription: compute line items from billing service.
+		// Exception: when the caller passes a pre-computed request (e.g. for SUBSCRIPTION_UPDATE
+		// opening invoices that include a FixedChargeAdjustment), use it directly to avoid
+		// discarding the adjustment.
+		if req != nil && types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionUpdate {
+			applyReq = req
+		} else {
+			if inv.PeriodStart == nil || inv.PeriodEnd == nil {
+				return false, ierr.NewError("subscription invoice missing period dates").
+					WithHint("PeriodStart and PeriodEnd are required for subscription invoices").
+					WithReportableDetails(map[string]interface{}{
+						"invoice_id": inv.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+			if err != nil {
+				return false, err
+			}
+			refPoint := types.ReferencePointPeriodEnd
+			switch types.InvoiceBillingReason(inv.BillingReason) {
+			case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd,
+				types.InvoiceBillingReasonSubscriptionUpdate:
+				refPoint = types.ReferencePointPeriodStart
+			case types.InvoiceBillingReasonProration:
+				refPoint = types.ReferencePointCancel
+			}
+			billingService := NewBillingService(s.ServiceParams)
+			subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+				Subscription:     sub,
+				PeriodStart:      *inv.PeriodStart,
+				PeriodEnd:        *inv.PeriodEnd,
+				ReferencePoint:   refPoint,
+				ExcludeInvoiceID: inv.ID,
+			})
+			if err != nil {
+				return false, err
+			}
+			computeReq := subInvReq.ToComputeRequest()
+			applyReq = &computeReq
 		}
 		sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
 		if err != nil {
