@@ -2015,11 +2015,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		calculationResult, err = s.CalculateCharges(ctx, &dto.CalculateChargesParams{
-			Subscription: sub,
-			LineItems:    advanceLineItems,
-			PeriodStart:  periodStart,
-			PeriodEnd:    periodEnd,
-			IncludeUsage: false, // No usage for advance
+			Subscription:          sub,
+			LineItems:             advanceLineItems,
+			PeriodStart:           periodStart,
+			PeriodEnd:             periodEnd,
+			IncludeUsage:          false, // No usage for advance
+			FixedChargeAdjustment: params.OpeningInvoiceAdjustmentAmount,
 		})
 		if err != nil {
 			return nil, err

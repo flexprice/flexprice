@@ -417,10 +417,11 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		if sub.SubscriptionStatus != types.SubscriptionStatusDraft && sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
 			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 			invoice, updatedSub, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
-				SubscriptionID: sub.ID,
-				PeriodStart:    sub.CurrentPeriodStart,
-				PeriodEnd:      sub.CurrentPeriodEnd,
-				ReferencePoint: types.ReferencePointPeriodStart,
+				SubscriptionID:                 sub.ID,
+				PeriodStart:                    sub.CurrentPeriodStart,
+				PeriodEnd:                      sub.CurrentPeriodEnd,
+				ReferencePoint:                 types.ReferencePointPeriodStart,
+				OpeningInvoiceAdjustmentAmount: req.OpeningInvoiceAdjustmentAmount,
 			}, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
 			if err != nil {
 				return err
@@ -1921,8 +1922,10 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
-		// Step 9: Top up wallet for proration credit (only if there's a credit amount)
-		if totalCreditAmount.GreaterThan(decimal.Zero) {
+		// Step 9: Top up wallet for proration credit (only if there's a credit amount).
+		// During plan changes with create_prorations, the caller sets SkipProrationWalletCredit
+		// so the credit is instead applied as OpeningInvoiceAdjustmentAmount on the new subscription.
+		if totalCreditAmount.GreaterThan(decimal.Zero) && !req.SkipProrationWalletCredit {
 			walletService := NewWalletService(s.ServiceParams)
 			cancelKey := s.buildCancellationProrationKey(subscription, req, effectiveDate)
 			_, err = walletService.TopUpWalletForProratedCharge(ctx, subscription.GetInvoicingCustomerID(), totalCreditAmount.Abs(), subscription.Currency, cancelKey)

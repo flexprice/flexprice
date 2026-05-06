@@ -1815,15 +1815,41 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	if flowType == types.InvoiceFlowSubscriptionCreation {
 		draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
 	}
+	// Plan-change opening invoice: override billing reason and apply the proration credit.
+	if req.OpeningInvoiceAdjustmentAmount != nil {
+		draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionUpdate
+	}
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	// When an opening-invoice credit is present, pre-compute the invoice request with the
+	// FixedChargeAdjustment so that fixed line-item amounts are reduced before coupon/tax
+	// application, then pass that pre-computed request to ComputeInvoice.
+	var preComputedReq *dto.InvoiceComputeRequest
+	if req.OpeningInvoiceAdjustmentAmount != nil {
+		billingService := NewBillingService(s.ServiceParams)
+		invReq, prepErr := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+			Subscription:                   subscription,
+			PeriodStart:                    req.PeriodStart,
+			PeriodEnd:                      req.PeriodEnd,
+			ReferencePoint:                 types.ReferencePointPeriodStart,
+			ExcludeInvoiceID:               draft.ID,
+			OpeningInvoiceAdjustmentAmount: req.OpeningInvoiceAdjustmentAmount,
+		})
+		if prepErr != nil {
+			return nil, nil, prepErr
+		}
+		computeReq := invReq.ToComputeRequest()
+		preComputedReq = &computeReq
+	}
+
 	// Populate draft with usage and line items; if zero-dollar, marked SKIPPED
-	// Pass nil for subscription invoices - coupons/taxes come from billing service
-	skipped, err := s.ComputeInvoice(ctx, draft.ID, nil)
+	// Pass nil for subscription invoices - coupons/taxes come from billing service.
+	// When preComputedReq is non-nil the adjusted line items are used directly.
+	skipped, err := s.ComputeInvoice(ctx, draft.ID, preComputedReq)
 	if err != nil {
 		return nil, nil, err
 	}

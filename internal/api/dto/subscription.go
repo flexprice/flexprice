@@ -415,6 +415,12 @@ type CreateSubscriptionRequest struct {
 
 	// SubscriptionType is set internally by the service layer.
 	SubscriptionType types.SubscriptionType `json:"-"`
+
+	// OpeningInvoiceAdjustmentAmount is an internal field set during plan changes with
+	// create_prorations. It carries the unused credit from the cancelled subscription and
+	// is applied as a FixedChargeAdjustment on the first invoice, reducing the amount due
+	// instead of creating a wallet credit. Must never be set from the public API.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
@@ -485,6 +491,12 @@ type CancelSubscriptionRequest struct {
 
 	//SuppressWebhook is an internal flag to suppress webhook events during cancellation.
 	SuppressWebhook bool `json:"-,omitempty"`
+
+	// SkipProrationWalletCredit is an internal flag used during plan changes (create_prorations).
+	// When true, the cancellation proration credit is NOT issued as a wallet top-up; instead
+	// the caller is responsible for applying it as OpeningInvoiceAdjustmentAmount on the new
+	// subscription. This flag must never be set from the public API.
+	SkipProrationWalletCredit bool `json:"-"`
 }
 
 // CancelSubscriptionResponse represents the enhanced cancellation response
