@@ -238,15 +238,16 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 		}
 	}
 
-	// Zero-dollar transactions (e.g. trial-start):
-	//   - Status=Ready: keeps the transaction open for checkout (Billed auto-completes immediately)
-	//   - CollectionMode=Automatic: Paddle only accepts Status=Ready with automatic collection;
-	//     manual collection only supports Draft/Billed.
-	// Non-zero invoices use Manual+Billed so Paddle sends the invoice to the customer.
-	txnStatus := paddle.TransactionStatusBilled
+	// For zero-dollar invoices (e.g. trial-start): omit Status entirely and use automatic collection.
+	// When customer_id + address_id are present, Paddle auto-assigns Status=ready and returns
+	// checkout.url immediately — the customer can complete checkout to save their card.
+	// For non-zero invoices: Manual+Billed so Paddle sends the invoice to the customer.
+	var statusPtr *paddle.TransactionStatus
 	collectionMode := paddle.CollectionModeManual
-	if flexInvoice.Total.IsZero() {
-		txnStatus = paddle.TransactionStatusReady
+	if !flexInvoice.Total.IsZero() {
+		billed := paddle.TransactionStatusBilled
+		statusPtr = &billed
+	} else {
 		collectionMode = paddle.CollectionModeAutomatic
 	}
 
@@ -256,19 +257,24 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 		AddressID:      paddle.PtrTo(paddleAddressID),
 		CurrencyCode:   paddle.PtrTo(currency),
 		CollectionMode: paddle.PtrTo(collectionMode),
-		Status:         paddle.PtrTo(txnStatus),
+		Status:         statusPtr,
 		CustomData: map[string]interface{}{
 			"flexprice_invoice_id":  flexInvoice.ID,
 			"flexprice_customer_id": flexInvoice.CustomerID,
 			"environment_id":        types.GetEnvironmentID(ctx),
 		},
-		BillingDetails: &paddle.BillingDetails{
+	}
+
+	// BillingDetails is only relevant for manual collection (invoice sending + checkout config).
+	// Automatic collection ($0 card-capture transactions) must leave it nil.
+	if collectionMode == paddle.CollectionModeManual {
+		req.BillingDetails = &paddle.BillingDetails{
 			EnableCheckout: true,
 			PaymentTerms: paddle.Duration{
 				Interval:  intervalDay,
 				Frequency: paymentDays,
 			},
-		},
+		}
 	}
 
 	if flexInvoice.InvoiceNumber != nil && *flexInvoice.InvoiceNumber != "" {
