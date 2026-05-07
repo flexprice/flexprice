@@ -99,7 +99,9 @@ func (s *SandboxSubscriptionCleanupActivities) BuildSandboxCleanupListActivity(c
 		EnvironmentIDs:     sandboxEnvIDs,
 		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
 	}
-	subs, err := s.subscriptionService.ListAllTenantSubscriptions(ctx, filter)
+	// We need to scan across tenants/environments, so use the cross-tenant listing path
+	// (used elsewhere for global cron-style scans) instead of the tenant-scoped ListSubscriptions.
+	subs, err := s.subscriptionService.GetSubscriptionsForBillingPeriodUpdate(ctx, filter)
 	if err != nil {
 		s.params.Logger.Errorw("failed to list subscriptions in dev envs for sandbox cleanup", "error", err)
 		return result, ierr.WithError(err).
@@ -108,9 +110,14 @@ func (s *SandboxSubscriptionCleanupActivities) BuildSandboxCleanupListActivity(c
 	}
 
 	now := time.Now().UTC()
+	cutoff := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	for _, item := range subs.Items {
 		sub := item.Subscription
 		if sub == nil {
+			continue
+		}
+		// Only cleanup subscriptions created on/after May 1, 2026.
+		if sub.CreatedAt.Before(cutoff) {
 			continue
 		}
 		expiryDays := tenantExpiryDays[sub.TenantID]
@@ -144,8 +151,9 @@ func (s *SandboxSubscriptionCleanupActivities) TerminateSandboxSubscriptionsBatc
 		subCtx = context.WithValue(subCtx, types.CtxEnvironmentID, sub.EnvironmentID)
 		subCtx = context.WithValue(subCtx, types.CtxUserID, sub.CreatedBy)
 		_, err := s.subscriptionService.CancelSubscription(subCtx, sub.SubscriptionID, &dto.CancelSubscriptionRequest{
-			CancellationType: types.CancellationTypeImmediate,
-			Reason:           "Sandbox subscription auto-cancelled after cleanup window",
+			CancellationType:               types.CancellationTypeImmediate,
+			CancelImmediatelyInvoicePolicy: types.CancelImmediatelyInvoicePolicyGenerateInvoice,
+			Reason:                         "Sandbox subscription auto-cancelled after cleanup window",
 		})
 		if err != nil {
 			s.params.Logger.Errorw("failed to terminate sandbox subscription", "subscription_id", sub.SubscriptionID, "tenant_id", sub.TenantID, "environment_id", sub.EnvironmentID, "error", err)

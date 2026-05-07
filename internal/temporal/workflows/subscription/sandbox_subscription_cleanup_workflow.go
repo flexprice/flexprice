@@ -68,7 +68,8 @@ func SandboxSubscriptionCleanupWorkflow(ctx workflow.Context) (*subscriptionMode
 		if !pageResult.HasMore {
 			break
 		}
-		offset += pageSize
+
+		offset += pageSize - len(pageResult.Items)
 	}
 
 	return &subscriptionModels.SandboxSubscriptionCleanupWorkflowResult{TerminatedCount: totalTerminated, BatchCount: batchCount}, nil

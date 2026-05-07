@@ -1920,9 +1920,18 @@ func (s *subscriptionService) CancelSubscription(
 		// Step 8: Void future credit grants
 		// Step 8: Set credit grant end dates to effective cancellation date, then archive grants
 		creditGrantService := NewCreditGrantService(s.ServiceParams)
+		// For immediate cancellations there is no pinned effective date — grants should end
+		// now (DeleteCreditGrant defaults to time.Now() when EffectiveDate is nil), and
+		// passing nil skips the 1-minute tolerance validation in Validate().
+		// For end-of-period / scheduled-date we pass the specific future date so grants
+		// are wound down at the right time.
+		var grantEffectiveDate *time.Time
+		if req.CancellationType != types.CancellationTypeImmediate {
+			grantEffectiveDate = &effectiveDate
+		}
 		err = creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
 			SubscriptionID: subscription.ID,
-			EffectiveDate:  &effectiveDate,
+			EffectiveDate:  grantEffectiveDate,
 		})
 		if err != nil {
 			return err
