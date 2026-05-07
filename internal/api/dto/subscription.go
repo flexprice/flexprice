@@ -639,6 +639,11 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		return err
 	}
 
+	if r.OpeningInvoiceAdjustmentAmount != nil && r.OpeningInvoiceAdjustmentAmount.IsNegative() {
+		return ierr.NewError("opening invoice adjustment amount must be >= 0").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Case- Both are absent
 	if r.CustomerID == "" && r.ExternalCustomerID == "" {
 		return ierr.NewError("either customer_id or external_customer_id is required").
