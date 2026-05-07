@@ -270,13 +270,6 @@ func (s *InvoiceSyncService) buildTransactionItems(flexInvoice *invoice.Invoice)
 	var items []paddle.CreateTransactionItems
 
 	for _, item := range flexInvoice.LineItems {
-		if item.Amount.IsZero() {
-			s.logger.Debugw("skipping zero-amount line item",
-				"invoice_id", flexInvoice.ID,
-				"line_item_id", item.ID)
-			continue
-		}
-
 		txnItem, err := s.buildSingleTransactionItem(flexInvoice, item)
 		if err != nil {
 			return nil, err
