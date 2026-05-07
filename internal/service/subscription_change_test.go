@@ -2,20 +2,24 @@ package service
 
 import (
 	"strings"
+	"testing"
 	"time"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	invoicedomain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
 type SubscriptionChangeServiceTestSuite struct {
@@ -37,42 +41,50 @@ func (s *SubscriptionChangeServiceTestSuite) TearDownTest() {
 
 func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 	serviceParams := ServiceParams{
-		Logger:                     s.GetLogger(),
-		Config:                     s.GetConfig(),
-		DB:                         s.GetDB(),
-		TaxAssociationRepo:         s.GetStores().TaxAssociationRepo,
-		TaxRateRepo:                s.GetStores().TaxRateRepo,
-		AuthRepo:                   s.GetStores().AuthRepo,
-		UserRepo:                   s.GetStores().UserRepo,
-		EventRepo:                  s.GetStores().EventRepo,
-		MeterRepo:                  s.GetStores().MeterRepo,
-		PriceRepo:                  s.GetStores().PriceRepo,
-		CustomerRepo:               s.GetStores().CustomerRepo,
-		PlanRepo:                   s.GetStores().PlanRepo,
-		SubRepo:                    s.GetStores().SubscriptionRepo,
-		WalletRepo:                 s.GetStores().WalletRepo,
-		TenantRepo:                 s.GetStores().TenantRepo,
-		InvoiceRepo:                s.GetStores().InvoiceRepo,
-		FeatureRepo:                s.GetStores().FeatureRepo,
-		EntitlementRepo:            s.GetStores().EntitlementRepo,
-		PaymentRepo:                s.GetStores().PaymentRepo,
-		SecretRepo:                 s.GetStores().SecretRepo,
-		EnvironmentRepo:            s.GetStores().EnvironmentRepo,
-		TaskRepo:                   s.GetStores().TaskRepo,
-		CreditGrantRepo:            s.GetStores().CreditGrantRepo,
-		CreditGrantApplicationRepo: s.GetStores().CreditGrantApplicationRepo,
-		CouponRepo:                 s.GetStores().CouponRepo,
-		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
-		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
-		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
-		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
-		CreditNoteRepo:             s.GetStores().CreditNoteRepo,
-		CreditNoteLineItemRepo:     s.GetStores().CreditNoteLineItemRepo,
-		ConnectionRepo:             s.GetStores().ConnectionRepo,
-		SettingsRepo:               s.GetStores().SettingsRepo,
-		EventPublisher:             s.GetPublisher(),
-		WebhookPublisher:           s.GetWebhookPublisher(),
-		ProrationCalculator:        s.GetCalculator(), // Use the correct method from BaseServiceTestSuite
+		Logger:                       s.GetLogger(),
+		Config:                       s.GetConfig(),
+		DB:                           s.GetDB(),
+		TaxAssociationRepo:           s.GetStores().TaxAssociationRepo,
+		TaxRateRepo:                  s.GetStores().TaxRateRepo,
+		AuthRepo:                     s.GetStores().AuthRepo,
+		UserRepo:                     s.GetStores().UserRepo,
+		EventRepo:                    s.GetStores().EventRepo,
+		MeterRepo:                    s.GetStores().MeterRepo,
+		PriceRepo:                    s.GetStores().PriceRepo,
+		CustomerRepo:                 s.GetStores().CustomerRepo,
+		PlanRepo:                     s.GetStores().PlanRepo,
+		SubRepo:                      s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo:     s.GetStores().SubscriptionLineItemRepo,
+		SubscriptionPhaseRepo:        s.GetStores().SubscriptionPhaseRepo,
+		SubScheduleRepo:              s.GetStores().SubscriptionScheduleRepo,
+		WalletRepo:                   s.GetStores().WalletRepo,
+		InvoiceLineItemRepo:          s.GetStores().InvoiceLineItemRepo,
+		TenantRepo:                   s.GetStores().TenantRepo,
+		InvoiceRepo:                  s.GetStores().InvoiceRepo,
+		FeatureRepo:                  s.GetStores().FeatureRepo,
+		EntitlementRepo:              s.GetStores().EntitlementRepo,
+		PaymentRepo:                  s.GetStores().PaymentRepo,
+		SecretRepo:                   s.GetStores().SecretRepo,
+		EnvironmentRepo:              s.GetStores().EnvironmentRepo,
+		TaskRepo:                     s.GetStores().TaskRepo,
+		CreditGrantRepo:              s.GetStores().CreditGrantRepo,
+		CreditGrantApplicationRepo:   s.GetStores().CreditGrantApplicationRepo,
+		CouponRepo:                   s.GetStores().CouponRepo,
+		CouponAssociationRepo:        s.GetStores().CouponAssociationRepo,
+		CouponApplicationRepo:        s.GetStores().CouponApplicationRepo,
+		AddonAssociationRepo:         s.GetStores().AddonAssociationRepo,
+		TaxAppliedRepo:               s.GetStores().TaxAppliedRepo,
+		CreditNoteRepo:               s.GetStores().CreditNoteRepo,
+		CreditNoteLineItemRepo:       s.GetStores().CreditNoteLineItemRepo,
+		ConnectionRepo:               s.GetStores().ConnectionRepo,
+		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
+		SettingsRepo:                 s.GetStores().SettingsRepo,
+		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
+		FeatureUsageRepo:             s.GetStores().FeatureUsageRepo,
+		EventPublisher:               s.GetPublisher(),
+		WebhookPublisher:             s.GetWebhookPublisher(),
+		ProrationCalculator:          s.GetCalculator(),
+		IntegrationFactory:           s.GetIntegrationFactory(),
 	}
 
 	s.subscriptionChangeService = NewSubscriptionChangeService(serviceParams).(*subscriptionChangeService)
@@ -364,6 +376,65 @@ func (s *SubscriptionChangeServiceTestSuite) createMultiMeterUsagePlan(name stri
 	return planResponse.Plan, createdMeters
 }
 
+// backdateSub pins CurrentPeriodStart/CurrentPeriodEnd on the subscription so that
+// daysUsed days have already elapsed out of a totalDays-long billing period.
+// This gives deterministic proration amounts regardless of when the test runs.
+// Returns the refreshed subscription.
+func (s *SubscriptionChangeServiceTestSuite) backdateSub(
+	sub *subscription.Subscription,
+	daysUsed, totalDays int,
+) *subscription.Subscription {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	sub.CurrentPeriodStart = now.AddDate(0, 0, -daysUsed)
+	sub.CurrentPeriodEnd = now.AddDate(0, 0, totalDays-daysUsed)
+	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, sub))
+	refreshed, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
+	require.NoError(s.T(), err)
+	return refreshed
+}
+
+// getInvoicesForSub lists all invoices (any status) for the given subscription ID.
+// Results are returned in repository order (typically insertion order).
+// The opening invoice is always [0] because it is created first.
+func (s *SubscriptionChangeServiceTestSuite) getInvoicesForSub(subID string) []*invoicedomain.Invoice {
+	ctx := s.GetContext()
+	filter := &types.InvoiceFilter{
+		QueryFilter:    types.NewDefaultQueryFilter(),
+		SubscriptionID: subID,
+	}
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	require.NoError(s.T(), err)
+	return invoices
+}
+
+// getWalletForCustomer returns the first wallet whose CustomerID matches,
+// or nil if no wallet exists yet. Tests run with an isolated in-memory store
+// so the only wallets present belong to the current test's customer(s).
+func (s *SubscriptionChangeServiceTestSuite) getWalletForCustomer(customerID string) *walletdomain.Wallet {
+	ctx := s.GetContext()
+	wallets, err := s.GetStores().WalletRepo.GetWalletsByFilter(ctx, &types.WalletFilter{
+		QueryFilter: types.NewDefaultQueryFilter(),
+	})
+	require.NoError(s.T(), err)
+	for _, w := range wallets {
+		if w.CustomerID == customerID {
+			return w
+		}
+	}
+	return nil
+}
+
+// assertAmountNear fails the test if |actual - expected| >= tol.
+// Use for proration amounts where wall-clock timing introduces sub-cent variance.
+func (s *SubscriptionChangeServiceTestSuite) assertAmountNear(expected, actual decimal.Decimal, tol float64, msg string) {
+	s.T().Helper()
+	diff := actual.Sub(expected).Abs()
+	tolDec := decimal.NewFromFloat(tol)
+	assert.True(s.T(), diff.LessThan(tolDec),
+		"%s: expected %s ≈ %s (tol=%s), got diff=%s", msg, expected, actual, tolDec, diff)
+}
+
 func (s *SubscriptionChangeServiceTestSuite) TestPreviewSubscriptionUpgrade() {
 	ctx := s.GetContext()
 
@@ -601,8 +672,8 @@ func (s *SubscriptionChangeServiceTestSuite) TestCalculatePeriodEndHelper() {
 func (s *SubscriptionChangeServiceTestSuite) TestGenerateWarningsHelper() {
 	service := s.subscriptionChangeService
 
-	// Create test subscription with trial end after the hardcoded date in the service
-	futureTime := time.Date(2025, 12, 25, 0, 0, 0, 0, time.UTC)
+	// Create test subscription with trial end in the future
+	futureTime := time.Now().UTC().AddDate(1, 0, 0) // one year from now
 	testSub := &subscription.Subscription{
 		TrialEnd: &futureTime,
 	}
@@ -1280,8 +1351,275 @@ func (s *SubscriptionChangeServiceTestSuite) TestFixedToUsagePlanTransition() {
 // 	}
 // }
 
+// TestUpgradeNoneProration verifies that when a customer upgrades plans with
+// ProrationBehaviorNone, no proration credit is applied: the opening invoice for the
+// new subscription reflects the full new plan price, no wallet is created, and
+// ProrationApplied is nil on the execute response.
+func (s *SubscriptionChangeServiceTestSuite) TestUpgradeNoneProration() {
+	ctx := s.GetContext()
+
+	// Setup
+	cust := s.createTestCustomer()
+	plan600 := s.createTestPlan("Plan600NP", decimal.NewFromFloat(600))
+	plan2000 := s.createTestPlan("Plan2000NP", decimal.NewFromFloat(2000))
+	sub := s.createTestSubscription(plan600.ID, cust.ID)
+
+	// Execute upgrade with no proration
+	req := s.createSubscriptionChangeRequest(plan2000.ID, types.ProrationBehaviorNone)
+	execResp, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, sub.ID, req)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), execResp)
+
+	s.Run("execute/new_sub_active", func() {
+		require.NotNil(s.T(), execResp.NewSubscription)
+		assert.Equal(s.T(), types.SubscriptionStatusActive, execResp.NewSubscription.Status)
+		assert.Equal(s.T(), plan2000.ID, execResp.NewSubscription.PlanID)
+	})
+
+	s.Run("execute/opening_invoice_full_price", func() {
+		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
+		require.NotEmpty(s.T(), invoices, "expected at least one invoice for the new subscription")
+		assert.True(s.T(), invoices[0].AmountDue.Equal(decimal.NewFromFloat(2000)),
+			"expected opening invoice AmountDue to be 2000, got %s", invoices[0].AmountDue.String())
+	})
+
+	s.Run("execute/no_wallet_credit", func() {
+		wallet := s.getWalletForCustomer(cust.ID)
+		if wallet != nil {
+			assert.True(s.T(), wallet.Balance.IsZero(),
+				"expected wallet balance to be 0 for ProrationBehaviorNone, got %s", wallet.Balance.String())
+		}
+		// wallet == nil is also acceptable (no wallet created at all)
+	})
+
+	s.Run("execute/no_proration_applied", func() {
+		assert.Nil(s.T(), execResp.ProrationApplied,
+			"expected ProrationApplied to be nil for ProrationBehaviorNone")
+	})
+}
+
+// TestCancelWithCreateProrations verifies that when a customer cancels mid-period
+// with ProrationBehaviorCreateProrations (the normal cancel path, NOT a plan change):
+//   - The response TotalCreditAmount is ~$300 (15/30 days of $600/mo)
+//   - A wallet is created for the customer
+//   - The wallet balance matches the credit (~$300)
+//   - The subscription ends up in the "cancelled" state
+func (s *SubscriptionChangeServiceTestSuite) TestCancelWithCreateProrations() {
+	ctx := s.GetContext()
+
+	// Setup: customer, $600/month plan, subscription backdated 15/30 days
+	cust := s.createTestCustomer()
+	plan600 := s.createTestPlan("Plan600", decimal.NewFromFloat(600))
+	sub := s.createTestSubscription(plan600.ID, cust.ID)
+	sub = s.backdateSub(sub, 15, 30)
+
+	// Call CancelSubscription with create_prorations — no SkipProrationWalletCredit
+	cancelResp, err := s.subscriptionService.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+		CancellationType:  types.CancellationTypeImmediate,
+	})
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), cancelResp)
+
+	s.Run("cancel/response_total_credit_amount", func() {
+		s.assertAmountNear(decimal.NewFromFloat(300), cancelResp.TotalCreditAmount, 1.0, "response TotalCreditAmount")
+	})
+
+	w := s.getWalletForCustomer(cust.ID)
+
+	s.Run("cancel/wallet_exists_for_customer", func() {
+		assert.NotNil(s.T(), w, "expected a wallet to be created for customer")
+	})
+
+	s.Run("cancel/wallet_balance_matches_credit", func() {
+		require.NotNil(s.T(), w, "wallet must exist to check balance")
+		s.assertAmountNear(decimal.NewFromFloat(300), w.Balance, 1.0, "wallet balance")
+	})
+
+	s.Run("cancel/subscription_is_cancelled", func() {
+		refreshed, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, sub.ID)
+		require.NoError(s.T(), err)
+		assert.Equal(s.T(), types.SubscriptionStatusCancelled, refreshed.SubscriptionStatus)
+	})
+}
+
+// TestUpgradeWithCreateProrations verifies that when a customer upgrades plans
+// immediately with ProrationBehaviorCreateProrations:
+//   - The preview shows the correct credit amount (~$300 for 15/30 days of $600/mo)
+//   - The preview next invoice total is reduced by that credit (~$2000 - $300 = $1700)
+//   - The old subscription is cancelled and no wallet credit is created
+//   - The new subscription's opening invoice has BillingReason=SUBSCRIPTION_UPDATE
+func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
+	ctx := s.GetContext()
+
+	// Setup: customer, $600/month plan, $2000/month plan
+	cust := s.createTestCustomer()
+	sourcePlan := s.createTestPlan("Source600", decimal.NewFromFloat(600))
+	targetPlan := s.createTestPlan("Target2000", decimal.NewFromFloat(2000))
+
+	// Create subscription on the $600 plan
+	sub := s.createTestSubscription(sourcePlan.ID, cust.ID)
+
+	// Backdate: 15 days used of 30 days total
+	sub = s.backdateSub(sub, 15, 30)
+
+	// Build request with create_prorations
+	req := s.createSubscriptionChangeRequest(targetPlan.ID, types.ProrationBehaviorCreateProrations)
+
+	// --- Preview ---
+	previewResp, err := s.subscriptionChangeService.PreviewSubscriptionChange(ctx, sub.ID, req)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), previewResp)
+
+	s.Run("preview/shows_proration_details", func() {
+		assert.NotNil(s.T(), previewResp.ProrationDetails)
+	})
+
+	s.Run("preview/credit_amount_near_300", func() {
+		require.NotNil(s.T(), previewResp.ProrationDetails)
+		s.assertAmountNear(decimal.NewFromFloat(300), previewResp.ProrationDetails.CreditAmount, 1.0, "credit amount")
+	})
+
+	s.Run("preview/next_invoice_total_near_1700", func() {
+		require.NotNil(s.T(), previewResp.NextInvoicePreview)
+		s.assertAmountNear(decimal.NewFromFloat(1700), previewResp.NextInvoicePreview.Total, 1.0, "next invoice total")
+	})
+
+	// --- Execute ---
+	execResp, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, sub.ID, req)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), execResp)
+
+	s.Run("execute/old_sub_cancelled", func() {
+		assert.Equal(s.T(), types.SubscriptionStatusCancelled, execResp.OldSubscription.Status)
+	})
+
+	s.Run("execute/new_sub_active_on_target_plan", func() {
+		assert.Equal(s.T(), types.SubscriptionStatusActive, execResp.NewSubscription.Status)
+		assert.Equal(s.T(), targetPlan.ID, execResp.NewSubscription.PlanID)
+	})
+
+	s.Run("execute/opening_invoice_billing_reason", func() {
+		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
+		require.NotEmpty(s.T(), invoices, "expected at least one invoice for new subscription")
+		assert.Equal(s.T(), string(types.InvoiceBillingReasonSubscriptionUpdate), string(invoices[0].BillingReason))
+	})
+
+	s.Run("execute/opening_invoice_amount_near_1700", func() {
+		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
+		require.GreaterOrEqual(s.T(), len(invoices), 1, "expected at least one invoice for new subscription")
+		s.assertAmountNear(decimal.NewFromFloat(1700), invoices[0].AmountDue, 1.0, "opening invoice total")
+	})
+
+	s.Run("execute/no_wallet_credit", func() {
+		wallet := s.getWalletForCustomer(cust.ID)
+		if wallet != nil {
+			assert.True(s.T(), wallet.Balance.IsZero(), "wallet balance should be zero, got %s", wallet.Balance)
+		}
+		// nil wallet also satisfies the requirement
+	})
+}
+
+// TestApplyFixedChargeAdjustmentToLineItems verifies the billing helper that
+// distributes a proration credit across invoice line items in order.
+func (s *SubscriptionChangeServiceTestSuite) TestApplyFixedChargeAdjustmentToLineItems() {
+	mkItem := func(amount float64) dto.CreateInvoiceLineItemRequest {
+		return dto.CreateInvoiceLineItemRequest{Amount: decimal.NewFromFloat(amount)}
+	}
+
+	cases := []struct {
+		name     string
+		credit   decimal.Decimal
+		items    []dto.CreateInvoiceLineItemRequest
+		wantAmts []float64 // expected Amount per output item
+	}{
+		{
+			name:     "credit_smaller_than_single_item",
+			credit:   decimal.NewFromFloat(300),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(2000)},
+			wantAmts: []float64{1700},
+		},
+		{
+			name:     "credit_spans_two_items_exhausts_first",
+			credit:   decimal.NewFromFloat(300),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts: []float64{0, 100},
+		},
+		{
+			name:     "credit_equals_total",
+			credit:   decimal.NewFromFloat(400),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts: []float64{0, 0},
+		},
+		{
+			name:     "credit_exceeds_total_capped_at_zero",
+			credit:   decimal.NewFromFloat(500),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200), mkItem(200)},
+			wantAmts: []float64{0, 0},
+		},
+		{
+			name:     "zero_credit_leaves_items_unchanged",
+			credit:   decimal.Zero,
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200)},
+			wantAmts: []float64{200},
+		},
+		{
+			name:     "empty_items_returns_empty",
+			credit:   decimal.NewFromFloat(300),
+			items:    []dto.CreateInvoiceLineItemRequest{},
+			wantAmts: []float64{},
+		},
+		{
+			name:     "negative_credit_treated_as_zero",
+			credit:   decimal.NewFromInt(-100),
+			items:    []dto.CreateInvoiceLineItemRequest{mkItem(200)},
+			wantAmts: []float64{200}, // unchanged
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		s.Run(tc.name, func() {
+			result := applyFixedChargeAdjustmentToLineItems(tc.items, tc.credit)
+			require.Len(s.T(), result, len(tc.wantAmts),
+				"result length mismatch for case %q", tc.name)
+			for i, wantF := range tc.wantAmts {
+				want := decimal.NewFromFloat(wantF)
+				assert.True(s.T(), result[i].Amount.Equal(want),
+					"item[%d] amount: want %s got %s", i, want, result[i].Amount)
+				assert.False(s.T(), result[i].Amount.IsNegative(),
+					"item[%d] must not be negative", i)
+			}
+		})
+	}
+}
+
+// TestIsFirstSubscriptionOpenInvoiceReason verifies that the billing-reason helper
+// correctly identifies which reasons trigger subscription activation on full payment.
+// SUBSCRIPTION_UPDATE was added in PR #1733 (plan-change opening invoice).
+func (s *SubscriptionChangeServiceTestSuite) TestIsFirstSubscriptionOpenInvoiceReason() {
+	cases := []struct {
+		reason   types.InvoiceBillingReason
+		wantTrue bool
+	}{
+		{types.InvoiceBillingReasonSubscriptionCreate, true},
+		{types.InvoiceBillingReasonSubscriptionTrialEnd, true},
+		{types.InvoiceBillingReasonSubscriptionUpdate, true}, // added in PR #1733
+		{types.InvoiceBillingReasonSubscriptionCycle, false},
+		{types.InvoiceBillingReasonProration, false},
+		{types.InvoiceBillingReasonManual, false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		s.Run(string(tc.reason), func() {
+			got := tc.reason.IsFirstSubscriptionOpenInvoiceReason()
+			assert.Equal(s.T(), tc.wantTrue, got,
+				"IsFirstSubscriptionOpenInvoiceReason() for reason %q", tc.reason)
+		})
+	}
+}
+
 // TestSubscriptionChangeServiceTestSuite runs the subscription change suite.
-// Uncomment to run; requires integration deps (e.g. IntegrationFactory) for full subscription creation.
-// func TestSubscriptionChangeServiceTestSuite(t *testing.T) {
-// 	suite.Run(t, new(SubscriptionChangeServiceTestSuite))
-// }
+func TestSubscriptionChangeServiceTestSuite(t *testing.T) {
+	suite.Run(t, new(SubscriptionChangeServiceTestSuite))
+}
