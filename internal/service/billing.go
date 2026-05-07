@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -287,7 +288,37 @@ func (s *billingService) CalculateFixedCharges(
 		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
+	// Optional opening-invoice credit (e.g. plan-change netting): reduce fixed line amounts in order,
+	// capped per line, and keep total consistent.
+	if params.OpeningInvoiceAdjustmentAmount != nil {
+		adj := lo.FromPtr(params.OpeningInvoiceAdjustmentAmount)
+		fixedCostLineItems = applyOpeningInvoiceAdjustmentToLineItems(fixedCostLineItems, adj)
+		fixedCost = fixedCost.Sub(adj)
+	}
+
 	return &dto.CalculateFixedChargesResult{LineItems: fixedCostLineItems, TotalAmount: fixedCost}, nil
+}
+
+// applyOpeningInvoiceAdjustmentToLineItems reduces line Amounts in slice order: for each line,
+// take min(remaining credit, line amount). Each take is capped by the line, so total reduction
+// cannot exceed the sum of line amounts even when credit is larger.
+func applyOpeningInvoiceAdjustmentToLineItems(
+	items []dto.CreateInvoiceLineItemRequest,
+	creditsToAdjust decimal.Decimal,
+) []dto.CreateInvoiceLineItemRequest {
+	if len(items) == 0 || !creditsToAdjust.GreaterThan(decimal.Zero) {
+		return slices.Clone(items)
+	}
+	remaining := creditsToAdjust
+	return lo.Map(items, func(item dto.CreateInvoiceLineItemRequest, _ int) dto.CreateInvoiceLineItemRequest {
+		if remaining.IsZero() {
+			return item
+		}
+		take := decimal.Min(remaining, item.Amount)
+		item.Amount = item.Amount.Sub(take)
+		remaining = remaining.Sub(take)
+		return item
+	})
 }
 
 // endDateBoundaryForMatching returns periodEnd + one billing period length so that
@@ -1528,10 +1559,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								},
 							}
 
-						fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
-						if fetchErr != nil {
-							return nil, fetchErr
-						}
+							fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
+							if fetchErr != nil {
+								return nil, fetchErr
+							}
 							commitmentUsageResult = fetchedResult
 						}
 
@@ -1823,10 +1854,10 @@ func (s *billingService) CalculateAllCharges(
 	periodEnd := params.PeriodEnd
 
 	fixedResult, err := s.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
-		Subscription:          sub,
-		PeriodStart:           periodStart,
-		PeriodEnd:             periodEnd,
-		FixedChargeAdjustment: params.FixedChargeAdjustment,
+		Subscription:                   sub,
+		PeriodStart:                    periodStart,
+		PeriodEnd:                      periodEnd,
+		OpeningInvoiceAdjustmentAmount: params.OpeningInvoiceAdjustmentAmount,
 	})
 	if err != nil {
 		return nil, err
@@ -2015,11 +2046,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		calculationResult, err = s.CalculateCharges(ctx, &dto.CalculateChargesParams{
-			Subscription: sub,
-			LineItems:    advanceLineItems,
-			PeriodStart:  periodStart,
-			PeriodEnd:    periodEnd,
-			IncludeUsage: false, // No usage for advance
+			Subscription:                   sub,
+			LineItems:                      advanceLineItems,
+			PeriodStart:                    periodStart,
+			PeriodEnd:                      periodEnd,
+			IncludeUsage:                   false, // No usage for advance
+			OpeningInvoiceAdjustmentAmount: params.OpeningInvoiceAdjustmentAmount,
 		})
 		if err != nil {
 			return nil, err
@@ -2595,11 +2627,11 @@ func (s *billingService) CalculateCharges(
 
 	// Calculate charges
 	return s.CalculateAllCharges(ctx, &dto.CalculateAllChargesParams{
-		Subscription:          &filteredSub,
-		Usage:                 usage,
-		PeriodStart:           periodStart,
-		PeriodEnd:             periodEnd,
-		FixedChargeAdjustment: params.FixedChargeAdjustment,
+		Subscription:                   &filteredSub,
+		Usage:                          usage,
+		PeriodStart:                    periodStart,
+		PeriodEnd:                      periodEnd,
+		OpeningInvoiceAdjustmentAmount: params.OpeningInvoiceAdjustmentAmount,
 	})
 }
 

@@ -401,24 +401,34 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		refPoint := types.ReferencePointPeriodEnd
 		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd:
+		case types.InvoiceBillingReasonSubscriptionCreate,
+			types.InvoiceBillingReasonSubscriptionTrialEnd,
+			types.InvoiceBillingReasonSubscriptionUpdate:
 			refPoint = types.ReferencePointPeriodStart
 		case types.InvoiceBillingReasonProration:
 			refPoint = types.ReferencePointCancel
 		}
 		billingService := NewBillingService(s.ServiceParams)
-		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		params := &dto.PrepareSubscriptionInvoiceRequestParams{
 			Subscription:     sub,
 			PeriodStart:      *inv.PeriodStart,
 			PeriodEnd:        *inv.PeriodEnd,
 			ReferencePoint:   refPoint,
 			ExcludeInvoiceID: inv.ID,
-		})
+		}
+
+		if req != nil {
+			if req.OpeningInvoiceAdjustmentAmount != nil {
+				params.OpeningInvoiceAdjustmentAmount = req.OpeningInvoiceAdjustmentAmount
+			}
+		}
+		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, params)
 		if err != nil {
 			return false, err
 		}
 		computeReq := subInvReq.ToComputeRequest()
 		applyReq = &computeReq
+		applyReq.OpeningInvoiceAdjustmentAmount = params.OpeningInvoiceAdjustmentAmount
 	} else if req != nil {
 		// One-off or credit: line items and amounts come from the caller's request
 		applyReq = req
@@ -1713,8 +1723,10 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 
 		inv.PaidAt = &now
 
-		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
-			s.HandleIncompleteSubscriptionPayment(ctx, inv)
+		if types.InvoiceBillingReason(inv.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
+			if err := s.HandleIncompleteSubscriptionPayment(ctx, inv); err != nil {
+				return err
+			}
 		}
 
 	case types.PaymentStatusOverpaid:
@@ -1728,8 +1740,10 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		if inv.PaidAt == nil {
 			inv.PaidAt = &now
 		}
-		if types.InvoiceBillingReason(inv.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
-			s.HandleIncompleteSubscriptionPayment(ctx, inv)
+		if types.InvoiceBillingReason(inv.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
+			if err := s.HandleIncompleteSubscriptionPayment(ctx, inv); err != nil {
+				return err
+			}
 		}
 	case types.PaymentStatusFailed:
 		// Don't change amount_paid for failed payments
@@ -1812,9 +1826,17 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		subscription.Currency,
 		string(subscription.BillingPeriod),
 	)
+
+	// If the flow type is subscription creation, set the billing reason to the request billing reason
+	// or default to subscription create
 	if flowType == types.InvoiceFlowSubscriptionCreation {
-		draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
+		if req.BillingReason != "" {
+			draftReq.BillingReason = req.BillingReason
+		} else {
+			draftReq.BillingReason = types.InvoiceBillingReasonSubscriptionCreate
+		}
 	}
+
 	draftReq.SubscriptionCustomerID = &subscription.CustomerID
 	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
 	if err != nil {
@@ -1822,8 +1844,11 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	}
 
 	// Populate draft with usage and line items; if zero-dollar, marked SKIPPED
-	// Pass nil for subscription invoices - coupons/taxes come from billing service
-	skipped, err := s.ComputeInvoice(ctx, draft.ID, nil)
+	var computeOverride *dto.InvoiceComputeRequest
+	if req.OpeningInvoiceAdjustmentAmount != nil && req.OpeningInvoiceAdjustmentAmount.GreaterThan(decimal.Zero) {
+		computeOverride = &dto.InvoiceComputeRequest{OpeningInvoiceAdjustmentAmount: req.OpeningInvoiceAdjustmentAmount}
+	}
+	skipped, err := s.ComputeInvoice(ctx, draft.ID, computeOverride)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -3466,7 +3491,7 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 		return nil
 	}
 
-	if !types.InvoiceBillingReason(invoice.BillingReason).TriggersSubscriptionActivationOnFullPayment() {
+	if !types.InvoiceBillingReason(invoice.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
 		return nil
 	}
 

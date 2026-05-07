@@ -35,9 +35,9 @@ type CalculateFixedChargesParams struct {
 	Subscription *subscription.Subscription `validate:"required"`
 	PeriodStart  time.Time                  `validate:"required"`
 	PeriodEnd    time.Time                  `validate:"required"`
-	// FixedChargeAdjustment is an optional credit (e.g. opening/plan-change) applied only to
-	// fixed line amounts after rounding.
-	FixedChargeAdjustment *decimal.Decimal `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is an optional credit (e.g. plan-change netting) applied only to
+	// fixed line amounts after rounding, before coupons.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // Validate enforces struct tags and a non-negative optional adjustment.
@@ -46,8 +46,8 @@ func (p *CalculateFixedChargesParams) Validate() error {
 	if err := validator.ValidateRequest(p); err != nil {
 		return err
 	}
-	if p.FixedChargeAdjustment != nil && p.FixedChargeAdjustment.IsNegative() {
-		return ierr.NewError("fixed_charge_adjustment must not be negative").
+	if p.OpeningInvoiceAdjustmentAmount != nil && p.OpeningInvoiceAdjustmentAmount.IsNegative() {
+		return ierr.NewError("opening_invoice_adjustment_amount must not be negative").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -72,8 +72,8 @@ type CalculateAllChargesParams struct {
 	Usage        *GetUsageBySubscriptionResponse
 	PeriodStart  time.Time `validate:"required"`
 	PeriodEnd    time.Time `validate:"required"`
-	// FixedChargeAdjustment is forwarded to CalculateFixedCharges only (usage unchanged).
-	FixedChargeAdjustment *decimal.Decimal `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is forwarded to CalculateFixedCharges only (usage unchanged).
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // Validate enforces struct tags and a non-negative optional adjustment.
@@ -81,8 +81,8 @@ func (p *CalculateAllChargesParams) Validate() error {
 	if err := validator.ValidateRequest(p); err != nil {
 		return err
 	}
-	if p.FixedChargeAdjustment != nil && p.FixedChargeAdjustment.IsNegative() {
-		return ierr.NewError("fixed_charge_adjustment must not be negative").
+	if p.OpeningInvoiceAdjustmentAmount != nil && p.OpeningInvoiceAdjustmentAmount.IsNegative() {
+		return ierr.NewError("opening_invoice_adjustment_amount must not be negative").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -97,7 +97,7 @@ type PrepareSubscriptionInvoiceRequestParams struct {
 	// ExcludeInvoiceID excludes lines already invoiced for the same price/period (empty = no exclusion).
 	ExcludeInvoiceID string `json:"-"`
 	// OpeningInvoiceAdjustmentAmount is the credit from the cancelled subscription to apply to the
-	// first invoice. Applied as FixedChargeAdjustment (reduces fixed line item amounts before coupons).
+	// first invoice (reduces fixed line item amounts before coupons).
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
@@ -151,8 +151,8 @@ type CalculateChargesParams struct {
 	PeriodStart  time.Time `validate:"required"`
 	PeriodEnd    time.Time `validate:"required"`
 	IncludeUsage bool
-	// FixedChargeAdjustment is forwarded to fixed-charge calculation only.
-	FixedChargeAdjustment *decimal.Decimal `json:"-"`
+	// OpeningInvoiceAdjustmentAmount is forwarded to fixed-charge calculation only.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // Validate enforces struct tags and a non-negative optional adjustment.
@@ -160,8 +160,8 @@ func (p *CalculateChargesParams) Validate() error {
 	if err := validator.ValidateRequest(p); err != nil {
 		return err
 	}
-	if p.FixedChargeAdjustment != nil && p.FixedChargeAdjustment.IsNegative() {
-		return ierr.NewError("fixed_charge_adjustment must not be negative").
+	if p.OpeningInvoiceAdjustmentAmount != nil && p.OpeningInvoiceAdjustmentAmount.IsNegative() {
+		return ierr.NewError("opening_invoice_adjustment_amount must not be negative").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

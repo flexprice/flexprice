@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -118,7 +119,7 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	}
 
 	// Calculate next invoice preview
-	nextInvoice, err := s.calculateNextInvoicePreview(ctx, currentSub, targetPlan, effectiveDate)
+	nextInvoice, err := s.calculateNextInvoicePreview(ctx, currentSub, targetPlan, effectiveDate, prorationDetails, req.ChangeAt)
 	if err != nil {
 		logger.Error("failed to calculate next invoice preview", zap.Error(err))
 		return nil, err
@@ -528,6 +529,8 @@ func (s *subscriptionChangeService) calculateNextInvoicePreview(
 	currentSub *subscription.Subscription,
 	targetPlan *plan.Plan,
 	effectiveDate time.Time,
+	prorationDetails *dto.ProrationDetails,
+	changeAt *types.ScheduleType,
 ) (*dto.InvoicePreview, error) {
 	// Get target plan prices
 	priceService := NewPriceService(s.serviceParams)
@@ -561,13 +564,54 @@ func (s *subscriptionChangeService) calculateNextInvoicePreview(
 		}
 	}
 
-	return &dto.InvoicePreview{
+	preview := &dto.InvoicePreview{
 		Subtotal:  subtotal,
 		TaxAmount: decimal.Zero,
 		Total:     subtotal,
 		Currency:  currentSub.Currency,
 		LineItems: lineItems,
-	}, nil
+	}
+
+	applySubscriptionChangePreviewCredit(preview, prorationDetails, changeAt)
+
+	return preview, nil
+}
+
+// applySubscriptionChangePreviewCredit applies immediate proration credit to the next-invoice preview.
+// It reduces line item amounts in slice order (capped per line) and keeps Subtotal/Total consistent.
+func applySubscriptionChangePreviewCredit(preview *dto.InvoicePreview, prorationDetails *dto.ProrationDetails, changeAt *types.ScheduleType) {
+	if preview == nil || prorationDetails == nil {
+		return
+	}
+
+	creditAmount := prorationDetails.CreditAmount
+	// When ChangeAt is omitted, subscription change semantics default to "immediate".
+	isImmediate := changeAt == nil || lo.FromPtr(changeAt) == types.ScheduleTypeImmediate
+	if !(isImmediate && creditAmount.GreaterThan(decimal.Zero) && len(preview.LineItems) > 0) {
+		return
+	}
+
+	// Apply credit across line items in order.
+	preview.LineItems = slices.Clone(preview.LineItems)
+	remaining := creditAmount
+	for i := range preview.LineItems {
+		if remaining.IsZero() {
+			break
+		}
+		take := decimal.Min(remaining, preview.LineItems[i].Amount)
+		preview.LineItems[i].Amount = preview.LineItems[i].Amount.Sub(take)
+		// Keep unit price aligned for quantity==1 previews.
+		preview.LineItems[i].UnitPrice = preview.LineItems[i].Amount
+		remaining = remaining.Sub(take)
+	}
+
+	// Subtotal equals sum of adjusted line items; clamp to zero for safety.
+	subtotal := lo.Reduce(preview.LineItems, func(acc decimal.Decimal, li dto.InvoiceLineItemPreview, _ int) decimal.Decimal {
+		return acc.Add(li.Amount)
+	}, decimal.Zero)
+
+	preview.Subtotal = decimal.Max(decimal.Zero, subtotal)
+	preview.Total = subtotal.Add(preview.TaxAmount)
 }
 
 // calculateNewBillingCycle calculates the new billing cycle information
@@ -657,19 +701,34 @@ func (s *subscriptionChangeService) executeChange(
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
+
 	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
-		CancellationType:  types.CancellationTypeImmediate,
-		Reason:            "subscription_change",
-		ProrationBehavior: req.ProrationBehavior,
+		CancellationType:          types.CancellationTypeImmediate,
+		Reason:                    "subscription_change",
+		ProrationBehavior:         req.ProrationBehavior,
+		SkipProrationWalletCredit: true, // we always skip the wallet credit refund since we will apply it as adjustment to the new subscription 1st invoice
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	// For immediate plan changes with create_prorations, we net the old subscription's proration
+	// credit against the new subscription's opening invoice (instead of issuing wallet credit).
+	cancelledSubCreditAmount := decimal.Zero
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+		prorationDetails, err := s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
+		if err != nil {
+			return nil, err
+		}
+		if prorationDetails != nil {
+			cancelledSubCreditAmount = prorationDetails.CreditAmount
+		}
+	}
+
 	// Create new subscription
-	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate)
+	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, cancelledSubCreditAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -712,6 +771,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 	targetPlan *plan.Plan,
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
+	cancelledSubTotalCreditAmount decimal.Decimal,
 ) (*subscription.Subscription, error) {
 	// Carry over inherited child subscriptions and invoicing customer via Inheritance config.
 	// ExternalCustomerIDsToInheritSubscription and InvoicingCustomerExternalID are mutually exclusive,
@@ -749,7 +809,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 					return nil, ierr.NewErrorf("customer not found for child subscription (customer_id=%s)", ch.CustomerID).
 						WithHint("Customer not found").
 						WithReportableDetails(map[string]any{
-							"customer_id":         ch.CustomerID,
+							"customer_id":           ch.CustomerID,
 							"child_subscription_id": ch.ID,
 						}).
 						Mark(ierr.ErrNotFound)
@@ -801,6 +861,13 @@ func (s *subscriptionChangeService) createNewSubscription(
 		PaymentTerms:       currentSub.PaymentTerms,
 		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
 		Inheritance:        inheritance,
+	}
+
+	// When doing an immediate plan change, we cancel the old subscription with proration but
+	// skip wallet credit issuance. Instead, we net that credit against the new subscription's
+	// opening invoice as an adjustment.
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !cancelledSubTotalCreditAmount.IsZero() {
+		createSubReq.OpeningInvoiceAdjustmentAmount = &cancelledSubTotalCreditAmount
 	}
 
 	subscriptionService := NewSubscriptionService(s.serviceParams)
