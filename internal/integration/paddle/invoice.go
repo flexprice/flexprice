@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v5"
+	"github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -215,37 +215,14 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 	flexInvoice *invoice.Invoice,
 	paddleCustomerID, paddleAddressID string,
 ) (*paddle.CreateTransactionRequest, error) {
-	var items []paddle.CreateTransactionItems
-
-	if flexInvoice.Total.IsZero() {
-		// For $0 invoices, reference a pre-created Paddle subscription price with
-		// RequiresPaymentMethod=true. A subscription price in a one-time transaction causes
-		// Paddle's checkout to show "Save card for future payments" instead of the
-		// card-free "Claim free product" flow. EnsureTrialCapturePrice auto-creates and
-		// caches the price on first use — no manual Paddle dashboard setup required.
-		priceID, err := s.client.EnsureTrialCapturePrice(ctx)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Failed to ensure trial capture price in Paddle").
-				Mark(ierr.ErrInternal)
-		}
-		items = []paddle.CreateTransactionItems{
-			*paddle.NewCreateTransactionItemsTransactionItemFromCatalog(&paddle.TransactionItemFromCatalog{
-				PriceID:  priceID,
-				Quantity: 1,
-			}),
-		}
-	} else {
-		var err error
-		items, err = s.buildTransactionItems(flexInvoice)
-		if err != nil {
-			return nil, err
-		}
-		if len(items) == 0 {
-			return nil, ierr.NewError("invoice has no line items").
-				WithHint("Cannot create Paddle transaction without line items").
-				Mark(ierr.ErrValidation)
-		}
+	items, err := s.buildTransactionItems(flexInvoice)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, ierr.NewError("invoice has no line items").
+			WithHint("Cannot create Paddle transaction without line items").
+			Mark(ierr.ErrValidation)
 	}
 
 	currency := paddle.CurrencyCode(strings.ToUpper(flexInvoice.Currency))
