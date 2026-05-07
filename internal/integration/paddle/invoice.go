@@ -174,7 +174,11 @@ func (s *InvoiceSyncService) SyncInvoiceToPaddle(
 	txn, err := s.client.CreateTransaction(ctx, createReq)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to create transaction in Paddle").
+			WithHintf("Failed to create transaction in Paddle: %s", err.Error()).
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": req.InvoiceID,
+				"error":      err.Error(),
+			}).
 			Mark(ierr.ErrInternal)
 	}
 
