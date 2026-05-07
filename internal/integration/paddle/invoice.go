@@ -234,13 +234,16 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 		}
 	}
 
-	// Zero-dollar transactions must use StatusReady instead of StatusBilled.
-	// Paddle auto-completes a $0 billed transaction immediately (nothing to collect),
-	// which would mark the FlexPrice invoice as paid and skip the checkout flow.
-	// StatusReady keeps the transaction open so the customer can go through checkout to save their card.
+	// Zero-dollar transactions (e.g. trial-start):
+	//   - Status=Ready: keeps the transaction open for checkout (Billed auto-completes immediately)
+	//   - CollectionMode=Automatic: Paddle only accepts Status=Ready with automatic collection;
+	//     manual collection only supports Draft/Billed.
+	// Non-zero invoices use Manual+Billed so Paddle sends the invoice to the customer.
 	txnStatus := paddle.TransactionStatusBilled
+	collectionMode := paddle.CollectionModeManual
 	if flexInvoice.Total.IsZero() {
 		txnStatus = paddle.TransactionStatusReady
+		collectionMode = paddle.CollectionModeAutomatic
 	}
 
 	req := &paddle.CreateTransactionRequest{
@@ -248,7 +251,7 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 		CustomerID:     paddle.PtrTo(paddleCustomerID),
 		AddressID:      paddle.PtrTo(paddleAddressID),
 		CurrencyCode:   paddle.PtrTo(currency),
-		CollectionMode: paddle.PtrTo(paddle.CollectionModeManual),
+		CollectionMode: paddle.PtrTo(collectionMode),
 		Status:         paddle.PtrTo(txnStatus),
 		CustomData: map[string]interface{}{
 			"flexprice_invoice_id":  flexInvoice.ID,
