@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"time"
 
@@ -92,7 +93,7 @@ func (h *OAuthHandler) InitiateOAuth(c *gin.Context) {
 		Metadata:      req.Metadata,
 		SyncConfig:    req.SyncConfig, // Pass through the sync configuration
 		CSRFState:     csrfState,
-		ExpiresAt:     time.Now().Add(5 * time.Minute),
+		ExpiresAt:     time.Now().UTC().Add(service.OAuthSessionTTL),
 	}
 
 	// Store session in cache (credentials will be encrypted)
@@ -157,8 +158,9 @@ func (h *OAuthHandler) CompleteOAuth(c *gin.Context) {
 		return
 	}
 
-	// Validate CSRF state (constant-time comparison to prevent timing attacks)
-	if session.CSRFState != req.State {
+	// Validate CSRF state (constant-time comparison when lengths match)
+	if len(session.CSRFState) != len(req.State) ||
+		subtle.ConstantTimeCompare([]byte(session.CSRFState), []byte(req.State)) != 1 {
 		h.logger.Warnw("CSRF state mismatch detected",
 			"session_id", req.SessionID,
 			"provider", session.Provider,
@@ -178,8 +180,21 @@ func (h *OAuthHandler) CompleteOAuth(c *gin.Context) {
 		"session_id", req.SessionID,
 		"provider", session.Provider)
 
+	// Normalize provider-specific account identifier for token exchange/connection finalization
+	providerAccountID := req.RealmID
+	if provider == types.OAuthProviderZohoBooks {
+		providerAccountID = req.OrganizationID
+		if session.Metadata == nil {
+			session.Metadata = make(map[string]string)
+		}
+		session.Metadata[types.OAuthMetadataOrganizationID] = req.OrganizationID
+		session.Metadata[types.OAuthMetadataOrganizationName] = req.OrganizationName
+		session.Metadata[types.OAuthMetadataLocation] = req.Location
+		session.Metadata[types.OAuthMetadataAccountsServer] = req.AccountsServer
+	}
+
 	// Exchange code for connection using provider-specific logic
-	connectionID, err := h.oauthService.ExchangeCodeForConnection(ctx, session, req.Code, req.RealmID)
+	connectionID, err := h.oauthService.ExchangeCodeForConnection(ctx, session, req.Code, providerAccountID)
 	if err != nil {
 		// Delete session on connection creation failure
 		_ = h.oauthService.DeleteOAuthSession(ctx, req.SessionID) // Ignore cleanup errors, main error is connection creation

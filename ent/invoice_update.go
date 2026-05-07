@@ -382,6 +382,26 @@ func (iu *InvoiceUpdate) ClearFinalizedAt() *InvoiceUpdate {
 	return iu
 }
 
+// SetLastComputedAt sets the "last_computed_at" field.
+func (iu *InvoiceUpdate) SetLastComputedAt(t time.Time) *InvoiceUpdate {
+	iu.mutation.SetLastComputedAt(t)
+	return iu
+}
+
+// SetNillableLastComputedAt sets the "last_computed_at" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableLastComputedAt(t *time.Time) *InvoiceUpdate {
+	if t != nil {
+		iu.SetLastComputedAt(*t)
+	}
+	return iu
+}
+
+// ClearLastComputedAt clears the value of the "last_computed_at" field.
+func (iu *InvoiceUpdate) ClearLastComputedAt() *InvoiceUpdate {
+	iu.mutation.ClearLastComputedAt()
+	return iu
+}
+
 // SetInvoicePdfURL sets the "invoice_pdf_url" field.
 func (iu *InvoiceUpdate) SetInvoicePdfURL(s string) *InvoiceUpdate {
 	iu.mutation.SetInvoicePdfURL(s)
@@ -708,6 +728,9 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if iu.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(invoice.FieldSubscriptionID, field.TypeString)
 	}
+	if iu.mutation.SubscriptionCustomerIDCleared() {
+		_spec.ClearField(invoice.FieldSubscriptionCustomerID, field.TypeString)
+	}
 	if value, ok := iu.mutation.InvoiceStatus(); ok {
 		_spec.SetField(invoice.FieldInvoiceStatus, field.TypeString, value)
 	}
@@ -788,6 +811,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if iu.mutation.FinalizedAtCleared() {
 		_spec.ClearField(invoice.FieldFinalizedAt, field.TypeTime)
+	}
+	if value, ok := iu.mutation.LastComputedAt(); ok {
+		_spec.SetField(invoice.FieldLastComputedAt, field.TypeTime, value)
+	}
+	if iu.mutation.LastComputedAtCleared() {
+		_spec.ClearField(invoice.FieldLastComputedAt, field.TypeTime)
 	}
 	if iu.mutation.BillingPeriodCleared() {
 		_spec.ClearField(invoice.FieldBillingPeriod, field.TypeString)
@@ -1315,6 +1344,26 @@ func (iuo *InvoiceUpdateOne) ClearFinalizedAt() *InvoiceUpdateOne {
 	return iuo
 }
 
+// SetLastComputedAt sets the "last_computed_at" field.
+func (iuo *InvoiceUpdateOne) SetLastComputedAt(t time.Time) *InvoiceUpdateOne {
+	iuo.mutation.SetLastComputedAt(t)
+	return iuo
+}
+
+// SetNillableLastComputedAt sets the "last_computed_at" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableLastComputedAt(t *time.Time) *InvoiceUpdateOne {
+	if t != nil {
+		iuo.SetLastComputedAt(*t)
+	}
+	return iuo
+}
+
+// ClearLastComputedAt clears the value of the "last_computed_at" field.
+func (iuo *InvoiceUpdateOne) ClearLastComputedAt() *InvoiceUpdateOne {
+	iuo.mutation.ClearLastComputedAt()
+	return iuo
+}
+
 // SetInvoicePdfURL sets the "invoice_pdf_url" field.
 func (iuo *InvoiceUpdateOne) SetInvoicePdfURL(s string) *InvoiceUpdateOne {
 	iuo.mutation.SetInvoicePdfURL(s)
@@ -1671,6 +1720,9 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	if iuo.mutation.SubscriptionIDCleared() {
 		_spec.ClearField(invoice.FieldSubscriptionID, field.TypeString)
 	}
+	if iuo.mutation.SubscriptionCustomerIDCleared() {
+		_spec.ClearField(invoice.FieldSubscriptionCustomerID, field.TypeString)
+	}
 	if value, ok := iuo.mutation.InvoiceStatus(); ok {
 		_spec.SetField(invoice.FieldInvoiceStatus, field.TypeString, value)
 	}
@@ -1751,6 +1803,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.FinalizedAtCleared() {
 		_spec.ClearField(invoice.FieldFinalizedAt, field.TypeTime)
+	}
+	if value, ok := iuo.mutation.LastComputedAt(); ok {
+		_spec.SetField(invoice.FieldLastComputedAt, field.TypeTime, value)
+	}
+	if iuo.mutation.LastComputedAtCleared() {
+		_spec.ClearField(invoice.FieldLastComputedAt, field.TypeTime)
 	}
 	if iuo.mutation.BillingPeriodCleared() {
 		_spec.ClearField(invoice.FieldBillingPeriod, field.TypeString)

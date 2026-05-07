@@ -200,3 +200,45 @@ func (h *FeatureHandler) QueryFeatures(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Clone a feature
+// @ID cloneFeature
+// @Description Clone an existing feature
+// @Tags Features
+// @x-scope "write"
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Source Feature ID"
+// @Param request body dto.CloneFeatureRequest true "Clone configuration"
+// @Success 201 {object} dto.FeatureResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 409 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /features/{id}/clone [post]
+func (h *FeatureHandler) CloneFeature(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("feature ID is required").
+			WithHint("Feature ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.CloneFeatureRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.featureService.CloneFeature(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}

@@ -13,20 +13,23 @@ import (
 )
 
 type CustomerHandler struct {
-	service service.CustomerService
-	billing service.BillingService
-	log     *logger.Logger
+	service                         service.CustomerService
+	billing                         service.BillingService
+	entityIntegrationMappingService service.EntityIntegrationMappingService
+	log                             *logger.Logger
 }
 
 func NewCustomerHandler(
 	service service.CustomerService,
 	billing service.BillingService,
+	entityIntegrationMappingService service.EntityIntegrationMappingService,
 	log *logger.Logger,
 ) *CustomerHandler {
 	return &CustomerHandler{
-		service: service,
-		billing: billing,
-		log:     log,
+		service:                         service,
+		billing:                         billing,
+		entityIntegrationMappingService: entityIntegrationMappingService,
+		log:                             log,
 	}
 }
 
@@ -75,9 +78,18 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 // @Router /customers/{id} [get]
 func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	id := c.Param("id")
+	expand := types.NewExpand(c.Query("expand"))
+	if err := expand.Validate(types.CustomerExpandConfig); err != nil {
+		c.Error(err)
+		return
+	}
 
 	resp, err := h.service.GetCustomer(c.Request.Context(), id)
 	if err != nil {
+		c.Error(err)
+		return
+	}
+	if err := h.attachCustomerIntegrations(c, resp, id, expand); err != nil {
 		c.Error(err)
 		return
 	}
@@ -212,6 +224,12 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /customers/external/{external_id} [get]
 func (h *CustomerHandler) GetCustomerByLookupKey(c *gin.Context) {
+	expand := types.NewExpand(c.Query("expand"))
+	if err := expand.Validate(types.CustomerExpandConfig); err != nil {
+		c.Error(err)
+		return
+	}
+
 	var lookupKey string
 	if c.Param("external_id") != "" {
 		lookupKey = c.Param("external_id")
@@ -229,8 +247,30 @@ func (h *CustomerHandler) GetCustomerByLookupKey(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+	if err := h.attachCustomerIntegrations(c, resp, resp.ID, expand); err != nil {
+		c.Error(err)
+		return
+	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *CustomerHandler) attachCustomerIntegrations(c *gin.Context, resp *dto.CustomerResponse, customerID string, expand types.Expand) error {
+	if resp == nil || !expand.Has(types.ExpandIntegrations) {
+		return nil
+	}
+
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityID = customerID
+	filter.EntityType = types.IntegrationEntityTypeCustomer
+
+	mappings, err := h.entityIntegrationMappingService.GetEntityIntegrationMappings(c.Request.Context(), filter)
+	if err != nil {
+		return err
+	}
+
+	resp.Integrations = mappings.Items
+	return nil
 }
 
 // @Summary Get customer entitlements

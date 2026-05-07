@@ -17,22 +17,16 @@ func ErrorHandler() gin.HandlerFunc {
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last().Err
 
-			// Get display message from hints
-			display := getDisplayMessage(err)
-
-			// Get safe details
-			details := getSafeDetails(err)
+			// Single call resolves both HTTP status and machine-readable code
+			status, code := ierr.ResolveError(err)
 
 			response := ierr.ErrorResponse{
-				Success: false,
-				Error: ierr.ErrorDetail{
-					Display:       display,
-					InternalError: err.Error(),
-					Details:       details,
-				},
+				Code:           code,
+				Message:        getDisplayMessage(err),
+				HTTPStatusCode: status,
+				Details:        getSafeDetails(err),
 			}
 
-			status := ierr.HTTPStatusFromErr(err)
 			c.JSON(status, response)
 		}
 	}

@@ -30,10 +30,10 @@ type SubscriptionLineItem struct {
 	BillingPeriod       types.BillingPeriod                  `db:"billing_period" json:"billing_period"`
 	BillingPeriodCount  int                                  `db:"billing_period_count" json:"billing_period_count"` // from price at create; default 1
 	InvoiceCadence      types.InvoiceCadence                 `db:"invoice_cadence" json:"invoice_cadence"`
-	TrialPeriod         int                                  `db:"trial_period" json:"trial_period"`
 	StartDate           time.Time                            `db:"start_date" json:"start_date,omitempty"`
 	EndDate             time.Time                            `db:"end_date" json:"end_date,omitempty"`
 	SubscriptionPhaseID *string                              `db:"subscription_phase_id" json:"subscription_phase_id,omitempty"`
+	AddonAssociationID  *string                              `db:"addon_association_id" json:"addon_association_id,omitempty"`
 	Metadata            map[string]string                    `db:"metadata" json:"metadata,omitempty"`
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
@@ -76,6 +76,12 @@ func (li *SubscriptionLineItem) IsUsage() bool {
 	return li.PriceType == types.PRICE_TYPE_USAGE && li.MeterID != ""
 }
 
+// IsOneTime returns true when the line item represents a one-time charge
+// (i.e. BillingPeriod == BILLING_PERIOD_ONETIME).
+func (li *SubscriptionLineItem) IsOneTime() bool {
+	return li.BillingPeriod == types.BILLING_PERIOD_ONETIME
+}
+
 // HasCommitment returns true if the line item has commitment configured
 func (li *SubscriptionLineItem) HasCommitment() bool {
 	hasAmountCommitment := li.CommitmentAmount != nil && li.CommitmentAmount.GreaterThan(decimal.Zero)
@@ -109,6 +115,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 	var meterID, meterDisplayName, displayName string
 	var startDate, endDate time.Time
 	var subscriptionPhaseID *string
+	var addonAssociationID *string
 
 	priceType := lo.FromPtr(e.PriceType)
 	if e.MeterID != nil {
@@ -129,6 +136,9 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 	}
 	if e.SubscriptionPhaseID != nil {
 		subscriptionPhaseID = e.SubscriptionPhaseID
+	}
+	if e.AddonAssociationID != nil {
+		addonAssociationID = e.AddonAssociationID
 	}
 
 	// Handle commitment fields
@@ -166,10 +176,10 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		BillingPeriod:           e.BillingPeriod,
 		BillingPeriodCount:      billingPeriodCount,
 		InvoiceCadence:          e.InvoiceCadence,
-		TrialPeriod:             e.TrialPeriod,
 		StartDate:               startDate,
 		EndDate:                 endDate,
 		SubscriptionPhaseID:     subscriptionPhaseID,
+		AddonAssociationID:      addonAssociationID,
 		Metadata:                e.Metadata,
 		EnvironmentID:           e.EnvironmentID,
 		CommitmentAmount:        e.CommitmentAmount,
@@ -195,7 +205,9 @@ func (li *SubscriptionLineItem) GetPeriod(defaultPeriodStart, defaultPeriodEnd t
 	return li.GetPeriodStart(defaultPeriodStart), li.GetPeriodEnd(defaultPeriodEnd)
 }
 
-// GetPeriodStart returns the period start date based on line item dates
+// GetPeriodStart returns the effective billing start for this line item within the given billing period.
+// It clips the line item's StartDate against the period boundary: returns max(StartDate, defaultPeriodStart).
+// Used to prevent double-billing when a line item was created mid-period.
 func (li *SubscriptionLineItem) GetPeriodStart(defaultPeriodStart time.Time) time.Time {
 	// If line item has a start date after default period start, use line item start date
 	if !li.StartDate.IsZero() && (li.StartDate.After(defaultPeriodStart) || li.StartDate.Equal(defaultPeriodStart)) {
@@ -204,7 +216,9 @@ func (li *SubscriptionLineItem) GetPeriodStart(defaultPeriodStart time.Time) tim
 	return defaultPeriodStart
 }
 
-// GetPeriodEnd returns the period end date based on line item dates
+// GetPeriodEnd returns the effective billing end for this line item within the given billing period.
+// It clips the line item's EndDate against the period boundary: returns min(EndDate, defaultPeriodEnd).
+// If EndDate is zero (line item is still active), defaultPeriodEnd is returned.
 func (li *SubscriptionLineItem) GetPeriodEnd(defaultPeriodEnd time.Time) time.Time {
 	// If line item has an end date before default period end, use line item end date
 	if !li.EndDate.IsZero() && (li.EndDate.Before(defaultPeriodEnd) || li.EndDate.Equal(defaultPeriodEnd)) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/service"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -46,26 +47,44 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 		return response, err
 	}
 
+	// Read max workflows config from app config
+	maxWorkflowsPerCronRun := 500 // default
+	if cfg, err := config.NewConfig(); err == nil {
+		if cfg.Temporal.MaxWorkflowsPerCronRun > 0 {
+			maxWorkflowsPerCronRun = cfg.Temporal.MaxWorkflowsPerCronRun
+		}
+	}
+
 	now := time.Now().UTC()
 	offset := 0
 	batchSize := input.BatchSize
 	totalProcessed := 0
+	capReached := false
 
 	// Loop through all subscriptions with pagination
 	for {
+		if capReached {
+			break
+		}
+
 		filter := &types.SubscriptionFilter{
 			QueryFilter: &types.QueryFilter{
 				Limit:  lo.ToPtr(batchSize),
 				Offset: lo.ToPtr(offset),
 				Status: lo.ToPtr(types.StatusPublished),
 			},
-			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
+			SubscriptionStatus:     []types.SubscriptionStatus{types.SubscriptionStatusActive},
+			EffectiveDateForUpdate: &now,
+			SubscriptionTypes: []types.SubscriptionType{
+				types.SubscriptionTypeStandalone,
+				types.SubscriptionTypeParent,
+			},
 			TimeRangeFilter: &types.TimeRangeFilter{
 				EndTime: &now,
 			},
 		}
 
-		subs, err := s.subscriptionService.ListAllTenantSubscriptions(ctx, filter)
+		subs, err := s.subscriptionService.GetSubscriptionsForBillingPeriodUpdate(ctx, filter)
 		if err != nil {
 			logger.Error("Failed to list subscriptions", "offset", offset, "error", err)
 			return response, err
@@ -84,6 +103,13 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 		temporalSvc := temporalService.GetGlobalTemporalService()
 		subItems := subs.Items
 		for _, sub := range subItems {
+			if totalProcessed >= maxWorkflowsPerCronRun {
+				logger.Info("Reached max workflows per cron run, remaining processed next cycle",
+					"max", maxWorkflowsPerCronRun, "triggered", totalProcessed)
+				capReached = true
+				break
+			}
+
 			// update context to include the tenant id
 			ctx = context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
 			ctx = context.WithValue(ctx, types.CtxEnvironmentID, sub.EnvironmentID)

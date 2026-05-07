@@ -112,6 +112,11 @@ func SubscriptionID(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldSubscriptionID, v))
 }
 
+// SubscriptionCustomerID applies equality check predicate on the "subscription_customer_id" field. It's identical to SubscriptionCustomerIDEQ.
+func SubscriptionCustomerID(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldSubscriptionCustomerID, v))
+}
+
 // InvoiceType applies equality check predicate on the "invoice_type" field. It's identical to InvoiceTypeEQ.
 func InvoiceType(v types.InvoiceType) predicate.Invoice {
 	vc := string(v)
@@ -203,6 +208,11 @@ func VoidedAt(v time.Time) predicate.Invoice {
 // FinalizedAt applies equality check predicate on the "finalized_at" field. It's identical to FinalizedAtEQ.
 func FinalizedAt(v time.Time) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldFinalizedAt, v))
+}
+
+// LastComputedAt applies equality check predicate on the "last_computed_at" field. It's identical to LastComputedAtEQ.
+func LastComputedAt(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldLastComputedAt, v))
 }
 
 // BillingPeriod applies equality check predicate on the "billing_period" field. It's identical to BillingPeriodEQ.
@@ -834,6 +844,81 @@ func SubscriptionIDEqualFold(v string) predicate.Invoice {
 // SubscriptionIDContainsFold applies the ContainsFold predicate on the "subscription_id" field.
 func SubscriptionIDContainsFold(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldContainsFold(FieldSubscriptionID, v))
+}
+
+// SubscriptionCustomerIDEQ applies the EQ predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDNEQ applies the NEQ predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDIn applies the In predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldSubscriptionCustomerID, vs...))
+}
+
+// SubscriptionCustomerIDNotIn applies the NotIn predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldSubscriptionCustomerID, vs...))
+}
+
+// SubscriptionCustomerIDGT applies the GT predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDGTE applies the GTE predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDLT applies the LT predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDLTE applies the LTE predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDContains applies the Contains predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDHasPrefix applies the HasPrefix predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDHasSuffix applies the HasSuffix predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDIsNil applies the IsNil predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldSubscriptionCustomerID))
+}
+
+// SubscriptionCustomerIDNotNil applies the NotNil predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldSubscriptionCustomerID))
+}
+
+// SubscriptionCustomerIDEqualFold applies the EqualFold predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldSubscriptionCustomerID, v))
+}
+
+// SubscriptionCustomerIDContainsFold applies the ContainsFold predicate on the "subscription_customer_id" field.
+func SubscriptionCustomerIDContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldSubscriptionCustomerID, v))
 }
 
 // InvoiceTypeEQ applies the EQ predicate on the "invoice_type" field.
@@ -1846,6 +1931,56 @@ func FinalizedAtIsNil() predicate.Invoice {
 // FinalizedAtNotNil applies the NotNil predicate on the "finalized_at" field.
 func FinalizedAtNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldFinalizedAt))
+}
+
+// LastComputedAtEQ applies the EQ predicate on the "last_computed_at" field.
+func LastComputedAtEQ(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldLastComputedAt, v))
+}
+
+// LastComputedAtNEQ applies the NEQ predicate on the "last_computed_at" field.
+func LastComputedAtNEQ(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldLastComputedAt, v))
+}
+
+// LastComputedAtIn applies the In predicate on the "last_computed_at" field.
+func LastComputedAtIn(vs ...time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldLastComputedAt, vs...))
+}
+
+// LastComputedAtNotIn applies the NotIn predicate on the "last_computed_at" field.
+func LastComputedAtNotIn(vs ...time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldLastComputedAt, vs...))
+}
+
+// LastComputedAtGT applies the GT predicate on the "last_computed_at" field.
+func LastComputedAtGT(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldLastComputedAt, v))
+}
+
+// LastComputedAtGTE applies the GTE predicate on the "last_computed_at" field.
+func LastComputedAtGTE(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldLastComputedAt, v))
+}
+
+// LastComputedAtLT applies the LT predicate on the "last_computed_at" field.
+func LastComputedAtLT(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldLastComputedAt, v))
+}
+
+// LastComputedAtLTE applies the LTE predicate on the "last_computed_at" field.
+func LastComputedAtLTE(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldLastComputedAt, v))
+}
+
+// LastComputedAtIsNil applies the IsNil predicate on the "last_computed_at" field.
+func LastComputedAtIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldLastComputedAt))
+}
+
+// LastComputedAtNotNil applies the NotNil predicate on the "last_computed_at" field.
+func LastComputedAtNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldLastComputedAt))
 }
 
 // BillingPeriodEQ applies the EQ predicate on the "billing_period" field.

@@ -2,16 +2,23 @@
 swagger-clean:
 	rm -rf docs/swagger
 
+# Swag v2 pin. Use `go run` for generation so CI never runs a random host `swag` from PATH while
+# expecting $(GOPATH)/bin/swag (install-swag skipped when `which swag` succeeds).
+SWAG_V2_PKG := github.com/swaggo/swag/v2/cmd/swag@v2.0.0-rc5
+
 .PHONY: install-swag
 install-swag:
-	@which swag > /dev/null || (go install github.com/swaggo/swag/cmd/swag@latest)
+	go install $(SWAG_V2_PKG)
 
 .PHONY: swagger
 swagger: swagger-2-0 swagger-3-0
 
-.PHONY: swagger-2-0
-swagger-2-0: install-swag
-	$(shell go env GOPATH)/bin/swag init \
+.PHONY: swagger-2-0-generate
+swagger-2-0-generate:
+	@echo "go mod download (warm cache; swag v2 treats go list stderr as fatal)..."
+	go mod download
+	@echo "Running swag via go run $(SWAG_V2_PKG) ..."
+	go run $(SWAG_V2_PKG) init \
 		--generalInfo cmd/server/main.go \
 		--dir . \
 		--parseDependency \
@@ -22,11 +29,16 @@ swagger-2-0: install-swag
 		--instanceName swagger \
 		--parseVendor \
 		--outputTypes go,json,yaml
-	@make swagger-fix-refs
-	@node scripts/fix_swagger_internal_types.mjs
+
+.PHONY: swagger-2-0-node
+swagger-2-0-node:
+	node scripts/fix_swagger_internal_types.mjs
+
+.PHONY: swagger-2-0
+swagger-2-0: swagger-2-0-generate swagger-fix-refs swagger-2-0-node
 
 .PHONY: swagger-3-0
-swagger-3-0: install-swag
+swagger-3-0:
 	@echo "Converting Swagger 2.0 to OpenAPI 3.0..."
 	@curl -X 'POST' \
 		'https://converter.swagger.io/api/convert' \
@@ -141,22 +153,38 @@ init-db: up migrate-postgres migrate-clickhouse generate-ent migrate-ent seed-db
 # Run postgres migrations
 migrate-postgres:
 	@echo "Running Postgres migrations..."
-	@sleep 5  # Wait for postgres to be ready
-	@docker compose exec -T postgres psql -U flexprice -d flexprice -c "CREATE SCHEMA IF NOT EXISTS extensions;"
-	@docker compose exec -T postgres psql -U flexprice -d flexprice -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" SCHEMA extensions;"
-	@echo "Postgres migrations complete"
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		if docker compose exec -T postgres pg_isready -U flexprice -d flexprice >/dev/null 2>&1; then \
+			echo "Postgres is ready"; \
+			docker compose exec -T postgres psql -U flexprice -d flexprice -c "CREATE SCHEMA IF NOT EXISTS extensions;"; \
+			docker compose exec -T postgres psql -U flexprice -d flexprice -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" SCHEMA extensions;"; \
+			echo "Postgres migrations complete"; \
+			exit 0; \
+		fi; \
+		echo "Postgres not ready yet (attempt $$i/10), waiting 3s..."; \
+		sleep 3; \
+	done; \
+	echo "Error: Postgres failed to become ready"; exit 1
 
 # Run clickhouse migrations
 migrate-clickhouse:
 	@echo "Running Clickhouse migrations..."
-	@sleep 5  # Wait for clickhouse to be ready
-	@for file in migrations/clickhouse/*.sql; do \
-		if [ -f "$$file" ]; then \
-			echo "Running migration: $$file"; \
-			docker compose exec -T clickhouse clickhouse-client --user=flexprice --password=flexprice123 --database=flexprice --multiquery < "$$file"; \
-		fi \
-	done
-	@echo "Clickhouse migrations complete"
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		if docker compose exec -T clickhouse clickhouse-client --user=flexprice --password=flexprice123 --database=flexprice --query "SELECT 1" >/dev/null 2>&1; then \
+			echo "Clickhouse is ready"; \
+			for file in migrations/clickhouse/*.sql; do \
+				if [ -f "$$file" ]; then \
+					echo "Running migration: $$file"; \
+					docker compose exec -T clickhouse clickhouse-client --user=flexprice --password=flexprice123 --database=flexprice --multiquery < "$$file" || true; \
+				fi; \
+			done; \
+			echo "Clickhouse migrations complete"; \
+			exit 0; \
+		fi; \
+		echo "Clickhouse not ready yet (attempt $$i/10), waiting 3s..."; \
+		sleep 3; \
+	done; \
+	echo "Error: Clickhouse failed to become ready"; exit 1
 
 # Seed initial data
 seed-db:
@@ -168,24 +196,40 @@ seed-db:
 .PHONY: init-kafka
 init-kafka:
 	@echo "Creating Kafka topics..."
-	@for i in 1 2 3 4 5; do \
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
 		echo "Attempt $$i: Checking if Kafka is ready..."; \
 		if docker compose exec -T kafka kafka-topics --bootstrap-server kafka:9092 --list >/dev/null 2>&1; then \
 			echo "Kafka is ready!"; \
-			docker compose exec -T kafka kafka-topics --create --if-not-exists \
-				--bootstrap-server kafka:9092 \
-				--topic events \
-				--partitions 1 \
-				--replication-factor 1 \
-				--config cleanup.policy=delete \
-				--config retention.ms=604800000; \
+			for topic in \
+				events \
+				events_lazy \
+				events_dlq \
+				events_backfill \
+				events_post_processing \
+				events_post_processing_backfill \
+				system_events \
+				wallet_alert \
+				onboarding_events \
+				staging_benchmarking \
+				prod_events_v4 \
+				staging_events_backfill \
+				staging_events; do \
+				echo "Creating topic: $$topic"; \
+				docker compose exec -T kafka kafka-topics --create --if-not-exists \
+					--bootstrap-server kafka:9092 \
+					--topic $$topic \
+					--partitions 1 \
+					--replication-factor 1 \
+					--config cleanup.policy=delete \
+					--config retention.ms=604800000; \
+			done; \
 			echo "Kafka topics created successfully"; \
 			exit 0; \
 		fi; \
-		echo "Kafka not ready yet, waiting..."; \
+		echo "Kafka not ready yet, waiting 5s..."; \
 		sleep 5; \
 	done; \
-	echo "Error: Kafka failed to become ready after 5 attempts"; \
+	echo "Error: Kafka failed to become ready after 10 attempts"; \
 	exit 1
 
 # Clean all docker containers and volumes related to the project
@@ -244,7 +288,7 @@ dev-setup:
 	@echo "Step 2: Building FlexPrice application image..."
 	@make build-image
 	@echo "Step 3: Running database migrations and initializing Kafka..."
-	@make init-db init-kafka migrate-ent seed-db 
+	@make migrate-postgres migrate-clickhouse migrate-ent seed-db init-kafka
 	@echo "Step 4: Starting FlexPrice services..."
 	@make start-flexprice
 	@echo ""
@@ -254,6 +298,10 @@ dev-setup:
 	@echo "   - Temporal UI:  http://localhost:8088"
 	@echo "   - Kafka UI:     http://localhost:8084 (with profile 'dev')"
 	@echo "   - ClickHouse:   http://localhost:8123"
+	@echo ""
+	@echo "🔑 Default API Key (for local testing):"
+	@echo "   sk_local_flexprice_test_key"
+	@echo "   (pass as: -H 'x-api-key: sk_local_flexprice_test_key')"
 	@echo ""
 	@echo "💡 Useful commands:"
 	@echo "   - make restart-flexprice  # Restart FlexPrice services"
@@ -267,11 +315,7 @@ apply-migration:
 		exit 1; \
 	fi
 	@echo "Applying migration file: $(file)"
-	@PGPASSWORD=$(shell grep -A 2 "postgres:" config.yaml | grep password | awk '{print $$2}') \
-		psql -h $(shell grep -A 2 "postgres:" config.yaml | grep host | awk '{print $$2}') \
-		-U $(shell grep -A 2 "postgres:" config.yaml | grep username | awk '{print $$2}') \
-		-d $(shell grep -A 2 "postgres:" config.yaml | grep database | awk '{print $$2}') \
-		-f $(file)
+	@docker compose exec -T postgres psql -U flexprice -d flexprice < $(file)
 	@echo "Migration applied successfully"
 
 .PHONY: docker-build-local
@@ -456,7 +500,7 @@ sdk-all-local:
 # Generate Go SDK only with Speakeasy
 speakeasy-go-sdk:
 	@echo "🔨 Generating Go SDK with Speakeasy..."
-	@bash -c 'set -o pipefail; CI=true TERM=dumb speakeasy run --target flexprice-go -y < /dev/null | cat'
+	@bash -c 'set -o pipefail; CI=true TERM=dumb speakeasy run --target flexprice-go -y --skip-compile < /dev/null | cat'
 	@echo "✓ Go SDK generated successfully"
 
 # Clean only Go SDK
@@ -514,15 +558,46 @@ test-sdk test-sdks:
 		echo ""; \
 		echo "❌ SDK tests need API credentials. Set and export:"; \
 		echo "   export FLEXPRICE_API_KEY=\"your-api-key\""; \
-		echo "   export FLEXPRICE_API_HOST=\"us.api.flexprice.io\"   # or localhost:8080 for local"; \
+		echo "   export FLEXPRICE_API_HOST=\"us.api.flexprice.io/v1\"   # or localhost:8080/v1 for local"; \
 		echo ""; \
 		exit 1; \
 	fi
 	@echo "Running SDK tests (Go, Python, TypeScript)..."
 	@echo "  FLEXPRICE_API_HOST=$$FLEXPRICE_API_HOST"
-	@echo "--- Go (install deps + test) ---"; (cd api/tests/go && go mod tidy && go mod download && go run -tags published test_sdk.go) || true
-	@echo "--- Python (install deps + test) ---"; (cd api/tests/python && ( [ -d .venv ] || python3 -m venv .venv ) && .venv/bin/pip install -q -r requirements.txt && .venv/bin/python test_sdk.py) || true
+	@echo "--- Go (install deps + test) ---"; (cd api/tests/go && GOPRIVATE=github.com/flexprice/* go mod tidy && GOPRIVATE=github.com/flexprice/* go mod download && GOPRIVATE=github.com/flexprice/* go run -tags published test_sdk.go) || true
+	@echo "--- Python (install deps + test) ---"; (cd api/tests/python && \
+		PY=; \
+		for c in python3.13 python3.12 python3.11 python3.10 python3; do \
+			if command -v $$c >/dev/null 2>&1 && $$c -c 'import sys; sys.exit(0 if sys.version_info>=(3,10) else 1)' 2>/dev/null; then PY=$$c; break; fi; \
+		done; \
+		if [ -z "$$PY" ]; then \
+			echo "❌ Python 3.10+ required (PyPI flexprice). macOS: brew install python@3.12  (then re-run; we try python3.12 … python3.10 before python3)"; \
+			exit 1; \
+		fi; \
+		if [ ! -d .venv ] || ! [ -x .venv/bin/python ] || ! .venv/bin/python -c 'import sys; sys.exit(0 if sys.version_info>=(3,10) else 1)' 2>/dev/null || ! .venv/bin/python -m pip --version >/dev/null 2>&1; then \
+			rm -rf .venv && $$PY -m venv .venv; \
+		fi && \
+		echo "  using $$(.venv/bin/python --version)" && \
+		.venv/bin/python -m pip install -q --upgrade pip setuptools wheel && \
+		.venv/bin/python -m pip install -q -r requirements.txt && \
+		.venv/bin/python test_sdk.py) || true
 	@echo "--- TypeScript (install deps + test) ---"; (cd api/tests/ts && npm install && npm test) || true
 	@echo "✓ All SDK tests finished"
 
-.PHONY: sdk-all test-sdk test-sdks
+# Run the orchestrated sanity integration test suite.
+# Usage:
+#   export FLEXPRICE_API_KEY=sk_...
+#   make test-suite
+# Host defaults to localhost:8080/v1 (http for localhost, https for remote).
+test-suite:
+	@if [ -z "$$FLEXPRICE_API_KEY" ]; then \
+		echo ""; \
+		echo "❌ Need an API key:"; \
+		echo "   export FLEXPRICE_API_KEY=sk_..."; \
+		echo "   make test-suite"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@cd integration-testing-suite/go && go run .
+
+.PHONY: sdk-all test-sdk test-sdks test-suite

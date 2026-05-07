@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -14,6 +15,8 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
+	"strings"
 )
 
 const invoiceLineItemBatchSize = 1000
@@ -578,4 +581,393 @@ func (r *invoiceLineItemRepository) List(ctx context.Context, filter *types.Invo
 	}
 	SetSpanSuccess(span)
 	return result, nil
+}
+
+// GetRevenueByCustomer aggregates invoice line item amounts grouped by customer_id
+// and price_type for DRAFT/FINALIZED invoices within the given period.
+func (r *invoiceLineItemRepository) GetRevenueByCustomer(
+	ctx context.Context,
+	periodStart, periodEnd time.Time,
+	customerIDs []string,
+) ([]domaininvoice.RevenueByCustomerRow, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "invoice_line_item", "get_revenue_by_customer", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": envID,
+		"period_start":   periodStart,
+		"period_end":     periodEnd,
+		"customer_count": len(customerIDs),
+	})
+	defer FinishSpan(span)
+
+	// Build the query with optional customer filter
+	customerFilter := ""
+	args := []interface{}{tenantID, envID, periodStart, periodEnd}
+
+	if len(customerIDs) > 0 {
+		placeholders := make([]string, len(customerIDs))
+		for i, id := range customerIDs {
+			placeholders[i] = fmt.Sprintf("$%d", i+5)
+			args = append(args, id)
+		}
+		customerFilter = " AND ili.customer_id IN (" + strings.Join(placeholders, ", ") + ")"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			ili.customer_id,
+			ili.price_type,
+			COALESCE(SUM(ili.amount), 0)::text AS amount
+		FROM invoice_line_items ili
+		INNER JOIN invoices inv
+			ON inv.id = ili.invoice_id
+			AND inv.invoice_status IN ('DRAFT', 'FINALIZED')
+			AND inv.status = 'published'
+		WHERE ili.period_start >= $3
+			AND ili.period_end < $4
+			AND ili.status = 'published'
+			AND ili.tenant_id = $1
+			AND ili.environment_id = $2
+			%s
+		GROUP BY ili.customer_id, ili.price_type
+	`, customerFilter)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to get revenue by customer").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []domaininvoice.RevenueByCustomerRow
+	for rows.Next() {
+		var row domaininvoice.RevenueByCustomerRow
+		var amountStr string
+		if err := rows.Scan(&row.CustomerID, &row.PriceType, &amountStr); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to scan revenue row").
+				Mark(ierr.ErrDatabase)
+		}
+		row.Amount, err = decimal.NewFromString(amountStr)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to parse revenue amount").
+				Mark(ierr.ErrDatabase)
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to iterate revenue rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return results, nil
+}
+
+// GetVoiceMinutesByCustomer aggregates invoice line item quantity (in milliseconds)
+// grouped by customer_id for a specific meter within the given period.
+func (r *invoiceLineItemRepository) GetVoiceMinutesByCustomer(
+	ctx context.Context,
+	periodStart, periodEnd time.Time,
+	meterID string,
+	customerIDs []string,
+) ([]domaininvoice.VoiceMinutesRow, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "invoice_line_item", "get_voice_minutes_by_customer", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": envID,
+		"period_start":   periodStart,
+		"period_end":     periodEnd,
+		"meter_id":       meterID,
+		"customer_count": len(customerIDs),
+	})
+	defer FinishSpan(span)
+
+	// Build the query with optional customer filter
+	customerFilter := ""
+	args := []interface{}{tenantID, envID, periodStart, periodEnd, meterID}
+
+	if len(customerIDs) > 0 {
+		placeholders := make([]string, len(customerIDs))
+		for i, id := range customerIDs {
+			placeholders[i] = fmt.Sprintf("$%d", i+6)
+			args = append(args, id)
+		}
+		customerFilter = " AND ili.customer_id IN (" + strings.Join(placeholders, ", ") + ")"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			ili.customer_id,
+			COALESCE(SUM(ili.quantity), 0)::text AS usage_ms
+		FROM invoice_line_items ili
+		INNER JOIN invoices inv
+			ON inv.id = ili.invoice_id
+			AND inv.invoice_status IN ('DRAFT', 'FINALIZED')
+			AND inv.status = 'published'
+		WHERE ili.period_start >= $3
+			AND ili.period_end < $4
+			AND ili.status = 'published'
+			AND ili.meter_id = $5
+			AND ili.tenant_id = $1
+			AND ili.environment_id = $2
+			%s
+		GROUP BY ili.customer_id
+	`, customerFilter)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to get voice minutes by customer").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []domaininvoice.VoiceMinutesRow
+	for rows.Next() {
+		var row domaininvoice.VoiceMinutesRow
+		var usageMsStr string
+		if err := rows.Scan(&row.CustomerID, &usageMsStr); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to scan voice minutes row").
+				Mark(ierr.ErrDatabase)
+		}
+		row.UsageMs, err = decimal.NewFromString(usageMsStr)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to parse voice minutes quantity").
+				Mark(ierr.ErrDatabase)
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to iterate voice minutes rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return results, nil
+}
+
+func validateRevenueGraphDateTruncPart(part string) error {
+	if part == "day" || part == "month" {
+		return nil
+	}
+	return ierr.NewError("invalid date_trunc granularity").
+		WithHint("date_trunc part must be 'day' or 'month'").
+		WithReportableDetails(map[string]interface{}{"date_trunc_part": part}).
+		Mark(ierr.ErrValidation)
+}
+
+// GetRevenueTimeSeries aggregates invoice line item amounts by calendar bucket and price_type.
+func (r *invoiceLineItemRepository) GetRevenueTimeSeries(
+	ctx context.Context,
+	periodStart, periodEnd time.Time,
+	dateTruncPart string,
+	customerIDs []string,
+) ([]domaininvoice.RevenueTimeSeriesRow, error) {
+	if err := validateRevenueGraphDateTruncPart(dateTruncPart); err != nil {
+		return nil, err
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "invoice_line_item", "get_revenue_time_series", map[string]interface{}{
+		"tenant_id":       tenantID,
+		"environment_id":  envID,
+		"period_start":    periodStart,
+		"period_end":      periodEnd,
+		"date_trunc_part": dateTruncPart,
+		"customer_count":  len(customerIDs),
+	})
+	defer FinishSpan(span)
+
+	tzTruncExpr := "date_trunc($1::text, ili.period_start AT TIME ZONE 'UTC')"
+	customerFilter := ""
+	args := []interface{}{dateTruncPart, tenantID, envID, periodStart, periodEnd}
+
+	if len(customerIDs) > 0 {
+		placeholders := make([]string, len(customerIDs))
+		for i, id := range customerIDs {
+			placeholders[i] = fmt.Sprintf("$%d", i+6)
+			args = append(args, id)
+		}
+		customerFilter = " AND ili.customer_id IN (" + strings.Join(placeholders, ", ") + ")"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s AS window_start,
+			ili.price_type,
+			COALESCE(SUM(ili.amount), 0)::text AS amount
+		FROM invoice_line_items ili
+		INNER JOIN invoices inv
+			ON inv.id = ili.invoice_id
+			AND inv.invoice_status IN ('DRAFT', 'FINALIZED')
+			AND inv.status = 'published'
+		WHERE ili.period_start >= $4
+			AND ili.period_end < $5
+			AND ili.status = 'published'
+			AND ili.tenant_id = $2
+			AND ili.environment_id = $3
+			%s
+		GROUP BY %s, ili.price_type
+		ORDER BY window_start ASC
+	`, tzTruncExpr, customerFilter, tzTruncExpr)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to get revenue time series").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []domaininvoice.RevenueTimeSeriesRow
+	for rows.Next() {
+		var row domaininvoice.RevenueTimeSeriesRow
+		var amountStr string
+		if err := rows.Scan(&row.WindowStart, &row.PriceType, &amountStr); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to scan revenue time series row").
+				Mark(ierr.ErrDatabase)
+		}
+		row.Amount, err = decimal.NewFromString(amountStr)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to parse revenue time series amount").
+				Mark(ierr.ErrDatabase)
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to iterate revenue time series rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return results, nil
+}
+
+// GetVoiceMinutesTimeSeries aggregates voice meter quantity (ms) by calendar bucket.
+func (r *invoiceLineItemRepository) GetVoiceMinutesTimeSeries(
+	ctx context.Context,
+	periodStart, periodEnd time.Time,
+	meterID, dateTruncPart string,
+	customerIDs []string,
+) ([]domaininvoice.VoiceMinutesTimeSeriesRow, error) {
+	if err := validateRevenueGraphDateTruncPart(dateTruncPart); err != nil {
+		return nil, err
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "invoice_line_item", "get_voice_minutes_time_series", map[string]interface{}{
+		"tenant_id":       tenantID,
+		"environment_id":  envID,
+		"period_start":    periodStart,
+		"period_end":      periodEnd,
+		"meter_id":        meterID,
+		"date_trunc_part": dateTruncPart,
+		"customer_count":  len(customerIDs),
+	})
+	defer FinishSpan(span)
+
+	tzTruncExpr := "date_trunc($1::text, ili.period_start AT TIME ZONE 'UTC')"
+	customerFilter := ""
+	args := []interface{}{dateTruncPart, tenantID, envID, periodStart, periodEnd, meterID}
+
+	if len(customerIDs) > 0 {
+		placeholders := make([]string, len(customerIDs))
+		for i, id := range customerIDs {
+			placeholders[i] = fmt.Sprintf("$%d", i+7)
+			args = append(args, id)
+		}
+		customerFilter = " AND ili.customer_id IN (" + strings.Join(placeholders, ", ") + ")"
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			%s AS window_start,
+			COALESCE(SUM(ili.quantity), 0)::text AS usage_ms
+		FROM invoice_line_items ili
+		INNER JOIN invoices inv
+			ON inv.id = ili.invoice_id
+			AND inv.invoice_status IN ('DRAFT', 'FINALIZED')
+			AND inv.status = 'published'
+		WHERE ili.period_start >= $4
+			AND ili.period_end < $5
+			AND ili.status = 'published'
+			AND ili.meter_id = $6
+			AND ili.tenant_id = $2
+			AND ili.environment_id = $3
+			%s
+		GROUP BY %s
+		ORDER BY window_start ASC
+	`, tzTruncExpr, customerFilter, tzTruncExpr)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to get voice minutes time series").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []domaininvoice.VoiceMinutesTimeSeriesRow
+	for rows.Next() {
+		var row domaininvoice.VoiceMinutesTimeSeriesRow
+		var usageMsStr string
+		if err := rows.Scan(&row.WindowStart, &usageMsStr); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to scan voice minutes time series row").
+				Mark(ierr.ErrDatabase)
+		}
+		row.UsageMs, err = decimal.NewFromString(usageMsStr)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("failed to parse voice minutes time series quantity").
+				Mark(ierr.ErrDatabase)
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("failed to iterate voice minutes time series rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return results, nil
 }

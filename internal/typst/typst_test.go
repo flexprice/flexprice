@@ -207,6 +207,47 @@ func (s *TypstCompilerSuite) TestInvoiceCompilation() {
 	s.NoError(err)
 }
 
+// Go json.Marshal encodes nil slices as null; the invoice template must still compile (draft with no line items).
+func (s *TypstCompilerSuite) TestInvoiceCompilationNullLineItems() {
+	invoiceJSON := []byte(`{
+		"currency": "USD",
+		"id": "inv-1",
+		"invoice_status": "DRAFT",
+		"invoice_number": "",
+		"issuing_date": "",
+		"due_date": "",
+		"amount_due": 0,
+		"subtotal": 0,
+		"total_discount": 0,
+		"total_prepaid_credits_applied": 0,
+		"total_tax": 0,
+		"notes": "",
+		"vat": 0,
+		"billing_reason": "",
+		"period_start": "",
+		"period_end": "",
+		"biller": {
+			"name": "Company Inc.",
+			"email": "",
+			"website": "",
+			"help_email": "",
+			"payment_instructions": "",
+			"address": {"street": "", "city": "", "postal_code": "", "state": "", "country": ""}
+		},
+		"recipient": {
+			"name": "John Doe",
+			"email": "",
+			"address": {"street": "", "city": "", "postal_code": "", "state": "", "country": ""}
+		},
+		"line_items": null,
+		"applied_taxes": null,
+		"applied_discounts": null
+	}`)
+
+	_, err := s.compiler.CompileTemplate(types.TemplateInvoiceDefault, invoiceJSON)
+	s.NoError(err)
+}
+
 func (s *TypstCompilerSuite) TestOneTimeInvoiceCompilation() {
 	// Create a JSON input for a one-time invoice (e.g., purchased credits)
 	invoiceJSON := []byte(`{

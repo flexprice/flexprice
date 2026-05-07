@@ -112,7 +112,7 @@ func CopyPlanChargesToAddons() error {
 			BillingModel:       p.BillingModel,
 			BillingCadence:     p.BillingCadence,
 			InvoiceCadence:     p.InvoiceCadence,
-			TrialPeriod:        p.TrialPeriod,
+			TrialPeriodDays:    p.TrialPeriodDays,
 			TierMode:           p.TierMode,
 			Tiers:              p.Tiers,
 			MeterID:            p.MeterID,

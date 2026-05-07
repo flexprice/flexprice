@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -66,10 +67,16 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 		Currency: strings.ToUpper(string(inv.Currency)), // HubSpot requires UPPERCASE (e.g., "USD")
 	}
 
-	// Set due date (Unix timestamp in milliseconds)
+	// Set due date (Unix timestamp in milliseconds).
+	// Clamp to at least 15 minutes from now so wallet top-up invoices
+	// (DueDate = time.Now()) don't fail HubSpot validation.
 	if inv.DueDate != nil {
-		dueDate := inv.DueDate.UnixMilli()
-		properties.DueDate = strconv.FormatInt(dueDate, 10)
+		minDueDate := time.Now().UTC().Add(15 * time.Minute)
+		dueDate := *inv.DueDate
+		if dueDate.Before(minDueDate) {
+			dueDate = minDueDate
+		}
+		properties.DueDate = strconv.FormatInt(dueDate.UnixMilli(), 10)
 	}
 
 	hubspotInvoice, err := s.client.CreateInvoice(ctx, &InvoiceCreateRequest{

@@ -19,6 +19,11 @@ func LoggingMiddleware(log *logger.Logger) gin.HandlerFunc {
 		// Process request
 		c.Next()
 
+		// Skip logging for health check endpoint
+		if path == "/health" {
+			return
+		}
+
 		// Calculate latency
 		latency := time.Since(start)
 

@@ -1,0 +1,4 @@
+# Pin flexprice from PyPI when not testing the local api/python tree.
+flexprice==2.1.1
+pydantic>=2
+httpx>=0.28

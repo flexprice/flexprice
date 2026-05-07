@@ -577,6 +577,9 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 		return
 	}
 
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
 	if filter.GetLimit() == 0 {
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}

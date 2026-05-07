@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -44,6 +45,8 @@ type Configuration struct {
 	FeatureUsageTracking       FeatureUsageTrackingConfig       `mapstructure:"feature_usage_tracking" validate:"required"`
 	FeatureUsageTrackingLazy   FeatureUsageTrackingLazyConfig   `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
 	FeatureUsageTrackingReplay FeatureUsageTrackingReplayConfig `mapstructure:"feature_usage_tracking_replay" validate:"required"`
+	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
+	UsageBenchmark             UsageBenchmarkConfig             `mapstructure:"usage_benchmark" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -54,6 +57,16 @@ type Configuration struct {
 	Redis                      RedisConfig                      `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing      RawEventsReprocessingConfig      `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
+	IntegrationEvents          IntegrationEventsConfig          `mapstructure:"integration_events" validate:"omitempty"`
+	OnboardingEvents           OnboardingEventsConfig           `mapstructure:"onboarding_events" validate:"omitempty"`
+	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
+	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
+}
+
+// GeminiConfig holds Google Gemini API settings for server-side AI pricing parse (portal).
+type GeminiConfig struct {
+	APIKey string `mapstructure:"api_key" validate:"omitempty"`
+	Model  string `mapstructure:"model" validate:"omitempty"`
 }
 
 type CacheConfig struct {
@@ -129,10 +142,24 @@ type LoggingConfig struct {
 	Level   types.LogLevel `mapstructure:"level" validate:"required"`
 	DBLevel types.LogLevel `mapstructure:"db_level" validate:"required"`
 
+	// Service identity fields added to every log line
+	ServiceName string `mapstructure:"service_name" validate:"omitempty"`
+	Environment string `mapstructure:"environment" validate:"omitempty"`
+	Region      string `mapstructure:"region" validate:"omitempty"`
+
 	// Fluentd configuration
 	FluentdEnabled bool   `mapstructure:"fluentd_enabled" default:"false"`
 	FluentdHost    string `mapstructure:"fluentd_host" validate:"omitempty"`
 	FluentdPort    int    `mapstructure:"fluentd_port" validate:"omitempty"`
+
+	// OpenTelemetry log export configuration (works with SigNoz, Grafana, Datadog, etc.)
+	OtelEnabled    bool   `mapstructure:"otel_enabled" default:"false"`
+	OtelEndpoint   string `mapstructure:"otel_endpoint" validate:"omitempty"`    // e.g. <host>:<port>
+	OtelInsecure   bool   `mapstructure:"otel_insecure" default:"false"`         // set true for local collector without TLS
+	OtelProtocol   string `mapstructure:"otel_protocol" default:"grpc"`          // grpc (default) or http
+	OtelAuthHeader string `mapstructure:"otel_auth_header" validate:"omitempty"` // header name
+	OtelAuthValue  string `mapstructure:"otel_auth_value" validate:"omitempty"`  // header value / token
+	OtelDebug      bool   `mapstructure:"otel_debug" default:"false"`            // use synchronous SimpleProcessor and verbose stderr output
 }
 
 type PostgresConfig struct {
@@ -183,12 +210,29 @@ type PyroscopeConfig struct {
 }
 
 type TemporalConfig struct {
-	Address    string `mapstructure:"address" validate:"required"`
-	TaskQueue  string `mapstructure:"task_queue" validate:"required"`
-	Namespace  string `mapstructure:"namespace" validate:"required"`
-	APIKey     string `mapstructure:"api_key"`
-	APIKeyName string `mapstructure:"api_key_name"`
-	TLS        bool   `mapstructure:"tls"`
+	Address                string               `mapstructure:"address" validate:"required"`
+	TaskQueue              string               `mapstructure:"task_queue" validate:"required"`
+	Namespace              string               `mapstructure:"namespace" validate:"required"`
+	APIKey                 string               `mapstructure:"api_key"`
+	APIKeyName             string               `mapstructure:"api_key_name"`
+	TLS                    bool                 `mapstructure:"tls"`
+	MaxWorkflowsPerCronRun int                  `mapstructure:"max_workflows_per_cron_run"`
+	Worker                 TemporalWorkerConfig `mapstructure:"worker"`
+}
+
+type TemporalWorkerConfig struct {
+	// MaxConcurrentActivityExecutionSize is the max number of activities executed concurrently per worker.
+	// Default: 10
+	MaxConcurrentActivityExecutionSize int `mapstructure:"max_concurrent_activity_execution_size"`
+	// MaxConcurrentWorkflowTaskExecutionSize is the max number of workflow tasks executed concurrently per worker.
+	// Default: 10
+	MaxConcurrentWorkflowTaskExecutionSize int `mapstructure:"max_concurrent_workflow_task_execution_size"`
+	// WorkerActivitiesPerSecond is the rate limit for activities per second per worker. 0 means unlimited.
+	// Default: 5
+	WorkerActivitiesPerSecond float64 `mapstructure:"worker_activities_per_second"`
+	// TaskQueueActivitiesPerSecond is the rate limit for activities per second across all workers for the task queue. 0 means unlimited.
+	// Default: 0 (unlimited)
+	TaskQueueActivitiesPerSecond float64 `mapstructure:"task_queue_activities_per_second"`
 }
 
 type SecretsConfig struct {
@@ -268,6 +312,23 @@ type FeatureUsageTrackingReplayConfig struct {
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_replay"`
 }
 
+// MeterUsageTrackingConfig configures the meter_usage pipeline consumer
+type MeterUsageTrackingConfig struct {
+	Enabled                  bool     `mapstructure:"enabled" default:"true"`
+	Topic                    string   `mapstructure:"topic" default:"events"`
+	RateLimit                int64    `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup            string   `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
+	PropertiesEnabledTenants []string `mapstructure:"properties_enabled_tenants"`
+}
+
+// UsageBenchmarkConfig configures the usage benchmarking consumer
+type UsageBenchmarkConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"false"`
+	Topic         string `mapstructure:"topic" default:"staging_benchmarking"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_usage_benchmark_service"`
+}
+
 type WalletBalanceAlertConfig struct {
 	// Rate limit in messages consumed per second
 	Enabled       bool   `mapstructure:"enabled" default:"true"`
@@ -287,6 +348,31 @@ type RawEventConsumptionConfig struct {
 	OutputTopic   string `mapstructure:"output_topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_raw_event_processing"`
+}
+
+type OnboardingEventsConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"staging_onboarding_events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"100"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"onboarding_events_consumer"`
+	MaxRetries    int    `mapstructure:"max_retries" default:"3"`
+}
+
+// WebhookRetryJobConfig configures the Temporal stale-webhook retry cron job.
+// All filtering is applied by the activity after the DB query.
+type WebhookRetryJobConfig struct {
+	// Enabled is a kill switch — false exits the activity immediately with zero counts.
+	Enabled bool `mapstructure:"enabled" default:"true"`
+	// MaxAttempts is the maximum number of delivery failures before a system_event is
+	// abandoned by the retry job. Replaces the hardcoded FailureCountLT(4) in the query.
+	MaxAttempts int `mapstructure:"max_attempts" default:"5"`
+	// RateLimit is the maximum number of webhook deliveries per second within a single
+	// cron job run (token-bucket, golang.org/x/time/rate).
+	RateLimit int `mapstructure:"rate_limit" default:"5"`
+	// ExcludedTenants is a flat list of tenant IDs to skip entirely. Empty = process all.
+	ExcludedTenants []string `mapstructure:"excluded_tenants"`
+	// AllowedEventTypes is a whitelist of event_name values to retry. Empty = retry all.
+	AllowedEventTypes []string `mapstructure:"allowed_event_types"`
 }
 
 type EnvAccessConfig struct {
@@ -348,7 +434,7 @@ type RedisConfig struct {
 func NewConfig() (*Configuration, error) {
 	v := viper.New()
 
-	// Step 1: Load `.env` if it exists
+	// Step 1: Load `.env` then `.env.local` if they exist.
 	_ = godotenv.Load()
 
 	// Step 2: Initialize Viper
@@ -363,6 +449,25 @@ func NewConfig() (*Configuration, error) {
 
 	// Step 4: Environment variable key mapping (e.g., FLEXPRICE_KAFKA_CONSUMER_GROUP)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// Bind bare env vars (no FLEXPRICE_ prefix) for service identity fields
+	_ = v.BindEnv("logging.service_name", "SERVICE_NAME")
+	_ = v.BindEnv("logging.environment", "ENVIRONMENT")
+	_ = v.BindEnv("logging.region", "REGION")
+
+	// Explicitly bind OTel logging vars — AutomaticEnv can miss nested keys with underscores
+	_ = v.BindEnv("logging.otel_enabled", "FLEXPRICE_LOGGING_OTEL_ENABLED")
+	_ = v.BindEnv("logging.otel_endpoint", "FLEXPRICE_LOGGING_OTEL_ENDPOINT")
+	_ = v.BindEnv("logging.otel_insecure", "FLEXPRICE_LOGGING_OTEL_INSECURE")
+	_ = v.BindEnv("logging.otel_protocol", "FLEXPRICE_LOGGING_OTEL_PROTOCOL")
+	_ = v.BindEnv("logging.otel_auth_header", "FLEXPRICE_LOGGING_OTEL_AUTH_HEADER")
+	_ = v.BindEnv("logging.otel_auth_value", "FLEXPRICE_LOGGING_OTEL_AUTH_VALUE")
+	_ = v.BindEnv("logging.otel_debug", "FLEXPRICE_LOGGING_OTEL_DEBUG")
+
+	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
+	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
+	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
+	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -379,13 +484,15 @@ func NewConfig() (*Configuration, error) {
 		return nil, fmt.Errorf("unable to decode into config struct, %v", err)
 	}
 
-	// Step 6: Parse API keys
-	apiKeysStr := v.GetString("auth.api_key.keys")
-	// Parse API keys JSON if present
-	if apiKeysStr != "" {
+	// Step 6: Parse API keys from env var (JSON string override).
+	// We read the OS env var directly instead of via Viper because the value is a JSON
+	// string — Viper/mapstructure would try to decode it as a map and panic during
+	// Unmarshal. Reading it here (after Unmarshal) avoids that conflict.
+	apiKeysEnv := os.Getenv("FLEXPRICE_AUTH_API_KEY_KEYS")
+	if apiKeysEnv != "" {
 		var apiKeys map[string]APIKeyDetails
-		if err := json.Unmarshal([]byte(apiKeysStr), &apiKeys); err != nil {
-			return nil, fmt.Errorf("failed to parse API keys JSON: %v", err)
+		if err := json.Unmarshal([]byte(apiKeysEnv), &apiKeys); err != nil {
+			return nil, fmt.Errorf("failed to parse FLEXPRICE_AUTH_API_KEY_KEYS JSON: %v", err)
 		}
 		cfg.Auth.APIKey.Keys = apiKeys
 	}

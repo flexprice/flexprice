@@ -1,21 +1,20 @@
 /**
  * FlexPrice TypeScript SDK – Quick start example
  *
- * Creates a client, creates a customer, and ingests one event.
- * Set FLEXPRICE_API_KEY (and optionally FLEXPRICE_API_HOST) in .env or environment.
+ * Default base URL: https://us.api.flexprice.io/v1
+ * Override with FLEXPRICE_API_HOST (full URL). Set FLEXPRICE_API_KEY in .env or environment.
  */
 
 import { FlexPrice } from "@flexprice/sdk";
 
 const apiKey = process.env.FLEXPRICE_API_KEY;
-const apiHost = process.env.FLEXPRICE_API_HOST ?? "us.api.flexprice.io";
+const serverURL =
+  process.env.FLEXPRICE_API_HOST ?? "https://us.api.flexprice.io/v1";
 
 if (!apiKey) {
   console.error("Set FLEXPRICE_API_KEY in .env or environment");
   process.exit(1);
 }
-
-const serverURL = apiHost.startsWith("http") ? apiHost : `https://${apiHost}`;
 
 const flexPrice = new FlexPrice({
   serverURL,

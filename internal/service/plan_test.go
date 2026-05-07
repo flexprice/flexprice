@@ -1130,6 +1130,101 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Override_Handling() {
 	})
 }
 
+func (s *PlanServiceSuite) TestGetPlansMetadataFilter() {
+	s.SetupTest()
+
+	plans := []*plan.Plan{
+		{
+			ID:        "plan-meta-1",
+			Name:      "Enterprise Monthly",
+			LookupKey: "enterprise-monthly",
+			Metadata:  map[string]string{"tier": "enterprise", "billing": "monthly"},
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			ID:        "plan-meta-2",
+			Name:      "Enterprise Annual",
+			LookupKey: "enterprise-annual",
+			Metadata:  map[string]string{"tier": "enterprise", "billing": "annual"},
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			ID:        "plan-meta-3",
+			Name:      "Starter Monthly",
+			LookupKey: "starter-monthly",
+			Metadata:  map[string]string{"tier": "starter", "billing": "monthly"},
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		},
+		{
+			ID:        "plan-meta-4",
+			Name:      "No Metadata",
+			LookupKey: "no-metadata",
+			BaseModel: types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+	for _, p := range plans {
+		s.Require().NoError(s.GetStores().PlanRepo.Create(s.GetContext(), p))
+	}
+
+	baseFilter := func(meta map[string]string) *types.PlanFilter {
+		f := &types.PlanFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+		if len(meta) > 0 {
+			f.MetadataFilter = &types.MetadataFilter{Metadata: meta}
+		}
+		return f
+	}
+
+	testCases := []struct {
+		name          string
+		filter        *types.PlanFilter
+		expectedIDs   []string
+		expectedCount int
+	}{
+		{
+			name:          "single_key_match",
+			filter:        baseFilter(map[string]string{"tier": "enterprise"}),
+			expectedCount: 2,
+			expectedIDs:   []string{"plan-meta-1", "plan-meta-2"},
+		},
+		{
+			name:          "multiple_keys_and_semantics",
+			filter:        baseFilter(map[string]string{"tier": "enterprise", "billing": "monthly"}),
+			expectedCount: 1,
+			expectedIDs:   []string{"plan-meta-1"},
+		},
+		{
+			name:          "no_match",
+			filter:        baseFilter(map[string]string{"tier": "pro"}),
+			expectedCount: 0,
+			expectedIDs:   []string{},
+		},
+		{
+			name:          "empty_filter_returns_all",
+			filter:        baseFilter(nil),
+			expectedCount: 4,
+		},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			resp, err := s.service.GetPlans(s.GetContext(), tc.filter)
+			s.Require().NoError(err)
+			s.Require().NotNil(resp)
+			s.Equal(tc.expectedCount, len(resp.Items), "unexpected result count for case: "+tc.name)
+
+			if len(tc.expectedIDs) > 0 {
+				gotIDs := make([]string, len(resp.Items))
+				for i, p := range resp.Items {
+					gotIDs[i] = p.ID
+				}
+				s.ElementsMatch(tc.expectedIDs, gotIDs)
+			}
+		})
+	}
+}
+
 func (s *PlanServiceSuite) TestSyncPlanPrices_Timing_And_Edge_Cases() {
 	s.Run("TC-SYNC-029_Line_Item_End_Date_In_Past", func() {
 		// Create a plan with price

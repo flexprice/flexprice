@@ -151,12 +151,14 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 		return false
 	}
 
-	// Apply parent customer ID filter
-	if len(f.ParentCustomerIDs) > 0 {
-		if c.ParentCustomerID == nil {
+	// Apply external IDs filter.
+	// When ExternalIDs is provided (even empty), treat it as an allowlist. This matches typical
+	// DB semantics for "WHERE external_id IN (...)" where an empty list returns no rows.
+	if f.ExternalIDs != nil {
+		if len(f.ExternalIDs) == 0 {
 			return false
 		}
-		if !lo.Contains(f.ParentCustomerIDs, *c.ParentCustomerID) {
+		if !lo.Contains(f.ExternalIDs, c.ExternalID) {
 			return false
 		}
 	}
@@ -168,6 +170,11 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 
 	// Apply customer ID filter
 	if len(f.CustomerIDs) > 0 && !lo.Contains(f.CustomerIDs, c.ID) {
+		return false
+	}
+
+	// Apply metadata filter (all key-value pairs must match — AND semantics, mirrors @> JSONB semantics)
+	if !f.MetadataFilter.Match(c.Metadata) {
 		return false
 	}
 

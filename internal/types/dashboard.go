@@ -35,6 +35,12 @@ type RevenueWindow struct {
 	TotalRevenue string    `json:"total_revenue"` // Total revenue for this window
 }
 
+// RevenueGraphPoint is one bar on the revenue dashboard graph (label + numeric value as string for JSON decimals).
+type RevenueGraphPoint struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
 // SubscriptionPlanCount represents subscription count for a plan
 type SubscriptionPlanCount struct {
 	PlanID   string `json:"plan_id"`

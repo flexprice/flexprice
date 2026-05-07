@@ -4,6 +4,8 @@ sources:
     swagger-json:
         inputs:
             - location: docs/swagger/swagger-3-0.json
+        overlays:
+            - location: .speakeasy/overlays/flexprice-sdk.yaml
         registry:
             location: registry.speakeasyapi.dev/flexprice/prod/swagger-json
     swagger-json-mcp:

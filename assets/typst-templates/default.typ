@@ -113,6 +113,11 @@
   invoice-type: "",             // Invoice type (subscription, one_time, etc.)
   doc,
 ) = {
+  // Go nil slices marshal as JSON null; .at(..., default: ()) only applies when the key is missing.
+  let items = if items == none { () } else { items }
+  let applied-taxes = if applied-taxes == none { () } else { applied-taxes }
+  let applied-discounts = if applied-discounts == none { () } else { applied-discounts }
+
   // Set styling defaults
   styling.font = styling.at("font", default: "Inter")
   styling.font-size = styling.at("font-size", default: 9pt)

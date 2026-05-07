@@ -342,6 +342,51 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			}
 			return data
 		}
+	case types.SecretProviderZohoBooks:
+		if encryptedSecretData.ZohoBooks != nil {
+			result := map[string]interface{}{
+				"client_id":       encryptedSecretData.ZohoBooks.ClientID,
+				"client_secret":   encryptedSecretData.ZohoBooks.ClientSecret,
+				"organization_id": encryptedSecretData.ZohoBooks.OrganizationID,
+			}
+			if encryptedSecretData.ZohoBooks.RefreshToken != "" {
+				result["refresh_token"] = encryptedSecretData.ZohoBooks.RefreshToken
+			}
+			if encryptedSecretData.ZohoBooks.AccessToken != "" {
+				result["access_token"] = encryptedSecretData.ZohoBooks.AccessToken
+			}
+			if encryptedSecretData.ZohoBooks.AuthCode != "" {
+				result["auth_code"] = encryptedSecretData.ZohoBooks.AuthCode
+			}
+			if encryptedSecretData.ZohoBooks.RedirectURI != "" {
+				result["redirect_uri"] = encryptedSecretData.ZohoBooks.RedirectURI
+			}
+			if encryptedSecretData.ZohoBooks.APIDomain != "" {
+				result["api_domain"] = encryptedSecretData.ZohoBooks.APIDomain
+			}
+			if encryptedSecretData.ZohoBooks.AccountsURL != "" {
+				result["accounts_server"] = encryptedSecretData.ZohoBooks.AccountsURL
+			}
+			if encryptedSecretData.ZohoBooks.Location != "" {
+				result["location"] = encryptedSecretData.ZohoBooks.Location
+			}
+			if encryptedSecretData.ZohoBooks.OrganizationName != "" {
+				result["organization_name"] = encryptedSecretData.ZohoBooks.OrganizationName
+			}
+			if encryptedSecretData.ZohoBooks.Scopes != "" {
+				result["scopes"] = encryptedSecretData.ZohoBooks.Scopes
+			}
+			if encryptedSecretData.ZohoBooks.AccessTokenExpiresAt != "" {
+				result["access_token_expires_at"] = encryptedSecretData.ZohoBooks.AccessTokenExpiresAt
+			}
+			if encryptedSecretData.ZohoBooks.OAuthSessionData != "" {
+				result["oauth_session_data"] = encryptedSecretData.ZohoBooks.OAuthSessionData
+			}
+			if encryptedSecretData.ZohoBooks.WebhookSecret != "" {
+				result["webhook_secret"] = encryptedSecretData.ZohoBooks.WebhookSecret
+			}
+			return result
+		}
 	default:
 		// For other providers or unknown types, use generic format
 		if encryptedSecretData.Generic != nil {

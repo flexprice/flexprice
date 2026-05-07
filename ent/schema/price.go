@@ -165,6 +165,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",
 			}).
+			Default(string(types.BILLING_CADENCE_RECURRING)).
 			Immutable().
 			NotEmpty().
 			GoType(types.BillingCadence("")),
@@ -177,8 +178,9 @@ func (Price) Fields() []ent.Field {
 			Immutable().
 			GoType(types.InvoiceCadence("")),
 
-		field.Int("trial_period").
+		field.Int("trial_period_days").
 			Default(0).
+			NonNegative().
 			Immutable(),
 
 		field.String("meter_id").

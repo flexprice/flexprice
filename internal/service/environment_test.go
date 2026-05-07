@@ -54,7 +54,7 @@ func (s *EnvironmentServiceSuite) SetupTest() {
 func (s *EnvironmentServiceSuite) TestCreateEnvironment() {
 	req := dto.CreateEnvironmentRequest{
 		Name: "Production",
-		Type: "production",
+		Type: "development",
 	}
 
 	resp, err := s.environmentService.CreateEnvironment(s.ctx, req)
@@ -86,6 +86,7 @@ func (s *EnvironmentServiceSuite) TestGetEnvironmentByID() {
 func (s *EnvironmentServiceSuite) TestListEnvironments() {
 	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-1", Name: "Production", Type: types.EnvironmentProduction})
 	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-2", Name: "Development", Type: types.EnvironmentDevelopment})
+	_ = s.environmentRepo.Create(s.ctx, &environment.Environment{ID: "env-deleted", Name: "Deleted", Type: types.EnvironmentDevelopment, BaseModel: types.BaseModel{Status: types.StatusDeleted}})
 
 	resp, err := s.environmentService.GetEnvironments(s.ctx, types.Filter{Offset: 0, Limit: 10})
 	s.NoError(err)
@@ -104,14 +105,26 @@ func (s *EnvironmentServiceSuite) TestUpdateEnvironment() {
 	}
 	_ = s.environmentRepo.Create(s.ctx, env)
 
-	updateReq := dto.UpdateEnvironmentRequest{
+	// Name updates and an unchanged type should succeed; type stays as it was.
+	resp, err := s.environmentService.UpdateEnvironment(s.ctx, "env-1", dto.UpdateEnvironmentRequest{
 		Name: "Updated Development",
-		Type: "updated-type",
-	}
-
-	resp, err := s.environmentService.UpdateEnvironment(s.ctx, "env-1", updateReq)
+		Type: string(types.EnvironmentDevelopment),
+	})
 	s.NoError(err)
 	s.NotNil(resp)
-	s.Equal(updateReq.Name, resp.Name)
-	s.Equal(updateReq.Type, resp.Type)
+	s.Equal("Updated Development", resp.Name)
+	s.Equal(string(types.EnvironmentDevelopment), resp.Type)
+
+	// Omitting type should also work and leave the type intact.
+	resp, err = s.environmentService.UpdateEnvironment(s.ctx, "env-1", dto.UpdateEnvironmentRequest{
+		Name: "Renamed Again",
+	})
+	s.NoError(err)
+	s.Equal(string(types.EnvironmentDevelopment), resp.Type)
+
+	// Attempting to change the type must be rejected.
+	_, err = s.environmentService.UpdateEnvironment(s.ctx, "env-1", dto.UpdateEnvironmentRequest{
+		Type: string(types.EnvironmentProduction),
+	})
+	s.Error(err)
 }

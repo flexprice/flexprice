@@ -198,7 +198,7 @@ func (s *creditGrantService) initializeCreditGrantWorkflow(ctx context.Context, 
 	}
 
 	if cg.CreditGrantAnchor.Before(time.Now()) || cg.CreditGrantAnchor.Equal(time.Now()) {
-		if err := s.processScheduledApplication(ctx, cga); err != nil {
+		if err := s.processCatchUpApplications(ctx, cga); err != nil {
 			s.Logger.Errorw("failed to process initial CGA eagerly", "error", err, "cga_id", cga.ID)
 		}
 	}
@@ -241,12 +241,12 @@ func (s *creditGrantService) ListCreditGrants(ctx context.Context, filter *types
 	return response, nil
 }
 
-func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, cga *domainCreditGrantApplication.CreditGrantApplication) error {
+func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, cga *domainCreditGrantApplication.CreditGrantApplication) (*domainCreditGrantApplication.CreditGrantApplication, error) {
 	walletSvc := service.NewWalletService(s.ServiceParams)
 
 	wallets, err := walletSvc.GetWalletsByCustomerID(ctx, subscription.CustomerID)
 	if err != nil {
-		return s.handleCreditGrantFailure(ctx, cga, err, "Failed to get wallet for top up")
+		return nil, s.handleCreditGrantFailure(ctx, cga, err, "Failed to get wallet for top up")
 	}
 
 	var selectedWallet *dto.WalletResponse
@@ -281,7 +281,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 		var err error
 		selectedWallet, err = walletSvc.CreateWallet(ctx, walletReq)
 		if err != nil {
-			return s.handleCreditGrantFailure(ctx, cga, err, "Failed to create wallet for top up")
+			return nil, s.handleCreditGrantFailure(ctx, cga, err, "Failed to create wallet for top up")
 		}
 	}
 
@@ -304,7 +304,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 		case types.CreditGrantExpiryDurationUnitYears:
 			expiryDate = lo.ToPtr(effectiveDate.AddDate(duration, 0, 0))
 		default:
-			return ierr.NewError("invalid expiration duration unit").Mark(ierr.ErrValidation)
+			return nil, ierr.NewError("invalid expiration duration unit").Mark(ierr.ErrValidation)
 		}
 	}
 	if grant.ExpirationType == types.CreditGrantExpiryTypeBillingCycle {
@@ -320,7 +320,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 				subscription.BillingPeriod,
 			)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			for _, subPeriod := range periods {
 				if (effectiveDate.Equal(subPeriod.Start) || effectiveDate.After(subPeriod.Start)) && effectiveDate.Before(subPeriod.End) {
@@ -344,6 +344,8 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 		},
 	}
 
+	var nextCGA *domainCreditGrantApplication.CreditGrantApplication
+
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if expiryDate != nil && expiryDate.Before(time.Now().UTC()) {
 			cga.ApplicationStatus = types.ApplicationStatusSkipped
@@ -353,7 +355,11 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 				return err
 			}
 			if grant.Cadence == types.CreditGrantCadenceRecurring {
-				return s.createNextPeriodApplication(txCtx, grant, subscription, lo.FromPtr(cga.PeriodEnd))
+				created, err := s.createNextPeriodApplication(txCtx, grant, subscription, lo.FromPtr(cga.PeriodEnd))
+				if err != nil {
+					return err
+				}
+				nextCGA = created
 			}
 			return nil
 		}
@@ -367,14 +373,18 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 			return err
 		}
 		if grant.Cadence == types.CreditGrantCadenceRecurring {
-			return s.createNextPeriodApplication(txCtx, grant, subscription, lo.FromPtr(cga.PeriodEnd))
+			created, err := s.createNextPeriodApplication(txCtx, grant, subscription, lo.FromPtr(cga.PeriodEnd))
+			if err != nil {
+				return err
+			}
+			nextCGA = created
 		}
 		return nil
 	})
 	if err != nil {
-		return s.handleCreditGrantFailure(ctx, cga, err, "Transaction failed during credit grant application")
+		return nil, s.handleCreditGrantFailure(ctx, cga, err, "Transaction failed during credit grant application")
 	}
-	return nil
+	return nextCGA, nil
 }
 
 func (s *creditGrantService) handleCreditGrantFailure(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication, err error, hint string) error {
@@ -390,7 +400,7 @@ func (s *creditGrantService) handleCreditGrantFailure(ctx context.Context, cga *
 	return err
 }
 
-func (s *creditGrantService) processScheduledApplication(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication) error {
+func (s *creditGrantService) processScheduledApplication(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication) (*domainCreditGrantApplication.CreditGrantApplication, error) {
 	sp := s.ServiceParams
 	subscriptionSvc := service.NewSubscriptionService(sp)
 	creditGrantSvc := service.NewCreditGrantService(sp)
@@ -398,15 +408,15 @@ func (s *creditGrantService) processScheduledApplication(ctx context.Context, cg
 	subscription, err := subscriptionSvc.GetSubscription(ctx, cga.SubscriptionID)
 	if err != nil {
 		s.Logger.Errorw("Failed to get subscription", "subscription_id", cga.SubscriptionID, "error", err)
-		return err
+		return nil, err
 	}
 	creditGrant, err := creditGrantSvc.GetCreditGrant(ctx, cga.CreditGrantID)
 	if err != nil {
 		s.Logger.Errorw("Failed to get credit grant", "credit_grant_id", cga.CreditGrantID, "error", err)
-		return err
+		return nil, err
 	}
 	if creditGrant.CreditGrant.Status != types.StatusPublished {
-		return nil
+		return nil, nil
 	}
 	if cga.ApplicationStatus == types.ApplicationStatusFailed {
 		cga.RetryCount++
@@ -416,34 +426,91 @@ func (s *creditGrantService) processScheduledApplication(ctx context.Context, cg
 	action, err := stateHandler.DetermineCreditGrantAction()
 	if err != nil {
 		s.Logger.Errorw("Failed to determine action", "application_id", cga.ID, "error", err)
-		return err
+		return nil, err
 	}
 
 	switch action {
 	case service.StateActionApply:
-		return s.applyCreditGrantToWallet(ctx, creditGrant.CreditGrant, subscription.Subscription, cga)
+		nextCGA, err := s.applyCreditGrantToWallet(ctx, creditGrant.CreditGrant, subscription.Subscription, cga)
+		if err != nil {
+			return nil, err
+		}
+		return nextCGA, nil
 	case service.StateActionSkip:
-		return s.skipCreditGrantApplication(ctx, cga, creditGrant.CreditGrant, subscription.Subscription)
+		nextCGA, err := s.skipCreditGrantApplication(ctx, cga, creditGrant.CreditGrant, subscription.Subscription)
+		if err != nil {
+			return nil, err
+		}
+		return nextCGA, nil
 	case service.StateActionDefer:
-		return s.deferCreditGrantApplication(ctx, cga)
+		if err := s.deferCreditGrantApplication(ctx, cga); err != nil {
+			return nil, err
+		}
+		return nil, nil
 	case service.StateActionCancel:
 		cga.ApplicationStatus = types.ApplicationStatusCancelled
 		cga.AppliedAt = nil
 		if err := s.CreditGrantApplicationRepo.Update(ctx, cga); err != nil {
-			return err
+			return nil, err
 		}
-		return s.cancelFutureGrantApplications(ctx, creditGrant.CreditGrant)
+		if err := s.cancelFutureGrantApplications(ctx, creditGrant.CreditGrant); err != nil {
+			return nil, err
+		}
+		return nil, nil
 	}
+	return nil, nil
+}
+
+// Keep in sync with maxCatchUpIterations in internal/service/creditgrant.go
+const maxCatchUpIterations = 100
+
+// processCatchUpApplications processes a CGA and immediately applies any subsequent
+// past-due CGAs for the same grant. Stops when the next period is in the future,
+// the action is Defer/Cancel, or maxCatchUpIterations is reached.
+// Always returns nil — failures are logged and left for cron retry (backward compat).
+func (s *creditGrantService) processCatchUpApplications(
+	ctx context.Context,
+	initialCGA *domainCreditGrantApplication.CreditGrantApplication,
+) error {
+	currentCGA := initialCGA
+	startTime := currentCGA.ScheduledFor
+
+	for i := 0; i < maxCatchUpIterations; i++ {
+		nextCGA, err := s.processScheduledApplication(ctx, currentCGA)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "catch-up loop stopping due to failure",
+				"cga_id", currentCGA.ID,
+				"grant_id", currentCGA.CreditGrantID,
+				"subscription_id", currentCGA.SubscriptionID,
+				"iterations_completed", i,
+				"error", err)
+			return nil
+		}
+		if nextCGA == nil {
+			break
+		}
+		if nextCGA.ScheduledFor.After(time.Now().UTC()) {
+			break
+		}
+		currentCGA = nextCGA
+	}
+
+	s.Logger.InfowCtx(ctx, "credit grant catch-up loop completed",
+		"grant_id", initialCGA.CreditGrantID,
+		"subscription_id", initialCGA.SubscriptionID,
+		"catch_up_from", startTime,
+		"catch_up_to", currentCGA.ScheduledFor)
+
 	return nil
 }
 
-func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, currentPeriodEnd time.Time) error {
+func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, currentPeriodEnd time.Time) (*domainCreditGrantApplication.CreditGrantApplication, error) {
 	nextPeriodStart, nextPeriodEnd, err := service.CalculateNextCreditGrantPeriod(lo.FromPtr(grant), currentPeriodEnd)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if grant.EndDate != nil && nextPeriodEnd.After(lo.FromPtr(grant.EndDate)) {
-		return nil
+		return nil, nil
 	}
 	nextPeriodCGAReq := dto.CreateCreditGrantApplicationRequest{
 		CreditGrantID:                   grant.ID,
@@ -457,10 +524,13 @@ func (s *creditGrantService) createNextPeriodApplication(ctx context.Context, gr
 		IdempotencyKey:                  s.generateIdempotencyKey(grant, lo.ToPtr(nextPeriodStart), lo.ToPtr(nextPeriodEnd)),
 	}
 	if err := nextPeriodCGAReq.Validate(); err != nil {
-		return err
+		return nil, err
 	}
 	nextPeriodCGA := nextPeriodCGAReq.ToCreditGrantApplication(ctx)
-	return s.CreditGrantApplicationRepo.Create(ctx, nextPeriodCGA)
+	if err := s.CreditGrantApplicationRepo.Create(ctx, nextPeriodCGA); err != nil {
+		return nil, err
+	}
+	return nextPeriodCGA, nil
 }
 
 func (s *creditGrantService) generateIdempotencyKey(grant *creditgrant.CreditGrant, periodStart, periodEnd *time.Time) string {
@@ -475,16 +545,20 @@ func (s *creditGrantService) generateIdempotencyKey(grant *creditgrant.CreditGra
 	return generator.GenerateKey(idempotency.ScopeCreditGrant, keyData)
 }
 
-func (s *creditGrantService) skipCreditGrantApplication(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) error {
+func (s *creditGrantService) skipCreditGrantApplication(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication, grant *creditgrant.CreditGrant, subscription *subscription.Subscription) (*domainCreditGrantApplication.CreditGrantApplication, error) {
 	cga.ApplicationStatus = types.ApplicationStatusSkipped
 	cga.AppliedAt = nil
 	if err := s.CreditGrantApplicationRepo.Update(ctx, cga); err != nil {
-		return err
+		return nil, err
 	}
 	if grant.Cadence == types.CreditGrantCadenceRecurring {
-		return s.createNextPeriodApplication(ctx, grant, subscription, lo.FromPtr(cga.PeriodEnd))
+		nextCGA, err := s.createNextPeriodApplication(ctx, grant, subscription, lo.FromPtr(cga.PeriodEnd))
+		if err != nil {
+			return nil, err
+		}
+		return nextCGA, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (s *creditGrantService) deferCreditGrantApplication(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication) error {

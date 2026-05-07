@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -90,8 +91,10 @@ type WalletService interface {
 	// CheckBalanceThresholds checks if wallet balance is below threshold and triggers alerts
 	CheckBalanceThresholds(ctx context.Context, w *wallet.Wallet, balance *dto.WalletBalanceResponse) error
 
-	// TopUpWalletForProratedCharge tops up a wallet for proration credits from subscription changes
-	TopUpWalletForProratedCharge(ctx context.Context, customerID string, amount decimal.Decimal, currency string) error
+	// TopUpWalletForProratedCharge tops up a wallet for proration credits from subscription changes.
+	// idempotencyKey should be a stable string derived from the change (e.g. lineItemID + effectiveDate)
+	// to prevent duplicate credits on retries.
+	TopUpWalletForProratedCharge(ctx context.Context, customerID string, amount decimal.Decimal, currency string, idempotencyKey string) (*dto.WalletTransactionResponse, error)
 
 	// CompletePurchasedCreditTransaction completes a pending wallet transaction when payment succeeds
 	CompletePurchasedCreditTransactionWithRetry(ctx context.Context, walletTransactionID string) error
@@ -465,7 +468,7 @@ func (s *walletService) loadUsersForExpansion(ctx context.Context, expand types.
 	}
 
 	// Fetch users in bulk
-	userService := NewUserService(s.UserRepo, s.TenantRepo, nil, nil, nil)
+	userService := NewUserService(s.UserRepo, s.TenantRepo, nil, nil, nil, nil, nil, s.Logger)
 	userFilter := &types.UserFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		UserIDs:     userIDs,
@@ -808,17 +811,16 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			amountPaid = &amount
 		}
 
-		invoice, err := invoiceService.CreateInvoice(ctx, dto.CreateInvoiceRequest{
+		invReq := dto.CreateInvoiceRequest{
 			CustomerID:     w.CustomerID,
 			AmountDue:      amount,
 			AmountPaid:     amountPaid,
 			Subtotal:       amount,
 			Total:          amount,
 			Currency:       w.Currency,
-			InvoiceType:    types.InvoiceTypeOneOff, // Changed from CREDIT to ONE_OFF
+			InvoiceType:    types.InvoiceTypeOneOff,
 			DueDate:        lo.ToPtr(time.Now().UTC()),
 			IdempotencyKey: idempotencyKey,
-			InvoiceStatus:  lo.ToPtr(types.InvoiceStatusFinalized),
 			LineItems: []dto.CreateInvoiceLineItemRequest{
 				{
 					Amount:      amount,
@@ -828,19 +830,21 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			},
 			PaymentStatus: lo.ToPtr(paymentStatus),
 			Metadata:      invoiceMetadata,
-		})
+		}
+		// Use CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
+		inv, err := invoiceService.CreateInvoice(ctx, invReq)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to create invoice for purchased credits").
 				Mark(ierr.ErrInternal)
 		}
 
-		invoiceID = invoice.ID
+		invoiceID = inv.ID
 
 		if autoCompleteEnabled {
 			s.Logger.InfowCtx(ctx, "created auto-completed credit purchase",
 				"wallet_transaction_id", walletTransactionID,
-				"invoice_id", invoice.ID,
+				"invoice_id", inv.ID,
 				"wallet_id", walletID,
 				"credits", req.CreditsToAdd.String(),
 				"amount", amount.String(),
@@ -849,7 +853,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		} else {
 			s.Logger.InfowCtx(ctx, "created pending credit purchase",
 				"wallet_transaction_id", walletTransactionID,
-				"invoice_id", invoice.ID,
+				"invoice_id", inv.ID,
 				"wallet_id", walletID,
 				"credits", req.CreditsToAdd.String(),
 				"amount", amount.String(),
@@ -1208,17 +1212,22 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			}
 
 			// Calculate usage charges
-			usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+			usageResult, err := billingService.CalculateUsageCharges(ctx, &dto.CalculateUsageChargesParams{
+				Subscription: sub,
+				Usage:        usage,
+				PeriodStart:  periodStart,
+				PeriodEnd:    periodEnd,
+			})
 			if err != nil {
 				return nil, err
 			}
 
 			s.Logger.InfowCtx(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", usageTotal,
-				"num_usage_charges", len(usageCharges))
+				"usage_total", usageResult.TotalAmount,
+				"num_usage_charges", len(usageResult.LineItems))
 
-			totalPendingCharges = totalPendingCharges.Add(usageTotal)
+			totalPendingCharges = totalPendingCharges.Add(usageResult.TotalAmount)
 		}
 	}
 
@@ -1232,7 +1241,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		return nil, err
 	}
 
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) && lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
+	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
 	} else {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
@@ -1824,13 +1833,15 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      walletID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -1858,13 +1869,15 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      transactionID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -2040,13 +2053,15 @@ func (s *walletService) PublishEvent(ctx context.Context, eventName types.Webhoo
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUID(),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      w.TenantID,
 		EnvironmentID: w.EnvironmentID,
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       eventJSON,
+		EntityType:    types.SystemEntityTypeWallet,
+		EntityID:      w.ID,
 	}
 
 	s.Logger.InfowCtx(ctx, "publishing webhook event",
@@ -2211,15 +2226,15 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	return nil
 }
 
-func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, customerID string, amount decimal.Decimal, currency string) error {
+func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, customerID string, amount decimal.Decimal, currency string, idempotencyKey string) (*dto.WalletTransactionResponse, error) {
 	if customerID == "" {
-		return ierr.NewError("customer_id is required").
+		return nil, ierr.NewError("customer_id is required").
 			WithHint("Customer ID is required for wallet top-up").
 			Mark(ierr.ErrValidation)
 	}
 
 	if amount.LessThanOrEqual(decimal.Zero) {
-		return ierr.NewError("amount must be positive").
+		return nil, ierr.NewError("amount must be positive").
 			WithHint("Top-up amount must be greater than zero").
 			Mark(ierr.ErrValidation)
 	}
@@ -2231,7 +2246,7 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 	// Get customer to validate existence
 	_, err := s.CustomerRepo.Get(ctx, customerID)
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to get customer").
 			WithReportableDetails(map[string]interface{}{
 				"customer_id": customerID,
@@ -2242,7 +2257,7 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 	// Get existing wallets for the customer
 	existingWallets, err := s.GetWalletsByCustomerID(ctx, customerID)
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to get existing wallets").
 			WithReportableDetails(map[string]interface{}{
 				"customer_id": customerID,
@@ -2250,23 +2265,21 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Find or create a suitable wallet for the proration credit
-	// Use postpaid wallet since proration credits should be usable for payments
-	// and only postpaid wallets can be used for payments
-
+	// Find or create a suitable prepaid wallet for the proration credit.
+	// Prepaid wallets represent customer-owned balance that can be consumed on future invoices.
 	var selectedWallet *dto.WalletResponse
 	for _, w := range existingWallets {
 		if w.WalletStatus == types.WalletStatusActive &&
 			types.IsMatchingCurrency(w.Currency, currency) &&
-			w.WalletType == types.WalletTypePostPaid {
+			w.WalletType == types.WalletTypePrePaid {
 			selectedWallet = w
 			break
 		}
 	}
 
-	// Create a new wallet if none exists
+	// Create a new prepaid wallet if none exists
 	if selectedWallet == nil {
-		s.Logger.InfowCtx(ctx, "creating new wallet for proration credit",
+		s.Logger.InfowCtx(ctx, "creating new prepaid wallet for proration credit",
 			"customer_id", customerID,
 			"currency", currency,
 			"amount", amount.String())
@@ -2276,7 +2289,7 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 			CustomerID:     customerID,
 			Currency:       currency,
 			ConversionRate: decimal.NewFromInt(1), // 1:1 conversion rate for credits
-			WalletType:     types.WalletTypePostPaid,
+			WalletType:     types.WalletTypePrePaid,
 			Metadata: types.Metadata{
 				"created_for": "proration_credit",
 				"source":      "subscription_change",
@@ -2285,7 +2298,7 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 
 		selectedWallet, err = s.CreateWallet(ctx, walletReq)
 		if err != nil {
-			return ierr.WithError(err).
+			return nil, ierr.WithError(err).
 				WithHint("Failed to create wallet for proration credit").
 				WithReportableDetails(map[string]interface{}{
 					"customer_id": customerID,
@@ -2304,12 +2317,12 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 			"source":      "subscription_change_proration",
 			"customer_id": customerID,
 		},
-		IdempotencyKey: lo.ToPtr(fmt.Sprintf("proration_credit_%s_%s", customerID, time.Now().Format("20060102150405"))),
+		IdempotencyKey: lo.ToPtr(idempotencyKey),
 	}
 
-	_, err = s.TopUpWallet(ctx, selectedWallet.ID, topUpReq)
+	topUpResp, err := s.TopUpWallet(ctx, selectedWallet.ID, topUpReq)
 	if err != nil {
-		return ierr.WithError(err).
+		return nil, ierr.WithError(err).
 			WithHint("Failed to top up wallet with proration credit").
 			WithReportableDetails(map[string]interface{}{
 				"customer_id": customerID,
@@ -2325,7 +2338,13 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 		"amount", amount.String(),
 		"currency", currency)
 
-	return nil
+	if topUpResp == nil || topUpResp.WalletTransaction == nil {
+		return nil, ierr.NewError("wallet top-up returned no transaction").
+			WithHint("Proration credit was applied but transaction details are missing").
+			Mark(ierr.ErrInternal)
+	}
+
+	return topUpResp.WalletTransaction, nil
 }
 
 func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error) {
@@ -2412,19 +2431,25 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			if err != nil {
 				return nil, err
 			}
+			// s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
 
 			// Calculate usage charges for feature usage data
-			usageCharges, usageTotal, err := billingService.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd, nil)
+			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
+				Subscription: sub,
+				Usage:        usage,
+				PeriodStart:  periodStart,
+				PeriodEnd:    periodEnd,
+			})
 			if err != nil {
 				return nil, err
 			}
 
 			s.Logger.InfowCtx(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", usageTotal,
-				"num_usage_charges", len(usageCharges))
+				"usage_total", featureUsageResult.TotalAmount,
+				"num_usage_charges", len(featureUsageResult.LineItems))
 
-			totalPendingCharges = totalPendingCharges.Add(usageTotal)
+			totalPendingCharges = totalPendingCharges.Add(featureUsageResult.TotalAmount)
 		}
 	}
 
@@ -2438,7 +2463,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		return nil, err
 	}
 
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) && lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
+	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
 	} else {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
@@ -2579,18 +2604,25 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 			})
 			if err != nil {
 				return nil, err
-			} // Calculate usage charges for feature usage data
-			usageCharges, usageTotal, err := billingService.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd, nil)
+			}
+			// s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
+			// Calculate usage charges for feature usage data
+			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
+				Subscription: sub,
+				Usage:        usage,
+				PeriodStart:  periodStart,
+				PeriodEnd:    periodEnd,
+			})
 			if err != nil {
 				return nil, err
 			}
 
 			s.Logger.InfowCtx(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
-				"usage_total", usageTotal,
-				"num_usage_charges", len(usageCharges))
+				"usage_total", featureUsageResult.TotalAmount,
+				"num_usage_charges", len(featureUsageResult.LineItems))
 
-			totalPendingCharges = totalPendingCharges.Add(usageTotal)
+			totalPendingCharges = totalPendingCharges.Add(featureUsageResult.TotalAmount)
 		}
 	}
 
@@ -2604,7 +2636,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		return nil, err
 	}
 
-	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) && lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
+	if lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll) || lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeFixed) {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidAmount)
 	} else {
 		totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges).Sub(resp.TotalPaidInvoiceAmount)
@@ -2799,7 +2831,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 				"event_id", req.ID,
 			)
 			// Trigger auto top-up if enabled
-			err := s.checkAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
+			err := s.triggerAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
 			if err != nil {
 				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
 					"error", err,
@@ -3008,8 +3040,8 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"event_id", req.ID,
 		)
 
-		// Check auto top-up
-		err = s.checkAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
+		// Trigger auto top-up if enabled
+		err = s.triggerAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
 		if err != nil {
 			s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
 				"error", err,
@@ -3052,16 +3084,14 @@ func (s *walletService) PublishWalletBalanceAlertEvent(ctx context.Context, cust
 	}
 }
 
-// checkAutoTopup checks if auto top-up is enabled and triggers it if needed
-func (s *walletService) checkAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
+// triggerAutoTopup checks if auto top-up is enabled and triggers it if needed
+func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
 
 	if w.AutoTopup == nil || w.AutoTopup.Enabled == nil || !*w.AutoTopup.Enabled {
-		return ierr.NewError("auto top-up is not enabled").
-			WithHint("Auto top-up is not enabled").
-			WithReportableDetails(map[string]interface{}{
-				"wallet_id": w.ID,
-			}).
-			Mark(ierr.ErrInvalidOperation)
+		s.Logger.DebugwCtx(ctx, "auto top-up not enabled, skipping",
+			"wallet_id", w.ID,
+		)
+		return nil
 	}
 
 	// Check if ongoing balance is below threshold
@@ -3181,4 +3211,23 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 	}
 
 	return balance
+}
+
+// publishBenchmarkEvent publishes a usage benchmark event to Kafka.
+// Fire-and-forget: errors are logged but never returned to the caller.
+func (s *walletService) publishBenchmarkEvent(ctx context.Context, subscriptionID string, startTime, endTime time.Time) {
+	benchSvc := NewUsageBenchmarkService(s.ServiceParams, nil)
+	evt := &events.UsageBenchmarkEvent{
+		SubscriptionID: subscriptionID,
+		StartTime:      startTime,
+		EndTime:        endTime,
+		TenantID:       types.GetTenantID(ctx),
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+	}
+	if err := benchSvc.PublishEvent(ctx, evt); err != nil {
+		s.Logger.WarnwCtx(ctx, "usage benchmark: failed to publish event",
+			"subscription_id", subscriptionID,
+			"error", err,
+		)
+	}
 }

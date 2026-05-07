@@ -161,6 +161,115 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "invoice finalized successfully"})
 }
 
+func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
+		return
+	}
+
+	ctx := c.Request.Context()
+	existing, err := h.invoiceService.GetInvoice(ctx, id)
+	if err != nil {
+		h.logger.Errorw("failed to get invoice for compute", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+	if existing.InvoiceStatus != types.InvoiceStatusDraft && existing.InvoiceStatus != types.InvoiceStatusSkipped {
+		c.Error(ierr.NewError("invoice is not in draft or skipped status").
+			WithHint("Only draft or skipped invoices can be computed").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id":     id,
+				"current_status": existing.InvoiceStatus.String(),
+			}).
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	syncMode := c.Query("sync") == "true"
+
+	// Try Temporal workflow execution
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc != nil {
+		workflowInput := invoiceModels.ComputeInvoiceWorkflowInput{
+			InvoiceID: id,
+		}
+
+		if syncMode {
+			// Synchronous: execute workflow and wait for result
+			skipped, err := h.invoiceService.ComputeInvoice(ctx, id, nil)
+			if err != nil {
+				h.logger.Errorw("failed to compute invoice", "error", err, "invoice_id", id)
+				c.Error(err)
+				return
+			}
+
+			// Fetch the updated invoice to return
+			invoice, err := h.invoiceService.GetInvoice(ctx, id)
+			if err != nil {
+				h.logger.Errorw("failed to get invoice after compute", "error", err, "invoice_id", id)
+				c.Error(err)
+				return
+			}
+
+			c.JSON(http.StatusOK, dto.ComputeInvoiceResponse{
+				Invoice: invoice,
+				Skipped: skipped,
+			})
+			return
+		}
+
+		// Async mode (default): start workflow and return workflow ID
+		workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalComputeInvoiceWorkflow, workflowInput)
+		if err != nil {
+			h.logger.Errorw("failed to start compute invoice workflow", "error", err, "invoice_id", id)
+			c.Error(err)
+			return
+		}
+
+		c.JSON(http.StatusAccepted, models.TemporalWorkflowResult{
+			Message:    "compute invoice workflow started",
+			WorkflowID: workflowRun.GetID(),
+			RunID:      workflowRun.GetRunID(),
+		})
+		return
+	}
+
+	// Fallback: no Temporal available, call service directly (always sync)
+	var reqPtr *dto.InvoiceComputeRequest
+	var body dto.InvoiceComputeRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		if errors.Is(err, io.EOF) {
+			reqPtr = nil
+		} else {
+			h.logger.Errorw("failed to bind compute request", "error", err, "invoice_id", id)
+			c.Error(ierr.WithError(err).WithHint("invalid request").Mark(ierr.ErrValidation))
+			return
+		}
+	} else {
+		reqPtr = &body
+	}
+
+	skipped, err := h.invoiceService.ComputeInvoice(ctx, id, reqPtr)
+	if err != nil {
+		h.logger.Errorw("failed to compute invoice", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+
+	invoice, err := h.invoiceService.GetInvoice(ctx, id)
+	if err != nil {
+		h.logger.Errorw("failed to get invoice after compute", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ComputeInvoiceResponse{
+		Invoice: invoice,
+		Skipped: skipped,
+	})
+}
+
 // VoidInvoice godoc
 // @Summary Void invoice
 // @ID voidInvoice
@@ -256,6 +365,59 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 	})
 }
 
+func (h *InvoiceHandler) TriggerFinalizeDraftInvoiceWorkflow(c *gin.Context) {
+	invoiceID := c.Param("invoice_id")
+	if invoiceID == "" {
+		c.Error(ierr.NewError("invoice_id is required").
+			WithHint("Please provide a valid invoice ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	ctx := c.Request.Context()
+	inv, err := h.invoiceService.GetInvoice(ctx, invoiceID)
+	if err != nil {
+		h.logger.Errorw("failed to load invoice for finalize draft workflow", "error", err, "invoice_id", invoiceID)
+		c.Error(err)
+		return
+	}
+	if inv.InvoiceStatus != types.InvoiceStatusDraft {
+		c.Error(ierr.NewError("invoice must be in draft status to trigger finalize draft workflow").
+			WithHintf("Current status is %s", inv.InvoiceStatus).
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		h.logger.Errorw("temporal service not available for finalize draft invoice", "invoice_id", invoiceID)
+		c.Error(ierr.NewError("temporal service not available").
+			WithHint("Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+
+	workflowInput := invoiceModels.ProcessInvoiceWorkflowInput{
+		InvoiceID:     invoiceID,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+	}
+
+	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalFinalizeDraftInvoiceWorkflow, workflowInput)
+	if err != nil {
+		h.logger.Errorw("failed to start finalize draft invoice workflow", "error", err, "invoice_id", invoiceID)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, models.TemporalWorkflowResult{
+		Message:    "finalize draft invoice workflow started",
+		WorkflowID: workflowRun.GetID(),
+		RunID:      workflowRun.GetRunID(),
+	})
+}
+
 // UpdatePaymentStatus godoc
 // @Summary Update invoice payment status
 // @ID updateInvoicePaymentStatus
@@ -343,6 +505,55 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (h *InvoiceHandler) GetInternalPreviewInvoice(c *gin.Context) {
+	var req dto.GetPreviewInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("Failed to bind request body", "error", err)
+		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.invoiceService.GetInternalPreviewInvoice(c.Request.Context(), req)
+	if err != nil {
+		h.logger.Error("Failed to get internal preview invoice", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetMeterUsagePreviewInvoice godoc
+// @Summary Get invoice preview using meter_usage data
+// @ID getMeterUsagePreviewInvoice
+// @Description Preview invoice using the meter_usage table for usage data instead of feature_usage.
+// @Tags Invoices
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.GetPreviewInvoiceRequest true "Preview Invoice Request"
+// @Success 200 {object} dto.InvoiceResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /invoices/meter-usage-preview [post]
+func (h *InvoiceHandler) GetMeterUsagePreviewInvoice(c *gin.Context) {
+	var req dto.GetPreviewInvoiceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("Failed to bind request body", "error", err)
+		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.invoiceService.GetMeterUsagePreviewInvoice(c.Request.Context(), req)
+	if err != nil {
+		h.logger.Error("Failed to get meter usage preview invoice", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // GetCustomerInvoiceSummary godoc
 // @Summary Get customer invoice summary
 // @ID getCustomerInvoiceSummary
@@ -405,11 +616,12 @@ func (h *InvoiceHandler) AttemptPayment(c *gin.Context) {
 // GetInvoicePDF godoc
 // @Summary Get invoice PDF
 // @ID getInvoicePdf
-// @Description Use when delivering an invoice PDF to the customer (e.g. email attachment or download). Use url=true for a presigned URL instead of binary.
+// @Description Use when delivering an invoice PDF to the customer (e.g. email attachment or download). Use url=true for a presigned URL instead of binary. Use force_generate=true to regenerate and re-upload the PDF even if one already exists in S3.
 // @Tags Invoices
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
 // @Param url query bool false "Return presigned URL from s3 instead of PDF"
+// @Param force_generate query bool false "Force regeneration of the PDF even if one already exists in S3 (default: false). Note: force_generate has no effect if invoice_pdf_url is already set on the invoice."
 // @Success 200 {file} application/pdf
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
@@ -423,7 +635,8 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 	}
 
 	if c.Query("url") == "true" {
-		url, err := h.invoiceService.GetInvoicePDFUrl(c.Request.Context(), id)
+		forceGenerate := c.Query("force_generate") == "true"
+		url, err := h.invoiceService.GetInvoicePDFUrl(c.Request.Context(), id, forceGenerate)
 		if err != nil {
 			h.logger.Errorw("failed to get invoice pdf url", "error", err, "invoice_id", id)
 			c.Error(err)

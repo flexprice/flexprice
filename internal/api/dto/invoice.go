@@ -116,6 +116,166 @@ type CreateInvoiceRequest struct {
 	InvoicePDFURL *string `json:"invoice_pdf_url,omitempty"`
 }
 
+// ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
+// extracting only the fields needed for empty draft creation.
+func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
+	return CreateDraftInvoiceRequest{
+		CustomerID:     r.CustomerID,
+		SubscriptionID: r.SubscriptionID,
+		InvoiceType:    r.InvoiceType,
+		Currency:       r.Currency,
+		PeriodStart:    r.PeriodStart,
+		PeriodEnd:      r.PeriodEnd,
+		BillingPeriod:  r.BillingPeriod,
+		BillingReason:  r.BillingReason,
+		Description:    r.Description,
+		DueDate:        r.DueDate,
+		Metadata:       r.Metadata,
+		IdempotencyKey: r.IdempotencyKey,
+		InvoicePDFURL:  r.InvoicePDFURL,
+	}
+}
+
+// ToComputeRequest converts a CreateInvoiceRequest to an InvoiceComputeRequest,
+// extracting only the fields needed for invoice computation (line items, amounts, coupons, taxes).
+func (r *CreateInvoiceRequest) ToComputeRequest() InvoiceComputeRequest {
+	return InvoiceComputeRequest{
+		LineItems:        r.LineItems,
+		Subtotal:         r.Subtotal,
+		Total:            r.Total,
+		AmountDue:        r.AmountDue,
+		Description:      r.Description,
+		DueDate:          r.DueDate,
+		InvoiceCoupons:   r.InvoiceCoupons,
+		LineItemCoupons:  r.LineItemCoupons,
+		PreparedTaxRates: r.PreparedTaxRates,
+	}
+}
+
+// ===================== Draft Invoice Creation DTO =====================
+
+// CreateDraftInvoiceRequest contains only the fields needed to create an empty zero-dollar
+// draft invoice. No amounts, no line items, no coupons, no taxes — those are populated
+// later by ComputeInvoice. Used by CreateEmptyDraftInvoice and CreateDraftInvoiceForSubscription.
+type CreateDraftInvoiceRequest struct {
+	CustomerID     string  `json:"customer_id" validate:"required"`
+	SubscriptionID *string `json:"subscription_id,omitempty"`
+	// SubscriptionCustomerID is the subscription owner's customer ID; set by service only (not in JSON).
+	SubscriptionCustomerID *string                    `json:"-"`
+	InvoiceType            types.InvoiceType          `json:"invoice_type" validate:"required"`
+	Currency               string                     `json:"currency" validate:"required"`
+	PeriodStart            *time.Time                 `json:"period_start,omitempty"`
+	PeriodEnd              *time.Time                 `json:"period_end,omitempty"`
+	BillingPeriod          *string                    `json:"billing_period,omitempty"`
+	BillingReason          types.InvoiceBillingReason `json:"billing_reason,omitempty"`
+	Description            string                     `json:"description,omitempty"`
+	DueDate                *time.Time                 `json:"due_date,omitempty"`
+	Metadata               types.Metadata             `json:"metadata,omitempty"`
+	IdempotencyKey         *string                    `json:"idempotency_key,omitempty"`
+	InvoicePDFURL          *string                    `json:"invoice_pdf_url,omitempty"`
+}
+
+// Validate validates the draft invoice creation request.
+func (r *CreateDraftInvoiceRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	if err := r.InvoiceType.Validate(); err != nil {
+		return err
+	}
+	if r.InvoiceType == types.InvoiceTypeSubscription {
+		if r.SubscriptionID == nil {
+			return ierr.NewError("subscription_id is required for subscription invoice").
+				WithHint("subscription_id is required for subscription invoice").
+				Mark(ierr.ErrValidation)
+		}
+		if r.BillingPeriod == nil {
+			return ierr.NewError("billing_period is required for subscription invoice").
+				WithHint("billing_period is required for subscription invoice").
+				Mark(ierr.ErrValidation)
+		}
+		if r.PeriodStart == nil {
+			return ierr.NewError("period_start is required for subscription invoice").
+				WithHint("period_start is required for subscription invoice").
+				Mark(ierr.ErrValidation)
+		}
+		if r.PeriodEnd == nil {
+			return ierr.NewError("period_end is required for subscription invoice").
+				WithHint("period_end is required for subscription invoice").
+				Mark(ierr.ErrValidation)
+		}
+		if r.PeriodEnd.Before(*r.PeriodStart) {
+			return ierr.NewError("period_end must be after period_start").
+				WithHint("period_end must be after period_start").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+// ToDraftInvoice converts a CreateDraftInvoiceRequest to a zero-dollar draft invoice domain object.
+// Unlike CreateInvoiceRequest.ToInvoice, this skips tax/discount calculations since all amounts are zero.
+func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoice.Invoice, error) {
+	if err := types.ValidateCurrencyCode(r.Currency); err != nil {
+		return nil, err
+	}
+
+	return &invoice.Invoice{
+		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:             r.CustomerID,
+		SubscriptionID:         r.SubscriptionID,
+		SubscriptionCustomerID: r.SubscriptionCustomerID,
+		InvoiceType:            r.InvoiceType,
+		Currency:               strings.ToLower(r.Currency),
+		AmountDue:              decimal.Zero,
+		Total:                  decimal.Zero,
+		Subtotal:               decimal.Zero,
+		AmountPaid:             decimal.Zero,
+		AmountRemaining:        decimal.Zero,
+		TotalDiscount:          decimal.Zero,
+		TotalTax:               decimal.Zero,
+		Description:            r.Description,
+		DueDate:                r.DueDate,
+		PeriodStart:            r.PeriodStart,
+		BillingPeriod:          r.BillingPeriod,
+		PeriodEnd:              r.PeriodEnd,
+		BillingReason:          string(r.BillingReason),
+		Metadata:               r.Metadata,
+		InvoicePDFURL:          r.InvoicePDFURL,
+		InvoiceStatus:          types.InvoiceStatusDraft,
+		PaymentStatus:          types.PaymentStatusPending,
+		BaseModel:              types.GetDefaultBaseModel(ctx),
+	}, nil
+}
+
+// ===================== Invoice Compute DTO =====================
+
+// InvoiceComputeRequest contains the computed data to apply to a draft invoice during ComputeInvoice.
+// No customer, subscription, or period info — those are already on the invoice. This is purely
+// the computed line items, amounts, coupons, and taxes to populate.
+type InvoiceComputeRequest struct {
+	LineItems        []CreateInvoiceLineItemRequest `json:"line_items"`
+	Subtotal         decimal.Decimal                `json:"subtotal" swaggertype:"string"`
+	Total            decimal.Decimal                `json:"total" swaggertype:"string"`
+	AmountDue        decimal.Decimal                `json:"amount_due" swaggertype:"string"`
+	Description      string                         `json:"description,omitempty"`
+	DueDate          *time.Time                     `json:"due_date,omitempty"`
+	InvoiceCoupons   []InvoiceCoupon                `json:"invoice_coupons,omitempty"`
+	LineItemCoupons  []InvoiceLineItemCoupon        `json:"line_item_coupons,omitempty"`
+	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
+
+	// OpeningInvoiceAdjustmentAmount is internal: transport field only — read by ComputeInvoice and
+	// forwarded to PrepareSubscriptionInvoiceRequestParams.OpeningInvoiceAdjustmentAmount, which applies it
+	// in CalculateFixedCharges (reducing fixed line item amounts directly). Not applied inside ComputeInvoice itself.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+}
+
+// ComputeInvoiceResponse is the API response after recomputing a draft invoice with ComputeInvoice.
+type ComputeInvoiceResponse struct {
+	Invoice *InvoiceResponse `json:"invoice"`
+	Skipped bool             `json:"skipped"`
+}
+
 // CreateProrationInvoiceRequest represents the request for creating a proration invoice
 type CreateProrationInvoiceRequest struct {
 	// subscription_id is the unique identifier of the subscription this proration relates to
@@ -906,7 +1066,7 @@ func (r *InvoiceResponse) WithUsageBreakdown(usageBreakdown map[string][]UsageBr
 }
 
 // ListInvoicesResponse represents the paginated response for listing invoices
-type ListInvoicesResponse = types.ListResponse[*InvoiceResponse]
+type ListInvoicesResponse = types.ListResponse[*InvoiceResponse] // @name ListInvoicesResponse
 
 // GetPreviewInvoiceRequest represents the request payload for previewing an invoice
 type GetPreviewInvoiceRequest struct {
@@ -984,11 +1144,48 @@ type CreateSubscriptionInvoiceRequest struct {
 
 	// reference_point defines the point in time used for calculating usage and charges
 	ReferencePoint types.InvoiceReferencePoint `json:"reference_point"`
+
+	// BillingReason optional; when empty, ToDraftRequest defaults to subscription_cycle (subscription_creation flow still forces SUBSCRIPTION_CREATE).
+	BillingReason types.InvoiceBillingReason `json:"billing_reason,omitempty"`
+
+	// OpeningInvoiceAdjustmentAmount is internal: same as InvoiceComputeRequest. Not in public JSON.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+}
+
+// ToDraftRequest builds a CreateDraftInvoiceRequest from the subscription invoice request
+// and pre-fetched subscription fields, avoiding a redundant DB fetch.
+func (r *CreateSubscriptionInvoiceRequest) ToDraftRequest(customerID, subscriptionID, currency, billingPeriod string) CreateDraftInvoiceRequest {
+	billingReason := r.BillingReason
+	if billingReason == "" {
+		billingReason = types.InvoiceBillingReasonSubscriptionCycle
+	}
+	req := CreateDraftInvoiceRequest{
+		CustomerID:     customerID,
+		SubscriptionID: lo.ToPtr(subscriptionID),
+		InvoiceType:    types.InvoiceTypeSubscription,
+		Currency:       currency,
+		BillingPeriod:  &billingPeriod,
+		PeriodStart:    &r.PeriodStart,
+		PeriodEnd:      &r.PeriodEnd,
+		BillingReason:  billingReason,
+	}
+	if r.BillingReason != "" {
+		req.BillingReason = r.BillingReason
+	} else if r.ReferencePoint == types.ReferencePointCancel {
+		req.BillingReason = types.InvoiceBillingReasonProration
+	}
+	return req
 }
 
 func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.BillingReason != "" {
+		if err := r.BillingReason.Validate(); err != nil {
+			return err
+		}
 	}
 
 	if err := r.ReferencePoint.Validate(); err != nil {
@@ -1000,6 +1197,25 @@ func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 			WithHint("Invoice period start must be before period end").
 			Mark(ierr.ErrValidation)
 	}
+
+	if r.BillingReason != "" {
+		if err := r.BillingReason.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if r.OpeningInvoiceAdjustmentAmount != nil && r.BillingReason == types.InvoiceBillingReasonSubscriptionUpdate {
+		if r.OpeningInvoiceAdjustmentAmount.IsNegative() {
+			return ierr.NewError("opening_invoice_adjustment_amount must be non-negative").
+				WithHint("Opening invoice adjustment amount must be non-negative").
+				WithReportableDetails(map[string]any{
+					"opening_invoice_adjustment_amount": r.OpeningInvoiceAdjustmentAmount.String(),
+					"billing_reason":                    r.BillingReason.String(),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 

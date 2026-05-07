@@ -2,6 +2,12 @@
 
 #let invoice-data = json(sys.inputs.path)
 
+// JSON null (e.g. Go nil slice) is Typst none; .at(key, default: ()) does not substitute when the key exists.
+#let json-array(data, key) = {
+  let v = data.at(key, default: none)
+  if v == none { () } else { v }
+}
+
 #show: template.default-invoice.with(
   currency: invoice-data.at("currency", default: "$"),
   precision: invoice-data.at("precision", default: 2),
@@ -48,9 +54,9 @@
       country: invoice-data.at("recipient", default: (:)).at("address", default: (:)).at("country", default: ""),
     )
   ),
-  items: invoice-data.at("line_items", default: ()),
-  applied-taxes: invoice-data.at("applied_taxes", default: ()),
-  applied-discounts: invoice-data.at("applied_discounts", default: ()),
+  items: json-array(invoice-data, "line_items"),
+  applied-taxes: json-array(invoice-data, "applied_taxes"),
+  applied-discounts: json-array(invoice-data, "applied_discounts"),
   styling: (
     font: if "styling" in invoice-data and "font" in invoice-data.styling {
       invoice-data.styling.font

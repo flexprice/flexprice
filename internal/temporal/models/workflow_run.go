@@ -56,17 +56,26 @@ type StartWorkflowOptions struct {
 	WorkflowRunTimeout time.Duration
 	// WorkflowTaskTimeout is the timeout for workflow task processing
 	WorkflowTaskTimeout time.Duration
+
+	// StartDelay is the delay before starting the workflow
+	StartDelay time.Duration
 }
 
 // ToSDKOptions converts StartWorkflowOptions to Temporal SDK client.StartWorkflowOptions
 func (o *StartWorkflowOptions) ToSDKOptions() client.StartWorkflowOptions {
-	return client.StartWorkflowOptions{
+	options := client.StartWorkflowOptions{
 		ID:                       o.ID,
 		TaskQueue:                o.TaskQueue,
 		WorkflowExecutionTimeout: o.WorkflowExecutionTimeout,
 		WorkflowRunTimeout:       o.WorkflowRunTimeout,
 		WorkflowTaskTimeout:      o.WorkflowTaskTimeout,
 	}
+
+	if o.StartDelay.Seconds() > 0 {
+		options.StartDelay = o.StartDelay
+	}
+
+	return options
 }
 
 // TemporalWorkflowResult represents the result of starting a Temporal workflow

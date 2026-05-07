@@ -1,47 +1,40 @@
-# FlexPrice SDK Tests (Published)
+# FlexPrice SDK integration tests
 
-Integration tests for the **published** FlexPrice SDKs. See [SDK PR #1288](https://github.com/flexprice/flexprice/pull/1288).
+Integration tests for the FlexPrice SDKs shipped from this repo (`api/go`, `api/typescript`, `api/python`). See [SDK PR #1288](https://github.com/flexprice/flexprice/pull/1288).
 
-Install the SDK from the registry, set credentials, and run the test for your language. These tests are the **verified reference** for the same API flows used in SDK examples.
+**Default workflow (pre-release):** point tests at the **local** generated SDKs so you validate the tree before publish.
 
-## Test access structure (verified)
+## What “async” means per language
 
-| Language   | Test entrypoint              | Notes |
-| ---------- | ----------------------------- | ----- |
-| **Go**     | `api/tests/go/test_sdk.go`    | Run with `go run -tags published test_sdk.go`. SDK via `replace` in `go.mod` (local `api/go`) or published module. |
-| **Python** | `api/tests/python/test_sdk.py`| Pin flexprice in `api/tests/python/requirements.txt` (e.g. `flexprice==2.0.1`). Use `.venv` and `pip install -r requirements.txt`. |
-| **TypeScript** | `api/tests/ts/test_sdk.ts` | Run with `npm test` (runs `npx ts-node test_sdk.ts`). Depends on `@flexprice/sdk` in `package.json`. |
+| Language | Behavior exercised |
+| -------- | -------------------- |
+| **Go** | Custom `AsyncClient` on `*flexprice.Flexprice` (`NewAsyncClientWithConfig`, `Enqueue`, `Flush`, `Close`) in addition to sync `Events.IngestEvent`. |
+| **TypeScript** | Promise-based SDK calls; bulk path uses `client.events.ingestEventsBulk`. There is no Go-style queued client in TS. |
+| **Python** | Speakeasy `ingest_event_async`, `ingest_events_bulk_async`, and a smoke `list_raw_events_async` via `asyncio` + `async with Flexprice(...)`. |
 
-All three run the same flow: Customers, Features, Plans, Addons, Entitlements, Subscriptions, Invoices, Prices, Payments, Wallets, Credit Grants, Credit Notes, Integrations, **Events** (sync + async), then cleanup. Events ingested via the SDK are stored in ClickHouse (`migrations/clickhouse/000006_create_raw_events.sql`).
+## Test entrypoints
 
-## Packages and repos (canonical)
+| Language | Entry | Local SDK |
+| -------- | ----- | --------- |
+| **Go** | [`api/tests/go/test_sdk.go`](go/test_sdk.go) | `go.mod` `replace github.com/flexprice/go-sdk/v2 => ../../go` |
+| **Python** | [`api/tests/python/test_sdk.py`](python/test_sdk.py) | [`requirements.txt`](python/requirements.txt) uses `-e ../../python` |
+| **TypeScript** | [`api/tests/ts/test_sdk.ts`](ts/test_sdk.ts) | [`package.json`](ts/package.json) uses `"@flexprice/sdk": "file:../../typescript"` (run `npm run build` in `api/typescript` if `esm/` is missing) |
 
-| Language   | Install | Repo |
-| ---------- | ------- | ----- |
-| **Go**     | [go-sdk](https://github.com/flexprice/go-sdk) (GitHub) | [go-sdk](https://github.com/flexprice/go-sdk) |
-| **TypeScript** | `npm i @flexprice/sdk` | [javascript-sdk](https://github.com/flexprice/javascript-sdk) |
-| **MCP**    | `npm i @flexprice/mcp-server` | [mcp-server](https://github.com/flexprice/mcp-server) |
-| **Python** | `pip install flexprice` | [python-sdk](https://github.com/flexprice/python-sdk) |
+**Published SDKs (optional):** Python — [`requirements-published.txt`](python/requirements-published.txt). TypeScript — `npm run test:published` in `api/tests/ts`.
 
 ---
 
 ## Environment (required)
 
-You must **export** base URL and API key so the tests can call the API. Set these before running any test (or `make test-sdk`):
-
-| Variable             | Required | Description                                                                                                                                 |
-| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FLEXPRICE_API_KEY`  | **Yes**  | Your FlexPrice API key.                                                                                                                     |
-| `FLEXPRICE_API_HOST` | **Yes**  | API host and version path (no `https://`). Must include `/v1` (e.g. `us.api.flexprice.io/v1` or `localhost:8080/v1`). No trailing space or slash. |
+| Variable | Required | Description |
+| -------- | -------- | ----------- |
+| `FLEXPRICE_API_KEY` | Yes | API key |
+| `FLEXPRICE_API_HOST` | Yes | Host **and** `/v1` path, **no** `https://` (e.g. `us.api.flexprice.io/v1` or `localhost:8080/v1`). No trailing slash. |
 
 ```bash
 export FLEXPRICE_API_KEY="your-api-key"
 export FLEXPRICE_API_HOST="us.api.flexprice.io/v1"
-# For local server:
-# export FLEXPRICE_API_HOST="localhost:8080/v1"
 ```
-
-If you run `make test-sdk` without these set, the Makefile will exit with instructions to set them.
 
 ---
 
@@ -59,14 +52,7 @@ go run -tags published test_sdk.go
 
 ```bash
 cd api/tests/python
-.venv/bin/pip install -e ../../python
-.venv/bin/python test_sdk.py
-```
-
-**Published SDK (pip, pinned to flexprice 2.0.1):**
-
-```bash
-cd api/tests/python
+python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python test_sdk.py
 ```
@@ -74,30 +60,24 @@ cd api/tests/python
 ### TypeScript
 
 ```bash
+cd api/typescript && npm install && npm run build   # if esm/ output is missing
 cd api/tests/ts
 npm install
 npm test
-# runs: npx ts-node test_sdk.ts
 ```
 
 ---
 
-## Makefile (from repo root)
-
-Run all SDK tests (Go, Python, TypeScript) in one command. Dependencies are installed automatically before each language’s tests:
+## Makefile (repo root)
 
 ```bash
 make test-sdk
-# or
-make test-sdks
 ```
 
-- **Go:** `go mod tidy` + `go mod download` then run tests (SDK is fetched from [go-sdk](https://github.com/flexprice/go-sdk) via a `replace` in `go.mod`).  
-- **Python:** A `.venv` is created in `api/tests/python` and used so system Python is not modified (avoids “externally-managed-environment” on macOS/Homebrew).  
-- **TypeScript:** `npm install` then run tests
+Installs dependencies per language (`go mod tidy`, `pip install -r requirements.txt` with editable local Python SDK, `npm install` with local `file:` TS SDK) then runs each test driver.
 
 ---
 
-## Test coverage
+## Coverage
 
-All variants run the same API flow: Customers, Features, Plans, Addons, Entitlements, Subscriptions, Invoices, Prices, Payments, Wallets, Credit Grants, Credit Notes, Integrations (connections), Events, plus cleanup.
+Same API flow across languages: Customers, Features, Plans, Addons, Entitlements, Subscriptions, Invoices, Prices, Payments, Wallets, Credit Grants, Credit Notes, **Integrations** (skipped where the generated SDK has no list-linked API), **Events** (sync + language-specific async/bulk), then cleanup. Events are stored in ClickHouse (`migrations/clickhouse/000006_create_raw_events.sql`).

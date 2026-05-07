@@ -21,6 +21,7 @@ type FeatureService interface {
 	GetFeatures(ctx context.Context, filter *types.FeatureFilter) (*dto.ListFeaturesResponse, error)
 	UpdateFeature(ctx context.Context, id string, req dto.UpdateFeatureRequest) (*dto.FeatureResponse, error)
 	DeleteFeature(ctx context.Context, id string) error
+	CloneFeature(ctx context.Context, id string, req dto.CloneFeatureRequest) (*dto.FeatureResponse, error)
 }
 
 type featureService struct {
@@ -99,7 +100,7 @@ func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatur
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventFeatureCreated, featureModel.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventFeatureCreated, featureModel.ID)
 
 	response := &dto.FeatureResponse{Feature: featureModel}
 	if featureModel.GroupID != "" {
@@ -365,7 +366,7 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventFeatureUpdated, feature.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventFeatureUpdated, feature.ID)
 
 	response := &dto.FeatureResponse{Feature: feature}
 	if feature.GroupID != "" {
@@ -419,12 +420,12 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 	}
 
 	// Publish webhook event
-	s.publishWebhookEvent(ctx, types.WebhookEventFeatureDeleted, id)
+	s.publishSystemEvent(ctx, types.WebhookEventFeatureDeleted, id)
 
 	return nil
 }
 
-func (s *featureService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, featureID string) {
+func (s *featureService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, featureID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalFeatureEvent{
 		FeatureID: featureID,
 		TenantID:  types.GetTenantID(ctx),
@@ -435,15 +436,144 @@ func (s *featureService) publishWebhookEvent(ctx context.Context, eventName type
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeFeature,
+		EntityID:      featureID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
+}
+
+// CloneFeature clones a feature within the same environment with a new name and lookup_key.
+// Cross-env feature cloning is handled exclusively by the environment clone Temporal workflow.
+func (s *featureService) CloneFeature(ctx context.Context, id string, req dto.CloneFeatureRequest) (*dto.FeatureResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("feature ID is required").
+			WithHint("Please provide a valid feature ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	sourceFeature, err := s.FeatureRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check lookup_key uniqueness among published features in the same environment
+	lookupFilter := types.NewNoLimitFeatureFilter()
+	lookupFilter.LookupKey = req.LookupKey
+	lookupFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	existing, err := s.FeatureRepo.List(ctx, lookupFilter)
+	if err != nil {
+		return nil, err
+	}
+	if len(existing) > 0 {
+		return nil, ierr.NewError("a published feature with this lookup_key already exists").
+			WithHint("Please choose a different lookup_key for the cloned feature").
+			WithReportableDetails(map[string]interface{}{
+				"lookup_key": req.LookupKey,
+			}).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	// Resolve description: request override takes precedence
+	description := sourceFeature.Description
+	if req.Description != nil {
+		description = *req.Description
+	}
+
+	// Merge metadata: source first, then req overlay, then source_feature_id
+	merged := make(types.Metadata, len(sourceFeature.Metadata)+len(req.Metadata)+1)
+	for k, v := range sourceFeature.Metadata {
+		merged[k] = v
+	}
+	for k, v := range req.Metadata {
+		merged[k] = v
+	}
+	merged["source_feature_id"] = id
+
+	newFeature := &feature.Feature{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_FEATURE),
+		Name:          req.Name,
+		LookupKey:     req.LookupKey,
+		Description:   description,
+		Type:          sourceFeature.Type,
+		Metadata:      merged,
+		UnitSingular:  sourceFeature.UnitSingular,
+		UnitPlural:    sourceFeature.UnitPlural,
+		ReportingUnit: sourceFeature.ReportingUnit,
+		AlertSettings: sourceFeature.AlertSettings,
+		GroupID:       sourceFeature.GroupID,
+		EnvironmentID: sourceFeature.EnvironmentID,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+
+	// For metered features, deep-copy the meter so the clone is fully independent.
+	// Sharing the meter would cause UpdateFeature (mutates filters) or DeleteFeature
+	// (disables the meter) on the clone to silently break the source feature.
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if sourceFeature.Type == types.FeatureTypeMetered && sourceFeature.MeterID != "" {
+			sourceMeter, err := s.MeterRepo.GetMeter(txCtx, sourceFeature.MeterID)
+			if err != nil {
+				return fmt.Errorf("failed to fetch source meter: %w", err)
+			}
+			filtersCopy := make([]meter.Filter, len(sourceMeter.Filters))
+			copy(filtersCopy, sourceMeter.Filters)
+			newMeter := &meter.Meter{
+				ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+				Name:          sourceMeter.Name,
+				EventName:     sourceMeter.EventName,
+				Aggregation:   sourceMeter.Aggregation,
+				Filters:       filtersCopy,
+				ResetUsage:    sourceMeter.ResetUsage,
+				EnvironmentID: sourceFeature.EnvironmentID,
+				BaseModel:     types.GetDefaultBaseModel(txCtx),
+			}
+			newMeter.Status = types.StatusPublished
+			if err := s.MeterRepo.CreateMeter(txCtx, newMeter); err != nil {
+				return fmt.Errorf("failed to create meter copy: %w", err)
+			}
+			newFeature.MeterID = newMeter.ID
+		}
+		return s.FeatureRepo.Create(txCtx, newFeature)
+	}); err != nil {
+		return nil, err
+	}
+
+	s.Logger.InfowCtx(ctx, "feature cloned successfully",
+		"source_feature_id", id,
+		"new_feature_id", newFeature.ID,
+	)
+
+	// Publish webhook event
+	s.publishSystemEvent(ctx, types.WebhookEventFeatureCreated, newFeature.ID)
+
+	response := &dto.FeatureResponse{Feature: newFeature}
+	if newFeature.Type == types.FeatureTypeMetered && newFeature.MeterID != "" {
+		clonedMeter, err := s.MeterRepo.GetMeter(ctx, newFeature.MeterID)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch meter for cloned feature response", "meter_id", newFeature.MeterID, "error", err)
+		} else {
+			response.Meter = dto.ToMeterResponse(clonedMeter)
+		}
+	}
+	if newFeature.GroupID != "" {
+		groupService := NewGroupService(s.ServiceParams)
+		if groupResp, err := groupService.GetGroup(ctx, newFeature.GroupID); err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch group for cloned feature response", "group_id", newFeature.GroupID, "error", err)
+		} else {
+			response.Group = groupResp
+		}
+	}
+	return response, nil
 }

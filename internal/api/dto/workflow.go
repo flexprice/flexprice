@@ -7,7 +7,7 @@ import (
 )
 
 // ListWorkflowsResponse represents a paginated list of workflow executions
-type ListWorkflowsResponse = types.ListResponse[*WorkflowExecutionDTO]
+type ListWorkflowsResponse = types.ListResponse[*WorkflowExecutionDTO] // @name ListWorkflowsResponse
 
 // WorkflowExecutionDTO represents a workflow execution summary
 type WorkflowExecutionDTO struct {

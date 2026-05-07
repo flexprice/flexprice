@@ -86,7 +86,7 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 			}
 		}
 
-		onboardingService := NewOnboardingService(s.ServiceParams, s.pubSub)
+		onboardingService := NewOnboardingService(s.ServiceParams)
 
 		err = onboardingService.OnboardNewUserWithTenant(
 			ctx,

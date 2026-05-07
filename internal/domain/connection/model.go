@@ -223,6 +223,56 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			Paddle: paddleMetadata,
 		}
+	case types.SecretProviderZohoBooks:
+		zohoMetadata := &types.ZohoBooksConnectionMetadata{}
+		if clientID, ok := metadata["client_id"].(string); ok {
+			zohoMetadata.ClientID = clientID
+		}
+		if clientSecret, ok := metadata["client_secret"].(string); ok {
+			zohoMetadata.ClientSecret = clientSecret
+		}
+		if refreshToken, ok := metadata["refresh_token"].(string); ok {
+			zohoMetadata.RefreshToken = refreshToken
+		}
+		if accessToken, ok := metadata["access_token"].(string); ok {
+			zohoMetadata.AccessToken = accessToken
+		}
+		if authCode, ok := metadata["auth_code"].(string); ok {
+			zohoMetadata.AuthCode = authCode
+		}
+		if redirectURI, ok := metadata["redirect_uri"].(string); ok {
+			zohoMetadata.RedirectURI = redirectURI
+		}
+		if apiDomain, ok := metadata["api_domain"].(string); ok {
+			zohoMetadata.APIDomain = apiDomain
+		}
+		if accountsServer, ok := metadata["accounts_server"].(string); ok {
+			zohoMetadata.AccountsURL = accountsServer
+		}
+		if location, ok := metadata["location"].(string); ok {
+			zohoMetadata.Location = location
+		}
+		if organizationID, ok := metadata["organization_id"].(string); ok {
+			zohoMetadata.OrganizationID = organizationID
+		}
+		if organizationName, ok := metadata["organization_name"].(string); ok {
+			zohoMetadata.OrganizationName = organizationName
+		}
+		if scopes, ok := metadata["scopes"].(string); ok {
+			zohoMetadata.Scopes = scopes
+		}
+		if accessTokenExpiresAt, ok := metadata["access_token_expires_at"].(string); ok {
+			zohoMetadata.AccessTokenExpiresAt = accessTokenExpiresAt
+		}
+		if oauthSessionData, ok := metadata["oauth_session_data"].(string); ok {
+			zohoMetadata.OAuthSessionData = oauthSessionData
+		}
+		if webhookSecret, ok := metadata["webhook_secret"].(string); ok {
+			zohoMetadata.WebhookSecret = webhookSecret
+		}
+		return types.ConnectionMetadata{
+			ZohoBooks: zohoMetadata,
+		}
 	default:
 		// For other providers or unknown types, use generic format
 		return types.ConnectionMetadata{
@@ -303,6 +353,18 @@ func (c *Connection) IsInvoiceInboundEnabled() bool {
 func (c *Connection) IsInvoiceOutboundEnabled() bool {
 	config := c.GetSyncConfig()
 	return config.Invoice != nil && config.Invoice.Outbound
+}
+
+// IsCustomerOutboundEnabled checks if customer outbound sync is enabled
+func (c *Connection) IsCustomerOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Customer != nil && config.Customer.Outbound
+}
+
+// IsCustomerInboundEnabled checks if customer inbound sync is enabled (e.g. Zoho Books contact created → FlexPrice)
+func (c *Connection) IsCustomerInboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Customer != nil && config.Customer.Inbound
 }
 
 // IsDealInboundEnabled checks if deal inbound sync is enabled

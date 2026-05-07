@@ -332,6 +332,69 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			encryptedMetadata.Paddle.ClientSideToken = encryptedClientSideToken
 		}
 
+	case types.SecretProviderZohoBooks:
+		if encryptedSecretData.ZohoBooks == nil {
+			s.Logger.Warnw("Zoho Books metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("Zoho Books metadata is required").
+				WithHint("Zoho Books connection requires encrypted_secret_data with zoho_books fields").
+				Mark(ierr.ErrValidation)
+		}
+		z := encryptedSecretData.ZohoBooks
+		out := &types.ZohoBooksConnectionMetadata{
+			RedirectURI:          z.RedirectURI,
+			APIDomain:            z.APIDomain,
+			AccountsURL:          z.AccountsURL,
+			Location:             z.Location,
+			OrganizationID:       z.OrganizationID,
+			OrganizationName:     z.OrganizationName,
+			Scopes:               z.Scopes,
+			AccessTokenExpiresAt: z.AccessTokenExpiresAt,
+			OAuthSessionData:     z.OAuthSessionData,
+		}
+		if z.ClientID != "" {
+			v, encErr := s.encryptionService.Encrypt(z.ClientID)
+			if encErr != nil {
+				return types.ConnectionMetadata{}, encErr
+			}
+			out.ClientID = v
+		}
+		if z.ClientSecret != "" {
+			v, encErr := s.encryptionService.Encrypt(z.ClientSecret)
+			if encErr != nil {
+				return types.ConnectionMetadata{}, encErr
+			}
+			out.ClientSecret = v
+		}
+		if z.RefreshToken != "" {
+			v, encErr := s.encryptionService.Encrypt(z.RefreshToken)
+			if encErr != nil {
+				return types.ConnectionMetadata{}, encErr
+			}
+			out.RefreshToken = v
+		}
+		if z.AccessToken != "" {
+			v, encErr := s.encryptionService.Encrypt(z.AccessToken)
+			if encErr != nil {
+				return types.ConnectionMetadata{}, encErr
+			}
+			out.AccessToken = v
+		}
+		if z.AuthCode != "" {
+			v, encErr := s.encryptionService.Encrypt(z.AuthCode)
+			if encErr != nil {
+				return types.ConnectionMetadata{}, encErr
+			}
+			out.AuthCode = v
+		}
+		if z.WebhookSecret != "" {
+			v, encErr := s.encryptionService.Encrypt(z.WebhookSecret)
+			if encErr != nil {
+				return types.ConnectionMetadata{}, encErr
+			}
+			out.WebhookSecret = v
+		}
+		encryptedMetadata.ZohoBooks = out
+
 	default:
 		// For other providers or unknown types, use generic format
 		if encryptedSecretData.Generic != nil {
@@ -586,6 +649,24 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 			}
 			conn.EncryptedSecretData = existingData
 		}
+	}
+
+	// Zoho Books: merge webhook_secret only (plaintext from API → encrypted at rest)
+	if req.EncryptedSecretData != nil && req.EncryptedSecretData.ZohoBooks != nil && req.EncryptedSecretData.ZohoBooks.WebhookSecret != "" {
+		if conn.ProviderType != types.SecretProviderZohoBooks {
+			return nil, ierr.NewError("webhook_secret update is only valid for zoho_books connections").
+				Mark(ierr.ErrValidation)
+		}
+		if conn.EncryptedSecretData.ZohoBooks == nil {
+			return nil, ierr.NewError("Zoho Books connection metadata is missing").
+				Mark(ierr.ErrValidation)
+		}
+		encWS, encErr := s.encryptionService.Encrypt(req.EncryptedSecretData.ZohoBooks.WebhookSecret)
+		if encErr != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to encrypt Zoho webhook secret", "error", encErr, "connection_id", id)
+			return nil, encErr
+		}
+		conn.EncryptedSecretData.ZohoBooks.WebhookSecret = encWS
 	}
 
 	conn.UpdatedAt = time.Now()

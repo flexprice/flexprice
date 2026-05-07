@@ -77,6 +77,7 @@ func ValidateProviderType(providerType string) bool {
 		"razorpay":   true,
 		"paypal":     true,
 		"quickbooks": true,
+		"zoho_books": true,
 	}
 	return validProviders[providerType]
 }
@@ -107,7 +108,7 @@ func Validate(m *EntityIntegrationMapping) error {
 
 	if !ValidateProviderType(m.ProviderType) {
 		return ierr.NewError("invalid provider_type").
-			WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks").
+			WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks, zoho_books").
 			Mark(ierr.ErrValidation)
 	}
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -30,6 +31,10 @@ type SubscriptionPhaseCreateRequest struct {
 	// If not provided, phase will use the same line items as the subscription (plan prices)
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 
+	// LineItems are extra line items to add during this phase, primarily one-time charges.
+	// Each item's start_date defaults to the phase's start_date when not provided.
+	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
+
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
@@ -43,6 +48,17 @@ func (r *SubscriptionPhaseCreateRequest) Validate() error {
 		return ierr.NewError("end_date cannot be before start_date").
 			WithHint("Ensure the phase end date is on or after the start date").
 			Mark(ierr.ErrValidation)
+	}
+
+	// Validate each nested line item (price/price_id presence, date ordering, etc.)
+	// Price and subscription context are not available here; full business-rule
+	// validation is deferred to createPhaseExtraLineItems in the service layer.
+	for i, li := range r.LineItems {
+		if err := li.Validate(nil, nil); err != nil {
+			return ierr.NewErrorf("invalid line_item at index %d: %s", i, err.Error()).
+				WithHint("Check the line item fields at the given index").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil
@@ -252,6 +268,35 @@ func (r *SubscriptionCouponRequest) Validate() error {
 	return nil
 }
 
+// SubscriptionInheritanceConfig groups all inheritance-related fields for
+// subscription creation. Child customers and invoicing customer are specified
+// by external (lookup) IDs; the service resolves them to internal IDs.
+type SubscriptionInheritanceConfig struct {
+	ExternalCustomerIDsToInheritSubscription []string `json:"external_customer_ids_to_inherit_subscription,omitempty"`
+	ParentSubscriptionID                     string   `json:"parent_subscription_id,omitempty"`
+	InvoicingCustomerExternalID              *string  `json:"invoicing_customer_external_id,omitempty"`
+}
+
+// Validate enforces mutual exclusivity:
+//   - parent_subscription_id vs non-empty external_customer_ids_to_inherit_subscription
+//   - invoicing_customer_external_id vs non-empty external_customer_ids_to_inherit_subscription
+func (c *SubscriptionInheritanceConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
+	if c.ParentSubscriptionID != "" && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+		return ierr.NewError("cannot set parent_subscription_id together with external_customer_ids_to_inherit_subscription").
+			WithHint("Use either a parent subscription link or child customers to inherit, not both").
+			Mark(ierr.ErrValidation)
+	}
+	if c.InvoicingCustomerExternalID != nil && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+		return ierr.NewError("cannot set invoicing_customer_external_id together with external_customer_ids_to_inherit_subscription").
+			WithHint("Use either invoicing_customer_external_id or external_customer_ids_to_inherit_subscription, not both").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 type CreateSubscriptionRequest struct {
 
 	// customer_id is the flexprice customer id
@@ -262,30 +307,21 @@ type CreateSubscriptionRequest struct {
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string `json:"external_customer_id"`
 
-	// invoicing_customer_id is the FlexPrice customer ID to use for invoicing.
-	// This can differ from the subscription customer (e.g., a billing entity invoicing on behalf of another customer).
-	// Mutually exclusive with invoicing_customer_external_id.
-	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
+	PlanID    string     `json:"plan_id" validate:"required"`
+	Currency  string     `json:"currency" validate:"required,len=3"`
+	LookupKey string     `json:"lookup_key"`
+	StartDate *time.Time `json:"start_date,omitempty"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
 
-	// invoicing_customer_external_id is the external ID of the customer to use for invoicing.
-	// Resolved internally to an internal customer ID via external ID lookup.
-	// Mutually exclusive with invoicing_customer_id.
-	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
+	// TrialPeriodDays: nil = inherit trial length from plan recurring-fixed prices (must be uniform).
+	// 0 = explicitly no trial (overrides catalog). >0 = override duration in days.
+	TrialPeriodDays *int `json:"trial_period_days,omitempty"`
 
-	// Deprecated: Use invoicing_customer_id or invoicing_customer_external_id instead.
-	// invoice_billing determines which customer should receive invoices for a subscription.
-	// Supported values: "invoice_to_parent" (uses the subscription customer's parent) or "invoice_to_self" (default).
-	// Will be removed in a future version.
-	InvoiceBilling *types.InvoiceBilling `json:"invoice_billing,omitempty"`
+	// TrialStart/TrialEnd are for internal integrations only (e.g. Stripe sync); not accepted from public JSON.
+	TrialStart *time.Time `json:"-"`
+	TrialEnd   *time.Time `json:"-"`
 
-	PlanID             string               `json:"plan_id" validate:"required"`
-	Currency           string               `json:"currency" validate:"required,len=3"`
-	LookupKey          string               `json:"lookup_key"`
-	StartDate          *time.Time           `json:"start_date,omitempty"`
-	EndDate            *time.Time           `json:"end_date,omitempty"`
-	TrialStart         *time.Time           `json:"trial_start,omitempty"`
-	TrialEnd           *time.Time           `json:"trial_end,omitempty"`
-	BillingCadence     types.BillingCadence `json:"billing_cadence" validate:"required"`
+	BillingCadence     types.BillingCadence `json:"-"`
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                  `json:"billing_period_count" default:"1"`
 	Metadata           map[string]string    `json:"metadata,omitempty"`
@@ -354,8 +390,11 @@ type CreateSubscriptionRequest struct {
 	// If not set, the default value is UTC.
 	CustomerTimezone string `json:"customer_timezone" validate:"omitempty,timezone"`
 
-	//Billing Anchor
-	BillingAnchor *time.Time `json:"-"`
+	// BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
+	// For monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date
+	// is before that day in the month, the first billing period ends on the next occurrence of that
+	// day in the same month (a shorter first period); subsequent periods follow the usual interval.
+	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
 
 	// Workflow
 	Workflow *types.TemporalWorkflowType `json:"-"`
@@ -364,14 +403,21 @@ type CreateSubscriptionRequest struct {
 	// If set to "draft", the subscription will be created as a draft (skips invoice creation and payment processing)
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 
-	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
-	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
-
 	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
 	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
 
 	// Enable Commitment True Up Fee
 	EnableTrueUp bool `json:"enable_true_up"`
+
+	// Inheritance groups all customer-hierarchy fields.
+	// When provided with at least one child ID, the subscription becomes a PARENT type.
+	Inheritance *SubscriptionInheritanceConfig `json:"inheritance,omitempty"`
+
+	// SubscriptionType is set internally by the service layer.
+	SubscriptionType types.SubscriptionType `json:"-"`
+
+	// OpeningInvoiceAdjustmentAmount is internal: proration/cancel credit to net the new subscription's first (opening) invoice (e.g. CancelSubscriptionResponse.TotalCreditAmount on immediate plan change). Not in public JSON.
+	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
@@ -382,13 +428,24 @@ type AddAddonRequest struct {
 
 // RemoveAddonRequest is used by body-based endpoint /subscriptions/addon (DELETE)
 type RemoveAddonRequest struct {
-	AddonAssociationID string `json:"addon_association_id" validate:"required"`
-	Reason             string `json:"reason,omitempty"`
+	AddonAssociationID string                  `json:"addon_association_id" validate:"required"`
+	Reason             string                  `json:"reason,omitempty"`
+	ProrationBehavior  types.ProrationBehavior `json:"proration_behavior,omitempty"`
+	// EffectiveDate is the date the cancellation takes effect.
+	// When nil the addon is cancelled at the end of the current period.
+	// When provided it must fall within [CurrentPeriodStart, CurrentPeriodEnd]; mid-period
+	// values combined with create_prorations will issue a wallet credit for unused time.
+	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 }
 
 func (r *RemoveAddonRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+	if r.ProrationBehavior != "" {
+		if err := r.ProrationBehavior.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -400,6 +457,16 @@ type UpdateSubscriptionRequest struct {
 
 	// ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send "" to clear.
 	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
+}
+
+// Validate checks UpdateSubscriptionRequest fields for basic structural validity.
+func (r *UpdateSubscriptionRequest) Validate() error {
+
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // CancelSubscriptionRequest represents the enhanced cancellation request
@@ -417,12 +484,13 @@ type CancelSubscriptionRequest struct {
 	// Reason for cancellation (for audit and business intelligence)
 	Reason string `json:"reason,omitempty"`
 
-	// CancelAt is the custom date to cancel the subscription.
-	// Required when CancellationType is "scheduled_date". Must be in the future.
 	CancelAt *time.Time `json:"cancel_at,omitempty"`
 
 	//SuppressWebhook is an internal flag to suppress webhook events during cancellation.
 	SuppressWebhook bool `json:"-,omitempty"`
+
+	// SkipProrationWalletCredit skips TopUpWalletForProratedCharge when the same proration is settled on the new subscription's opening invoice (immediate plan change).
+	SkipProrationWalletCredit bool `json:"-"`
 }
 
 // CancelSubscriptionResponse represents the enhanced cancellation response
@@ -463,20 +531,6 @@ func (r *CancelSubscriptionRequest) Validate() error {
 		return err
 	}
 
-	// Validate scheduled_date specific fields
-	if r.CancellationType == types.CancellationTypeScheduledDate {
-		if r.CancelAt == nil {
-			return ierr.NewError("cancel_at is required for scheduled_date cancellation type").
-				WithHint("Provide a future date in cancel_at when using scheduled_date cancellation type").
-				Mark(ierr.ErrValidation)
-		}
-		if !r.CancelAt.After(time.Now().UTC()) {
-			return ierr.NewError("cancel_at must be in the future").
-				WithHint("Provide a future date in cancel_at").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
 	// Set default proration behavior if not provided
 	if r.ProrationBehavior == "" {
 		r.ProrationBehavior = types.ProrationBehaviorNone
@@ -486,6 +540,24 @@ func (r *CancelSubscriptionRequest) Validate() error {
 		r.CancelImmediatelyInvoicePolicy = types.CancelImmediatelyInvoicePolicySkip
 	} else if err := r.CancelImmediatelyInvoicePolicy.Validate(); err != nil {
 		return err
+	}
+
+	// CancellationType-specific validation
+	if r.CancellationType == types.CancellationTypeScheduledDate {
+		if r.CancelAt == nil {
+			return ierr.NewError("cancel_at is required for scheduled_date").
+				WithHint("Provide a future date in cancel_at").
+				Mark(ierr.ErrValidation)
+		}
+		now := time.Now().UTC()
+		if !r.CancelAt.After(now) {
+			return ierr.NewError("cancel_at must be a future date for scheduled_date cancellation").
+				WithHint("Provide a date strictly in the future for cancel_at").
+				WithReportableDetails(map[string]interface{}{
+					"cancel_at": r.CancelAt.UTC().Format(time.RFC3339),
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil
@@ -530,7 +602,7 @@ type SubscriptionResponse struct {
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
-type ListSubscriptionsResponse = types.ListResponse[*SubscriptionResponse]
+type ListSubscriptionsResponse = types.ListResponse[*SubscriptionResponse] // @name ListSubscriptionsResponse
 
 // SubscriptionResponseV2 represents the V2 response for a subscription
 // with optional expanded fields based on the request expand parameter
@@ -561,6 +633,17 @@ type SubscriptionResponseV2 struct {
 }
 
 func (r *CreateSubscriptionRequest) Validate() error {
+
+	err := validator.ValidateRequest(r)
+	if err != nil {
+		return err
+	}
+
+	if r.OpeningInvoiceAdjustmentAmount != nil && r.OpeningInvoiceAdjustmentAmount.IsNegative() {
+		return ierr.NewError("opening invoice adjustment amount must be >= 0").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Case- Both are absent
 	if r.CustomerID == "" && r.ExternalCustomerID == "" {
 		return ierr.NewError("either customer_id or external_customer_id is required").
@@ -568,23 +651,10 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// invoicing_customer_id and invoicing_customer_external_id are mutually exclusive
-	if r.InvoicingCustomerID != nil && r.InvoicingCustomerExternalID != nil {
-		return ierr.NewError("only one of invoicing_customer_id or invoicing_customer_external_id may be provided").
-			WithHint("Send either invoicing_customer_id or invoicing_customer_external_id, but not both").
-			Mark(ierr.ErrValidation)
-	}
-
-	// invoice_billing (deprecated) cannot be combined with the new invoicing customer fields
-	if r.InvoiceBilling != nil && (r.InvoicingCustomerID != nil || r.InvoicingCustomerExternalID != nil) {
-		return ierr.NewError("invoice_billing cannot be used together with invoicing_customer_id or invoicing_customer_external_id").
-			WithHint("invoice_billing is deprecated; use invoicing_customer_id or invoicing_customer_external_id instead").
-			Mark(ierr.ErrValidation)
-	}
-
-	err := validator.ValidateRequest(r)
-	if err != nil {
-		return err
+	if r.Inheritance != nil {
+		if err := r.Inheritance.Validate(); err != nil {
+			return err
+		}
 	}
 
 	// Validate currency
@@ -592,6 +662,9 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		return err
 	}
 
+	if r.BillingCadence == "" {
+		r.BillingCadence = types.BILLING_CADENCE_RECURRING
+	}
 	if err := r.BillingCadence.Validate(); err != nil {
 		return err
 	}
@@ -602,6 +675,15 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	if err := r.BillingCycle.Validate(); err != nil {
 		return err
+	}
+	if r.BillingAnchor != nil && r.BillingCycle != types.BillingCycleAnniversary {
+		return ierr.NewError("invalid billing_anchor for billing_cycle").
+			WithHint("billing_anchor can only be passed when billing_cycle is anniversary").
+			WithReportableDetails(map[string]any{
+				"billing_cycle":  r.BillingCycle,
+				"billing_anchor": r.BillingAnchor,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Handle legacy collection method conversion and validation
@@ -630,14 +712,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PaymentBehavior == nil {
 		defaultPaymentBehavior := types.PaymentBehaviorDefaultActive
 		r.PaymentBehavior = &defaultPaymentBehavior
-	}
-
-	// Deprecated: invoice_billing is deprecated in favor of invoicing_customer_id / invoicing_customer_external_id.
-	// Validate the value if it was explicitly provided for backward compatibility.
-	if r.InvoiceBilling != nil {
-		if err := r.InvoiceBilling.Validate(); err != nil {
-			return err
-		}
 	}
 
 	if r.PaymentTerms != nil {
@@ -722,22 +796,28 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.ParentSubscriptionID != nil && lo.FromPtr(r.ParentSubscriptionID) == "" {
-		return ierr.NewError("parent_subscription_id cannot be empty when provided").
-			WithHint("Omit parent_subscription_id or provide a non-empty subscription ID").
-			Mark(ierr.ErrValidation)
-	}
-
-	if r.StartDate != nil && r.StartDate.After(time.Now().UTC()) {
-		return ierr.NewError("start_date cannot be in the future").
-			WithHint("Start date must be in the past or present").
+	if r.TrialPeriodDays != nil && lo.FromPtr(r.TrialPeriodDays) < 0 {
+		return ierr.NewError("trial_period_days must be non-negative").
+			WithHint("Use 0 to disable trial or omit to inherit from plan prices").
 			WithReportableDetails(map[string]interface{}{
-				"start_date": *r.StartDate,
+				"trial_period_days": lo.FromPtr(r.TrialPeriodDays),
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.TrialStart != nil && r.TrialStart.After(*r.StartDate) {
+	if (r.TrialStart != nil) != (r.TrialEnd != nil) {
+		return ierr.NewError("trial_start and trial_end must both be set").
+			WithHint("Internal use only: provide both bounds or neither").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.TrialPeriodDays != nil && lo.FromPtr(r.TrialPeriodDays) > 0 && (r.TrialStart != nil || r.TrialEnd != nil) {
+		return ierr.NewError("cannot set trial_period_days together with trial_start/trial_end").
+			WithHint("Use trial_period_days for API creates, or trial_start/trial_end for gateway sync only").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.StartDate != nil && r.TrialStart != nil && r.TrialStart.After(*r.StartDate) {
 		return ierr.NewError("trial_start cannot be after start_date").
 			WithHint("Trial start date must be before or equal to start date").
 			WithReportableDetails(map[string]interface{}{
@@ -747,13 +827,19 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if r.TrialEnd != nil && r.TrialEnd.Before(*r.StartDate) {
+	if r.StartDate != nil && r.TrialEnd != nil && r.TrialEnd.Before(*r.StartDate) {
 		return ierr.NewError("trial_end cannot be before start_date").
 			WithHint("Trial end date must be after or equal to start date").
 			WithReportableDetails(map[string]interface{}{
 				"start_date": *r.StartDate,
 				"trial_end":  *r.TrialEnd,
 			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.TrialStart != nil && r.TrialEnd != nil && r.TrialEnd.Before(*r.TrialStart) {
+		return ierr.NewError("trial_end cannot be before trial_start").
+			WithHint("trial_end must be on or after trial_start").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1077,6 +1163,24 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		}
 		endDate = r.EndDate
 	}
+	if r.BillingAnchor != nil {
+		billingAnchor = *r.BillingAnchor
+	}
+
+	subscriptionType := r.SubscriptionType
+	if subscriptionType == "" {
+		subscriptionType = types.SubscriptionTypeStandalone
+	}
+
+	var parentSubscriptionID *string
+	if r.Inheritance != nil && r.Inheritance.ParentSubscriptionID != "" {
+		parentSubscriptionID = lo.ToPtr(r.Inheritance.ParentSubscriptionID)
+	}
+
+	var trialStart, trialEnd *time.Time
+	if r.TrialStart != nil && r.TrialEnd != nil {
+		trialStart, trialEnd = r.TrialStart, r.TrialEnd
+	}
 
 	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
@@ -1087,8 +1191,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		SubscriptionStatus: initialStatus,
 		StartDate:          startDate,
 		EndDate:            endDate,
-		TrialStart:         r.TrialStart,
-		TrialEnd:           r.TrialEnd,
+		TrialStart:         trialStart,
+		TrialEnd:           trialEnd,
 		BillingCadence:     r.BillingCadence,
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,
@@ -1104,9 +1208,9 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		PaymentBehavior:        string(paymentBehavior),
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
-		InvoicingCustomerID:    r.InvoicingCustomerID,
-		ParentSubscriptionID:   r.ParentSubscriptionID,
+		ParentSubscriptionID:   parentSubscriptionID,
 		PaymentTerms:           r.PaymentTerms,
+		SubscriptionType:       subscriptionType,
 	}
 
 	// Set commitment amount, duration, and overage factor if provided
@@ -1149,6 +1253,9 @@ type SubscriptionLineItemResponse struct {
 	*subscription.SubscriptionLineItem
 	Price *PriceResponse `json:"price,omitempty"`
 }
+
+// ListSubscriptionLineItemsResponse represents the response for listing subscription line items
+type ListSubscriptionLineItemsResponse = types.ListResponse[*SubscriptionLineItemResponse] // @name ListSubscriptionLineItemsResponse
 
 // OverrideLineItemRequest represents a price override for a specific subscription
 type OverrideLineItemRequest struct {
@@ -1600,6 +1707,10 @@ type SubscriptionUsageByMetersResponse struct {
 	Price                  *price.Price       `json:"price"`
 	IsOverage              bool               `json:"is_overage"`               // Whether this charge is at overage rate
 	OverageFactor          float64            `json:"overage_factor,omitempty"` // Factor applied to this charge if in overage
+
+	// BucketedUsageResult holds per-bucket usage data for bucketed meters (MAX/SUM with bucket_size).
+	// Populated by GetMeterUsageBySubscription so CalculateMeterUsageCharges doesn't re-query ClickHouse.
+	BucketedUsageResult *events.AggregationResult `json:"-"`
 }
 
 type SubscriptionUpdatePeriodResponse struct {

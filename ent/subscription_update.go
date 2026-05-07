@@ -545,6 +545,20 @@ func (su *SubscriptionUpdate) ClearPaymentTerms() *SubscriptionUpdate {
 	return su
 }
 
+// SetSubscriptionType sets the "subscription_type" field.
+func (su *SubscriptionUpdate) SetSubscriptionType(tt types.SubscriptionType) *SubscriptionUpdate {
+	su.mutation.SetSubscriptionType(tt)
+	return su
+}
+
+// SetNillableSubscriptionType sets the "subscription_type" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableSubscriptionType(tt *types.SubscriptionType) *SubscriptionUpdate {
+	if tt != nil {
+		su.SetSubscriptionType(*tt)
+	}
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -998,6 +1012,9 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.PaymentTermsCleared() {
 		_spec.ClearField(subscription.FieldPaymentTerms, field.TypeString)
+	}
+	if value, ok := su.mutation.SubscriptionType(); ok {
+		_spec.SetField(subscription.FieldSubscriptionType, field.TypeString, value)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1870,6 +1887,20 @@ func (suo *SubscriptionUpdateOne) ClearPaymentTerms() *SubscriptionUpdateOne {
 	return suo
 }
 
+// SetSubscriptionType sets the "subscription_type" field.
+func (suo *SubscriptionUpdateOne) SetSubscriptionType(tt types.SubscriptionType) *SubscriptionUpdateOne {
+	suo.mutation.SetSubscriptionType(tt)
+	return suo
+}
+
+// SetNillableSubscriptionType sets the "subscription_type" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableSubscriptionType(tt *types.SubscriptionType) *SubscriptionUpdateOne {
+	if tt != nil {
+		suo.SetSubscriptionType(*tt)
+	}
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -2353,6 +2384,9 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if suo.mutation.PaymentTermsCleared() {
 		_spec.ClearField(subscription.FieldPaymentTerms, field.TypeString)
+	}
+	if value, ok := suo.mutation.SubscriptionType(); ok {
+		_spec.SetField(subscription.FieldSubscriptionType, field.TypeString, value)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

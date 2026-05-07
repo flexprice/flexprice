@@ -181,6 +181,39 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Search subscription line items
+// @ID querySubscriptionLineItems
+// @Description List subscription line items with a JSON filter (subscription, customer, price, pagination, expand=prices, etc.).
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope read
+// @Param filter body types.SubscriptionLineItemFilter true "Filter"
+// @Success 200 {object} dto.ListSubscriptionLineItemsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /subscriptions/lineitems/search [post]
+func (h *SubscriptionHandler) QuerySubscriptionLineItems(c *gin.Context) {
+	var filter types.SubscriptionLineItemFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.ListSubscriptionLineItems(c.Request.Context(), &filter)
+	if err != nil {
+		h.log.Error("Failed to list subscription line items", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Cancel subscription
 // @ID cancelSubscription
 // @Description Use when a customer churns or downgrades. Supports immediate or end-of-period cancellation and proration. Ideal for self-serve or support-driven cancellations.
@@ -650,4 +683,23 @@ func (h *SubscriptionHandler) TriggerSubscriptionWorkflow(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *SubscriptionHandler) TriggerSubscriptionDraftAndComputeWorkflow(c *gin.Context) {
+	subscriptionID := c.Param("subscription_id")
+	if subscriptionID == "" {
+		c.Error(ierr.NewError("subscription_id is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.service.TriggerSubscriptionDraftAndComputeWorkflow(c.Request.Context(), subscriptionID)
+	if err != nil {
+		h.log.Error("Failed to trigger draft-and-compute subscription invoice workflow", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, response)
 }

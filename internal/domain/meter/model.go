@@ -298,3 +298,14 @@ func NewMeter(name string, tenantID, createdBy string) *Meter {
 		ResetUsage: types.ResetUsageBillingPeriod,
 	}
 }
+
+func (m *Meter) ToFilterMap() map[string][]string {
+	if len(m.Filters) == 0 {
+		return nil
+	}
+	filters := make(map[string][]string, len(m.Filters))
+	for _, f := range m.Filters {
+		filters[f.Key] = f.Values
+	}
+	return filters
+}

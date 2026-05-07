@@ -372,6 +372,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		InvoiceNumberSuffixLength:              5,
 		DueDateDays:                            lo.ToPtr(1),
 		AutoCompletePurchasedCreditTransaction: false,
+		FinalizationDelaySeconds:               7200, // 2 hours
 	}
 
 	defaultSubscriptionConfig := SubscriptionConfig{
@@ -385,7 +386,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	}
 
 	defaultTenantConfig := TenantConfig{
-		Production:                    1,
+		Production:                    0,
 		Development:                   2,
 		MaxUsers:                      10,
 		SandboxSubscriptionExpiryDays: 90,

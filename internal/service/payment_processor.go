@@ -82,7 +82,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 			return paymentObj, err
 		}
-		p.publishWebhookEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	} else if paymentObj.PaymentMethodType != types.PaymentMethodTypePaymentLink {
 		// Update payment status to processing and fire pending event
 		// TODO: take a lock on the payment object here to avoid race conditions
@@ -91,7 +91,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 			return paymentObj, err
 		}
-		p.publishWebhookEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	}
 
 	// Process payment based on payment method type
@@ -177,7 +177,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.ErrorMessage = lo.ToPtr(errMsg)
 			failedAt := time.Now().UTC()
 			paymentObj.FailedAt = &failedAt
-			p.publishWebhookEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
+			p.publishSystemEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
 		}
 	} else {
 		// For payment links, keep as pending until external payment completion
@@ -185,13 +185,13 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.PaymentStatus = types.PaymentStatusPending
 			paymentObj.SucceededAt = nil // Keep succeeded_at as nil
 			p.Logger.InfowCtx(ctx, "keeping payment link as pending", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
-			p.publishWebhookEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
+			p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 		} else {
 			paymentObj.PaymentStatus = types.PaymentStatusSucceeded
 			succeededAt := time.Now().UTC()
 			paymentObj.SucceededAt = &succeededAt
 			p.Logger.InfowCtx(ctx, "marking payment as succeeded", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
-			p.publishWebhookEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
+			p.publishSystemEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
 		}
 	}
 
@@ -770,7 +770,7 @@ func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *pay
 	return attempt, nil
 }
 
-func (p *paymentProcessor) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
+func (p *paymentProcessor) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
 		PaymentID: paymentID,
 		TenantID:  types.GetTenantID(ctx),
@@ -782,13 +782,15 @@ func (p *paymentProcessor) publishWebhookEvent(ctx context.Context, eventName ty
 	}
 
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventName,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypePayment,
+		EntityID:      paymentID,
 	}
 	if err := p.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		p.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
@@ -942,32 +944,27 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 	return nil
 }
 
-// handleIncompleteSubscriptionPayment checks if the paid invoice is the first invoice for a subscription
-// and activates the subscription if it's currently in incomplete status
+// handleIncompleteSubscriptionPayment runs subscription activation / trial conversion when a qualifying
+// invoice is fully paid (SUBSCRIPTION_CREATE or SUBSCRIPTION_TRIAL_END).
 func (p *paymentProcessor) handleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error {
 	// Only process subscription invoices that are fully paid
 	if invoice.SubscriptionID == nil || !invoice.AmountRemaining.IsZero() {
 		return nil
 	}
 
-	// Check if this is the first invoice (billing_reason = subscription_create)
-	if invoice.BillingReason != string(types.InvoiceBillingReasonSubscriptionCreate) {
+	if !types.InvoiceBillingReason(invoice.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
 		return nil
 	}
 
-	p.Logger.InfowCtx(ctx, "processing first invoice payment for subscription activation",
+	p.Logger.InfowCtx(ctx, "processing subscription activation after invoice payment",
 		"invoice_id", invoice.ID,
 		"subscription_id", *invoice.SubscriptionID,
 		"billing_reason", invoice.BillingReason)
 
-	// Get the subscription service
 	subscriptionService := NewSubscriptionService(p.ServiceParams)
-
-	// Activate the incomplete subscription
-	err := subscriptionService.ActivateIncompleteSubscription(ctx, *invoice.SubscriptionID)
-	if err != nil {
+	if err := subscriptionService.HandleSubscriptionActivatingInvoicePaid(ctx, invoice); err != nil {
 		return ierr.WithError(err).
-			WithHint("Failed to activate incomplete subscription after first invoice payment").
+			WithHint("Failed to complete subscription activation after invoice payment").
 			WithReportableDetails(map[string]interface{}{
 				"subscription_id": *invoice.SubscriptionID,
 				"invoice_id":      invoice.ID,
@@ -975,7 +972,7 @@ func (p *paymentProcessor) handleIncompleteSubscriptionPayment(ctx context.Conte
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	p.Logger.InfowCtx(ctx, "successfully activated subscription after first invoice payment",
+	p.Logger.InfowCtx(ctx, "successfully processed subscription activation after invoice payment",
 		"invoice_id", invoice.ID,
 		"subscription_id", *invoice.SubscriptionID)
 

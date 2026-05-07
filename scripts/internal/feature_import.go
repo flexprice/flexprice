@@ -429,7 +429,6 @@ func (s *featureImportScript) processRow(ctx context.Context, row FeatureRow) er
 		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount:   1,
 		BillingModel:         types.BILLING_MODEL_FLAT_FEE,
-		BillingCadence:       types.BILLING_CADENCE_RECURRING,
 		MeterID:              meterID,
 		InvoiceCadence:       types.InvoiceCadenceArrear,
 		DisplayName:          row.FeatureName,

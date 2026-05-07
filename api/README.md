@@ -28,8 +28,8 @@ See [AGENTS.md](../AGENTS.md) and [.speakeasy/README.md](../.speakeasy/README.md
 
 ## Usage (high level)
 
-- **API base URL:** Use `https://us.api.flexprice.io/v1` for all SDKs and the MCP server. Always include `/v1` in the base URL; no trailing space or trailing slash.
-- **Go:** `flexprice.New(serverURL, flexprice.WithSecurity(apiKey))` – see `api/go/README.md` and `api/go/examples/`.
+- **API base URL:** Use `https://us.api.flexprice.io/v1` (or your region) in examples and apps: full URL including `https://` and `/v1`; no trailing slash. **Integration tests** in `api/tests/` use a different `FLEXPRICE_API_HOST` shape (host without scheme); see [api/tests/README.md](tests/README.md).
+- **Go:** `flexprice.New(flexprice.WithServerURL(serverURL), flexprice.WithSecurity(apiKey))` — see `api/go/README.md` and `api/go/examples/`.
 - **TypeScript:** `npm i @flexprice/sdk` then import `Flexprice` / `FlexPrice`; optional custom `CustomerPortal` in `src/sdk/customer-portal.ts`.
 - **Python:** `pip install flexprice` then `from flexprice import Flexprice`; examples in `api/python/examples/`.
 - **MCP:** `npm i @flexprice/mcp-server`; run with `npx @flexprice/mcp-server start` (or from `api/mcp`); set `FLEXPRICE_API_KEY` or per-README auth.

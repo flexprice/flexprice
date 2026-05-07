@@ -162,7 +162,7 @@ func NewCouponResponse(c *coupon.Coupon) *CouponResponse {
 }
 
 // ListCouponsResponse represents the response for listing coupons
-type ListCouponsResponse = types.ListResponse[*CouponResponse]
+type ListCouponsResponse = types.ListResponse[*CouponResponse] // @name ListCouponsResponse
 
 // ApplyDiscountRequest represents the request to apply a discount
 type ApplyDiscountRequest struct {

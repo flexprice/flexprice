@@ -19,13 +19,12 @@ type SubscriptionPriceCreateRequest struct {
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                      `json:"billing_period_count"`
 	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
-	BillingCadence     types.BillingCadence     `json:"billing_cadence" validate:"required"`
 	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence" validate:"required"`
 	Amount             *decimal.Decimal         `json:"amount,omitempty" swaggertype:"string"`
 	MeterID            string                   `json:"meter_id,omitempty"`
 	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
 	LookupKey          string                   `json:"lookup_key,omitempty"`
-	TrialPeriod        int                      `json:"trial_period"`
+	TrialPeriodDays    int                      `json:"trial_period_days"`
 	Description        string                   `json:"description,omitempty"`
 	Metadata           map[string]string        `json:"metadata,omitempty"`
 	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
@@ -52,13 +51,12 @@ func (p *SubscriptionPriceCreateRequest) ToCreatePriceRequest(sub *subscription.
 		BillingPeriod:        p.BillingPeriod,
 		BillingPeriodCount:   p.BillingPeriodCount,
 		BillingModel:         p.BillingModel,
-		BillingCadence:       p.BillingCadence,
 		InvoiceCadence:       p.InvoiceCadence,
 		Amount:               p.Amount,
 		MeterID:              p.MeterID,
 		FilterValues:         p.FilterValues,
 		LookupKey:            p.LookupKey,
-		TrialPeriod:          p.TrialPeriod,
+		TrialPeriodDays:      p.TrialPeriodDays,
 		Description:          p.Description,
 		Metadata:             p.Metadata,
 		TierMode:             p.TierMode,
@@ -80,7 +78,8 @@ func (p *SubscriptionPriceCreateRequest) ToCreatePriceRequest(sub *subscription.
 	return req
 }
 
-// CreateSubscriptionLineItemRequest represents the request to create a subscription line item
+// CreateSubscriptionLineItemRequest represents the request to create a subscription line item.
+// For prices with billing_period ONETIME, request end_date is ignored: the line item end_date is always start_date + 1 calendar day (UTC), clamped to the subscription end when present.
 type CreateSubscriptionLineItemRequest struct {
 	// PriceID references an existing price (plan, addon, or subscription-scoped). Exactly one of price_id or price must be set.
 	PriceID string `json:"price_id,omitempty"`
@@ -93,6 +92,9 @@ type CreateSubscriptionLineItemRequest struct {
 	DisplayName          string                          `json:"display_name,omitempty"`
 	SubscriptionPhaseID  *string                         `json:"subscription_phase_id,omitempty"`
 	SkipEntitlementCheck bool                            `json:"-"` // This is used to skip entitlement check when creating a subscription line item
+
+	// ProrationBehavior controls mid-period charge creation. Defaults to none.
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
 	// Commitment fields
 	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
@@ -107,6 +109,9 @@ type CreateSubscriptionLineItemRequest struct {
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
 type DeleteSubscriptionLineItemRequest struct {
 	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
+
+	// ProrationBehavior controls mid-period credit issuance. Defaults to none.
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 }
 
 type UpdateSubscriptionLineItemRequest struct {
@@ -181,8 +186,11 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 			Mark(ierr.ErrValidation)
 	}
 
+	onetimeIgnoresRequestEndDate := (price != nil && price.BillingPeriod == types.BILLING_PERIOD_ONETIME) ||
+		(r.Price != nil && r.Price.BillingPeriod == types.BILLING_PERIOD_ONETIME)
+
 	// Validate start date is not after end date if both are provided
-	if r.StartDate != nil && r.EndDate != nil {
+	if !onetimeIgnoresRequestEndDate && r.StartDate != nil && r.EndDate != nil {
 		if r.StartDate.After(lo.FromPtr(r.EndDate)) {
 			return ierr.NewError("start_date cannot be after end_date").
 				WithHint("Start date cannot be after end date").
@@ -205,7 +213,7 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 					Mark(ierr.ErrValidation)
 			}
 		}
-		if sub.EndDate != nil && r.EndDate != nil {
+		if !onetimeIgnoresRequestEndDate && sub.EndDate != nil && r.EndDate != nil {
 			subEndUTC := lo.FromPtr(sub.EndDate).UTC()
 			endUTC := lo.FromPtr(r.EndDate).UTC()
 			if endUTC.After(subEndUTC) {
@@ -244,6 +252,17 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 						Mark(ierr.ErrValidation)
 				}
 			}
+		}
+	}
+
+	// Note: inline price path (r.Price) is nil here; ONETIME billing period is validated
+	// downstream in CreatePriceRequest.Validate() for that path.
+	// ONETIME charges must use ADVANCE invoice cadence
+	if price != nil && price.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+		if price.InvoiceCadence != "" && price.InvoiceCadence != types.InvoiceCadenceAdvance {
+			return ierr.NewError("ONETIME charges must have invoice_cadence ADVANCE").
+				WithHint("One-time charges are always billed in advance").
+				Mark(ierr.ErrValidation)
 		}
 	}
 
@@ -428,6 +447,16 @@ func (r *CreateSubscriptionLineItemRequest) validateCommitmentFields() error {
 
 // ToSubscriptionLineItem converts the request to a domain subscription line item
 func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context, params LineItemParams) *subscription.SubscriptionLineItem {
+	// Resolve InvoiceCadence from price
+	invoiceCadence := types.InvoiceCadenceAdvance
+	if params.Price != nil {
+		invoiceCadence = params.Price.InvoiceCadence
+		// ONETIME charges default to ADVANCE invoice cadence if not explicitly set
+		if params.Price.BillingPeriod == types.BILLING_PERIOD_ONETIME && invoiceCadence == "" {
+			invoiceCadence = types.InvoiceCadenceAdvance
+		}
+	}
+
 	lineItem := &subscription.SubscriptionLineItem{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
 		SubscriptionID:      params.Subscription.ID,
@@ -436,8 +465,7 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		PriceType:           params.Price.Type,
 		Currency:            params.Subscription.Currency,
 		BillingPeriod:       params.Price.BillingPeriod,
-		InvoiceCadence:      params.Price.InvoiceCadence,
-		TrialPeriod:         params.Price.TrialPeriod,
+		InvoiceCadence:      invoiceCadence,
 		EntityType:          params.EntityType,
 		Metadata:            r.Metadata,
 		SubscriptionPhaseID: r.SubscriptionPhaseID,
@@ -498,7 +526,7 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		}
 	}
 
-	// Set dates: effective start = max(subscription start, price start, request start)
+	// Effective start = latest of subscription start, price start, and request start_date (when provided).
 	startDate := params.Subscription.StartDate
 	if params.Price != nil && params.Price.StartDate != nil && params.Price.StartDate.After(startDate) {
 		startDate = lo.FromPtr(params.Price.StartDate)
@@ -507,8 +535,16 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		startDate = lo.FromPtr(r.StartDate)
 	}
 	lineItem.StartDate = startDate.UTC()
-	// When end date is given: end = max(price/request end, line item start) so start is never after end
-	if r.EndDate != nil {
+
+	if params.Price != nil && params.Price.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+		end := lineItem.StartDate.Add(time.Second)
+		if sub := params.Subscription; sub != nil && sub.EndDate != nil {
+			if se := lo.FromPtr(sub.EndDate).UTC(); end.After(se) {
+				end = se
+			}
+		}
+		lineItem.EndDate = end
+	} else if r.EndDate != nil {
 		endDateVal := r.EndDate.UTC()
 		if startDate.After(endDateVal) {
 			endDateVal = startDate.UTC()
@@ -599,7 +635,6 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		Currency:         existingLineItem.Currency,
 		BillingPeriod:    existingLineItem.BillingPeriod,
 		InvoiceCadence:   existingLineItem.InvoiceCadence,
-		TrialPeriod:      existingLineItem.TrialPeriod,
 		EntityType:       existingLineItem.EntityType,
 		EntityID:         existingLineItem.EntityID,
 		PlanDisplayName:  existingLineItem.PlanDisplayName,

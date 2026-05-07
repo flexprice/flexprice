@@ -34,8 +34,6 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
-	// FieldType holds the string denoting the type field in the database.
-	FieldType = "type"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// EdgeEntitlements holds the string denoting the entitlements edge name in mutations.
@@ -64,7 +62,6 @@ var Columns = []string{
 	FieldLookupKey,
 	FieldName,
 	FieldDescription,
-	FieldType,
 	FieldMetadata,
 }
 
@@ -95,8 +92,6 @@ var (
 	LookupKeyValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
-	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
-	TypeValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Addon queries.
@@ -155,11 +150,6 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
-}
-
-// ByType orders the results by the type field.
-func ByType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldType, opts...).ToFunc()
 }
 
 // ByEntitlementsCount orders the results by entitlements count.

@@ -3,6 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -59,6 +60,12 @@ func (s *BillingActivities) CheckDraftSubscriptionActivity(
 		}, nil
 	}
 
+	if sub.SubscriptionType == types.SubscriptionTypeInherited {
+		return &subscriptionModels.CheckDraftSubscriptionActivityOutput{
+			IsInherited: true,
+		}, nil
+	}
+
 	return &subscriptionModels.CheckDraftSubscriptionActivityOutput{
 		IsDraft: false,
 	}, nil
@@ -112,14 +119,15 @@ func (s *BillingActivities) CreateDraftInvoicesActivity(
 
 	invoices := make([]string, 0)
 	for _, period := range input.Periods {
-		invoice, err := subscriptionService.CreateDraftInvoiceForSubscription(ctx, input.SubscriptionID, period)
+		draft, err := subscriptionService.CreateDraftInvoiceForSubscription(ctx, input.SubscriptionID, period)
 		if err != nil {
 			return nil, err
 		}
-		// Skip nil invoices (zero-amount invoices)
-		if invoice != nil {
-			invoices = append(invoices, invoice.ID)
+		if draft == nil {
+			return nil, fmt.Errorf("CreateDraftInvoiceForSubscription returned nil for subscription %s period %s-%s",
+				input.SubscriptionID, period.Start, period.End)
 		}
+		invoices = append(invoices, draft.ID)
 	}
 
 	return &subscriptionModels.CreateInvoicesActivityOutput{
@@ -166,6 +174,32 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 		"new_period_start", input.PeriodStart,
 		"new_period_end", input.PeriodEnd)
 
+	// TODO: Think on this later, if we need to cascade the period update to inherited child subscriptions
+	// Cascade period update to INHERITED child subscriptions
+	// if sub.SubscriptionType == types.SubscriptionTypeParent {
+	// 	inheritedFilter := types.NewNoLimitSubscriptionFilter()
+	// 	inheritedFilter.ParentSubscriptionIDs = []string{sub.ID}
+	// 	inheritedFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	// 	inheritedFilter.SubscriptionStatus = []types.SubscriptionStatus{
+	// 		types.SubscriptionStatusActive,
+	// 		types.SubscriptionStatusTrialing,
+	// 	}
+
+	// 	inheritedSubs, err := s.serviceParams.SubRepo.List(ctx, inheritedFilter)
+	// 	if err != nil {
+	// 		s.logger.Errorw("failed to list inherited subs for period cascade", "error", err, "parent_sub", sub.ID)
+	// 	} else {
+	// 		for _, child := range inheritedSubs {
+	// 			child.CurrentPeriodStart = input.PeriodStart
+	// 			child.CurrentPeriodEnd = input.PeriodEnd
+	// 			if err := s.serviceParams.SubRepo.Update(ctx, child); err != nil {
+	// 				s.logger.Errorw("failed to update inherited sub period",
+	// 					"child_sub_id", child.ID, "parent_sub_id", sub.ID, "error", err)
+	// 			}
+	// 		}
+	// 	}
+	// }
+
 	return &subscriptionModels.UpdateSubscriptionPeriodActivityOutput{
 		Success: true,
 	}, nil
@@ -195,7 +229,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 	}
 
 	for _, invoiceID := range input.InvoiceIDs {
-		_, err := temporalSvc.ExecuteWorkflow(
+		_, err := temporalSvc.ExecuteWorkflowWithDelay(
 			ctx,
 			types.TemporalProcessInvoiceWorkflow,
 			invoiceModels.ProcessInvoiceWorkflowInput{
@@ -204,6 +238,7 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 				EnvironmentID: input.EnvironmentID,
 				UserID:        input.UserID,
 			},
+			900+rand.Intn(300), // adding a random delay between 900 and 1200 seconds
 		)
 		if err != nil {
 			s.logger.Errorw("failed to trigger invoice workflow",
@@ -276,13 +311,19 @@ func (s *BillingActivities) CheckCancellationActivity(
 				return err
 			}
 
-			// Update the cancellation schedule status to executed
 			subscriptionService := service.NewSubscriptionService(s.serviceParams)
+
+			// Update the cancellation schedule status to executed
 			if err := subscriptionService.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
 				s.logger.Errorw("failed to mark cancellation schedule as executed",
 					"subscription_id", sub.ID,
 					"error", err)
 				// Don't fail the transaction, just log the error
+			}
+
+			// Match CancelSubscription / cron processSubscriptionPeriod: cancel inherited child subs with the parent
+			if err := subscriptionService.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
+				return err
 			}
 
 			return nil

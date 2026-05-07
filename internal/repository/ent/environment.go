@@ -136,6 +136,7 @@ func (r *environmentRepository) List(ctx context.Context, filter types.Filter) (
 		Query().
 		Where(
 			entEnvironment.TenantID(tenantID),
+			entEnvironment.StatusIn(string(types.StatusPublished)),
 		).
 		Order(ent.Desc(entEnvironment.FieldCreatedAt)).
 		Limit(filter.Limit).

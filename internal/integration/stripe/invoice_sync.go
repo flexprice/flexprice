@@ -171,9 +171,15 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 		params.CollectionMethod = stripe.String(string(stripe.InvoiceCollectionMethodChargeAutomatically))
 	}
 
-	// Set due date only for send_invoice collection method
-	if flexInvoice.DueDate != nil && collectionMethod == types.CollectionMethodSendInvoice {
-		params.DueDate = stripe.Int64(flexInvoice.DueDate.Unix())
+	// Stripe requires due_date when collection_method is send_invoice.
+	// Use the invoice due date if it's at least 15 minutes from now; otherwise default.
+	if collectionMethod == types.CollectionMethodSendInvoice {
+		minDueDate := time.Now().UTC().Add(15 * time.Minute)
+		dueDate := time.Now().UTC().Add(time.Duration(types.InvoiceDefaultDueDays) * 24 * time.Hour)
+		if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(minDueDate) {
+			dueDate = *flexInvoice.DueDate
+		}
+		params.DueDate = stripe.Int64(dueDate.Unix())
 	}
 
 	// Create the invoice

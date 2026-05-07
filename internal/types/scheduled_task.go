@@ -9,6 +9,7 @@ type ScheduledTaskInterval string
 
 const (
 	ScheduledTaskIntervalEvery15Minutes ScheduledTaskInterval = "15MIN"
+	ScheduledTaskIntervalEvery30Minutes ScheduledTaskInterval = "30MIN"
 	ScheduledTaskIntervalCustom         ScheduledTaskInterval = "custom" // 10 minutes for testing
 	ScheduledTaskIntervalHourly         ScheduledTaskInterval = "hourly"
 	ScheduledTaskIntervalDaily          ScheduledTaskInterval = "daily"
@@ -18,6 +19,7 @@ const (
 func (s ScheduledTaskInterval) Validate() error {
 	allowedIntervals := []ScheduledTaskInterval{
 		ScheduledTaskIntervalEvery15Minutes,
+		ScheduledTaskIntervalEvery30Minutes,
 		ScheduledTaskIntervalCustom,
 		ScheduledTaskIntervalHourly,
 		ScheduledTaskIntervalDaily,
@@ -33,7 +35,7 @@ func (s ScheduledTaskInterval) Validate() error {
 		}
 	}
 	return ierr.NewError("invalid scheduled task interval").
-		WithHint("Interval must be one of: 15MIN, custom, hourly, daily").
+		WithHint("Interval must be one of: 15MIN, 30MIN, custom, hourly, daily").
 		Mark(ierr.ErrValidation)
 }
 
@@ -41,10 +43,11 @@ func (s ScheduledTaskInterval) Validate() error {
 type ScheduledTaskEntityType string
 
 const (
-	ScheduledTaskEntityTypeEvents       ScheduledTaskEntityType = "events"
-	ScheduledTaskEntityTypeInvoice      ScheduledTaskEntityType = "invoice"
-	ScheduledTaskEntityTypeCreditTopups ScheduledTaskEntityType = "credit_topups"
-	ScheduledTaskEntityTypeCreditUsage  ScheduledTaskEntityType = "credit_usage"
+	ScheduledTaskEntityTypeEvents         ScheduledTaskEntityType = "events"
+	ScheduledTaskEntityTypeInvoice        ScheduledTaskEntityType = "invoice"
+	ScheduledTaskEntityTypeCreditTopups   ScheduledTaskEntityType = "credit_topups"
+	ScheduledTaskEntityTypeCreditUsage    ScheduledTaskEntityType = "credit_usage"
+	ScheduledTaskEntityTypeUsageAnalytics ScheduledTaskEntityType = "usage_analytics"
 )
 
 // Validate validates the entity type
@@ -54,6 +57,7 @@ func (e ScheduledTaskEntityType) Validate() error {
 		ScheduledTaskEntityTypeInvoice,
 		ScheduledTaskEntityTypeCreditTopups,
 		ScheduledTaskEntityTypeCreditUsage,
+		ScheduledTaskEntityTypeUsageAnalytics,
 	}
 	if e == "" {
 		return ierr.NewError("entity type is required").
@@ -66,7 +70,7 @@ func (e ScheduledTaskEntityType) Validate() error {
 		}
 	}
 	return ierr.NewError("invalid entity type").
-		WithHint("Entity type must be one of: events, invoices, credit_topups").
+		WithHint("Entity type must be one of: events, invoice, credit_topups, credit_usage, usage_analytics").
 		Mark(ierr.ErrValidation)
 }
 
@@ -174,13 +178,14 @@ func (s *S3ExportConfig) Validate() error {
 // S3JobConfig represents the configuration for an S3 export job
 // This is stored in the job_config JSON field of scheduled_tasks table
 type S3JobConfig struct {
-	Bucket       string            `json:"bucket"`                   // S3 bucket name
-	Region       string            `json:"region"`                   // AWS region (e.g., "us-west-2")
-	KeyPrefix    string            `json:"key_prefix,omitempty"`     // Optional prefix for S3 keys (e.g., "flexprice-exports/")
-	Compression  S3CompressionType `json:"compression,omitempty"`    // Compression type: "gzip", "none" (default: "none")
-	Encryption   S3EncryptionType  `json:"encryption,omitempty"`     // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")
-	EndpointURL  string            `json:"endpoint_url,omitempty"`   // Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
-	UsePathStyle bool              `json:"use_path_style,omitempty"` // Use path-style addressing instead of virtual-hosted-style (required for MinIO)
+	Bucket               string               `json:"bucket"`                           // S3 bucket name
+	Region               string               `json:"region"`                           // AWS region (e.g., "us-west-2")
+	KeyPrefix            string               `json:"key_prefix,omitempty"`             // Optional prefix for S3 keys (e.g., "flexprice-exports/")
+	Compression          S3CompressionType    `json:"compression,omitempty"`            // Compression type: "gzip", "none" (default: "none")
+	Encryption           S3EncryptionType     `json:"encryption,omitempty"`             // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")
+	EndpointURL          string               `json:"endpoint_url,omitempty"`           // Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
+	UsePathStyle         bool                 `json:"use_path_style,omitempty"`         // Use path-style addressing (required for MinIO)
+	ExportMetadataFields ExportMetadataFields `json:"export_metadata_fields,omitempty"` // Optional user-selected metadata columns
 }
 
 // Validate validates the S3 job configuration
@@ -273,4 +278,105 @@ type UpdateScheduledTaskInput struct {
 	Interval  *ScheduledTaskInterval
 	Enabled   *bool
 	JobConfig *S3JobConfig
+}
+
+// ExportMetadataEntityType identifies which entity's metadata a field is read from.
+type ExportMetadataEntityType string
+
+const (
+	ExportMetadataEntityTypeCustomer ExportMetadataEntityType = "customer"
+	ExportMetadataEntityTypeWallet   ExportMetadataEntityType = "wallet"
+)
+
+// allowedMetadataEntityTypes maps each export entity type to the metadata entity types it supports.
+var allowedMetadataEntityTypes = map[ScheduledTaskEntityType][]ExportMetadataEntityType{
+	ScheduledTaskEntityTypeCreditUsage:    {ExportMetadataEntityTypeCustomer, ExportMetadataEntityTypeWallet},
+	ScheduledTaskEntityTypeUsageAnalytics: {ExportMetadataEntityTypeCustomer},
+}
+
+func (e ExportMetadataEntityType) Validate() error {
+	allowedTypes := []ExportMetadataEntityType{
+		ExportMetadataEntityTypeCustomer,
+		ExportMetadataEntityTypeWallet,
+	}
+	if e == "" {
+		return nil // Optional field
+	}
+	for _, entityType := range allowedTypes {
+		if e == entityType {
+			return nil
+		}
+	}
+	return ierr.NewError("invalid export metadata field entity_type").
+		WithHint("invalid export metadata field entity_type").
+		WithReportableDetails(map[string]interface{}{
+			"entity_type":   e,
+			"allowed_types": allowedTypes,
+		}).
+		Mark(ierr.ErrValidation)
+}
+
+// ExportMetadataField describes one user-selected metadata field to append to an export CSV.
+type ExportMetadataField struct {
+	EntityType ExportMetadataEntityType `json:"entity_type" validate:"required"` // which entity's metadata to read from
+	FieldKey   string                   `json:"field_key" validate:"required"`   // metadata key to look up
+	ColumnName string                   `json:"column_name,omitempty"`           // CSV column header to be shown in the exported file
+}
+
+// ExportMetadataFields is a named slice type so validation methods can be attached.
+type ExportMetadataFields []ExportMetadataField
+
+// ValidateAndDefault validates each field against the allowed metadata entity types for the given
+// export entity type, then normalises defaults. The entity-type check runs first so the error
+// message is meaningful before any defaulting happens.
+func (fields ExportMetadataFields) ValidateAndDefault(exportEntity ScheduledTaskEntityType) error {
+	allowed, ok := allowedMetadataEntityTypes[exportEntity]
+	if !ok {
+		return ierr.NewError("export_metadata_fields are not supported for this export type").
+			Mark(ierr.ErrValidation)
+	}
+
+	for i := range fields {
+		f := &fields[i]
+		if f.EntityType == "" {
+			return ierr.NewError("export metadata field entity_type is required").
+				WithHintf("export_metadata_fields[%d] is missing entity_type", i).
+				Mark(ierr.ErrValidation)
+		}
+		supported := false
+		for _, a := range allowed {
+			if f.EntityType == a {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			return ierr.NewError("unsupported metadata entity_type for this export").
+				WithHintf("unsupported metadata entity_type for this export").
+				WithReportableDetails(map[string]interface{}{
+					"index":         i,
+					"entity_type":   f.EntityType,
+					"allowed_types": allowed,
+					"export_entity": exportEntity,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if f.FieldKey == "" {
+			return ierr.NewError("export metadata field field_key is required").
+				WithHintf("export_metadata_fields[%d] is missing field_key", i).
+				Mark(ierr.ErrValidation)
+		}
+		if f.ColumnName == "" {
+			f.ColumnName = f.FieldKey
+		}
+	}
+	return nil
+}
+
+// GetExportMetadataFields returns the export metadata fields slice, safe to call on nil config.
+func (s *S3JobConfig) GetExportMetadataFields() ExportMetadataFields {
+	if s == nil {
+		return nil
+	}
+	return s.ExportMetadataFields
 }

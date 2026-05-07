@@ -290,6 +290,14 @@ func (pc *PriceCreate) SetBillingCadence(tc types.BillingCadence) *PriceCreate {
 	return pc
 }
 
+// SetNillableBillingCadence sets the "billing_cadence" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableBillingCadence(tc *types.BillingCadence) *PriceCreate {
+	if tc != nil {
+		pc.SetBillingCadence(*tc)
+	}
+	return pc
+}
+
 // SetInvoiceCadence sets the "invoice_cadence" field.
 func (pc *PriceCreate) SetInvoiceCadence(tc types.InvoiceCadence) *PriceCreate {
 	pc.mutation.SetInvoiceCadence(tc)
@@ -304,16 +312,16 @@ func (pc *PriceCreate) SetNillableInvoiceCadence(tc *types.InvoiceCadence) *Pric
 	return pc
 }
 
-// SetTrialPeriod sets the "trial_period" field.
-func (pc *PriceCreate) SetTrialPeriod(i int) *PriceCreate {
-	pc.mutation.SetTrialPeriod(i)
+// SetTrialPeriodDays sets the "trial_period_days" field.
+func (pc *PriceCreate) SetTrialPeriodDays(i int) *PriceCreate {
+	pc.mutation.SetTrialPeriodDays(i)
 	return pc
 }
 
-// SetNillableTrialPeriod sets the "trial_period" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableTrialPeriod(i *int) *PriceCreate {
+// SetNillableTrialPeriodDays sets the "trial_period_days" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableTrialPeriodDays(i *int) *PriceCreate {
 	if i != nil {
-		pc.SetTrialPeriod(*i)
+		pc.SetTrialPeriodDays(*i)
 	}
 	return pc
 }
@@ -595,9 +603,13 @@ func (pc *PriceCreate) defaults() {
 		v := price.DefaultConversionRate
 		pc.mutation.SetConversionRate(v)
 	}
-	if _, ok := pc.mutation.TrialPeriod(); !ok {
-		v := price.DefaultTrialPeriod
-		pc.mutation.SetTrialPeriod(v)
+	if _, ok := pc.mutation.BillingCadence(); !ok {
+		v := price.DefaultBillingCadence
+		pc.mutation.SetBillingCadence(v)
+	}
+	if _, ok := pc.mutation.TrialPeriodDays(); !ok {
+		v := price.DefaultTrialPeriodDays
+		pc.mutation.SetTrialPeriodDays(v)
 	}
 	if _, ok := pc.mutation.EntityType(); !ok {
 		v := price.DefaultEntityType
@@ -697,8 +709,13 @@ func (pc *PriceCreate) check() error {
 			return &ValidationError{Name: "invoice_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.invoice_cadence": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.TrialPeriod(); !ok {
-		return &ValidationError{Name: "trial_period", err: errors.New(`ent: missing required field "Price.trial_period"`)}
+	if _, ok := pc.mutation.TrialPeriodDays(); !ok {
+		return &ValidationError{Name: "trial_period_days", err: errors.New(`ent: missing required field "Price.trial_period_days"`)}
+	}
+	if v, ok := pc.mutation.TrialPeriodDays(); ok {
+		if err := price.TrialPeriodDaysValidator(v); err != nil {
+			return &ValidationError{Name: "trial_period_days", err: fmt.Errorf(`ent: validator failed for field "Price.trial_period_days": %w`, err)}
+		}
 	}
 	if v, ok := pc.mutation.TierMode(); ok {
 		if err := v.Validate(); err != nil {
@@ -853,9 +870,9 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_spec.SetField(price.FieldInvoiceCadence, field.TypeString, value)
 		_node.InvoiceCadence = value
 	}
-	if value, ok := pc.mutation.TrialPeriod(); ok {
-		_spec.SetField(price.FieldTrialPeriod, field.TypeInt, value)
-		_node.TrialPeriod = value
+	if value, ok := pc.mutation.TrialPeriodDays(); ok {
+		_spec.SetField(price.FieldTrialPeriodDays, field.TypeInt, value)
+		_node.TrialPeriodDays = value
 	}
 	if value, ok := pc.mutation.MeterID(); ok {
 		_spec.SetField(price.FieldMeterID, field.TypeString, value)

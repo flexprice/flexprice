@@ -70,6 +70,7 @@ type ServiceParams struct {
 	ProcessedEventRepo           events.ProcessedEventRepository
 	FeatureUsageRepo             events.FeatureUsageRepository
 	RawEventRepo                 events.RawEventRepository
+	MeterUsageRepo               events.MeterUsageRepository
 	MeterRepo                    meter.Repository
 	PriceRepo                    price.Repository
 	PriceUnitRepo                priceunit.Repository
@@ -126,6 +127,7 @@ type ServiceParams struct {
 
 	// PubSubs
 	WalletBalanceAlertPubSub types.WalletBalanceAlertPubSub
+	UsageBenchmarkPubSub     types.UsageBenchmarkPubSub
 	WebhookPubSub            pubsub.PubSub
 }
 
@@ -142,6 +144,7 @@ func NewServiceParams(
 	processedEventRepo events.ProcessedEventRepository,
 	featureUsageRepo events.FeatureUsageRepository,
 	rawEventRepo events.RawEventRepository,
+	meterUsageRepo events.MeterUsageRepository,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
 	priceUnitRepo priceunit.Repository,
@@ -187,6 +190,7 @@ func NewServiceParams(
 	prorationCalculator proration.Calculator,
 	integrationFactory *integration.Factory,
 	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
+	usageBenchmarkPubSub types.UsageBenchmarkPubSub,
 	webhookPubSub pubsub.PubSub,
 	planPriceSyncRepo planpricesync.Repository,
 	workflowExecutionRepo workflowexecution.Repository,
@@ -203,6 +207,7 @@ func NewServiceParams(
 		ProcessedEventRepo:           processedEventRepo,
 		FeatureUsageRepo:             featureUsageRepo,
 		RawEventRepo:                 rawEventRepo,
+		MeterUsageRepo:               meterUsageRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,
 		PriceUnitRepo:                priceUnitRepo,
@@ -248,6 +253,7 @@ func NewServiceParams(
 		ProrationCalculator:          prorationCalculator,
 		IntegrationFactory:           integrationFactory,
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
+		UsageBenchmarkPubSub:         usageBenchmarkPubSub,
 		WebhookPubSub:                webhookPubSub,
 		PlanPriceSyncRepo:            planPriceSyncRepo,
 		WorkflowExecutionRepo:        workflowExecutionRepo,

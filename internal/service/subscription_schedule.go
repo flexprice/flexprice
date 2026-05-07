@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -486,6 +487,11 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 	sub.CancelAtPeriodEnd = config.OriginalCancelAtPeriodEnd
 	sub.CancelAt = config.OriginalCancelAt
 	sub.EndDate = config.OriginalEndDate
+	// Restore CurrentPeriodEnd if it was shortened at scheduling time (scheduled_date with effectiveDate < period end).
+	// Nil-safe: old schedule records without this field are handled gracefully.
+	if config.OriginalCurrentPeriodEnd != nil {
+		sub.CurrentPeriodEnd = lo.FromPtr(config.OriginalCurrentPeriodEnd)
+	}
 
 	// Update the subscription
 	if err := s.SubRepo.Update(ctx, sub); err != nil {

@@ -29,6 +29,7 @@ type PaddleClient interface {
 	GetSDKClient(ctx context.Context) (*paddle.SDK, *PaddleConfig, error)
 	CreateCustomer(ctx context.Context, req *paddle.CreateCustomerRequest) (*paddle.Customer, error)
 	CreateAddress(ctx context.Context, customerID string, req *paddle.CreateAddressRequest) (*paddle.Address, error)
+	UpdateAddress(ctx context.Context, customerID string, addressID string, req *paddle.UpdateAddressRequest) (*paddle.Address, error)
 	CreateTransaction(ctx context.Context, req *paddle.CreateTransactionRequest) (*paddle.Transaction, error)
 	PreviewTransaction(ctx context.Context, req *paddle.PreviewTransactionCreateRequest) (*paddle.TransactionPreview, error)
 	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string, webhookSecret string) error
@@ -247,6 +248,37 @@ func (c *Client) CreateAddress(ctx context.Context, customerID string, req *padd
 	}
 
 	c.logger.Infow("successfully created address in Paddle",
+		"address_id", address.ID,
+		"customer_id", customerID)
+	return address, nil
+}
+
+// UpdateAddress updates an existing address for a customer in Paddle
+func (c *Client) UpdateAddress(ctx context.Context, customerID string, addressID string, req *paddle.UpdateAddressRequest) (*paddle.Address, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	req.CustomerID = customerID
+	req.AddressID = addressID
+	address, err := client.UpdateAddress(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to update address in Paddle",
+			"error", err,
+			"customer_id", customerID,
+			"address_id", addressID)
+		return nil, ierr.NewError("failed to update address in Paddle").
+			WithHint("Unable to update address in Paddle").
+			WithReportableDetails(map[string]interface{}{
+				"error":       err.Error(),
+				"customer_id": customerID,
+				"address_id":  addressID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	c.logger.Infow("successfully updated address in Paddle",
 		"address_id", address.ID,
 		"customer_id", customerID)
 	return address, nil

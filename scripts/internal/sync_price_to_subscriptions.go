@@ -176,7 +176,6 @@ func SyncPriceToSubscriptions() error {
 			Currency:         sub.Currency,
 			BillingPeriod:    sub.BillingPeriod,
 			InvoiceCadence:   p.InvoiceCadence,
-			TrialPeriod:      p.TrialPeriod,
 			StartDate:        startDate,
 			Metadata:         nil,
 			EnvironmentID:    sub.EnvironmentID,

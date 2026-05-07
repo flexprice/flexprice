@@ -122,8 +122,6 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			Immutable().
 			Optional().
 			GoType(types.InvoiceCadence("")), // TODO: Remove this once we have migrated all the data
-		field.Int("trial_period").
-			Default(0),
 		field.Time("start_date").
 			Optional().
 			Nillable(),
@@ -131,6 +129,15 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 		field.String("subscription_phase_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+		// addon_association_id links this line item to the AddonAssociation that created it.
+		// Set once on creation (immutable); nil for line items not originating from an addon add.
+		field.String("addon_association_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).

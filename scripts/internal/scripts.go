@@ -13,12 +13,16 @@ import (
 
 // GenerateNewAPIKey generates a new API key
 func GenerateNewAPIKey() error {
-	// Generate a new API key
-	rawKey := auth.GenerateAPIKey()
-	hashedKey := auth.HashAPIKey(rawKey)
-
 	userID := os.Getenv("USER_ID")
 	tenantID := os.Getenv("TENANT_ID")
+	rawAPIKey := os.Getenv("SCRIPT_FLEXPRICE_API_KEY")
+
+	if rawAPIKey == "" {
+		rawAPIKey = auth.GenerateAPIKey()
+	}
+
+	// Generate a new API key
+	hashedKey := auth.HashAPIKey(rawAPIKey)
 
 	// Create API key details (customize these values)
 	details := config.APIKeyDetails{
@@ -40,7 +44,7 @@ func GenerateNewAPIKey() error {
 	}
 
 	fmt.Printf("\nNew API Key Generated:\n")
-	fmt.Printf("Raw Key (give this to your customer): %s\n", rawKey)
+	fmt.Printf("Raw Key (give this to your customer): %s\n", rawAPIKey)
 	fmt.Printf("\nConfiguration:\n")
 	fmt.Printf("Add this to your config.yaml under auth.api_key.keys:\n")
 	fmt.Printf("%s:\n", hashedKey)

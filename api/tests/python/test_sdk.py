@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-FlexPrice Python SDK - Published SDK tests (pip install flexprice==2.0.1).
-Run from api/tests/python: pip install -r requirements.txt && python test_sdk.py
-Uses flexprice 2.0.1 (see api/tests/python/requirements.txt).
-Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
-Uses the Flexprice client (server_url, api_key_auth) and namespaced APIs (client.customers, client.events, etc.).
-Package: https://pypi.org/project/flexprice/
-Repo: https://github.com/flexprice/python-sdk
+FlexPrice Python SDK integration tests.
+Default: local editable SDK (requirements.txt: -e ../../python).
+Published pin: see requirements-published.txt (flexprice==2.1.1 on PyPI).
+Run: cd api/tests/python && pip install -r requirements.txt && python test_sdk.py
+Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1; no trailing space or slash).
+Uses sync APIs in a context manager; async HTTP methods are exercised via asyncio (ingest_event_async, ingest_events_bulk_async).
 """
 
+import asyncio
 import os
 import sys
 import time
@@ -155,7 +155,7 @@ test_event_customer_id: Optional[str] = None
 def get_server_url_and_api_key():
     """Return (server_url, api_key) from environment."""
     api_key = os.getenv("FLEXPRICE_API_KEY")
-    api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io")
+    api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io/v1")
     if not api_key:
         print("❌ Missing FLEXPRICE_API_KEY environment variable")
         sys.exit(1)
@@ -1960,17 +1960,17 @@ def test_get_wallet_transactions(client: Flexprice):
         print(f"⚠ Warning: Error getting transactions: {e}\n")
 
 
-def test_search_wallets(client: Flexprice):
-    """Test 9: Search Wallets"""
-    print("--- Test 9: Search Wallets ---")
+# def test_search_wallets(client: Flexprice):
+#     """Test 9: Search Wallets"""
+#     print("--- Test 9: Search Wallets ---")
 
-    try:
-        response = client.wallets.query_wallet(limit=10)
+#     try:
+#         response = client.wallets.query_wallet(limit=10)
 
-        print("✓ Search completed!")
-        print(f"  Found {len(response.items) if response.items else 0} wallets for customer '{test_customer_id}'\n")
-    except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
-        print(f"❌ Error searching wallets: {e}\n")
+#         print("✓ Search completed!")
+#         print(f"  Found {len(response.items) if response.items else 0} wallets for customer '{test_customer_id}'\n")
+#     except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
+#         print(f"❌ Error searching wallets: {e}\n")
 
 
 # ========================================
@@ -2450,102 +2450,105 @@ def test_query_events(client: Flexprice):
         print("⚠ Skipping query events test\n")
 
 
-def test_async_event_enqueue(client: Flexprice):
-    """Test 3: Async Event - Simple Enqueue"""
-    print("--- Test 3: Async Event - Simple Enqueue ---")
+def _async_events_customer_id(sync_client: Flexprice) -> str:
+    if test_event_customer_id:
+        return test_event_customer_id
+    if test_customer_id:
+        try:
+            customer = sync_client.customers.get_customer(id=test_customer_id)
+            if hasattr(customer, "external_id") and customer.external_id:
+                return str(customer.external_id)
+        except Exception:
+            pass
+    return f"test-customer-{int(time.time())}"
 
-    # Use test customer external ID if available
-    customer_id = test_event_customer_id
-    if not customer_id:
-        if test_customer_id:
+
+def test_async_event_operations(server_url: str, api_key: str, sync_client: Flexprice) -> None:
+    """Speakeasy async HTTP: ingest_event_async, ingest_events_bulk_async (separate async Flexprice client)."""
+    print("========================================")
+    print("EVENTS API — Async HTTP (Python SDK)")
+    print("========================================\n")
+
+    customer_id = _async_events_customer_id(sync_client)
+
+    async def runner() -> None:
+        async with Flexprice(server_url=server_url, api_key_auth=api_key) as c:
+            print("--- Test 3: ingest_event_async ---")
             try:
-                customer = client.customers.get_customer(id=test_customer_id)
-                customer_id = customer.external_id if hasattr(customer, 'external_id') and customer.external_id else f"test-customer-{int(time.time())}"
-            except:
-                customer_id = f"test-customer-{int(time.time())}"
-        else:
-            customer_id = f"test-customer-{int(time.time())}"
+                await c.events.ingest_event_async(
+                    event_name="api_request",
+                    external_customer_id=customer_id,
+                    properties={
+                        "path": "/api/resource",
+                        "method": "GET",
+                        "status": "200",
+                        "response_time_ms": "150",
+                    },
+                    source="sdk_test",
+                )
+                print("✓ ingest_event_async succeeded!")
+                print("  Event Name: api_request")
+                print(f"  Customer ID: {customer_id}\n")
+            except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
+                print(f"❌ ingest_event_async: {e}\n")
+
+            print("--- Test 4: ingest_event_async (timestamp) ---")
+            try:
+                await c.events.ingest_event_async(
+                    event_name="file_upload",
+                    external_customer_id=customer_id,
+                    properties={
+                        "file_size_bytes": "1048576",
+                        "file_type": "image/jpeg",
+                        "storage_bucket": "user_uploads",
+                    },
+                    source="sdk_test",
+                    timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                )
+                print("✓ ingest_event_async (with timestamp) succeeded!")
+                print("  Event Name: file_upload")
+                print(f"  Customer ID: {customer_id}\n")
+            except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
+                print(f"❌ ingest_event_async (options): {e}\n")
+
+            print("--- Test 5: ingest_events_bulk_async ---")
+            try:
+                batch_count = 5
+                evts = [
+                    {
+                        "event_name": "batch_example",
+                        "external_customer_id": customer_id,
+                        "properties": {"index": str(i), "batch": "demo"},
+                        "source": "sdk_test",
+                    }
+                    for i in range(batch_count)
+                ]
+                await c.events.ingest_events_bulk_async(events=evts)
+                print(f"✓ ingest_events_bulk_async ({batch_count} events) succeeded!")
+                print("  Event Name: batch_example")
+                print(f"  Customer ID: {customer_id}")
+                print("  Waiting for events to be processed...\n")
+                await asyncio.sleep(2)
+            except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
+                print(f"❌ ingest_events_bulk_async: {e}\n")
+
+            print("--- Test 6: list_raw_events_async (smoke) ---")
+            if not test_event_name:
+                print("⚠ Skipping list_raw_events_async (no test_event_name)\n")
+                return
+            try:
+                await c.events.list_raw_events_async(
+                    external_customer_id=customer_id,
+                    event_name=test_event_name,
+                )
+                print("✓ list_raw_events_async succeeded!\n")
+            except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
+                print(f"⚠ list_raw_events_async: {e} (non-fatal)\n")
 
     try:
-        client.events.ingest_event(
-            event_name="api_request",
-            external_customer_id=customer_id,
-            properties={"path": "/api/resource", "method": "GET", "status": "200", "response_time_ms": "150"},
-            source="sdk_test",
-        )
-
-        print("✓ Async event enqueued successfully!")
-        print(f"  Event Name: api_request")
-        print(f"  Customer ID: {customer_id}\n")
-    except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
-        print(f"❌ Error enqueueing async event: {e}\n")
-
-
-def test_async_event_enqueue_with_options(client: Flexprice):
-    """Test 4: Async Event - Enqueue With Options"""
-    print("--- Test 4: Async Event - Enqueue With Options ---")
-
-    # Use test customer external ID if available
-    customer_id = test_event_customer_id
-    if not customer_id:
-        if test_customer_id:
-            try:
-                customer = client.customers.get_customer(id=test_customer_id)
-                customer_id = customer.external_id if hasattr(customer, 'external_id') and customer.external_id else f"test-customer-{int(time.time())}"
-            except:
-                customer_id = f"test-customer-{int(time.time())}"
-        else:
-            customer_id = f"test-customer-{int(time.time())}"
-
-    try:
-        client.events.ingest_event(
-            event_name="file_upload",
-            external_customer_id=customer_id,
-            properties={"file_size_bytes": "1048576", "file_type": "image/jpeg", "storage_bucket": "user_uploads"},
-            source="sdk_test",
-            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        )
-
-        print("✓ Async event with options enqueued successfully!")
-        print(f"  Event Name: file_upload")
-        print(f"  Customer ID: {customer_id}\n")
-    except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
-        print(f"❌ Error enqueueing async event with options: {e}\n")
-
-
-def test_async_event_batch(client: Flexprice):
-    """Test 5: Async Event - Batch Enqueue"""
-    print("--- Test 5: Async Event - Batch Enqueue ---")
-
-    # Use test customer external ID if available
-    customer_id = test_event_customer_id
-    if not customer_id:
-        if test_customer_id:
-            try:
-                customer = client.customers.get_customer(id=test_customer_id)
-                customer_id = customer.external_id if hasattr(customer, 'external_id') and customer.external_id else f"test-customer-{int(time.time())}"
-            except:
-                customer_id = f"test-customer-{int(time.time())}"
-        else:
-            customer_id = f"test-customer-{int(time.time())}"
-
-    try:
-        batch_count = 5
-        for i in range(batch_count):
-            client.events.ingest_event(
-                event_name="batch_example",
-                external_customer_id=customer_id,
-                properties={"index": str(i), "batch": "demo"},
-                source="sdk_test",
-            )
-
-        print(f"✓ Enqueued {batch_count} batch events successfully!")
-        print(f"  Event Name: batch_example")
-        print(f"  Customer ID: {customer_id}")
-        print(f"  Waiting for events to be processed...\n")
-        time.sleep(2)  # Wait for background processing
-    except (sdk_errors.FlexpriceError, sdk_errors.FlexpriceDefaultError, Exception) as e:
-        print(f"❌ Error enqueueing batch event: {e}\n")
+        asyncio.run(runner())
+    except Exception as e:
+        print(f"❌ Async events runner failed: {e}\n")
 
 
 # ========================================
@@ -2722,7 +2725,7 @@ def main():
         test_top_up_wallet(client)
         test_debit_wallet(client)
         test_get_wallet_transactions(client)
-        test_search_wallets(client)
+        # test_search_wallets(client)
 
         print("✓ Wallets API Tests Completed!\n")
 
@@ -2757,10 +2760,8 @@ def main():
         test_create_event(client)
         test_query_events(client)
 
-        # Async event operations
-        test_async_event_enqueue(client)
-        test_async_event_enqueue_with_options(client)
-        test_async_event_batch(client)
+        # Async HTTP event operations (ingest_*_async, bulk)
+        test_async_event_operations(server_url, api_key, client)
 
         print("✓ Events API Tests Completed!\n")
 

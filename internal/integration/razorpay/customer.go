@@ -18,6 +18,7 @@ type RazorpayCustomerService interface {
 	EnsureCustomerSyncedToRazorpay(ctx context.Context, customerID string, customerService interfaces.CustomerService) (*customer.Customer, error)
 	SyncCustomerToRazorpay(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error)
 	GetRazorpayCustomerID(ctx context.Context, customerID string) (string, error)
+	UpdateRazorpayCustomerNotes(ctx context.Context, razorpayCustomerID string, notes map[string]interface{}) error
 }
 
 // CustomerService handles Razorpay customer operations
@@ -274,4 +275,16 @@ func (s *CustomerService) mergeCustomerMetadata(existingMetadata map[string]stri
 	}
 
 	return merged
+}
+
+func (s *CustomerService) UpdateRazorpayCustomerNotes(ctx context.Context, razorpayCustomerID string, notes map[string]interface{}) error {
+	if razorpayCustomerID == "" {
+		return ierr.NewError("razorpay customer id is required").
+			WithHint("Provide a valid Razorpay customer ID").
+			Mark(ierr.ErrValidation)
+	}
+	_, err := s.client.UpdateCustomer(ctx, razorpayCustomerID, map[string]interface{}{
+		"notes": notes,
+	})
+	return err
 }

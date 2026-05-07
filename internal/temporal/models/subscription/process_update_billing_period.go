@@ -90,7 +90,8 @@ func (i *CheckDraftSubscriptionActivityInput) Validate() error {
 }
 
 type CheckDraftSubscriptionActivityOutput struct {
-	IsDraft bool `json:"is_draft"`
+	IsDraft     bool `json:"is_draft"`
+	IsInherited bool `json:"is_inherited"`
 }
 
 // CheckSubscriptionPauseStatusActivity input

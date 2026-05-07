@@ -179,8 +179,66 @@ log "================================================================"
 log ""
 log "Finding all missing event IDs (raw_events ANTI JOIN events) ..."
 
-QUERY="
-SELECT r.id
+if [[ -n "$EXTERNAL_CUSTOMER_ID" ]]; then
+  log "Customer filter: ${EXTERNAL_CUSTOMER_ID} (skipping missing-customer pre-fetch)"
+  extra_where+=" AND external_customer_id = '${EXTERNAL_CUSTOMER_ID}'"
+  extra_where_fu+=" AND external_customer_id = '${EXTERNAL_CUSTOMER_ID}'"
+else
+  log "Pre-fetching missing customers ..."
+  missing_customers_raw=$(ch_query "
+  SELECT external_customer_id
+  FROM (
+    SELECT external_customer_id
+    FROM ${CH_DB}.raw_events
+    PREWHERE tenant_id  = '${TENANT_ID}'
+      AND environment_id = '${ENVIRONMENT_ID}'
+      AND timestamp >= toDateTime64('${ch_start}', 3)
+      AND timestamp <  toDateTime64('${ch_end}', 3)
+    WHERE field4 = 'false'
+    GROUP BY external_customer_id
+  ) r
+  ANTI JOIN (
+    SELECT external_customer_id
+    FROM ${CH_DB}.feature_usage
+    WHERE tenant_id  = '${TENANT_ID}'
+      AND environment_id = '${ENVIRONMENT_ID}'
+    GROUP BY external_customer_id
+  ) f USING (external_customer_id)
+  ")
+
+  missing_customer_list=""
+  missing_customer_count=0
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    missing_customer_count=$((missing_customer_count + 1))
+    [[ -n "$missing_customer_list" ]] && missing_customer_list+=","
+    missing_customer_list+="'${line}'"
+  done <<< "$missing_customers_raw"
+  log "  -> ${missing_customer_count} customers excluded (no feature_usage)"
+
+  [[ -n "$missing_customer_list" ]] && \
+    extra_where+=" AND external_customer_id NOT IN (${missing_customer_list})"
+fi
+
+# Load event names to skip from JSON file (if present)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKIP_FILE="${EVENTS_TO_SKIP_FILE:-${SCRIPT_DIR}/events_to_skip.json}"
+if [[ -f "$SKIP_FILE" ]]; then
+  skip_count=$(jq '.events_to_skip | length' "$SKIP_FILE")
+  if (( skip_count > 0 )); then
+    skip_event_list=$(jq -r '.events_to_skip[]' "$SKIP_FILE" \
+      | awk '{printf "%s'\''%s'\''", (NR>1 ? "," : ""), $0}')
+    extra_where+=" AND event_name NOT IN (${skip_event_list})"
+  fi
+  log "  -> ${skip_count} event names excluded (events_to_skip.json)"
+fi
+
+###############################################################################
+# Step 2: Count total events
+###############################################################################
+log "Counting total events to reprocess ..."
+total_count=$(ch_query "
+SELECT uniqHLL12(cityHash64(id))
 FROM (
   SELECT id
   FROM ${CH_DB}.raw_events
@@ -190,8 +248,8 @@ FROM (
     AND timestamp >= toDateTime64('${ch_start}', 3)
     AND timestamp <  toDateTime64('${ch_end}', 3)
   WHERE field4 = 'false'
-    AND field1 != 'custom-llm'
-    ${extra_event_filter}
+  AND field1 != 'custom-llm'
+    ${extra_where}
 ) r
 ANTI JOIN (
   SELECT id

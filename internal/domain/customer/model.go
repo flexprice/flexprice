@@ -20,11 +20,6 @@ type Customer struct {
 	// Email is the email of the customer
 	Email string `db:"email" json:"email"`
 
-	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
-	// Retained for backward compatibility; no hierarchy rules are enforced at the service layer.
-	// ParentCustomerID is the parent customer identifier for the customer.
-	ParentCustomerID *string `db:"parent_customer_id" json:"parent_customer_id"`
-
 	// AddressLine1 is the first line of the customer's address
 	AddressLine1 string `db:"address_line1" json:"address_line1"`
 
@@ -63,7 +58,6 @@ func FromEnt(c *ent.Customer) *Customer {
 		Name:              c.Name,
 		Email:             c.Email,
 		AddressLine1:      c.AddressLine1,
-		ParentCustomerID:  c.ParentCustomerID,
 		AddressLine2:      c.AddressLine2,
 		AddressCity:       c.AddressCity,
 		AddressState:      c.AddressState,

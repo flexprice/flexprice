@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
@@ -31,6 +32,8 @@ func NewMeterRepository(client postgres.IClient, logger *logger.Logger, cache ca
 }
 
 func (r *meterRepository) CreateMeter(ctx context.Context, m *domainMeter.Meter) error {
+	m.EventName = strings.TrimSpace(m.EventName)
+
 	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
@@ -366,7 +369,8 @@ func (o MeterQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.M
 	}
 
 	if f.EventName != "" {
-		query = query.Where(meter.EventName(string(f.EventName)))
+		trimmed := strings.TrimSpace(f.EventName)
+		query = query.Where(meter.EventName(trimmed))
 	}
 
 	if len(f.MeterIDs) > 0 {

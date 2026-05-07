@@ -83,6 +83,7 @@ type CreateAPIKeyResponse struct {
 }
 
 // ListSecretsResponse represents the response for listing secrets
+// @name ListSecretsResponse
 type ListSecretsResponse = types.ListResponse[*SecretResponse]
 
 // ToSecretResponse converts a domain Secret to a SecretResponse

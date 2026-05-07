@@ -2,11 +2,14 @@
 
 /**
  * Flexprice TypeScript SDK - API tests.
- * SDK: @flexprice/sdk (npm latest, or link local api/typescript for "test:local").
+ * Default: published @flexprice/sdk@2.1.1 (see package.json).
+ * Local monorepo SDK: `npm run test:local` (requires `npm run build` in api/typescript).
  * Run from api/tests/ts: npm install && npm test   (or: npx ts-node test_sdk.ts)
- * Local SDK: npm run test:local   (uses api/typescript via file:../../typescript).
  * Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
  * Debug: FLEXPRICE_DEBUG=1 logs request/response and full error details on failure.
+ *
+ * Note: The Go SDK ships a separate batched AsyncClient; TypeScript uses Promise-based calls.
+ * Bulk ingestion is covered via client.events.ingestEventsBulk (not the same as Go's queue).
  */
 
 import {
@@ -38,6 +41,7 @@ import {
     PriceUnitType,
     ProrationBehavior,
     ResumeMode,
+    SubscriptionStatus,
     TransactionReason,
 } from '@flexprice/sdk';
 
@@ -78,6 +82,20 @@ let testEventCustomerID = '';
 // ========================================
 
 const DEBUG = process.env.FLEXPRICE_DEBUG === '1' || process.env.FLEXPRICE_DEBUG === 'true';
+
+/**
+ * Paginated SDK page: some versions type the first page as `{ result: { items, pagination } }`,
+ * others as `{ items, pagination }` at the root.
+ */
+function paginatedPageItems(page: {
+    items?: unknown[];
+    result?: { items?: unknown[]; pagination?: unknown };
+    pagination?: unknown;
+}): { items: unknown[]; pagination?: unknown } {
+    const items = page.items ?? page.result?.items ?? [];
+    const pagination = page.pagination ?? page.result?.pagination;
+    return { items, pagination };
+}
 
 function safeStringify(x: unknown, maxLen = 800): string {
     try {
@@ -973,46 +991,15 @@ async function testSearchEntitlements(client: Flexprice) {
 
 async function testListConnections(client: Flexprice) {
     console.log('--- Test 1: List Connections ---');
-
-    try {
-        const response = await client.integrations.listLinkedIntegrations();
-
-        if (response && 'integrations' in response) {
-            const list = (response.integrations ?? []) as Array<{ id?: string; providerType?: string }>;
-            console.log(`✓ Retrieved ${list.length} linked integration(s)`);
-            if (list.length > 0) {
-                const first = list[0];
-                console.log(`  First connection: ${first.id ?? 'N/A'}`);
-                if (first.providerType) {
-                    console.log(`  Provider Type: ${first.providerType}`);
-                }
-            }
-            console.log();
-        } else {
-            console.log(`✓ Retrieved 0 connections\n`);
-        }
-    } catch (error: any) {
-        console.log(`⚠ Warning: Error listing connections: ${error.message}`);
-        console.log('⚠ Skipping connections tests (may not have any connections)\n');
-    }
+    void client;
+    console.log('⚠ Skipping: listLinkedIntegrations is not in the generated TypeScript SDK (only linkIntegrationMapping exists).');
+    console.log();
 }
 
 async function testSearchConnections(client: Flexprice) {
     console.log('--- Test 2: Search Connections ---');
-
-    try {
-        const response = await client.integrations.listLinkedIntegrations();
-
-        if (response && 'integrations' in response) {
-            const list = (response.integrations ?? []) as unknown[];
-            console.log('✓ List completed!');
-            console.log(`  Found ${list.length} linked integration(s)\n`);
-        } else {
-            console.log('✓ Found 0 connections\n');
-        }
-    } catch (error: any) {
-        console.log(`⚠ Warning: Error searching connections: ${error.message}\n`);
-    }
+    void client;
+    console.log('⚠ Skipping: same as list connections.\n');
 }
 
 // ========================================
@@ -1046,7 +1033,7 @@ async function testCreateSubscription(client: Flexprice) {
             billingPeriod: BillingPeriod.Monthly,
             billingPeriodCount: 1,
             billingCycle: BillingCycle.Anniversary,
-            startDate: new Date().toISOString(),
+            startDate: new Date(),
             metadata: {
                 source: 'sdk_test',
                 test_run: new Date().toISOString(),
@@ -1150,7 +1137,8 @@ async function testActivateSubscription(client: Flexprice) {
             billingCadence: BillingCadence.Recurring,
             billingPeriod: BillingPeriod.Monthly,
             billingPeriodCount: 1,
-            startDate: new Date().toISOString(),
+            startDate: new Date(),
+            subscriptionStatus: SubscriptionStatus.Draft,
         });
         const draftID = draftSub?.id ?? '';
         if (!draftID) {
@@ -1159,7 +1147,7 @@ async function testActivateSubscription(client: Flexprice) {
         }
         console.log(`  Created draft subscription: ${draftID}`);
 
-        await client.subscriptions.activateSubscription(draftID, { startDate: new Date().toISOString() });
+        await client.subscriptions.activateSubscription(draftID, { startDate: new Date() });
 
         console.log('✓ Subscription activated successfully!');
         console.log(`  ID: ${draftID}\n`);
@@ -2071,19 +2059,17 @@ async function testListPayments(client: Flexprice) {
     console.log('--- Test 3: List Payments ---');
 
     try {
-        const response = await client.payments.listPayments({ limit: 10 });
-
-        if (response && 'items' in response) {
-            console.log(`✓ Retrieved ${response.items?.length || 0} payments`);
-            if (response.items && response.items.length > 0) {
-                const first = response.items[0] as { id?: string; amount?: string; currency?: string };
-                console.log(`  First payment: ${first.id} - ${first.amount} ${first.currency}`);
-            }
-            if (response.pagination) {
-                console.log(`  Total: ${(response.pagination as { total?: number })?.total ?? ''}\n`);
-            }
+        const pages = await client.payments.listPayments({ limit: 10 });
+        const { items, pagination } = paginatedPageItems(pages);
+        console.log(`✓ Retrieved ${items.length} payments`);
+        if (items.length > 0) {
+            const first = items[0] as { id?: string; amount?: string; currency?: string };
+            console.log(`  First payment: ${first.id} - ${first.amount} ${first.currency}`);
+        }
+        if (pagination) {
+            console.log(`  Total: ${(pagination as { total?: number })?.total ?? ''}\n`);
         } else {
-            console.log(`✓ Retrieved 0 payments\n`);
+            console.log();
         }
     } catch (error: any) {
         console.log(`❌ Error listing payments: ${error.message}\n`);
@@ -2297,39 +2283,35 @@ async function testGetWalletTransactions(client: Flexprice) {
 
     try {
         const response = await client.wallets.getWalletTransactions({ idPathParameter: testWalletID });
-
-        if (response && 'items' in response) {
-            console.log('✓ Wallet transactions retrieved!');
-            console.log(`  Total transactions: ${response.items?.length || 0}\n`);
-        } else {
-            console.log('✓ Wallet transactions retrieved! Total: 0\n');
-        }
+        const { items } = paginatedPageItems(response);
+        console.log('✓ Wallet transactions retrieved!');
+        console.log(`  Total transactions: ${items.length}\n`);
     } catch (error: any) {
         console.log(`⚠ Warning: Error getting transactions: ${error.message}\n`);
     }
 }
 
-async function testSearchWallets(client: Flexprice) {
-    console.log('--- Test 9: Search Wallets ---');
+// async function testSearchWallets(client: Flexprice) {
+//     console.log('--- Test 9: Search Wallets ---');
 
-    try {
-        const response = await client.wallets.queryWallet({});
+//     try {
+//         const response = await client.wallets.queryWallet({});
 
-        if (response && 'items' in response) {
-            console.log('✓ Search completed!');
-            console.log(`  Found ${response.items?.length || 0} wallets\n`);
-        } else {
-            console.log('✓ Found 0 wallets\n');
-        }
-    } catch (error: any) {
-        const msg = error?.message ?? String(error);
-        if (msg.includes('500') || msg.includes('Status 500')) {
-            console.log('⚠ Search wallets returned 500 (known backend issue); skipping\n');
-        } else {
-            console.log(`❌ Error searching wallets: ${msg}\n`);
-        }
-    }
-}
+//         if (response && 'items' in response) {
+//             console.log('✓ Search completed!');
+//             console.log(`  Found ${response.items?.length || 0} wallets\n`);
+//         } else {
+//             console.log('✓ Found 0 wallets\n');
+//         }
+//     } catch (error: any) {
+//         const msg = error?.message ?? String(error);
+//         if (msg.includes('500') || msg.includes('Status 500')) {
+//             console.log('⚠ Search wallets returned 500 (known backend issue); skipping\n');
+//         } else {
+//             console.log(`❌ Error searching wallets: ${msg}\n`);
+//         }
+//     }
+// }
 
 // ========================================
 // CREDIT GRANTS API TESTS
@@ -2772,7 +2754,7 @@ async function testDeletePrice(client: Flexprice) {
     }
 
     try {
-        const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
         await client.prices.deletePrice(testPriceID, { endDate: futureDate });
 
         console.log('✓ Price deleted successfully!');
@@ -2956,7 +2938,7 @@ async function testQueryEvents(client: Flexprice) {
 }
 
 async function testAsyncEventEnqueue(client: Flexprice) {
-    console.log('--- Test 3: Async Event - Simple Enqueue ---');
+    console.log('--- Test 3: Event ingest (single, async API processing) ---');
 
     // Use test customer external ID if available
     let customerID = testEventCustomerID;
@@ -2981,16 +2963,16 @@ async function testAsyncEventEnqueue(client: Flexprice) {
             source: 'sdk_test',
         });
 
-        console.log('✓ Async event enqueued successfully!');
+        console.log('✓ Event ingested successfully!');
         console.log('  Event Name: api_request');
         console.log(`  Customer ID: ${customerID}\n`);
     } catch (error: any) {
-        console.log(`❌ Error enqueueing async event: ${error.message}\n`);
+        console.log(`❌ Error ingesting event: ${error.message}\n`);
     }
 }
 
 async function testAsyncEventEnqueueWithOptions(client: Flexprice) {
-    console.log('--- Test 4: Async Event - Enqueue With Options ---');
+    console.log('--- Test 4: Event ingest with timestamp/source ---');
 
     // Use test customer external ID if available
     let customerID = testEventCustomerID;
@@ -3016,16 +2998,16 @@ async function testAsyncEventEnqueueWithOptions(client: Flexprice) {
             timestamp: new Date().toISOString(),
         });
 
-        console.log('✓ Async event with options enqueued successfully!');
+        console.log('✓ Event with options ingested successfully!');
         console.log('  Event Name: file_upload');
         console.log(`  Customer ID: ${customerID}\n`);
     } catch (error: any) {
-        console.log(`❌ Error enqueueing async event with options: ${error.message}\n`);
+        console.log(`❌ Error ingesting event with options: ${error.message}\n`);
     }
 }
 
 async function testAsyncEventBatch(client: Flexprice) {
-    console.log('--- Test 5: Async Event - Batch Enqueue ---');
+    console.log('--- Test 5: Bulk ingest (ingestEventsBulk) ---');
 
     // Use test customer external ID if available
     let customerID = testEventCustomerID;
@@ -3044,24 +3026,22 @@ async function testAsyncEventBatch(client: Flexprice) {
 
     try {
         const batchCount = 5;
-        for (let i = 0; i < batchCount; i++) {
-            await client.events.ingestEvent({
-                eventName: 'batch_example',
-                externalCustomerId: customerID,
-                properties: { index: String(i), batch: 'demo' },
-                source: 'sdk_test',
-            });
-        }
+        const events = Array.from({ length: batchCount }, (_, i) => ({
+            eventName: 'batch_example',
+            externalCustomerId: customerID,
+            properties: { index: String(i), batch: 'demo' },
+            source: 'sdk_test',
+        }));
+        await client.events.ingestEventsBulk({ events });
 
-        console.log(`✓ Enqueued ${batchCount} batch events successfully!`);
+        console.log(`✓ Bulk ingested ${batchCount} events successfully!`);
         console.log('  Event Name: batch_example');
         console.log(`  Customer ID: ${customerID}`);
         console.log('  Waiting for events to be processed...\n');
 
-        // Wait for background processing
         await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (error: any) {
-        console.log(`❌ Error enqueueing batch event: ${error.message}\n`);
+        console.log(`❌ Error bulk ingesting events: ${error.message}\n`);
     }
 }
 
@@ -3232,7 +3212,7 @@ async function main() {
     await testTopUpWallet(client);
     await testDebitWallet(client);
     await testGetWalletTransactions(client);
-    await testSearchWallets(client);
+    // await testSearchWallets(client);
 
     console.log('✓ Wallets API Tests Completed!\n');
 

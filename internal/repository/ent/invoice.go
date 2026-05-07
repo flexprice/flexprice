@@ -61,6 +61,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetTenantID(inv.TenantID).
 		SetCustomerID(inv.CustomerID).
 		SetNillableSubscriptionID(inv.SubscriptionID).
+		SetNillableSubscriptionCustomerID(inv.SubscriptionCustomerID).
 		SetInvoiceType(inv.InvoiceType).
 		SetInvoiceStatus(inv.InvoiceStatus).
 		SetPaymentStatus(inv.PaymentStatus).
@@ -76,6 +77,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetNillablePaidAt(inv.PaidAt).
 		SetNillableVoidedAt(inv.VoidedAt).
 		SetNillableFinalizedAt(inv.FinalizedAt).
+		SetNillableLastComputedAt(inv.LastComputedAt).
 		SetBillingPeriod(types.BillingPeriod(lo.FromPtr(inv.BillingPeriod))).
 		SetNillableInvoicePdfURL(inv.InvoicePDFURL).
 		SetBillingReason(inv.BillingReason).
@@ -164,6 +166,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetTenantID(inv.TenantID).
 			SetCustomerID(inv.CustomerID).
 			SetNillableSubscriptionID(inv.SubscriptionID).
+			SetNillableSubscriptionCustomerID(inv.SubscriptionCustomerID).
 			SetInvoiceType(inv.InvoiceType).
 			SetInvoiceStatus(inv.InvoiceStatus).
 			SetPaymentStatus(inv.PaymentStatus).
@@ -180,6 +183,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillablePaidAt(inv.PaidAt).
 			SetNillableVoidedAt(inv.VoidedAt).
 			SetNillableFinalizedAt(inv.FinalizedAt).
+			SetNillableLastComputedAt(inv.LastComputedAt).
 			SetNillableInvoicePdfURL(inv.InvoicePDFURL).
 			SetBillingPeriod(types.BillingPeriod(lo.FromPtr(inv.BillingPeriod))).
 			SetBillingReason(inv.BillingReason).
@@ -441,6 +445,70 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 	return invoiceData, nil
 }
 
+// GetForUpdate retrieves an invoice with a row-level lock (SELECT FOR UPDATE).
+// Must be called within a transaction so the lock is held until commit/rollback.
+func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domainInvoice.Invoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "get_for_update", map[string]interface{}{
+		"invoice_id": id,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Acquire row-level lock so concurrent workers cannot update the same invoice
+	lockQuery := `SELECT id FROM invoices WHERE id = $1 AND tenant_id = $2 AND environment_id = $3 FOR UPDATE`
+	rows, err := client.QueryContext(ctx, lockQuery, id, tenantID, environmentID)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
+	}
+	// Must check and close rows BEFORE running another query on the same connection
+	hasRow := rows.Next()
+	rowErr := rows.Err()
+	rows.Close() // Close immediately, not deferred
+	if rowErr != nil {
+		return nil, ierr.WithError(rowErr).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
+	}
+	if !hasRow {
+		return nil, ierr.NewError("invoice not found").
+			WithHint("invoice not found: " + id).
+			WithReportableDetails(map[string]any{"id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Load invoice (same connection holds the lock)
+	inv, err := client.Invoice.Query().
+		Where(
+			invoice.ID(id),
+			invoice.TenantID(tenantID),
+			invoice.EnvironmentID(environmentID),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.
+				WithError(err).
+				WithHintf("invoice %s not found", id).
+				WithReportableDetails(map[string]any{"id": id}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).WithHint("getting invoice failed").Mark(ierr.ErrDatabase)
+	}
+
+	result := domainInvoice.FromEnt(inv)
+
+	// Fetch line items separately (consistent with Get pattern)
+	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
+	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
+	}
+	result.LineItems = items
+
+	return result, nil
+}
+
 func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoice) error {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "update", map[string]interface{}{
@@ -475,6 +543,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetNillablePaidAt(inv.PaidAt).
 		SetNillableVoidedAt(inv.VoidedAt).
 		SetNillableFinalizedAt(inv.FinalizedAt).
+		SetNillableLastComputedAt(inv.LastComputedAt).
 		SetNillableInvoicePdfURL(inv.InvoicePDFURL).
 		SetBillingReason(string(inv.BillingReason)).
 		SetMetadata(inv.Metadata).
@@ -482,6 +551,8 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetNillableRecalculatedInvoiceID(inv.RecalculatedInvoiceID).
+		SetNillableInvoiceNumber(inv.InvoiceNumber).
+		SetNillableBillingSequence(inv.BillingSequence).
 		SetUpdatedAt(time.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetTotal(inv.Total).
@@ -584,8 +655,16 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 		})
 	}
 
-	// Apply common query options
-	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+	// Apply common query options.
+	// Important: if callers use the DSL-style `filter.Sort`, we must not apply the legacy
+	// QueryFilter sort first (it would become the primary ORDER BY and "override" the user sort).
+	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
+
+	if filter == nil || len(filter.Sort) == 0 {
+		query = ApplySorting(query, filter, r.queryOpts)
+	}
+	query = ApplyPagination(query, filter, r.queryOpts)
+
 	// Apply entity-specific filters
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 	if err != nil {
@@ -605,6 +684,57 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	}
 
 	// Convert to domain model
+	result := make([]*domainInvoice.Invoice, len(invoices))
+	for i, inv := range invoices {
+		result[i] = domainInvoice.FromEnt(inv)
+	}
+
+	return result, nil
+}
+
+// ListAllTenant retrieves invoices across all tenants (skips tenant/environment filters).
+// NOTE: This is a potentially expensive operation — use only for scheduled jobs.
+func (r *invoiceRepository) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*domainInvoice.Invoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "list_all_tenant", map[string]interface{}{
+		"filter": filter,
+	})
+	defer FinishSpan(span)
+
+	if filter == nil {
+		filter = &types.InvoiceFilter{
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+	}
+
+	if err := filter.Validate(); err != nil {
+		SetSpanError(span, err)
+		return nil, fmt.Errorf("invalid filter: %w", err)
+	}
+
+	client := r.client.Reader(ctx)
+	query := client.Invoice.Query()
+
+	if filter == nil || len(filter.Sort) == 0 {
+		query = ApplySorting(query, filter, r.queryOpts)
+	}
+	query = ApplyPagination(query, filter, r.queryOpts)
+	query = r.queryOpts.ApplyStatusFilter(query, filter.GetStatus())
+
+	// Apply entity-specific filters (status, type, etc.) but NOT tenant/environment
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to apply query options").
+			Mark(ierr.ErrDatabase)
+	}
+
+	invoices, err := query.All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("invoice listing failed").Mark(ierr.ErrDatabase)
+	}
+
 	result := make([]*domainInvoice.Invoice, len(invoices))
 	for i, inv := range invoices {
 		result[i] = domainInvoice.FromEnt(inv)
@@ -672,27 +802,31 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 	return invoiceData, nil
 }
 
-func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "exists_for_period", map[string]interface{}{
 		"subscription_id": subscriptionID,
 		"period_start":    periodStart,
 		"period_end":      periodEnd,
+		"billing_reason":  billingReason,
 	})
 	defer FinishSpan(span)
 
+	predicates := []predicate.Invoice{
+		invoice.TenantID(types.GetTenantID(ctx)),
+		invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+		invoice.SubscriptionIDEQ(subscriptionID),
+		invoice.PeriodStartEQ(periodStart),
+		invoice.PeriodEndEQ(periodEnd),
+		invoice.StatusEQ(string(types.StatusPublished)),
+		invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
+	}
+	if billingReason != "" {
+		predicates = append(predicates, invoice.BillingReasonEQ(billingReason))
+	}
+
 	exists, err := r.client.Writer(ctx).Invoice.Query().
-		Where(
-			invoice.And(
-				invoice.TenantID(types.GetTenantID(ctx)),
-				invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
-				invoice.SubscriptionIDEQ(subscriptionID),
-				invoice.PeriodStartEQ(periodStart),
-				invoice.PeriodEndEQ(periodEnd),
-				invoice.StatusEQ(string(types.StatusPublished)),
-				invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
-			),
-		).
+		Where(invoice.And(predicates...)).
 		Exist(ctx)
 	if err != nil {
 		return false, ierr.WithError(err).WithHint("invoice existence check failed").WithReportableDetails(map[string]any{
@@ -703,6 +837,45 @@ func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID 
 	}
 
 	return exists, nil
+}
+
+func (r *invoiceRepository) GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*domainInvoice.Invoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "get_for_period", map[string]interface{}{
+		"subscription_id": subscriptionID,
+		"period_start":    periodStart,
+		"period_end":      periodEnd,
+		"billing_reason":  billingReason,
+	})
+	defer FinishSpan(span)
+
+	predicates := []predicate.Invoice{
+		invoice.TenantID(types.GetTenantID(ctx)),
+		invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
+		invoice.SubscriptionIDEQ(subscriptionID),
+		invoice.PeriodStartEQ(periodStart),
+		invoice.PeriodEndEQ(periodEnd),
+		invoice.StatusEQ(string(types.StatusPublished)),
+		invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
+	}
+	if billingReason != "" {
+		predicates = append(predicates, invoice.BillingReasonEQ(billingReason))
+	}
+
+	inv, err := r.client.Reader(ctx).Invoice.Query().
+		Where(invoice.And(predicates...)).
+		First(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).WithHint("invoice not found for period").Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).WithHint("get for period failed").WithReportableDetails(map[string]any{
+			"subscription_id": subscriptionID,
+			"period_start":    periodStart.String(),
+			"period_end":      periodEnd.String(),
+		}).Mark(ierr.ErrDatabase)
+	}
+
+	return domainInvoice.FromEnt(inv), nil
 }
 
 func (r *invoiceRepository) getYearMonth(format types.InvoiceNumberFormat, timezone string) string {
@@ -896,6 +1069,11 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.SubscriptionID != "" {
 		query = query.Where(invoice.SubscriptionID(f.SubscriptionID))
 	}
+
+	if len(f.SubscriptionCustomerIDs) > 0 {
+		query = query.Where(invoice.SubscriptionCustomerIDIn(f.SubscriptionCustomerIDs...))
+	}
+
 	if f.InvoiceType != "" {
 		query = query.Where(invoice.InvoiceType(f.InvoiceType))
 	}
@@ -904,6 +1082,10 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	}
 	if len(f.InvoiceStatus) > 0 {
 		query = query.Where(invoice.InvoiceStatusIn(f.InvoiceStatus...))
+	} else {
+		// By default, exclude SKIPPED invoices from listings — they are zero-dollar
+		// drafts with no financial data. Callers that need them can filter explicitly.
+		query = query.Where(invoice.InvoiceStatusNEQ(types.InvoiceStatusSkipped))
 	}
 	if len(f.PaymentStatus) > 0 {
 		query = query.Where(invoice.PaymentStatusIn(f.PaymentStatus...))

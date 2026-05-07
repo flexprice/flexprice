@@ -52,13 +52,6 @@ func (Addon) Fields() []ent.Field {
 		field.Text("description").
 			Optional(),
 
-		field.String("type").
-			SchemaType(map[string]string{
-				"postgres": "varchar(20)",
-			}).
-			NotEmpty().
-			Comment("single_instance or multi_instance"),
-
 		field.JSON("metadata", map[string]interface{}{}).
 			Optional().
 			SchemaType(map[string]string{

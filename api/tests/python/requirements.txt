@@ -1,4 +1,7 @@
-# Published SDK tests: pin flexprice to avoid circular-import / UnrecognizedStr issues in newer releases
-flexprice>=2.0.1
+# Python 3.10+ required (matches PyPI flexprice; make test-sdks picks python3.12 … python3.10 if default python3 is older).
+# Local SDK from the monorepo (matches make test-sdk / CI against generated api/python).
+# Published on PyPI: flexprice==2.1.1 — use requirements-published.txt or: pip install flexprice==2.1.1
+-e ../../python
+
 pydantic>=2
 httpx>=0.28

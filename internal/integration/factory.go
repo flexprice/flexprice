@@ -31,6 +31,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
+	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
@@ -302,22 +303,24 @@ func (f *Factory) GetChargebeeIntegration(ctx context.Context) (*ChargebeeIntegr
 		Logger:                       f.logger,
 	})
 
-	// Create invoice service
-	invoiceSvc := chargebee.NewInvoiceService(chargebee.InvoiceServiceParams{
-		Client:                       chargebeeClient,
-		CustomerSvc:                  customerSvc,
-		InvoiceRepo:                  f.invoiceRepo,
-		PaymentRepo:                  f.paymentRepo,
-		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
-		Logger:                       f.logger,
-	})
-
 	// Create plan sync service
 	planSyncSvc := chargebee.NewPlanSyncService(chargebee.PlanSyncServiceParams{
 		Client:                       chargebeeClient,
 		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
 		MeterRepo:                    f.meterRepo,
 		FeatureRepo:                  f.featureRepo,
+		Logger:                       f.logger,
+	})
+
+	// Create invoice service
+	invoiceSvc := chargebee.NewInvoiceService(chargebee.InvoiceServiceParams{
+		Client:                       chargebeeClient,
+		CustomerSvc:                  customerSvc,
+		InvoiceRepo:                  f.invoiceRepo,
+		PaymentRepo:                  f.paymentRepo,
+		PriceRepo:                    f.priceRepo,
+		PlanSyncSvc:                  planSyncSvc,
+		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
 		Logger:                       f.logger,
 	})
 
@@ -567,6 +570,45 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 	}, nil
 }
 
+// GetZohoBooksIntegration returns a complete Zoho Books integration setup
+func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegration, error) {
+	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil || conn.Status != types.StatusPublished {
+		return nil, ierr.NewError("Connection with provider zoho_books is not configured in this environment").
+			WithHint("Zoho Books connection must be configured and published before use").
+			Mark(ierr.ErrNotFound)
+	}
+
+	zohoClient := zoho.NewClient(
+		f.connectionRepo,
+		f.encryptionService,
+		f.logger,
+	)
+	customerSvc := zoho.NewCustomerService(
+		zohoClient,
+		f.customerRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+	invoiceSvc := zoho.NewInvoiceService(
+		zohoClient,
+		customerSvc,
+		f.customerRepo,
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	return &ZohoBooksIntegration{
+		Client:     zohoClient,
+		CustomerSvc: customerSvc,
+		InvoiceSvc: invoiceSvc,
+	}, nil
+}
+
 // GetIntegrationByProvider returns the appropriate integration for the given provider type
 func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (interface{}, error) {
 	switch providerType {
@@ -586,6 +628,8 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetPaddleIntegration(ctx)
 	case types.SecretProviderMoyasar:
 		return f.GetMoyasarIntegration(ctx)
+	case types.SecretProviderZohoBooks:
+		return f.GetZohoBooksIntegration(ctx)
 	default:
 		return nil, ierr.NewError("unsupported integration provider").
 			WithHint("Provider type is not supported").
@@ -607,6 +651,7 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 		types.SecretProviderNomod,
 		types.SecretProviderPaddle,
 		types.SecretProviderMoyasar,
+		types.SecretProviderZohoBooks,
 	}
 }
 
@@ -697,6 +742,13 @@ type MoyasarIntegration struct {
 	WebhookHandler *moyasarwebhook.Handler
 }
 
+// ZohoBooksIntegration contains all Zoho Books integration services
+type ZohoBooksIntegration struct {
+	Client      zoho.ZohoClient
+	CustomerSvc zoho.ZohoCustomerService
+	InvoiceSvc  zoho.ZohoInvoiceService
+}
+
 // IntegrationProvider defines the interface for all integration providers
 type IntegrationProvider interface {
 	GetProviderType() types.SecretProvider
@@ -783,6 +835,21 @@ type PaddleProvider struct {
 	integration *PaddleIntegration
 }
 
+// ZohoBooksProvider implements IntegrationProvider for Zoho Books
+type ZohoBooksProvider struct {
+	integration *ZohoBooksIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *ZohoBooksProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderZohoBooks
+}
+
+// IsAvailable checks if Zoho Books integration is available
+func (p *ZohoBooksProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasZohoBooksConnection(ctx)
+}
+
 // GetProviderType returns the provider type
 func (p *PaddleProvider) GetProviderType() types.SecretProvider {
 	return types.SecretProviderPaddle
@@ -848,6 +915,15 @@ func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvi
 		paddleProvider := &PaddleProvider{integration: paddleIntegration}
 		if paddleProvider.IsAvailable(ctx) {
 			providers = append(providers, paddleProvider)
+		}
+	}
+
+	// Check Zoho Books
+	zohoIntegration, err := f.GetZohoBooksIntegration(ctx)
+	if err == nil {
+		zohoProvider := &ZohoBooksProvider{integration: zohoIntegration}
+		if zohoProvider.IsAvailable(ctx) {
+			providers = append(providers, zohoProvider)
 		}
 	}
 

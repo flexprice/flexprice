@@ -85,13 +85,16 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 
 	var filteredEvents []*events.Event
 
+	// Build a deduplicated union of both customer ID sources once, outside the loop.
+	allCustomerIDs := lo.Uniq(lo.Without(append(params.ExternalCustomerIDs, params.ExternalCustomerID), ""))
+
 	// Filter events based on basic criteria
 	for _, event := range s.events {
 		if event.EventName != params.EventName {
 			continue
 		}
 
-		if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
+		if len(allCustomerIDs) > 0 && !lo.Contains(allCustomerIDs, event.ExternalCustomerID) {
 			continue
 		}
 
@@ -598,15 +601,26 @@ func (s *InMemoryEventStore) GetUsageWithFilters(ctx context.Context, params *ev
 	return results, nil
 }
 
-func (s *InMemoryEventStore) GetDistinctEventNames(ctx context.Context, externalCustomerID string, startTime, endTime time.Time) ([]string, error) {
+func (s *InMemoryEventStore) GetDistinctEventNames(ctx context.Context, externalCustomerIDs []string, startTime, endTime time.Time) ([]string, error) {
+	if len(externalCustomerIDs) == 0 {
+		return nil, nil
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	idSet := make(map[string]struct{}, len(externalCustomerIDs))
+	for _, id := range externalCustomerIDs {
+		idSet[id] = struct{}{}
+	}
+
 	var eventNames []string
 	for _, event := range s.events {
+		if _, ok := idSet[event.ExternalCustomerID]; !ok {
+			continue
+		}
 		// Use inclusive comparison: event.Timestamp >= startTime && event.Timestamp < endTime
-		if event.ExternalCustomerID == externalCustomerID &&
-			(event.Timestamp.Equal(startTime) || event.Timestamp.After(startTime)) &&
+		if (event.Timestamp.Equal(startTime) || event.Timestamp.After(startTime)) &&
 			event.Timestamp.Before(endTime) {
 			eventNames = append(eventNames, event.EventName)
 		}
@@ -618,6 +632,44 @@ func (s *InMemoryEventStore) GetDistinctEventNames(ctx context.Context, external
 	return eventNames, nil
 }
 
+func (s *InMemoryEventStore) GetDistinctExternalCustomerIDs(ctx context.Context, startTime, endTime time.Time) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	var externalIDs []string
+	for _, event := range s.events {
+		if tenantID != "" && event.TenantID != tenantID {
+			continue
+		}
+		if environmentID != "" && event.EnvironmentID != environmentID {
+			continue
+		}
+
+		// Mirror ClickHouse repo semantics: startTime is >=, endTime is <= when provided.
+		if !startTime.IsZero() && event.Timestamp.Before(startTime) {
+			continue
+		}
+		if !endTime.IsZero() && event.Timestamp.After(endTime) {
+			continue
+		}
+		if !event.Timestamp.IsZero() {
+			if event.ExternalCustomerID != "" {
+				externalIDs = append(externalIDs, event.ExternalCustomerID)
+			}
+		}
+	}
+
+	externalIDs = lo.Uniq(externalIDs)
+	sort.Strings(externalIDs)
+	if externalIDs == nil {
+		return []string{}, nil
+	}
+	return externalIDs, nil
+}
+
 func (s *InMemoryEventStore) matchesBaseFilters(ctx context.Context, event *events.Event, params *events.UsageParams) bool {
 	// check tenant ID
 	tenantID := types.GetTenantID(ctx)
@@ -625,8 +677,9 @@ func (s *InMemoryEventStore) matchesBaseFilters(ctx context.Context, event *even
 		return false
 	}
 
-	// Check customer ID
-	if params.ExternalCustomerID != "" && event.ExternalCustomerID != params.ExternalCustomerID {
+	// Check customer ID — union of ExternalCustomerIDs and ExternalCustomerID
+	allCustomerIDs := lo.Uniq(lo.Without(append(params.ExternalCustomerIDs, params.ExternalCustomerID), ""))
+	if len(allCustomerIDs) > 0 && !lo.Contains(allCustomerIDs, event.ExternalCustomerID) {
 		return false
 	}
 

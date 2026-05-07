@@ -131,6 +131,11 @@ func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.Cre
 		return nil, err
 	}
 
+	// Validate the price domain object
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+
 	// Validate meter for USAGE prices: must be set and must exist
 	if p.Type == types.PRICE_TYPE_USAGE {
 		if p.MeterID == "" {

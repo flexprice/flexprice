@@ -75,7 +75,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetNillableEndDate(p.EndDate).
 		SetNillableMeterID(lo.ToPtr(p.MeterID)).
 		SetInvoiceCadence(p.InvoiceCadence).
-		SetTrialPeriod(p.TrialPeriod).
+		SetTrialPeriodDays(p.TrialPeriodDays).
 		SetNillableTierMode(lo.ToPtr(p.TierMode)).
 		SetTiers(p.ToEntTiers()).
 		SetPriceUnitTiers(domainPrice.ToEntTiersFromJSONB(p.PriceUnitTiers)).
@@ -409,7 +409,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetInvoiceCadence(p.InvoiceCadence).
 			SetNillableStartDate(p.StartDate).
 			SetNillableEndDate(p.EndDate).
-			SetTrialPeriod(p.TrialPeriod).
+			SetTrialPeriodDays(p.TrialPeriodDays).
 			SetNillableMeterID(lo.ToPtr(p.MeterID)).
 			SetNillableTierMode(lo.ToPtr(p.TierMode)).
 			SetTiers(p.ToEntTiers()).

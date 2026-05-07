@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	repoent "github.com/flexprice/flexprice/internal/repository/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -27,10 +28,11 @@ type WebhookPublisher interface {
 
 // webhookPublisher publishes webhook events to a topic (memory PubSub or shared Kafka producer).
 type webhookPublisher struct {
-	pubSub   pubsub.PubSub       // used when pubsub is memory
-	producer MessagePublisher    // used when pubsub is kafka (shared producer); Close is no-op
-	config   *config.Webhook
-	logger   *logger.Logger
+	pubSub          pubsub.PubSub    // used when pubsub is memory
+	producer        MessagePublisher // used when pubsub is kafka (shared producer); Close is no-op
+	config          *config.Webhook
+	logger          *logger.Logger
+	systemEventRepo *repoent.SystemEventRepository
 }
 
 // NewPublisher creates a webhook publisher backed by a PubSub (e.g. in-memory for tests/local).
@@ -38,11 +40,13 @@ func NewPublisher(
 	pubSub pubsub.PubSub,
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	systemEventRepo *repoent.SystemEventRepository,
 ) (WebhookPublisher, error) {
 	return &webhookPublisher{
-		pubSub: pubSub,
-		config: &cfg.Webhook,
-		logger: logger,
+		pubSub:          pubSub,
+		config:          &cfg.Webhook,
+		logger:          logger,
+		systemEventRepo: systemEventRepo,
 	}, nil
 }
 
@@ -52,11 +56,13 @@ func NewPublisherFromProducer(
 	producer MessagePublisher,
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	systemEventRepo *repoent.SystemEventRepository,
 ) (WebhookPublisher, error) {
 	return &webhookPublisher{
-		producer: producer,
-		config:   &cfg.Webhook,
-		logger:   logger,
+		producer:        producer,
+		config:          &cfg.Webhook,
+		logger:          logger,
+		systemEventRepo: systemEventRepo,
 	}, nil
 }
 
@@ -83,6 +89,16 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 		"topic", p.config.Topic,
 		"payload", string(payload),
 	)
+
+	if p.systemEventRepo != nil {
+		if err := p.systemEventRepo.OnConsumed(ctx, event); err != nil {
+			p.logger.ErrorwCtx(ctx, "system_events OnConsumed failed",
+				"error", err,
+				"event_id", event.ID,
+				"event_name", event.EventName,
+			)
+		}
+	}
 
 	if p.producer != nil {
 		if err := p.producer.Publish(p.config.Topic, msg); err != nil {

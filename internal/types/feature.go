@@ -1,10 +1,15 @@
 package types
 
 import (
+	"regexp"
+	"strings"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
+
+var nonAlphanumericRe = regexp.MustCompile(`[^a-z0-9]+`)
 
 type FeatureType string
 
@@ -214,4 +219,12 @@ func (r *ReportingUnit) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// generateLookupKey derives a lookup key from a name: lowercase, whitespace/special chars → underscore, trim.
+func GenerateLookupKey(name string) string {
+	key := strings.ToLower(name)
+	key = nonAlphanumericRe.ReplaceAllString(key, "_")
+	key = strings.Trim(key, "_")
+	return key
 }

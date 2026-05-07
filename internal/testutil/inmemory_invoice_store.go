@@ -77,6 +77,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		ID:                         inv.ID,
 		CustomerID:                 inv.CustomerID,
 		SubscriptionID:             inv.SubscriptionID,
+		SubscriptionCustomerID:     inv.SubscriptionCustomerID,
 		InvoiceType:                inv.InvoiceType,
 		InvoiceStatus:              inv.InvoiceStatus,
 		PaymentStatus:              inv.PaymentStatus,
@@ -108,6 +109,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		Version:                    inv.Version,
 		EnvironmentID:              inv.EnvironmentID,
 		RecalculatedInvoiceID:      inv.RecalculatedInvoiceID,
+		LastComputedAt:             inv.LastComputedAt,
 		BaseModel:                  inv.BaseModel,
 	}
 }
@@ -183,6 +185,11 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 	return copyInvoice(inv), nil
 }
 
+// GetForUpdate returns the invoice; in-memory store has no row locking.
+func (s *InMemoryInvoiceStore) GetForUpdate(ctx context.Context, id string) (*invoice.Invoice, error) {
+	return s.Get(ctx, id)
+}
+
 func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice) error {
 	if inv == nil {
 		return ierr.NewError("invoice cannot be nil").WithHint("invoice cannot be nil").Mark(ierr.ErrValidation)
@@ -196,6 +203,10 @@ func (s *InMemoryInvoiceStore) Delete(ctx context.Context, id string) error {
 
 func (s *InMemoryInvoiceStore) List(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
 	return s.InMemoryStore.List(ctx, filter, invoiceFilterFn, invoiceSortFn)
+}
+
+func (s *InMemoryInvoiceStore) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*invoice.Invoice, error) {
+	return s.List(ctx, filter)
 }
 
 func (s *InMemoryInvoiceStore) Count(ctx context.Context, filter *types.InvoiceFilter) (int, error) {
@@ -222,7 +233,7 @@ func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key stri
 	return nil, ierr.NewError("invoice not found").WithHint("invoice not found").Mark(ierr.ErrNotFound)
 }
 
-func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
+func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (bool, error) {
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
 	invoices, err := s.List(ctx, filter)
@@ -236,6 +247,9 @@ func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscription
 		if inv.InvoiceStatus == types.InvoiceStatusVoided {
 			continue
 		}
+		if billingReason != "" && inv.BillingReason != billingReason {
+			continue
+		}
 		if inv.PeriodStart != nil && inv.PeriodEnd != nil {
 			if (periodStart.Equal(*inv.PeriodStart) || periodStart.After(*inv.PeriodStart)) &&
 				(periodEnd.Equal(*inv.PeriodEnd) || periodEnd.Before(*inv.PeriodEnd)) {
@@ -245,6 +259,30 @@ func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscription
 	}
 
 	return false, nil
+}
+
+func (s *InMemoryInvoiceStore) GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*invoice.Invoice, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = subscriptionID
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, inv := range invoices {
+		if inv.InvoiceStatus == types.InvoiceStatusVoided {
+			continue
+		}
+		if billingReason != "" && inv.BillingReason != billingReason {
+			continue
+		}
+		if inv.PeriodStart != nil && inv.PeriodEnd != nil &&
+			periodStart.Equal(*inv.PeriodStart) && periodEnd.Equal(*inv.PeriodEnd) {
+			return copyInvoice(inv), nil
+		}
+	}
+
+	return nil, ierr.NewError("invoice not found").WithHint("invoice not found for period").Mark(ierr.ErrNotFound)
 }
 
 func (s *InMemoryInvoiceStore) GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error) {
@@ -342,6 +380,17 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
+	// Filter by subscription customer IDs (parent / invoiced-to subscription customer)
+	if len(f.SubscriptionCustomerIDs) > 0 {
+		subCust := ""
+		if inv.SubscriptionCustomerID != nil {
+			subCust = *inv.SubscriptionCustomerID
+		}
+		if !lo.Contains(f.SubscriptionCustomerIDs, subCust) {
+			return false
+		}
+	}
+
 	// Filter by subscription ID
 	if f.SubscriptionID != "" {
 		if inv.SubscriptionID == nil || *inv.SubscriptionID != f.SubscriptionID {
@@ -354,8 +403,13 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
-	// Filter by invoice status
-	if len(f.InvoiceStatus) > 0 && !lo.Contains(f.InvoiceStatus, inv.InvoiceStatus) {
+	// Filter by invoice status — mirrors repository default: when no explicit status
+	// filter is set, exclude SKIPPED invoices (zero-dollar drafts with no financial data).
+	if len(f.InvoiceStatus) > 0 {
+		if !lo.Contains(f.InvoiceStatus, inv.InvoiceStatus) {
+			return false
+		}
+	} else if inv.InvoiceStatus == types.InvoiceStatusSkipped {
 		return false
 	}
 

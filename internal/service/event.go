@@ -19,6 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/sourcegraph/conc/pool"
 )
@@ -123,19 +124,29 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		m = req.Meter
 	}
 
+	// Merge single and multiple external customer IDs
+	externalCustomerIDs := make([]string, 0)
+	if req.ExternalCustomerID != "" {
+		externalCustomerIDs = append(externalCustomerIDs, req.ExternalCustomerID)
+	}
+	if len(req.ExternalCustomerIDs) > 0 {
+		externalCustomerIDs = append(externalCustomerIDs, req.ExternalCustomerIDs...)
+	}
+	externalCustomerIDs = lo.Uniq(externalCustomerIDs)
+
 	getUsageRequest := dto.GetUsageRequest{
-		ExternalCustomerID: req.ExternalCustomerID,
-		CustomerID:         req.CustomerID,
-		EventName:          m.EventName,
-		PropertyName:       m.Aggregation.Field,
-		AggregationType:    m.Aggregation.Type,
-		StartTime:          req.StartTime,
-		WindowSize:         req.WindowSize,
-		EndTime:            req.EndTime,
-		Filters:            req.Filters,
-		PriceID:            req.PriceID,
-		MeterID:            req.MeterID,
-		BillingAnchor:      req.BillingAnchor,
+		ExternalCustomerIDs: externalCustomerIDs,
+		CustomerID:          req.CustomerID,
+		EventName:           m.EventName,
+		PropertyName:        m.Aggregation.Field,
+		AggregationType:     m.Aggregation.Type,
+		StartTime:           req.StartTime,
+		WindowSize:          req.WindowSize,
+		EndTime:             req.EndTime,
+		Filters:             req.Filters,
+		PriceID:             req.PriceID,
+		MeterID:             req.MeterID,
+		BillingAnchor:       req.BillingAnchor,
 	}
 
 	// Pass the multiplier from meter configuration if it's a SUM_WITH_MULTIPLIER aggregation
@@ -483,13 +494,14 @@ func (s *eventService) GetUsageByMeterWithFilters(ctx context.Context, req *dto.
 
 	params := &events.UsageWithFiltersParams{
 		UsageParams: &events.UsageParams{
-			EventName:          m.EventName,
-			PropertyName:       m.Aggregation.Field,
-			AggregationType:    m.Aggregation.Type,
-			ExternalCustomerID: req.ExternalCustomerID,
-			StartTime:          req.StartTime,
-			EndTime:            req.EndTime,
-			Filters:            meterFilters,
+			EventName:           m.EventName,
+			PropertyName:        m.Aggregation.Field,
+			AggregationType:     m.Aggregation.Type,
+			ExternalCustomerIDs: lo.Uniq(req.ExternalCustomerIDs),
+			CustomerID:          req.CustomerID,
+			StartTime:           req.StartTime,
+			EndTime:             req.EndTime,
+			Filters:             meterFilters,
 		},
 		FilterGroups: prioritizedGroups,
 	}

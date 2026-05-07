@@ -265,7 +265,7 @@ func (*WalletTransactionResponse) WithWallet(w *wallet.Wallet) *WalletTransactio
 }
 
 // ListWalletTransactionsResponse represents the response for listing wallet transactions
-type ListWalletTransactionsResponse = types.ListResponse[*WalletTransactionResponse]
+type ListWalletTransactionsResponse = types.ListResponse[*WalletTransactionResponse] // @name ListWalletTransactionsResponse
 
 // TopUpWalletRequest represents a request to add credits to a wallet
 type TopUpWalletRequest struct {

@@ -42,14 +42,15 @@ func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 
 	// Convert flat encrypted secret data to structured format based on provider_type
 	if temp.EncryptedSecretData != nil {
-		req.EncryptedSecretData = convertFlatMetadataToStructured(temp.EncryptedSecretData, temp.ProviderType)
+		req.EncryptedSecretData = ConvertFlatMetadataToStructured(temp.EncryptedSecretData, temp.ProviderType)
 	}
 
 	return nil
 }
 
-// convertFlatMetadataToStructured converts flat metadata to structured format
-func convertFlatMetadataToStructured(flatMetadata map[string]interface{}, providerType types.SecretProvider) types.ConnectionMetadata {
+// ConvertFlatMetadataToStructured maps a flat encrypted_secret_data object (same shape clients use on create)
+// into types.ConnectionMetadata for the given provider.
+func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, providerType types.SecretProvider) types.ConnectionMetadata {
 	switch providerType {
 	case types.SecretProviderStripe:
 		stripeMetadata := &types.StripeConnectionMetadata{}
@@ -234,6 +235,57 @@ func convertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			Paddle: paddleMetadata,
 		}
 
+	case types.SecretProviderZohoBooks:
+		zohoMetadata := &types.ZohoBooksConnectionMetadata{}
+		if v, ok := flatMetadata["client_id"].(string); ok {
+			zohoMetadata.ClientID = v
+		}
+		if v, ok := flatMetadata["client_secret"].(string); ok {
+			zohoMetadata.ClientSecret = v
+		}
+		if v, ok := flatMetadata["refresh_token"].(string); ok {
+			zohoMetadata.RefreshToken = v
+		}
+		if v, ok := flatMetadata["access_token"].(string); ok {
+			zohoMetadata.AccessToken = v
+		}
+		if v, ok := flatMetadata["auth_code"].(string); ok {
+			zohoMetadata.AuthCode = v
+		}
+		if v, ok := flatMetadata["redirect_uri"].(string); ok {
+			zohoMetadata.RedirectURI = v
+		}
+		if v, ok := flatMetadata["api_domain"].(string); ok {
+			zohoMetadata.APIDomain = v
+		}
+		if v, ok := flatMetadata["accounts_server"].(string); ok {
+			zohoMetadata.AccountsURL = v
+		}
+		if v, ok := flatMetadata["location"].(string); ok {
+			zohoMetadata.Location = v
+		}
+		if v, ok := flatMetadata["organization_id"].(string); ok {
+			zohoMetadata.OrganizationID = v
+		}
+		if v, ok := flatMetadata["organization_name"].(string); ok {
+			zohoMetadata.OrganizationName = v
+		}
+		if v, ok := flatMetadata["scopes"].(string); ok {
+			zohoMetadata.Scopes = v
+		}
+		if v, ok := flatMetadata["access_token_expires_at"].(string); ok {
+			zohoMetadata.AccessTokenExpiresAt = v
+		}
+		if v, ok := flatMetadata["oauth_session_data"].(string); ok {
+			zohoMetadata.OAuthSessionData = v
+		}
+		if v, ok := flatMetadata["webhook_secret"].(string); ok {
+			zohoMetadata.WebhookSecret = v
+		}
+		return types.ConnectionMetadata{
+			ZohoBooks: zohoMetadata,
+		}
+
 	default:
 		// For other providers or unknown types, use generic format
 		return types.ConnectionMetadata{
@@ -250,28 +302,57 @@ type UpdateConnectionRequest struct {
 	Metadata            map[string]interface{}    `json:"metadata,omitempty"`
 	SyncConfig          *types.SyncConfig         `json:"sync_config,omitempty" validate:"omitempty,dive"`
 	EncryptedSecretData *types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"` // For updating webhook tokens, etc.
+	// FlatEncryptedSecretData is set when the client sends a flat encrypted_secret_data object (create-style keys at top level).
+	// It is merged using the connection's provider_type in the service layer. Not serialized.
+	FlatEncryptedSecretData map[string]interface{} `json:"-"`
 }
 
-// UnmarshalJSON custom unmarshaling to handle flat metadata structure
+func updateRequestMetadataStructPopulated(cm types.ConnectionMetadata) bool {
+	return cm.Stripe != nil || cm.S3 != nil || cm.HubSpot != nil || cm.Razorpay != nil ||
+		cm.Chargebee != nil || cm.QuickBooks != nil || cm.Nomod != nil || cm.Moyasar != nil ||
+		cm.Paddle != nil || cm.ZohoBooks != nil || cm.Generic != nil || cm.Settings != nil
+}
+
+// UnmarshalJSON accepts either nested encrypted_secret_data (e.g. {"zoho_books":{"webhook_secret":"..."}})
+// or a flat object (e.g. {"webhook_secret":"..."}) like CreateConnectionRequest.
 func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
-	// First, unmarshal to a temporary struct to get the raw data
 	var temp struct {
-		Name                string                    `json:"name"`
-		Metadata            map[string]interface{}    `json:"metadata,omitempty"`
-		SyncConfig          *types.SyncConfig         `json:"sync_config,omitempty"`
-		EncryptedSecretData *types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"`
+		Name                string                 `json:"name"`
+		Metadata            map[string]interface{} `json:"metadata,omitempty"`
+		SyncConfig          *types.SyncConfig      `json:"sync_config,omitempty"`
+		EncryptedSecretData json.RawMessage        `json:"encrypted_secret_data,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
 		return err
 	}
 
-	// Set the basic fields
 	req.Name = temp.Name
 	req.Metadata = temp.Metadata
 	req.SyncConfig = temp.SyncConfig
-	req.EncryptedSecretData = temp.EncryptedSecretData
+	req.EncryptedSecretData = nil
+	req.FlatEncryptedSecretData = nil
 
+	if len(temp.EncryptedSecretData) == 0 {
+		return nil
+	}
+
+	var structured types.ConnectionMetadata
+	if err := json.Unmarshal(temp.EncryptedSecretData, &structured); err != nil {
+		return err
+	}
+	if updateRequestMetadataStructPopulated(structured) {
+		req.EncryptedSecretData = &structured
+		return nil
+	}
+
+	var flat map[string]interface{}
+	if err := json.Unmarshal(temp.EncryptedSecretData, &flat); err != nil {
+		return err
+	}
+	if len(flat) > 0 {
+		req.FlatEncryptedSecretData = flat
+	}
 	return nil
 }
 

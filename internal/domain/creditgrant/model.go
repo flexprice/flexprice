@@ -49,10 +49,11 @@ type CreditGrant struct {
 
 // CreditGrantCloneOverrides holds optional overrides for CopyWith. Nil fields mean "keep existing value".
 type CreditGrantCloneOverrides struct {
-	ID        *string
-	Scope     *types.CreditGrantScope
-	PlanID    *string
-	BaseModel *types.BaseModel
+	ID            *string
+	Scope         *types.CreditGrantScope
+	PlanID        *string
+	EnvironmentID *string // nil = derive from ctx; non-nil = use explicit value
+	BaseModel     *types.BaseModel
 }
 
 // CopyWith returns a shallow copy of the credit grant with optional overrides applied.
@@ -79,6 +80,12 @@ func (c *CreditGrant) CopyWith(ctx context.Context, overrides *CreditGrantCloneO
 		out.BaseModel = lo.FromPtr(overrides.BaseModel)
 	} else {
 		out.BaseModel = types.GetDefaultBaseModel(ctx)
+	}
+	// EnvironmentID is NOT part of BaseModel — set explicitly or fall back to context
+	if overrides.EnvironmentID != nil {
+		out.EnvironmentID = lo.FromPtr(overrides.EnvironmentID)
+	} else {
+		out.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 	return lo.ToPtr(out)
 }

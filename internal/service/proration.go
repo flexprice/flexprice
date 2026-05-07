@@ -52,6 +52,10 @@ func (s *prorationService) CalculateProration(ctx context.Context, params prorat
 			Mark(ierr.ErrSystem)
 	}
 
+	if result == nil {
+		return nil, nil
+	}
+
 	s.serviceParams.Logger.Debug("proration calculation completed",
 		zap.String("subscription_id", params.SubscriptionID),
 		zap.String("line_item_id", params.LineItemID),
@@ -558,7 +562,7 @@ func (s *prorationService) CreateProrationParamsForLineItem(
 		NewPriceID:            item.PriceID,
 		NewQuantity:           item.Quantity,
 		NewPricePerUnit:       price.Amount,
-		ProrationDate:         subscription.StartDate,
+		ProrationDate:         item.GetPeriodStart(periodStart),
 		ProrationBehavior:     behavior,
 		CustomerTimezone:      subscription.CustomerTimezone,
 		OriginalAmountPaid:    decimal.Zero,

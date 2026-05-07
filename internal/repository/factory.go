@@ -33,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	domainsystemevent "github.com/flexprice/flexprice/internal/domain/systemevent"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	taxrate "github.com/flexprice/flexprice/internal/domain/tax"
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
@@ -230,6 +231,14 @@ func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
 	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.Cache)
 }
 
+func NewSystemEventRepository(p RepositoryParams) *entRepo.SystemEventRepository {
+	return entRepo.NewSystemEventRepository(p.EntClient)
+}
+
+func NewSystemEventDomainRepository(repo *entRepo.SystemEventRepository) domainsystemevent.Repository {
+	return repo
+}
+
 func NewGroupRepository(p RepositoryParams) group.Repository {
 	return entRepo.NewGroupRepository(p.EntClient, p.Logger, p.Cache)
 }
@@ -240,6 +249,14 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 
 func NewCostSheetUsageRepository(p RepositoryParams) events.CostSheetUsageRepository {
 	return clickhouseRepo.NewCostSheetUsageRepository(p.ClickHouseDB, p.Logger)
+}
+
+func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
+	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
+}
+
+func NewUsageBenchmarkRepository(p RepositoryParams) events.UsageBenchmarkRepository {
+	return clickhouseRepo.NewUsageBenchmarkRepository(p.ClickHouseDB, p.Logger)
 }
 
 func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {

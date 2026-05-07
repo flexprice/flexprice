@@ -100,18 +100,19 @@ func (f EntityIntegrationMappingFilter) Validate() error {
 		}
 	}
 
-	// Validate provider types if provided
+	// Validate provider types if provided (keep in sync with domain entityintegrationmapping.ValidateProviderType)
 	if len(f.ProviderTypes) > 0 {
 		validProviderTypes := map[string]bool{
 			"stripe":     true,
 			"razorpay":   true,
 			"paypal":     true,
 			"quickbooks": true,
+			"zoho_books": true,
 		}
 		for _, pt := range f.ProviderTypes {
 			if !validProviderTypes[pt] {
 				return ierr.NewError("invalid provider_type").
-					WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks").
+					WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks, zoho_books").
 					Mark(ierr.ErrValidation)
 			}
 		}

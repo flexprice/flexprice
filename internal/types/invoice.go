@@ -133,6 +133,8 @@ const (
 	InvoiceStatusFinalized InvoiceStatus = "FINALIZED"
 	// InvoiceStatusVoided indicates invoice has been voided and is no longer valid for payment
 	InvoiceStatusVoided InvoiceStatus = "VOIDED"
+	// InvoiceStatusSkipped indicates a zero-dollar draft; no invoice number, no finalization, no vendor sync, no payment
+	InvoiceStatusSkipped InvoiceStatus = "SKIPPED"
 )
 
 func (s InvoiceStatus) String() string {
@@ -144,6 +146,7 @@ func (s InvoiceStatus) Validate() error {
 		InvoiceStatusDraft,
 		InvoiceStatusFinalized,
 		InvoiceStatusVoided,
+		InvoiceStatusSkipped,
 	}
 
 	if s != "" && !lo.Contains(allowed, s) {
@@ -167,6 +170,8 @@ const (
 	InvoiceBillingReasonSubscriptionCycle InvoiceBillingReason = "SUBSCRIPTION_CYCLE"
 	// InvoiceBillingReasonSubscriptionUpdate indicates invoice is for subscription changes (upgrades, downgrades)
 	InvoiceBillingReasonSubscriptionUpdate InvoiceBillingReason = "SUBSCRIPTION_UPDATE"
+	// InvoiceBillingReasonSubscriptionTrialEnd indicates the converting invoice when a trialing subscription ends
+	InvoiceBillingReasonSubscriptionTrialEnd InvoiceBillingReason = "SUBSCRIPTION_TRIAL_END"
 	// InvoiceBillingReasonProration indicates invoice is for proration credits/charges (cancellations, plan changes)
 	InvoiceBillingReasonProration InvoiceBillingReason = "PRORATION"
 	// InvoiceBillingReasonManual indicates invoice was created manually by an administrator
@@ -182,6 +187,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionCreate,
 		InvoiceBillingReasonSubscriptionCycle,
 		InvoiceBillingReasonSubscriptionUpdate,
+		InvoiceBillingReasonSubscriptionTrialEnd,
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
 	}
@@ -195,6 +201,22 @@ func (r InvoiceBillingReason) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// IsFirstSubscriptionOpenInvoiceReason reports whether paying an invoice should run first-invoice
+// activation for a subscription.
+//
+// Qualifying reasons:
+//   - SUBSCRIPTION_CREATE
+//   - SUBSCRIPTION_TRIAL_END
+//   - SUBSCRIPTION_UPDATE
+func (r InvoiceBillingReason) IsFirstSubscriptionOpenInvoiceReason() bool {
+	switch r {
+	case InvoiceBillingReasonSubscriptionCreate, InvoiceBillingReasonSubscriptionTrialEnd, InvoiceBillingReasonSubscriptionUpdate:
+		return true
+	default:
+		return false
+	}
 }
 
 const (
@@ -265,6 +287,7 @@ type InvoiceConfig struct {
 	InvoiceNumberSuffixLength              int                 `json:"suffix_length,omitempty" validate:"required,min=1,max=10"`
 	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after period end when payment is due
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
+	FinalizationDelaySeconds               int                 `json:"finalization_delay_seconds,omitempty" validate:"omitempty,min=0"` // Seconds to wait after invoice creation before finalization. 0 = immediate.
 }
 
 // Validate implements SettingConfig interface
@@ -327,6 +350,9 @@ type InvoiceFilter struct {
 	// subscription_id filters invoices generated for a specific subscription
 	// Only returns invoices that were created as part of the specified subscription's billing
 	SubscriptionID string `json:"subscription_id,omitempty" form:"subscription_id"`
+
+	// subscription_customer_id filters invoices by the subscription owner's customer ID
+	SubscriptionCustomerIDs []string `json:"subscription_customer_id,omitempty" form:"subscription_customer_id"`
 
 	// invoice_type filters by the nature of the invoice (SUBSCRIPTION, ONE_OFF, or CREDIT)
 	// Use this to separate recurring charges from one-time fees or credit adjustments

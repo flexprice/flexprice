@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -210,5 +211,138 @@ func (s *entityIntegrationMappingService) DeleteEntityIntegrationMapping(ctx con
 		return err
 	}
 
+	return nil
+}
+
+func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*dto.LinkIntegrationMappingResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	mapping, err := s.upsertEntityMapping(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.applyEntitySideEffects(ctx, req); err != nil {
+		return nil, err
+	}
+
+	return &dto.LinkIntegrationMappingResponse{
+		Mapping: &dto.EntityIntegrationMappingResponse{
+			ID:               mapping.ID,
+			EntityID:         mapping.EntityID,
+			EntityType:       mapping.EntityType,
+			ProviderType:     mapping.ProviderType,
+			ProviderEntityID: mapping.ProviderEntityID,
+			EnvironmentID:    mapping.EnvironmentID,
+			TenantID:         mapping.TenantID,
+			Status:           mapping.Status,
+			CreatedAt:        mapping.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:        mapping.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			CreatedBy:        mapping.CreatedBy,
+			UpdatedBy:        mapping.UpdatedBy,
+		},
+	}, nil
+}
+
+func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*entityintegrationmapping.EntityIntegrationMapping, error) {
+	filter := &types.EntityIntegrationMappingFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		EntityID:    req.EntityID,
+		EntityType:  req.EntityType,
+		ProviderTypes: []string{
+			req.ProviderType,
+		},
+	}
+	existing, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata := req.Metadata
+	if metadata == nil {
+		metadata = map[string]interface{}{}
+	}
+	metadata["linked_via"] = "integrations_mapping_link_api"
+	metadata["linked_at"] = time.Now().UTC().Format(time.RFC3339)
+
+	if len(existing) > 0 {
+		mapping := existing[0]
+		mapping.ProviderEntityID = req.ProviderEntityID
+		mapping.Metadata = metadata
+		mapping.UpdatedAt = time.Now().UTC()
+		mapping.UpdatedBy = types.GetUserID(ctx)
+		if err := s.EntityIntegrationMappingRepo.Update(ctx, mapping); err != nil {
+			return nil, err
+		}
+		return mapping, nil
+	}
+
+	mapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         req.EntityID,
+		EntityType:       req.EntityType,
+		ProviderType:     req.ProviderType,
+		ProviderEntityID: req.ProviderEntityID,
+		Metadata:         metadata,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	if err := entityintegrationmapping.Validate(mapping); err != nil {
+		return nil, err
+	}
+	if err := s.EntityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
+		return nil, err
+	}
+	return mapping, nil
+}
+
+func (s *entityIntegrationMappingService) applyEntitySideEffects(ctx context.Context, req dto.LinkIntegrationMappingRequest) error {
+	switch req.EntityType {
+	case types.IntegrationEntityTypeCustomer:
+		return s.applyCustomerLinkSideEffects(ctx, req)
+	default:
+		return ierr.NewError("unsupported entity type for link side effects").
+			WithHint(fmt.Sprintf("Entity type %s is not supported yet", req.EntityType)).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+func (s *entityIntegrationMappingService) applyCustomerLinkSideEffects(ctx context.Context, req dto.LinkIntegrationMappingRequest) error {
+	switch types.SecretProvider(req.ProviderType) {
+	case types.SecretProviderRazorpay:
+		return s.applyRazorpayCustomerLinkSideEffects(ctx, req)
+	default:
+		return ierr.NewError("unsupported provider for customer link").
+			WithHint(fmt.Sprintf("Provider %s is not supported yet for customer links", req.ProviderType)).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+func (s *entityIntegrationMappingService) applyRazorpayCustomerLinkSideEffects(ctx context.Context, req dto.LinkIntegrationMappingRequest) error {
+	cust, err := s.CustomerRepo.Get(ctx, req.EntityID)
+	if err != nil {
+		return err
+	}
+	if cust.Metadata == nil {
+		cust.Metadata = map[string]string{}
+	}
+	cust.Metadata["razorpay_customer_id"] = req.ProviderEntityID
+	if err := s.CustomerRepo.Update(ctx, cust); err != nil {
+		return err
+	}
+
+	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "razorpay integration unavailable for customer notes update", "error", err, "customer_id", req.EntityID, "provider_entity_id", req.ProviderEntityID)
+		return nil
+	}
+	if err := razorpayIntegration.CustomerSvc.UpdateRazorpayCustomerNotes(ctx, req.ProviderEntityID, map[string]interface{}{
+		"flexprice_customer_id": req.EntityID,
+		"environment_id":        types.GetEnvironmentID(ctx),
+	}); err != nil {
+		s.Logger.WarnwCtx(ctx, "failed to update razorpay customer notes", "error", err, "customer_id", req.EntityID, "provider_entity_id", req.ProviderEntityID)
+		return nil
+	}
 	return nil
 }

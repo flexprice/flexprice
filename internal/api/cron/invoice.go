@@ -16,7 +16,9 @@ import (
 	"github.com/stripe/stripe-go/v82"
 )
 
-// InvoiceHandler handles invoice related cron jobs
+// InvoiceHandler handles invoice related cron jobs.
+//
+// Deprecated: for automation, use Temporal server schedules (worker creates them on startup).
 type InvoiceHandler struct {
 	invoiceService      service.InvoiceService
 	subscriptionService service.SubscriptionService
@@ -27,7 +29,9 @@ type InvoiceHandler struct {
 	logger              *logger.Logger
 }
 
-// NewInvoiceHandler creates a new invoice handler
+// NewInvoiceHandler creates a new invoice handler.
+//
+// Deprecated: for automation, use Temporal server schedules (worker creates them on startup).
 func NewInvoiceHandler(
 	invoiceService service.InvoiceService,
 	subscriptionService service.SubscriptionService,
@@ -48,19 +52,26 @@ func NewInvoiceHandler(
 	}
 }
 
-// TenantEnvironmentPair represents a tenant and environment pair to process
+// TenantEnvironmentPair represents a tenant and environment pair to process.
+//
+// Deprecated: use Temporal schedules; this is only for the HTTP cron void-old-pending flow.
 type TenantEnvironmentPair struct {
 	TenantID      string `json:"tenant_id" binding:"required"`
 	EnvironmentID string `json:"environment_id" binding:"required"`
 }
 
-// VoidOldPendingInvoicesRequest represents the request payload for the void old pending invoices cron job
+// VoidOldPendingInvoicesRequest represents the request payload for the void old pending invoices cron job.
+//
+// Deprecated: use Temporal schedules; this is only for the HTTP cron void-old-pending flow.
 type VoidOldPendingInvoicesRequest struct {
 	// targets is an optional array of tenant-environment pairs to process. If empty, all tenants and environments are processed.
 	Targets []TenantEnvironmentPair `json:"targets,omitempty"`
 }
 
-// VoidOldPendingInvoices processes incomplete subscriptions and voids their old pending invoices
+// VoidOldPendingInvoices processes incomplete subscriptions and voids their old pending invoices.
+// It is bound to POST /v1/cron/invoices/void-old-pending.
+//
+// Deprecated: use the Temporal server schedule where applicable.
 func (h *InvoiceHandler) VoidOldPendingInvoices(c *gin.Context) {
 	h.logger.Infow("starting void old pending invoices cron job", "time", time.Now().UTC().Format(time.RFC3339))
 

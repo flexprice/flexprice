@@ -176,16 +176,16 @@ const (
 	// ex 1-100 emails for $100, 101-1000 emails for $90
 	BILLING_MODEL_TIERED BillingModel = "TIERED"
 
-	// For BILLING_CADENCE_RECURRING
 	BILLING_PERIOD_MONTHLY   BillingPeriod = "MONTHLY"
 	BILLING_PERIOD_ANNUAL    BillingPeriod = "ANNUAL"
 	BILLING_PERIOD_WEEKLY    BillingPeriod = "WEEKLY"
 	BILLING_PERIOD_DAILY     BillingPeriod = "DAILY"
 	BILLING_PERIOD_QUARTER   BillingPeriod = "QUARTERLY"
 	BILLING_PERIOD_HALF_YEAR BillingPeriod = "HALF_YEARLY"
+	BILLING_PERIOD_ONETIME   BillingPeriod = "ONETIME"
 
 	BILLING_CADENCE_RECURRING BillingCadence = "RECURRING"
-	BILLING_CADENCE_ONETIME   BillingCadence = "ONETIME"
+	// BILLING_CADENCE_ONETIME was removed — use BILLING_PERIOD_ONETIME instead
 
 	// BILLING_TIER_VOLUME means all units price based on final tier reached.
 	// Tier boundaries are INCLUSIVE: if up_to is 1000, quantity 1000 belongs to this tier
@@ -205,14 +205,31 @@ const (
 	DEFAULT_BATCH_SIZE = 100
 )
 
+func (b BillingModel) Validate() error {
+	allowed := []BillingModel{
+		BILLING_MODEL_FLAT_FEE,
+		BILLING_MODEL_PACKAGE,
+		BILLING_MODEL_TIERED,
+	}
+	if b != "" && !lo.Contains(allowed, b) {
+		return ierr.NewError("invalid billing model").
+			WithHint("Invalid billing model").
+			WithReportableDetails(map[string]interface{}{
+				"billing_model": b,
+				"allowed":       allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 func (b BillingCadence) Validate() error {
 	allowed := []BillingCadence{
 		BILLING_CADENCE_RECURRING,
-		BILLING_CADENCE_ONETIME,
 	}
 	if b != "" && !lo.Contains(allowed, b) {
 		return ierr.NewError("invalid billing cadence").
-			WithHint("Invalid billing cadence").
+			WithHint("Invalid billing cadence — only RECURRING is supported").
 			WithReportableDetails(map[string]interface{}{
 				"billing_cadence": b,
 				"allowed":         allowed,
@@ -234,6 +251,7 @@ func (b BillingPeriod) Validate() error {
 		BILLING_PERIOD_DAILY,
 		BILLING_PERIOD_QUARTER,
 		BILLING_PERIOD_HALF_YEAR,
+		BILLING_PERIOD_ONETIME,
 	}
 	if !lo.Contains(allowed, b) {
 		return ierr.NewError("invalid billing period").
@@ -266,13 +284,19 @@ func BillingPeriodOrder(b BillingPeriod) int {
 		return 5
 	case BILLING_PERIOD_ANNUAL:
 		return 6
+	case BILLING_PERIOD_ONETIME:
+		return -1
 	default:
 		return 0
 	}
 }
 
 // BillingPeriodGreaterThan returns true when a has a longer cadence than b (Order(a) > Order(b)).
+// Returns false if either period is ONETIME, as it is not on the recurring cadence scale.
 func BillingPeriodGreaterThan(a, b BillingPeriod) bool {
+	if a == BILLING_PERIOD_ONETIME || b == BILLING_PERIOD_ONETIME {
+		return false
+	}
 	return BillingPeriodOrder(a) > BillingPeriodOrder(b)
 }
 
@@ -297,7 +321,11 @@ func BillingPeriodToMonths(b BillingPeriod) int {
 // IsBillingPeriodMultiple returns true when longer is an exact multiple of shorter
 // (e.g. QUARTERLY is 3× MONTHLY). Both periods must be month-based; sub-month
 // periods always return false when compared with month-based periods.
+// Returns false if either period is ONETIME, as it is not on the recurring cadence scale.
 func IsBillingPeriodMultiple(longer, shorter BillingPeriod) bool {
+	if longer == BILLING_PERIOD_ONETIME || shorter == BILLING_PERIOD_ONETIME {
+		return false
+	}
 	lm := BillingPeriodToMonths(longer)
 	sm := BillingPeriodToMonths(shorter)
 	if lm == 0 || sm == 0 {
@@ -306,63 +334,6 @@ func IsBillingPeriodMultiple(longer, shorter BillingPeriod) bool {
 	return lm%sm == 0
 }
 
-// MinBillingPeriod returns the shortest BillingPeriod in the slice.
-// Returns "" for an empty slice.
-func MinBillingPeriod(periods []BillingPeriod) BillingPeriod {
-	if len(periods) == 0 {
-		return ""
-	}
-	min := periods[0]
-	for _, p := range periods[1:] {
-		if BillingPeriodOrder(p) < BillingPeriodOrder(min) {
-			min = p
-		}
-	}
-	return min
-}
-
-// ValidateBillingPeriodAlignment ensures every period in the list is a valid
-// multiple of the smallest period. Returns nil when len(periods) <= 1.
-func ValidateBillingPeriodAlignment(periods []BillingPeriod) error {
-	if len(periods) <= 1 {
-		return nil
-	}
-	min := MinBillingPeriod(periods)
-	for _, p := range periods {
-		if p == min {
-			continue
-		}
-		if !IsBillingPeriodMultiple(p, min) {
-			return ierr.NewError("billing periods are not aligned").
-				WithHint("All billing periods must be multiples of the smallest billing period").
-				WithReportableDetails(map[string]interface{}{
-					"period":          p,
-					"smallest_period": min,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-	return nil
-}
-
-func (b BillingModel) Validate() error {
-	allowed := []BillingModel{
-		BILLING_MODEL_FLAT_FEE,
-		BILLING_MODEL_PACKAGE,
-		BILLING_MODEL_TIERED,
-	}
-
-	if b != "" && !lo.Contains(allowed, b) {
-		return ierr.NewError("invalid billing model").
-			WithHint("Invalid billing model").
-			WithReportableDetails(map[string]interface{}{
-				"billing_model": b,
-				"allowed":       allowed,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
 
 func (b BillingTier) Validate() error {
 	allowed := []BillingTier{

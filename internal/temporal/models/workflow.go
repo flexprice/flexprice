@@ -674,7 +674,6 @@ func (c *CreateFeatureAndPriceActionConfig) ToDTO(params interface{}) (interface
 	}
 	meterAggType := types.AggregationSum
 	meterResetUsage := types.ResetUsageBillingPeriod
-	priceBillingCadence := types.BILLING_CADENCE_RECURRING
 	priceBillingPeriod := types.BILLING_PERIOD_MONTHLY
 	priceBillingModel := types.BILLING_MODEL_FLAT_FEE
 	priceCurrency := "USD"
@@ -726,7 +725,6 @@ func (c *CreateFeatureAndPriceActionConfig) ToDTO(params interface{}) (interface
 			BillingPeriod:      priceBillingPeriod,
 			BillingPeriodCount: priceBillingPeriodCount,
 			BillingModel:       priceBillingModel,
-			BillingCadence:     priceBillingCadence,
 			InvoiceCadence:     priceInvoiceCadence,
 			// MeterID will be set after feature creation
 			Metadata: map[string]string{

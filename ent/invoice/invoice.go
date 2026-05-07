@@ -34,6 +34,8 @@ const (
 	FieldCustomerID = "customer_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
 	FieldSubscriptionID = "subscription_id"
+	// FieldSubscriptionCustomerID holds the string denoting the subscription_customer_id field in the database.
+	FieldSubscriptionCustomerID = "subscription_customer_id"
 	// FieldInvoiceType holds the string denoting the invoice_type field in the database.
 	FieldInvoiceType = "invoice_type"
 	// FieldInvoiceStatus holds the string denoting the invoice_status field in the database.
@@ -70,6 +72,8 @@ const (
 	FieldVoidedAt = "voided_at"
 	// FieldFinalizedAt holds the string denoting the finalized_at field in the database.
 	FieldFinalizedAt = "finalized_at"
+	// FieldLastComputedAt holds the string denoting the last_computed_at field in the database.
+	FieldLastComputedAt = "last_computed_at"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
 	FieldBillingPeriod = "billing_period"
 	// FieldPeriodStart holds the string denoting the period_start field in the database.
@@ -128,6 +132,7 @@ var Columns = []string{
 	FieldEnvironmentID,
 	FieldCustomerID,
 	FieldSubscriptionID,
+	FieldSubscriptionCustomerID,
 	FieldInvoiceType,
 	FieldInvoiceStatus,
 	FieldPaymentStatus,
@@ -146,6 +151,7 @@ var Columns = []string{
 	FieldPaidAt,
 	FieldVoidedAt,
 	FieldFinalizedAt,
+	FieldLastComputedAt,
 	FieldBillingPeriod,
 	FieldPeriodStart,
 	FieldPeriodEnd,
@@ -270,6 +276,11 @@ func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionID, opts...).ToFunc()
 }
 
+// BySubscriptionCustomerID orders the results by the subscription_customer_id field.
+func BySubscriptionCustomerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionCustomerID, opts...).ToFunc()
+}
+
 // ByInvoiceType orders the results by the invoice_type field.
 func ByInvoiceType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoiceType, opts...).ToFunc()
@@ -358,6 +369,11 @@ func ByVoidedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByFinalizedAt orders the results by the finalized_at field.
 func ByFinalizedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFinalizedAt, opts...).ToFunc()
+}
+
+// ByLastComputedAt orders the results by the last_computed_at field.
+func ByLastComputedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastComputedAt, opts...).ToFunc()
 }
 
 // ByBillingPeriod orders the results by the billing_period field.

@@ -56,7 +56,7 @@ type GroupResponse struct {
 }
 
 // ListGroupsResponse represents the response for listing groups
-type ListGroupsResponse = types.ListResponse[*GroupResponse]
+type ListGroupsResponse = types.ListResponse[*GroupResponse] // @name ListGroupsResponse
 
 func ToGroupResponse(group *group.Group) *GroupResponse {
 	return &GroupResponse{

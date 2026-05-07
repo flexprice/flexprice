@@ -38,8 +38,6 @@ type Addon struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
-	// single_instance or multi_instance
-	Type string `json:"type,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -73,7 +71,7 @@ func (*Addon) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case addon.FieldMetadata:
 			values[i] = new([]byte)
-		case addon.FieldID, addon.FieldTenantID, addon.FieldStatus, addon.FieldCreatedBy, addon.FieldUpdatedBy, addon.FieldEnvironmentID, addon.FieldLookupKey, addon.FieldName, addon.FieldDescription, addon.FieldType:
+		case addon.FieldID, addon.FieldTenantID, addon.FieldStatus, addon.FieldCreatedBy, addon.FieldUpdatedBy, addon.FieldEnvironmentID, addon.FieldLookupKey, addon.FieldName, addon.FieldDescription:
 			values[i] = new(sql.NullString)
 		case addon.FieldCreatedAt, addon.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -158,12 +156,6 @@ func (a *Addon) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				a.Description = value.String
 			}
-		case addon.FieldType:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field type", values[i])
-			} else if value.Valid {
-				a.Type = value.String
-			}
 		case addon.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -242,9 +234,6 @@ func (a *Addon) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(a.Description)
-	builder.WriteString(", ")
-	builder.WriteString("type=")
-	builder.WriteString(a.Type)
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", a.Metadata))

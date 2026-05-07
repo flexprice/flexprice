@@ -134,6 +134,20 @@ func (ic *InvoiceCreate) SetNillableSubscriptionID(s *string) *InvoiceCreate {
 	return ic
 }
 
+// SetSubscriptionCustomerID sets the "subscription_customer_id" field.
+func (ic *InvoiceCreate) SetSubscriptionCustomerID(s string) *InvoiceCreate {
+	ic.mutation.SetSubscriptionCustomerID(s)
+	return ic
+}
+
+// SetNillableSubscriptionCustomerID sets the "subscription_customer_id" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableSubscriptionCustomerID(s *string) *InvoiceCreate {
+	if s != nil {
+		ic.SetSubscriptionCustomerID(*s)
+	}
+	return ic
+}
+
 // SetInvoiceType sets the "invoice_type" field.
 func (ic *InvoiceCreate) SetInvoiceType(tt types.InvoiceType) *InvoiceCreate {
 	ic.mutation.SetInvoiceType(tt)
@@ -366,6 +380,20 @@ func (ic *InvoiceCreate) SetFinalizedAt(t time.Time) *InvoiceCreate {
 func (ic *InvoiceCreate) SetNillableFinalizedAt(t *time.Time) *InvoiceCreate {
 	if t != nil {
 		ic.SetFinalizedAt(*t)
+	}
+	return ic
+}
+
+// SetLastComputedAt sets the "last_computed_at" field.
+func (ic *InvoiceCreate) SetLastComputedAt(t time.Time) *InvoiceCreate {
+	ic.mutation.SetLastComputedAt(t)
+	return ic
+}
+
+// SetNillableLastComputedAt sets the "last_computed_at" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableLastComputedAt(t *time.Time) *InvoiceCreate {
+	if t != nil {
+		ic.SetLastComputedAt(*t)
 	}
 	return ic
 }
@@ -818,6 +846,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		_spec.SetField(invoice.FieldSubscriptionID, field.TypeString, value)
 		_node.SubscriptionID = &value
 	}
+	if value, ok := ic.mutation.SubscriptionCustomerID(); ok {
+		_spec.SetField(invoice.FieldSubscriptionCustomerID, field.TypeString, value)
+		_node.SubscriptionCustomerID = &value
+	}
 	if value, ok := ic.mutation.InvoiceType(); ok {
 		_spec.SetField(invoice.FieldInvoiceType, field.TypeString, value)
 		_node.InvoiceType = value
@@ -889,6 +921,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.FinalizedAt(); ok {
 		_spec.SetField(invoice.FieldFinalizedAt, field.TypeTime, value)
 		_node.FinalizedAt = &value
+	}
+	if value, ok := ic.mutation.LastComputedAt(); ok {
+		_spec.SetField(invoice.FieldLastComputedAt, field.TypeTime, value)
+		_node.LastComputedAt = &value
 	}
 	if value, ok := ic.mutation.BillingPeriod(); ok {
 		_spec.SetField(invoice.FieldBillingPeriod, field.TypeString, value)

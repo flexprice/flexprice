@@ -43,3 +43,22 @@ func (h *DashboardHandler) GetRevenues(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+// GetRevenueDashboard returns revenue analytics with summary tiles and per-customer breakdown
+func (h *DashboardHandler) GetRevenueDashboard(c *gin.Context) {
+	var req dto.RevenueDashboardRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.dashboardService.GetRevenueDashboard(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}

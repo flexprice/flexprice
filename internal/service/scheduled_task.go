@@ -13,8 +13,10 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
+	invoiceWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/invoice"
 	subscriptionWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/api/serviceerror"
@@ -32,6 +34,7 @@ type ScheduledTaskService interface {
 
 	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
 	ScheduleUpdateBillingPeriod(ctx context.Context) (string, error)
+	ScheduleDraftFinalization(ctx context.Context) (string, error)
 	ScheduleSandboxSubscriptionsCleanup(ctx context.Context) (string, error)
 }
 
@@ -109,11 +112,12 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 
 		// Populate bucket, region, and key_prefix from config
 		jobConfig = &types.S3JobConfig{
-			Bucket:      s.config.FlexpriceS3Exports.Bucket,
-			Region:      s.config.FlexpriceS3Exports.Region,
-			KeyPrefix:   conn.SyncConfig.S3.KeyPrefix, // Tenant + Environment isolation
-			Compression: req.JobConfig.Compression,
-			Encryption:  req.JobConfig.Encryption,
+			Bucket:               s.config.FlexpriceS3Exports.Bucket,
+			Region:               s.config.FlexpriceS3Exports.Region,
+			KeyPrefix:            conn.SyncConfig.S3.KeyPrefix, // Tenant + Environment isolation
+			Compression:          req.JobConfig.Compression,
+			Encryption:           req.JobConfig.Encryption,
+			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
 		}
 
 		// Set defaults if not provided
@@ -138,10 +142,16 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 			s.logger.Errorw("invalid populated job config for flexprice-managed S3", "error", err)
 			return nil, err
 		}
+		if err := jobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
+			return nil, err
+		}
 	} else {
 		// For non-managed connections: full validation required
 		if err := req.JobConfig.Validate(); err != nil {
 			s.logger.Errorw("invalid job config for custom S3 connection", "error", err)
+			return nil, err
+		}
+		if err := req.JobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
 			return nil, err
 		}
 		jobConfig = req.JobConfig
@@ -707,6 +717,8 @@ func (s *scheduledTaskService) getCronExpression(interval types.ScheduledTaskInt
 		return "15 * * * *" // Every hour at 15 minutes past (e.g., 10:15, 11:15, 12:15)
 	case types.ScheduledTaskIntervalDaily:
 		return "15 0 * * *" // Every day at 00:15 AM
+	case types.ScheduledTaskIntervalEvery30Minutes:
+		return "*/30 * * * *" // Every 30 minutes
 	default:
 		return "15 0 * * *" // Default to daily at 00:15
 	}
@@ -810,6 +822,48 @@ func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) 
 	}
 
 	return "Triggered update billing period workflow successfully", nil
+}
+
+// ScheduleDraftFinalization creates a Temporal schedule that runs every 30 minutes
+// to finalize draft invoices whose finalization delay has elapsed.
+func (s *scheduledTaskService) ScheduleDraftFinalization(ctx context.Context) (string, error) {
+	scheduleID := types.GenerateUUIDWithPrefix("schtask_draft_finalize")
+
+	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalEvery30Minutes)
+
+	scheduleSpec := client.ScheduleSpec{
+		CronExpressions: []string{cronExpr}, // Every 30 minutes
+	}
+
+	action := &client.ScheduleWorkflowAction{
+		Workflow: invoiceWorkflows.ScheduleDraftFinalizationWorkflow,
+		Args: []interface{}{
+			invoiceModels.ScheduleDraftFinalizationWorkflowInput{
+				BatchSize: 100,
+			},
+		},
+		TaskQueue:                string(types.TemporalTaskQueueInvoice),
+		WorkflowExecutionTimeout: 1 * time.Hour,
+		WorkflowRunTimeout:       1 * time.Hour,
+		WorkflowTaskTimeout:      1 * time.Hour,
+	}
+
+	scheduleOptions := models.CreateScheduleOptions{
+		ID:     scheduleID,
+		Spec:   scheduleSpec,
+		Action: action,
+		Paused: false,
+	}
+
+	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
+	if err != nil {
+		s.logger.Errorw("failed to create draft finalization schedule", "error", err)
+		return "", ierr.WithError(err).
+			WithHint("Failed to create draft finalization schedule").
+			Mark(ierr.ErrInternal)
+	}
+
+	return "Triggered draft finalization schedule successfully", nil
 }
 
 func (s *scheduledTaskService) ScheduleSandboxSubscriptionsCleanup(ctx context.Context) (string, error) {

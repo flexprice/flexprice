@@ -20,6 +20,7 @@ const (
 	TemporalTaskQueueSubscription    TemporalTaskQueue = "subscription"
 	TemporalTaskQueueInvoice         TemporalTaskQueue = "invoice"
 	TemporalTaskQueueReprocessEvents TemporalTaskQueue = "events"
+	TemporalTaskQueueCron            TemporalTaskQueue = "cron"
 )
 
 // String returns the string representation of the task queue
@@ -37,6 +38,7 @@ func (tq TemporalTaskQueue) Validate() error {
 		TemporalTaskQueueWorkflows,
 		TemporalTaskQueueInvoice,
 		TemporalTaskQueueReprocessEvents,
+		TemporalTaskQueueCron,
 	}
 	if lo.Contains(allowedQueues, tq) {
 		return nil
@@ -51,40 +53,79 @@ type TemporalWorkflowType string
 
 const (
 	// Workflow Types - only include implemented workflows
-	TemporalPriceSyncWorkflow                   TemporalWorkflowType = "PriceSyncWorkflow"
-	TemporalQuickBooksPriceSyncWorkflow         TemporalWorkflowType = "QuickBooksPriceSyncWorkflow"
-	TemporalTaskProcessingWorkflow              TemporalWorkflowType = "TaskProcessingWorkflow"
-	TemporalSubscriptionChangeWorkflow          TemporalWorkflowType = "SubscriptionChangeWorkflow"
-	TemporalSubscriptionCreationWorkflow        TemporalWorkflowType = "SubscriptionCreationWorkflow"
-	TemporalStripeIntegrationWorkflow           TemporalWorkflowType = "StripeIntegrationWorkflow"
-	TemporalExecuteExportWorkflow               TemporalWorkflowType = "ExecuteExportWorkflow"
-	TemporalHubSpotDealSyncWorkflow             TemporalWorkflowType = "HubSpotDealSyncWorkflow"
-	TemporalHubSpotInvoiceSyncWorkflow          TemporalWorkflowType = "HubSpotInvoiceSyncWorkflow"
-	TemporalHubSpotQuoteSyncWorkflow            TemporalWorkflowType = "HubSpotQuoteSyncWorkflow"
-	TemporalNomodInvoiceSyncWorkflow            TemporalWorkflowType = "NomodInvoiceSyncWorkflow"
-	TemporalMoyasarInvoiceSyncWorkflow          TemporalWorkflowType = "MoyasarInvoiceSyncWorkflow"
-	TemporalPaddleInvoiceSyncWorkflow          TemporalWorkflowType = "PaddleInvoiceSyncWorkflow"
-	TemporalCustomerOnboardingWorkflow          TemporalWorkflowType = "CustomerOnboardingWorkflow"
-	TemporalPrepareProcessedEventsWorkflow      TemporalWorkflowType = "PrepareProcessedEventsWorkflow"
-	TemporalScheduleSubscriptionBillingWorkflow TemporalWorkflowType = "ScheduleSubscriptionBillingWorkflow"
-	TemporalSandboxSubscriptionCleanupWorkflow   TemporalWorkflowType = "SandboxSubscriptionCleanupWorkflow"
-	TemporalProcessSubscriptionBillingWorkflow  TemporalWorkflowType = "ProcessSubscriptionBillingWorkflow"
-	TemporalProcessInvoiceWorkflow              TemporalWorkflowType = "ProcessInvoiceWorkflow"
-	TemporalRecalculateInvoiceWorkflow          TemporalWorkflowType = "RecalculateInvoiceWorkflow"
-	TemporalReprocessEventsWorkflow             TemporalWorkflowType = "ReprocessEventsWorkflow"
-	TemporalReprocessRawEventsWorkflow          TemporalWorkflowType = "ReprocessRawEventsWorkflow"
-	TemporalReprocessEventsForPlanWorkflow      TemporalWorkflowType = "ReprocessEventsForPlanWorkflow"
+	TemporalCreditGrantProcessingWorkflow              TemporalWorkflowType = "CreditGrantProcessingWorkflow"
+	TemporalSubscriptionAutoCancellationWorkflow       TemporalWorkflowType = "SubscriptionAutoCancellationWorkflow"
+	TemporalWalletCreditExpiryWorkflow                 TemporalWorkflowType = "WalletCreditExpiryWorkflow"
+	TemporalSubscriptionBillingPeriodsWorkflow         TemporalWorkflowType = "SubscriptionBillingPeriodsWorkflow"
+	TemporalSubscriptionRenewalDueAlertsWorkflow       TemporalWorkflowType = "SubscriptionRenewalDueAlertsWorkflow"
+	TemporalOutboundWebhookStaleRetryWorkflow          TemporalWorkflowType = "OutboundWebhookStaleRetryWorkflow"
+	TemporalChargebeeCustomerSyncWorkflow              TemporalWorkflowType = "ChargebeeCustomerSyncWorkflow"
+	TemporalChargebeeInvoiceSyncWorkflow               TemporalWorkflowType = "ChargebeeInvoiceSyncWorkflow"
+	TemporalComputeInvoiceWorkflow                     TemporalWorkflowType = "ComputeInvoiceWorkflow"
+	TemporalCustomerOnboardingWorkflow                 TemporalWorkflowType = "CustomerOnboardingWorkflow"
+	TemporalDraftAndComputeSubscriptionInvoiceWorkflow TemporalWorkflowType = "DraftAndComputeSubscriptionInvoiceWorkflow"
+	TemporalEnvironmentCloneWorkflow                   TemporalWorkflowType = "EnvironmentCloneWorkflow"
+	TemporalExecuteExportWorkflow                      TemporalWorkflowType = "ExecuteExportWorkflow"
+	TemporalFinalizeDraftInvoiceWorkflow               TemporalWorkflowType = "FinalizeDraftInvoiceWorkflow"
+	TemporalHubSpotDealSyncWorkflow                    TemporalWorkflowType = "HubSpotDealSyncWorkflow"
+	TemporalHubSpotInvoiceSyncWorkflow                 TemporalWorkflowType = "HubSpotInvoiceSyncWorkflow"
+	TemporalHubSpotQuoteSyncWorkflow                   TemporalWorkflowType = "HubSpotQuoteSyncWorkflow"
+	TemporalMoyasarInvoiceSyncWorkflow                 TemporalWorkflowType = "MoyasarInvoiceSyncWorkflow"
+	TemporalNomodCustomerSyncWorkflow                  TemporalWorkflowType = "NomodCustomerSyncWorkflow"
+	TemporalNomodInvoiceSyncWorkflow                   TemporalWorkflowType = "NomodInvoiceSyncWorkflow"
+	TemporalPaddleCustomerSyncWorkflow                 TemporalWorkflowType = "PaddleCustomerSyncWorkflow"
+	TemporalPaddleInvoiceSyncWorkflow                  TemporalWorkflowType = "PaddleInvoiceSyncWorkflow"
+	TemporalPrepareProcessedEventsWorkflow             TemporalWorkflowType = "PrepareProcessedEventsWorkflow"
+	TemporalPriceSyncWorkflow                          TemporalWorkflowType = "PriceSyncWorkflow"
+	TemporalProcessInvoiceWorkflow                     TemporalWorkflowType = "ProcessInvoiceWorkflow"
+	TemporalProcessSubscriptionBillingWorkflow         TemporalWorkflowType = "ProcessSubscriptionBillingWorkflow"
+	TemporalQuickBooksCustomerSyncWorkflow             TemporalWorkflowType = "QuickBooksCustomerSyncWorkflow"
+	TemporalQuickBooksInvoiceSyncWorkflow              TemporalWorkflowType = "QuickBooksInvoiceSyncWorkflow"
+	TemporalQuickBooksPriceSyncWorkflow                TemporalWorkflowType = "QuickBooksPriceSyncWorkflow"
+	TemporalRazorpayCustomerSyncWorkflow               TemporalWorkflowType = "RazorpayCustomerSyncWorkflow"
+	TemporalRazorpayInvoiceSyncWorkflow                TemporalWorkflowType = "RazorpayInvoiceSyncWorkflow"
+	TemporalRecalculateInvoiceWorkflow                 TemporalWorkflowType = "RecalculateInvoiceWorkflow"
+	TemporalReprocessEventsForPlanWorkflow             TemporalWorkflowType = "ReprocessEventsForPlanWorkflow"
+	TemporalReprocessEventsWorkflow                    TemporalWorkflowType = "ReprocessEventsWorkflow"
+	TemporalReprocessRawEventsWorkflow                 TemporalWorkflowType = "ReprocessRawEventsWorkflow"
+	TemporalScheduleDraftFinalizationWorkflow          TemporalWorkflowType = "ScheduleDraftFinalizationWorkflow"
+	TemporalScheduleSubscriptionBillingWorkflow        TemporalWorkflowType = "ScheduleSubscriptionBillingWorkflow"
+	TemporalStripeCustomerSyncWorkflow                 TemporalWorkflowType = "StripeCustomerSyncWorkflow"
+	TemporalStripeIntegrationWorkflow                  TemporalWorkflowType = "StripeIntegrationWorkflow"
+	TemporalStripeInvoiceSyncWorkflow                  TemporalWorkflowType = "StripeInvoiceSyncWorkflow"
+	TemporalZohoBooksInvoiceSyncWorkflow               TemporalWorkflowType = "ZohoBooksInvoiceSyncWorkflow"
+	TemporalSubscriptionChangeWorkflow                 TemporalWorkflowType = "SubscriptionChangeWorkflow"
+	TemporalSubscriptionCreationWorkflow               TemporalWorkflowType = "SubscriptionCreationWorkflow"
+	TemporalTaskProcessingWorkflow                     TemporalWorkflowType = "TaskProcessingWorkflow"
+	TemporalSandboxSubscriptionCleanupWorkflow         TemporalWorkflowType = "SandboxSubscriptionCleanupWorkflow"
 )
 
-// WorkflowTypesExcludedFromTracking are workflow types that are not persisted to the
-// workflow_execution table and do not run start/end tracking in the interceptor.
-// Use the existing TemporalWorkflowType enums so the list stays type-safe and discoverable.
-var WorkflowTypesExcludedFromTracking = []TemporalWorkflowType{
+// temporalCronWorkflowTypes is the single list of schedule/worker cron workflows (keeps
+// task queue, tracking exclusions, and Validate in sync when adding a cron workflow).
+var temporalCronWorkflowTypes = []TemporalWorkflowType{
+	TemporalCreditGrantProcessingWorkflow,
+	TemporalSubscriptionAutoCancellationWorkflow,
+	TemporalWalletCreditExpiryWorkflow,
+	TemporalSubscriptionBillingPeriodsWorkflow,
+	TemporalSubscriptionRenewalDueAlertsWorkflow,
+	TemporalOutboundWebhookStaleRetryWorkflow,
+}
+
+var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{
 	TemporalScheduleSubscriptionBillingWorkflow,
 	TemporalSandboxSubscriptionCleanupWorkflow,
 	TemporalProcessSubscriptionBillingWorkflow,
 	TemporalProcessInvoiceWorkflow,
+	TemporalScheduleDraftFinalizationWorkflow,
 }
+
+// WorkflowTypesExcludedFromTracking are workflow types that are not persisted to the
+// workflow_execution table and do not run start/end tracking in the interceptor.
+// Use the existing TemporalWorkflowType enums so the list stays type-safe and discoverable.
+var WorkflowTypesExcludedFromTracking = append(
+	append([]TemporalWorkflowType{}, workflowTypesExcludedFromTrackingCore...),
+	temporalCronWorkflowTypes...,
+)
 
 // ShouldTrackWorkflowType returns false if this workflow type is excluded from tracking
 // (no DB save, no interceptor start/end logic). Used by the workflow tracking interceptor.
@@ -99,30 +140,47 @@ func (w TemporalWorkflowType) String() string {
 
 // Validate validates the workflow type
 func (w TemporalWorkflowType) Validate() error {
-	allowedWorkflows := []TemporalWorkflowType{
-		TemporalPriceSyncWorkflow,                   // "PriceSyncWorkflow"
-		TemporalQuickBooksPriceSyncWorkflow,         // "QuickBooksPriceSyncWorkflow"
-		TemporalTaskProcessingWorkflow,              // "TaskProcessingWorkflow"
-		TemporalSubscriptionChangeWorkflow,          // "SubscriptionChangeWorkflow"
-		TemporalSubscriptionCreationWorkflow,        // "SubscriptionCreationWorkflow"
-		TemporalExecuteExportWorkflow,               // "ExecuteExportWorkflow"
-		TemporalHubSpotDealSyncWorkflow,             // "HubSpotDealSyncWorkflow"
-		TemporalHubSpotInvoiceSyncWorkflow,          // "HubSpotInvoiceSyncWorkflow"
-		TemporalHubSpotQuoteSyncWorkflow,            // "HubSpotQuoteSyncWorkflow"
-		TemporalNomodInvoiceSyncWorkflow,            // "NomodInvoiceSyncWorkflow"
-		TemporalMoyasarInvoiceSyncWorkflow,          // "MoyasarInvoiceSyncWorkflow"
-		TemporalPaddleInvoiceSyncWorkflow,          // "PaddleInvoiceSyncWorkflow"
-		TemporalCustomerOnboardingWorkflow,          // "CustomerOnboardingWorkflow"
-		TemporalPrepareProcessedEventsWorkflow,      // "PrepareProcessedEventsWorkflow"
-		TemporalScheduleSubscriptionBillingWorkflow, // "ScheduleSubscriptionBillingWorkflow"
-		TemporalSandboxSubscriptionCleanupWorkflow,   // "SandboxSubscriptionCleanupWorkflow"
-		TemporalProcessSubscriptionBillingWorkflow,  // "ProcessSubscriptionBillingWorkflow"
-		TemporalProcessInvoiceWorkflow,              // "ProcessInvoiceWorkflow"
-		TemporalRecalculateInvoiceWorkflow,          // "RecalculateInvoiceWorkflow"
-		TemporalReprocessEventsWorkflow,             // "ReprocessEventsWorkflow"
-		TemporalReprocessRawEventsWorkflow,          // "ReprocessRawEventsWorkflow"
-		TemporalReprocessEventsForPlanWorkflow,      // "ReprocessEventsForPlanWorkflow"
-	}
+	allowedWorkflows := append(append([]TemporalWorkflowType{}, temporalCronWorkflowTypes...), []TemporalWorkflowType{
+		TemporalChargebeeCustomerSyncWorkflow,
+		TemporalChargebeeInvoiceSyncWorkflow,
+		TemporalComputeInvoiceWorkflow,
+		TemporalCustomerOnboardingWorkflow,
+		TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
+		TemporalEnvironmentCloneWorkflow,
+		TemporalExecuteExportWorkflow,
+		TemporalFinalizeDraftInvoiceWorkflow,
+		TemporalHubSpotDealSyncWorkflow,
+		TemporalHubSpotInvoiceSyncWorkflow,
+		TemporalHubSpotQuoteSyncWorkflow,
+		TemporalMoyasarInvoiceSyncWorkflow,
+		TemporalNomodCustomerSyncWorkflow,
+		TemporalNomodInvoiceSyncWorkflow,
+		TemporalPaddleCustomerSyncWorkflow,
+		TemporalPaddleInvoiceSyncWorkflow,
+		TemporalPrepareProcessedEventsWorkflow,
+		TemporalPriceSyncWorkflow,
+		TemporalProcessInvoiceWorkflow,
+		TemporalProcessSubscriptionBillingWorkflow,
+		TemporalQuickBooksCustomerSyncWorkflow,
+		TemporalQuickBooksInvoiceSyncWorkflow,
+		TemporalQuickBooksPriceSyncWorkflow,
+		TemporalRazorpayCustomerSyncWorkflow,
+		TemporalRazorpayInvoiceSyncWorkflow,
+		TemporalRecalculateInvoiceWorkflow,
+		TemporalReprocessEventsForPlanWorkflow,
+		TemporalReprocessEventsWorkflow,
+		TemporalReprocessRawEventsWorkflow,
+		TemporalScheduleDraftFinalizationWorkflow,
+		TemporalScheduleSubscriptionBillingWorkflow,
+		TemporalStripeCustomerSyncWorkflow,
+		TemporalStripeIntegrationWorkflow,
+		TemporalStripeInvoiceSyncWorkflow,
+		TemporalZohoBooksInvoiceSyncWorkflow,
+		TemporalSubscriptionChangeWorkflow,
+		TemporalSubscriptionCreationWorkflow,
+		TemporalTaskProcessingWorkflow,
+		TemporalSandboxSubscriptionCleanupWorkflow,
+	}...)
 	if lo.Contains(allowedWorkflows, w) {
 		return nil
 	}
@@ -134,8 +192,11 @@ func (w TemporalWorkflowType) Validate() error {
 
 // TaskQueue returns the logical task queue for the workflow
 func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
+	if lo.Contains(temporalCronWorkflowTypes, w) {
+		return TemporalTaskQueueCron
+	}
 	switch w {
-	case TemporalTaskProcessingWorkflow, TemporalSubscriptionChangeWorkflow, TemporalSubscriptionCreationWorkflow, TemporalHubSpotDealSyncWorkflow, TemporalHubSpotInvoiceSyncWorkflow, TemporalHubSpotQuoteSyncWorkflow, TemporalNomodInvoiceSyncWorkflow, TemporalMoyasarInvoiceSyncWorkflow, TemporalPaddleInvoiceSyncWorkflow:
+	case TemporalTaskProcessingWorkflow, TemporalSubscriptionChangeWorkflow, TemporalSubscriptionCreationWorkflow, TemporalStripeIntegrationWorkflow, TemporalHubSpotDealSyncWorkflow, TemporalHubSpotInvoiceSyncWorkflow, TemporalHubSpotQuoteSyncWorkflow, TemporalNomodInvoiceSyncWorkflow, TemporalMoyasarInvoiceSyncWorkflow, TemporalPaddleInvoiceSyncWorkflow, TemporalStripeInvoiceSyncWorkflow, TemporalRazorpayInvoiceSyncWorkflow, TemporalChargebeeInvoiceSyncWorkflow, TemporalQuickBooksInvoiceSyncWorkflow, TemporalZohoBooksInvoiceSyncWorkflow, TemporalStripeCustomerSyncWorkflow, TemporalRazorpayCustomerSyncWorkflow, TemporalChargebeeCustomerSyncWorkflow, TemporalQuickBooksCustomerSyncWorkflow, TemporalNomodCustomerSyncWorkflow, TemporalPaddleCustomerSyncWorkflow:
 		return TemporalTaskQueueTask
 	case TemporalPriceSyncWorkflow, TemporalQuickBooksPriceSyncWorkflow:
 		return TemporalTaskQueuePrice
@@ -147,9 +208,9 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueSubscription
 	case TemporalRecalculateInvoiceWorkflow:
 		return TemporalTaskQueueSubscription
-	case TemporalProcessInvoiceWorkflow:
+	case TemporalProcessInvoiceWorkflow, TemporalFinalizeDraftInvoiceWorkflow, TemporalScheduleDraftFinalizationWorkflow, TemporalComputeInvoiceWorkflow, TemporalDraftAndComputeSubscriptionInvoiceWorkflow:
 		return TemporalTaskQueueInvoice
-	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow:
+	case TemporalCustomerOnboardingWorkflow, TemporalPrepareProcessedEventsWorkflow, TemporalEnvironmentCloneWorkflow:
 		return TemporalTaskQueueWorkflows
 	case TemporalReprocessEventsWorkflow, TemporalReprocessRawEventsWorkflow, TemporalReprocessEventsForPlanWorkflow:
 		return TemporalTaskQueueReprocessEvents
@@ -174,12 +235,26 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 	case TemporalTaskQueueTask:
 		return []TemporalWorkflowType{
 			TemporalTaskProcessingWorkflow,
+			TemporalSubscriptionChangeWorkflow,
+			TemporalSubscriptionCreationWorkflow,
+			TemporalStripeIntegrationWorkflow,
 			TemporalHubSpotDealSyncWorkflow,
 			TemporalHubSpotInvoiceSyncWorkflow,
 			TemporalHubSpotQuoteSyncWorkflow,
 			TemporalNomodInvoiceSyncWorkflow,
 			TemporalMoyasarInvoiceSyncWorkflow,
 			TemporalPaddleInvoiceSyncWorkflow,
+			TemporalStripeInvoiceSyncWorkflow,
+			TemporalRazorpayInvoiceSyncWorkflow,
+			TemporalChargebeeInvoiceSyncWorkflow,
+			TemporalQuickBooksInvoiceSyncWorkflow,
+			TemporalZohoBooksInvoiceSyncWorkflow,
+			TemporalStripeCustomerSyncWorkflow,
+			TemporalRazorpayCustomerSyncWorkflow,
+			TemporalChargebeeCustomerSyncWorkflow,
+			TemporalQuickBooksCustomerSyncWorkflow,
+			TemporalNomodCustomerSyncWorkflow,
+			TemporalPaddleCustomerSyncWorkflow,
 		}
 	case TemporalTaskQueuePrice:
 		return []TemporalWorkflowType{
@@ -200,11 +275,16 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 	case TemporalTaskQueueInvoice:
 		return []TemporalWorkflowType{
 			TemporalProcessInvoiceWorkflow,
+			TemporalFinalizeDraftInvoiceWorkflow,
+			TemporalScheduleDraftFinalizationWorkflow,
+			TemporalComputeInvoiceWorkflow,
+			TemporalDraftAndComputeSubscriptionInvoiceWorkflow,
 		}
 	case TemporalTaskQueueWorkflows:
 		return []TemporalWorkflowType{
 			TemporalCustomerOnboardingWorkflow,
 			TemporalPrepareProcessedEventsWorkflow,
+			TemporalEnvironmentCloneWorkflow,
 		}
 	case TemporalTaskQueueReprocessEvents:
 		return []TemporalWorkflowType{
@@ -212,6 +292,10 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 			TemporalReprocessRawEventsWorkflow,
 			TemporalReprocessEventsForPlanWorkflow,
 		}
+	case TemporalTaskQueueCron:
+		out := make([]TemporalWorkflowType, len(temporalCronWorkflowTypes))
+		copy(out, temporalCronWorkflowTypes)
+		return out
 	default:
 		return []TemporalWorkflowType{}
 	}
@@ -227,6 +311,7 @@ func GetAllTaskQueues() []TemporalTaskQueue {
 		TemporalTaskQueueInvoice,
 		TemporalTaskQueueWorkflows,
 		TemporalTaskQueueReprocessEvents,
+		TemporalTaskQueueCron,
 	}
 }
 

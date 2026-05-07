@@ -23,9 +23,12 @@ func (MetadataMixin) Fields() []ent.Field {
 	}
 }
 
+// Indexes of the MetadataMixin.
+func (MetadataMixin) Indexes() []ent.Index {
+	return []ent.Index{}
+}
+
 // Hooks of the MetadataMixin.
 func (MetadataMixin) Hooks() []ent.Hook {
-	return []ent.Hook{
-		// Add hooks if needed
-	}
+	return []ent.Hook{}
 }

@@ -91,8 +91,7 @@ func (s *PriceServiceSuite) TestCreatePrice() {
 		BillingPeriodCount: 1,
 		BillingModel:       types.BILLING_MODEL_TIERED,
 		TierMode:           types.BILLING_TIER_SLAB,
-		InvoiceCadence:     types.InvoiceCadenceAdvance,
-		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
 		Description:        "Test Price",
 		Metadata:           map[string]string{"key": "value"},
 		Tiers: []dto.CreatePriceTier{
@@ -258,7 +257,6 @@ func (s *PriceServiceSuite) TestUpdatePrice_EffectiveDateValidation() {
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-			BillingCadence:     types.BILLING_CADENCE_RECURRING,
 			InvoiceCadence:     types.InvoiceCadenceAdvance,
 		}
 		_ = s.priceRepo.Create(s.ctx, p)
@@ -314,7 +312,6 @@ func (s *PriceServiceSuite) TestUpdatePrice_EffectiveDateValidation() {
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-			BillingCadence:     types.BILLING_CADENCE_RECURRING,
 			InvoiceCadence:     types.InvoiceCadenceAdvance,
 		}
 		_ = s.priceRepo.Create(s.ctx, p)
@@ -1708,8 +1705,7 @@ func (s *PriceServiceSuite) TestUpdatePrice_CustomPriceUnitValidation() {
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
-			BillingCadence:     types.BILLING_CADENCE_RECURRING,
-			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			InvoiceCadence:     types.InvoiceCadenceArrear,
 		}
 		_ = s.priceRepo.Create(s.ctx, customPrice)
 
@@ -1767,8 +1763,7 @@ func (s *PriceServiceSuite) TestUpdatePrice_CustomPriceUnitValidation() {
 			TierMode:           types.BILLING_TIER_SLAB,
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
-			BillingCadence:     types.BILLING_CADENCE_RECURRING,
-			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			InvoiceCadence:     types.InvoiceCadenceArrear,
 			PriceUnitTiers: []price.PriceTier{
 				{
 					UpTo:       &upTo10,
@@ -1807,7 +1802,6 @@ func (s *PriceServiceSuite) TestUpdatePrice_CustomPriceUnitValidation() {
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 			BillingPeriodCount: 1,
-			BillingCadence:     types.BILLING_CADENCE_RECURRING,
 			InvoiceCadence:     types.InvoiceCadenceAdvance,
 		}
 		_ = s.priceRepo.Create(s.ctx, fiatPrice)
@@ -2164,7 +2158,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 				{
@@ -2177,7 +2170,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 			},
@@ -2219,7 +2211,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 				{
@@ -2232,7 +2223,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 			},
@@ -2285,7 +2275,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 			},
@@ -2338,7 +2327,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 				{
@@ -2351,7 +2339,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 				{
@@ -2364,7 +2351,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 			},
@@ -2426,7 +2412,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 				{
@@ -2439,7 +2424,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount: 1,
 					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:     types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:     types.InvoiceCadenceAdvance,
 				},
 			},
@@ -2494,7 +2478,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount:   1,
 					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:       types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:       types.InvoiceCadenceAdvance,
 					SkipEntityValidation: true,
 				},
@@ -2508,7 +2491,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount:   1,
 					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:       types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:       types.InvoiceCadenceAdvance,
 					SkipEntityValidation: true,
 				},
@@ -2564,7 +2546,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount:   1,
 					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:       types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:       types.InvoiceCadenceAdvance,
 					SkipEntityValidation: true, // First item skips validation
 				},
@@ -2578,7 +2559,6 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
 					BillingPeriodCount:   1,
 					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
-					BillingCadence:       types.BILLING_CADENCE_RECURRING,
 					InvoiceCadence:       types.InvoiceCadenceAdvance,
 					SkipEntityValidation: false, // This doesn't matter - first item already skipped validation
 				},

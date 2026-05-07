@@ -137,12 +137,6 @@ func (ac *AddonCreate) SetNillableDescription(s *string) *AddonCreate {
 	return ac
 }
 
-// SetType sets the "type" field.
-func (ac *AddonCreate) SetType(s string) *AddonCreate {
-	ac.mutation.SetType(s)
-	return ac
-}
-
 // SetMetadata sets the "metadata" field.
 func (ac *AddonCreate) SetMetadata(m map[string]interface{}) *AddonCreate {
 	ac.mutation.SetMetadata(m)
@@ -258,14 +252,6 @@ func (ac *AddonCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Addon.name": %w`, err)}
 		}
 	}
-	if _, ok := ac.mutation.GetType(); !ok {
-		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Addon.type"`)}
-	}
-	if v, ok := ac.mutation.GetType(); ok {
-		if err := addon.TypeValidator(v); err != nil {
-			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Addon.type": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -340,10 +326,6 @@ func (ac *AddonCreate) createSpec() (*Addon, *sqlgraph.CreateSpec) {
 	if value, ok := ac.mutation.Description(); ok {
 		_spec.SetField(addon.FieldDescription, field.TypeString, value)
 		_node.Description = value
-	}
-	if value, ok := ac.mutation.GetType(); ok {
-		_spec.SetField(addon.FieldType, field.TypeString, value)
-		_node.Type = value
 	}
 	if value, ok := ac.mutation.Metadata(); ok {
 		_spec.SetField(addon.FieldMetadata, field.TypeJSON, value)

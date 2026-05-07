@@ -49,7 +49,7 @@ func (b *CommunicationPayloadBuilder) BuildPayload(ctx context.Context, eventTyp
 	}
 
 	// inject the invoice pdf url into the invoice response
-	pdfUrl, err := b.services.InvoiceService.GetInvoicePDFUrl(ctx, invoiceID)
+	pdfUrl, err := b.services.InvoiceService.GetInvoicePDFUrl(ctx, invoiceID, false)
 	if err != nil {
 		b.services.Sentry.CaptureException(err)
 	}

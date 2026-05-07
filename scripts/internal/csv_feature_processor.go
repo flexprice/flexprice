@@ -307,7 +307,6 @@ func (p *CSVFeatureProcessor) createPrice(ctx context.Context, record CSVFeature
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		MeterID:            meterID,
 		InvoiceCadence:     types.InvoiceCadenceArrear,
 		Description:        fmt.Sprintf("Price for %s", record.FeatureName),

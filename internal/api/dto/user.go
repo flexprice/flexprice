@@ -77,4 +77,4 @@ func NewUserResponse(u *user.User, tenant *tenant.Tenant) *UserResponse {
 }
 
 // ListUsersResponse is the response type for listing users with pagination
-type ListUsersResponse = types.ListResponse[*UserResponse]
+type ListUsersResponse = types.ListResponse[*UserResponse] // @name ListUsersResponse

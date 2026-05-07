@@ -19,9 +19,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -205,7 +205,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
-	s.Logger.Debugw("processing event from message queue",
+	s.Logger.Debugw("processing event from message queue in cost sheet usage tracking service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -262,7 +262,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 
 // Process a single event for cost sheet usage tracking
 func (s *costsheetUsageTrackingService) processEvent(ctx context.Context, event *events.Event) error {
-	s.Logger.DebugwCtx(ctx, "processing event",
+	s.Logger.DebugwCtx(ctx, "processing event in cost sheet usage tracking service",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"external_customer_id", event.ExternalCustomerID,

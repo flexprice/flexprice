@@ -259,6 +259,10 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 		req.CustomData["invoice_number"] = *flexInvoice.InvoiceNumber
 	}
 
+	if flexInvoice.SubscriptionCustomerID != nil && *flexInvoice.SubscriptionCustomerID != "" {
+		req.CustomData["flexprice_subscription_customer_id"] = *flexInvoice.SubscriptionCustomerID
+	}
+
 	return req, nil
 }
 

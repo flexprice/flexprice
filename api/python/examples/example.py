@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 FlexPrice Python SDK example – sync client, create customer and ingest event.
-Set FLEXPRICE_API_KEY (and optionally FLEXPRICE_API_HOST) in .env or environment.
+
+Default base URL: https://us.api.flexprice.io/v1
+Override with FLEXPRICE_API_HOST (full URL). Set FLEXPRICE_API_KEY in .env or environment.
 """
 
 import os
@@ -12,14 +14,16 @@ load_dotenv()
 
 from flexprice import Flexprice
 
+
 def main():
     api_key = os.getenv("FLEXPRICE_API_KEY")
-    api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io")
+    server_url = os.getenv(
+        "FLEXPRICE_API_HOST", "https://us.api.flexprice.io/v1"
+    )
 
     if not api_key:
         raise SystemExit("Set FLEXPRICE_API_KEY in .env or environment")
 
-    server_url = api_host if api_host.startswith(("http://", "https://")) else f"https://{api_host}"
     customer_id = f"sample-customer-{int(time.time())}"
 
     print("Starting FlexPrice Python SDK example...")
@@ -29,8 +33,15 @@ def main():
         with Flexprice(
             server_url=server_url,
             api_key_auth=api_key,
-        ) as flexprice:
-            result = flexprice.events.ingest_event(
+        ) as client:
+            client.customers.create_customer(
+                external_id=customer_id,
+                email=f"sample-{customer_id}@example.com",
+                name="Example Customer",
+            )
+            print("Customer created:", customer_id)
+
+            result = client.events.ingest_event(
                 request={
                     "event_name": "Sample Event",
                     "external_customer_id": customer_id,
@@ -43,6 +54,7 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
         raise
+
 
 if __name__ == "__main__":
     main()

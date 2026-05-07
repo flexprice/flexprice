@@ -19,6 +19,8 @@ const (
 
 	// Webhook security
 	OAuthCredentialWebhookVerifierToken = "webhook_verifier_token"
+	// OAuthCredentialWebhookSecret is the Zoho Books webhook signing secret (optional at OAuth init; stored encrypted).
+	OAuthCredentialWebhookSecret = "webhook_secret"
 
 	// QuickBooks-specific credentials
 	// (Currently QuickBooks uses client_id and client_secret, which are common)
@@ -27,10 +29,15 @@ const (
 // OAuth metadata field names (used in Metadata map)
 const (
 	// QuickBooks metadata
-	OAuthMetadataEnvironment     = "environment"       // "sandbox" or "production"
-	OAuthMetadataIncomeAccountID = "income_account_id" // Optional, defaults to "79"
-	OAuthMetadataRedirectURI     = "redirect_uri"      // Set by backend
-	OAuthMetadataRealmID         = "realm_id"          // QuickBooks company ID
+	OAuthMetadataEnvironment      = "environment"       // "sandbox" or "production"
+	OAuthMetadataIncomeAccountID  = "income_account_id" // Optional, defaults to "79"
+	OAuthMetadataRedirectURI      = "redirect_uri"      // Set by backend
+	OAuthMetadataRealmID          = "realm_id"          // QuickBooks company ID
+	OAuthMetadataOrganizationID   = "organization_id"   // Zoho Books organization ID
+	OAuthMetadataOrganizationName = "organization_name" // Zoho Books organization name
+	OAuthMetadataAccountsServer   = "accounts_server"   // Zoho accounts domain for DC
+	OAuthMetadataLocation         = "location"          // Zoho location/DC hint
+	OAuthMetadataScopes           = "scopes"            // granted scopes
 
 	// Future providers can add their metadata constants here
 	// Stripe metadata example:
@@ -48,11 +55,12 @@ type OAuthProvider string
 
 const (
 	OAuthProviderQuickBooks OAuthProvider = "quickbooks"
+	OAuthProviderZohoBooks  OAuthProvider = "zoho_books"
 )
 
 // OAuthSession represents a temporary OAuth session stored in cache during the OAuth flow.
 // This is a generic session that supports multiple OAuth providers.
-// Sessions auto-expire after 5 minutes for security.
+// Session lifetime is configured when the session is created.
 type OAuthSession struct {
 	// Session identification
 	SessionID     string        `json:"session_id"`     // Random 32-byte hex string (cache key)
@@ -76,12 +84,12 @@ type OAuthSession struct {
 	CSRFState string `json:"csrf_state"` // Random 32-byte hex string for state validation
 
 	// Session lifecycle
-	ExpiresAt time.Time `json:"expires_at"` // Auto-cleanup timestamp (5 minutes)
+	ExpiresAt time.Time `json:"expires_at"` // Auto-cleanup timestamp
 }
 
 // IsExpired checks if the OAuth session has expired
 func (s *OAuthSession) IsExpired() bool {
-	return time.Now().After(s.ExpiresAt)
+	return time.Now().UTC().After(s.ExpiresAt.UTC())
 }
 
 // Validate validates the OAuth session fields
@@ -112,9 +120,19 @@ func (s *OAuthSession) Validate() error {
 		if s.GetMetadata(OAuthMetadataEnvironment) == "" {
 			return ierr.NewError("environment is required in metadata").Mark(ierr.ErrValidation)
 		}
+	case OAuthProviderZohoBooks:
+		if len(s.Credentials) == 0 {
+			return ierr.NewError("credentials are required").Mark(ierr.ErrValidation)
+		}
+		if s.GetCredential(OAuthCredentialClientID) == "" {
+			return ierr.NewError("client_id is required in credentials").Mark(ierr.ErrValidation)
+		}
+		if s.GetCredential(OAuthCredentialClientSecret) == "" {
+			return ierr.NewError("client_secret is required in credentials").Mark(ierr.ErrValidation)
+		}
 	default:
 		return ierr.NewError("unsupported OAuth provider").
-			WithHintf("Provider '%s' is not supported. Supported providers: quickbooks", s.Provider).
+			WithHintf("Provider '%s' is not supported. Supported providers: quickbooks, zoho_books", s.Provider).
 			Mark(ierr.ErrValidation)
 	}
 

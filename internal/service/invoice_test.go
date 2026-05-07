@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -16,10 +17,26 @@ import (
 
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
+
+// recordingWebhookPublisher captures WebhookEvent publishes while delegating to inner.
+type recordingWebhookPublisher struct {
+	inner  webhookPublisher.WebhookPublisher
+	events []*types.WebhookEvent
+}
+
+func (r *recordingWebhookPublisher) PublishWebhook(ctx context.Context, event *types.WebhookEvent) error {
+	r.events = append(r.events, event)
+	return r.inner.PublishWebhook(ctx, event)
+}
+
+func (r *recordingWebhookPublisher) Close() error {
+	return r.inner.Close()
+}
 
 type InvoiceServiceSuite struct {
 	testutil.BaseServiceTestSuite
@@ -615,6 +632,119 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 	}
 }
 
+func (s *InvoiceServiceSuite) TestCreateOneOffInvoice_PublishesFinalizedSystemEventWhenCreated() {
+	ctx := s.GetContext()
+	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}
+	s.service.(*invoiceService).WebhookPublisher = rec
+
+	resp, err := s.service.CreateOneOffInvoice(ctx, dto.CreateInvoiceRequest{
+		CustomerID:    s.testData.customer.ID,
+		InvoiceType:   types.InvoiceTypeOneOff,
+		Currency:      "usd",
+		AmountDue:     decimal.NewFromFloat(100),
+		Total:         decimal.NewFromFloat(100),
+		Subtotal:      decimal.NewFromFloat(100),
+		BillingReason: types.InvoiceBillingReasonManual,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.InvoiceStatusFinalized, resp.InvoiceStatus)
+
+	var finalized *types.WebhookEvent
+	for _, ev := range rec.events {
+		if ev.EventName == types.WebhookEventInvoiceUpdateFinalized {
+			finalized = ev
+			break
+		}
+	}
+	s.Require().NotNil(finalized, "expected invoice.update.finalized system event")
+	var pl struct {
+		InvoiceID string `json:"invoice_id"`
+	}
+	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
+	s.Equal(resp.ID, pl.InvoiceID)
+}
+
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventForOneOffDraft() {
+	ctx := s.GetContext()
+	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}
+	s.service.(*invoiceService).WebhookPublisher = rec
+
+	draftInvoice := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(50),
+		Total:           decimal.NewFromFloat(50),
+		Subtotal:        decimal.NewFromFloat(50),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(50),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftInvoice))
+
+	s.NotContains(lo.Map(rec.events, func(ev *types.WebhookEvent, _ int) types.WebhookEventName {
+		return ev.EventName
+	}), types.WebhookEventInvoiceUpdateFinalized)
+
+	err := s.service.FinalizeInvoice(ctx, draftInvoice.ID)
+	s.Require().NoError(err)
+
+	var finalized *types.WebhookEvent
+	for _, ev := range rec.events {
+		if ev.EventName == types.WebhookEventInvoiceUpdateFinalized {
+			finalized = ev
+		}
+	}
+	s.Require().NotNil(finalized)
+	var pl struct {
+		InvoiceID string `json:"invoice_id"`
+	}
+	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
+	s.Equal(draftInvoice.ID, pl.InvoiceID)
+}
+
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventForSubscription() {
+	ctx := s.GetContext()
+	rec := &recordingWebhookPublisher{inner: s.GetWebhookPublisher()}
+	s.service.(*invoiceService).WebhookPublisher = rec
+
+	draftSubscriptionInvoice := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  &s.testData.subscription.ID,
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(15),
+		Total:           decimal.NewFromFloat(15),
+		Subtotal:        decimal.NewFromFloat(15),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(15),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, draftSubscriptionInvoice))
+
+	err := s.service.FinalizeInvoice(ctx, draftSubscriptionInvoice.ID)
+	s.Require().NoError(err)
+	var finalized *types.WebhookEvent
+	for _, ev := range rec.events {
+		if ev.EventName == types.WebhookEventInvoiceUpdateFinalized {
+			finalized = ev
+		}
+	}
+	s.Require().NotNil(finalized)
+	var pl struct {
+		InvoiceID string `json:"invoice_id"`
+	}
+	s.Require().NoError(json.Unmarshal(finalized.Payload, &pl))
+	s.Equal(draftSubscriptionInvoice.ID, pl.InvoiceID)
+}
+
 func (s *InvoiceServiceSuite) TestUpdatePaymentStatus() {
 	// Create a finalized invoice first with line items
 	finalizedInvoice := &invoice.Invoice{
@@ -1139,6 +1269,137 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 	}
 }
 
+func (s *InvoiceServiceSuite) TestGetUnpaidInvoicesToBePaid_Calculations() {
+	ctx := s.GetContext()
+
+	// Fresh customer to avoid interference with other suite fixtures.
+	cust := &customer.Customer{
+		ID:         "cust_unpaid_to_be_paid",
+		ExternalID: "ext_cust_unpaid_to_be_paid",
+		Name:       "Unpaid Invoices Customer",
+		Email:      "unpaid-invoices@test.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	// inv_1: unpaid finalized USD
+	// - AmountPaid=30, AmountRemaining=100 => AmountDue=130
+	// - usage line: 80 - prepaid 10 - discount 5 = 65 contribution
+	// - fixed line: 50 (does not affect unpaid usage charges)
+	inv1 := &invoice.Invoice{
+		ID:              "inv_unpaid_1",
+		CustomerID:      cust.ID,
+		Currency:        "usd",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		AmountPaid:      decimal.NewFromInt(30),
+		AmountRemaining: decimal.NewFromInt(100),
+		AmountDue:       decimal.NewFromInt(130),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:                    "inv1_li_usage",
+				CustomerID:            cust.ID,
+				Currency:              "usd",
+				Amount:                decimal.NewFromInt(80),
+				PriceType:             lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
+				PrepaidCreditsApplied: decimal.NewFromInt(10),
+				LineItemDiscount:      decimal.NewFromInt(5),
+				BaseModel:             types.GetDefaultBaseModel(ctx),
+			},
+			{
+				ID:               "inv1_li_fixed",
+				CustomerID:       cust.ID,
+				Currency:         "usd",
+				Amount:           decimal.NewFromInt(50),
+				PriceType:        lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+				LineItemDiscount: decimal.Zero,
+				BaseModel:        types.GetDefaultBaseModel(ctx),
+			},
+		},
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, inv1))
+
+	// inv_2: unpaid finalized USD
+	// - AmountPaid=0, AmountRemaining=50
+	// - usage line: 50 contribution
+	inv2 := &invoice.Invoice{
+		ID:              "inv_unpaid_2",
+		CustomerID:      cust.ID,
+		Currency:        "usd",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromInt(50),
+		AmountDue:       decimal.NewFromInt(50),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:                    "inv2_li_usage",
+				CustomerID:            cust.ID,
+				Currency:              "usd",
+				Amount:                decimal.NewFromInt(50),
+				PriceType:             lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
+				PrepaidCreditsApplied: decimal.Zero,
+				LineItemDiscount:      decimal.Zero,
+				BaseModel:             types.GetDefaultBaseModel(ctx),
+			},
+		},
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, inv2))
+
+	// inv_3: PAID invoice should be ignored.
+	inv3 := &invoice.Invoice{
+		ID:              "inv_paid_ignored",
+		CustomerID:      cust.ID,
+		Currency:        "usd",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusSucceeded,
+		AmountPaid:      decimal.NewFromInt(200),
+		AmountRemaining: decimal.Zero,
+		AmountDue:       decimal.NewFromInt(200),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.Create(ctx, inv3))
+
+	// inv_4: different currency should be ignored.
+	inv4 := &invoice.Invoice{
+		ID:              "inv_eur_ignored",
+		CustomerID:      cust.ID,
+		Currency:        "eur",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromInt(999),
+		AmountDue:       decimal.NewFromInt(999),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.Create(ctx, inv4))
+
+	resp, err := s.service.GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID: cust.ID,
+		Currency:   "usd",
+	})
+	s.NoError(err)
+	s.NotNil(resp)
+
+	s.True(decimal.NewFromInt(150).Equal(resp.TotalUnpaidAmount),
+		"TotalUnpaidAmount mismatch: expected 150, got %s", resp.TotalUnpaidAmount)
+	s.True(decimal.NewFromInt(115).Equal(resp.TotalUnpaidUsageCharges),
+		"TotalUnpaidUsageCharges mismatch: expected 115, got %s", resp.TotalUnpaidUsageCharges)
+	s.True(decimal.NewFromInt(30).Equal(resp.TotalPaidInvoiceAmount),
+		"TotalPaidInvoiceAmount mismatch: expected 30, got %s", resp.TotalPaidInvoiceAmount)
+
+	// Should return only the two unpaid USD invoices.
+	s.Len(resp.Invoices, 2)
+	gotIDs := lo.Map(resp.Invoices, func(i *dto.InvoiceResponse, _ int) string { return i.ID })
+	s.ElementsMatch([]string{inv1.ID, inv2.ID}, gotIDs)
+}
+
 func (s *InvoiceServiceSuite) setupWallets() {
 	// Clear all stores to prevent conflicts with previous tests
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
@@ -1517,7 +1778,7 @@ func (s *InvoiceServiceSuite) TestListInvoicesWithExternalCustomerID() {
 func (s *InvoiceServiceSuite) TestUpdateInvoice() {
 	ctx := s.GetContext()
 
-	// Create a test invoice first - explicitly set as draft and pending payment
+	// Create a test invoice first (draft-first flow: create draft → populate → finalize, so result is finalized)
 	createReq := dto.CreateInvoiceRequest{
 		CustomerID:    s.testData.customer.ID,
 		InvoiceType:   types.InvoiceTypeOneOff,
@@ -1527,15 +1788,14 @@ func (s *InvoiceServiceSuite) TestUpdateInvoice() {
 		Subtotal:      decimal.NewFromFloat(100.00),
 		BillingReason: types.InvoiceBillingReasonManual,
 		DueDate:       lo.ToPtr(time.Now().UTC().Add(24 * time.Hour)), // Due in 1 day
-		InvoiceStatus: lo.ToPtr(types.InvoiceStatusDraft),
-		PaymentStatus: lo.ToPtr(types.PaymentStatusPending),
 	}
 
 	invoice, err := s.service.CreateOneOffInvoice(ctx, createReq)
 	s.Require().NoError(err)
 	s.Require().NotNil(invoice)
-	s.Require().Equal(types.InvoiceStatusDraft, invoice.InvoiceStatus)
-	s.Require().Equal(types.PaymentStatusPending, invoice.PaymentStatus)
+	s.Require().Equal(types.InvoiceStatusFinalized, invoice.InvoiceStatus)
+	// PaymentStatus may be PENDING or SUCCEEDED (e.g. SUCCEEDED when total is zero with no line items)
+	s.Require().Contains([]types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusSucceeded}, invoice.PaymentStatus)
 
 	tests := []struct {
 		name          string
@@ -1614,8 +1874,11 @@ func (s *InvoiceServiceSuite) TestUpdateInvoice() {
 		Total:         decimal.NewFromFloat(100.00),
 		Subtotal:      decimal.NewFromFloat(100.00),
 		BillingReason: types.InvoiceBillingReasonManual,
-		PaymentStatus: lo.ToPtr(types.PaymentStatusSucceeded), // Mark as paid
 	})
+	s.Require().NoError(err)
+	// Mark as paid (draft-first flow returns finalized + pending; simulate payment)
+	amount := decimal.NewFromFloat(100.00)
+	err = s.service.UpdatePaymentStatus(ctx, paidInvoice.ID, types.PaymentStatusSucceeded, &amount)
 	s.Require().NoError(err)
 
 	// Update PDF URL and due date for paid invoice (should succeed)

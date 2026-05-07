@@ -73,7 +73,6 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetCreatedAt(c.CreatedAt).
 		SetUpdatedAt(c.UpdatedAt).
 		SetCreatedBy(c.CreatedBy).
-		SetNillableParentCustomerID(c.ParentCustomerID).
 		SetUpdatedBy(c.UpdatedBy).
 		SetEnvironmentID(c.EnvironmentID).
 		Save(ctx)
@@ -340,7 +339,6 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetAddressPostalCode(c.AddressPostalCode).
 		SetAddressCountry(c.AddressCountry).
 		SetMetadata(c.Metadata).
-		SetNillableParentCustomerID(c.ParentCustomerID).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
@@ -495,10 +493,6 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		query = query.Where(customer.ExternalID(f.ExternalID))
 	}
 
-	if len(f.ParentCustomerIDs) > 0 {
-		query = query.Where(customer.ParentCustomerIDIn(f.ParentCustomerIDs...))
-	}
-
 	if f.Email != "" {
 		query = query.Where(customer.Email(f.Email))
 	}
@@ -509,6 +503,15 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 
 	if len(f.ExternalIDs) > 0 {
 		query = query.Where(customer.ExternalIDIn(f.ExternalIDs...))
+	}
+
+	query, err = dsl.ApplyMetadataFilter[CustomerQuery, predicate.Customer](
+		query,
+		f.MetadataFilter,
+		func(p dsl.Predicate) predicate.Customer { return predicate.Customer(p) },
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	if f.Filters != nil {

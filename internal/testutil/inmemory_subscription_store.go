@@ -61,6 +61,18 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 		return false
 	}
 
+	// Filter by parent subscription IDs
+	if len(f.ParentSubscriptionIDs) > 0 {
+		if sub.ParentSubscriptionID == nil || !lo.Contains(f.ParentSubscriptionIDs, *sub.ParentSubscriptionID) {
+			return false
+		}
+	}
+
+	// Filter by subscription type
+	if len(f.SubscriptionTypes) > 0 && !lo.Contains(f.SubscriptionTypes, sub.SubscriptionType) {
+		return false
+	}
+
 	// Filter by subscription status
 	if len(f.SubscriptionStatus) > 0 && !lo.Contains(f.SubscriptionStatus, sub.SubscriptionStatus) {
 		return false
@@ -76,8 +88,23 @@ func subscriptionFilterFn(ctx context.Context, sub *subscription.Subscription, f
 		return false
 	}
 
-	// Filter by time range
-	if f.TimeRangeFilter != nil {
+	if f.EffectiveDateForUpdate != nil {
+		d := *f.EffectiveDateForUpdate
+		periodEnded := !sub.CurrentPeriodEnd.After(d)
+		cancelEffective := sub.CancelAt != nil && !sub.CancelAt.After(d)
+		if !periodEnded && !cancelEffective {
+			return false
+		}
+	}
+
+	if f.TrialEndDueLTE != nil {
+		d := *f.TrialEndDueLTE
+		if sub.TrialEnd == nil || sub.TrialEnd.After(d) {
+			return false
+		}
+	}
+
+	if f.EffectiveDateForUpdate == nil && f.TimeRangeFilter != nil {
 		if f.StartTime != nil && sub.CreatedAt.Before(*f.StartTime) {
 			return false
 		}
@@ -280,19 +307,22 @@ func (s *InMemorySubscriptionStore) ListAll(ctx context.Context, filter *types.S
 		TimeRangeFilter:         filter.TimeRangeFilter,
 		CustomerID:              filter.CustomerID,
 		PlanID:                  filter.PlanID,
+		ParentSubscriptionIDs:   filter.ParentSubscriptionIDs,
+		SubscriptionTypes:       filter.SubscriptionTypes,
 		SubscriptionStatus:      filter.SubscriptionStatus,
 		BillingCadence:          filter.BillingCadence,
 		BillingPeriod:           filter.BillingPeriod,
 		SubscriptionStatusNotIn: filter.SubscriptionStatusNotIn,
 		ActiveAt:                filter.ActiveAt,
+		EffectiveDateForUpdate:  filter.EffectiveDateForUpdate,
+		TrialEndDueLTE:          filter.TrialEndDueLTE,
 	}
 
 	return s.List(ctx, unlimitedFilter)
 }
 
-// ListAllTenant returns all subscriptions across all tenants
-// NOTE: This is a potentially expensive operation and to be used only for CRONs
-func (s *InMemorySubscriptionStore) ListAllTenant(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
+// GetSubscriptionsForBillingPeriodUpdate returns subscriptions across all tenants for billing-period jobs.
+func (s *InMemorySubscriptionStore) GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
 	return s.ListAll(ctx, filter)
 }
 

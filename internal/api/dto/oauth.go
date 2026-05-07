@@ -52,10 +52,22 @@ func (r *InitiateOAuthRequest) Validate() error {
 		// income_account_id is optional, defaults to "79" if not provided
 
 		return nil
+	case types.OAuthProviderZohoBooks:
+		if r.Credentials[types.OAuthCredentialClientID] == "" {
+			return errors.NewError("client_id is required for Zoho Books OAuth").
+				WithHint("Provide your Zoho app client_id in the credentials field").
+				Mark(errors.ErrValidation)
+		}
+		if r.Credentials[types.OAuthCredentialClientSecret] == "" {
+			return errors.NewError("client_secret is required for Zoho Books OAuth").
+				WithHint("Provide your Zoho app client_secret in the credentials field").
+				Mark(errors.ErrValidation)
+		}
+		return nil
 
 	default:
 		return errors.NewError("unsupported OAuth provider").
-			WithHintf("Provider '%s' is not supported. Supported providers: quickbooks", r.Provider).
+			WithHintf("Provider '%s' is not supported. Supported providers: quickbooks, zoho_books", r.Provider).
 			Mark(errors.ErrValidation)
 	}
 }
@@ -73,6 +85,10 @@ type CompleteOAuthRequest struct {
 	Code      string              `json:"code" binding:"required"`       // OAuth authorization code from the provider
 	State     string              `json:"state" binding:"required"`      // CSRF state token
 	RealmID   string              `json:"realm_id"`                      // QuickBooks realm ID (required for QuickBooks, validated in Validate())
+	OrganizationID string         `json:"organization_id"`               // Zoho Books organization ID (required for Zoho)
+	OrganizationName string       `json:"organization_name,omitempty"`   // Zoho Books organization name
+	Location string               `json:"location,omitempty"`            // Zoho callback location/DC
+	AccountsServer string         `json:"accounts_server,omitempty"`     // Zoho callback accounts server
 }
 
 // Validate validates the OAuth complete request with provider-specific rules
@@ -103,10 +119,17 @@ func (r *CompleteOAuthRequest) Validate() error {
 				Mark(errors.ErrValidation)
 		}
 		return nil
+	case types.OAuthProviderZohoBooks:
+		if r.OrganizationID == "" {
+			return errors.NewError("organization_id is required for Zoho Books OAuth").
+				WithHint("Zoho organization_id must be provided to complete the OAuth flow").
+				Mark(errors.ErrValidation)
+		}
+		return nil
 
 	default:
 		return errors.NewError("unsupported OAuth provider").
-			WithHintf("Provider '%s' is not supported. Supported providers: quickbooks", r.Provider).
+			WithHintf("Provider '%s' is not supported. Supported providers: quickbooks, zoho_books", r.Provider).
 			Mark(errors.ErrValidation)
 	}
 }

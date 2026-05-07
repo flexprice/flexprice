@@ -120,7 +120,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		return nil, err
 	}
 
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteCreated, creditNote.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteCreated, creditNote.ID)
 
 	if req.ProcessCreditNote {
 		if err := s.FinalizeCreditNote(ctx, creditNote.ID); err != nil {
@@ -350,7 +350,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 		}
 	}
 
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 	return nil
 }
 
@@ -442,7 +442,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 		return err
 	}
 
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 	return nil
 }
 
@@ -579,7 +579,7 @@ func (s *creditNoteService) recalculateInvoiceAmountsForCreditNote(ctx context.C
 	return s.InvoiceRepo.Update(ctx, inv)
 }
 
-func (s *creditNoteService) publishInternalWebhookEvent(ctx context.Context, eventType string, creditNoteID string) {
+func (s *creditNoteService) publishSystemEvent(ctx context.Context, eventType string, creditNoteID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalCreditNoteEvent{
 		CreditNoteID: creditNoteID,
 		TenantID:     types.GetTenantID(ctx),
@@ -589,13 +589,15 @@ func (s *creditNoteService) publishInternalWebhookEvent(ctx context.Context, eve
 		return
 	}
 	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WEBHOOK_EVENT),
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
 		EventName:     eventType,
 		TenantID:      types.GetTenantID(ctx),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		UserID:        types.GetUserID(ctx),
 		Timestamp:     time.Now().UTC(),
 		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeCreditNote,
+		EntityID:      creditNoteID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Errorw("failed to publish webhook event", "error", err, "event_name", eventType)

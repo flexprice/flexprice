@@ -46,7 +46,10 @@ func NewCustomerService(
 	}
 }
 
-// EnsureCustomerSyncedToPaddle ensures a customer is synced to Paddle
+// EnsureCustomerSyncedToPaddle ensures the customer exists in Paddle and that
+// the Paddle customer mapping is present in FlexPrice metadata/mapping table.
+// If the customer is already synced but missing a Paddle address mapping,
+// this method opportunistically backfills the address (when address_country exists).
 func (s *CustomerService) EnsureCustomerSyncedToPaddle(ctx context.Context, customerID string, customerService interfaces.CustomerService) (*customer.Customer, error) {
 	customerResp, err := customerService.GetCustomer(ctx, customerID)
 	if err != nil {
@@ -61,6 +64,9 @@ func (s *CustomerService) EnsureCustomerSyncedToPaddle(ctx context.Context, cust
 
 	// Check if customer already has Paddle ID in metadata
 	if paddleID, exists := flexpriceCustomer.Metadata["paddle_customer_id"]; exists && paddleID != "" {
+		if err := s.syncPaddleAddress(ctx, flexpriceCustomer, paddleID); err != nil {
+			return nil, err
+		}
 		s.logger.Infow("customer already synced to Paddle",
 			"customer_id", customerID,
 			"paddle_customer_id", paddleID)
@@ -94,6 +100,9 @@ func (s *CustomerService) EnsureCustomerSyncedToPaddle(ctx context.Context, cust
 					"error", err)
 				return flexpriceCustomer, nil
 			}
+			if err := s.syncPaddleAddress(ctx, updatedCustomerResp.Customer, existingMapping.ProviderEntityID); err != nil {
+				return nil, err
+			}
 			return updatedCustomerResp.Customer, nil
 		}
 	}
@@ -109,6 +118,13 @@ func (s *CustomerService) EnsureCustomerSyncedToPaddle(ctx context.Context, cust
 	updatedCustomerResp, err := customerService.GetCustomer(ctx, customerID)
 	if err != nil {
 		return nil, err
+	}
+
+	paddleID := updatedCustomerResp.Customer.Metadata["paddle_customer_id"]
+	if paddleID != "" {
+		if err := s.syncPaddleAddress(ctx, updatedCustomerResp.Customer, paddleID); err != nil {
+			return nil, err
+		}
 	}
 
 	return updatedCustomerResp.Customer, nil
@@ -199,25 +215,8 @@ func (s *CustomerService) SyncCustomerToPaddle(ctx context.Context, flexpriceCus
 	// Create address if we have address data (country_code is required for Paddle address)
 	var paddleAddressID string
 	if flexpriceCustomer.AddressCountry != "" {
-		createAddressReq := &paddle.CreateAddressRequest{
-			CustomerID:  paddleCustomerID,
-			CountryCode: toCountryCode(flexpriceCustomer.AddressCountry),
-		}
-		if flexpriceCustomer.AddressLine1 != "" {
-			createAddressReq.FirstLine = paddle.PtrTo(flexpriceCustomer.AddressLine1)
-		}
-		if flexpriceCustomer.AddressLine2 != "" {
-			createAddressReq.SecondLine = paddle.PtrTo(flexpriceCustomer.AddressLine2)
-		}
-		if flexpriceCustomer.AddressCity != "" {
-			createAddressReq.City = paddle.PtrTo(flexpriceCustomer.AddressCity)
-		}
-		if flexpriceCustomer.AddressPostalCode != "" {
-			createAddressReq.PostalCode = paddle.PtrTo(flexpriceCustomer.AddressPostalCode)
-		}
-		if flexpriceCustomer.AddressState != "" {
-			createAddressReq.Region = paddle.PtrTo(flexpriceCustomer.AddressState)
-		}
+		createAddressReq := buildCreateAddressRequest(flexpriceCustomer)
+		createAddressReq.CustomerID = paddleCustomerID
 
 		address, err := s.client.CreateAddress(ctx, paddleCustomerID, createAddressReq)
 		if err != nil {
@@ -289,6 +288,167 @@ func (s *CustomerService) SyncCustomerToPaddle(ctx context.Context, flexpriceCus
 	}
 
 	return paddleCustomerID, nil
+}
+
+// syncPaddleAddress ensures the Paddle address for an already-synced customer
+// always reflects the current FlexPrice address data.
+//
+// - If AddressCountry is empty: no-op (Paddle requires country).
+// - If paddle_address_id exists in mapping: call UpdateAddress (soft-fail on error).
+// - If paddle_address_id is missing: call CreateAddress and store the new ID.
+// - If no mapping row exists: call CreateAddress and create the mapping row.
+func (s *CustomerService) syncPaddleAddress(ctx context.Context, flexpriceCustomer *customer.Customer, paddleCustomerID string) error {
+	if flexpriceCustomer == nil || paddleCustomerID == "" {
+		return nil
+	}
+
+	// Paddle requires country code — no-op until user adds it
+	if flexpriceCustomer.AddressCountry == "" {
+		s.logger.Infow("skipping Paddle address sync: address_country is required",
+			"customer_id", flexpriceCustomer.ID,
+			"paddle_customer_id", paddleCustomerID)
+		return nil
+	}
+
+	if s.entityIntegrationMappingRepo == nil {
+		return nil
+	}
+
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityID:      flexpriceCustomer.ID,
+		EntityType:    types.IntegrationEntityTypeCustomer,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	}
+	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to load Paddle customer mapping for address sync").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id":        flexpriceCustomer.ID,
+				"paddle_customer_id": paddleCustomerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	var mapping *entityintegrationmapping.EntityIntegrationMapping
+	if len(mappings) > 0 {
+		mapping = mappings[0]
+	}
+
+	addressCountry := toCountryCode(flexpriceCustomer.AddressCountry)
+
+	// Case: paddle_address_id exists → UpdateAddress (always push latest data)
+	if mapping != nil {
+		if existingAddressID, ok := mapping.Metadata["paddle_address_id"].(string); ok && existingAddressID != "" {
+			updateReq := &paddle.UpdateAddressRequest{
+				CountryCode: paddle.NewPatchField(addressCountry),
+			}
+			if flexpriceCustomer.AddressLine1 != "" {
+				updateReq.FirstLine = paddle.NewPtrPatchField(flexpriceCustomer.AddressLine1)
+			}
+			if flexpriceCustomer.AddressLine2 != "" {
+				updateReq.SecondLine = paddle.NewPtrPatchField(flexpriceCustomer.AddressLine2)
+			}
+			if flexpriceCustomer.AddressCity != "" {
+				updateReq.City = paddle.NewPtrPatchField(flexpriceCustomer.AddressCity)
+			}
+			if flexpriceCustomer.AddressPostalCode != "" {
+				updateReq.PostalCode = paddle.NewPtrPatchField(flexpriceCustomer.AddressPostalCode)
+			}
+			if flexpriceCustomer.AddressState != "" {
+				updateReq.Region = paddle.NewPtrPatchField(flexpriceCustomer.AddressState)
+			}
+
+			_, err := s.client.UpdateAddress(ctx, paddleCustomerID, existingAddressID, updateReq)
+			if err != nil {
+				// Soft-fail: log and proceed — invoice can still use the existing address ID
+				s.logger.Warnw("failed to update Paddle address — proceeding with existing address ID",
+					"customer_id", flexpriceCustomer.ID,
+					"paddle_customer_id", paddleCustomerID,
+					"paddle_address_id", existingAddressID,
+					"error", err)
+				return nil
+			}
+
+			s.logger.Infow("updated Paddle address with latest FlexPrice address data",
+				"customer_id", flexpriceCustomer.ID,
+				"paddle_customer_id", paddleCustomerID,
+				"paddle_address_id", existingAddressID)
+			return nil
+		}
+	}
+
+	// Case: no paddle_address_id → CreateAddress
+	createReq := buildCreateAddressRequest(flexpriceCustomer)
+
+	address, err := s.client.CreateAddress(ctx, paddleCustomerID, createReq)
+	if err != nil {
+		s.logger.Errorw("failed to create Paddle address — invoice sync blocked",
+			"customer_id", flexpriceCustomer.ID,
+			"paddle_customer_id", paddleCustomerID,
+			"error", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create Paddle address. Ensure the customer address fields (country, postal code, etc.) are valid.").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id":        flexpriceCustomer.ID,
+				"paddle_customer_id": paddleCustomerID,
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
+	s.logger.Infow("created Paddle address and stored mapping",
+		"customer_id", flexpriceCustomer.ID,
+		"paddle_customer_id", paddleCustomerID,
+		"paddle_address_id", address.ID)
+
+	if mapping == nil {
+		// No mapping row at all — create one
+		newMapping := &entityintegrationmapping.EntityIntegrationMapping{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+			EntityID:         flexpriceCustomer.ID,
+			EntityType:       types.IntegrationEntityTypeCustomer,
+			ProviderType:     string(types.SecretProviderPaddle),
+			ProviderEntityID: paddleCustomerID,
+			Metadata: map[string]interface{}{
+				"created_via":        "flexprice_to_provider_backfill",
+				"paddle_customer_id": paddleCustomerID,
+				"paddle_address_id":  address.ID,
+				"synced_at":          time.Now().UTC().Format(time.RFC3339),
+			},
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}
+		if err := s.entityIntegrationMappingRepo.Create(ctx, newMapping); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to store Paddle address ID after creation. The address was created in Paddle — retry the invoice to recover.").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id":        flexpriceCustomer.ID,
+					"paddle_customer_id": paddleCustomerID,
+					"paddle_address_id":  address.ID,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+		return nil
+	}
+
+	// Update existing mapping with new paddle_address_id
+	if mapping.Metadata == nil {
+		mapping.Metadata = make(map[string]interface{})
+	}
+	mapping.Metadata["paddle_customer_id"] = paddleCustomerID
+	mapping.Metadata["paddle_address_id"] = address.ID
+	mapping.Metadata["synced_at"] = time.Now().UTC().Format(time.RFC3339)
+	if err := s.entityIntegrationMappingRepo.Update(ctx, mapping); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to store Paddle address ID after creation. The address was created in Paddle — retry the invoice to recover.").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id":        flexpriceCustomer.ID,
+				"paddle_customer_id": paddleCustomerID,
+				"paddle_address_id":  address.ID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }
 
 // GetPaddleCustomerID retrieves the Paddle customer ID for a FlexPrice customer
@@ -423,6 +583,30 @@ func (s *CustomerService) CreateCustomerFromPaddle(ctx context.Context, paddleCu
 	}
 
 	return nil
+}
+
+// buildCreateAddressRequest builds a Paddle CreateAddressRequest from a FlexPrice customer.
+// Caller must ensure AddressCountry is non-empty before calling.
+func buildCreateAddressRequest(c *customer.Customer) *paddle.CreateAddressRequest {
+	req := &paddle.CreateAddressRequest{
+		CountryCode: toCountryCode(c.AddressCountry),
+	}
+	if c.AddressLine1 != "" {
+		req.FirstLine = paddle.PtrTo(c.AddressLine1)
+	}
+	if c.AddressLine2 != "" {
+		req.SecondLine = paddle.PtrTo(c.AddressLine2)
+	}
+	if c.AddressCity != "" {
+		req.City = paddle.PtrTo(c.AddressCity)
+	}
+	if c.AddressPostalCode != "" {
+		req.PostalCode = paddle.PtrTo(c.AddressPostalCode)
+	}
+	if c.AddressState != "" {
+		req.Region = paddle.PtrTo(c.AddressState)
+	}
+	return req
 }
 
 // mergeCustomerMetadata merges new metadata with existing customer metadata

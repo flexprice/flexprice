@@ -453,6 +453,18 @@ func (f SubscriptionScheduleFunc) Mutate(ctx context.Context, m ent.Mutation) (e
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionScheduleMutation", m)
 }
 
+// The SystemEventFunc type is an adapter to allow the use of ordinary
+// function as SystemEvent mutator.
+type SystemEventFunc func(context.Context, *ent.SystemEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SystemEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SystemEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SystemEventMutation", m)
+}
+
 // The TaskFunc type is an adapter to allow the use of ordinary
 // function as Task mutator.
 type TaskFunc func(context.Context, *ent.TaskMutation) (ent.Value, error)

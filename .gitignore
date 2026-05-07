@@ -88,6 +88,8 @@ lambdas/*
 # =============================================================================
 api/*/*
 !api/go/
+!api/go/errorutils/
+!api/go/errorutils/**
 !api/typescript/
 !api/python/
 !api/tests/
@@ -116,3 +118,7 @@ CLAUDE.m
 api/tests/python/.venv/
 
 vendor/
+.claude/settings.json
+
+# claude superpowers
+docs/superpowers/*

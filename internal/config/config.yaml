@@ -13,10 +13,10 @@ auth:
   api_key:
     header: "x-api-key"
     keys:
-      "c3b3fa371183f0df159d659da0b42c5270c8d53c22e180df2286e059c75802ab":
+      "0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c":
         tenant_id: "00000000-0000-0000-0000-000000000000"
         user_id: "00000000-0000-0000-0000-000000000000"
-        name: "Dev API Keys"
+        name: "Local Dev API Key"
         is_active: true
 
 kafka:
@@ -34,7 +34,6 @@ kafka:
   client_id: "flexprice-client-local"
   route_tenants_on_lazy_mode: []
 
-
 clickhouse:
   address: 127.0.0.1:9000 # For local mode
   # Will be overridden by FLEXPRICE_CLICKHOUSE_ADDRESS env var in Docker
@@ -48,8 +47,8 @@ postgres:
   host: 127.0.0.1 # For local mode
   # Will be overridden by FLEXPRICE_POSTGRES_HOST env var in Docker
   port: 5432
-  reader_host: 127.0.0.1
-  reader_port: 5432
+  reader_host: "" # empty = use writer host; set FLEXPRICE_POSTGRES_READER_HOST to override
+  reader_port: 0  # 0 = use writer port
   user: flexprice
   password: flexprice123
   dbname: flexprice
@@ -85,6 +84,9 @@ dynamodb:
 logging:
   level: "debug"
   db_level: "error"
+  # Service identity — override via SERVICE_NAME and ENVIRONMENT env vars
+  service_name: "" # e.g., "flexprice-api"
+  environment: "" # e.g., "production", "staging"
   # Fluentd configuration for centralized logging
   # When enabled, logs will be sent to Fluentd in addition to stdout
   fluentd_enabled: false # Set to true to enable Fluentd logging
@@ -115,6 +117,13 @@ webhook:
     auth_token: "svix_auth_token"
     base_url: "https://api.us.svix.com"
 
+webhook_retry_job:
+  enabled: true
+  max_attempts: 5
+  rate_limit: 5
+  excluded_tenants: []
+  allowed_event_types: []
+
 temporal:
   address: "127.0.0.1:7233" # For local mode
   # Will be overridden by TEMPORAL_ADDRESS env var in Docker
@@ -123,12 +132,18 @@ temporal:
   task_queue: "billing-task-queue"
   api_key: "strong api key"
   api_key_name: "secret name"
+  max_workflows_per_cron_run: 500 # Max child workflows per cron cycle; 0 = unlimited
   client_name: "flexprice-client"
   retry:
     initial_interval_seconds: 1
     max_interval_seconds: 10
     max_attempts: 3
     backoff_coefficient: 2.0
+  worker:
+    max_concurrent_activity_execution_size: 10 # Max activities running concurrently per worker (default: 10)
+    max_concurrent_workflow_task_execution_size: 10 # Max workflow tasks running concurrently per worker (default: 10)
+    worker_activities_per_second: 5 # Rate limit: activities dispatched per second per worker (default: 5, 0=unlimited)
+    task_queue_activities_per_second: 0 # Rate limit: activities per second across ALL workers for a task queue (default: 0=unlimited)
   connection:
     dial_timeout_seconds: 5
     retry_max_attempts: 5
@@ -157,7 +172,6 @@ flexprice_s3_exports:
   aws_access_key_id: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_ACCESS_KEY_ID env var
   aws_secret_access_key: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SECRET_ACCESS_KEY env var
   aws_session_token: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SESSION_TOKEN env var
-  
 
 cache:
   enabled: false
@@ -180,7 +194,6 @@ event_processing_replay:
   topic: "events_backfill"
   rate_limit: 1
   consumer_group: "v1_event_processing_replay"
-
 
 event_post_processing:
   enabled: true
@@ -214,6 +227,19 @@ feature_usage_tracking_replay:
   rate_limit: 1
   consumer_group: "v1_feature_tracking_service_replay"
 
+meter_usage_tracking:
+  enabled: true
+  topic: "events"
+  rate_limit: 1
+  consumer_group: "v1_meter_usage_tracking_service"
+  properties_enabled_tenants: [] # List of tenant IDs for which event properties will be processed and stored. For other tenants, properties will be ignored to save storage and processing costs.
+
+usage_benchmark:
+  enabled: false
+  topic: "staging_benchmarking"
+  rate_limit: 10
+  consumer_group: "v1_usage_benchmark_service"
+
 costsheet_usage_tracking:
   enabled: true
   topic: "events"
@@ -225,7 +251,7 @@ costsheet_usage_tracking_lazy:
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service_lazy"
-  
+
 wallet_balance_alert:
   enabled: true
   topic: "wallet_alert"
@@ -237,6 +263,11 @@ feature_flag:
   enable_feature_usage_for_analytics: true # TODO: cleanup by 15th October 2025
   # Tenant ID to force use v1 analytics service (empty string means no tenant is forced to v1)
   force_v1_for_tenant: ""
+
+# Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
+gemini:
+  api_key: ""
+  model: "gemini-2.5-flash-lite"
 
 email:
   enabled: false # Set to true to enable email sending (override with FLEXPRICE_EMAIL_ENABLED=true)
@@ -281,7 +312,19 @@ raw_events_reprocessing:
 # Raw event consumption configuration (batch processing from Bento)
 raw_event_consumption:
   enabled: true
-  topic: "staging_events_backfill"      # INPUT: Reads batches from here
-  output_topic: "staging_events"                 # OUTPUT: Publishes transformed events to here
+  topic: "staging_events_backfill" # INPUT: Reads batches from here
+  output_topic: "staging_events" # OUTPUT: Publishes transformed events to here
   rate_limit: 10
   consumer_group: "v1_raw_event_processing_v4"
+
+integration_events:
+  enabled: true
+  consumer_group: "integration-events-consumer"
+  rate_limit: 10
+
+onboarding_events:
+  enabled: true
+  topic: "onboarding_events"
+  rate_limit: 10
+  consumer_group: "onboarding_events_consumer"
+  max_retries: 3

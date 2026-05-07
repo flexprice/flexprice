@@ -10,18 +10,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flexprice/flexprice-go/v2"
-	"github.com/flexprice/flexprice-go/v2/models/dtos"
-	"github.com/flexprice/flexprice-go/v2/models/types"
+	flexprice "github.com/flexprice/go-sdk/v2"
+	"github.com/flexprice/go-sdk/v2/models/dtos"
+	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
-// test_local_sdk.go - Local SDK tests (unpublished SDK from api/go).
-// Run from api/tests/go: go run test_local_sdk.go
+// FlexPrice Go SDK API tests (published module github.com/flexprice/go-sdk/v2 v2.1.1).
+// List payloads use *Response types (e.g. types.CustomerResponse) from the generated Go SDK.
+// If sum.golang.org has not indexed the tag yet, fetch with: GOPRIVATE=github.com/flexprice/* (see Makefile test-sdk).
+// Run from api/tests/go: go run -tags published test_sdk.go
 // Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
-// SDK repo: update defaultGoSDKRepo when you change where the Go SDK is hosted.
-
-// defaultGoSDKRepo is the Go SDK module path (local api/go when using replace in go.mod).
-const defaultGoSDKRepo = "github.com/flexprice/flexprice-go/v2 (local api/go)"
+// defaultGoSDKRepo is the Go SDK module path and version used for test output.
+const defaultGoSDKRepo = "github.com/flexprice/go-sdk/v2 v2.1.1"
 
 // strPtr returns a *string for optional SDK fields (SDK models use *string, not types.String).
 func strPtr(s string) *string { return &s }
@@ -76,15 +76,22 @@ func main() {
 	fmt.Printf("✓ API Key: %s...%s\n", apiKey[:min(8, len(apiKey))], apiKey[max(0, len(apiKey)-4):])
 	fmt.Printf("✓ API Host: %s\n\n", apiHost)
 
-	// Initialize SDK (Flexprice with WithSecurity)
+	// Initialize SDK (WithServerURL + WithSecurity; http for local dev)
 	parts := strings.SplitN(apiHost, "/", 2)
 	hostOnly := parts[0]
 	basePath := ""
 	if len(parts) > 1 {
 		basePath = "/" + parts[1]
 	}
-	serverURL := "https://" + hostOnly + basePath
-	client := flexprice.New(serverURL, flexprice.WithSecurity(apiKey))
+	scheme := "https://"
+	if strings.HasPrefix(hostOnly, "localhost") || strings.HasPrefix(hostOnly, "127.0.0.1") {
+		scheme = "http://"
+	}
+	serverURL := scheme + hostOnly + basePath
+	client := flexprice.New(
+		flexprice.WithServerURL(serverURL),
+		flexprice.WithSecurity(apiKey),
+	)
 	ctx := context.Background()
 
 	// Run all Customer API tests (without delete)
@@ -276,7 +283,7 @@ func main() {
 	testTopUpWallet(ctx, client)
 	testDebitWallet(ctx, client)
 	testGetWalletTransactions(ctx, client)
-	testSearchWallets(ctx, client)
+	// testSearchWallets(ctx, client)
 
 	fmt.Println("✓ Wallets API Tests Completed!\n")
 
@@ -332,7 +339,7 @@ func main() {
 	testDeletePlan(ctx, client)
 	testDeleteFeature(ctx, client)
 	testCancelSubscriptionCleanup(ctx, client) // must run before customer (API rejects delete if customer has active subscriptions)
-	testDeleteWallet(ctx, client)            // must run before customer (API rejects delete if customer has wallets)
+	testDeleteWallet(ctx, client)              // must run before customer (API rejects delete if customer has wallets)
 	testDeleteCustomer(ctx, client)
 
 	fmt.Println("✓ Cleanup Completed!\n")
@@ -348,7 +355,7 @@ func testCreateCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	testCustomerName = fmt.Sprintf("Test Customer %d", timestamp)
 	testExternalID = fmt.Sprintf("test-customer-%d", timestamp)
 
-	request := types.DtoCreateCustomerRequest{
+	request := types.CreateCustomerRequest{
 		ExternalID: testExternalID,
 		Name:       strPtr(testCustomerName),
 		Email:      strPtr(fmt.Sprintf("test-%d@example.com", timestamp)),
@@ -365,18 +372,18 @@ func testCreateCustomer(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	customer := resp.DtoCustomerResponse
-	if customer == nil || customer.ID == nil {
+	customer := resp.GetCustomerResponse()
+	if customer == nil || customer.GetID() == nil {
 		log.Printf("❌ Create customer returned no body")
 		fmt.Println()
 		return
 	}
-	testCustomerID = *customer.ID
+	testCustomerID = *customer.GetID()
 	fmt.Printf("✓ Customer created successfully!\n")
-	fmt.Printf("  ID: %s\n", *customer.ID)
-	fmt.Printf("  Name: %s\n", *customer.Name)
-	fmt.Printf("  External ID: %s\n", *customer.ExternalID)
-	fmt.Printf("  Email: %s\n\n", *customer.Email)
+	fmt.Printf("  ID: %s\n", *customer.GetID())
+	fmt.Printf("  Name: %s\n", *customer.GetName())
+	fmt.Printf("  External ID: %s\n", *customer.GetExternalID())
+	fmt.Printf("  Email: %s\n\n", *customer.GetEmail())
 }
 
 // Test 2: Get customer by ID
@@ -389,16 +396,16 @@ func testGetCustomer(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	customer := resp.DtoCustomerResponse
+	customer := resp.GetCustomerResponse()
 	if customer == nil {
 		log.Printf("❌ Get customer returned no body")
 		fmt.Println()
 		return
 	}
 	fmt.Printf("✓ Customer retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *customer.ID)
-	fmt.Printf("  Name: %s\n", *customer.Name)
-	fmt.Printf("  Created At: %s\n\n", *customer.CreatedAt)
+	fmt.Printf("  ID: %s\n", *customer.GetID())
+	fmt.Printf("  Name: %s\n", *customer.GetName())
+	fmt.Printf("  Created At: %s\n\n", *customer.GetCreatedAt())
 }
 
 // Test 3: List all customers (query with limit)
@@ -412,21 +419,24 @@ func testListCustomers(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListCustomersResponse
+	listResp := resp.GetListCustomersResponse()
 	if listResp == nil {
 		fmt.Printf("✓ Retrieved 0 customers\n\n")
 		return
 	}
-	items := listResp.Items
+	items := []types.CustomerResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
+	}
 	if items == nil {
-		items = []types.DtoCustomerResponse{}
+		items = []types.CustomerResponse{}
 	}
 	fmt.Printf("✓ Retrieved %d customers\n", len(items))
 	if len(items) > 0 {
-		fmt.Printf("  First customer: %s - %s\n", *items[0].ID, *items[0].Name)
+		fmt.Printf("  First customer: %s - %s\n", *items[0].GetID(), *items[0].GetName())
 	}
-	if listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -436,7 +446,7 @@ func testUpdateCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Customer ---")
 
 	updatedName := fmt.Sprintf("%s (Updated)", testCustomerName)
-	body := types.DtoUpdateCustomerRequest{
+	body := types.UpdateCustomerRequest{
 		Name: strPtr(updatedName),
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
@@ -450,16 +460,16 @@ func testUpdateCustomer(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	customer := resp.DtoCustomerResponse
+	customer := resp.GetCustomerResponse()
 	if customer == nil {
 		log.Printf("❌ Update customer returned no body")
 		fmt.Println()
 		return
 	}
 	fmt.Printf("✓ Customer updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *customer.ID)
-	fmt.Printf("  New Name: %s\n", *customer.Name)
-	fmt.Printf("  Updated At: %s\n\n", *customer.UpdatedAt)
+	fmt.Printf("  ID: %s\n", *customer.GetID())
+	fmt.Printf("  New Name: %s\n", *customer.GetName())
+	fmt.Printf("  Updated At: %s\n\n", *customer.GetUpdatedAt())
 }
 
 // Test 5: Lookup customer by external ID
@@ -472,7 +482,7 @@ func testLookupCustomer(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	customer := resp.DtoCustomerResponse
+	customer := resp.GetCustomerResponse()
 	if customer == nil {
 		log.Printf("❌ Lookup returned no body")
 		fmt.Println()
@@ -480,8 +490,8 @@ func testLookupCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	fmt.Printf("✓ Customer found by external ID!\n")
 	fmt.Printf("  External ID: %s\n", testExternalID)
-	fmt.Printf("  ID: %s\n", *customer.ID)
-	fmt.Printf("  Name: %s\n\n", *customer.Name)
+	fmt.Printf("  ID: %s\n", *customer.GetID())
+	fmt.Printf("  Name: %s\n\n", *customer.GetName())
 }
 
 // Test 6: Search customers
@@ -495,16 +505,16 @@ func testSearchCustomers(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListCustomersResponse
-	items := []types.DtoCustomerResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListCustomersResponse()
+	items := []types.CustomerResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Search completed!\n")
 	fmt.Printf("  Found %d customers matching external ID '%s'\n", len(items), testExternalID)
 	for i, customer := range items {
-		if i < 3 && customer.ID != nil && customer.Name != nil {
-			fmt.Printf("  - %s: %s\n", *customer.ID, *customer.Name)
+		if i < 3 && customer.GetID() != nil && customer.GetName() != nil {
+			fmt.Printf("  - %s: %s\n", *customer.GetID(), *customer.GetName())
 		}
 	}
 	fmt.Println()
@@ -520,17 +530,17 @@ func testGetCustomerEntitlements(ctx context.Context, client *flexprice.Flexpric
 		fmt.Println("⚠ Skipping entitlements test (customer may not have any entitlements)\n")
 		return
 	}
-	entitlements := resp.DtoCustomerEntitlementsResponse
+	entitlements := resp.GetCustomerEntitlementsResponse()
 	if entitlements == nil {
 		fmt.Println("  No entitlements found\n")
 		return
 	}
 	fmt.Printf("✓ Retrieved customer entitlements!\n")
-	if entitlements.Features != nil {
-		fmt.Printf("  Total features: %d\n", len(entitlements.Features))
-		for i, feature := range entitlements.Features {
-			if i < 3 && feature.Feature != nil && feature.Feature.ID != nil {
-				fmt.Printf("  - Feature: %s\n", *feature.Feature.ID)
+	if entitlements.GetFeatures() != nil {
+		fmt.Printf("  Total features: %d\n", len(entitlements.GetFeatures()))
+		for i, feature := range entitlements.GetFeatures() {
+			if i < 3 && feature.GetFeature() != nil && feature.GetFeature().GetID() != nil {
+				fmt.Printf("  - Feature: %s\n", *feature.GetFeature().GetID())
 			}
 		}
 	} else {
@@ -549,10 +559,10 @@ func testGetCustomerUpcomingGrants(ctx context.Context, client *flexprice.Flexpr
 		fmt.Println("⚠ Skipping upcoming grants test (customer may not have any grants)\n")
 		return
 	}
-	grants := resp.DtoListCreditGrantApplicationsResponse
+	grants := resp.GetListCreditGrantApplicationsResponse()
 	n := 0
-	if grants != nil && grants.Items != nil {
-		n = len(grants.Items)
+	if grants != nil && grants.GetItems() != nil {
+		n = len(grants.GetItems())
 	}
 	fmt.Printf("✓ Retrieved upcoming grants!\n")
 	fmt.Printf("  Total upcoming grants: %d\n", n)
@@ -570,9 +580,9 @@ func testGetCustomerUsage(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping usage test (customer may not have usage data)\n")
 		return
 	}
-	usage := resp.DtoCustomerUsageSummaryResponse
-	if usage != nil && usage.Features != nil {
-		fmt.Printf("✓ Retrieved customer usage!\n  Feature usage records: %d\n", len(usage.Features))
+	usage := resp.GetCustomerUsageSummaryResponse()
+	if usage != nil && usage.GetFeatures() != nil {
+		fmt.Printf("✓ Retrieved customer usage!\n  Feature usage records: %d\n", len(usage.GetFeatures()))
 	} else {
 		fmt.Printf("✓ Retrieved customer usage!\n  No usage data found\n")
 	}
@@ -605,7 +615,7 @@ func testCreateFeature(ctx context.Context, client *flexprice.Flexprice) {
 	testFeatureName = fmt.Sprintf("Test Feature %d", timestamp)
 	featureKey := fmt.Sprintf("test_feature_%d", timestamp)
 
-	request := types.DtoCreateFeatureRequest{
+	request := types.CreateFeatureRequest{
 		Name:        testFeatureName,
 		LookupKey:   strPtr(featureKey),
 		Description: strPtr("This is a test feature created by SDK tests"),
@@ -623,18 +633,18 @@ func testCreateFeature(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	feature := resp.DtoFeatureResponse
-	if feature == nil || feature.ID == nil {
+	feature := resp.GetFeatureResponse()
+	if feature == nil || feature.GetID() == nil {
 		log.Printf("❌ Create feature returned no body")
 		fmt.Println()
 		return
 	}
-	testFeatureID = *feature.ID
+	testFeatureID = *feature.GetID()
 	fmt.Printf("✓ Feature created successfully!\n")
-	fmt.Printf("  ID: %s\n", *feature.ID)
-	fmt.Printf("  Name: %s\n", *feature.Name)
-	fmt.Printf("  Lookup Key: %s\n", *feature.LookupKey)
-	fmt.Printf("  Type: %s\n\n", string(*feature.Type))
+	fmt.Printf("  ID: %s\n", *feature.GetID())
+	fmt.Printf("  Name: %s\n", *feature.GetName())
+	fmt.Printf("  Lookup Key: %s\n", *feature.GetLookupKey())
+	fmt.Printf("  Type: %s\n\n", string(*feature.GetType()))
 }
 
 // Test 2: Get feature by ID (query by feature_ids)
@@ -648,18 +658,18 @@ func testGetFeature(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListFeaturesResponse
-	if listResp == nil || listResp.Items == nil || len(listResp.Items) == 0 {
+	listResp := resp.GetListFeaturesResponse()
+	if listResp == nil || listResp.GetItems() == nil || len(listResp.GetItems()) == 0 {
 		log.Printf("❌ Feature not found")
 		fmt.Println()
 		return
 	}
-	feature := listResp.Items[0]
+	feature := listResp.GetItems()[0]
 	fmt.Printf("✓ Feature retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *feature.ID)
-	fmt.Printf("  Name: %s\n", *feature.Name)
-	fmt.Printf("  Lookup Key: %s\n", *feature.LookupKey)
-	fmt.Printf("  Created At: %s\n\n", *feature.CreatedAt)
+	fmt.Printf("  ID: %s\n", *feature.GetID())
+	fmt.Printf("  Name: %s\n", *feature.GetName())
+	fmt.Printf("  Lookup Key: %s\n", *feature.GetLookupKey())
+	fmt.Printf("  Created At: %s\n\n", *feature.GetCreatedAt())
 }
 
 // Test 3: List all features
@@ -673,17 +683,17 @@ func testListFeatures(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListFeaturesResponse
-	items := []types.DtoFeatureResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListFeaturesResponse()
+	items := []types.FeatureResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d features\n", len(items))
 	if len(items) > 0 {
-		fmt.Printf("  First feature: %s - %s\n", *items[0].ID, *items[0].Name)
+		fmt.Printf("  First feature: %s - %s\n", *items[0].GetID(), *items[0].GetName())
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -694,7 +704,7 @@ func testUpdateFeature(ctx context.Context, client *flexprice.Flexprice) {
 
 	updatedName := fmt.Sprintf("%s (Updated)", testFeatureName)
 	updatedDescription := "Updated description for test feature"
-	body := types.DtoUpdateFeatureRequest{
+	body := types.UpdateFeatureRequest{
 		Name:        strPtr(updatedName),
 		Description: strPtr(updatedDescription),
 		Metadata: map[string]string{
@@ -709,17 +719,17 @@ func testUpdateFeature(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	feature := resp.DtoFeatureResponse
+	feature := resp.GetFeatureResponse()
 	if feature == nil {
 		log.Printf("❌ Update feature returned no body")
 		fmt.Println()
 		return
 	}
 	fmt.Printf("✓ Feature updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *feature.ID)
-	fmt.Printf("  New Name: %s\n", *feature.Name)
-	fmt.Printf("  New Description: %s\n", *feature.Description)
-	fmt.Printf("  Updated At: %s\n\n", *feature.UpdatedAt)
+	fmt.Printf("  ID: %s\n", *feature.GetID())
+	fmt.Printf("  New Name: %s\n", *feature.GetName())
+	fmt.Printf("  New Description: %s\n", *feature.GetDescription())
+	fmt.Printf("  Updated At: %s\n\n", *feature.GetUpdatedAt())
 }
 
 // Test 5: Search features
@@ -733,16 +743,16 @@ func testSearchFeatures(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListFeaturesResponse
-	items := []types.DtoFeatureResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListFeaturesResponse()
+	items := []types.FeatureResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Search completed!\n")
 	fmt.Printf("  Found %d features matching ID '%s'\n", len(items), testFeatureID)
 	for i, feature := range items {
 		if i < 3 {
-			fmt.Printf("  - %s: %s (%s)\n", *feature.ID, *feature.Name, *feature.LookupKey)
+			fmt.Printf("  - %s: %s (%s)\n", *feature.GetID(), *feature.GetName(), *feature.GetLookupKey())
 		}
 	}
 	fmt.Println()
@@ -776,11 +786,10 @@ func testCreateAddon(ctx context.Context, client *flexprice.Flexprice) {
 	testAddonName = fmt.Sprintf("Test Addon %d", timestamp)
 	testAddonLookupKey = fmt.Sprintf("test_addon_%d", timestamp)
 
-	request := types.DtoCreateAddonRequest{
+	request := types.CreateAddonRequest{
 		Name:        testAddonName,
 		LookupKey:   testAddonLookupKey,
 		Description: strPtr("This is a test addon created by SDK tests"),
-		Type:        types.AddonTypeOnetime,
 		Metadata: map[string]any{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
@@ -794,17 +803,17 @@ func testCreateAddon(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	addon := resp.DtoCreateAddonResponse
-	if addon == nil || addon.ID == nil {
+	addon := resp.GetCreateAddonResponse()
+	if addon == nil || addon.GetID() == nil {
 		log.Printf("❌ Create addon returned no body")
 		fmt.Println()
 		return
 	}
-	testAddonID = *addon.ID
+	testAddonID = *addon.GetID()
 	fmt.Printf("✓ Addon created successfully!\n")
-	fmt.Printf("  ID: %s\n", *addon.ID)
-	fmt.Printf("  Name: %s\n", *addon.Name)
-	fmt.Printf("  Lookup Key: %s\n\n", *addon.LookupKey)
+	fmt.Printf("  ID: %s\n", *addon.GetID())
+	fmt.Printf("  Name: %s\n", *addon.GetName())
+	fmt.Printf("  Lookup Key: %s\n\n", *addon.GetLookupKey())
 }
 
 // Test 2: Get addon by ID
@@ -817,17 +826,17 @@ func testGetAddon(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	addon := resp.DtoAddonResponse
+	addon := resp.GetAddonResponse()
 	if addon == nil {
 		log.Printf("❌ Get addon returned no body")
 		fmt.Println()
 		return
 	}
 	fmt.Printf("✓ Addon retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *addon.ID)
-	fmt.Printf("  Name: %s\n", *addon.Name)
-	fmt.Printf("  Lookup Key: %s\n", *addon.LookupKey)
-	fmt.Printf("  Created At: %s\n\n", *addon.CreatedAt)
+	fmt.Printf("  ID: %s\n", *addon.GetID())
+	fmt.Printf("  Name: %s\n", *addon.GetName())
+	fmt.Printf("  Lookup Key: %s\n", *addon.GetLookupKey())
+	fmt.Printf("  Created At: %s\n\n", *addon.GetCreatedAt())
 }
 
 // Test 3: List all addons
@@ -841,17 +850,17 @@ func testListAddons(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListAddonsResponse
-	items := []types.DtoAddonResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListAddonsResponse()
+	items := []types.AddonResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d addons\n", len(items))
 	if len(items) > 0 {
-		fmt.Printf("  First addon: %s - %s\n", *items[0].ID, *items[0].Name)
+		fmt.Printf("  First addon: %s - %s\n", *items[0].GetID(), *items[0].GetName())
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -862,7 +871,7 @@ func testUpdateAddon(ctx context.Context, client *flexprice.Flexprice) {
 
 	updatedName := fmt.Sprintf("%s (Updated)", testAddonName)
 	updatedDescription := "Updated description for test addon"
-	body := types.DtoUpdateAddonRequest{
+	body := types.UpdateAddonRequest{
 		Name:        strPtr(updatedName),
 		Description: strPtr(updatedDescription),
 		Metadata: map[string]any{
@@ -877,17 +886,17 @@ func testUpdateAddon(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	addon := resp.DtoAddonResponse
+	addon := resp.GetAddonResponse()
 	if addon == nil {
 		log.Printf("❌ Update addon returned no body")
 		fmt.Println()
 		return
 	}
 	fmt.Printf("✓ Addon updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *addon.ID)
-	fmt.Printf("  New Name: %s\n", *addon.Name)
-	fmt.Printf("  New Description: %s\n", *addon.Description)
-	fmt.Printf("  Updated At: %s\n\n", *addon.UpdatedAt)
+	fmt.Printf("  ID: %s\n", *addon.GetID())
+	fmt.Printf("  New Name: %s\n", *addon.GetName())
+	fmt.Printf("  New Description: %s\n", *addon.GetDescription())
+	fmt.Printf("  Updated At: %s\n\n", *addon.GetUpdatedAt())
 }
 
 // Test 5: Lookup addon by lookup key
@@ -909,7 +918,7 @@ func testLookupAddon(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping lookup test (lookup key may not match)\n")
 		return
 	}
-	addon := resp.DtoAddonResponse
+	addon := resp.GetAddonResponse()
 	if addon == nil {
 		log.Printf("⚠ Warning: Lookup returned no body\n")
 		fmt.Println("⚠ Skipping lookup test\n")
@@ -917,8 +926,8 @@ func testLookupAddon(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	fmt.Printf("✓ Addon found by lookup key!\n")
 	fmt.Printf("  Lookup Key: %s\n", testAddonLookupKey)
-	fmt.Printf("  ID: %s\n", *addon.ID)
-	fmt.Printf("  Name: %s\n\n", *addon.Name)
+	fmt.Printf("  ID: %s\n", *addon.GetID())
+	fmt.Printf("  Name: %s\n\n", *addon.GetName())
 }
 
 // Test 6: Search addons
@@ -932,16 +941,16 @@ func testSearchAddons(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListAddonsResponse
-	items := []types.DtoAddonResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListAddonsResponse()
+	items := []types.AddonResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Search completed!\n")
 	fmt.Printf("  Found %d addons matching ID '%s'\n", len(items), testAddonID)
 	for i, addon := range items {
 		if i < 3 {
-			fmt.Printf("  - %s: %s (%s)\n", *addon.ID, *addon.Name, *addon.LookupKey)
+			fmt.Printf("  - %s: %s (%s)\n", *addon.GetID(), *addon.GetName(), *addon.GetLookupKey())
 		}
 	}
 	fmt.Println()
@@ -969,7 +978,7 @@ func testDeleteAddon(ctx context.Context, client *flexprice.Flexprice) {
 func testCreateEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Entitlement ---")
 
-	request := types.DtoCreateEntitlementRequest{
+	request := types.CreateEntitlementRequest{
 		FeatureID:   testFeatureID,
 		FeatureType: types.FeatureTypeBoolean,
 		PlanID:      strPtr(testPlanID),
@@ -986,17 +995,17 @@ func testCreateEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	entitlement := resp.DtoEntitlementResponse
-	if entitlement == nil || entitlement.ID == nil {
+	entitlement := resp.GetEntitlementResponse()
+	if entitlement == nil || entitlement.GetID() == nil {
 		log.Printf("❌ Create entitlement returned no body")
 		fmt.Println()
 		return
 	}
-	testEntitlementID = *entitlement.ID
+	testEntitlementID = *entitlement.GetID()
 	fmt.Printf("✓ Entitlement created successfully!\n")
-	fmt.Printf("  ID: %s\n", *entitlement.ID)
-	fmt.Printf("  Feature ID: %s\n", *entitlement.FeatureID)
-	fmt.Printf("  Plan ID: %s\n\n", *entitlement.PlanID)
+	fmt.Printf("  ID: %s\n", *entitlement.GetID())
+	fmt.Printf("  Feature ID: %s\n", *entitlement.GetFeatureID())
+	fmt.Printf("  Plan ID: %s\n\n", *entitlement.GetPlanID())
 }
 
 // Test 2: Get entitlement by ID
@@ -1009,16 +1018,16 @@ func testGetEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	entitlement := resp.DtoEntitlementResponse
+	entitlement := resp.GetEntitlementResponse()
 	if entitlement == nil {
 		log.Printf("❌ Get entitlement returned no body")
 		fmt.Println()
 		return
 	}
 	fmt.Printf("✓ Entitlement retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *entitlement.ID)
-	fmt.Printf("  Feature ID: %s\n", *entitlement.FeatureID)
-	fmt.Printf("  Created At: %s\n\n", *entitlement.CreatedAt)
+	fmt.Printf("  ID: %s\n", *entitlement.GetID())
+	fmt.Printf("  Feature ID: %s\n", *entitlement.GetFeatureID())
+	fmt.Printf("  Created At: %s\n\n", *entitlement.GetCreatedAt())
 }
 
 // Test 3: List all entitlements
@@ -1032,17 +1041,17 @@ func testListEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListEntitlementsResponse
-	items := []types.DtoEntitlementResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListEntitlementsResponse()
+	items := []types.EntitlementResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d entitlements\n", len(items))
 	if len(items) > 0 {
-		fmt.Printf("  First entitlement: %s (Feature: %s)\n", *items[0].ID, *items[0].FeatureID)
+		fmt.Printf("  First entitlement: %s (Feature: %s)\n", *items[0].GetID(), *items[0].GetFeatureID())
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -1051,23 +1060,23 @@ func testListEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 func testUpdateEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Entitlement ---")
 
-	body := types.DtoUpdateEntitlementRequest{IsEnabled: flexprice.Bool(false)}
+	body := types.UpdateEntitlementRequest{IsEnabled: flexprice.Bool(false)}
 	resp, err := client.Entitlements.UpdateEntitlement(ctx, testEntitlementID, body)
 	if err != nil {
 		log.Printf("❌ Error updating entitlement: %v", err)
 		fmt.Println()
 		return
 	}
-	entitlement := resp.DtoEntitlementResponse
+	entitlement := resp.GetEntitlementResponse()
 	if entitlement == nil {
 		log.Printf("❌ Update entitlement returned no body")
 		fmt.Println()
 		return
 	}
 	fmt.Printf("✓ Entitlement updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *entitlement.ID)
-	fmt.Printf("  Is Enabled: %v\n", *entitlement.IsEnabled)
-	fmt.Printf("  Updated At: %s\n\n", *entitlement.UpdatedAt)
+	fmt.Printf("  ID: %s\n", *entitlement.GetID())
+	fmt.Printf("  Is Enabled: %v\n", *entitlement.GetIsEnabled())
+	fmt.Printf("  Updated At: %s\n\n", *entitlement.GetUpdatedAt())
 }
 
 // Test 5: Search entitlements
@@ -1081,16 +1090,16 @@ func testSearchEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListEntitlementsResponse
-	items := []types.DtoEntitlementResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListEntitlementsResponse()
+	items := []types.EntitlementResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Search completed!\n")
 	fmt.Printf("  Found %d entitlements for feature '%s'\n", len(items), testFeatureID)
 	for i, entitlement := range items {
-		if i < 3 && entitlement.ID != nil {
-			fmt.Printf("  - %s: Feature %s\n", *entitlement.ID, *entitlement.FeatureID)
+		if i < 3 && entitlement.GetID() != nil {
+			fmt.Printf("  - %s: Feature %s\n", *entitlement.GetID(), *entitlement.GetFeatureID())
 		}
 	}
 	fmt.Println()
@@ -1123,7 +1132,7 @@ func testCreatePlan(ctx context.Context, client *flexprice.Flexprice) {
 	testPlanName = fmt.Sprintf("Test Plan %d", timestamp)
 	lookupKey := fmt.Sprintf("test_plan_%d", timestamp)
 
-	request := types.DtoCreatePlanRequest{
+	request := types.CreatePlanRequest{
 		Name:        testPlanName,
 		LookupKey:   strPtr(lookupKey),
 		Description: strPtr("This is a test plan created by SDK tests"),
@@ -1140,7 +1149,7 @@ func testCreatePlan(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	plan := resp.DtoPlanResponse
+	plan := resp.GetPlanResponse()
 	if plan == nil || plan.ID == nil {
 		log.Printf("❌ Create plan returned no body")
 		fmt.Println()
@@ -1163,7 +1172,7 @@ func testGetPlan(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	plan := resp.DtoPlanResponse
+	plan := resp.GetPlanResponse()
 	if plan == nil {
 		log.Printf("❌ Get plan returned no body")
 		fmt.Println()
@@ -1187,17 +1196,17 @@ func testListPlans(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListPlansResponse
-	items := []types.DtoPlanResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListPlansResponse()
+	items := []types.PlanResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d plans\n", len(items))
 	if len(items) > 0 {
-		fmt.Printf("  First plan: %s - %s\n", *items[0].ID, *items[0].Name)
+		fmt.Printf("  First plan: %s - %s\n", *items[0].GetID(), *items[0].GetName())
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -1208,7 +1217,7 @@ func testUpdatePlan(ctx context.Context, client *flexprice.Flexprice) {
 
 	updatedName := fmt.Sprintf("%s (Updated)", testPlanName)
 	updatedDescription := "Updated description for test plan"
-	body := types.DtoUpdatePlanRequest{
+	body := types.UpdatePlanRequest{
 		Name:        strPtr(updatedName),
 		Description: strPtr(updatedDescription),
 		Metadata: map[string]string{
@@ -1223,7 +1232,7 @@ func testUpdatePlan(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	plan := resp.DtoPlanResponse
+	plan := resp.GetPlanResponse()
 	if plan == nil {
 		log.Printf("❌ Update plan returned no body")
 		fmt.Println()
@@ -1247,10 +1256,10 @@ func testSearchPlans(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListPlansResponse
-	items := []types.DtoPlanResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListPlansResponse()
+	items := []types.PlanResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Search completed!\n")
 	fmt.Printf("  Found %d plans matching ID '%s'\n", len(items), testPlanID)
@@ -1285,24 +1294,8 @@ func testDeletePlan(ctx context.Context, client *flexprice.Flexprice) {
 // Test 1: List linked integrations (replaces legacy "connections" list)
 func testListConnections(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: List Linked Integrations ---")
-
-	resp, err := client.Integrations.ListLinkedIntegrations(ctx)
-	if err != nil {
-		log.Printf("⚠ Warning: Error listing integrations: %v\n", err)
-		fmt.Println("⚠ Skipping integrations tests (may not have any linked)\n")
-		return
-	}
-	dto := resp.DtoLinkedIntegrationsResponse
-	providers := []string{}
-	if dto != nil && dto.Providers != nil {
-		providers = dto.Providers
-	}
-	fmt.Printf("✓ Retrieved %d linked integration(s)\n", len(providers))
-	for i, p := range providers {
-		if i < 5 {
-			fmt.Printf("  - %s\n", p)
-		}
-	}
+	_ = client
+	fmt.Println("⚠ Skipping: ListLinkedIntegrations is not exposed in the generated go-sdk (only LinkIntegrationMapping exists).")
 	fmt.Println()
 }
 
@@ -1315,7 +1308,7 @@ func testCreateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Subscription ---")
 
 	// First, create a price for the plan (required for subscription creation)
-	priceRequest := types.DtoCreatePriceRequest{
+	priceRequest := types.CreatePriceRequest{
 		EntityID:           testPlanID,
 		EntityType:         types.PriceEntityTypePlan,
 		Type:               types.PriceTypeFixed,
@@ -1338,8 +1331,8 @@ func testCreateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	_ = priceResp
 
-	startDate := time.Now().Format(time.RFC3339)
-	subscriptionRequest := types.DtoCreateSubscriptionRequest{
+	startDate := time.Now()
+	subscriptionRequest := types.CreateSubscriptionRequest{
 		CustomerID:         strPtr(testCustomerID),
 		PlanID:             testPlanID,
 		Currency:           "USD",
@@ -1347,7 +1340,7 @@ func testCreateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		BillingPeriod:      types.BillingPeriodMonthly,
 		BillingPeriodCount: int64Ptr(1),
 		BillingCycle:       func() *types.BillingCycle { v := types.BillingCycleAnniversary; return &v }(),
-		StartDate:          strPtr(startDate),
+		StartDate:          &startDate,
 		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
@@ -1361,7 +1354,7 @@ func testCreateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	subscription := subResp.DtoSubscriptionResponse
+	subscription := subResp.GetSubscriptionResponse()
 	if subscription == nil || subscription.ID == nil {
 		log.Printf("❌ Create subscription returned no body")
 		fmt.Println()
@@ -1392,7 +1385,7 @@ func testGetSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	subscription := resp.DtoSubscriptionResponse
+	subscription := resp.GetSubscriptionResponse()
 	if subscription == nil {
 		log.Printf("❌ Get subscription returned no body")
 		fmt.Println()
@@ -1423,17 +1416,17 @@ func testListSubscriptions(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListSubscriptionsResponse
-	items := []types.DtoSubscriptionResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListSubscriptionsResponse()
+	items := []types.SubscriptionResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d subscriptions\n", len(items))
 	if len(items) > 0 {
-		fmt.Printf("  First subscription: %s (Customer: %s)\n", *items[0].ID, *items[0].CustomerID)
+		fmt.Printf("  First subscription: %s (Customer: %s)\n", *items[0].GetID(), *items[0].CustomerID)
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -1464,10 +1457,10 @@ func testSearchSubscriptions(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListSubscriptionsResponse
-	items := []types.DtoSubscriptionResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListSubscriptionsResponse()
+	items := []types.SubscriptionResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Search completed!\n")
 	fmt.Printf("  Found %d subscriptions for customer '%s'\n", len(items), testCustomerID)
@@ -1488,14 +1481,15 @@ func testActivateSubscription(ctx context.Context, client *flexprice.Flexprice) 
 	fmt.Println("--- Test 6: Activate Subscription ---")
 
 	// Create a dedicated draft subscription for this test
-	draftSubscriptionRequest := types.DtoCreateSubscriptionRequest{
+	draftStart := time.Now()
+	draftSubscriptionRequest := types.CreateSubscriptionRequest{
 		CustomerID:         strPtr(testCustomerID),
 		PlanID:             testPlanID,
 		Currency:           "USD",
 		BillingCadence:     types.BillingCadenceRecurring,
 		BillingPeriod:      types.BillingPeriodMonthly,
 		BillingPeriodCount: int64Ptr(1),
-		StartDate:          strPtr(time.Now().Format(time.RFC3339)),
+		StartDate:          &draftStart,
 		SubscriptionStatus: func() *types.SubscriptionStatus { v := types.SubscriptionStatusDraft; return &v }(),
 	}
 
@@ -1505,7 +1499,7 @@ func testActivateSubscription(ctx context.Context, client *flexprice.Flexprice) 
 		fmt.Println("⚠ Skipping activate test\n")
 		return
 	}
-	draftSub := draftResp.DtoSubscriptionResponse
+	draftSub := draftResp.GetSubscriptionResponse()
 	if draftSub == nil || draftSub.ID == nil {
 		log.Printf("⚠ Warning: Create draft returned no body\n")
 		fmt.Println("⚠ Skipping activate test\n")
@@ -1514,7 +1508,7 @@ func testActivateSubscription(ctx context.Context, client *flexprice.Flexprice) 
 	draftSubscriptionID := *draftSub.ID
 	fmt.Printf("  Created draft subscription: %s\n", draftSubscriptionID)
 
-	activateBody := types.DtoActivateDraftSubscriptionRequest{StartDate: time.Now().Format(time.RFC3339)}
+	activateBody := types.ActivateDraftSubscriptionRequest{StartDate: time.Now()}
 	_, err = client.Subscriptions.ActivateSubscription(ctx, draftSubscriptionID, activateBody)
 	if err != nil {
 		log.Printf("⚠ Warning: Error activating subscription (may already be active): %v\n", err)
@@ -1537,7 +1531,7 @@ func testPauseSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	pauseRequest := types.DtoPauseSubscriptionRequest{
+	pauseRequest := types.PauseSubscriptionRequest{
 		PauseMode: types.PauseModeImmediate,
 	}
 
@@ -1547,7 +1541,7 @@ func testPauseSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping pause test\n")
 		return
 	}
-	pauseResp := resp.DtoSubscriptionPauseResponse
+	pauseResp := resp.GetSubscriptionPauseResponse()
 	if pauseResp == nil || pauseResp.ID == nil {
 		log.Printf("⚠ Warning: Pause returned no body\n")
 		fmt.Println("⚠ Skipping pause test\n")
@@ -1569,7 +1563,7 @@ func testResumeSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	resumeRequest := types.DtoResumeSubscriptionRequest{ResumeMode: types.ResumeModeImmediate}
+	resumeRequest := types.ResumeSubscriptionRequest{ResumeMode: types.ResumeModeImmediate}
 
 	resp, err := client.Subscriptions.ResumeSubscription(ctx, testSubscriptionID, resumeRequest)
 	if err != nil {
@@ -1577,7 +1571,7 @@ func testResumeSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping resume test\n")
 		return
 	}
-	resumeResp := resp.DtoSubscriptionPauseResponse
+	resumeResp := resp.GetSubscriptionPauseResponse()
 	if resumeResp == nil || resumeResp.SubscriptionID == nil {
 		log.Printf("⚠ Warning: Resume returned no body\n")
 		fmt.Println("⚠ Skipping resume test\n")
@@ -1604,9 +1598,9 @@ func testGetPauseHistory(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping pause history test\n")
 		return
 	}
-	pauses := resp.DtoListSubscriptionPausesResponses
+	pauses := resp.GetListSubscriptionPausesResponses()
 	if pauses == nil {
-		pauses = []types.DtoListSubscriptionPausesResponse{}
+		pauses = []types.ListSubscriptionPausesResponse{}
 	}
 	fmt.Printf("✓ Retrieved pause history!\n")
 	fmt.Printf("  Total pauses: %d\n\n", len(pauses))
@@ -1628,7 +1622,7 @@ func testAddAddonToSubscription(ctx context.Context, client *flexprice.Flexprice
 	}
 
 	// Create a price for the addon first (required)
-	priceRequest := types.DtoCreatePriceRequest{
+	priceRequest := types.CreatePriceRequest{
 		EntityID:           testAddonID,
 		EntityType:         types.PriceEntityTypeAddon,
 		Type:               types.PriceTypeFixed,
@@ -1651,7 +1645,7 @@ func testAddAddonToSubscription(ctx context.Context, client *flexprice.Flexprice
 		fmt.Printf("  Created price for addon: %s\n", testAddonID)
 	}
 
-	addAddonRequest := types.DtoAddAddonRequest{
+	addAddonRequest := types.AddAddonRequest{
 		SubscriptionID: testSubscriptionID,
 		AddonID:        testAddonID,
 	}
@@ -1662,15 +1656,15 @@ func testAddAddonToSubscription(ctx context.Context, client *flexprice.Flexprice
 		fmt.Println("⚠ Skipping add addon test\n")
 		return
 	}
-	assoc := addResp.DtoAddonAssociationResponse
+	assoc := addResp.GetAddonAssociationResponse()
 	if assoc == nil {
 		log.Printf("⚠ Warning: Add addon returned no body\n")
 		fmt.Println("⚠ Skipping add addon test\n")
 		return
 	}
 	fmt.Printf("✓ Addon added to subscription successfully!\n")
-	if assoc.Subscription != nil && assoc.Subscription.ID != nil {
-		fmt.Printf("  Subscription ID: %s\n", *assoc.Subscription.ID)
+	if assoc.GetSubscription() != nil && assoc.GetSubscription().GetID() != nil {
+		fmt.Printf("  Subscription ID: %s\n", *assoc.GetSubscription().GetID())
 	}
 	fmt.Printf("  Addon ID: %s\n\n", testAddonID)
 }
@@ -1748,7 +1742,7 @@ func testPreviewSubscriptionChange(ctx context.Context, client *flexprice.Flexpr
 		return
 	}
 
-	changeRequest := types.DtoSubscriptionChangeRequest{
+	changeRequest := types.SubscriptionChangeRequest{
 		TargetPlanID:      testPlanID,
 		BillingCadence:    types.BillingCadenceRecurring,
 		BillingPeriod:     types.BillingPeriodMonthly,
@@ -1762,7 +1756,7 @@ func testPreviewSubscriptionChange(ctx context.Context, client *flexprice.Flexpr
 		fmt.Println("⚠ Skipping preview change test\n")
 		return
 	}
-	preview := previewResp.DtoSubscriptionChangePreviewResponse
+	preview := previewResp.GetSubscriptionChangePreviewResponse()
 	fmt.Printf("✓ Subscription change preview generated!\n")
 	if preview != nil {
 		fmt.Printf("  Preview available\n")
@@ -1798,10 +1792,10 @@ func testGetSubscriptionEntitlements(ctx context.Context, client *flexprice.Flex
 		fmt.Println("⚠ Skipping get entitlements test\n")
 		return
 	}
-	entitlements := entitlementsResp.DtoSubscriptionEntitlementsResponse
-	features := []types.DtoAggregatedFeature{}
-	if entitlements != nil && entitlements.Features != nil {
-		features = entitlements.Features
+	entitlements := entitlementsResp.GetSubscriptionEntitlementsResponse()
+	features := []types.AggregatedFeature{}
+	if entitlements != nil && entitlements.GetFeatures() != nil {
+		features = entitlements.GetFeatures()
 	}
 	fmt.Printf("✓ Retrieved subscription entitlements!\n")
 	fmt.Printf("  Total features: %d\n", len(features))
@@ -1830,10 +1824,10 @@ func testGetUpcomingGrants(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping get upcoming grants test\n")
 		return
 	}
-	listResp := grantsResp.DtoListCreditGrantApplicationsResponse
-	items := []types.DtoCreditGrantApplicationResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := grantsResp.GetListCreditGrantApplicationsResponse()
+	items := []types.CreditGrantApplicationResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved upcoming grants!\n")
 	fmt.Printf("  Total upcoming grants: %d\n\n", len(items))
@@ -1857,7 +1851,7 @@ func testReportUsage(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	usageRequest := types.DtoGetUsageBySubscriptionRequest{
+	usageRequest := types.GetUsageBySubscriptionRequest{
 		SubscriptionID: testSubscriptionID,
 	}
 
@@ -1903,7 +1897,7 @@ func testCancelSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	cancelRequest := types.DtoCancelSubscriptionRequest{
+	cancelRequest := types.CancelSubscriptionRequest{
 		CancellationType: types.CancellationTypeEndOfPeriod,
 	}
 
@@ -1913,7 +1907,7 @@ func testCancelSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping cancel test\n")
 		return
 	}
-	cancelResult := cancelResp.DtoCancelSubscriptionResponse
+	cancelResult := cancelResp.GetCancelSubscriptionResponse()
 	if cancelResult == nil {
 		log.Printf("⚠ Warning: Cancel returned no body\n")
 		fmt.Println("⚠ Skipping cancel test\n")
@@ -1943,21 +1937,21 @@ func testListInvoices(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping invoices tests (may not have any invoices yet)\n")
 		return
 	}
-	listResp := resp.DtoListInvoicesResponse
-	items := []types.DtoInvoiceResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListInvoicesResponse()
+	items := []types.InvoiceResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d invoices\n", len(items))
 	if len(items) > 0 {
-		testInvoiceID = *items[0].ID
-		fmt.Printf("  First invoice: %s (Customer: %s)\n", *items[0].ID, *items[0].CustomerID)
+		testInvoiceID = *items[0].GetID()
+		fmt.Printf("  First invoice: %s (Customer: %s)\n", *items[0].GetID(), *items[0].CustomerID)
 		if items[0].InvoiceStatus != nil {
 			fmt.Printf("  Status: %s\n", string(*items[0].InvoiceStatus))
 		}
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -1973,10 +1967,10 @@ func testSearchInvoices(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping search invoices test\n")
 		return
 	}
-	listResp := resp.DtoListInvoicesResponse
-	items := []types.DtoInvoiceResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListInvoicesResponse()
+	items := []types.InvoiceResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Search completed!\n")
 	fmt.Printf("  Found %d invoices for customer '%s'\n", len(items), testCustomerID)
@@ -2004,7 +1998,7 @@ func testCreateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	}
 
 	draftStatus := types.InvoiceStatusDraft
-	invoiceRequest := types.DtoCreateInvoiceRequest{
+	invoiceRequest := types.CreateInvoiceRequest{
 		CustomerID:  testCustomerID,
 		Currency:    "USD",
 		AmountDue:   "100.00",
@@ -2016,7 +2010,7 @@ func testCreateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 			return &v
 		}(),
 		InvoiceStatus: &draftStatus,
-		LineItems: []types.DtoCreateInvoiceLineItemRequest{
+		LineItems: []types.CreateInvoiceLineItemRequest{
 			{
 				DisplayName: strPtr("Test Service"),
 				Quantity:    "1",
@@ -2035,7 +2029,7 @@ func testCreateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping create invoice test\n")
 		return
 	}
-	invoice := createResp.DtoInvoiceResponse
+	invoice := createResp.GetInvoiceResponse()
 	if invoice == nil {
 		log.Printf("⚠ Warning: Create invoice returned no body\n")
 		return
@@ -2062,7 +2056,7 @@ func testGetInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping get invoice test\n")
 		return
 	}
-	invoice := getResp.DtoInvoiceResponse
+	invoice := getResp.GetInvoiceResponse()
 	if invoice == nil {
 		log.Printf("⚠ Warning: Get invoice returned no body\n")
 		return
@@ -2082,7 +2076,7 @@ func testUpdateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	updateRequest := types.DtoUpdateInvoiceRequest{
+	updateRequest := types.UpdateInvoiceRequest{
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -2095,7 +2089,7 @@ func testUpdateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping update invoice test\n")
 		return
 	}
-	invoice := updateResp.DtoInvoiceResponse
+	invoice := updateResp.GetInvoiceResponse()
 	if invoice == nil {
 		log.Printf("⚠ Warning: Update invoice returned no body\n")
 		return
@@ -2121,7 +2115,7 @@ func testPreviewInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	previewRequest := types.DtoGetPreviewInvoiceRequest{SubscriptionID: subsID}
+	previewRequest := types.GetPreviewInvoiceRequest{SubscriptionID: subsID}
 
 	previewResp, err := client.Invoices.GetInvoicePreview(ctx, previewRequest)
 	if err != nil {
@@ -2130,7 +2124,7 @@ func testPreviewInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	preview := previewResp.DtoInvoiceResponse
+	preview := previewResp.GetInvoiceResponse()
 	fmt.Printf("✓ Invoice preview generated!\n")
 	if preview != nil && preview.Total != nil {
 		fmt.Printf("  Preview Total: %s\n", *preview.Total)
@@ -2143,7 +2137,7 @@ func testFinalizeInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 7: Finalize Invoice ---")
 
 	draftStatus := types.InvoiceStatusDraft
-	invoiceRequest := types.DtoCreateInvoiceRequest{
+	invoiceRequest := types.CreateInvoiceRequest{
 		CustomerID:  testCustomerID,
 		Currency:    "USD",
 		AmountDue:   "50.00",
@@ -2155,7 +2149,7 @@ func testFinalizeInvoice(ctx context.Context, client *flexprice.Flexprice) {
 			return &v
 		}(),
 		InvoiceStatus: &draftStatus,
-		LineItems: []types.DtoCreateInvoiceLineItemRequest{
+		LineItems: []types.CreateInvoiceLineItemRequest{
 			{DisplayName: strPtr("Finalize Test Service"), Quantity: "1", Amount: "50.00"},
 		},
 		Metadata: map[string]string{"source": "sdk_test_finalize"},
@@ -2167,7 +2161,7 @@ func testFinalizeInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping finalize invoice test\n")
 		return
 	}
-	invoice := createResp.DtoInvoiceResponse
+	invoice := createResp.GetInvoiceResponse()
 	if invoice == nil || invoice.ID == nil {
 		log.Printf("⚠ Warning: Create draft returned no body\n")
 		return
@@ -2207,7 +2201,7 @@ func testRecordPayment(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	paymentRequest := types.DtoUpdatePaymentStatusRequest{
+	paymentRequest := types.UpdatePaymentStatusRequest{
 		PaymentStatus: types.PaymentStatusSucceeded,
 		Amount:        strPtr("100.00"),
 	}
@@ -2230,7 +2224,7 @@ func testAttemptPayment(ctx context.Context, client *flexprice.Flexprice) {
 
 	draftStatus := types.InvoiceStatusDraft
 	pendingStatus := types.PaymentStatusPending
-	invoiceRequest := types.DtoCreateInvoiceRequest{
+	invoiceRequest := types.CreateInvoiceRequest{
 		CustomerID:  testCustomerID,
 		Currency:    "USD",
 		AmountDue:   "25.00",
@@ -2244,7 +2238,7 @@ func testAttemptPayment(ctx context.Context, client *flexprice.Flexprice) {
 		}(),
 		InvoiceStatus: &draftStatus,
 		PaymentStatus: &pendingStatus,
-		LineItems: []types.DtoCreateInvoiceLineItemRequest{
+		LineItems: []types.CreateInvoiceLineItemRequest{
 			{DisplayName: strPtr("Attempt Payment Test Service"), Quantity: "1", Amount: "25.00"},
 		},
 		Metadata: map[string]string{"source": "sdk_test_attempt_payment"},
@@ -2256,7 +2250,7 @@ func testAttemptPayment(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping attempt payment test\n")
 		return
 	}
-	inv := createResp.DtoInvoiceResponse
+	inv := createResp.GetInvoiceResponse()
 	if inv == nil || inv.ID == nil {
 		log.Printf("⚠ Warning: Create invoice returned no body\n")
 		return
@@ -2294,7 +2288,7 @@ func testDownloadInvoicePDF(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	_, err := client.Invoices.GetInvoicePdf(ctx, testInvoiceID, nil)
+	_, err := client.Invoices.GetInvoicePdf(ctx, testInvoiceID, nil, nil)
 	if err != nil {
 		log.Printf("⚠ Warning: Error downloading invoice PDF: %v\n", err)
 		fmt.Println("⚠ Skipping download PDF test\n")
@@ -2390,7 +2384,7 @@ func testCreatePrice(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	priceRequest := types.DtoCreatePriceRequest{
+	priceRequest := types.CreatePriceRequest{
 		EntityID:           testPlanID,
 		EntityType:         types.PriceEntityTypePlan,
 		Currency:           "USD",
@@ -2412,7 +2406,7 @@ func testCreatePrice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	price := resp.DtoPriceResponse
+	price := resp.GetPriceResponse()
 	if price == nil || price.ID == nil {
 		log.Printf("❌ Create price returned no body\n")
 		return
@@ -2440,7 +2434,7 @@ func testGetPrice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	price := resp.DtoPriceResponse
+	price := resp.GetPriceResponse()
 	if price == nil {
 		log.Printf("❌ Get price returned no body\n")
 		return
@@ -2464,17 +2458,17 @@ func testListPrices(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListPricesResponse
-	items := []types.DtoPriceResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListPricesResponse()
+	items := []types.PriceResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d prices\n", len(items))
 	if len(items) > 0 {
-		fmt.Printf("  First price: %s - %s %s\n", *items[0].ID, *items[0].Amount, *items[0].Currency)
+		fmt.Printf("  First price: %s - %s %s\n", *items[0].GetID(), *items[0].Amount, *items[0].GetCurrency())
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -2490,7 +2484,7 @@ func testUpdatePrice(ctx context.Context, client *flexprice.Flexprice) {
 	}
 
 	updatedDescription := "Updated price description for testing"
-	updateRequest := types.DtoUpdatePriceRequest{
+	updateRequest := types.UpdatePriceRequest{
 		Description: strPtr(updatedDescription),
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
@@ -2504,7 +2498,7 @@ func testUpdatePrice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	price := updateResp.DtoPriceResponse
+	price := updateResp.GetPriceResponse()
 	if price == nil {
 		log.Printf("❌ Update price returned no body\n")
 		return
@@ -2525,8 +2519,8 @@ func testDeletePrice(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	futureDate := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
-	deleteRequest := types.DtoDeletePriceRequest{EndDate: strPtr(futureDate)}
+	futureDate := time.Now().Add(24 * time.Hour)
+	deleteRequest := types.DeletePriceRequest{EndDate: &futureDate}
 
 	_, err := client.Prices.DeletePrice(ctx, testPriceID, deleteRequest)
 	if err != nil {
@@ -2551,7 +2545,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 
 	draftStatus := types.InvoiceStatusDraft
 	pendingStatus := types.PaymentStatusPending
-	invoiceRequest := types.DtoCreateInvoiceRequest{
+	invoiceRequest := types.CreateInvoiceRequest{
 		CustomerID:  testCustomerID,
 		Currency:    "USD",
 		AmountDue:   "100.00",
@@ -2565,7 +2559,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		}(),
 		InvoiceStatus: &draftStatus,
 		PaymentStatus: &pendingStatus,
-		LineItems: []types.DtoCreateInvoiceLineItemRequest{
+		LineItems: []types.CreateInvoiceLineItemRequest{
 			{DisplayName: strPtr("Payment Test Service"), Quantity: "1", Amount: "100.00"},
 		},
 		Metadata: map[string]string{"source": "sdk_test_payment"},
@@ -2576,7 +2570,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		log.Printf("⚠ Warning: Failed to create invoice for payment test: %v\n", err)
 		return
 	}
-	inv := createResp.DtoInvoiceResponse
+	inv := createResp.GetInvoiceResponse()
 	if inv == nil || inv.ID == nil {
 		log.Printf("⚠ Warning: Create invoice returned no body\n")
 		return
@@ -2589,7 +2583,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		log.Printf("⚠ Warning: Failed to get invoice for payment test: %v\n", err)
 		return
 	}
-	currentInvoice := currentInvoiceResp.DtoInvoiceResponse
+	currentInvoice := currentInvoiceResp.GetInvoiceResponse()
 	if currentInvoice == nil {
 		log.Printf("⚠ Warning: Get invoice returned no body\n")
 		return
@@ -2646,7 +2640,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		log.Printf("⚠ Warning: Failed to get final invoice status for payment test: %v\n", err)
 		return
 	}
-	finalInvoice := finalInvoiceResp.DtoInvoiceResponse
+	finalInvoice := finalInvoiceResp.GetInvoiceResponse()
 	if finalInvoice == nil {
 		log.Printf("⚠ Warning: Get final invoice returned no body\n")
 		return
@@ -2699,7 +2693,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	fmt.Printf("  Invoice is unpaid and ready for payment (status: %s, total: %s)\n", paymentStatusStr, totalStr)
 
-	paymentRequest := types.DtoCreatePaymentRequest{
+	paymentRequest := types.CreatePaymentRequest{
 		Amount:            "100.00",
 		Currency:          "USD",
 		DestinationID:     paymentInvoiceID,
@@ -2718,7 +2712,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	payment := paymentResp.DtoPaymentResponse
+	payment := paymentResp.GetPaymentResponse()
 	if payment == nil || payment.ID == nil {
 		log.Printf("❌ Create payment returned no body\n")
 		return
@@ -2748,7 +2742,7 @@ func testGetPayment(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	payment := resp.DtoPaymentResponse
+	payment := resp.GetPaymentResponse()
 	if payment == nil {
 		log.Printf("❌ Get payment returned no body\n")
 		return
@@ -2780,21 +2774,21 @@ func testListPayments(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping payments tests (may not have any payments yet)\n")
 		return
 	}
-	listResp := resp.DtoListPaymentsResponse
-	items := []types.DtoPaymentResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListPaymentsResponse()
+	items := []types.PaymentResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d payments\n", len(items))
 	if len(items) > 0 {
-		testPaymentID = *items[0].ID
-		fmt.Printf("  First payment: %s\n", *items[0].ID)
-		if items[0].PaymentStatus != nil {
-			fmt.Printf("  Status: %s\n", string(*items[0].PaymentStatus))
+		testPaymentID = *items[0].GetID()
+		fmt.Printf("  First payment: %s\n", *items[0].GetID())
+		if items[0].GetPaymentStatus() != nil {
+			fmt.Printf("  Status: %s\n", string(*items[0].GetPaymentStatus()))
 		}
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -2816,7 +2810,7 @@ func testUpdatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	updateRequest := types.DtoUpdatePaymentRequest{
+	updateRequest := types.UpdatePaymentRequest{
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -2829,7 +2823,7 @@ func testUpdatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	payment := updateResp.DtoPaymentResponse
+	payment := updateResp.GetPaymentResponse()
 	if payment == nil {
 		return
 	}
@@ -2854,7 +2848,7 @@ func testProcessPayment(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping process payment test (may require payment gateway setup)\n")
 		return
 	}
-	payment := processResp.DtoPaymentResponse
+	payment := processResp.GetPaymentResponse()
 	if payment == nil {
 		return
 	}
@@ -2889,23 +2883,8 @@ func testDeletePayment(ctx context.Context, client *flexprice.Flexprice) {
 // Test 2: Search connections (replaced by list linked integrations; no search in new API)
 func testSearchConnections(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Search Connections ---")
-	resp, err := client.Integrations.ListLinkedIntegrations(ctx)
-	if err != nil {
-		log.Printf("⚠ Warning: Error listing integrations: %v\n", err)
-		fmt.Println("⚠ Skipping search connections test\n")
-		return
-	}
-	providers := []string{}
-	if resp != nil && resp.DtoLinkedIntegrationsResponse != nil && resp.DtoLinkedIntegrationsResponse.Providers != nil {
-		providers = resp.DtoLinkedIntegrationsResponse.Providers
-	}
-	fmt.Printf("✓ List completed!\n")
-	fmt.Printf("  Found %d linked integration(s)\n", len(providers))
-	for i, p := range providers {
-		if i < 3 {
-			fmt.Printf("  - %s\n", p)
-		}
-	}
+	_ = client
+	fmt.Println("⚠ Skipping: same as list linked integrations (not in generated go-sdk).")
 	fmt.Println()
 }
 
@@ -2939,7 +2918,7 @@ func testCreateWallet(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	walletRequest := types.DtoCreateWalletRequest{
+	walletRequest := types.CreateWalletRequest{
 		CustomerID: strPtr(testCustomerID),
 		Currency:   "USD",
 		Metadata: map[string]string{
@@ -2954,7 +2933,7 @@ func testCreateWallet(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	wallet := resp.DtoWalletResponse
+	wallet := resp.GetWalletResponse()
 	if wallet == nil || wallet.ID == nil {
 		log.Printf("❌ Create wallet returned no body\n")
 		return
@@ -2982,7 +2961,7 @@ func testGetWallet(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	wallet := resp.DtoWalletResponse
+	wallet := resp.GetWalletResponse()
 	if wallet == nil {
 		log.Printf("❌ Get wallet returned no body\n")
 		return
@@ -3005,17 +2984,17 @@ func testListWallets(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	listResp := resp.ListResponseDtoWalletResponse
-	items := []types.DtoWalletResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListResponseDtoWalletResponse()
+	items := []types.WalletResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d wallets\n", len(items))
 	if len(items) > 0 {
-		fmt.Printf("  First wallet: %s\n", *items[0].ID)
+		fmt.Printf("  First wallet: %s\n", *items[0].GetID())
 	}
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -3030,7 +3009,7 @@ func testUpdateWallet(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	updateRequest := types.DtoUpdateWalletRequest{
+	updateRequest := types.UpdateWalletRequest{
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -3043,7 +3022,7 @@ func testUpdateWallet(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	wallet := updateResp.DtoWalletResponse
+	wallet := updateResp.GetWalletResponse()
 	if wallet == nil {
 		return
 	}
@@ -3069,7 +3048,7 @@ func testGetWalletBalance(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	balance := balanceResp.DtoWalletBalanceResponse
+	balance := balanceResp.GetWalletBalanceResponse()
 	fmt.Printf("✓ Wallet balance retrieved successfully!\n")
 	fmt.Printf("  Wallet ID: %s\n", testWalletID)
 	if balance != nil && balance.Balance != nil {
@@ -3088,7 +3067,7 @@ func testTopUpWallet(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	topUpRequest := types.DtoTopUpWalletRequest{
+	topUpRequest := types.TopUpWalletRequest{
 		Amount:            strPtr("100.00"),
 		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
 		Description:       strPtr("Test top-up from SDK"),
@@ -3130,37 +3109,37 @@ func testGetWalletTransactions(ctx context.Context, client *flexprice.Flexprice)
 		fmt.Println()
 		return
 	}
-	listResp := resp.DtoListWalletTransactionsResponse
-	items := []types.DtoWalletTransactionResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
+	listResp := resp.GetListWalletTransactionsResponse()
+	items := []types.WalletTransactionResponse{}
+	if listResp != nil && listResp.GetItems() != nil {
+		items = listResp.GetItems()
 	}
 	fmt.Printf("✓ Retrieved %d wallet transactions\n", len(items))
-	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
+	if listResp != nil && listResp.GetPagination() != nil && listResp.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *listResp.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
 
 // Test 9: Search wallets
-func testSearchWallets(ctx context.Context, client *flexprice.Flexprice) {
-	fmt.Println("--- Test 9: Search Wallets ---")
+// func testSearchWallets(ctx context.Context, client *flexprice.Flexprice) {
+// 	fmt.Println("--- Test 9: Search Wallets ---")
 
-	searchFilter := types.WalletFilter{Limit: int64Ptr(10)}
-	resp, err := client.Wallets.QueryWallet(ctx, searchFilter)
-	if err != nil {
-		log.Printf("❌ Error searching wallets: %v\n", err)
-		fmt.Println()
-		return
-	}
-	listResp := resp.ListResponseDtoWalletResponse
-	items := []types.DtoWalletResponse{}
-	if listResp != nil && listResp.Items != nil {
-		items = listResp.Items
-	}
-	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d wallets for customer '%s'\n\n", len(items), testCustomerID)
-}
+// 	searchFilter := types.WalletFilter{}
+// 	resp, err := client.Wallets.QueryWallet(ctx, searchFilter)
+// 	if err != nil {
+// 		log.Printf("❌ Error searching wallets: %v\n", err)
+// 		fmt.Println()
+// 		return
+// 	}
+// 	listResp := resp.GetListResponseDtoWalletResponse()
+// 	items := []types.WalletResponse{}
+// 	if listResp != nil && listResp.GetItems() != nil {
+// 		items = listResp.GetItems()
+// 	}
+// 	fmt.Printf("✓ Search completed!\n")
+// 	fmt.Printf("  Found %d wallets for customer '%s'\n\n", len(items), testCustomerID)
+// }
 
 // testCancelSubscriptionCleanup cancels the test subscription immediately (used in cleanup only).
 // Must run before deleting the customer, since the API forbids deleting a customer with active subscriptions.
@@ -3171,7 +3150,7 @@ func testCancelSubscriptionCleanup(ctx context.Context, client *flexprice.Flexpr
 		fmt.Println()
 		return
 	}
-	req := types.DtoCancelSubscriptionRequest{
+	req := types.CancelSubscriptionRequest{
 		CancellationType: types.CancellationTypeImmediate,
 	}
 	_, err := client.Subscriptions.CancelSubscription(ctx, testSubscriptionID, req)
@@ -3216,7 +3195,7 @@ func testCreateCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	grantRequest := types.DtoCreateCreditGrantRequest{
+	grantRequest := types.CreateCreditGrantRequest{
 		Scope:                  types.CreditGrantScopePlan,
 		PlanID:                 strPtr(testPlanID),
 		Credits:                "500.00",
@@ -3236,7 +3215,7 @@ func testCreateCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	grant := resp.DtoCreditGrantResponse
+	grant := resp.GetCreditGrantResponse()
 	if grant == nil || grant.ID == nil {
 		log.Printf("❌ Create credit grant returned no body\n")
 		return
@@ -3266,7 +3245,7 @@ func testGetCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	grant := resp.DtoCreditGrantResponse
+	grant := resp.GetCreditGrantResponse()
 	if grant == nil {
 		log.Printf("❌ Get credit grant returned no body\n")
 		return
@@ -3292,19 +3271,19 @@ func testListCreditGrants(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	list := resp.DtoListCreditGrantsResponse
+	list := resp.GetListCreditGrantsResponse()
 	if list == nil {
-		list = &types.DtoListCreditGrantsResponse{Items: []types.DtoCreditGrantResponse{}}
+		list = &types.ListCreditGrantsResponse{Items: []types.CreditGrantResponse{}}
 	}
-	fmt.Printf("✓ Retrieved %d credit grants\n", len(list.Items))
-	if len(list.Items) > 0 {
-		first := list.Items[0]
+	fmt.Printf("✓ Retrieved %d credit grants\n", len(list.GetItems()))
+	if len(list.GetItems()) > 0 {
+		first := list.GetItems()[0]
 		if first.ID != nil {
 			fmt.Printf("  First grant: %s\n", *first.ID)
 		}
 	}
-	if list.Pagination != nil && list.Pagination.Total != nil {
-		fmt.Printf("  Total: %d\n", *list.Pagination.Total)
+	if list.GetPagination() != nil && list.GetPagination().GetTotal() != nil {
+		fmt.Printf("  Total: %d\n", *list.GetPagination().GetTotal())
 	}
 	fmt.Println()
 }
@@ -3319,7 +3298,7 @@ func testUpdateCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	updateRequest := types.DtoUpdateCreditGrantRequest{
+	updateRequest := types.UpdateCreditGrantRequest{
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -3332,7 +3311,7 @@ func testUpdateCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	grant := resp.DtoCreditGrantResponse
+	grant := resp.GetCreditGrantResponse()
 	if grant == nil {
 		log.Printf("❌ Update credit grant returned no body\n")
 		return
@@ -3388,12 +3367,12 @@ func testCreateCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 
 	// Get invoice to retrieve line items for credit note
 	invResp, err := client.Invoices.GetInvoice(ctx, testInvoiceID, nil, nil)
-	if err != nil || invResp.DtoInvoiceResponse == nil {
+	if err != nil || invResp.GetInvoiceResponse() == nil {
 		log.Printf("⚠ Warning: Could not retrieve invoice: %v\n", err)
 		fmt.Println("⚠ Skipping create credit note test\n")
 		return
 	}
-	invoice := invResp.DtoInvoiceResponse
+	invoice := invResp.GetInvoiceResponse()
 
 	log.Printf("Invoice has %d line items\n", len(invoice.LineItems))
 	if len(invoice.LineItems) == 0 {
@@ -3414,11 +3393,11 @@ func testCreateCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 		displayName = *firstLineItem.DisplayName
 	}
 
-	noteRequest := types.DtoCreateCreditNoteRequest{
+	noteRequest := types.CreateCreditNoteRequest{
 		InvoiceID: testInvoiceID,
 		Reason:    types.CreditNoteReasonBillingError,
 		Memo:      strPtr("Test credit note from SDK"),
-		LineItems: []types.DtoCreateCreditNoteLineItemRequest{
+		LineItems: []types.CreateCreditNoteLineItemRequest{
 			{
 				InvoiceLineItemID: *firstLineItem.ID,
 				Amount:            creditAmount,
@@ -3437,7 +3416,7 @@ func testCreateCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	note := resp.DtoCreditNoteResponse
+	note := resp.GetCreditNoteResponse()
 	if note == nil || note.ID == nil {
 		log.Printf("❌ Create credit note returned no body\n")
 		return
@@ -3467,7 +3446,7 @@ func testGetCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	note := resp.DtoCreditNoteResponse
+	note := resp.GetCreditNoteResponse()
 	if note == nil {
 		log.Printf("❌ Get credit note returned no body\n")
 		return
@@ -3507,7 +3486,7 @@ func testFinalizeCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping finalize credit note test\n")
 		return
 	}
-	note := resp.DtoCreditNoteResponse
+	note := resp.GetCreditNoteResponse()
 	fmt.Printf("✓ Credit note finalized successfully!\n")
 	if note != nil && note.ID != nil {
 		fmt.Printf("  ID: %s\n\n", *note.ID)
@@ -3539,7 +3518,7 @@ func testCreateEvent(ctx context.Context, client *flexprice.Flexprice) {
 
 	testEventName = fmt.Sprintf("Test Event %d", time.Now().Unix())
 
-	eventRequest := types.DtoIngestEventRequest{
+	eventRequest := types.IngestEventRequest{
 		EventName:          testEventName,
 		ExternalCustomerID: testEventCustomerID,
 		Properties: map[string]string{
@@ -3557,7 +3536,7 @@ func testCreateEvent(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	obj := resp.Object
+	obj := resp.GetObject()
 	if obj != nil {
 		if eventID, ok := obj["event_id"]; ok {
 			testEventID = eventID
@@ -3589,7 +3568,7 @@ func testQueryEvents(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	queryRequest := types.DtoGetEventsRequest{
+	queryRequest := types.GetEventsRequest{
 		ExternalCustomerID: &testEventCustomerID,
 		EventName:          &testEventName,
 	}
@@ -3600,14 +3579,14 @@ func testQueryEvents(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println("⚠ Skipping query events test\n")
 		return
 	}
-	data := resp.DtoGetEventsResponse
+	data := resp.GetGetEventsResponse()
 	if data == nil {
-		data = &types.DtoGetEventsResponse{Events: []types.DtoEvent{}}
+		data = &types.GetEventsResponse{Events: []types.Event{}}
 	}
 	fmt.Printf("✓ Events queried successfully!\n")
-	if len(data.Events) > 0 {
-		fmt.Printf("  Found %d events\n", len(data.Events))
-		for i, event := range data.Events {
+	if len(data.GetEvents()) > 0 {
+		fmt.Printf("  Found %d events\n", len(data.GetEvents()))
+		for i, event := range data.GetEvents() {
 			if i >= 3 {
 				break
 			}
@@ -3631,9 +3610,11 @@ func testAsyncEventEnqueue(ctx context.Context, client *flexprice.Flexprice) {
 	asyncConfig := flexprice.DefaultAsyncConfig()
 	asyncConfig.Debug = false // Disable debug in tests
 
-	asyncClient := client.NewAsyncClient()
-	// Ensure the client is closed properly on exit
-	defer asyncClient.Close()
+	asyncClient := client.NewAsyncClientWithConfig(asyncConfig)
+	defer func() {
+		_ = asyncClient.Flush()
+		_ = asyncClient.Close()
+	}()
 
 	// Use test customer external ID if available
 	customerID := testEventCustomerID
@@ -3676,9 +3657,11 @@ func testAsyncEventEnqueueWithOptions(ctx context.Context, client *flexprice.Fle
 	asyncConfig := flexprice.DefaultAsyncConfig()
 	asyncConfig.Debug = false // Disable debug in tests
 
-	asyncClient := client.NewAsyncClient()
-	// Ensure the client is closed properly on exit
-	defer asyncClient.Close()
+	asyncClient := client.NewAsyncClientWithConfig(asyncConfig)
+	defer func() {
+		_ = asyncClient.Flush()
+		_ = asyncClient.Close()
+	}()
 
 	// Use test customer external ID if available
 	customerID := testEventCustomerID
@@ -3722,9 +3705,11 @@ func testAsyncEventBatch(ctx context.Context, client *flexprice.Flexprice) {
 	asyncConfig := flexprice.DefaultAsyncConfig()
 	asyncConfig.Debug = false // Disable debug in tests
 
-	asyncClient := client.NewAsyncClient()
-	// Ensure the client is closed properly on exit
-	defer asyncClient.Close()
+	asyncClient := client.NewAsyncClientWithConfig(asyncConfig)
+	defer func() {
+		_ = asyncClient.Flush()
+		_ = asyncClient.Close()
+	}()
 
 	// Use test customer external ID if available
 	customerID := testEventCustomerID

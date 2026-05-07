@@ -24,12 +24,11 @@ type CreatePriceRequest struct {
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                      `json:"billing_period_count" default:"1"`
 	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
-	BillingCadence     types.BillingCadence     `json:"billing_cadence" validate:"required"`
 	MeterID            string                   `json:"meter_id,omitempty"`
 	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
 	LookupKey          string                   `json:"lookup_key,omitempty"`
 	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence" validate:"required"`
-	TrialPeriod        int                      `json:"trial_period"`
+	TrialPeriodDays    int                      `json:"trial_period_days"`
 	Description        string                   `json:"description,omitempty"`
 	Metadata           map[string]string        `json:"metadata,omitempty"`
 	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
@@ -122,7 +121,7 @@ type PriceResponse struct {
 }
 
 // ListPricesResponse represents the response for listing prices
-type ListPricesResponse = types.ListResponse[*PriceResponse]
+type ListPricesResponse = types.ListResponse[*PriceResponse] // @name ListPricesResponse
 
 // CreateBulkPriceRequest represents the request to create multiple prices in bulk
 type CreateBulkPriceRequest struct {
@@ -215,9 +214,6 @@ func (r *CreatePriceRequest) Validate() error {
 		return err
 	}
 	if err := r.BillingModel.Validate(); err != nil {
-		return err
-	}
-	if err := r.BillingCadence.Validate(); err != nil {
 		return err
 	}
 	if err := r.BillingPeriod.Validate(); err != nil {
@@ -355,27 +351,31 @@ func (r *CreatePriceRequest) Validate() error {
 		}
 	}
 
-	// 9. Validate billing cadence specific requirements
-	switch r.BillingCadence {
-	case types.BILLING_CADENCE_RECURRING:
-		if r.BillingPeriod == "" {
-			return ierr.NewError("billing_period is required when billing_cadence is RECURRING").
-				WithHint("Please select a billing period to set up recurring pricing").
+	// 9. Validate billing period requirements
+	// billing_cadence is always RECURRING; billing_period drives one-time vs recurring
+	if r.BillingPeriod == "" {
+		return ierr.NewError("billing_period is required").
+			WithHint("Please select a billing period (e.g. MONTHLY, ANNUAL, ONETIME)").
+			Mark(ierr.ErrValidation)
+	}
+	if r.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+		if r.InvoiceCadence != "" && r.InvoiceCadence != types.InvoiceCadenceAdvance {
+			return ierr.NewError("invoice_cadence must be ADVANCE for ONETIME prices").
+				WithHint("One-time charges are always billed in advance").
 				Mark(ierr.ErrValidation)
 		}
 	}
 
 	// 11. Validate trial period
-	if r.TrialPeriod < 0 {
-		return ierr.NewError("trial period must be non-negative").
-			WithHint("Please provide a non-negative trial period").
+	if r.TrialPeriodDays < 0 {
+		return ierr.NewError("trial_period_days must be non-negative").
+			WithHint("Please provide a non-negative trial_period_days").
 			Mark(ierr.ErrValidation)
 	}
-	if r.TrialPeriod > 0 &&
-		r.BillingCadence != types.BILLING_CADENCE_RECURRING &&
-		r.Type != types.PRICE_TYPE_FIXED {
-		return ierr.NewError("trial period can only be set for recurring fixed prices").
-			WithHint("Trial period can only be set for recurring fixed prices").
+	if r.TrialPeriodDays > 0 &&
+		(r.BillingPeriod == types.BILLING_PERIOD_ONETIME || r.Type != types.PRICE_TYPE_FIXED) {
+		return ierr.NewError("trial_period_days can only be set for recurring fixed prices").
+			WithHint("trial_period_days can only be set for recurring fixed prices").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -437,9 +437,9 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,
 		BillingModel:       r.BillingModel,
-		BillingCadence:     r.BillingCadence,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
 		InvoiceCadence:     r.InvoiceCadence,
-		TrialPeriod:        r.TrialPeriod,
+		TrialPeriodDays:    r.TrialPeriodDays,
 		MeterID:            lo.Ternary(r.Type == types.PRICE_TYPE_USAGE, r.MeterID, ""),
 		LookupKey:          r.LookupKey,
 		Description:        r.Description,
@@ -573,9 +573,8 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.Type = existingPrice.Type
 	createReq.BillingPeriod = existingPrice.BillingPeriod
 	createReq.BillingPeriodCount = existingPrice.BillingPeriodCount
-	createReq.BillingCadence = existingPrice.BillingCadence
 	createReq.InvoiceCadence = existingPrice.InvoiceCadence
-	createReq.TrialPeriod = existingPrice.TrialPeriod
+	createReq.TrialPeriodDays = existingPrice.TrialPeriodDays
 	createReq.MeterID = lo.Ternary(existingPrice.Type == types.PRICE_TYPE_USAGE, existingPrice.MeterID, "")
 	createReq.ParentPriceID = existingPrice.GetRootPriceID()
 	createReq.DisplayName = existingPrice.DisplayName

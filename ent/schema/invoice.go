@@ -49,6 +49,16 @@ func (Invoice) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+
+		field.String("subscription_customer_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable().
+			Comment("Subscription owner customer ID; set internally for subscription invoices"),
+
 		field.String("invoice_type").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -145,6 +155,9 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 		field.Time("finalized_at").
+			Optional().
+			Nillable(),
+		field.Time("last_computed_at").
 			Optional().
 			Nillable(),
 		field.String("billing_period").

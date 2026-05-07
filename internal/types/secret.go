@@ -35,6 +35,7 @@ const (
 	SecretProviderRazorpay   SecretProvider = "razorpay"
 	SecretProviderChargebee  SecretProvider = "chargebee"
 	SecretProviderQuickBooks SecretProvider = "quickbooks"
+	SecretProviderZohoBooks  SecretProvider = "zoho_books"
 	SecretProviderNomod      SecretProvider = "nomod"
 	SecretProviderMoyasar    SecretProvider = "moyasar"
 	SecretProviderPaddle     SecretProvider = "paddle"
@@ -49,6 +50,7 @@ func (p SecretProvider) Validate() error {
 		SecretProviderRazorpay,
 		SecretProviderChargebee,
 		SecretProviderQuickBooks,
+		SecretProviderZohoBooks,
 		SecretProviderNomod,
 		SecretProviderMoyasar,
 		SecretProviderPaddle,

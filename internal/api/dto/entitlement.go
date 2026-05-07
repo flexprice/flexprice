@@ -127,7 +127,7 @@ type EntitlementResponse struct {
 }
 
 // ListEntitlementsResponse represents a paginated list of entitlements
-type ListEntitlementsResponse = types.ListResponse[*EntitlementResponse]
+type ListEntitlementsResponse = types.ListResponse[*EntitlementResponse] // @name ListEntitlementsResponse
 
 // CreateBulkEntitlementRequest represents the request to create multiple entitlements in bulk
 type CreateBulkEntitlementRequest struct {

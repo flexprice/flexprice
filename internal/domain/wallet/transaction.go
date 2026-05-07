@@ -176,12 +176,14 @@ type CreditTopupsExportData struct {
 	CreatedAt           time.Time
 }
 
-// CreditUsageExportData represents the joined data for credit usage export
-type CreditUsageExportData struct {
-	CustomerID         string
-	CustomerName       string
-	CustomerExternalID string
-	CurrentBalance     decimal.Decimal
-	RealtimeBalance    decimal.Decimal
-	NumberOfWallets    int
-}
+// CreditUsageCSVHeaders represents the column header strings for the credit usage CSV export
+type CreditUsageCSVHeaders string
+
+const (
+	CreditUsageCSVHeadersCustomerName       CreditUsageCSVHeaders = "name"
+	CreditUsageCSVHeadersCustomerExternalID CreditUsageCSVHeaders = "customer_external_id"
+	CreditUsageCSVHeadersCustomerID         CreditUsageCSVHeaders = "customer_id"
+	CreditUsageCSVHeadersCurrentBalance     CreditUsageCSVHeaders = "current_balance"
+	CreditUsageCSVHeadersRealtimeBalance    CreditUsageCSVHeaders = "real_time_balance"
+	CreditUsageCSVHeadersNumberOfWallets    CreditUsageCSVHeaders = "number_of_wallets"
+)

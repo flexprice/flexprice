@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 FlexPrice Python SDK example – async client, ingest events.
-Set FLEXPRICE_API_KEY (and optionally FLEXPRICE_API_HOST) in .env or environment.
+
+Default base URL: https://us.api.flexprice.io/v1
+Override with FLEXPRICE_API_HOST (full URL). Set FLEXPRICE_API_KEY in .env or environment.
 """
 
 import asyncio
@@ -19,12 +21,12 @@ logger = logging.getLogger(__name__)
 
 async def main():
     api_key = os.getenv("FLEXPRICE_API_KEY")
-    api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io/v1")
+    server_url = os.getenv(
+        "FLEXPRICE_API_HOST", "https://us.api.flexprice.io/v1"
+    )
 
     if not api_key:
         raise SystemExit("Set FLEXPRICE_API_KEY in .env or environment")
-
-    server_url = api_host if api_host.startswith(("http://", "https://")) else f"https://{api_host}"
 
     logger.info("Using async FlexPrice client")
 

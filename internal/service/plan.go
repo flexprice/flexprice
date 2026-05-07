@@ -790,7 +790,8 @@ func createPlanLineItem(
 }
 
 // ClonePlan clones a plan and its associated active prices, published entitlements,
-// and published credit grants into a new plan with a distinct name and lookup_key.
+// and published credit grants into a new plan within the same environment.
+// Cross-env plan cloning is handled exclusively by the environment clone Temporal workflow.
 func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePlanRequest) (*dto.PlanResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("plan ID is required").
@@ -980,3 +981,4 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		CreditGrants: grantResponses,
 	}, nil
 }
+

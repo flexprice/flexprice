@@ -199,7 +199,7 @@ func (h *PlanHandler) DeletePlan(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
-// @Success 200 {object} dto.PlanResponse
+// @Success 200 {object} dto.ListEntitlementsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -358,8 +358,10 @@ func (h *PlanHandler) QueryPlans(c *gin.Context) {
 }
 
 // @Summary Clone a plan
+// @ID clonePlan
 // @Description Clone an existing plan, copying its active prices, published entitlements, and published credit grants
 // @Tags Plans
+// @x-scope "write"
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

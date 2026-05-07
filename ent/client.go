@@ -52,6 +52,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/flexprice/flexprice/ent/systemevent"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/taxapplied"
 	"github.com/flexprice/flexprice/ent/taxassociation"
@@ -144,6 +145,8 @@ type Client struct {
 	SubscriptionPhase *SubscriptionPhaseClient
 	// SubscriptionSchedule is the client for interacting with the SubscriptionSchedule builders.
 	SubscriptionSchedule *SubscriptionScheduleClient
+	// SystemEvent is the client for interacting with the SystemEvent builders.
+	SystemEvent *SystemEventClient
 	// Task is the client for interacting with the Task builders.
 	Task *TaskClient
 	// TaxApplied is the client for interacting with the TaxApplied builders.
@@ -210,6 +213,7 @@ func (c *Client) init() {
 	c.SubscriptionPause = NewSubscriptionPauseClient(c.config)
 	c.SubscriptionPhase = NewSubscriptionPhaseClient(c.config)
 	c.SubscriptionSchedule = NewSubscriptionScheduleClient(c.config)
+	c.SystemEvent = NewSystemEventClient(c.config)
 	c.Task = NewTaskClient(c.config)
 	c.TaxApplied = NewTaxAppliedClient(c.config)
 	c.TaxAssociation = NewTaxAssociationClient(c.config)
@@ -348,6 +352,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		SubscriptionPause:        NewSubscriptionPauseClient(cfg),
 		SubscriptionPhase:        NewSubscriptionPhaseClient(cfg),
 		SubscriptionSchedule:     NewSubscriptionScheduleClient(cfg),
+		SystemEvent:              NewSystemEventClient(cfg),
 		Task:                     NewTaskClient(cfg),
 		TaxApplied:               NewTaxAppliedClient(cfg),
 		TaxAssociation:           NewTaxAssociationClient(cfg),
@@ -413,6 +418,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		SubscriptionPause:        NewSubscriptionPauseClient(cfg),
 		SubscriptionPhase:        NewSubscriptionPhaseClient(cfg),
 		SubscriptionSchedule:     NewSubscriptionScheduleClient(cfg),
+		SystemEvent:              NewSystemEventClient(cfg),
 		Task:                     NewTaskClient(cfg),
 		TaxApplied:               NewTaxAppliedClient(cfg),
 		TaxAssociation:           NewTaxAssociationClient(cfg),
@@ -458,9 +464,9 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
 		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
 		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule, c.Task,
-		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction, c.WorkflowExecution,
+		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
+		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
+		c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -477,9 +483,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
 		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
 		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule, c.Task,
-		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
-		c.WalletTransaction, c.WorkflowExecution,
+		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
+		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
+		c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -562,6 +568,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SubscriptionPhase.mutate(ctx, m)
 	case *SubscriptionScheduleMutation:
 		return c.SubscriptionSchedule.mutate(ctx, m)
+	case *SystemEventMutation:
+		return c.SystemEvent.mutate(ctx, m)
 	case *TaskMutation:
 		return c.Task.mutate(ctx, m)
 	case *TaxAppliedMutation:
@@ -6130,6 +6138,139 @@ func (c *SubscriptionScheduleClient) mutate(ctx context.Context, m *Subscription
 	}
 }
 
+// SystemEventClient is a client for the SystemEvent schema.
+type SystemEventClient struct {
+	config
+}
+
+// NewSystemEventClient returns a client for the SystemEvent from the given config.
+func NewSystemEventClient(c config) *SystemEventClient {
+	return &SystemEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `systemevent.Hooks(f(g(h())))`.
+func (c *SystemEventClient) Use(hooks ...Hook) {
+	c.hooks.SystemEvent = append(c.hooks.SystemEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `systemevent.Intercept(f(g(h())))`.
+func (c *SystemEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SystemEvent = append(c.inters.SystemEvent, interceptors...)
+}
+
+// Create returns a builder for creating a SystemEvent entity.
+func (c *SystemEventClient) Create() *SystemEventCreate {
+	mutation := newSystemEventMutation(c.config, OpCreate)
+	return &SystemEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SystemEvent entities.
+func (c *SystemEventClient) CreateBulk(builders ...*SystemEventCreate) *SystemEventCreateBulk {
+	return &SystemEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SystemEventClient) MapCreateBulk(slice any, setFunc func(*SystemEventCreate, int)) *SystemEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SystemEventCreateBulk{err: fmt.Errorf("calling to SystemEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SystemEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SystemEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SystemEvent.
+func (c *SystemEventClient) Update() *SystemEventUpdate {
+	mutation := newSystemEventMutation(c.config, OpUpdate)
+	return &SystemEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SystemEventClient) UpdateOne(se *SystemEvent) *SystemEventUpdateOne {
+	mutation := newSystemEventMutation(c.config, OpUpdateOne, withSystemEvent(se))
+	return &SystemEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SystemEventClient) UpdateOneID(id string) *SystemEventUpdateOne {
+	mutation := newSystemEventMutation(c.config, OpUpdateOne, withSystemEventID(id))
+	return &SystemEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SystemEvent.
+func (c *SystemEventClient) Delete() *SystemEventDelete {
+	mutation := newSystemEventMutation(c.config, OpDelete)
+	return &SystemEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SystemEventClient) DeleteOne(se *SystemEvent) *SystemEventDeleteOne {
+	return c.DeleteOneID(se.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SystemEventClient) DeleteOneID(id string) *SystemEventDeleteOne {
+	builder := c.Delete().Where(systemevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SystemEventDeleteOne{builder}
+}
+
+// Query returns a query builder for SystemEvent.
+func (c *SystemEventClient) Query() *SystemEventQuery {
+	return &SystemEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSystemEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SystemEvent entity by its id.
+func (c *SystemEventClient) Get(ctx context.Context, id string) (*SystemEvent, error) {
+	return c.Query().Where(systemevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SystemEventClient) GetX(ctx context.Context, id string) *SystemEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SystemEventClient) Hooks() []Hook {
+	return c.hooks.SystemEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *SystemEventClient) Interceptors() []Interceptor {
+	return c.inters.SystemEvent
+}
+
+func (c *SystemEventClient) mutate(ctx context.Context, m *SystemEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SystemEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SystemEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SystemEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SystemEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SystemEvent mutation op: %q", m.Op())
+	}
+}
+
 // TaskClient is a client for the Task schema.
 type TaskClient struct {
 	config
@@ -7336,8 +7477,8 @@ type (
 		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
 		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
 		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, Task, TaxApplied,
-		TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
+		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
+		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
@@ -7347,8 +7488,8 @@ type (
 		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
 		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
 		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, Task, TaxApplied,
-		TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
+		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
+		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
 		WorkflowExecution []ent.Interceptor
 	}
 )

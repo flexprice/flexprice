@@ -986,49 +986,56 @@ func (r *EventRepository) FindUnprocessedEventsFromFeatureUsage(ctx context.Cont
 	return eventsList, nil
 }
 
-// GetDistinctEventNames retrieves distinct event names for a given external customer
-// within the specified time range. This is used for performance optimization
-// to filter meter requests to only those that have actual events.
-func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCustomerID string, startTime, endTime time.Time) ([]string, error) {
-	// Start a span for this repository operation
+// GetDistinctEventNames retrieves distinct event names for the given external customer IDs
+func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCustomerIDs []string, startTime, endTime time.Time) ([]string, error) {
+	if len(externalCustomerIDs) == 0 {
+		return nil, nil
+	}
+
 	span := StartRepositorySpan(ctx, "event", "get_distinct_event_names", map[string]interface{}{
-		"external_customer_id": externalCustomerID,
-		"start_time":           startTime,
-		"end_time":             endTime,
+		"external_customer_id_count": len(externalCustomerIDs),
+		"start_time":                 startTime,
+		"end_time":                   endTime,
 	})
 	defer FinishSpan(span)
-
-	query := `
-		SELECT DISTINCT event_name 
-		FROM events
-		WHERE tenant_id = ?
-		AND environment_id = ?
-		AND external_customer_id = ?
-	`
 
 	args := []interface{}{
 		types.GetTenantID(ctx),
 		types.GetEnvironmentID(ctx),
-		externalCustomerID,
 	}
 
-	// Add time filters if provided
+	var customerFilter string
+	if len(externalCustomerIDs) == 1 {
+		customerFilter = "AND external_customer_id = ?"
+		args = append(args, externalCustomerIDs[0])
+	} else {
+		placeholders := make([]string, len(externalCustomerIDs))
+		for i, id := range externalCustomerIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		customerFilter = "AND external_customer_id IN (" + strings.Join(placeholders, ", ") + ")"
+	}
+
+	query := `
+		SELECT DISTINCT event_name
+		FROM events
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		` + customerFilter
+
 	if !startTime.IsZero() {
 		query += " AND timestamp >= ?"
 		args = append(args, startTime)
 	}
-
 	if !endTime.IsZero() {
 		query += " AND timestamp <= ?"
 		args = append(args, endTime)
 	}
-
-	// Order by event_name for consistent results
 	query += " ORDER BY event_name"
 
 	r.logger.Debugw("executing get distinct event names query",
-		"query", query,
-		"external_customer_id", externalCustomerID,
+		"external_customer_id_count", len(externalCustomerIDs),
 		"start_time", startTime,
 		"end_time", endTime)
 
@@ -1038,7 +1045,7 @@ func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCus
 		return nil, ierr.WithError(err).
 			WithHint("Failed to query distinct event names").
 			WithReportableDetails(map[string]interface{}{
-				"external_customer_id": externalCustomerID,
+				"external_customer_id_count": len(externalCustomerIDs),
 			}).
 			Mark(ierr.ErrDatabase)
 	}
@@ -1064,9 +1071,8 @@ func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCus
 	}
 
 	r.logger.Debugw("retrieved distinct event names",
-		"external_customer_id", externalCustomerID,
-		"event_count", len(eventNames),
-		"event_names", eventNames)
+		"external_customer_id_count", len(externalCustomerIDs),
+		"event_count", len(eventNames))
 
 	SetSpanSuccess(span)
 	return eventNames, nil
@@ -1095,7 +1101,7 @@ func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, end
 			SELECT 
 				%s AS window_time,
 				COUNT(DISTINCT(id)) as event_count
-			FROM events FINAL
+			FROM events
 			WHERE tenant_id = ?
 			AND environment_id = ?
 			AND timestamp >= ?
@@ -1152,7 +1158,7 @@ func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, end
 		// No window size, just get total count
 		query := `
 			SELECT COUNT(DISTINCT(id)) as total_count
-			FROM events FINAL
+			FROM events
 			WHERE tenant_id = ?
 			AND environment_id = ?
 		`
@@ -1210,7 +1216,7 @@ func (r *EventRepository) GetEventByID(ctx context.Context, eventID string) (*ev
 			properties,
 			environment_id,
 			ingested_at
-		FROM events FINAL
+		FROM events
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND id = ?
@@ -1269,4 +1275,62 @@ func (r *EventRepository) GetEventByID(ctx context.Context, eventID string) (*ev
 
 	SetSpanSuccess(span)
 	return &event, nil
+}
+
+// GetDistinctEventNames retrieves distinct event names for the given external customer IDs
+func (r *EventRepository) GetDistinctExternalCustomerIDs(ctx context.Context, startTime, endTime time.Time) ([]string, error) {
+	span := StartRepositorySpan(ctx, "event", "get_distinct_external_customer_ids", map[string]interface{}{
+		"start_time": startTime,
+		"end_time":   endTime,
+	})
+	defer FinishSpan(span)
+
+	args := []interface{}{
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+	}
+
+	query := `
+		SELECT DISTINCT external_customer_id
+		FROM events
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		`
+
+	if !startTime.IsZero() {
+		query += " AND timestamp >= ?"
+		args = append(args, startTime)
+	}
+	if !endTime.IsZero() {
+		query += " AND timestamp <= ?"
+		args = append(args, endTime)
+	}
+
+	r.logger.Debugw("executing get distinct external customer ids query",
+		"start_time", startTime,
+		"end_time", endTime)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query distinct external customer ids").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var externalCustomerIDs []string
+	for rows.Next() {
+		var externalCustomerID string
+		if err := rows.Scan(&externalCustomerID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan external customer id").
+				Mark(ierr.ErrDatabase)
+		}
+		externalCustomerIDs = append(externalCustomerIDs, externalCustomerID)
+	}
+
+	SetSpanSuccess(span)
+	return externalCustomerIDs, nil
 }

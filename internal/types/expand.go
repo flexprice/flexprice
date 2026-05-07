@@ -35,10 +35,10 @@ const (
 	ExpandGroups                    ExpandableField = "groups"
 	ExpandWallet                    ExpandableField = "wallet"
 	ExpandFeature                   ExpandableField = "feature"
-	ExpandParentCustomer            ExpandableField = "parent_customer"
 	ExpandCreatedByUser             ExpandableField = "created_by_user"
 	ExpandCreditsAvailableBreakdown ExpandableField = "credits_available_breakdown"
 	ExpandSubscriptionLineItems     ExpandableField = "subscription_line_items"
+	ExpandIntegrations              ExpandableField = "integrations"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -142,9 +142,9 @@ var (
 
 	// CustomerExpandConfig defines what can be expanded on a customer
 	CustomerExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandParentCustomer},
+		AllowedFields: []ExpandableField{ExpandIntegrations},
 		NestedExpands: map[ExpandableField][]ExpandableField{
-			ExpandParentCustomer: {},
+			ExpandIntegrations: {},
 		},
 	}
 
@@ -171,6 +171,16 @@ var (
 		AllowedFields: []ExpandableField{ExpandAddons, ExpandSubscription},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandAddons: {},
+		},
+	}
+
+	// SubscriptionLineItemListExpandConfig defines expands for listing subscription line items (collection APIs).
+	// Supports top-level prices (and nested price fields) and subscription_line_items.prices for parity with subscription expand strings.
+	SubscriptionLineItemListExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandPrices, ExpandSubscriptionLineItems},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandPrices:                {ExpandMeters, ExpandPriceUnit, ExpandPlan, ExpandAddons, ExpandGroups},
+			ExpandSubscriptionLineItems: {ExpandPrices},
 		},
 	}
 )
