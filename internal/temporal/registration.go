@@ -245,7 +245,6 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	creditGrantService := service.NewCreditGrantService(params)
 	tenantService := service.NewTenantService(params)
 	envAccessService := service.NewEnvAccessService(params.Config)
-	settingsService := service.NewSettingsService(params)
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
 	cronBundle := &cronActivityBundle{
 		creditGrant:          cronActivities.NewCreditGrantActivities(creditGrantService),
