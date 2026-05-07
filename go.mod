@@ -1,11 +1,11 @@
 module github.com/flexprice/flexprice
 
-go 1.25.0
+go 1.24.0
 
 require (
 	entgo.io/ent v0.14.1
 	github.com/ClickHouse/clickhouse-go/v2 v2.35.0
-	github.com/PaddleHQ/paddle-go-sdk/v5 v5.2.0
+	github.com/PaddleHQ/paddle-go-sdk/v4 v4.2.0
 	github.com/Shopify/sarama v1.38.0
 	github.com/ThreeDotsLabs/watermill v1.4.4
 	github.com/ThreeDotsLabs/watermill-kafka/v2 v2.2.2
@@ -115,7 +115,7 @@ require (
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.6 // indirect
-	github.com/ggicci/httpin v0.20.3 // indirect
+	github.com/ggicci/httpin v0.20.2 // indirect
 	github.com/ggicci/owl v0.8.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect

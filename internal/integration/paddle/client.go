@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v5"
+	"github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -33,11 +33,6 @@ type PaddleClient interface {
 	CreateTransaction(ctx context.Context, req *paddle.CreateTransactionRequest) (*paddle.Transaction, error)
 	PreviewTransaction(ctx context.Context, req *paddle.PreviewTransactionCreateRequest) (*paddle.TransactionPreview, error)
 	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string, webhookSecret string) error
-	// EnsureTrialCapturePrice returns a Paddle catalog price ID for $0 trial card-capture.
-	// It auto-creates a subscription price (RequiresPaymentMethod=true) on first call and caches
-	// the result in connection metadata. Referencing this price ID in a one-time transaction
-	// causes Paddle's checkout to show the "Save card" UI instead of "Claim free product".
-	EnsureTrialCapturePrice(ctx context.Context) (string, error)
 }
 
 // PaddleConfig holds decrypted Paddle connection configuration
@@ -336,73 +331,6 @@ func (c *Client) PreviewTransaction(ctx context.Context, req *paddle.PreviewTran
 
 	c.logger.Infow("successfully previewed transaction in Paddle")
 	return preview, nil
-}
-
-// EnsureTrialCapturePrice auto-creates a Paddle catalog subscription price with
-// RequiresPaymentMethod=true on first call, caches the price ID in connection metadata,
-// and returns it on subsequent calls without hitting the Paddle API.
-// Referencing this price ID in a one-time $0 transaction causes Paddle's checkout to
-// show the "Save card for future payments" UI instead of the card-free "Claim free product" flow.
-func (c *Client) EnsureTrialCapturePrice(ctx context.Context) (string, error) {
-	conn, err := c.connectionRepo.GetByProvider(ctx, types.SecretProviderPaddle)
-	if err != nil {
-		return "", ierr.WithError(err).WithHint("Failed to get Paddle connection").Mark(ierr.ErrDatabase)
-	}
-
-	if conn.Metadata != nil {
-		if priceID, ok := conn.Metadata["trial_price_id"].(string); ok && priceID != "" {
-			return priceID, nil
-		}
-	}
-
-	client, _, err := c.GetSDKClient(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	product, err := client.CreateProduct(ctx, &paddle.CreateProductRequest{
-		Name:        "FlexPrice Trial",
-		TaxCategory: paddle.TaxCategoryStandard,
-		Description: paddle.PtrTo("Placeholder product for $0 trial card-capture checkout."),
-	})
-	if err != nil {
-		return "", ierr.NewError("failed to create trial product in Paddle: "+err.Error()).
-			Mark(ierr.ErrInternal)
-	}
-
-	price, err := client.CreatePrice(ctx, &paddle.CreatePriceRequest{
-		ProductID:   product.ID,
-		Name:        paddle.PtrTo("Trial (Card Capture)"),
-		Description: "$0 subscription price; requires card at checkout for future billing.",
-		UnitPrice:   paddle.Money{Amount: "0", CurrencyCode: paddle.CurrencyCodeUSD},
-		BillingCycle: &paddle.Duration{
-			Interval:  paddle.IntervalMonth,
-			Frequency: 1,
-		},
-		TrialPeriod: &paddle.TrialPeriod{
-			Interval:              paddle.IntervalMonth,
-			Frequency:             1,
-			RequiresPaymentMethod: true,
-		},
-	})
-	if err != nil {
-		return "", ierr.NewError("failed to create trial price in Paddle: "+err.Error()).
-			Mark(ierr.ErrInternal)
-	}
-
-	if conn.Metadata == nil {
-		conn.Metadata = make(map[string]interface{})
-	}
-	conn.Metadata["trial_price_id"] = price.ID
-	if updateErr := c.connectionRepo.Update(ctx, conn); updateErr != nil {
-		c.logger.Warnw("failed to persist trial_price_id in connection metadata — next call will re-create",
-			"error", updateErr, "price_id", price.ID)
-	}
-
-	c.logger.Infow("auto-created Paddle trial capture price",
-		"product_id", product.ID, "price_id", price.ID)
-
-	return price.ID, nil
 }
 
 // toCountryCode converts a string to Paddle CountryCode (uppercase ISO 3166-1 alpha-2)

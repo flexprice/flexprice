@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v5"
-	"github.com/PaddleHQ/paddle-go-sdk/v5/pkg/paddlenotification"
+	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
+	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
