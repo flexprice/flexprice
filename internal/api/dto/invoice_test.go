@@ -39,4 +39,6 @@ func TestCreateInvoiceRequest_ZeroOutAmounts_EmptyLineItems(t *testing.T) {
 	}
 	req.ZeroOutAmounts() // must not panic on nil/empty LineItems
 	assert.True(t, req.Subtotal.IsZero())
+	assert.True(t, req.Total.IsZero())
+	assert.True(t, req.AmountDue.IsZero())
 }

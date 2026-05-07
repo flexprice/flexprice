@@ -453,7 +453,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			//   CurrentPeriodEnd   = TrialEnd
 			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 
-			_, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+			invoice, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: sub.ID,
 				PeriodStart:    sub.CurrentPeriodStart, // == TrialStart
 				PeriodEnd:      sub.CurrentPeriodEnd,   // == TrialEnd
