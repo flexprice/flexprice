@@ -160,21 +160,73 @@ func (s InvoiceStatus) Validate() error {
 	return nil
 }
 
-// InvoiceBillingReason indicates why an invoice was generated
+// InvoiceBillingReason indicates why an invoice was generated. It drives diverging
+// behavior throughout the compute → finalize → payment pipeline — see each constant
+// for which flows it affects.
 type InvoiceBillingReason string
 
 const (
-	// InvoiceBillingReasonSubscriptionCreate indicates invoice is for new subscription activation
+	// InvoiceBillingReasonSubscriptionCreate is the initial invoice at subscription
+	// activation for non-trial subscriptions.
+	// Flow: CreateSubscription → CreateSubscriptionInvoice (InvoiceFlowSubscriptionCreation)
+	// Compute: advance charges for current_period_start → current_period_end (ReferencePointPeriodStart)
+	// Zero-dollar: marked SKIPPED — no charge, no sync, no invoice number.
+	// Side-effect: activates subscription when paid or if no payment is needed.
 	InvoiceBillingReasonSubscriptionCreate InvoiceBillingReason = "SUBSCRIPTION_CREATE"
-	// InvoiceBillingReasonSubscriptionCycle indicates invoice is for regular subscription billing cycle
+
+	// InvoiceBillingReasonSubscriptionCycle is generated at the end of each billing period.
+	// Flow: ProcessBillingDue → renewal workflow
+	// Compute: arrear usage charges for closing period + advance charges for next period (ReferencePointPeriodEnd)
+	// Zero-dollar: marked SKIPPED.
 	InvoiceBillingReasonSubscriptionCycle InvoiceBillingReason = "SUBSCRIPTION_CYCLE"
-	// InvoiceBillingReasonSubscriptionUpdate indicates invoice is for subscription changes (upgrades, downgrades)
+
+	// InvoiceBillingReasonSubscriptionUpdate is generated when a subscription changes
+	// mid-period (plan upgrade/downgrade, quantity change) or when
+	// OpeningInvoiceAdjustmentAmount is provided at creation.
+	// Flow: ChangeSubscription, or CreateSubscription with adjustment amount
+	// Compute: proration credits/charges (ReferencePointPeriodStart)
+	// Zero-dollar: marked SKIPPED.
+	// Side-effect: activates INCOMPLETE subscription when paid.
 	InvoiceBillingReasonSubscriptionUpdate InvoiceBillingReason = "SUBSCRIPTION_UPDATE"
-	// InvoiceBillingReasonSubscriptionTrialEnd indicates the converting invoice when a trialing subscription ends
+
+	// InvoiceBillingReasonSubscriptionTrialEnd is the first real invoice when a trialing
+	// subscription converts to paid at trial end.
+	// Flow: ProcessTrialEndDue → processSubscriptionTrialEnd (InvoiceFlowRenewal)
+	// Compute: advance charges from trial_end → trial_end + billing_period (ReferencePointPeriodStart).
+	//          Billing anchor is reset to trial_end so the first paid period is full-length.
+	// Zero-dollar: marked SKIPPED; subscription is activated immediately without payment.
+	// Side-effect: activates subscription when paid.
 	InvoiceBillingReasonSubscriptionTrialEnd InvoiceBillingReason = "SUBSCRIPTION_TRIAL_END"
-	// InvoiceBillingReasonProration indicates invoice is for proration credits/charges (cancellations, plan changes)
+
+	// InvoiceBillingReasonSubscriptionTrialStart is a $0 preview invoice created the moment
+	// a trialing subscription is activated. It mirrors the first paid invoice's line items
+	// (same advance charges) but all amounts are forced to zero.
+	//
+	// Purpose:
+	//   - Gives customers visibility into what they will be charged when the trial ends.
+	//   - For send_invoice: stays PENDING so it syncs to downstream integrations (Stripe,
+	//     Paddle) and their checkout / card-capture flow is triggered. Paddle has no other
+	//     mechanism to save a payment method outside of a $0 checkout transaction.
+	//   - For charge_automatically: marked SUCCEEDED immediately — payment method is on
+	//     file and there is nothing to charge.
+	//
+	// Flow: CreateSubscription (trialing path) → CreateSubscriptionInvoice (InvoiceFlowSubscriptionCreation)
+	// Compute: advance charges for current_period_start → current_period_end = trial_start → trial_end
+	//          (ReferencePointPeriodStart); all line item amounts zeroed before writing.
+	// Zero-dollar: NOT skipped — intentionally $0, must be finalized and visible in listings.
+	// Side-effect: none — subscription stays TRIALING regardless of payment status.
+	InvoiceBillingReasonSubscriptionTrialStart InvoiceBillingReason = "SUBSCRIPTION_TRIAL_START"
+
+	// InvoiceBillingReasonProration is generated for proration credits or charges when a
+	// subscription changes mid-period (cancellation, plan change, quantity adjustment).
+	// Flow: ChangeSubscription proration path
+	// Zero-dollar: marked SKIPPED.
 	InvoiceBillingReasonProration InvoiceBillingReason = "PRORATION"
-	// InvoiceBillingReasonManual indicates invoice was created manually by an administrator
+
+	// InvoiceBillingReasonManual is for invoices created directly by an administrator
+	// outside of any automated subscription lifecycle.
+	// Flow: manual invoice creation API
+	// Zero-dollar: marked SKIPPED.
 	InvoiceBillingReasonManual InvoiceBillingReason = "MANUAL"
 )
 
@@ -188,6 +240,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionCycle,
 		InvoiceBillingReasonSubscriptionUpdate,
 		InvoiceBillingReasonSubscriptionTrialEnd,
+		InvoiceBillingReasonSubscriptionTrialStart,
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
 	}

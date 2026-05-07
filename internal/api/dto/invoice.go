@@ -152,6 +152,21 @@ func (r *CreateInvoiceRequest) ToComputeRequest() InvoiceComputeRequest {
 	}
 }
 
+// ZeroOutAmounts forces all monetary amounts on this invoice request to zero while
+// preserving line item structure (descriptions, quantities, price metadata).
+//
+// Used for trial start invoices: the customer sees exactly which charges apply when
+// the trial ends, but amounts are always $0 during the trial window. Quantity and
+// pricing metadata are kept so the pricing skeleton remains visible (e.g. "1 seat × $99/mo").
+func (r *CreateInvoiceRequest) ZeroOutAmounts() {
+	r.Subtotal = decimal.Zero
+	r.Total = decimal.Zero
+	r.AmountDue = decimal.Zero
+	for i := range r.LineItems {
+		r.LineItems[i].Amount = decimal.Zero
+	}
+}
+
 // ===================== Draft Invoice Creation DTO =====================
 
 // CreateDraftInvoiceRequest contains only the fields needed to create an empty zero-dollar
