@@ -1103,7 +1103,6 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithInheritanceChildren
 	s.Equal(resp.ID, *inherited[0].ParentSubscriptionID)
 }
 
-
 func (s *SubscriptionServiceSuite) TestCancelSubscription_RejectedForInheritedSubscription() {
 	ctx := s.GetContext()
 	parent, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, s.testData.subscription.ID)
@@ -1121,24 +1120,24 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_RejectedForInheritedSu
 	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
 
 	inherited := &subscription.Subscription{
-		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
-		CustomerID:             child.ID,
-		PlanID:                 parent.PlanID,
-		Currency:               parent.Currency,
-		SubscriptionStatus:     types.SubscriptionStatusActive,
-		BillingAnchor:          parent.BillingAnchor,
-		BillingCycle:           parent.BillingCycle,
-		StartDate:              parent.StartDate,
-		EndDate:                parent.EndDate,
-		CurrentPeriodStart:     parent.CurrentPeriodStart,
-		CurrentPeriodEnd:       parent.CurrentPeriodEnd,
-		BillingPeriod:          parent.BillingPeriod,
-		BillingPeriodCount:     parent.BillingPeriodCount,
-		Version:                1,
-		EnvironmentID:          parent.EnvironmentID,
-		ParentSubscriptionID:   &parent.ID,
-		SubscriptionType:       types.SubscriptionTypeInherited,
-		BaseModel:              types.GetDefaultBaseModel(ctx),
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               parent.PlanID,
+		Currency:             parent.Currency,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		BillingAnchor:        parent.BillingAnchor,
+		BillingCycle:         parent.BillingCycle,
+		StartDate:            parent.StartDate,
+		EndDate:              parent.EndDate,
+		CurrentPeriodStart:   parent.CurrentPeriodStart,
+		CurrentPeriodEnd:     parent.CurrentPeriodEnd,
+		BillingPeriod:        parent.BillingPeriod,
+		BillingPeriodCount:   parent.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parent.EnvironmentID,
+		ParentSubscriptionID: &parent.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
 	}
 	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
 
