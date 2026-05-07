@@ -403,8 +403,12 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		switch types.InvoiceBillingReason(inv.BillingReason) {
 		case types.InvoiceBillingReasonSubscriptionCreate,
 			types.InvoiceBillingReasonSubscriptionTrialEnd,
+			types.InvoiceBillingReasonSubscriptionTrialStart,
 			types.InvoiceBillingReasonSubscriptionUpdate:
+
+			// for create, trial end, trial start, and update, we use the period start as the reference point
 			refPoint = types.ReferencePointPeriodStart
+
 		case types.InvoiceBillingReasonProration:
 			refPoint = types.ReferencePointCancel
 		}
@@ -425,6 +429,11 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		subInvReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, params)
 		if err != nil {
 			return false, err
+		}
+		// Trial start invoices preview the first period's charges at $0. Amounts are
+		// computed normally so line item structure is accurate, then forced to zero.
+		if types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart {
+			subInvReq.ZeroOutAmounts()
 		}
 		computeReq := subInvReq.ToComputeRequest()
 		applyReq = &computeReq
@@ -480,7 +489,8 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			inv.LineItems = lineItemDomains
 		}
 
-		if inv.InvoiceType == types.InvoiceTypeSubscription && inv.Subtotal.IsZero() {
+		isTrialStart := types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart
+		if inv.InvoiceType == types.InvoiceTypeSubscription && inv.Subtotal.IsZero() && !isTrialStart {
 			now := time.Now().UTC()
 			inv.LastComputedAt = &now
 			inv.InvoiceStatus = types.InvoiceStatusSkipped
