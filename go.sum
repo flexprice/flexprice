@@ -14,8 +14,8 @@ github.com/DATA-DOG/go-sqlmock v1.5.0 h1:Shsta01QNfFxHCfpW6YH2STWB0MudeXXEWMr20O
 github.com/DATA-DOG/go-sqlmock v1.5.0/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
-github.com/PaddleHQ/paddle-go-sdk/v4 v4.2.0 h1:4zAMNR6cusIY0oiZL7MlSyNs/qR3zU8NjersZDvJ/LE=
-github.com/PaddleHQ/paddle-go-sdk/v4 v4.2.0/go.mod h1:t86rk4WEWHwlbphwI4dxCmVZOtYkou101Vq0K5P1o2Y=
+github.com/PaddleHQ/paddle-go-sdk/v5 v5.2.0 h1:HJabVGWEsDyogj1Ib/ZGcMcP9Vc/e2tqIDYx0xZA+qI=
+github.com/PaddleHQ/paddle-go-sdk/v5 v5.2.0/go.mod h1:nlFfZYf7MovyHTE67+u7BARbMiBdMMLXGuQMbCVm9ss=
 github.com/Shopify/sarama v1.32.0/go.mod h1:+EmJJKZWVT/faR9RcOxJerP+LId4iWdQPBGLy1Y1Njs=
 github.com/Shopify/sarama v1.38.0 h1:Q81EWxDT2Xs7kCaaiDGV30GyNCWd6K1Xmd4k2qpTWE8=
 github.com/Shopify/sarama v1.38.0/go.mod h1:djdek3V4gS0N9LZ+OhfuuM6rE1bEKeDffYY8UvsRNyM=
@@ -151,8 +151,8 @@ github.com/getsentry/sentry-go v0.43.0 h1:XbXLpFicpo8HmBDaInk7dum18G9KSLcjZiyUKS
 github.com/getsentry/sentry-go v0.43.0/go.mod h1:XDotiNZbgf5U8bPDUAfvcFmOnMQQceESxyKaObSssW0=
 github.com/getsentry/sentry-go/gin v0.43.0 h1:39PH91LqoFxhvyaLGhgeahmGnVG5xn5jOWKQrBz/eRE=
 github.com/getsentry/sentry-go/gin v0.43.0/go.mod h1:Uyn8n0wYW9JDPxbRY1i5mYVuN/NPLw2CB1/1gmIVXX4=
-github.com/ggicci/httpin v0.20.2 h1:SmXSM/jg58H2W4+fIcF+6bo4JXQW/f8oeHYHYmwecmk=
-github.com/ggicci/httpin v0.20.2/go.mod h1:lQaLWTYNcs4eo8WoESBqqT4fUc9dgdIKeHweZMj17No=
+github.com/ggicci/httpin v0.20.3 h1:qy93bUsF/eGbX8WJfXEjB3bjgUrv7MKZ3qVWR73DIGY=
+github.com/ggicci/httpin v0.20.3/go.mod h1:ppHGT8xt99mRnDUuehLLWl2RAVLKG+VGn48GjK5xaLA=
 github.com/ggicci/owl v0.8.2 h1:og+lhqpzSMPDdEB+NJfzoAJARP7qCG3f8uUC3xvGukA=
 github.com/ggicci/owl v0.8.2/go.mod h1:PHRD57u41vFN5UtFz2SF79yTVoM3HlWpjMiE+ZU2dj4=
 github.com/gin-contrib/sse v0.1.0 h1:Y/yl/+YNO8GZSjAhjMsSuLt29uWRFHdHYUb5lYOV9qE=
