@@ -215,14 +215,37 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 	flexInvoice *invoice.Invoice,
 	paddleCustomerID, paddleAddressID string,
 ) (*paddle.CreateTransactionRequest, error) {
-	items, err := s.buildTransactionItems(flexInvoice)
-	if err != nil {
-		return nil, err
-	}
-	if len(items) == 0 {
-		return nil, ierr.NewError("invoice has no line items").
-			WithHint("Cannot create Paddle transaction without line items").
-			Mark(ierr.ErrValidation)
+	var items []paddle.CreateTransactionItems
+
+	if flexInvoice.Total.IsZero() {
+		// For $0 invoices, reference a pre-created Paddle subscription price with
+		// RequiresPaymentMethod=true. A subscription price in a one-time transaction causes
+		// Paddle's checkout to show "Save card for future payments" instead of the
+		// card-free "Claim free product" flow. EnsureTrialCapturePrice auto-creates and
+		// caches the price on first use — no manual Paddle dashboard setup required.
+		priceID, err := s.client.EnsureTrialCapturePrice(ctx)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to ensure trial capture price in Paddle").
+				Mark(ierr.ErrInternal)
+		}
+		items = []paddle.CreateTransactionItems{
+			*paddle.NewCreateTransactionItemsTransactionItemFromCatalog(&paddle.TransactionItemFromCatalog{
+				PriceID:  priceID,
+				Quantity: 1,
+			}),
+		}
+	} else {
+		var err error
+		items, err = s.buildTransactionItems(flexInvoice)
+		if err != nil {
+			return nil, err
+		}
+		if len(items) == 0 {
+			return nil, ierr.NewError("invoice has no line items").
+				WithHint("Cannot create Paddle transaction without line items").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	currency := paddle.CurrencyCode(strings.ToUpper(flexInvoice.Currency))
@@ -339,37 +362,20 @@ func (s *InvoiceSyncService) buildSingleTransactionItem(flexInvoice *invoice.Inv
 		priceQuantity.Maximum = quantity
 	}
 
-	price := paddle.TransactionPriceCreateWithProduct{
-		Description: description,
-		UnitPrice: paddle.Money{
-			Amount:       fmt.Sprintf("%d", amountInCents),
-			CurrencyCode: paddle.CurrencyCode(currency),
-		},
-		Quantity: priceQuantity,
-		Product: paddle.TransactionSubscriptionProductCreate{
-			Name:        productName,
-			TaxCategory: defaultTaxCategory,
-		},
-	}
-
-	// For $0 items: add a monthly trial period with RequiresPaymentMethod=true.
-	// This tells Paddle's checkout to show the "Save card for future payments" UI
-	// instead of the card-free "Claim your free product" flow.
-	if amountInCents == 0 {
-		price.BillingCycle = &paddle.Duration{
-			Interval:  paddle.IntervalMonth,
-			Frequency: 1,
-		}
-		price.TrialPeriod = &paddle.TrialPeriod{
-			Interval:              paddle.IntervalMonth,
-			Frequency:             1,
-			RequiresPaymentMethod: true,
-		}
-	}
-
 	txnItem := paddle.NewCreateTransactionItemsTransactionItemCreateWithProduct(&paddle.TransactionItemCreateWithProduct{
 		Quantity: quantity,
-		Price:    price,
+		Price: paddle.TransactionPriceCreateWithProduct{
+			Description: description,
+			UnitPrice: paddle.Money{
+				Amount:       fmt.Sprintf("%d", amountInCents),
+				CurrencyCode: paddle.CurrencyCode(currency),
+			},
+			Quantity: priceQuantity,
+			Product: paddle.TransactionSubscriptionProductCreate{
+				Name:        productName,
+				TaxCategory: defaultTaxCategory,
+			},
+		},
 	})
 	return txnItem, nil
 }
