@@ -401,7 +401,9 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		}
 		refPoint := types.ReferencePointPeriodEnd
 		switch types.InvoiceBillingReason(inv.BillingReason) {
-		case types.InvoiceBillingReasonSubscriptionCreate, types.InvoiceBillingReasonSubscriptionTrialEnd:
+		case types.InvoiceBillingReasonSubscriptionCreate,
+			types.InvoiceBillingReasonSubscriptionTrialEnd,
+			types.InvoiceBillingReasonSubscriptionUpdate:
 			refPoint = types.ReferencePointPeriodStart
 		case types.InvoiceBillingReasonProration:
 			refPoint = types.ReferencePointCancel
@@ -1722,7 +1724,9 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		inv.PaidAt = &now
 
 		if types.InvoiceBillingReason(inv.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
-			s.HandleIncompleteSubscriptionPayment(ctx, inv)
+			if err := s.HandleIncompleteSubscriptionPayment(ctx, inv); err != nil {
+				return err
+			}
 		}
 
 	case types.PaymentStatusOverpaid:
@@ -1737,7 +1741,9 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 			inv.PaidAt = &now
 		}
 		if types.InvoiceBillingReason(inv.BillingReason).IsFirstSubscriptionOpenInvoiceReason() {
-			s.HandleIncompleteSubscriptionPayment(ctx, inv)
+			if err := s.HandleIncompleteSubscriptionPayment(ctx, inv); err != nil {
+				return err
+			}
 		}
 	case types.PaymentStatusFailed:
 		// Don't change amount_paid for failed payments

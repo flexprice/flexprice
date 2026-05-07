@@ -1520,9 +1520,9 @@ func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
 	})
 }
 
-// TestApplyFixedChargeAdjustmentToLineItems verifies the billing helper that
-// distributes a proration credit across invoice line items in order.
-func (s *SubscriptionChangeServiceTestSuite) TestApplyFixedChargeAdjustmentToLineItems() {
+// TestApplyOpeningInvoiceAdjustmentToLineItems verifies the billing helper that
+// distributes opening-invoice credit across fixed line items in order.
+func (s *SubscriptionChangeServiceTestSuite) TestApplyOpeningInvoiceAdjustmentToLineItems() {
 	mkItem := func(amount float64) dto.CreateInvoiceLineItemRequest {
 		return dto.CreateInvoiceLineItemRequest{Amount: decimal.NewFromFloat(amount)}
 	}
@@ -1580,7 +1580,7 @@ func (s *SubscriptionChangeServiceTestSuite) TestApplyFixedChargeAdjustmentToLin
 	for _, tc := range cases {
 		tc := tc
 		s.Run(tc.name, func() {
-			result := applyFixedChargeAdjustmentToLineItems(tc.items, tc.credit)
+			result := applyOpeningInvoiceAdjustmentToLineItems(tc.items, tc.credit)
 			require.Len(s.T(), result, len(tc.wantAmts),
 				"result length mismatch for case %q", tc.name)
 			for i, wantF := range tc.wantAmts {

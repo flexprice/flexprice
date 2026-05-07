@@ -585,7 +585,8 @@ func applySubscriptionChangePreviewCredit(preview *dto.InvoicePreview, proration
 	}
 
 	creditAmount := prorationDetails.CreditAmount
-	isImmediate := lo.FromPtr(changeAt) == types.ScheduleTypeImmediate
+	// When ChangeAt is omitted, subscription change semantics default to "immediate".
+	isImmediate := changeAt == nil || lo.FromPtr(changeAt) == types.ScheduleTypeImmediate
 	if !(isImmediate && creditAmount.GreaterThan(decimal.Zero) && len(preview.LineItems) > 0) {
 		return
 	}
@@ -700,6 +701,7 @@ func (s *subscriptionChangeService) executeChange(
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
+
 	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
@@ -712,8 +714,21 @@ func (s *subscriptionChangeService) executeChange(
 		return nil, err
 	}
 
+	// For immediate plan changes with create_prorations, we net the old subscription's proration
+	// credit against the new subscription's opening invoice (instead of issuing wallet credit).
+	cancelledSubCreditAmount := decimal.Zero
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+		prorationDetails, err := s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
+		if err != nil {
+			return nil, err
+		}
+		if prorationDetails != nil {
+			cancelledSubCreditAmount = prorationDetails.CreditAmount
+		}
+	}
+
 	// Create new subscription
-	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, archivedSub.TotalCreditAmount)
+	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, cancelledSubCreditAmount)
 	if err != nil {
 		return nil, err
 	}

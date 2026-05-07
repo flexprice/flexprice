@@ -265,8 +265,8 @@ type InvoiceComputeRequest struct {
 	PreparedTaxRates []*TaxRateResponse             `json:"prepared_tax_rates,omitempty"`
 
 	// OpeningInvoiceAdjustmentAmount is internal: transport field only — read by ComputeInvoice and
-	// forwarded to PrepareSubscriptionInvoiceRequestParams, which applies it as FixedChargeAdjustment
-	// in CalculateFixedCharges (reducing line item amounts directly). Not applied inside ComputeInvoice itself.
+	// forwarded to PrepareSubscriptionInvoiceRequestParams.OpeningInvoiceAdjustmentAmount, which applies it
+	// in CalculateFixedCharges (reducing fixed line item amounts directly). Not applied inside ComputeInvoice itself.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
 }
 

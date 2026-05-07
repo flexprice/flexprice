@@ -288,19 +288,21 @@ func (s *billingService) CalculateFixedCharges(
 		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
-	// if there is an opening invoice adjustment amount, apply it to the line items
+	// Optional opening-invoice credit (e.g. plan-change netting): reduce fixed line amounts in order,
+	// capped per line, and keep total consistent.
 	if params.OpeningInvoiceAdjustmentAmount != nil {
-		fixedCostLineItems = applyFixedChargeAdjustmentToLineItems(fixedCostLineItems, lo.FromPtr(params.OpeningInvoiceAdjustmentAmount))
-		fixedCost = fixedCost.Sub(lo.FromPtr(params.OpeningInvoiceAdjustmentAmount))
+		adj := lo.FromPtr(params.OpeningInvoiceAdjustmentAmount)
+		fixedCostLineItems = applyOpeningInvoiceAdjustmentToLineItems(fixedCostLineItems, adj)
+		fixedCost = fixedCost.Sub(adj)
 	}
 
 	return &dto.CalculateFixedChargesResult{LineItems: fixedCostLineItems, TotalAmount: fixedCost}, nil
 }
 
-// applyFixedChargeAdjustmentToLineItems reduces line Amounts in slice order: for each line,
+// applyOpeningInvoiceAdjustmentToLineItems reduces line Amounts in slice order: for each line,
 // take min(remaining credit, line amount). Each take is capped by the line, so total reduction
 // cannot exceed the sum of line amounts even when credit is larger.
-func applyFixedChargeAdjustmentToLineItems(
+func applyOpeningInvoiceAdjustmentToLineItems(
 	items []dto.CreateInvoiceLineItemRequest,
 	creditsToAdjust decimal.Decimal,
 ) []dto.CreateInvoiceLineItemRequest {
@@ -1852,10 +1854,10 @@ func (s *billingService) CalculateAllCharges(
 	periodEnd := params.PeriodEnd
 
 	fixedResult, err := s.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
-		Subscription:          sub,
-		PeriodStart:           periodStart,
-		PeriodEnd:             periodEnd,
-		FixedChargeAdjustment: params.FixedChargeAdjustment,
+		Subscription:                   sub,
+		PeriodStart:                    periodStart,
+		PeriodEnd:                      periodEnd,
+		OpeningInvoiceAdjustmentAmount: params.OpeningInvoiceAdjustmentAmount,
 	})
 	if err != nil {
 		return nil, err
@@ -2044,11 +2046,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		calculationResult, err = s.CalculateCharges(ctx, &dto.CalculateChargesParams{
-			Subscription: sub,
-			LineItems:    advanceLineItems,
-			PeriodStart:  periodStart,
-			PeriodEnd:    periodEnd,
-			IncludeUsage: false, // No usage for advance
+			Subscription:                   sub,
+			LineItems:                      advanceLineItems,
+			PeriodStart:                    periodStart,
+			PeriodEnd:                      periodEnd,
+			IncludeUsage:                   false, // No usage for advance
+			OpeningInvoiceAdjustmentAmount: params.OpeningInvoiceAdjustmentAmount,
 		})
 		if err != nil {
 			return nil, err
@@ -2624,11 +2627,11 @@ func (s *billingService) CalculateCharges(
 
 	// Calculate charges
 	return s.CalculateAllCharges(ctx, &dto.CalculateAllChargesParams{
-		Subscription:          &filteredSub,
-		Usage:                 usage,
-		PeriodStart:           periodStart,
-		PeriodEnd:             periodEnd,
-		FixedChargeAdjustment: params.FixedChargeAdjustment,
+		Subscription:                   &filteredSub,
+		Usage:                          usage,
+		PeriodStart:                    periodStart,
+		PeriodEnd:                      periodEnd,
+		OpeningInvoiceAdjustmentAmount: params.OpeningInvoiceAdjustmentAmount,
 	})
 }
 
