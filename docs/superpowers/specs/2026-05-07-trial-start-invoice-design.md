@@ -44,9 +44,16 @@ Create a **$0 preview invoice** at the moment a trialing subscription is activat
 
 Billing reason is the discriminator for all diverging behavior in the compute → finalize → payment pipeline. It is the right lever (vs. a feature flag or a generic `ZeroAmounts` parameter) because it explicitly names the intent.
 
-### 2. Invoice period: `TrialStart → TrialEnd`
+### 2. Invoice period: `CurrentPeriodStart → CurrentPeriodEnd` (= `TrialStart → TrialEnd`)
 
-Not `CurrentPeriodStart → CurrentPeriodEnd`. For trialing subscriptions, `CurrentPeriodEnd` is the first billing cycle end (e.g., Feb 1 for a monthly plan starting Jan 1), not the trial end (Jan 8). The trial start invoice must explicitly use `sub.TrialStart` and `sub.TrialEnd` as period bounds. This matches Stripe/Paddle behavior.
+`syncTrialingStateFromCreateRequest` (called at line 258 in `subscription.go`, before the invoice creation block) aligns the current period to the trial window for trialing subscriptions:
+
+```go
+sub.CurrentPeriodStart = lo.FromPtr(sub.TrialStart)
+sub.CurrentPeriodEnd   = lo.FromPtr(sub.TrialEnd)
+```
+
+So by the time invoice creation runs, `CurrentPeriodStart == TrialStart` and `CurrentPeriodEnd == TrialEnd`. The trial start invoice simply uses `sub.CurrentPeriodStart` and `sub.CurrentPeriodEnd` — exactly like the non-trial path does — which naturally gives `trial_start → trial_end`. This matches Stripe/Paddle behavior (both use `subscription_start → subscription_start + trial_days` as the $0 invoice period).
 
 ### 3. Line items: advance charges only, zeroed
 
@@ -178,18 +185,18 @@ if inv.InvoiceType == types.InvoiceTypeSubscription && inv.Subtotal.IsZero() && 
 if sub.SubscriptionStatus != types.SubscriptionStatusDraft &&
     sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
     // ... existing invoice creation ...
-} else if sub.SubscriptionStatus == types.SubscriptionStatusTrialing &&
-    sub.TrialStart != nil && sub.TrialEnd != nil {
+} else if sub.SubscriptionStatus == types.SubscriptionStatusTrialing {
 
     paymentParams := dto.NewPaymentParametersFromSubscription(
         sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID,
     ).NormalizePaymentParameters()
 
-    // trialInvoice is informational only; its value is not used to gate activation.
+    // syncTrialingStateFromCreateRequest already set CurrentPeriodStart = TrialStart
+    // and CurrentPeriodEnd = TrialEnd, so we use them directly.
     _, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
         SubscriptionID: sub.ID,
-        PeriodStart:    lo.FromPtr(sub.TrialStart),
-        PeriodEnd:      lo.FromPtr(sub.TrialEnd),
+        PeriodStart:    sub.CurrentPeriodStart, // == TrialStart
+        PeriodEnd:      sub.CurrentPeriodEnd,   // == TrialEnd
         ReferencePoint: types.ReferencePointPeriodStart,
         BillingReason:  types.InvoiceBillingReasonSubscriptionTrialStart,
     }, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
