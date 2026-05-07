@@ -968,7 +968,11 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 			lockedInv.InvoiceNumber = &invoiceNumber
 		}
 
-		if lockedInv.Total.IsZero() {
+		// Trial-start invoices are always $0 but must NOT be auto-succeeded here.
+		// attemptPaymentForSubscriptionInvoice will set the correct status based on
+		// collection method: SUCCEEDED for charge_automatically, PENDING for send_invoice.
+		isTrialStart := types.InvoiceBillingReason(lockedInv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart
+		if lockedInv.Total.IsZero() && !isTrialStart {
 			lockedInv.PaymentStatus = types.PaymentStatusSucceeded
 		}
 
@@ -2354,6 +2358,20 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 				"invoice_id", inv.ID)
 			return err
 		}
+	}
+
+	// Trial-start invoices are always $0 — skip the normal payment pipeline entirely.
+	// charge_automatically: mark succeeded immediately (payment method is on file but nothing to collect).
+	// send_invoice: leave PENDING so the finalized invoice syncs to downstream integrations
+	// (Stripe, Paddle, etc.) and triggers their card-capture checkout flow.
+	// Subscription stays TRIALING in both cases.
+	if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialStart) {
+		if sub != nil && types.CollectionMethod(sub.CollectionMethod) == types.CollectionMethodChargeAutomatically {
+			zero := decimal.Zero
+			return s.UpdatePaymentStatus(ctx, inv.ID, types.PaymentStatusSucceeded, &zero)
+		}
+		// send_invoice: invoice stays PENDING — nothing more to do.
+		return nil
 	}
 
 	// If Stripe outbound invoice sync is enabled for this tenant/environment,
