@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v4"
+	"github.com/PaddleHQ/paddle-go-sdk/v5"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -339,20 +339,37 @@ func (s *InvoiceSyncService) buildSingleTransactionItem(flexInvoice *invoice.Inv
 		priceQuantity.Maximum = quantity
 	}
 
+	price := paddle.TransactionPriceCreateWithProduct{
+		Description: description,
+		UnitPrice: paddle.Money{
+			Amount:       fmt.Sprintf("%d", amountInCents),
+			CurrencyCode: paddle.CurrencyCode(currency),
+		},
+		Quantity: priceQuantity,
+		Product: paddle.TransactionSubscriptionProductCreate{
+			Name:        productName,
+			TaxCategory: defaultTaxCategory,
+		},
+	}
+
+	// For $0 items: add a monthly trial period with RequiresPaymentMethod=true.
+	// This tells Paddle's checkout to show the "Save card for future payments" UI
+	// instead of the card-free "Claim your free product" flow.
+	if amountInCents == 0 {
+		price.BillingCycle = &paddle.Duration{
+			Interval:  paddle.IntervalMonth,
+			Frequency: 1,
+		}
+		price.TrialPeriod = &paddle.TrialPeriod{
+			Interval:              paddle.IntervalMonth,
+			Frequency:             1,
+			RequiresPaymentMethod: true,
+		}
+	}
+
 	txnItem := paddle.NewCreateTransactionItemsTransactionItemCreateWithProduct(&paddle.TransactionItemCreateWithProduct{
 		Quantity: quantity,
-		Price: paddle.TransactionPriceCreateWithProduct{
-			Description: description,
-			UnitPrice: paddle.Money{
-				Amount:       fmt.Sprintf("%d", amountInCents),
-				CurrencyCode: paddle.CurrencyCode(currency),
-			},
-			Quantity: priceQuantity,
-			Product: paddle.TransactionSubscriptionProductCreate{
-				Name:        productName,
-				TaxCategory: defaultTaxCategory,
-			},
-		},
+		Price:    price,
 	})
 	return txnItem, nil
 }

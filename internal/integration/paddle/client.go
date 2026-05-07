@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v4"
+	"github.com/PaddleHQ/paddle-go-sdk/v5"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"

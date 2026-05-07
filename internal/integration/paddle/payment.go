@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
+	"github.com/PaddleHQ/paddle-go-sdk/v5/pkg/paddlenotification"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
