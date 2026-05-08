@@ -85,7 +85,7 @@ func (s *InvoiceSyncService) SyncInvoiceToPaddle(
 	if existingMapping != nil {
 		s.logger.Infow("invoice already synced to Paddle",
 			"invoice_id", req.InvoiceID,
-			"paddle_transaction_id", existingMapping.ProviderEntityID)
+			"paddle_provider_entity_id", existingMapping.ProviderEntityID)
 		resp := s.buildResponseFromMapping(existingMapping)
 		s.appendCheckoutToken(ctx, resp)
 		if err := s.updateFlexPriceInvoiceFromPaddle(ctx, flexInvoice, resp); err != nil {
@@ -155,36 +155,52 @@ func (s *InvoiceSyncService) SyncInvoiceToPaddle(
 		"paddle_customer_id", paddleCustomerID,
 		"paddle_address_id", paddleAddressID)
 
-	// Preview the transaction to get Paddle-accurate tax BEFORE creating the real one.
-	// This ensures the FlexPrice invoice reflects the exact per-line and aggregate tax that
-	// Paddle will charge, preventing the "overpaid" situation after payment.
-	if err := s.previewAndSyncTax(ctx, flexInvoice, paddleCustomerID, paddleAddressID); err != nil {
-		// Non-fatal: log and proceed. The transaction is still created and the invoice
-		// totals will read from the created transaction as a fallback below.
-		s.logger.Warnw("Paddle tax preview failed, proceeding without pre-sync",
-			"error", err,
-			"invoice_id", req.InvoiceID)
+	// --- Unified subscription-based sync ---
+	// If the customer already has a saved Paddle subscription, charge it immediately.
+	// Otherwise create a subscription checkout transaction so the customer can pay and save their card.
+	subID := s.getPaddleSubscriptionID(ctx, flexInvoice.CustomerID)
+
+	if subID != "" {
+		s.logger.Infow("paddle_subscription_id found — attempting auto-charge",
+			"invoice_id", req.InvoiceID,
+			"subscription_id", subID)
+
+		sub, err := s.client.GetSubscription(ctx, subID)
+		if err != nil || !isEligibleSubscription(sub, flexInvoice.Currency) {
+			var reason string
+			if err != nil {
+				reason = err.Error()
+			} else {
+				reason = fmt.Sprintf("status=%s currency=%s", sub.Status, sub.CurrencyCode)
+			}
+			s.logger.Errorw("Paddle subscription not eligible for charge",
+				"invoice_id", req.InvoiceID,
+				"subscription_id", subID,
+				"reason", reason)
+			return nil, ierr.NewError("Paddle subscription is not eligible for charge: "+reason).
+				WithHint("Subscription must be active/trialing and currency must match the invoice. Operator action required.").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": subID,
+					"invoice_id":      req.InvoiceID,
+					"reason":          reason,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		return s.chargeSubscriptionForInvoice(ctx, flexInvoice, sub.ID)
 	}
 
-	createReq, err := s.buildCreateTransactionRequest(ctx, flexInvoice, paddleCustomerID, paddleAddressID)
+	// No subscription yet — create a subscription checkout transaction.
+	// The customer completes checkout, pays the invoice, and saves their card.
+	// The transaction.completed webhook will store paddle_subscription_id and schedule a pause.
+	s.logger.Infow("no paddle_subscription_id — creating subscription checkout transaction",
+		"invoice_id", req.InvoiceID,
+		"customer_id", flexInvoice.CustomerID)
+
+	txn, err := s.buildSubscriptionCheckoutTransaction(ctx, flexInvoice, paddleCustomerID, paddleAddressID)
 	if err != nil {
 		return nil, err
 	}
-
-	txn, err := s.client.CreateTransaction(ctx, createReq)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHintf("Failed to create transaction in Paddle: %s", err.Error()).
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id": req.InvoiceID,
-				"error":      err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
-	s.logger.Infow("successfully created transaction in Paddle",
-		"invoice_id", req.InvoiceID,
-		"paddle_transaction_id", txn.ID)
 
 	syncResp := s.buildSyncResponse(txn)
 	s.appendCheckoutToken(ctx, syncResp)
@@ -688,8 +704,7 @@ func (s *InvoiceSyncService) buildSyncResponse(txn *paddle.Transaction) *PaddleI
 	if txn.Details.Totals.Subtotal != "" {
 		resp.Amount = parsePaddleCents(txn.Details.Totals.Subtotal)
 	}
-	// Capture tax and grand total from created transaction for mismatch logging only.
-	// These do NOT override the invoice — previewAndSyncTax is the source of truth.
+	// Capture tax and grand total from the created transaction.
 	if txn.Details.Totals.Tax != "" {
 		resp.TaxAmount = parsePaddleCents(txn.Details.Totals.Tax)
 	}
@@ -758,9 +773,8 @@ func (s *InvoiceSyncService) buildResponseFromMapping(mapping *entityintegration
 }
 
 // updateFlexPriceInvoiceFromPaddle persists the Paddle transaction metadata (ID, checkout URL)
-// to the FlexPrice invoice. Tax totals are already set by previewAndSyncTax before this runs
-// — we do NOT override them here. We only log a warning if the created transaction's grand total
-// differs from what the preview set, for observability.
+// to the FlexPrice invoice. Totals on the invoice are set by persistSyncResult (auto_collect path)
+// or left as-is for the checkout path (Paddle calculates totals when the customer pays).
 func (s *InvoiceSyncService) updateFlexPriceInvoiceFromPaddle(ctx context.Context, flexInvoice *invoice.Invoice, syncResp *PaddleInvoiceSyncResponse) error {
 	if syncResp == nil || syncResp.PaddleTransactionID == "" {
 		return nil
@@ -771,18 +785,6 @@ func (s *InvoiceSyncService) updateFlexPriceInvoiceFromPaddle(ctx context.Contex
 	flexInvoice.Metadata["paddle_transaction_id"] = syncResp.PaddleTransactionID
 	if syncResp.CheckoutURL != "" {
 		flexInvoice.Metadata["paddle_checkout_url"] = syncResp.CheckoutURL
-	}
-
-	// Log a warning if the created transaction's grand total differs from what the preview set.
-	// This should not happen in practice but helps detect edge cases (e.g. tax rate changed
-	// between preview and create, or preview used stale address data).
-	if syncResp.GrandTotal.IsPositive() && !flexInvoice.AmountDue.Equal(syncResp.GrandTotal) {
-		s.logger.Warnw("Paddle tax mismatch: invoice amount_due differs from created transaction grand_total",
-			"invoice_id", flexInvoice.ID,
-			"invoice_amount_due", flexInvoice.AmountDue,
-			"paddle_grand_total", syncResp.GrandTotal,
-			"invoice_total_tax", flexInvoice.TotalTax,
-			"paddle_tax", syncResp.TaxAmount)
 	}
 
 	return s.invoiceRepo.Update(ctx, flexInvoice)

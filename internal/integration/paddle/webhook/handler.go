@@ -21,6 +21,7 @@ import (
 type Handler struct {
 	paymentSvc                   *paddle.PaymentService
 	customerSvc                  paddle.PaddleCustomerService
+	client                       paddle.PaddleClient
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	logger                       *logger.Logger
 }
@@ -29,12 +30,14 @@ type Handler struct {
 func NewHandler(
 	paymentSvc *paddle.PaymentService,
 	customerSvc paddle.PaddleCustomerService,
+	client paddle.PaddleClient,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
 ) *Handler {
 	return &Handler{
 		paymentSvc:                   paymentSvc,
 		customerSvc:                  customerSvc,
+		client:                       client,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		logger:                       logger,
 	}
@@ -76,6 +79,7 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 	txn := &event.Data
 	txnID := txn.ID
 
+	// Primary lookup: find invoice mapping by the Paddle transaction ID (checkout path).
 	filter := &types.EntityIntegrationMappingFilter{
 		ProviderTypes:     []string{string(types.SecretProviderPaddle)},
 		ProviderEntityIDs: []string{txnID},
@@ -90,13 +94,32 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 		return nil
 	}
 
+	if len(mappings) == 0 && txn.SubscriptionID != nil && *txn.SubscriptionID != "" {
+		// Fallback: subscription charge path — the mapping was written with sub_id as
+		// ProviderEntityID (no txn_id is known at charge time). Look it up by sub_id.
+		subFilter := &types.EntityIntegrationMappingFilter{
+			ProviderTypes:     []string{string(types.SecretProviderPaddle)},
+			ProviderEntityIDs: []string{*txn.SubscriptionID},
+			EntityType:        types.IntegrationEntityTypeInvoice,
+		}
+		mappings, err = h.entityIntegrationMappingRepo.List(ctx, subFilter)
+		if err != nil {
+			h.logger.Errorw("failed to find charge mapping for Paddle subscription",
+				"error", err,
+				"paddle_subscription_id", *txn.SubscriptionID,
+				"paddle_transaction_id", txnID)
+			return nil
+		}
+	}
+
 	if len(mappings) == 0 {
 		h.logger.Warnw("no FlexPrice invoice found for Paddle transaction, skipping",
 			"paddle_transaction_id", txnID)
 		return nil
 	}
 
-	flexpriceInvoiceID := mappings[0].EntityID
+	existingMapping := mappings[0]
+	flexpriceInvoiceID := existingMapping.EntityID
 
 	err = h.paymentSvc.ProcessExternalPaddleTransaction(ctx, txn, flexpriceInvoiceID, services.PaymentService, services.InvoiceService)
 	if err != nil {
@@ -110,6 +133,37 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 	h.logger.Infow("successfully processed transaction.completed",
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"paddle_transaction_id", txnID)
+
+	// If the transaction is associated with a subscription, store the subscription ID on the
+	// customer so that future invoice syncs can use CreateSubscriptionCharge, and schedule a
+	// pause to prevent Paddle from auto-renewing the subscription.
+	if txn.SubscriptionID != nil && *txn.SubscriptionID != "" {
+		subID := *txn.SubscriptionID
+		paddleCustomerID := lo.FromPtrOr(txn.CustomerID, "")
+
+		if paddleCustomerID != "" {
+			if err := h.customerSvc.PersistPaddleSubscriptionID(ctx, paddleCustomerID, subID); err != nil {
+				h.logger.Warnw("failed to persist Paddle subscription ID on customer",
+					"paddle_customer_id", paddleCustomerID,
+					"subscription_id", subID,
+					"error", err)
+			}
+		}
+
+		// Schedule a pause at the next billing period so Paddle never auto-charges.
+		// The subscription stays "active", which is required for CreateSubscriptionCharge.
+		// Best-effort: a failure here is logged but does not block webhook acknowledgement.
+		if _, err := h.client.PauseSubscription(ctx, subID); err != nil {
+			h.logger.Warnw("failed to schedule subscription pause after transaction.completed",
+				"subscription_id", subID,
+				"paddle_transaction_id", txnID,
+				"error", err)
+		} else {
+			h.logger.Infow("scheduled subscription pause to prevent auto-renewal",
+				"subscription_id", subID,
+				"paddle_transaction_id", txnID)
+		}
+	}
 
 	return nil
 }

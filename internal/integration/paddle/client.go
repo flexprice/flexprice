@@ -38,6 +38,16 @@ type PaddleClient interface {
 	// the result in connection metadata. Referencing this price ID in a one-time transaction
 	// causes Paddle's checkout to show the "Save card" UI instead of "Claim free product".
 	EnsureTrialCapturePrice(ctx context.Context) (string, error)
+	// GetSubscription returns a Paddle subscription by ID.
+	GetSubscription(ctx context.Context, id string) (*paddle.Subscription, error)
+	// CreateSubscriptionCharge creates a one-time charge against an existing subscription.
+	CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error)
+	// ListTransactions returns a page of Paddle transactions matching the request filters.
+	ListTransactions(ctx context.Context, req *paddle.ListTransactionsRequest) ([]*paddle.Transaction, error)
+	// GetTransaction returns a single Paddle transaction by ID.
+	GetTransaction(ctx context.Context, id string) (*paddle.Transaction, error)
+	// PauseSubscription schedules (or immediately applies) a pause on a Paddle subscription.
+	PauseSubscription(ctx context.Context, subID string) (*paddle.Subscription, error)
 }
 
 // PaddleConfig holds decrypted Paddle connection configuration
@@ -301,7 +311,7 @@ func (c *Client) CreateTransaction(ctx context.Context, req *paddle.CreateTransa
 		c.logger.Errorw("failed to create transaction in Paddle",
 			"error", err,
 			"paddle_error_detail", err.Error())
-		return nil, ierr.NewError("failed to create transaction in Paddle: "+err.Error()).
+		return nil, ierr.NewError("failed to create transaction in Paddle: " + err.Error()).
 			WithHint("Unable to create transaction in Paddle").
 			WithReportableDetails(map[string]interface{}{
 				"error": err.Error(),
@@ -366,7 +376,7 @@ func (c *Client) EnsureTrialCapturePrice(ctx context.Context) (string, error) {
 		Description: paddle.PtrTo("Placeholder product for $0 trial card-capture checkout."),
 	})
 	if err != nil {
-		return "", ierr.NewError("failed to create trial product in Paddle: "+err.Error()).
+		return "", ierr.NewError("failed to create trial product in Paddle: " + err.Error()).
 			Mark(ierr.ErrInternal)
 	}
 
@@ -386,7 +396,7 @@ func (c *Client) EnsureTrialCapturePrice(ctx context.Context) (string, error) {
 		},
 	})
 	if err != nil {
-		return "", ierr.NewError("failed to create trial price in Paddle: "+err.Error()).
+		return "", ierr.NewError("failed to create trial price in Paddle: " + err.Error()).
 			Mark(ierr.ErrInternal)
 	}
 
@@ -403,6 +413,102 @@ func (c *Client) EnsureTrialCapturePrice(ctx context.Context) (string, error) {
 		"product_id", product.ID, "price_id", price.ID)
 
 	return price.ID, nil
+}
+
+// GetSubscription retrieves a Paddle subscription by ID.
+func (c *Client) GetSubscription(ctx context.Context, id string) (*paddle.Subscription, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := client.GetSubscription(ctx, &paddle.GetSubscriptionRequest{SubscriptionID: id})
+	if err != nil {
+		c.logger.Errorw("failed to get subscription from Paddle", "subscription_id", id, "error", err)
+		return nil, ierr.NewError("failed to get subscription from Paddle: " + err.Error()).
+			WithReportableDetails(map[string]interface{}{"subscription_id": id, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return sub, nil
+}
+
+// CreateSubscriptionCharge creates a one-time charge against an existing subscription.
+func (c *Client) CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := client.CreateSubscriptionCharge(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to create subscription charge in Paddle", "subscription_id", req.SubscriptionID, "error", err)
+		return nil, ierr.NewError("failed to create subscription charge in Paddle: " + err.Error()).
+			WithReportableDetails(map[string]interface{}{"subscription_id": req.SubscriptionID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return sub, nil
+}
+
+// ListTransactions returns the first page of Paddle transactions matching the filter.
+// The caller controls page size via req.PerPage.
+func (c *Client) ListTransactions(ctx context.Context, req *paddle.ListTransactionsRequest) ([]*paddle.Transaction, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	col, err := client.ListTransactions(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to list transactions from Paddle", "error", err)
+		return nil, ierr.NewError("failed to list transactions from Paddle: " + err.Error()).
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	if col == nil {
+		return nil, nil
+	}
+	// Drain at most the first page (up to req.PerPage items).
+	var txns []*paddle.Transaction
+	iterErr := col.Iter(ctx, func(t *paddle.Transaction) (bool, error) {
+		txns = append(txns, t)
+		if req.PerPage != nil && len(txns) >= *req.PerPage {
+			return false, nil
+		}
+		return true, nil
+	})
+	if iterErr != nil {
+		c.logger.Warnw("error iterating Paddle transactions", "error", iterErr)
+	}
+	return txns, nil
+}
+
+// GetTransaction retrieves a single Paddle transaction by ID.
+func (c *Client) GetTransaction(ctx context.Context, id string) (*paddle.Transaction, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	txn, err := client.GetTransaction(ctx, &paddle.GetTransactionRequest{TransactionID: id})
+	if err != nil {
+		c.logger.Errorw("failed to get transaction from Paddle", "transaction_id", id, "error", err)
+		return nil, ierr.NewError("failed to get transaction from Paddle: " + err.Error()).
+			WithReportableDetails(map[string]interface{}{"transaction_id": id, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return txn, nil
+}
+
+// PauseSubscription schedules a pause on a Paddle subscription at the next billing period.
+func (c *Client) PauseSubscription(ctx context.Context, subID string) (*paddle.Subscription, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := client.PauseSubscription(ctx, &paddle.PauseSubscriptionRequest{SubscriptionID: subID})
+	if err != nil {
+		c.logger.Errorw("failed to pause subscription in Paddle", "subscription_id", subID, "error", err)
+		return nil, ierr.NewError("failed to pause subscription in Paddle: " + err.Error()).
+			WithReportableDetails(map[string]interface{}{"subscription_id": subID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return sub, nil
 }
 
 // toCountryCode converts a string to Paddle CountryCode (uppercase ISO 3166-1 alpha-2)
