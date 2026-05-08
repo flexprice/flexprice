@@ -12,21 +12,32 @@ type SubscriptionType string
 
 const (
 	// SubscriptionTypeStandalone is a regular subscription with no hierarchy relationship.
+	// No invoicing_customer_id or parent_subscription_id may be set.
 	SubscriptionTypeStandalone SubscriptionType = "standalone"
 
+	// SubscriptionTypeDelegated has its own line items but the invoice is raised against a
+	// different customer (invoicing_customer_id is required; parent_subscription_id must be unset).
+	SubscriptionTypeDelegated SubscriptionType = "delegated"
+
 	// SubscriptionTypeParent is the primary subscription that owns line items and aggregates
-	// usage from child (inherited) subscriptions.
+	// usage from child (inherited) subscriptions, and triggers clubbed invoices for grouped_invoicing children.
 	SubscriptionTypeParent SubscriptionType = "parent"
 
 	// SubscriptionTypeInherited is a skeleton subscription created for each child customer
 	// in a hierarchy. It carries no line items; events are matched via the parent subscription.
 	SubscriptionTypeInherited SubscriptionType = "inherited"
+
+	// SubscriptionTypeGroupedInvoicing has its own line items and entitlements but its invoice
+	// is clubbed into the parent's invoice. parent_subscription_id is required; invoicing_customer_id is optional.
+	SubscriptionTypeGroupedInvoicing SubscriptionType = "grouped_invoicing"
 )
 
 var SubscriptionTypeValues = []SubscriptionType{
 	SubscriptionTypeStandalone,
+	SubscriptionTypeDelegated,
 	SubscriptionTypeParent,
 	SubscriptionTypeInherited,
+	SubscriptionTypeGroupedInvoicing,
 }
 
 func (t SubscriptionType) String() string {
@@ -40,7 +51,7 @@ func (t SubscriptionType) Validate() error {
 
 	if !lo.Contains(SubscriptionTypeValues, t) {
 		return ierr.NewError("invalid subscription type").
-			WithHint("Subscription type must be standalone, parent, or inherited").
+			WithHint("Subscription type must be one of: standalone, delegated, parent, inherited, grouped_invoicing").
 			WithReportableDetails(map[string]any{
 				"subscription_type": t,
 				"allowed_values":    SubscriptionTypeValues,
@@ -451,12 +462,22 @@ const (
 	SubscriptionChangeTypeUpgrade   SubscriptionChangeType = "upgrade"
 	SubscriptionChangeTypeDowngrade SubscriptionChangeType = "downgrade"
 	SubscriptionChangeTypeLateral   SubscriptionChangeType = "lateral"
+
+	// SubscriptionChangeTypeAddToGroupedInvoicing converts standalone subscriptions to
+	// grouped_invoicing children of a given parent.
+	SubscriptionChangeTypeAddToGroupedInvoicing SubscriptionChangeType = "add_to_grouped_invoicing"
+
+	// SubscriptionChangeTypeRemoveFromGroupedInvoicing reverts grouped_invoicing children
+	// back to standalone, clearing their parent link.
+	SubscriptionChangeTypeRemoveFromGroupedInvoicing SubscriptionChangeType = "remove_from_grouped_invoicing"
 )
 
 var SubscriptionChangeTypeValues = []SubscriptionChangeType{
 	SubscriptionChangeTypeUpgrade,
 	SubscriptionChangeTypeDowngrade,
 	SubscriptionChangeTypeLateral,
+	SubscriptionChangeTypeAddToGroupedInvoicing,
+	SubscriptionChangeTypeRemoveFromGroupedInvoicing,
 }
 
 func (s SubscriptionChangeType) String() string {
@@ -466,7 +487,7 @@ func (s SubscriptionChangeType) String() string {
 func (s SubscriptionChangeType) Validate() error {
 	if s != "" && !lo.Contains(SubscriptionChangeTypeValues, s) {
 		return ierr.NewError("invalid subscription change type").
-			WithHint("Subscription change type must be upgrade, downgrade, or lateral").
+			WithHint("Subscription change type must be one of: upgrade, downgrade, lateral, add_to_grouped_invoicing, remove_from_grouped_invoicing").
 			WithReportableDetails(map[string]any{
 				"allowed_values": SubscriptionChangeTypeValues,
 				"provided_value": s,
