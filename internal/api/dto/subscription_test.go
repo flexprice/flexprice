@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/stretchr/testify/assert"
 )
 
 func baseCreateSubscriptionRequest() CreateSubscriptionRequest {
@@ -50,6 +51,123 @@ func TestCreateSubscriptionRequestValidate_BillingAnchorRequiresAnniversaryBilli
 			t.Fatalf("expected no error, got: %v", err)
 		}
 	})
+}
+
+func strPtr(s string) *string { return &s }
+
+func TestSubscriptionInheritanceConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *SubscriptionInheritanceConfig
+		wantErr bool
+	}{
+		{
+			name: "nil config is valid",
+			cfg:  nil,
+		},
+		{
+			name: "delegated requires invoicing_customer_external_id",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior: types.SubscriptionTypeDelegated,
+			},
+			wantErr: true,
+		},
+		{
+			name: "delegated with parent_subscription_id is invalid",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:           types.SubscriptionTypeDelegated,
+				InvoicingCustomerExternalID: strPtr("cust_ext"),
+				ParentSubscriptionID:        "sub_123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "grouped_invoicing requires parent_subscription_id",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior: types.SubscriptionTypeGroupedInvoicing,
+			},
+			wantErr: true,
+		},
+		{
+			name: "grouped_invoicing valid",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:    types.SubscriptionTypeGroupedInvoicing,
+				ParentSubscriptionID: "sub_parent_123",
+			},
+		},
+		{
+			name: "inherited requires parent_subscription_id",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior: types.SubscriptionTypeInherited,
+			},
+			wantErr: true,
+		},
+		{
+			name: "inherited rejects invoicing_customer_external_id",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:           types.SubscriptionTypeInherited,
+				ParentSubscriptionID:        "sub_parent_123",
+				InvoicingCustomerExternalID: strPtr("cust_ext"),
+			},
+			wantErr: true,
+		},
+		{
+			name: "parent rejects parent_subscription_id",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:    types.SubscriptionTypeParent,
+				ParentSubscriptionID: "sub_123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "standalone rejects parent_subscription_id",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:    types.SubscriptionTypeStandalone,
+				ParentSubscriptionID: "sub_123",
+			},
+			wantErr: true,
+		},
+		{
+			name: "standalone rejects invoicing_customer_external_id",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:           types.SubscriptionTypeStandalone,
+				InvoicingCustomerExternalID: strPtr("cust"),
+			},
+			wantErr: true,
+		},
+		{
+			name: "legacy path nil behavior with parent_id and external_ids is invalid",
+			cfg: &SubscriptionInheritanceConfig{
+				ParentSubscriptionID:                     "sub_123",
+				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "legacy path nil behavior with invoicing_id and external_ids is invalid",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingCustomerExternalID:              strPtr("cust_inv"),
+				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "legacy path nil behavior with only parent_id is valid",
+			cfg: &SubscriptionInheritanceConfig{
+				ParentSubscriptionID: "sub_123",
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.cfg.Validate()
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestCreateSubscriptionRequestValidate_BillingAnchorOnOrAfterStartDate(t *testing.T) {
