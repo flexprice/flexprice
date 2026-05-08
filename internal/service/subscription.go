@@ -7356,7 +7356,7 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx context.Context, req *dto.CreateSubscriptionRequest, sub *subscription.Subscription) (groupedInvoicingSubIDs []string, childCustomerIDs []string, err error) {
 	if req.Inheritance == nil {
 		sub.SubscriptionType = types.SubscriptionTypeStandalone
-		return nil, nil, nil
+		return nil, nil, s.validateNoInheritedSubForSubscriber(ctx, sub)
 	}
 
 	inh := req.Inheritance
