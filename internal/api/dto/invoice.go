@@ -1150,6 +1150,9 @@ type CreateSubscriptionInvoiceRequest struct {
 
 	// OpeningInvoiceAdjustmentAmount is internal: same as InvoiceComputeRequest. Not in public JSON.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+
+	// Metadata is optional key-value metadata to attach to the created invoice.
+	Metadata types.Metadata `json:"-"`
 }
 
 // ToDraftRequest builds a CreateDraftInvoiceRequest from the subscription invoice request
@@ -1168,6 +1171,7 @@ func (r *CreateSubscriptionInvoiceRequest) ToDraftRequest(customerID, subscripti
 		PeriodStart:    &r.PeriodStart,
 		PeriodEnd:      &r.PeriodEnd,
 		BillingReason:  billingReason,
+		Metadata:       r.Metadata,
 	}
 	if r.BillingReason != "" {
 		req.BillingReason = r.BillingReason

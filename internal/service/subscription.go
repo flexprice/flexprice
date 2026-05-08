@@ -1853,11 +1853,16 @@ func (s *subscriptionService) CancelSubscription(
 			invoiceService := NewInvoiceService(s.ServiceParams)
 			paymentParams := dto.NewPaymentParametersFromSubscription(subscription.CollectionMethod, subscription.PaymentBehavior, subscription.GatewayPaymentMethodID)
 			paymentParams = paymentParams.NormalizePaymentParameters()
+			cancelInvoiceMeta := types.Metadata{}
+			if req.Reason != "" {
+				cancelInvoiceMeta["cancellation_reason"] = req.Reason
+			}
 			inv, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: subscription.ID,
 				PeriodStart:    subscription.CurrentPeriodStart,
 				PeriodEnd:      effectiveDate,
 				ReferencePoint: types.ReferencePointCancel,
+				Metadata:       cancelInvoiceMeta,
 			}, paymentParams, types.InvoiceFlowCancel, false)
 			if err != nil {
 				return err
