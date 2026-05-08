@@ -2144,6 +2144,7 @@ var (
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "internal_status", Type: field.TypeString, Default: "trialing", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "billing_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
@@ -2158,7 +2159,7 @@ var (
 			{
 				Name:    "idx_tenant_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{TenantsColumns[3]},
+				Columns: []*schema.Column{TenantsColumns[4]},
 			},
 		},
 	}

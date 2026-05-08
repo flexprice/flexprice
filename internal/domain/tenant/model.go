@@ -28,13 +28,14 @@ type TenantAddress struct {
 
 // Tenant represents an organization or group within the system.
 type Tenant struct {
-	ID             string               `json:"id"`
-	Name           string               `json:"name"`
-	Status         types.Status         `json:"status"`
-	BillingDetails TenantBillingDetails `json:"billing_details"`
-	Metadata       types.Metadata       `json:"metadata"`
-	CreatedAt      time.Time            `json:"created_at"`
-	UpdatedAt      time.Time            `json:"updated_at"`
+	ID             string                    `json:"id"`
+	Name           string                    `json:"name"`
+	Status         types.Status              `json:"status"`
+	InternalStatus types.TenantInternalStatus `json:"internal_status"`
+	BillingDetails TenantBillingDetails      `json:"billing_details"`
+	Metadata       types.Metadata            `json:"metadata"`
+	CreatedAt      time.Time                 `json:"created_at"`
+	UpdatedAt      time.Time                 `json:"updated_at"`
 }
 
 // FromEnt converts an ent Tenant to a domain Tenant
@@ -47,6 +48,7 @@ func FromEnt(e *ent.Tenant) *Tenant {
 		ID:             e.ID,
 		Name:           e.Name,
 		Status:         types.Status(e.Status),
+		InternalStatus: types.TenantInternalStatus(e.InternalStatus),
 		Metadata:       e.Metadata,
 		CreatedAt:      e.CreatedAt,
 		UpdatedAt:      e.UpdatedAt,

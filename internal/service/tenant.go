@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -19,6 +20,7 @@ type TenantService interface {
 	AssignTenantToUser(ctx context.Context, req dto.AssignTenantRequest) error
 	GetAllTenants(ctx context.Context) ([]*dto.TenantResponse, error)
 	UpdateTenant(ctx context.Context, id string, req dto.UpdateTenantRequest) (*dto.TenantResponse, error)
+	UpdateTenantAccess(ctx context.Context, id string, req dto.UpdateTenantAccessRequest) (*dto.TenantResponse, error)
 	GetBillingUsage(ctx context.Context) (*dto.TenantBillingUsage, error)
 	CreateTenantAsBillingCustomer(ctx context.Context, t *tenant.Tenant) error
 }
@@ -292,4 +294,35 @@ func getBillingContext(ctx context.Context, config *config.Configuration) contex
 	billingCtx := context.WithValue(ctx, types.CtxTenantID, config.Billing.TenantID)
 	billingCtx = context.WithValue(billingCtx, types.CtxEnvironmentID, config.Billing.EnvironmentID)
 	return billingCtx
+}
+
+func (s *tenantService) UpdateTenantAccess(ctx context.Context, id string, req dto.UpdateTenantAccessRequest) (*dto.TenantResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	existingTenant, err := s.TenantRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if existingTenant.InternalStatus == req.InternalStatus {
+		return nil, ierr.NewError("tenant internal status is already set to the requested value").
+			WithHint("The tenant is already in the requested internal status").
+			WithReportableDetails(map[string]any{
+				"tenant_id":       id,
+				"current_status":  existingTenant.InternalStatus,
+				"requested_status": req.InternalStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	existingTenant.InternalStatus = req.InternalStatus
+	existingTenant.UpdatedAt = time.Now()
+
+	if err := s.TenantRepo.Update(ctx, existingTenant); err != nil {
+		return nil, err
+	}
+
+	return dto.NewTenantResponse(existingTenant), nil
 }

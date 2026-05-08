@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
@@ -69,7 +70,15 @@ type Handlers struct {
 	CronKafkaLagMonitoring *cron.KafkaLagMonitoringHandler
 }
 
-func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
+func NewRouter(
+	handlers Handlers,
+	cfg *config.Configuration,
+	logger *logger.Logger,
+	secretService service.SecretService,
+	envAccessService service.EnvAccessService,
+	rbacService *rbac.RBACService,
+	tenantRepo tenant.Repository,
+) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
 	// Create a new gin engine without default middleware
@@ -115,6 +124,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	}
 
 	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, logger))
+	private.Use(middleware.TenantAccessMiddleware(tenantRepo, logger))
 	private.Use(middleware.EnvAccessMiddleware(envAccessService, logger))
 	private.Use(middleware.SentryTenantContextMiddleware)
 
@@ -533,7 +543,10 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		adminRoutes := v1Private.Group("/admin")
 		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, logger))
 		{
-			// All admin routes to go here
+			adminTenants := adminRoutes.Group("/tenants")
+			{
+				adminTenants.PUT("/:id/internal-status", handlers.Tenant.UpdateTenantAccess)
+			}
 		}
 
 		// AI helpers (authenticated; same middleware as other /v1 private routes)
