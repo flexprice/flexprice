@@ -2302,7 +2302,16 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// For parent subscriptions, merge line items from all grouped_invoicing children.
 	if sub.SubscriptionType == types.SubscriptionTypeParent {
-		children, err := s.SubRepo.List(ctx, groupedInvoicingChildrenFilter(sub.ID))
+		filter := types.NewNoLimitSubscriptionFilter()
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+		filter.ParentSubscriptionIDs = []string{sub.ID}
+		filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+		filter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+			types.SubscriptionStatusDraft,
+		}
+		children, err := s.SubRepo.List(ctx, filter)
 		if err != nil {
 			return nil, err
 		}
