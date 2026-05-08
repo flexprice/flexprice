@@ -7376,7 +7376,7 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 	}
 
 	// SubIDsForGroupedInvoicing are processed post-create (parent.ID not known yet at this point).
-	groupedInvoicingSubIDs = inh.SubIDsForGroupedInvoicing
+	groupedInvoicingSubIDs = inh.SubscriptionsIDsForGroupedInvoicing
 
 	if len(childCustomerIDs) > 0 {
 		sub.SubscriptionType = types.SubscriptionTypeParent

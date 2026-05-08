@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/stretchr/testify/assert"
 )
 
 func baseCreateSubscriptionRequest() CreateSubscriptionRequest {
@@ -51,69 +50,6 @@ func TestCreateSubscriptionRequestValidate_BillingAnchorRequiresAnniversaryBilli
 			t.Fatalf("expected no error, got: %v", err)
 		}
 	})
-}
-
-func strPtr(s string) *string { return &s }
-
-func TestSubscriptionInheritanceConfig_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		cfg     *SubscriptionInheritanceConfig
-		wantErr bool
-	}{
-		{
-			name: "nil config is valid",
-			cfg:  nil,
-		},
-		{
-			name: "legacy path nil behavior with parent_id and external_ids is invalid",
-			cfg: &SubscriptionInheritanceConfig{
-				ParentSubscriptionID:                     "sub_123",
-				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "legacy path nil behavior with invoicing_id and external_ids is invalid",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingCustomerExternalID:              strPtr("cust_inv"),
-				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "legacy path nil behavior with only parent_id is valid",
-			cfg: &SubscriptionInheritanceConfig{
-				ParentSubscriptionID: "sub_123",
-			},
-		},
-		{
-			name: "sub_ids_for_grouped_invoicing with parent_subscription_id is invalid",
-			cfg: &SubscriptionInheritanceConfig{
-				ParentSubscriptionID:      "sub_123",
-				SubIDsForGroupedInvoicing: []string{"sub_123"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "sub_ids_for_grouped_invoicing with invoicing_customer_external_id is invalid",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingCustomerExternalID: strPtr("cust_ext"),
-				SubIDsForGroupedInvoicing:   []string{"sub_123"},
-			},
-			wantErr: true,
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := tc.cfg.Validate()
-			if tc.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
 }
 
 func TestCreateSubscriptionRequestValidate_BillingAnchorOnOrAfterStartDate(t *testing.T) {

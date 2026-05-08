@@ -283,9 +283,9 @@ type SubscriptionInheritanceConfig struct {
 	// Required for delegated; rejected for inherited; optional for others.
 	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
 
-	// SubIDsForGroupedInvoicing: existing standalone subscription IDs to convert to
+	// SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to
 	// grouped_invoicing under this parent at creation time. Only valid for parent behavior.
-	SubIDsForGroupedInvoicing []string `json:"sub_ids_for_grouped_invoicing,omitempty"`
+	SubscriptionsIDsForGroupedInvoicing []string `json:"subscriptions_ids_for_grouped_invoicing,omitempty"`
 }
 
 // Validate enforces mutual-exclusivity constraints between inheritance fields.
@@ -309,15 +309,15 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 	}
 
 	// Grouped invoicing conversions only make sense when creating a parent (no parent link).
-	if len(c.SubIDsForGroupedInvoicing) > 0 && c.ParentSubscriptionID != "" {
-		return ierr.NewError("cannot set sub_ids_for_grouped_invoicing together with parent_subscription_id").
-			WithHint("sub_ids_for_grouped_invoicing can only be used when creating a parent subscription").
+	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && c.ParentSubscriptionID != "" {
+		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with parent_subscription_id").
+			WithHint("subscriptions_ids_for_grouped_invoicing can only be used when creating a parent subscription").
 			Mark(ierr.ErrValidation)
 	}
 
 	// Grouped invoicing conversions cannot be combined with delegated invoicing.
-	if len(c.SubIDsForGroupedInvoicing) > 0 && c.InvoicingCustomerExternalID != nil {
-		return ierr.NewError("cannot set sub_ids_for_grouped_invoicing together with invoicing_customer_external_id").
+	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && c.InvoicingCustomerExternalID != nil {
+		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with invoicing_customer_external_id").
 			WithHint("Use either grouped invoicing conversion or delegated invoicing, not both").
 			Mark(ierr.ErrValidation)
 	}
