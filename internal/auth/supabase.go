@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"math"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -14,6 +16,57 @@ import (
 	"github.com/nedpals/supabase-go"
 	"github.com/sethvargo/go-password/password"
 )
+
+const jwtClockSkewLeeway = 5 * time.Second
+
+func validateJWTTimeClaimsWithLeeway(mapClaims jwt.MapClaims, now time.Time) error {
+	nowUnix := now.Unix()
+	leewaySeconds := int64(jwtClockSkewLeeway / time.Second)
+
+	getInt64 := func(key string) (int64, bool) {
+		raw, ok := mapClaims[key]
+		if !ok || raw == nil {
+			return 0, false
+		}
+		switch v := raw.(type) {
+		case float64:
+			// jwt.MapClaims unmarshals numeric dates as float64
+			return int64(math.Floor(v)), true
+		case json.Number:
+			i, err := v.Int64()
+			return i, err == nil
+		case int64:
+			return v, true
+		case int:
+			return int64(v), true
+		default:
+			return 0, false
+		}
+	}
+
+	// exp: invalid if now is after exp + leeway
+	if exp, ok := getInt64("exp"); ok {
+		if nowUnix > exp+leewaySeconds {
+			return jwt.ErrTokenExpired
+		}
+	}
+
+	// nbf: invalid if now + leeway is before nbf
+	if nbf, ok := getInt64("nbf"); ok {
+		if nowUnix+leewaySeconds < nbf {
+			return jwt.ErrTokenNotValidYet
+		}
+	}
+
+	// iat: invalid if iat is more than leeway ahead of now
+	if iat, ok := getInt64("iat"); ok {
+		if nowUnix+leewaySeconds < iat {
+			return jwt.NewValidationError("Token used before issued", jwt.ValidationErrorIssuedAt)
+		}
+	}
+
+	return nil
+}
 
 type supabaseAuth struct {
 	AuthConfig config.AuthConfig
@@ -95,7 +148,8 @@ func (s *supabaseAuth) Login(ctx context.Context, req AuthRequest, userAuthInfo 
 }
 
 func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.Claims, error) {
-	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+	parser := jwt.Parser{SkipClaimsValidation: true}
+	parsedToken, err := parser.Parse(token, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ierr.NewError("unexpected signing method").
 				WithHint("Unexpected signing method").
@@ -117,6 +171,12 @@ func (s *supabaseAuth) ValidateToken(ctx context.Context, token string) (*auth.C
 	if !ok || !parsedToken.Valid {
 		return nil, ierr.NewError("invalid token claims").
 			WithHint("Invalid token claims").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
+	if err := validateJWTTimeClaimsWithLeeway(claims, time.Now()); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Token time-claims validation error").
 			Mark(ierr.ErrPermissionDenied)
 	}
 
