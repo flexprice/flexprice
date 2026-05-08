@@ -120,7 +120,7 @@ func (p *PrepareSubscriptionInvoiceRequestParams) Validate() error {
 // It describes a parent subscription plus its grouped_invoicing children for clubbed invoice generation.
 type PrepareGroupedInvoiceRequestParams struct {
 	ParentSubscription *subscription.Subscription   `validate:"required"`
-	ChildSubscriptions []*subscription.Subscription // may be empty; each must have line items loaded
+	ChildSubscriptions []*subscription.Subscription // may be empty; line items are reloaded internally by PrepareSubscriptionInvoiceRequest
 	PeriodStart        time.Time                    `validate:"required"`
 	PeriodEnd          time.Time                    `validate:"required"`
 	ReferencePoint     types.InvoiceReferencePoint  `validate:"required"`

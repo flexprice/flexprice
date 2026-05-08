@@ -2920,14 +2920,16 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 			if sub.SubscriptionType == types.SubscriptionTypeParent && len(groupedChildren) > 0 {
 				// Clubbed invoice path: merge parent + children line items into one invoice.
-				paymentParamsGrouped := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
 				clubbedInv, clubbedErr := invoiceService.CreateGroupedSubscriptionInvoice(
 					ctx,
-					sub,
-					groupedChildren,
-					period.start,
-					period.end,
-					paymentParamsGrouped,
+					&dto.CreateGroupedSubscriptionInvoiceRequest{
+						ParentSubscriptionID: sub.ID,
+						ChildSubscriptionIDs: lo.Map(groupedChildren, func(c *subscription.Subscription, _ int) string { return c.ID }),
+						PeriodStart:          period.start,
+						PeriodEnd:            period.end,
+						ReferencePoint:       types.ReferencePointPeriodEnd,
+					},
+					paymentParams,
 				)
 				if clubbedErr != nil {
 					return clubbedErr

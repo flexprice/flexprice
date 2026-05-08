@@ -44,13 +44,7 @@ type InvoiceService interface {
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	// CreateGroupedSubscriptionInvoice generates a single clubbed invoice for a parent
 	// subscription plus all its grouped_invoicing children for the given period.
-	CreateGroupedSubscriptionInvoice(
-		ctx context.Context,
-		parentSub *subscription.Subscription,
-		childSubs []*subscription.Subscription,
-		periodStart, periodEnd time.Time,
-		paymentParams *dto.PaymentParameters,
-	) (*dto.InvoiceResponse, error)
+	CreateGroupedSubscriptionInvoice(ctx context.Context, req *dto.CreateGroupedSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters) (*dto.InvoiceResponse, error)
 	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
@@ -1948,61 +1942,58 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	return dto.NewInvoiceResponse(inv), subscription, nil
 }
 
-func (s *invoiceService) CreateGroupedSubscriptionInvoice(
-	ctx context.Context,
-	parentSub *subscription.Subscription,
-	childSubs []*subscription.Subscription,
-	periodStart, periodEnd time.Time,
-	paymentParams *dto.PaymentParameters,
-) (*dto.InvoiceResponse, error) {
+func (s *invoiceService) CreateGroupedSubscriptionInvoice(ctx context.Context, req *dto.CreateGroupedSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters) (*dto.InvoiceResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	s.Logger.InfowCtx(ctx, "creating grouped subscription invoice",
-		"parent_subscription_id", parentSub.ID,
-		"child_count", len(childSubs),
-		"period_start", periodStart,
-		"period_end", periodEnd)
+		"parent_subscription_id", req.ParentSubscriptionID,
+		"child_count", len(req.ChildSubscriptionIDs),
+		"period_start", req.PeriodStart,
+		"period_end", req.PeriodEnd)
 
-	billingService := NewBillingService(s.ServiceParams)
-
-	// Load parent and each child with their line items
-	parentWithItems, _, err := s.SubRepo.GetWithLineItems(ctx, parentSub.ID)
+	parentSub, err := s.SubRepo.Get(ctx, req.ParentSubscriptionID)
 	if err != nil {
 		return nil, err
 	}
-	childWithItems := make([]*subscription.Subscription, 0, len(childSubs))
-	for _, ch := range childSubs {
-		c, _, err := s.SubRepo.GetWithLineItems(ctx, ch.ID)
+
+	childSubs := make([]*subscription.Subscription, 0, len(req.ChildSubscriptionIDs))
+	for _, id := range req.ChildSubscriptionIDs {
+		child, err := s.SubRepo.Get(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		childWithItems = append(childWithItems, c)
+		childSubs = append(childSubs, child)
 	}
 
-	// Build merged invoice request
+	billingService := NewBillingService(s.ServiceParams)
+
+	// PrepareGroupedInvoiceRequest calls PrepareSubscriptionInvoiceRequest for parent and
+	// each child, which reloads line items from the repo internally. No pre-loading needed.
 	mergedReq, err := billingService.PrepareGroupedInvoiceRequest(ctx, &dto.PrepareGroupedInvoiceRequestParams{
-		ParentSubscription: parentWithItems,
-		ChildSubscriptions: childWithItems,
-		PeriodStart:        periodStart,
-		PeriodEnd:          periodEnd,
-		ReferencePoint:     types.ReferencePointPeriodEnd,
+		ParentSubscription: parentSub,
+		ChildSubscriptions: childSubs,
+		PeriodStart:        req.PeriodStart,
+		PeriodEnd:          req.PeriodEnd,
+		ReferencePoint:     req.ReferencePoint,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Nothing to invoice — skip
 	if len(mergedReq.LineItems) == 0 {
 		return nil, nil
 	}
 
-	// Create draft invoice against parent's invoicing customer
 	draftReq := dto.CreateDraftInvoiceRequest{
-		CustomerID:             parentWithItems.GetInvoicingCustomerID(),
-		SubscriptionID:         &parentWithItems.ID,
-		SubscriptionCustomerID: &parentWithItems.CustomerID,
-		Currency:               parentWithItems.Currency,
-		BillingPeriod:          lo.ToPtr(string(parentWithItems.BillingPeriod)),
-		PeriodStart:            &periodStart,
-		PeriodEnd:              &periodEnd,
+		CustomerID:             parentSub.GetInvoicingCustomerID(),
+		SubscriptionID:         &parentSub.ID,
+		SubscriptionCustomerID: &parentSub.CustomerID,
+		Currency:               parentSub.Currency,
+		BillingPeriod:          lo.ToPtr(string(parentSub.BillingPeriod)),
+		PeriodStart:            &req.PeriodStart,
+		PeriodEnd:              &req.PeriodEnd,
 		BillingReason:          types.InvoiceBillingReasonSubscriptionCycle,
 		InvoiceType:            types.InvoiceTypeSubscription,
 	}
@@ -2011,7 +2002,6 @@ func (s *invoiceService) CreateGroupedSubscriptionInvoice(
 		return nil, err
 	}
 
-	// Apply merged line items to draft (bypasses subscription-based recomputation)
 	skipped, err := s.computeInvoiceWithRequest(ctx, draft.ID, mergedReq)
 	if err != nil {
 		return nil, err
@@ -2020,8 +2010,7 @@ func (s *invoiceService) CreateGroupedSubscriptionInvoice(
 		return nil, nil
 	}
 
-	// Process payment and finalize
-	if err := s.ProcessDraftInvoice(ctx, draft.ID, paymentParams, parentWithItems, types.InvoiceFlowRenewal); err != nil {
+	if err := s.ProcessDraftInvoice(ctx, draft.ID, paymentParams, parentSub, types.InvoiceFlowRenewal); err != nil {
 		return nil, err
 	}
 
