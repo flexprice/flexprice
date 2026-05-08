@@ -150,31 +150,39 @@ Mirrors existing `getInheritedSubscriptions`.
 
 ---
 
-## Subscription Change Service
+## Subscription Modification Service
 
-### New Change Types
+Grouped invoicing membership changes are handled by the existing `SubscriptionModificationService` (in `internal/service/subscription_modification.go`), not `SubscriptionChangeService`. This keeps the preview/execute pattern consistent with the existing `inheritance` and `quantity_change` modification types.
+
+### New Modification Types
 
 ```go
-SubscriptionChangeTypeAddToGroupedInvoicing     SubscriptionChangeType = "add_to_grouped_invoicing"
-SubscriptionChangeTypeRemoveFromGroupedInvoicing SubscriptionChangeType = "remove_from_grouped_invoicing"
+SubscriptionModifyTypeGroupedInvoicingAdd    SubscriptionModifyType = "grouped_invoicing_add"
+SubscriptionModifyTypeGroupedInvoicingRemove SubscriptionModifyType = "grouped_invoicing_remove"
 ```
 
 ### Input DTO
 
 ```go
-type GroupedInvoicingMembershipChangeInput struct {
-    ParentSubscriptionID string   `json:"parent_subscription_id,omitempty"` // required for add
-    ChildSubscriptionIDs []string `json:"child_subscription_ids"`
+// Added to internal/api/dto/subscription_modification.go
+type SubModifyGroupedInvoicingParams struct {
+    // ParentSubscriptionID is required for grouped_invoicing_add.
+    ParentSubscriptionID string   `json:"parent_subscription_id,omitempty"`
+    ChildSubscriptionIDs []string `json:"child_subscription_ids" validate:"required,min=1"`
 }
+
+func (r *SubModifyGroupedInvoicingParams) Validate() error { ... }
 ```
+
+`GroupedInvoicingParams *SubModifyGroupedInvoicingParams` is added to `ExecuteSubscriptionModifyRequest`.
 
 ### Preview
 
-Runs all validations for each child. Returns per-child result (pass/fail + reason). Writes nothing.
+For each child, calls `validateAddToGroupedInvoicingDryRun` (add) or `validateRemoveFromGroupedInvoicingDryRun` (remove). Returns per-child `ChangedSubscription` entries in `ChangedResources.Subscriptions`. Writes nothing.
 
 ### Execute
 
-Calls `addToGroupedInvoicing` / `removeFromGroupedInvoicing` for each child in a single transaction. Rolls back all if any child fails.
+Calls `addToGroupedInvoicing` / `removeFromGroupedInvoicing` for each child in a single transaction. Rolls back all if any child fails. Returns updated child subscription IDs in `ChangedResources.Subscriptions`.
 
 ---
 

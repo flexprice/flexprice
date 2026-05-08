@@ -4,7 +4,7 @@
 
 **Goal:** Add `grouped_invoicing` and `delegated` subscription types, a user-facing `invoicing_behavior` field inside `SubscriptionInheritanceConfig`, membership helpers, and a clubbed invoice billing flow where a parent sub's billing period trigger generates one merged invoice for itself plus all its `grouped_invoicing` children.
 
-**Architecture:** Extend the existing `SubscriptionType` enum with two new values. Hook grouped invoicing into the existing `processSubscriptionPeriod` → `CreateSubscriptionInvoice` pipeline by routing parent subs with grouped children through a new `CreateGroupedSubscriptionInvoice` method that merges line items from all children before computing the invoice. Membership add/remove logic lives in a dedicated `internal/service/subscription_grouped_invoicing.go` file. Change-service preview/execute for post-creation membership changes follows the existing `SubscriptionChangeService` pattern.
+**Architecture:** Extend the existing `SubscriptionType` enum with two new values. Hook grouped invoicing into the existing `processSubscriptionPeriod` → `CreateSubscriptionInvoice` pipeline by routing parent subs with grouped children through a new `CreateGroupedSubscriptionInvoice` method that merges line items from all children before computing the invoice. Membership add/remove logic lives in a dedicated `internal/service/subscription_grouped_invoicing.go` file. Post-creation membership changes are exposed via `SubscriptionModificationService` with two new modify types (`grouped_invoicing_add`, `grouped_invoicing_remove`), following the same preview/execute pattern as existing `inheritance` and `quantity_change` types.
 
 **Tech Stack:** Go 1.23, Gin, Uber FX, Ent (PostgreSQL), existing service patterns in `internal/service/`.
 
@@ -14,15 +14,15 @@
 
 | File | Action | Responsibility |
 |---|---|---|
-| `internal/types/subscription.go` | Modify | Add `SubscriptionTypeDelegated`, `SubscriptionTypeGroupedInvoicing`, `SubscriptionChangeTypeAddToGroupedInvoicing`, `SubscriptionChangeTypeRemoveFromGroupedInvoicing` |
+| `internal/types/subscription.go` | Modify | Add `SubscriptionTypeDelegated`, `SubscriptionTypeGroupedInvoicing` |
 | `internal/api/dto/subscription.go` | Modify | Add `InvoicingBehavior` + `SubIDsForGroupedInvoicing` to `SubscriptionInheritanceConfig`; update `Validate()` |
 | `internal/api/dto/billing.go` | Modify | Add `PrepareGroupedInvoiceRequestParams` |
-| `internal/api/dto/subscription_change.go` | Modify | Add `GroupedInvoicingMembershipChangeRequest` + `GroupedInvoicingMembershipPreviewResponse` |
+| `internal/api/dto/subscription_modification.go` | Modify | Add `SubModifyGroupedInvoicingParams`; add `SubscriptionModifyTypeGroupedInvoicingAdd/Remove`; extend `ExecuteSubscriptionModifyRequest` |
 | `internal/service/subscription_grouped_invoicing.go` | **Create** | `addToGroupedInvoicing`, `removeFromGroupedInvoicing`, `getGroupedInvoicingSubscriptions` |
 | `internal/service/subscription.go` | Modify | Update `prepareSubscriptionInheritanceForCreate`; update `processSubscriptionPeriod` to skip grouped children and trigger clubbed invoice for parents |
 | `internal/service/billing.go` | Modify | Add `PrepareGroupedInvoiceRequest` to interface + implementation |
 | `internal/service/invoice.go` | Modify | Skip `grouped_invoicing` in `ComputeInvoice`; add `CreateGroupedSubscriptionInvoice` |
-| `internal/service/subscription_change.go` | Modify | Add `PreviewGroupedInvoicingMembership` + `ExecuteGroupedInvoicingMembership` to interface + struct |
+| `internal/service/subscription_modification.go` | Modify | Add `grouped_invoicing_add`/`_remove` cases to Execute + Preview switch |
 | `internal/service/subscription_grouped_invoicing_test.go` | **Create** | Unit tests for add/remove helpers |
 | `internal/service/subscription_test.go` | Modify | Tests for new create-time behaviors (delegated, grouped_invoicing child create, parent with `sub_ids_for_grouped_invoicing`) |
 
@@ -74,38 +74,13 @@ Update the `Validate()` hint at line ~44:
 WithHint("Subscription type must be one of: standalone, delegated, parent, inherited, grouped_invoicing").
 ```
 
-- [ ] **Step 2: Add the two new `SubscriptionChangeType` constants**
-
-After the existing `SubscriptionChangeTypeLateral` block (around line 453 in `internal/types/subscription.go`), add:
-
-```go
-	// SubscriptionChangeTypeAddToGroupedInvoicing converts standalone subscriptions to
-	// grouped_invoicing children of a given parent.
-	SubscriptionChangeTypeAddToGroupedInvoicing SubscriptionChangeType = "add_to_grouped_invoicing"
-
-	// SubscriptionChangeTypeRemoveFromGroupedInvoicing reverts grouped_invoicing children
-	// back to standalone, clearing their parent link.
-	SubscriptionChangeTypeRemoveFromGroupedInvoicing SubscriptionChangeType = "remove_from_grouped_invoicing"
-```
-
-Also append both to `SubscriptionChangeTypeValues`:
-```go
-var SubscriptionChangeTypeValues = []SubscriptionChangeType{
-	SubscriptionChangeTypeUpgrade,
-	SubscriptionChangeTypeDowngrade,
-	SubscriptionChangeTypeLateral,
-	SubscriptionChangeTypeAddToGroupedInvoicing,
-	SubscriptionChangeTypeRemoveFromGroupedInvoicing,
-}
-```
-
-- [ ] **Step 3: Run `go vet ./internal/types/...` — expected: no errors**
+- [ ] **Step 2: Run `go vet ./internal/types/...` — expected: no errors**
 
 ```bash
 cd /path/to/repo && go vet ./internal/types/...
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add internal/types/subscription.go
@@ -1459,215 +1434,296 @@ git commit -m "feat(billing): wire grouped invoicing into UpdateBillingPeriods"
 
 ---
 
-## Task 9: Add grouped invoicing membership to `SubscriptionChangeService`
+## Task 9: Add grouped invoicing membership to `SubscriptionModificationService`
 
 **Files:**
-- Modify: `internal/api/dto/subscription_change.go`
-- Modify: `internal/service/subscription_change.go`
+- Modify: `internal/api/dto/subscription_modification.go`
+- Modify: `internal/service/subscription_modification.go`
 
-- [ ] **Step 1: Add DTOs to `internal/api/dto/subscription_change.go`**
+The existing `SubscriptionModificationService` already has `Execute`/`Preview` methods that switch on `req.Type`. This task adds two new type values and wires them in.
 
-Append after the existing types:
+- [ ] **Step 1: Add new constants and DTO to `internal/api/dto/subscription_modification.go`**
+
+After the existing `SubscriptionModifyTypeQuantityChange` constant, add:
 
 ```go
-// GroupedInvoicingMembershipChangeRequest is the input for add/remove grouped invoicing membership changes.
-type GroupedInvoicingMembershipChangeRequest struct {
-	// ParentSubscriptionID is required for add_to_grouped_invoicing change type.
-	ParentSubscriptionID string `json:"parent_subscription_id,omitempty"`
-	// ChildSubscriptionIDs lists the subscriptions to add or remove.
+SubscriptionModifyTypeGroupedInvoicingAdd    SubscriptionModifyType = "grouped_invoicing_add"
+SubscriptionModifyTypeGroupedInvoicingRemove SubscriptionModifyType = "grouped_invoicing_remove"
+```
+
+Add the params struct before `ExecuteSubscriptionModifyRequest`:
+
+```go
+// SubModifyGroupedInvoicingParams is the payload for grouped invoicing membership changes.
+type SubModifyGroupedInvoicingParams struct {
+	// ParentSubscriptionID is required for grouped_invoicing_add.
+	ParentSubscriptionID string   `json:"parent_subscription_id,omitempty"`
 	ChildSubscriptionIDs []string `json:"child_subscription_ids" validate:"required,min=1"`
 }
 
-func (r *GroupedInvoicingMembershipChangeRequest) Validate() error {
+func (r *SubModifyGroupedInvoicingParams) Validate(modifyType SubscriptionModifyType) error {
 	if len(r.ChildSubscriptionIDs) == 0 {
-		return ierr.NewError("child_subscription_ids must not be empty").Mark(ierr.ErrValidation)
+		return ierr.NewError("child_subscription_ids must not be empty").
+			WithHint("Provide child_subscription_ids with at least one entry").
+			Mark(ierr.ErrValidation)
+	}
+	if modifyType == SubscriptionModifyTypeGroupedInvoicingAdd && r.ParentSubscriptionID == "" {
+		return ierr.NewError("parent_subscription_id is required for grouped_invoicing_add").
+			Mark(ierr.ErrValidation)
 	}
 	return nil
 }
+```
 
-// GroupedInvoicingMembershipPreviewItem is the per-child preview result.
-type GroupedInvoicingMembershipPreviewItem struct {
-	SubscriptionID string `json:"subscription_id"`
-	Valid          bool   `json:"valid"`
-	Error          string `json:"error,omitempty"`
-}
+Add `GroupedInvoicingParams` field to `ExecuteSubscriptionModifyRequest`:
 
-// GroupedInvoicingMembershipPreviewResponse is returned by the preview step.
-type GroupedInvoicingMembershipPreviewResponse struct {
-	Items     []GroupedInvoicingMembershipPreviewItem `json:"items"`
-	AllValid  bool                                    `json:"all_valid"`
-}
-
-// GroupedInvoicingMembershipExecuteResponse is returned by the execute step.
-type GroupedInvoicingMembershipExecuteResponse struct {
-	UpdatedSubscriptionIDs []string `json:"updated_subscription_ids"`
+```go
+type ExecuteSubscriptionModifyRequest struct {
+	Type                 SubscriptionModifyType          `json:"type" binding:"required"`
+	InheritanceParams    *SubModifyInheritanceRequest    `json:"inheritance_params,omitempty"`
+	QuantityChangeParams *SubModifyQuantityChangeRequest `json:"quantity_change_params,omitempty"`
+	GroupedInvoicingParams *SubModifyGroupedInvoicingParams `json:"grouped_invoicing_params,omitempty"`
 }
 ```
 
-- [ ] **Step 2: Add methods to `SubscriptionChangeService` interface in `internal/service/subscription_change.go`**
+Update `Validate()` — add two new cases to the switch:
 
 ```go
-// PreviewGroupedInvoicingMembership validates and previews add/remove grouped invoicing membership changes.
-PreviewGroupedInvoicingMembership(ctx context.Context, changeType types.SubscriptionChangeType, req *dto.GroupedInvoicingMembershipChangeRequest) (*dto.GroupedInvoicingMembershipPreviewResponse, error)
-
-// ExecuteGroupedInvoicingMembership executes add/remove grouped invoicing membership changes atomically.
-ExecuteGroupedInvoicingMembership(ctx context.Context, changeType types.SubscriptionChangeType, req *dto.GroupedInvoicingMembershipChangeRequest) (*dto.GroupedInvoicingMembershipExecuteResponse, error)
+case SubscriptionModifyTypeGroupedInvoicingAdd, SubscriptionModifyTypeGroupedInvoicingRemove:
+	if r.GroupedInvoicingParams == nil {
+		return ierr.NewError("grouped_invoicing_params is required for type '" + string(r.Type) + "'").
+			Mark(ierr.ErrValidation)
+	}
+	return r.GroupedInvoicingParams.Validate(r.Type)
 ```
 
-- [ ] **Step 3: Implement both methods on `subscriptionChangeService`**
+Also update the `default` hint to include the new values:
+```go
+WithHint("Valid values: inheritance, quantity_change, grouped_invoicing_add, grouped_invoicing_remove").
+```
+
+- [ ] **Step 2: Write tests for the new validation**
+
+In `internal/api/dto/subscription_modification_test.go` (create if it doesn't exist), add table-driven tests:
 
 ```go
-func (s *subscriptionChangeService) PreviewGroupedInvoicingMembership(
-	ctx context.Context,
-	changeType types.SubscriptionChangeType,
-	req *dto.GroupedInvoicingMembershipChangeRequest,
-) (*dto.GroupedInvoicingMembershipPreviewResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
+package dto_test
+
+import (
+	"testing"
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/stretchr/testify/require"
+)
+
+func TestExecuteSubscriptionModifyRequest_Validate_GroupedInvoicing(t *testing.T) {
+	tests := []struct {
+		name    string
+		req     dto.ExecuteSubscriptionModifyRequest
+		wantErr bool
+	}{
+		{
+			name: "grouped_invoicing_add with valid params",
+			req: dto.ExecuteSubscriptionModifyRequest{
+				Type: dto.SubscriptionModifyTypeGroupedInvoicingAdd,
+				GroupedInvoicingParams: &dto.SubModifyGroupedInvoicingParams{
+					ParentSubscriptionID: "parent_123",
+					ChildSubscriptionIDs: []string{"child_1", "child_2"},
+				},
+			},
+		},
+		{
+			name: "grouped_invoicing_add missing parent_subscription_id",
+			req: dto.ExecuteSubscriptionModifyRequest{
+				Type: dto.SubscriptionModifyTypeGroupedInvoicingAdd,
+				GroupedInvoicingParams: &dto.SubModifyGroupedInvoicingParams{
+					ChildSubscriptionIDs: []string{"child_1"},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "grouped_invoicing_add missing params",
+			req: dto.ExecuteSubscriptionModifyRequest{
+				Type: dto.SubscriptionModifyTypeGroupedInvoicingAdd,
+			},
+			wantErr: true,
+		},
+		{
+			name: "grouped_invoicing_remove with valid params — parent not required",
+			req: dto.ExecuteSubscriptionModifyRequest{
+				Type: dto.SubscriptionModifyTypeGroupedInvoicingRemove,
+				GroupedInvoicingParams: &dto.SubModifyGroupedInvoicingParams{
+					ChildSubscriptionIDs: []string{"child_1"},
+				},
+			},
+		},
+		{
+			name: "grouped_invoicing_remove missing child_subscription_ids",
+			req: dto.ExecuteSubscriptionModifyRequest{
+				Type: dto.SubscriptionModifyTypeGroupedInvoicingRemove,
+				GroupedInvoicingParams: &dto.SubModifyGroupedInvoicingParams{},
+			},
+			wantErr: true,
+		},
 	}
-
-	subService := NewSubscriptionService(s.serviceParams).(*subscriptionService)
-	resp := &dto.GroupedInvoicingMembershipPreviewResponse{
-		Items:    make([]dto.GroupedInvoicingMembershipPreviewItem, 0, len(req.ChildSubscriptionIDs)),
-		AllValid: true,
-	}
-
-	var parentSub *subscription.Subscription
-	if changeType == types.SubscriptionChangeTypeAddToGroupedInvoicing {
-		if req.ParentSubscriptionID == "" {
-			return nil, ierr.NewError("parent_subscription_id is required for add_to_grouped_invoicing").Mark(ierr.ErrValidation)
-		}
-		var err error
-		parentSub, err = s.serviceParams.SubRepo.Get(ctx, req.ParentSubscriptionID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	for _, childID := range req.ChildSubscriptionIDs {
-		item := dto.GroupedInvoicingMembershipPreviewItem{SubscriptionID: childID, Valid: true}
-		var err error
-		if changeType == types.SubscriptionChangeTypeAddToGroupedInvoicing {
-			err = subService.addToGroupedInvoicing(ctx, parentSub, childID)
-			// This is preview only — we do NOT commit; wrap in a dry-run check instead.
-			// Re-fetch and validate without writing:
-			err = subService.validateAddToGroupedInvoicingDryRun(ctx, parentSub, childID)
-		} else {
-			err = subService.validateRemoveFromGroupedInvoicingDryRun(ctx, childID)
-		}
-		if err != nil {
-			item.Valid = false
-			item.Error = err.Error()
-			resp.AllValid = false
-		}
-		resp.Items = append(resp.Items, item)
-	}
-	return resp, nil
-}
-
-func (s *subscriptionChangeService) ExecuteGroupedInvoicingMembership(
-	ctx context.Context,
-	changeType types.SubscriptionChangeType,
-	req *dto.GroupedInvoicingMembershipChangeRequest,
-) (*dto.GroupedInvoicingMembershipExecuteResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	subService := NewSubscriptionService(s.serviceParams).(*subscriptionService)
-
-	var parentSub *subscription.Subscription
-	if changeType == types.SubscriptionChangeTypeAddToGroupedInvoicing {
-		if req.ParentSubscriptionID == "" {
-			return nil, ierr.NewError("parent_subscription_id is required for add_to_grouped_invoicing").Mark(ierr.ErrValidation)
-		}
-		var err error
-		parentSub, err = s.serviceParams.SubRepo.Get(ctx, req.ParentSubscriptionID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	updatedIDs := make([]string, 0, len(req.ChildSubscriptionIDs))
-	err := s.serviceParams.DB.WithTx(ctx, func(ctx context.Context) error {
-		for _, childID := range req.ChildSubscriptionIDs {
-			var err error
-			if changeType == types.SubscriptionChangeTypeAddToGroupedInvoicing {
-				err = subService.addToGroupedInvoicing(ctx, parentSub, childID)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.req.Validate()
+			if tc.wantErr {
+				require.Error(t, err)
 			} else {
-				err = subService.removeFromGroupedInvoicing(ctx, childID)
+				require.NoError(t, err)
 			}
-			if err != nil {
-				return err // rolls back all
+		})
+	}
+}
+```
+
+Run: `go test ./internal/api/dto/... -run TestExecuteSubscriptionModifyRequest_Validate_GroupedInvoicing -v`
+Expected: PASS
+
+- [ ] **Step 3: Wire into `SubscriptionModificationService` in `internal/service/subscription_modification.go`**
+
+In `Execute()`, add to the switch:
+
+```go
+case dto.SubscriptionModifyTypeGroupedInvoicingAdd, dto.SubscriptionModifyTypeGroupedInvoicingRemove:
+	return s.executeGroupedInvoicingMembership(ctx, req.Type, req.GroupedInvoicingParams)
+```
+
+In `Preview()`, add to the switch:
+
+```go
+case dto.SubscriptionModifyTypeGroupedInvoicingAdd, dto.SubscriptionModifyTypeGroupedInvoicingRemove:
+	return s.previewGroupedInvoicingMembership(ctx, req.Type, req.GroupedInvoicingParams)
+```
+
+Also update the `default` hint in both switches to include the new values.
+
+- [ ] **Step 4: Implement `executeGroupedInvoicingMembership` and `previewGroupedInvoicingMembership`**
+
+Add a new file `internal/service/subscription_modification_grouped.go` (keeps the main file tidy):
+
+```go
+package service
+
+import (
+	"context"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
+)
+
+func (s *subscriptionModificationService) previewGroupedInvoicingMembership(
+	ctx context.Context,
+	modifyType dto.SubscriptionModifyType,
+	params *dto.SubModifyGroupedInvoicingParams,
+) (*dto.SubscriptionModifyResponse, error) {
+	subSvc := NewSubscriptionService(s.serviceParams).(*subscriptionService)
+
+	var parentSub *subscription.Subscription
+	if modifyType == dto.SubscriptionModifyTypeGroupedInvoicingAdd {
+		var err error
+		parentSub, err = s.serviceParams.SubRepo.Get(ctx, params.ParentSubscriptionID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	changed := make([]dto.ChangedSubscription, 0, len(params.ChildSubscriptionIDs))
+	for _, childID := range params.ChildSubscriptionIDs {
+		var validateErr error
+		if modifyType == dto.SubscriptionModifyTypeGroupedInvoicingAdd {
+			validateErr = subSvc.validateAddToGroupedInvoicingDryRun(ctx, parentSub, childID)
+		} else {
+			validateErr = subSvc.validateRemoveFromGroupedInvoicingDryRun(ctx, childID)
+		}
+		action := dto.ChangedSubscriptionActionUpdated
+		status := types.SubscriptionStatusActive
+		if validateErr != nil {
+			return nil, validateErr
+		}
+		changed = append(changed, dto.ChangedSubscription{
+			ID:     childID,
+			Action: action,
+			Status: status,
+		})
+	}
+
+	return &dto.SubscriptionModifyResponse{
+		ChangedResources: dto.ChangedResources{
+			Subscriptions: changed,
+		},
+	}, nil
+}
+
+func (s *subscriptionModificationService) executeGroupedInvoicingMembership(
+	ctx context.Context,
+	modifyType dto.SubscriptionModifyType,
+	params *dto.SubModifyGroupedInvoicingParams,
+) (*dto.SubscriptionModifyResponse, error) {
+	subSvc := NewSubscriptionService(s.serviceParams).(*subscriptionService)
+
+	var parentSub *subscription.Subscription
+	if modifyType == dto.SubscriptionModifyTypeGroupedInvoicingAdd {
+		var err error
+		parentSub, err = s.serviceParams.SubRepo.Get(ctx, params.ParentSubscriptionID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	changed := make([]dto.ChangedSubscription, 0, len(params.ChildSubscriptionIDs))
+	err := s.serviceParams.DB.WithTx(ctx, func(txCtx context.Context) error {
+		for _, childID := range params.ChildSubscriptionIDs {
+			var opErr error
+			if modifyType == dto.SubscriptionModifyTypeGroupedInvoicingAdd {
+				opErr = subSvc.addToGroupedInvoicing(txCtx, parentSub, childID)
+			} else {
+				opErr = subSvc.removeFromGroupedInvoicing(txCtx, childID)
 			}
-			updatedIDs = append(updatedIDs, childID)
+			if opErr != nil {
+				return opErr
+			}
+			changed = append(changed, dto.ChangedSubscription{
+				ID:     childID,
+				Action: dto.ChangedSubscriptionActionUpdated,
+				Status: types.SubscriptionStatusActive,
+			})
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &dto.GroupedInvoicingMembershipExecuteResponse{UpdatedSubscriptionIDs: updatedIDs}, nil
+
+	return &dto.SubscriptionModifyResponse{
+		ChangedResources: dto.ChangedResources{
+			Subscriptions: changed,
+		},
+	}, nil
 }
 ```
 
-**Note:** `validateAddToGroupedInvoicingDryRun` and `validateRemoveFromGroupedInvoicingDryRun` are thin wrappers in `subscription_grouped_invoicing.go` that run all validations without calling `SubRepo.Update`. Extract the validation logic from `addToGroupedInvoicing` into a separate `validateAddToGroupedInvoicing(ctx, parentSub, childSubID)` helper that both the dry-run and the execute path call.
-
-- [ ] **Step 4: Extract validation into a dry-run helper in `subscription_grouped_invoicing.go`**
-
-Refactor `addToGroupedInvoicing` to call `validateAddToGroupedInvoicing` internally:
-
-```go
-// validateAddToGroupedInvoicing runs all nine constraints without writing.
-func (s *subscriptionService) validateAddToGroupedInvoicing(ctx context.Context, parentSub *subscription.Subscription, child *subscription.Subscription) error {
-    // ... all 9 constraint checks, same as before but takes already-fetched child ...
-}
-
-func (s *subscriptionService) addToGroupedInvoicing(ctx context.Context, parentSub *subscription.Subscription, childSubID string) error {
-    child, err := s.SubRepo.Get(ctx, childSubID)
-    if err != nil {
-        return err
-    }
-    if err := s.validateAddToGroupedInvoicing(ctx, parentSub, child); err != nil {
-        return err
-    }
-    child.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
-    child.ParentSubscriptionID = lo.ToPtr(parentSub.ID)
-    return s.SubRepo.Update(ctx, child)
-}
-
-func (s *subscriptionService) validateAddToGroupedInvoicingDryRun(ctx context.Context, parentSub *subscription.Subscription, childSubID string) error {
-    child, err := s.SubRepo.Get(ctx, childSubID)
-    if err != nil {
-        return err
-    }
-    return s.validateAddToGroupedInvoicing(ctx, parentSub, child)
-}
-
-func (s *subscriptionService) validateRemoveFromGroupedInvoicingDryRun(ctx context.Context, childSubID string) error {
-    child, err := s.SubRepo.Get(ctx, childSubID)
-    if err != nil {
-        return err
-    }
-    if child.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
-        return ierr.NewError("subscription is not of type grouped_invoicing").Mark(ierr.ErrValidation)
-    }
-    return nil
-}
-```
+**Note on status field:** The `ChangedSubscription.Status` field is set to `Active` as a placeholder since the grouped invoicing membership change does not alter the subscription status. The actual status is unaffected by add/remove operations.
 
 - [ ] **Step 5: Run tests**
 
 ```bash
-go test ./internal/service/... -run "TestSubscriptionChangeService" -v
-go test ./internal/service/... -timeout 300s
+go test ./internal/api/dto/... -run TestExecuteSubscriptionModifyRequest_Validate_GroupedInvoicing -v
+go test ./internal/service/... -run "TestSubscriptionGroupedInvoicingTestSuite" -v
+go vet ./internal/api/dto/... ./internal/service/...
 ```
+
+Expected: all pass, no vet errors.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add internal/api/dto/subscription_change.go internal/service/subscription_change.go internal/service/subscription_grouped_invoicing.go
-git commit -m "feat(change-service): add preview+execute for grouped invoicing membership changes"
+git add internal/api/dto/subscription_modification.go internal/service/subscription_modification.go internal/service/subscription_modification_grouped.go
+git commit -m "feat(modification-service): add grouped_invoicing_add/remove to SubscriptionModificationService"
 ```
 
 ---
@@ -1733,12 +1789,13 @@ go vet ./...
 gofmt -w internal/types/subscription.go \
     internal/api/dto/subscription.go \
     internal/api/dto/billing.go \
-    internal/api/dto/subscription_change.go \
+    internal/api/dto/subscription_modification.go \
     internal/service/subscription_grouped_invoicing.go \
     internal/service/subscription.go \
     internal/service/billing.go \
     internal/service/invoice.go \
-    internal/service/subscription_change.go
+    internal/service/subscription_modification.go \
+    internal/service/subscription_modification_grouped.go
 ```
 
 - [ ] **Step 4: Commit**
@@ -1770,8 +1827,8 @@ git commit -m "chore: gofmt and final cleanup for grouped invoicing feature"
 | `CreateGroupedSubscriptionInvoice` | Task 7 |
 | `grouped_invoicing` child skipped in `UpdateBillingPeriods` | Task 8 |
 | Parent triggers clubbed invoice + advances children periods | Task 8 |
-| Change service preview + execute for membership | Task 9 |
-| Dry-run validation helper | Task 9 |
+| Modification service preview + execute for membership (grouped_invoicing_add/remove) | Task 9 |
+| Dry-run validation helper | Task 4 |
 | Ent schema comment updated, migration generated | Task 10 |
 | Backward compat: existing subs unaffected | Tasks 2, 5 (legacy path) |
 
