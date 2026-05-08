@@ -340,6 +340,12 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 		if c.ParentSubscriptionID != "" {
 			return ierr.NewError("delegated subscription must not have parent_subscription_id").Mark(ierr.ErrValidation)
 		}
+		if len(c.SubIDsForGroupedInvoicing) > 0 {
+			return ierr.NewError("delegated subscription must not have sub_ids_for_grouped_invoicing").Mark(ierr.ErrValidation)
+		}
+		if len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+			return ierr.NewError("delegated subscription must not have external_customer_ids_to_inherit_subscription").Mark(ierr.ErrValidation)
+		}
 
 	case types.SubscriptionTypeParent:
 		if c.ParentSubscriptionID != "" {
@@ -355,12 +361,24 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 		if c.InvoicingCustomerExternalID != nil {
 			return ierr.NewError("inherited subscription must not have invoicing_customer_external_id").Mark(ierr.ErrValidation)
 		}
+		if len(c.SubIDsForGroupedInvoicing) > 0 {
+			return ierr.NewError("inherited subscription must not have sub_ids_for_grouped_invoicing").Mark(ierr.ErrValidation)
+		}
+		if len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+			return ierr.NewError("inherited subscription must not have external_customer_ids_to_inherit_subscription").Mark(ierr.ErrValidation)
+		}
 
 	case types.SubscriptionTypeGroupedInvoicing:
 		if c.ParentSubscriptionID == "" {
 			return ierr.NewError("grouped_invoicing subscription requires parent_subscription_id").
 				WithHint("Set parent_subscription_id to the parent subscription ID").
 				Mark(ierr.ErrValidation)
+		}
+		if len(c.SubIDsForGroupedInvoicing) > 0 {
+			return ierr.NewError("grouped_invoicing subscription must not have sub_ids_for_grouped_invoicing").Mark(ierr.ErrValidation)
+		}
+		if len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+			return ierr.NewError("grouped_invoicing subscription must not have external_customer_ids_to_inherit_subscription").Mark(ierr.ErrValidation)
 		}
 
 	default:

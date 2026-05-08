@@ -172,6 +172,60 @@ func TestSubscriptionInheritanceConfig_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "delegated rejects sub_ids_for_grouped_invoicing",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:           types.SubscriptionTypeDelegated,
+				InvoicingCustomerExternalID: strPtr("cust_ext"),
+				SubIDsForGroupedInvoicing:   []string{"sub_123"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "delegated rejects external_customer_ids_to_inherit_subscription",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:                        types.SubscriptionTypeDelegated,
+				InvoicingCustomerExternalID:              strPtr("cust_ext"),
+				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "inherited rejects sub_ids_for_grouped_invoicing",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:         types.SubscriptionTypeInherited,
+				ParentSubscriptionID:      "sub_parent",
+				SubIDsForGroupedInvoicing: []string{"sub_123"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "inherited rejects external_customer_ids_to_inherit_subscription",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:                        types.SubscriptionTypeInherited,
+				ParentSubscriptionID:                     "sub_parent",
+				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "grouped_invoicing rejects sub_ids_for_grouped_invoicing",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:         types.SubscriptionTypeGroupedInvoicing,
+				ParentSubscriptionID:      "sub_parent",
+				SubIDsForGroupedInvoicing: []string{"sub_123"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "grouped_invoicing rejects external_customer_ids_to_inherit_subscription",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:                        types.SubscriptionTypeGroupedInvoicing,
+				ParentSubscriptionID:                     "sub_parent",
+				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
+			},
+			wantErr: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
