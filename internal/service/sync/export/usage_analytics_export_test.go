@@ -127,18 +127,19 @@ func (e *usageAnalyticsTestEnv) addEvent(t *testing.T, externalCustomerID string
 
 func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 	staticCols := []string{
+		string(UsageAnalyticsCSVHeadersCustomerName),
 		string(UsageAnalyticsCSVHeadersCustomerID),
 		string(UsageAnalyticsCSVHeadersCustomerExternalID),
 		string(UsageAnalyticsCSVHeadersStartTime),
 		string(UsageAnalyticsCSVHeadersEndTime),
 		string(UsageAnalyticsCSVHeadersFeatureName),
 		string(UsageAnalyticsCSVHeadersFeatureID),
-		string(UsageAnalyticsCSVHeadersSource),
 		string(UsageAnalyticsCSVHeadersEventName),
 		string(UsageAnalyticsCSVHeadersEventCount),
 		string(UsageAnalyticsCSVHeadersTotalUsage),
 		string(UsageAnalyticsCSVHeadersTotalCost),
 		string(UsageAnalyticsCSVHeadersCurrency),
+		string(UsageAnalyticsCSVHeadersSource),
 	}
 
 	tests := []struct {
@@ -207,6 +208,9 @@ func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 			wantRows:  1,
 			assertRow: func(t *testing.T, headers []string, rows [][]string, env *usageAnalyticsTestEnv) {
 				col := func(name string) string { return colVal(t, headers, rows[0], name) }
+				if got := col(string(UsageAnalyticsCSVHeadersCustomerName)); got != "Acme Corp" {
+					t.Errorf("customer_name: want Acme Corp got %q", got)
+				}
 				if got := col(string(UsageAnalyticsCSVHeadersCustomerID)); got != "cust-2" {
 					t.Errorf("customer_id: want cust-2 got %q", got)
 				}
