@@ -1886,6 +1886,7 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 		req.PeriodEnd = &sub.CurrentPeriodEnd
 	}
 
+	// Prepare invoice request using billing service with the preview reference point
 	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
 		Subscription:   sub,
 		PeriodStart:    *req.PeriodStart,
@@ -1940,6 +1941,7 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 		req.PeriodEnd = &sub.CurrentPeriodEnd
 	}
 
+	// Prepare invoice request using billing service with the internal preview reference point
 	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
 		Subscription:   sub,
 		PeriodStart:    *req.PeriodStart,
