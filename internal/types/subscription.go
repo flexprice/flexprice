@@ -462,22 +462,12 @@ const (
 	SubscriptionChangeTypeUpgrade   SubscriptionChangeType = "upgrade"
 	SubscriptionChangeTypeDowngrade SubscriptionChangeType = "downgrade"
 	SubscriptionChangeTypeLateral   SubscriptionChangeType = "lateral"
-
-	// SubscriptionChangeTypeAddToGroupedInvoicing converts standalone subscriptions to
-	// grouped_invoicing children of a given parent.
-	SubscriptionChangeTypeAddToGroupedInvoicing SubscriptionChangeType = "add_to_grouped_invoicing"
-
-	// SubscriptionChangeTypeRemoveFromGroupedInvoicing reverts grouped_invoicing children
-	// back to standalone, clearing their parent link.
-	SubscriptionChangeTypeRemoveFromGroupedInvoicing SubscriptionChangeType = "remove_from_grouped_invoicing"
 )
 
 var SubscriptionChangeTypeValues = []SubscriptionChangeType{
 	SubscriptionChangeTypeUpgrade,
 	SubscriptionChangeTypeDowngrade,
 	SubscriptionChangeTypeLateral,
-	SubscriptionChangeTypeAddToGroupedInvoicing,
-	SubscriptionChangeTypeRemoveFromGroupedInvoicing,
 }
 
 func (s SubscriptionChangeType) String() string {
@@ -487,7 +477,7 @@ func (s SubscriptionChangeType) String() string {
 func (s SubscriptionChangeType) Validate() error {
 	if s != "" && !lo.Contains(SubscriptionChangeTypeValues, s) {
 		return ierr.NewError("invalid subscription change type").
-			WithHint("Subscription change type must be one of: upgrade, downgrade, lateral, add_to_grouped_invoicing, remove_from_grouped_invoicing").
+			WithHint("Subscription change type must be upgrade, downgrade, or lateral").
 			WithReportableDetails(map[string]any{
 				"allowed_values": SubscriptionChangeTypeValues,
 				"provided_value": s,
