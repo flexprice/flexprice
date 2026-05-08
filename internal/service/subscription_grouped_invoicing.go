@@ -208,12 +208,9 @@ func (s *subscriptionService) validateRemoveFromGroupedInvoicingDryRun(
 	return nil
 }
 
-// getGroupedInvoicingSubscriptions returns all active/trialing/draft child subscriptions
-// of type grouped_invoicing that belong to the given parent subscription.
-func (s *subscriptionService) getGroupedInvoicingSubscriptions(
-	ctx context.Context,
-	parentSubID string,
-) ([]*subscription.Subscription, error) {
+// groupedInvoicingChildrenFilter builds the canonical filter for listing active
+// grouped_invoicing child subscriptions of the given parent.
+func groupedInvoicingChildrenFilter(parentSubID string) *types.SubscriptionFilter {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	filter.ParentSubscriptionIDs = []string{parentSubID}
@@ -223,6 +220,14 @@ func (s *subscriptionService) getGroupedInvoicingSubscriptions(
 		types.SubscriptionStatusTrialing,
 		types.SubscriptionStatusDraft,
 	}
+	return filter
+}
 
-	return s.SubRepo.List(ctx, filter)
+// getGroupedInvoicingSubscriptions returns all active/trialing/draft child subscriptions
+// of type grouped_invoicing that belong to the given parent subscription.
+func (s *subscriptionService) getGroupedInvoicingSubscriptions(
+	ctx context.Context,
+	parentSubID string,
+) ([]*subscription.Subscription, error) {
+	return s.SubRepo.List(ctx, groupedInvoicingChildrenFilter(parentSubID))
 }

@@ -2032,16 +2032,7 @@ func (s *invoiceService) prepareInvoiceRequestForPreview(
 	referencePoint types.InvoiceReferencePoint,
 ) (*dto.CreateInvoiceRequest, error) {
 	if sub.SubscriptionType == types.SubscriptionTypeParent {
-		filter := types.NewNoLimitSubscriptionFilter()
-		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-		filter.ParentSubscriptionIDs = []string{sub.ID}
-		filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
-		filter.SubscriptionStatus = []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusTrialing,
-			types.SubscriptionStatusDraft,
-		}
-		children, err := s.SubRepo.List(ctx, filter)
+		children, err := s.SubRepo.List(ctx, groupedInvoicingChildrenFilter(sub.ID))
 		if err != nil {
 			return nil, err
 		}
@@ -2054,6 +2045,8 @@ func (s *invoiceService) prepareInvoiceRequestForPreview(
 				ReferencePoint:     referencePoint,
 			})
 		}
+		s.Logger.InfowCtx(ctx, "parent subscription has no grouped_invoicing children, using single-subscription preview",
+			"subscription_id", sub.ID)
 	}
 	return billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
 		Subscription:   sub,
