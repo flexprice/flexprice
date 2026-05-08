@@ -42,9 +42,17 @@ func SentryTenantContextMiddleware(c *gin.Context) {
 	if environmentID := types.GetEnvironmentID(ctx); environmentID != "" {
 		hub.Scope().SetTag("environment_id", environmentID)
 	}
+	user := sentry.User{}
 	if userID := types.GetUserID(ctx); userID != "" {
 		hub.Scope().SetTag("user_id", userID)
-		hub.Scope().SetUser(sentry.User{ID: userID})
+		user.ID = userID
+	}
+	if ip := c.ClientIP(); ip != "" {
+		hub.Scope().SetTag("user.ip", ip)
+		user.IPAddress = ip
+	}
+	if user.ID != "" || user.IPAddress != "" {
+		hub.Scope().SetUser(user)
 	}
 	c.Next()
 }
