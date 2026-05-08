@@ -42,6 +42,7 @@ import (
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ee "github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/security"
@@ -418,8 +419,24 @@ func provideHandlers(
 	}
 }
 
-func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
-	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService, rbacService)
+func provideRouter(
+	handlers api.Handlers,
+	cfg *config.Configuration,
+	logger *logger.Logger,
+	secretService service.SecretService,
+	envAccessService service.EnvAccessService,
+	rbacService *rbac.RBACService,
+	tenantRepo tenant.Repository,
+) *gin.Engine {
+	return api.NewRouter(
+		handlers,
+		cfg,
+		logger,
+		secretService,
+		envAccessService,
+		rbacService,
+		tenantRepo,
+	)
 }
 
 func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {

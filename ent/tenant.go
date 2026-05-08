@@ -23,6 +23,8 @@ type Tenant struct {
 	Name string `json:"name,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// InternalStatus holds the value of the "internal_status" field.
+	InternalStatus string `json:"internal_status,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -41,7 +43,7 @@ func (*Tenant) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case tenant.FieldBillingDetails, tenant.FieldMetadata:
 			values[i] = new([]byte)
-		case tenant.FieldID, tenant.FieldName, tenant.FieldStatus:
+		case tenant.FieldID, tenant.FieldName, tenant.FieldStatus, tenant.FieldInternalStatus:
 			values[i] = new(sql.NullString)
 		case tenant.FieldCreatedAt, tenant.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -77,6 +79,12 @@ func (t *Tenant) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				t.Status = value.String
+			}
+		case tenant.FieldInternalStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field internal_status", values[i])
+			} else if value.Valid {
+				t.InternalStatus = value.String
 			}
 		case tenant.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -147,6 +155,9 @@ func (t *Tenant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(t.Status)
+	builder.WriteString(", ")
+	builder.WriteString("internal_status=")
+	builder.WriteString(t.InternalStatus)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(t.CreatedAt.Format(time.ANSIC))

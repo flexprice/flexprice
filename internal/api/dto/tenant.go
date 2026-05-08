@@ -86,6 +86,7 @@ func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 		ID:             r.ID,
 		Name:           r.Name,
 		Status:         types.StatusPublished,
+		InternalStatus: types.TenantInternalStatusTrialing,
 		BillingDetails: billingDetails,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
@@ -127,4 +128,15 @@ func (r *UpdateTenantRequest) Validate() error {
 type TenantBillingUsage struct {
 	Usage         *CustomerUsageSummaryResponse `json:"usage"`
 	Subscriptions []*SubscriptionResponse       `json:"subscriptions"`
+}
+
+type UpdateTenantAccessRequest struct {
+	InternalStatus types.TenantInternalStatus `json:"internal_status" validate:"required"`
+}
+
+func (r *UpdateTenantAccessRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return r.InternalStatus.Validate()
 }

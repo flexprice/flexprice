@@ -45,6 +45,7 @@ func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tena
 		SetID(tenant.ID).
 		SetName(tenant.Name).
 		SetStatus(string(tenant.Status)).
+		SetInternalStatus(string(tenant.InternalStatus)).
 		SetCreatedAt(tenant.CreatedAt).
 		SetUpdatedAt(tenant.UpdatedAt).
 		SetBillingDetails(tenant.BillingDetails.ToSchema()).
@@ -147,6 +148,7 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 		UpdateOneID(tenant.ID).
 		SetName(tenant.Name).
 		SetStatus(string(tenant.Status)).
+		SetInternalStatus(string(tenant.InternalStatus)).
 		SetUpdatedAt(time.Now()).
 		SetMetadata(tenant.Metadata).
 		SetBillingDetails(tenant.BillingDetails.ToSchema()).
