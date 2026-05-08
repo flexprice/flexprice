@@ -157,6 +157,21 @@ func TestSubscriptionInheritanceConfig_Validate(t *testing.T) {
 				ParentSubscriptionID: "sub_123",
 			},
 		},
+		{
+			name: "standalone rejects sub_ids_for_grouped_invoicing",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior:         types.SubscriptionTypeStandalone,
+				SubIDsForGroupedInvoicing: []string{"sub_123"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "unknown invoicing_behavior returns error",
+			cfg: &SubscriptionInheritanceConfig{
+				InvoicingBehavior: types.SubscriptionType("invalid_behavior"),
+			},
+			wantErr: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
