@@ -7336,59 +7336,24 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 		return nil, nil, err
 	}
 
-	behavior := inh.InvoicingBehavior
-
-	// Legacy auto-detection: InvoicingBehavior not set — preserve original logic
-	if behavior == "" {
-		if inh.ParentSubscriptionID != "" {
-			parentSub, err := s.SubRepo.Get(ctx, inh.ParentSubscriptionID)
-			if err != nil {
-				return nil, nil, err
-			}
-			if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
-				return nil, nil, ierr.NewError("parent subscription is not active").
-					WithHint("The parent subscription must be active").
-					WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
-					Mark(ierr.ErrValidation)
-			}
-			sub.InvoicingCustomerID = parentSub.InvoicingCustomerID
-			sub.SubscriptionType = types.SubscriptionTypeInherited
-			sub.ParentSubscriptionID = lo.ToPtr(inh.ParentSubscriptionID)
+	// Auto-detection path (the only path): interpret inheritance fields and set SubscriptionType.
+	if inh.ParentSubscriptionID != "" {
+		parentSub, err := s.SubRepo.Get(ctx, inh.ParentSubscriptionID)
+		if err != nil {
+			return nil, nil, err
 		}
-		if inh.InvoicingCustomerExternalID != nil {
-			invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, lo.FromPtr(inh.InvoicingCustomerExternalID))
-			if err != nil {
-				return nil, nil, err
-			}
-			if invoicingCustomer.Status != types.StatusPublished {
-				return nil, nil, ierr.NewError("invoicing customer is not active").
-					WithHint("The invoicing customer must be active").
-					WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
-					Mark(ierr.ErrValidation)
-			}
-			sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
+		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
+			return nil, nil, ierr.NewError("parent subscription is not active").
+				WithHint("The parent subscription must be active").
+				WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
+				Mark(ierr.ErrValidation)
 		}
-		if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
-			resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription)
-			if err != nil {
-				return nil, nil, err
-			}
-			childCustomerIDs = resolved
-		}
-		if len(childCustomerIDs) > 0 {
-			sub.SubscriptionType = types.SubscriptionTypeParent
-		} else if sub.SubscriptionType == "" {
-			sub.SubscriptionType = types.SubscriptionTypeStandalone
-		}
-		return nil, childCustomerIDs, s.validateNoInheritedSubForSubscriber(ctx, sub)
+		sub.InvoicingCustomerID = parentSub.InvoicingCustomerID
+		sub.SubscriptionType = types.SubscriptionTypeInherited
+		sub.ParentSubscriptionID = lo.ToPtr(inh.ParentSubscriptionID)
 	}
 
-	// Explicit path: switch on InvoicingBehavior
-	switch behavior {
-	case types.SubscriptionTypeStandalone:
-		sub.SubscriptionType = types.SubscriptionTypeStandalone
-
-	case types.SubscriptionTypeDelegated:
+	if inh.InvoicingCustomerExternalID != nil {
 		invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, lo.FromPtr(inh.InvoicingCustomerExternalID))
 		if err != nil {
 			return nil, nil, err
@@ -7400,90 +7365,23 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 				Mark(ierr.ErrValidation)
 		}
 		sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
-		sub.SubscriptionType = types.SubscriptionTypeDelegated
+	}
 
-	case types.SubscriptionTypeParent:
+	if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
+		resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription)
+		if err != nil {
+			return nil, nil, err
+		}
+		childCustomerIDs = resolved
+	}
+
+	// SubIDsForGroupedInvoicing are processed post-create (parent.ID not known yet at this point).
+	groupedInvoicingSubIDs = inh.SubIDsForGroupedInvoicing
+
+	if len(childCustomerIDs) > 0 {
 		sub.SubscriptionType = types.SubscriptionTypeParent
-		if inh.InvoicingCustomerExternalID != nil {
-			invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, lo.FromPtr(inh.InvoicingCustomerExternalID))
-			if err != nil {
-				return nil, nil, err
-			}
-			if invoicingCustomer.Status != types.StatusPublished {
-				return nil, nil, ierr.NewError("invoicing customer is not active").
-					WithHint("The invoicing customer must be active").
-					WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
-					Mark(ierr.ErrValidation)
-			}
-			sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
-		}
-		if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
-			resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription)
-			if err != nil {
-				return nil, nil, err
-			}
-			childCustomerIDs = resolved
-		}
-		// SubIDsForGroupedInvoicing are processed post-create (parent.ID not known yet at this point)
-		groupedInvoicingSubIDs = inh.SubIDsForGroupedInvoicing
-
-	case types.SubscriptionTypeInherited:
-		parentSub, err := s.SubRepo.Get(ctx, inh.ParentSubscriptionID)
-		if err != nil {
-			return nil, nil, err
-		}
-		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive &&
-			parentSub.SubscriptionStatus != types.SubscriptionStatusTrialing {
-			return nil, nil, ierr.NewError("parent subscription is not active or trialing").
-				WithHint("The parent subscription must be active or trialing").
-				WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
-				Mark(ierr.ErrValidation)
-		}
-		sub.InvoicingCustomerID = parentSub.InvoicingCustomerID
-		sub.SubscriptionType = types.SubscriptionTypeInherited
-		sub.ParentSubscriptionID = lo.ToPtr(inh.ParentSubscriptionID)
-
-	case types.SubscriptionTypeGroupedInvoicing:
-		parentSub, err := s.SubRepo.Get(ctx, inh.ParentSubscriptionID)
-		if err != nil {
-			return nil, nil, err
-		}
-		if parentSub.SubscriptionType != types.SubscriptionTypeParent {
-			return nil, nil, ierr.NewError("parent subscription must have type parent").
-				WithHint("Only subscriptions of type 'parent' can accept grouped_invoicing children").
-				WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "parent_type": parentSub.SubscriptionType}).
-				Mark(ierr.ErrValidation)
-		}
-		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive &&
-			parentSub.SubscriptionStatus != types.SubscriptionStatusTrialing {
-			return nil, nil, ierr.NewError("parent subscription must be active or trialing").
-				WithHint("Only active or trialing parent subscriptions can accept grouped_invoicing children").
-				WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
-				Mark(ierr.ErrValidation)
-		}
-		sub.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
-		sub.ParentSubscriptionID = lo.ToPtr(inh.ParentSubscriptionID)
-		// Validate billing constraints match parent (constraints 6-9)
-		if sub.BillingPeriod != parentSub.BillingPeriod {
-			return nil, nil, ierr.NewError("billing period mismatch between subscription and parent").
-				WithHint("Child and parent subscriptions must have the same billing period").
-				Mark(ierr.ErrValidation)
-		}
-		if sub.BillingPeriodCount != parentSub.BillingPeriodCount {
-			return nil, nil, ierr.NewError("billing period count mismatch between subscription and parent").
-				WithHint("Child and parent subscriptions must have the same billing period count").
-				Mark(ierr.ErrValidation)
-		}
-		if !sub.BillingAnchor.Equal(parentSub.BillingAnchor) {
-			return nil, nil, ierr.NewError("billing anchor mismatch between subscription and parent").
-				WithHint("Child and parent subscriptions must share the same billing anchor").
-				Mark(ierr.ErrValidation)
-		}
-		if sub.StartDate.Before(parentSub.StartDate) {
-			return nil, nil, ierr.NewError("subscription start date is before parent start date").
-				WithHint("Child subscription cannot start before its parent").
-				Mark(ierr.ErrValidation)
-		}
+	} else if sub.SubscriptionType == "" {
+		sub.SubscriptionType = types.SubscriptionTypeStandalone
 	}
 
 	return groupedInvoicingSubIDs, childCustomerIDs, s.validateNoInheritedSubForSubscriber(ctx, sub)

@@ -66,76 +66,6 @@ func TestSubscriptionInheritanceConfig_Validate(t *testing.T) {
 			cfg:  nil,
 		},
 		{
-			name: "delegated requires invoicing_customer_external_id",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior: types.SubscriptionTypeDelegated,
-			},
-			wantErr: true,
-		},
-		{
-			name: "delegated with parent_subscription_id is invalid",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:           types.SubscriptionTypeDelegated,
-				InvoicingCustomerExternalID: strPtr("cust_ext"),
-				ParentSubscriptionID:        "sub_123",
-			},
-			wantErr: true,
-		},
-		{
-			name: "grouped_invoicing requires parent_subscription_id",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior: types.SubscriptionTypeGroupedInvoicing,
-			},
-			wantErr: true,
-		},
-		{
-			name: "grouped_invoicing valid",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:    types.SubscriptionTypeGroupedInvoicing,
-				ParentSubscriptionID: "sub_parent_123",
-			},
-		},
-		{
-			name: "inherited requires parent_subscription_id",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior: types.SubscriptionTypeInherited,
-			},
-			wantErr: true,
-		},
-		{
-			name: "inherited rejects invoicing_customer_external_id",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:           types.SubscriptionTypeInherited,
-				ParentSubscriptionID:        "sub_parent_123",
-				InvoicingCustomerExternalID: strPtr("cust_ext"),
-			},
-			wantErr: true,
-		},
-		{
-			name: "parent rejects parent_subscription_id",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:    types.SubscriptionTypeParent,
-				ParentSubscriptionID: "sub_123",
-			},
-			wantErr: true,
-		},
-		{
-			name: "standalone rejects parent_subscription_id",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:    types.SubscriptionTypeStandalone,
-				ParentSubscriptionID: "sub_123",
-			},
-			wantErr: true,
-		},
-		{
-			name: "standalone rejects invoicing_customer_external_id",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:           types.SubscriptionTypeStandalone,
-				InvoicingCustomerExternalID: strPtr("cust"),
-			},
-			wantErr: true,
-		},
-		{
 			name: "legacy path nil behavior with parent_id and external_ids is invalid",
 			cfg: &SubscriptionInheritanceConfig{
 				ParentSubscriptionID:                     "sub_123",
@@ -158,71 +88,18 @@ func TestSubscriptionInheritanceConfig_Validate(t *testing.T) {
 			},
 		},
 		{
-			name: "standalone rejects sub_ids_for_grouped_invoicing",
+			name: "sub_ids_for_grouped_invoicing with parent_subscription_id is invalid",
 			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:         types.SubscriptionTypeStandalone,
+				ParentSubscriptionID:      "sub_123",
 				SubIDsForGroupedInvoicing: []string{"sub_123"},
 			},
 			wantErr: true,
 		},
 		{
-			name: "unknown invoicing_behavior returns error",
+			name: "sub_ids_for_grouped_invoicing with invoicing_customer_external_id is invalid",
 			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior: types.SubscriptionType("invalid_behavior"),
-			},
-			wantErr: true,
-		},
-		{
-			name: "delegated rejects sub_ids_for_grouped_invoicing",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:           types.SubscriptionTypeDelegated,
 				InvoicingCustomerExternalID: strPtr("cust_ext"),
 				SubIDsForGroupedInvoicing:   []string{"sub_123"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "delegated rejects external_customer_ids_to_inherit_subscription",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:                        types.SubscriptionTypeDelegated,
-				InvoicingCustomerExternalID:              strPtr("cust_ext"),
-				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "inherited rejects sub_ids_for_grouped_invoicing",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:         types.SubscriptionTypeInherited,
-				ParentSubscriptionID:      "sub_parent",
-				SubIDsForGroupedInvoicing: []string{"sub_123"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "inherited rejects external_customer_ids_to_inherit_subscription",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:                        types.SubscriptionTypeInherited,
-				ParentSubscriptionID:                     "sub_parent",
-				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "grouped_invoicing rejects sub_ids_for_grouped_invoicing",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:         types.SubscriptionTypeGroupedInvoicing,
-				ParentSubscriptionID:      "sub_parent",
-				SubIDsForGroupedInvoicing: []string{"sub_123"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "grouped_invoicing rejects external_customer_ids_to_inherit_subscription",
-			cfg: &SubscriptionInheritanceConfig{
-				InvoicingBehavior:                        types.SubscriptionTypeGroupedInvoicing,
-				ParentSubscriptionID:                     "sub_parent",
-				ExternalCustomerIDsToInheritSubscription: []string{"cust1"},
 			},
 			wantErr: true,
 		},
