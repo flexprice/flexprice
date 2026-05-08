@@ -116,6 +116,24 @@ func (p *PrepareSubscriptionInvoiceRequestParams) Validate() error {
 	return nil
 }
 
+// PrepareGroupedInvoiceRequestParams holds inputs for PrepareGroupedInvoiceRequest.
+// It describes a parent subscription plus its grouped_invoicing children for clubbed invoice generation.
+type PrepareGroupedInvoiceRequestParams struct {
+	ParentSubscription *subscription.Subscription   `validate:"required"`
+	ChildSubscriptions []*subscription.Subscription // may be empty; each must have line items loaded
+	PeriodStart        time.Time                    `validate:"required"`
+	PeriodEnd          time.Time                    `validate:"required"`
+	ReferencePoint     types.InvoiceReferencePoint  `validate:"required"`
+}
+
+// Validate enforces struct tags.
+func (p *PrepareGroupedInvoiceRequestParams) Validate() error {
+	if err := validator.ValidateRequest(p); err != nil {
+		return err
+	}
+	return p.ReferencePoint.Validate()
+}
+
 // ClassifyLineItemsParams holds inputs for ClassifyLineItems.
 type ClassifyLineItemsParams struct {
 	Subscription       *subscription.Subscription `validate:"required"`
