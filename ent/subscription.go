@@ -105,7 +105,7 @@ type Subscription struct {
 	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
 	// Payment terms for invoice due date (e.g. 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET)
 	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
-	// Subscription type within a customer hierarchy (standalone, parent, inherited)
+	// Subscription type within a customer hierarchy (standalone, delegated, parent, inherited, grouped_invoicing)
 	SubscriptionType types.SubscriptionType `json:"subscription_type,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.

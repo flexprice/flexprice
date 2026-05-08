@@ -201,7 +201,7 @@ func (Subscription) Fields() []ent.Field {
 			}).
 			Default(string(types.SubscriptionTypeStandalone)).
 			GoType(types.SubscriptionType("")).
-			Comment("Subscription type within a customer hierarchy (standalone, parent, inherited)"),
+			Comment("Subscription type within a customer hierarchy (standalone, delegated, parent, inherited, grouped_invoicing)"),
 	}
 }
 
