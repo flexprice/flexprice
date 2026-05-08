@@ -52,7 +52,7 @@ func TestExecuteSubscriptionModifyRequest_Validate_GroupedInvoicing(t *testing.T
 		{
 			name: "grouped_invoicing_remove missing child_subscription_ids",
 			req: dto.ExecuteSubscriptionModifyRequest{
-				Type: dto.SubscriptionModifyTypeGroupedInvoicingRemove,
+				Type:                   dto.SubscriptionModifyTypeGroupedInvoicingRemove,
 				GroupedInvoicingParams: &dto.SubModifyGroupedInvoicingParams{},
 			},
 			wantErr: true,

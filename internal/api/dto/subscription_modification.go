@@ -62,8 +62,8 @@ func (r *SubModifyQuantityChangeRequest) Validate() error {
 type SubscriptionModifyType string
 
 const (
-	SubscriptionModifyTypeInheritance           SubscriptionModifyType = "inheritance"
-	SubscriptionModifyTypeQuantityChange        SubscriptionModifyType = "quantity_change"
+	SubscriptionModifyTypeInheritance            SubscriptionModifyType = "inheritance"
+	SubscriptionModifyTypeQuantityChange         SubscriptionModifyType = "quantity_change"
 	SubscriptionModifyTypeGroupedInvoicingAdd    SubscriptionModifyType = "grouped_invoicing_add"
 	SubscriptionModifyTypeGroupedInvoicingRemove SubscriptionModifyType = "grouped_invoicing_remove"
 )
