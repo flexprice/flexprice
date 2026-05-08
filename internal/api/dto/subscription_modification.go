@@ -62,17 +62,40 @@ func (r *SubModifyQuantityChangeRequest) Validate() error {
 type SubscriptionModifyType string
 
 const (
-	SubscriptionModifyTypeInheritance    SubscriptionModifyType = "inheritance"
-	SubscriptionModifyTypeQuantityChange SubscriptionModifyType = "quantity_change"
+	SubscriptionModifyTypeInheritance           SubscriptionModifyType = "inheritance"
+	SubscriptionModifyTypeQuantityChange        SubscriptionModifyType = "quantity_change"
+	SubscriptionModifyTypeGroupedInvoicingAdd    SubscriptionModifyType = "grouped_invoicing_add"
+	SubscriptionModifyTypeGroupedInvoicingRemove SubscriptionModifyType = "grouped_invoicing_remove"
 )
+
+// SubModifyGroupedInvoicingParams is the payload for grouped invoicing membership changes.
+type SubModifyGroupedInvoicingParams struct {
+	// ParentSubscriptionID is required for grouped_invoicing_add.
+	ParentSubscriptionID string   `json:"parent_subscription_id,omitempty"`
+	ChildSubscriptionIDs []string `json:"child_subscription_ids"`
+}
+
+func (r *SubModifyGroupedInvoicingParams) Validate(modifyType SubscriptionModifyType) error {
+	if len(r.ChildSubscriptionIDs) == 0 {
+		return ierr.NewError("child_subscription_ids must not be empty").
+			WithHint("Provide child_subscription_ids with at least one entry").
+			Mark(ierr.ErrValidation)
+	}
+	if modifyType == SubscriptionModifyTypeGroupedInvoicingAdd && r.ParentSubscriptionID == "" {
+		return ierr.NewError("parent_subscription_id is required for grouped_invoicing_add").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
 
 // ExecuteSubscriptionModifyRequest is the unified body for
 // POST /subscriptions/:id/modify/execute and /modify/preview.
 // Exactly one of InheritanceParams or QuantityChangeParams must be set.
 type ExecuteSubscriptionModifyRequest struct {
-	Type                 SubscriptionModifyType          `json:"type" binding:"required"`
-	InheritanceParams    *SubModifyInheritanceRequest    `json:"inheritance_params,omitempty"`
-	QuantityChangeParams *SubModifyQuantityChangeRequest `json:"quantity_change_params,omitempty"`
+	Type                   SubscriptionModifyType           `json:"type" binding:"required"`
+	InheritanceParams      *SubModifyInheritanceRequest     `json:"inheritance_params,omitempty"`
+	QuantityChangeParams   *SubModifyQuantityChangeRequest  `json:"quantity_change_params,omitempty"`
+	GroupedInvoicingParams *SubModifyGroupedInvoicingParams `json:"grouped_invoicing_params,omitempty"`
 }
 
 func (r *ExecuteSubscriptionModifyRequest) Validate() error {
@@ -89,9 +112,15 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 		return r.QuantityChangeParams.Validate()
+	case SubscriptionModifyTypeGroupedInvoicingAdd, SubscriptionModifyTypeGroupedInvoicingRemove:
+		if r.GroupedInvoicingParams == nil {
+			return ierr.NewError("grouped_invoicing_params is required for type '" + string(r.Type) + "'").
+				Mark(ierr.ErrValidation)
+		}
+		return r.GroupedInvoicingParams.Validate(r.Type)
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
-			WithHint("Valid values: inheritance, quantity_change").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing_add, grouped_invoicing_remove").
 			Mark(ierr.ErrValidation)
 	}
 }
