@@ -2701,6 +2701,15 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return nil
 	}
 
+	// Skip processing for grouped_invoicing children — the parent handles invoice generation
+	// and period advancement for these subscriptions.
+	if sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
+		s.Logger.InfowCtx(ctx, "skipping period processing for grouped_invoicing child subscription",
+			"subscription_id", sub.ID,
+			"parent_subscription_id", sub.ParentSubscriptionID)
+		return nil
+	}
+
 	// Check for scheduled pauses that should be activated
 	if sub.PauseStatus == types.PauseStatusScheduled && sub.ActivePauseID != nil {
 		pause, err := s.SubRepo.GetPause(ctx, *sub.ActivePauseID)
@@ -2820,6 +2829,17 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 	// TODO: Check if subscription has ended and should be cancelled
 
+	// Fetch grouped_invoicing children once (before the transaction) so both the
+	// per-period invoice loop and the post-loop period-advancement step can reuse them.
+	var groupedChildren []*subscription.Subscription
+	if sub.SubscriptionType == types.SubscriptionTypeParent {
+		var gErr error
+		groupedChildren, gErr = s.getGroupedInvoicingSubscriptions(ctx, sub.ID)
+		if gErr != nil {
+			return gErr
+		}
+	}
+
 	// Initialize services
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
@@ -2897,64 +2917,92 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
 			// Apply backward compatibility normalization
 			paymentParams = paymentParams.NormalizePaymentParameters()
-			inv, updatedSub, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
-				SubscriptionID: sub.ID,
-				PeriodStart:    period.start,
-				PeriodEnd:      period.end,
-				ReferencePoint: types.ReferencePointPeriodEnd,
-			}, paymentParams, types.InvoiceFlowRenewal, false)
-			if err != nil {
-				return err
-			}
 
-			// Use the updated subscription from CreateSubscriptionInvoice to avoid extra DB call
-			if updatedSub != nil {
-				sub = updatedSub
-			}
-
-			// Check for cancellation at this period end
-			if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(period.end) {
-				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-				sub.EndDate = sub.CancelAt
-				sub.CancelledAt = sub.CancelAt // Set when actually cancelling
-
-				// Update the cancellation schedule status to executed
-				if err := s.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
-					s.Logger.ErrorwCtx(ctx, "failed to mark cancellation schedule as executed",
+			if sub.SubscriptionType == types.SubscriptionTypeParent && len(groupedChildren) > 0 {
+				// Clubbed invoice path: merge parent + children line items into one invoice.
+				paymentParamsGrouped := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
+				clubbedInv, clubbedErr := invoiceService.CreateGroupedSubscriptionInvoice(
+					ctx,
+					sub,
+					groupedChildren,
+					period.start,
+					period.end,
+					paymentParamsGrouped,
+				)
+				if clubbedErr != nil {
+					return clubbedErr
+				}
+				if clubbedInv != nil {
+					s.Logger.InfowCtx(ctx, "created grouped invoice for parent subscription",
 						"subscription_id", sub.ID,
-						"error", err)
-					// Don't fail the entire operation, just log the error
+						"invoice_id", clubbedInv.ID,
+						"period_start", period.start,
+						"period_end", period.end,
+						"child_count", len(groupedChildren))
+				}
+				// Cancellation checks are skipped for the grouped path — the parent's
+				// period advancement below handles lifecycle correctly.
+			} else {
+				// Regular invoice path.
+				inv, updatedSub, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+					SubscriptionID: sub.ID,
+					PeriodStart:    period.start,
+					PeriodEnd:      period.end,
+					ReferencePoint: types.ReferencePointPeriodEnd,
+				}, paymentParams, types.InvoiceFlowRenewal, false)
+				if err != nil {
+					return err
 				}
 
-				break
-			}
+				// Use the updated subscription from CreateSubscriptionInvoice to avoid extra DB call
+				if updatedSub != nil {
+					sub = updatedSub
+				}
 
-			// Check if this period end matches the subscription end date
-			if sub.EndDate != nil && period.end.Equal(*sub.EndDate) {
-				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-				sub.CancelledAt = sub.EndDate
-				s.Logger.InfowCtx(ctx, "will cancel subscription at end of this period",
-					"subscription_id", sub.ID,
-					"period_end", period.end,
-					"end_date", *sub.EndDate)
-				break
-			}
+				// Check for cancellation at this period end
+				if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(period.end) {
+					sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+					sub.EndDate = sub.CancelAt
+					sub.CancelledAt = sub.CancelAt // Set when actually cancelling
 
-			if inv == nil {
-				s.Logger.InfowCtx(ctx, "no invoice was created for period",
+					// Update the cancellation schedule status to executed
+					if err := s.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
+						s.Logger.ErrorwCtx(ctx, "failed to mark cancellation schedule as executed",
+							"subscription_id", sub.ID,
+							"error", err)
+						// Don't fail the entire operation, just log the error
+					}
+
+					break
+				}
+
+				// Check if this period end matches the subscription end date
+				if sub.EndDate != nil && period.end.Equal(*sub.EndDate) {
+					sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+					sub.CancelledAt = sub.EndDate
+					s.Logger.InfowCtx(ctx, "will cancel subscription at end of this period",
+						"subscription_id", sub.ID,
+						"period_end", period.end,
+						"end_date", *sub.EndDate)
+					break
+				}
+
+				if inv == nil {
+					s.Logger.InfowCtx(ctx, "no invoice was created for period",
+						"subscription_id", sub.ID,
+						"period_start", period.start,
+						"period_end", period.end,
+						"period_index", i)
+					continue
+				}
+
+				s.Logger.InfowCtx(ctx, "created invoice for period",
 					"subscription_id", sub.ID,
+					"invoice_id", inv.ID,
 					"period_start", period.start,
 					"period_end", period.end,
 					"period_index", i)
-				continue
 			}
-
-			s.Logger.InfowCtx(ctx, "created invoice for period",
-				"subscription_id", sub.ID,
-				"invoice_id", inv.ID,
-				"period_start", period.start,
-				"period_end", period.end,
-				"period_index", i)
 		}
 
 		// Update to the new current period (last period)
@@ -2980,6 +3028,18 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// Update the subscription
 		if err := s.SubRepo.Update(ctx, sub); err != nil {
 			return err
+		}
+
+		// Advance grouped_invoicing children to match the parent's new period
+		if sub.SubscriptionType == types.SubscriptionTypeParent && len(groupedChildren) > 0 {
+			newPeriod := periods[len(periods)-1]
+			for _, child := range groupedChildren {
+				child.CurrentPeriodStart = newPeriod.start
+				child.CurrentPeriodEnd = newPeriod.end
+				if err := s.SubRepo.Update(ctx, child); err != nil {
+					return err
+				}
+			}
 		}
 
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
