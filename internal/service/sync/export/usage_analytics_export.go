@@ -48,6 +48,7 @@ func NewUsageAnalyticsExporter(
 type UsageAnalyticsCSVHeaders string
 
 const (
+	UsageAnalyticsCSVHeadersCustomerName       UsageAnalyticsCSVHeaders = "customer_name"
 	UsageAnalyticsCSVHeadersCustomerID         UsageAnalyticsCSVHeaders = "customer_id"
 	UsageAnalyticsCSVHeadersCustomerExternalID UsageAnalyticsCSVHeaders = "customer_external_id"
 	UsageAnalyticsCSVHeadersStartTime          UsageAnalyticsCSVHeaders = "start_time"
@@ -64,6 +65,7 @@ const (
 
 // usageAnalyticsStaticHeaders is the fixed set of base CSV columns.
 var usageAnalyticsStaticHeaders = []string{
+	string(UsageAnalyticsCSVHeadersCustomerName),
 	string(UsageAnalyticsCSVHeadersCustomerID),
 	string(UsageAnalyticsCSVHeadersCustomerExternalID),
 	string(UsageAnalyticsCSVHeadersStartTime),
@@ -80,6 +82,7 @@ var usageAnalyticsStaticHeaders = []string{
 
 // usageAnalyticsRecord is one row per (customer × feature × source) before CSV serialisation.
 type usageAnalyticsRecord struct {
+	CustomerName       string
 	CustomerID         string
 	CustomerExternalID string
 	StartTime          time.Time
@@ -178,6 +181,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 
 		for _, item := range response.Items {
 			record := &usageAnalyticsRecord{
+				CustomerName:       c.Name,
 				CustomerID:         c.ID,
 				CustomerExternalID: c.ExternalID,
 				StartTime:          request.StartTime,
@@ -253,6 +257,7 @@ func (e *UsageAnalyticsExporter) resolveHeaders(metadataFields types.ExportMetad
 func (e *UsageAnalyticsExporter) buildRow(record *usageAnalyticsRecord, metadataFields types.ExportMetadataFields) []string {
 	row := make([]string, 0, len(usageAnalyticsStaticHeaders)+len(metadataFields))
 	row = append(row,
+		record.CustomerName,
 		record.CustomerID,
 		record.CustomerExternalID,
 		record.StartTime.Format(time.RFC3339),
