@@ -133,6 +133,7 @@ func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 		string(UsageAnalyticsCSVHeadersEndTime),
 		string(UsageAnalyticsCSVHeadersFeatureName),
 		string(UsageAnalyticsCSVHeadersFeatureID),
+		string(UsageAnalyticsCSVHeadersSource),
 		string(UsageAnalyticsCSVHeadersEventName),
 		string(UsageAnalyticsCSVHeadersEventCount),
 		string(UsageAnalyticsCSVHeadersTotalUsage),
@@ -298,6 +299,30 @@ func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 				err := env.req.JobConfig.ExportMetadataFields.ValidateAndDefault(types.ScheduledTaskEntityTypeUsageAnalytics)
 				if err == nil {
 					t.Error("expected validation error for wallet entity_type on usage_analytics export, got nil")
+				}
+			},
+		},
+		{
+			name: "source column populated when analytics returns source",
+			setup: func(t *testing.T, env *usageAnalyticsTestEnv) {
+				c := env.addCustomer(t, "cust-src", "ext-src", "Source Corp", nil)
+				env.addEvent(t, c.ExternalID, env.req.StartTime.Add(1*time.Minute))
+				env.setAnalytics(c.ExternalID, []dto.UsageAnalyticItem{
+					{FeatureID: "feat-1", FeatureName: "LLM Calls", EventName: "llm_call", Source: "gemma4_389f6963-c14f-44d0-afc3-d7e89c6a5ab8", EventCount: 10, TotalUsage: decimal.NewFromInt(10), TotalCost: decimal.NewFromInt(1), Currency: "USD"},
+					{FeatureID: "feat-1", FeatureName: "LLM Calls", EventName: "llm_call", Source: "gpt4o_7a2b1c3d-beef-cafe-dead-000000000001", EventCount: 5, TotalUsage: decimal.NewFromInt(5), TotalCost: decimal.NewFromFloat(0.5), Currency: "USD"},
+				})
+			},
+			wantCount: 2,
+			wantRows:  2,
+			assertRow: func(t *testing.T, headers []string, rows [][]string, _ *usageAnalyticsTestEnv) {
+				sources := make(map[string]bool)
+				for _, row := range rows {
+					sources[colVal(t, headers, row, string(UsageAnalyticsCSVHeadersSource))] = true
+				}
+				for _, want := range []string{"gemma4_389f6963-c14f-44d0-afc3-d7e89c6a5ab8", "gpt4o_7a2b1c3d-beef-cafe-dead-000000000001"} {
+					if !sources[want] {
+						t.Errorf("source %q not found in rows", want)
+					}
 				}
 			},
 		},
