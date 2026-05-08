@@ -2917,75 +2917,64 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
 			// Apply backward compatibility normalization
 			paymentParams = paymentParams.NormalizePaymentParameters()
+			inv, updatedSub, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+				SubscriptionID: sub.ID,
+				PeriodStart:    period.start,
+				PeriodEnd:      period.end,
+				ReferencePoint: types.ReferencePointPeriodEnd,
+			}, paymentParams, types.InvoiceFlowRenewal, false)
+			if err != nil {
+				return err
+			}
 
-			{
-				inv, updatedSub, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
-					SubscriptionID: sub.ID,
-					PeriodStart:    period.start,
-					PeriodEnd:      period.end,
-					ReferencePoint: types.ReferencePointPeriodEnd,
-				}, paymentParams, types.InvoiceFlowRenewal, false)
-				if err != nil {
-					return err
-				}
+			// Use the updated subscription from CreateSubscriptionInvoice to avoid extra DB call
+			if updatedSub != nil {
+				sub = updatedSub
+			}
 
-				if inv != nil {
-					s.Logger.InfowCtx(ctx, "created invoice for subscription",
+			// Check for cancellation at this period end
+			if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(period.end) {
+				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+				sub.EndDate = sub.CancelAt
+				sub.CancelledAt = sub.CancelAt // Set when actually cancelling
+
+				// Update the cancellation schedule status to executed
+				if err := s.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
+					s.Logger.ErrorwCtx(ctx, "failed to mark cancellation schedule as executed",
 						"subscription_id", sub.ID,
-						"invoice_id", inv.ID,
-						"period_start", period.start,
-						"period_end", period.end)
+						"error", err)
+					// Don't fail the entire operation, just log the error
 				}
 
-				// Use the updated subscription from CreateSubscriptionInvoice to avoid extra DB call
-				if updatedSub != nil {
-					sub = updatedSub
-				}
+				break
+			}
 
-				// Check for cancellation at this period end
-				if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(period.end) {
-					sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-					sub.EndDate = sub.CancelAt
-					sub.CancelledAt = sub.CancelAt // Set when actually cancelling
-
-					// Update the cancellation schedule status to executed
-					if err := s.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
-						s.Logger.ErrorwCtx(ctx, "failed to mark cancellation schedule as executed",
-							"subscription_id", sub.ID,
-							"error", err)
-						// Don't fail the entire operation, just log the error
-					}
-
-					break
-				}
-
-				// Check if this period end matches the subscription end date
-				if sub.EndDate != nil && period.end.Equal(*sub.EndDate) {
-					sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-					sub.CancelledAt = sub.EndDate
-					s.Logger.InfowCtx(ctx, "will cancel subscription at end of this period",
-						"subscription_id", sub.ID,
-						"period_end", period.end,
-						"end_date", *sub.EndDate)
-					break
-				}
-
-				if inv == nil {
-					s.Logger.InfowCtx(ctx, "no invoice was created for period",
-						"subscription_id", sub.ID,
-						"period_start", period.start,
-						"period_end", period.end,
-						"period_index", i)
-					continue
-				}
-
-				s.Logger.InfowCtx(ctx, "created invoice for period",
+			// Check if this period end matches the subscription end date
+			if sub.EndDate != nil && period.end.Equal(*sub.EndDate) {
+				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+				sub.CancelledAt = sub.EndDate
+				s.Logger.InfowCtx(ctx, "will cancel subscription at end of this period",
 					"subscription_id", sub.ID,
-					"invoice_id", inv.ID,
+					"period_end", period.end,
+					"end_date", *sub.EndDate)
+				break
+			}
+
+			if inv == nil {
+				s.Logger.InfowCtx(ctx, "no invoice was created for period",
+					"subscription_id", sub.ID,
 					"period_start", period.start,
 					"period_end", period.end,
 					"period_index", i)
+				continue
 			}
+
+			s.Logger.InfowCtx(ctx, "created invoice for period",
+				"subscription_id", sub.ID,
+				"invoice_id", inv.ID,
+				"period_start", period.start,
+				"period_end", period.end,
+				"period_index", i)
 		}
 
 		// Update to the new current period (last period)
