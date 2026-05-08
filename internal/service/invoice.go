@@ -1949,7 +1949,6 @@ func (s *invoiceService) CreateGroupedSubscriptionInvoice(ctx context.Context, r
 
 	s.Logger.InfowCtx(ctx, "creating grouped subscription invoice",
 		"parent_subscription_id", req.ParentSubscriptionID,
-		"child_count", len(req.ChildSubscriptionIDs),
 		"period_start", req.PeriodStart,
 		"period_end", req.PeriodEnd)
 
@@ -1958,25 +1957,14 @@ func (s *invoiceService) CreateGroupedSubscriptionInvoice(ctx context.Context, r
 		return nil, err
 	}
 
-	childSubs := make([]*subscription.Subscription, 0, len(req.ChildSubscriptionIDs))
-	for _, id := range req.ChildSubscriptionIDs {
-		child, err := s.SubRepo.Get(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		childSubs = append(childSubs, child)
-	}
-
 	billingService := NewBillingService(s.ServiceParams)
 
-	// PrepareGroupedInvoiceRequest calls PrepareSubscriptionInvoiceRequest for parent and
-	// each child, which reloads line items from the repo internally. No pre-loading needed.
-	mergedReq, err := billingService.PrepareGroupedInvoiceRequest(ctx, &dto.PrepareGroupedInvoiceRequestParams{
-		ParentSubscription: parentSub,
-		ChildSubscriptions: childSubs,
-		PeriodStart:        req.PeriodStart,
-		PeriodEnd:          req.PeriodEnd,
-		ReferencePoint:     req.ReferencePoint,
+	// PrepareSubscriptionInvoiceRequest detects the parent type and merges children internally.
+	mergedReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   parentSub,
+		PeriodStart:    req.PeriodStart,
+		PeriodEnd:      req.PeriodEnd,
+		ReferencePoint: req.ReferencePoint,
 	})
 	if err != nil {
 		return nil, err
@@ -2021,41 +2009,6 @@ func (s *invoiceService) CreateGroupedSubscriptionInvoice(ctx context.Context, r
 	return dto.NewInvoiceResponse(inv), nil
 }
 
-// prepareInvoiceRequestForPreview builds a CreateInvoiceRequest for preview endpoints.
-// For parent subscriptions it fetches grouped_invoicing children and returns a merged
-// clubbed request; for all other types it falls back to PrepareSubscriptionInvoiceRequest.
-func (s *invoiceService) prepareInvoiceRequestForPreview(
-	ctx context.Context,
-	billingService BillingService,
-	sub *subscription.Subscription,
-	periodStart, periodEnd time.Time,
-	referencePoint types.InvoiceReferencePoint,
-) (*dto.CreateInvoiceRequest, error) {
-	if sub.SubscriptionType == types.SubscriptionTypeParent {
-		children, err := s.SubRepo.List(ctx, groupedInvoicingChildrenFilter(sub.ID))
-		if err != nil {
-			return nil, err
-		}
-		if len(children) > 0 {
-			return billingService.PrepareGroupedInvoiceRequest(ctx, &dto.PrepareGroupedInvoiceRequestParams{
-				ParentSubscription: sub,
-				ChildSubscriptions: children,
-				PeriodStart:        periodStart,
-				PeriodEnd:          periodEnd,
-				ReferencePoint:     referencePoint,
-			})
-		}
-		s.Logger.InfowCtx(ctx, "parent subscription has no grouped_invoicing children, using single-subscription preview",
-			"subscription_id", sub.ID)
-	}
-	return billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-		Subscription:   sub,
-		PeriodStart:    periodStart,
-		PeriodEnd:      periodEnd,
-		ReferencePoint: referencePoint,
-	})
-}
-
 func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {
 	billingService := NewBillingService(s.ServiceParams)
 
@@ -2072,8 +2025,12 @@ func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPrevi
 		req.PeriodEnd = &sub.CurrentPeriodEnd
 	}
 
-	// Prepare invoice request using billing service with the preview reference point
-	invReq, err := s.prepareInvoiceRequestForPreview(ctx, billingService, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointPreview)
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   sub,
+		PeriodStart:    *req.PeriodStart,
+		PeriodEnd:      *req.PeriodEnd,
+		ReferencePoint: types.ReferencePointPreview,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -2122,8 +2079,12 @@ func (s *invoiceService) GetInternalPreviewInvoice(ctx context.Context, req dto.
 		req.PeriodEnd = &sub.CurrentPeriodEnd
 	}
 
-	// Prepare invoice request using billing service with the internal preview reference point
-	invReq, err := s.prepareInvoiceRequestForPreview(ctx, billingService, sub, *req.PeriodStart, *req.PeriodEnd, types.ReferencePointInternalPreview)
+	invReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+		Subscription:   sub,
+		PeriodStart:    *req.PeriodStart,
+		PeriodEnd:      *req.PeriodEnd,
+		ReferencePoint: types.ReferencePointInternalPreview,
+	})
 	if err != nil {
 		return nil, err
 	}

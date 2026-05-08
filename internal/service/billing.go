@@ -52,11 +52,6 @@ type BillingService interface {
 	// using the reference point to determine which charges to include.
 	PrepareSubscriptionInvoiceRequest(ctx context.Context, params *dto.PrepareSubscriptionInvoiceRequestParams) (*dto.CreateInvoiceRequest, error)
 
-	// PrepareGroupedInvoiceRequest builds a single CreateInvoiceRequest by calling
-	// PrepareSubscriptionInvoiceRequest for the parent and each grouped_invoicing child,
-	// then flat-merging all LineItems.
-	PrepareGroupedInvoiceRequest(ctx context.Context, params *dto.PrepareGroupedInvoiceRequestParams) (*dto.CreateInvoiceRequest, error)
-
 	// ClassifyLineItems classifies line items based on cadence and type.
 	ClassifyLineItems(params *dto.ClassifyLineItemsParams) *dto.LineItemClassification
 
@@ -2293,7 +2288,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	}
 
 	// Create invoice request for the calculated charges
-	return s.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{
+	invReq, err := s.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{
 		Subscription: sub,
 		Result:       calculationResult,
 		PeriodStart:  periodStart,
@@ -2301,46 +2296,41 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		Description:  description,
 		Metadata:     metadata,
 	})
-}
-
-func (s *billingService) PrepareGroupedInvoiceRequest(ctx context.Context, params *dto.PrepareGroupedInvoiceRequestParams) (*dto.CreateInvoiceRequest, error) {
-	if err := params.Validate(); err != nil {
-		return nil, err
-	}
-
-	baseReq, err := s.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-		Subscription:   params.ParentSubscription,
-		PeriodStart:    params.PeriodStart,
-		PeriodEnd:      params.PeriodEnd,
-		ReferencePoint: params.ReferencePoint,
-	})
 	if err != nil {
 		return nil, err
 	}
 
-	for _, child := range params.ChildSubscriptions {
-		childReq, err := s.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-			Subscription:   child,
-			PeriodStart:    params.PeriodStart,
-			PeriodEnd:      params.PeriodEnd,
-			ReferencePoint: params.ReferencePoint,
-		})
+	// For parent subscriptions, merge line items from all grouped_invoicing children.
+	if sub.SubscriptionType == types.SubscriptionTypeParent {
+		children, err := s.SubRepo.List(ctx, groupedInvoicingChildrenFilter(sub.ID))
 		if err != nil {
 			return nil, err
 		}
-		baseReq.LineItems = append(baseReq.LineItems, childReq.LineItems...)
+		for _, child := range children {
+			childReq, err := s.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+				Subscription:   child,
+				PeriodStart:    periodStart,
+				PeriodEnd:      periodEnd,
+				ReferencePoint: referencePoint,
+			})
+			if err != nil {
+				return nil, err
+			}
+			invReq.LineItems = append(invReq.LineItems, childReq.LineItems...)
+		}
+		// Recalculate totals from merged line items
+		if len(children) > 0 {
+			var subtotal decimal.Decimal
+			for _, li := range invReq.LineItems {
+				subtotal = subtotal.Add(li.Amount)
+			}
+			invReq.Subtotal = subtotal
+			invReq.Total = subtotal
+			invReq.AmountDue = subtotal
+		}
 	}
 
-	// Recalculate totals from merged line items
-	var subtotal decimal.Decimal
-	for _, li := range baseReq.LineItems {
-		subtotal = subtotal.Add(li.Amount)
-	}
-	baseReq.Subtotal = subtotal
-	baseReq.Total = subtotal
-	baseReq.AmountDue = subtotal
-
-	return baseReq, nil
+	return invReq, nil
 }
 
 // validatePeriodAgainstSubscriptionEndDate ensures billing periods don't exceed subscription end date

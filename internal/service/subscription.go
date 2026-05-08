@@ -2924,7 +2924,6 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 					ctx,
 					&dto.CreateGroupedSubscriptionInvoiceRequest{
 						ParentSubscriptionID: sub.ID,
-						ChildSubscriptionIDs: lo.Map(groupedChildren, func(c *subscription.Subscription, _ int) string { return c.ID }),
 						PeriodStart:          period.start,
 						PeriodEnd:            period.end,
 						ReferencePoint:       types.ReferencePointPeriodEnd,

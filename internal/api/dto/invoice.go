@@ -1223,7 +1223,6 @@ func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 // clubbed invoice for a parent subscription and its grouped_invoicing children.
 type CreateGroupedSubscriptionInvoiceRequest struct {
 	ParentSubscriptionID string                      `validate:"required"`
-	ChildSubscriptionIDs []string                    // may be empty
 	PeriodStart          time.Time                   `validate:"required"`
 	PeriodEnd            time.Time                   `validate:"required"`
 	ReferencePoint       types.InvoiceReferencePoint `validate:"required"`
