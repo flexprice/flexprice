@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // validateAddToGroupedInvoicing checks all 9 constraints required before a child subscription
@@ -43,8 +44,8 @@ func (s *subscriptionService) validateAddToGroupedInvoicing(
 		return ierr.NewError("child subscription already has a parent").
 			WithHint("Subscription is already attached to a parent; detach it first").
 			WithReportableDetails(map[string]any{
-				"child_subscription_id":    child.ID,
-				"current_parent_sub_id":    *child.ParentSubscriptionID,
+				"child_subscription_id": child.ID,
+				"current_parent_sub_id": *child.ParentSubscriptionID,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -136,7 +137,7 @@ func (s *subscriptionService) addToGroupedInvoicing(
 	}
 
 	child.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
-	child.ParentSubscriptionID = &parentSub.ID
+	child.ParentSubscriptionID = lo.ToPtr(parentSub.ID)
 
 	return s.SubRepo.Update(ctx, child)
 }
@@ -214,6 +215,7 @@ func (s *subscriptionService) getGroupedInvoicingSubscriptions(
 	parentSubID string,
 ) ([]*subscription.Subscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
+	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 	filter.ParentSubscriptionIDs = []string{parentSubID}
 	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
 	filter.SubscriptionStatus = []types.SubscriptionStatus{
