@@ -69,7 +69,6 @@ Thumbs.db
 temp/*
 .speakeasy/temp/*
 scripts/bash/logs/*
-scripts/bash/enterprise-customer-ids.json
 
 # =============================================================================
 # Artifacts

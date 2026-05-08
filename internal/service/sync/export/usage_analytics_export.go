@@ -48,6 +48,7 @@ func NewUsageAnalyticsExporter(
 type UsageAnalyticsCSVHeaders string
 
 const (
+	UsageAnalyticsCSVHeadersCustomerName       UsageAnalyticsCSVHeaders = "customer_name"
 	UsageAnalyticsCSVHeadersCustomerID         UsageAnalyticsCSVHeaders = "customer_id"
 	UsageAnalyticsCSVHeadersCustomerExternalID UsageAnalyticsCSVHeaders = "customer_external_id"
 	UsageAnalyticsCSVHeadersStartTime          UsageAnalyticsCSVHeaders = "start_time"
@@ -59,10 +60,12 @@ const (
 	UsageAnalyticsCSVHeadersTotalUsage         UsageAnalyticsCSVHeaders = "total_usage"
 	UsageAnalyticsCSVHeadersTotalCost          UsageAnalyticsCSVHeaders = "total_cost"
 	UsageAnalyticsCSVHeadersCurrency           UsageAnalyticsCSVHeaders = "currency"
+	UsageAnalyticsCSVHeadersSource             UsageAnalyticsCSVHeaders = "source"
 )
 
 // usageAnalyticsStaticHeaders is the fixed set of base CSV columns.
 var usageAnalyticsStaticHeaders = []string{
+	string(UsageAnalyticsCSVHeadersCustomerName),
 	string(UsageAnalyticsCSVHeadersCustomerID),
 	string(UsageAnalyticsCSVHeadersCustomerExternalID),
 	string(UsageAnalyticsCSVHeadersStartTime),
@@ -74,10 +77,12 @@ var usageAnalyticsStaticHeaders = []string{
 	string(UsageAnalyticsCSVHeadersTotalUsage),
 	string(UsageAnalyticsCSVHeadersTotalCost),
 	string(UsageAnalyticsCSVHeadersCurrency),
+	string(UsageAnalyticsCSVHeadersSource),
 }
 
-// usageAnalyticsRecord is one row per (customer × feature) before CSV serialisation.
+// usageAnalyticsRecord is one row per (customer × feature × source) before CSV serialisation.
 type usageAnalyticsRecord struct {
+	CustomerName       string
 	CustomerID         string
 	CustomerExternalID string
 	StartTime          time.Time
@@ -89,6 +94,7 @@ type usageAnalyticsRecord struct {
 	TotalUsage         decimal.Decimal
 	TotalCost          decimal.Decimal
 	Currency           string
+	Source             string
 	// CustomerMetadata holds the customer's raw metadata for dynamic column lookup.
 	CustomerMetadata types.Metadata
 }
@@ -162,6 +168,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 			ExternalCustomerID: c.ExternalID,
 			StartTime:          request.StartTime,
 			EndTime:            request.EndTime,
+			GroupBy:            []string{"source", "feature_id"},
 		})
 		if err != nil {
 			failedCount++
@@ -174,6 +181,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 
 		for _, item := range response.Items {
 			record := &usageAnalyticsRecord{
+				CustomerName:       c.Name,
 				CustomerID:         c.ID,
 				CustomerExternalID: c.ExternalID,
 				StartTime:          request.StartTime,
@@ -185,6 +193,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 				TotalUsage:         item.TotalUsage,
 				TotalCost:          item.TotalCost,
 				Currency:           item.Currency,
+				Source:             item.Source,
 				CustomerMetadata:   c.Metadata,
 			}
 
@@ -248,6 +257,7 @@ func (e *UsageAnalyticsExporter) resolveHeaders(metadataFields types.ExportMetad
 func (e *UsageAnalyticsExporter) buildRow(record *usageAnalyticsRecord, metadataFields types.ExportMetadataFields) []string {
 	row := make([]string, 0, len(usageAnalyticsStaticHeaders)+len(metadataFields))
 	row = append(row,
+		record.CustomerName,
 		record.CustomerID,
 		record.CustomerExternalID,
 		record.StartTime.Format(time.RFC3339),
@@ -259,6 +269,7 @@ func (e *UsageAnalyticsExporter) buildRow(record *usageAnalyticsRecord, metadata
 		record.TotalUsage.String(),
 		record.TotalCost.String(),
 		record.Currency,
+		record.Source,
 	)
 	for _, f := range metadataFields {
 		var val string

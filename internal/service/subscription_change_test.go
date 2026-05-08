@@ -395,17 +395,34 @@ func (s *SubscriptionChangeServiceTestSuite) backdateSub(
 }
 
 // getInvoicesForSub lists all invoices (any status) for the given subscription ID.
-// Results are returned in repository order (typically insertion order).
-// The opening invoice is always [0] because it is created first.
+// Results are returned oldest-first to make tests deterministic.
 func (s *SubscriptionChangeServiceTestSuite) getInvoicesForSub(subID string) []*invoicedomain.Invoice {
 	ctx := s.GetContext()
+	sort := "created_at"
+	order := "asc"
 	filter := &types.InvoiceFilter{
 		QueryFilter:    types.NewDefaultQueryFilter(),
 		SubscriptionID: subID,
 	}
+	filter.QueryFilter.Sort = &sort
+	filter.QueryFilter.Order = &order
 	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
 	require.NoError(s.T(), err)
 	return invoices
+}
+
+func (s *SubscriptionChangeServiceTestSuite) getOpeningInvoiceForSub(subID string) *invoicedomain.Invoice {
+	s.T().Helper()
+	invoices := s.getInvoicesForSub(subID)
+	require.NotEmpty(s.T(), invoices, "expected at least one invoice for subscription %s", subID)
+	for _, inv := range invoices {
+		reason := types.InvoiceBillingReason(inv.BillingReason)
+		if reason.IsFirstSubscriptionOpenInvoiceReason() {
+			return inv
+		}
+	}
+	require.FailNow(s.T(), "expected an opening invoice with a subscription open reason", "subscription_id=%s", subID)
+	return nil
 }
 
 // getWalletForCustomer returns the first wallet whose CustomerID matches,
@@ -1377,10 +1394,9 @@ func (s *SubscriptionChangeServiceTestSuite) TestUpgradeNoneProration() {
 	})
 
 	s.Run("execute/opening_invoice_full_price", func() {
-		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
-		require.NotEmpty(s.T(), invoices, "expected at least one invoice for the new subscription")
-		assert.True(s.T(), invoices[0].AmountDue.Equal(decimal.NewFromFloat(2000)),
-			"expected opening invoice AmountDue to be 2000, got %s", invoices[0].AmountDue.String())
+		openingInvoice := s.getOpeningInvoiceForSub(execResp.NewSubscription.ID)
+		assert.True(s.T(), openingInvoice.AmountDue.Equal(decimal.NewFromFloat(2000)),
+			"expected opening invoice AmountDue to be 2000, got %s", openingInvoice.AmountDue.String())
 	})
 
 	s.Run("execute/no_wallet_credit", func() {
@@ -1500,15 +1516,13 @@ func (s *SubscriptionChangeServiceTestSuite) TestUpgradeWithCreateProrations() {
 	})
 
 	s.Run("execute/opening_invoice_billing_reason", func() {
-		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
-		require.NotEmpty(s.T(), invoices, "expected at least one invoice for new subscription")
-		assert.Equal(s.T(), string(types.InvoiceBillingReasonSubscriptionUpdate), string(invoices[0].BillingReason))
+		openingInvoice := s.getOpeningInvoiceForSub(execResp.NewSubscription.ID)
+		assert.Equal(s.T(), string(types.InvoiceBillingReasonSubscriptionUpdate), string(openingInvoice.BillingReason))
 	})
 
 	s.Run("execute/opening_invoice_amount_near_1700", func() {
-		invoices := s.getInvoicesForSub(execResp.NewSubscription.ID)
-		require.GreaterOrEqual(s.T(), len(invoices), 1, "expected at least one invoice for new subscription")
-		s.assertAmountNear(decimal.NewFromFloat(1700), invoices[0].AmountDue, 1.0, "opening invoice total")
+		openingInvoice := s.getOpeningInvoiceForSub(execResp.NewSubscription.ID)
+		s.assertAmountNear(decimal.NewFromFloat(1700), openingInvoice.AmountDue, 1.0, "opening invoice total")
 	})
 
 	s.Run("execute/no_wallet_credit", func() {

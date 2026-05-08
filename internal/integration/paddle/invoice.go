@@ -174,7 +174,11 @@ func (s *InvoiceSyncService) SyncInvoiceToPaddle(
 	txn, err := s.client.CreateTransaction(ctx, createReq)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to create transaction in Paddle").
+			WithHintf("Failed to create transaction in Paddle: %s", err.Error()).
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": req.InvoiceID,
+				"error":      err.Error(),
+			}).
 			Mark(ierr.ErrInternal)
 	}
 
@@ -234,25 +238,43 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 		}
 	}
 
+	// For zero-dollar invoices (e.g. trial-start): omit Status entirely and use automatic collection.
+	// When customer_id + address_id are present, Paddle auto-assigns Status=ready and returns
+	// checkout.url immediately — the customer can complete checkout to save their card.
+	// For non-zero invoices: Manual+Billed so Paddle sends the invoice to the customer.
+	var statusPtr *paddle.TransactionStatus
+	collectionMode := paddle.CollectionModeManual
+	if !flexInvoice.Total.IsZero() {
+		billed := paddle.TransactionStatusBilled
+		statusPtr = &billed
+	} else {
+		collectionMode = paddle.CollectionModeAutomatic
+	}
+
 	req := &paddle.CreateTransactionRequest{
 		Items:          items,
 		CustomerID:     paddle.PtrTo(paddleCustomerID),
 		AddressID:      paddle.PtrTo(paddleAddressID),
 		CurrencyCode:   paddle.PtrTo(currency),
-		CollectionMode: paddle.PtrTo(paddle.CollectionModeManual),
-		Status:         paddle.PtrTo(paddle.TransactionStatusBilled),
+		CollectionMode: paddle.PtrTo(collectionMode),
+		Status:         statusPtr,
 		CustomData: map[string]interface{}{
 			"flexprice_invoice_id":  flexInvoice.ID,
 			"flexprice_customer_id": flexInvoice.CustomerID,
 			"environment_id":        types.GetEnvironmentID(ctx),
 		},
-		BillingDetails: &paddle.BillingDetails{
+	}
+
+	// BillingDetails is only relevant for manual collection (invoice sending + checkout config).
+	// Automatic collection ($0 card-capture transactions) must leave it nil.
+	if collectionMode == paddle.CollectionModeManual {
+		req.BillingDetails = &paddle.BillingDetails{
 			EnableCheckout: true,
 			PaymentTerms: paddle.Duration{
 				Interval:  intervalDay,
 				Frequency: paymentDays,
 			},
-		},
+		}
 	}
 
 	if flexInvoice.InvoiceNumber != nil && *flexInvoice.InvoiceNumber != "" {
@@ -270,13 +292,6 @@ func (s *InvoiceSyncService) buildTransactionItems(flexInvoice *invoice.Invoice)
 	var items []paddle.CreateTransactionItems
 
 	for _, item := range flexInvoice.LineItems {
-		if item.Amount.IsZero() {
-			s.logger.Debugw("skipping zero-amount line item",
-				"invoice_id", flexInvoice.ID,
-				"line_item_id", item.ID)
-			continue
-		}
-
 		txnItem, err := s.buildSingleTransactionItem(flexInvoice, item)
 		if err != nil {
 			return nil, err

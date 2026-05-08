@@ -445,6 +445,25 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 					return err
 				}
 			}
+		} else if sub.SubscriptionStatus == types.SubscriptionStatusTrialing {
+			// Create a $0 preview invoice at trial start so downstream integrations (Stripe,
+			// Paddle) can drive card capture via their $0 checkout flow.
+			// syncTrialingStateFromCreateRequest has already aligned:
+			//   CurrentPeriodStart = TrialStart
+			//   CurrentPeriodEnd   = TrialEnd
+			paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID).NormalizePaymentParameters()
+
+			invoice, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+				SubscriptionID: sub.ID,
+				PeriodStart:    sub.CurrentPeriodStart, // == TrialStart
+				PeriodEnd:      sub.CurrentPeriodEnd,   // == TrialEnd
+				ReferencePoint: types.ReferencePointPeriodStart,
+				BillingReason:  types.InvoiceBillingReasonSubscriptionTrialStart,
+			}, paymentParams, types.InvoiceFlowSubscriptionCreation, false)
+			if err != nil {
+				return err
+			}
+			// Subscription stays TRIALING — trial start invoice does not gate activation.
 		}
 
 		// Inherited children must see the parent's final status/period fields after invoice + activation.

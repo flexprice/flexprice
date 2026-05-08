@@ -1103,7 +1103,6 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithInheritanceChildren
 	s.Equal(resp.ID, *inherited[0].ParentSubscriptionID)
 }
 
-
 func (s *SubscriptionServiceSuite) TestCancelSubscription_RejectedForInheritedSubscription() {
 	ctx := s.GetContext()
 	parent, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, s.testData.subscription.ID)
@@ -1121,24 +1120,24 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription_RejectedForInheritedSu
 	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
 
 	inherited := &subscription.Subscription{
-		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
-		CustomerID:             child.ID,
-		PlanID:                 parent.PlanID,
-		Currency:               parent.Currency,
-		SubscriptionStatus:     types.SubscriptionStatusActive,
-		BillingAnchor:          parent.BillingAnchor,
-		BillingCycle:           parent.BillingCycle,
-		StartDate:              parent.StartDate,
-		EndDate:                parent.EndDate,
-		CurrentPeriodStart:     parent.CurrentPeriodStart,
-		CurrentPeriodEnd:       parent.CurrentPeriodEnd,
-		BillingPeriod:          parent.BillingPeriod,
-		BillingPeriodCount:     parent.BillingPeriodCount,
-		Version:                1,
-		EnvironmentID:          parent.EnvironmentID,
-		ParentSubscriptionID:   &parent.ID,
-		SubscriptionType:       types.SubscriptionTypeInherited,
-		BaseModel:              types.GetDefaultBaseModel(ctx),
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               parent.PlanID,
+		Currency:             parent.Currency,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		BillingAnchor:        parent.BillingAnchor,
+		BillingCycle:         parent.BillingCycle,
+		StartDate:            parent.StartDate,
+		EndDate:              parent.EndDate,
+		CurrentPeriodStart:   parent.CurrentPeriodStart,
+		CurrentPeriodEnd:     parent.CurrentPeriodEnd,
+		BillingPeriod:        parent.BillingPeriod,
+		BillingPeriodCount:   parent.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        parent.EnvironmentID,
+		ParentSubscriptionID: &parent.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
 	}
 	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
 
@@ -6294,4 +6293,109 @@ func (s *SubscriptionServiceSuite) TestGetUsageBySubscription_ParentIncludesChil
 	s.Require().NotNil(apiCharge, "expected API Calls charge in response")
 	s.Equal(float64(2000), apiCharge.Quantity)
 	s.Equal(25.0, apiCharge.Amount) // (1000*0.02) + (1000*0.005)
+}
+
+// TestCreateSubscription_TrialStart_Invoice verifies that creating a TRIALING subscription
+// produces a $0 FINALIZED invoice with BillingReason=SUBSCRIPTION_TRIAL_START whose period
+// covers the trial window. Payment status should be SUCCEEDED for charge_automatically and
+// PENDING for send_invoice.
+//
+// NOTE: This test MUST FAIL until Task 4/5 implement trial-start invoice creation in
+// CreateSubscription. The expected failure point is the NotNil assertion for trialInv.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_TrialStart_Invoice() {
+	ctx := s.GetContext()
+	now := s.testData.now
+
+	trialStart := now
+	trialEnd := now.Add(14 * 24 * time.Hour) // 14-day trial
+
+	type subcase struct {
+		name             string
+		collectionMethod types.CollectionMethod
+		wantPayStatus    types.PaymentStatus
+	}
+
+	cases := []subcase{
+		{
+			name:             "charge_automatically",
+			collectionMethod: types.CollectionMethodChargeAutomatically,
+			wantPayStatus:    types.PaymentStatusSucceeded,
+		},
+		{
+			name:             "send_invoice",
+			collectionMethod: types.CollectionMethodSendInvoice,
+			wantPayStatus:    types.PaymentStatusPending,
+		},
+	}
+
+	invoiceSvc := s.createInvoiceService()
+
+	for _, tc := range cases {
+		tc := tc
+		s.Run(tc.name, func() {
+			req := dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          &trialStart,
+				Currency:           "usd",
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+				CollectionMethod:   lo.ToPtr(tc.collectionMethod),
+				// TrialStart/TrialEnd are internal-only fields (json:"-"), safe to set in service tests.
+				TrialStart: &trialStart,
+				TrialEnd:   &trialEnd,
+			}
+
+			resp, err := s.service.CreateSubscription(ctx, req)
+			s.Require().NoError(err, "CreateSubscription must succeed")
+			s.Require().NotNil(resp)
+
+			// The subscription must be TRIALING while within the trial window.
+			s.Equal(types.SubscriptionStatusTrialing, resp.SubscriptionStatus,
+				"subscription created with a trial window must start in TRIALING status")
+
+			// Retrieve all invoices for this subscription.
+			filter := types.NewNoLimitInvoiceFilter()
+			filter.SubscriptionID = resp.ID
+			filter.InvoiceType = types.InvoiceTypeSubscription
+
+			invoicesResp, err := invoiceSvc.ListInvoices(ctx, filter)
+			s.Require().NoError(err, "listing invoices must not fail")
+
+			// Find the trial-start invoice by billing reason.
+			// BillingReason is stored as a plain string in the domain model.
+			var trialInv *dto.InvoiceResponse
+			for _, inv := range invoicesResp.Items {
+				if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionTrialStart) {
+					trialInv = inv
+					break
+				}
+			}
+
+			// *** This assertion is the expected failure point in Task 3. ***
+			// No trial-start invoice is created yet; Task 4/5 will implement it.
+			s.Require().NotNil(trialInv, "trial start invoice must exist (BillingReason=SUBSCRIPTION_TRIAL_START)")
+
+			// Verify invoice is FINALIZED (not SKIPPED).
+			s.Equal(types.InvoiceStatusFinalized, trialInv.InvoiceStatus,
+				"trial start invoice must be FINALIZED")
+
+			// Verify all amounts are zero.
+			s.True(trialInv.Total.IsZero(), "trial start invoice total must be $0")
+			s.True(trialInv.AmountDue.IsZero(), "trial start invoice amount_due must be $0")
+
+			// Verify period covers the trial window.
+			s.Require().NotNil(trialInv.PeriodStart, "trial start invoice must have period_start")
+			s.Require().NotNil(trialInv.PeriodEnd, "trial start invoice must have period_end")
+			s.Equal(trialStart.Unix(), trialInv.PeriodStart.Unix(),
+				"invoice period_start must equal trial_start")
+			s.Equal(trialEnd.Unix(), trialInv.PeriodEnd.Unix(),
+				"invoice period_end must equal trial_end")
+
+			// Verify payment status is driven by collection method.
+			s.Equal(tc.wantPayStatus, trialInv.PaymentStatus,
+				"payment status must match collection method expectation")
+		})
+	}
 }
