@@ -42,9 +42,6 @@ type InvoiceService interface {
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
-	// CreateGroupedSubscriptionInvoice generates a single clubbed invoice for a parent
-	// subscription plus all its grouped_invoicing children for the given period.
-	CreateGroupedSubscriptionInvoice(ctx context.Context, req *dto.CreateGroupedSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters) (*dto.InvoiceResponse, error)
 	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, referencePoint types.InvoiceReferencePoint) (*dto.InvoiceResponse, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (skipped bool, err error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
@@ -1940,73 +1937,6 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		return nil, nil, err
 	}
 	return dto.NewInvoiceResponse(inv), subscription, nil
-}
-
-func (s *invoiceService) CreateGroupedSubscriptionInvoice(ctx context.Context, req *dto.CreateGroupedSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters) (*dto.InvoiceResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	s.Logger.InfowCtx(ctx, "creating grouped subscription invoice",
-		"parent_subscription_id", req.ParentSubscriptionID,
-		"period_start", req.PeriodStart,
-		"period_end", req.PeriodEnd)
-
-	parentSub, err := s.SubRepo.Get(ctx, req.ParentSubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	billingService := NewBillingService(s.ServiceParams)
-
-	// PrepareSubscriptionInvoiceRequest detects the parent type and merges children internally.
-	mergedReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-		Subscription:   parentSub,
-		PeriodStart:    req.PeriodStart,
-		PeriodEnd:      req.PeriodEnd,
-		ReferencePoint: req.ReferencePoint,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if len(mergedReq.LineItems) == 0 {
-		return nil, nil
-	}
-
-	draftReq := dto.CreateDraftInvoiceRequest{
-		CustomerID:             parentSub.GetInvoicingCustomerID(),
-		SubscriptionID:         &parentSub.ID,
-		SubscriptionCustomerID: &parentSub.CustomerID,
-		Currency:               parentSub.Currency,
-		BillingPeriod:          lo.ToPtr(string(parentSub.BillingPeriod)),
-		PeriodStart:            &req.PeriodStart,
-		PeriodEnd:              &req.PeriodEnd,
-		BillingReason:          types.InvoiceBillingReasonSubscriptionCycle,
-		InvoiceType:            types.InvoiceTypeSubscription,
-	}
-	draft, err := s.CreateEmptyDraftInvoice(ctx, draftReq)
-	if err != nil {
-		return nil, err
-	}
-
-	skipped, err := s.computeInvoiceWithRequest(ctx, draft.ID, mergedReq)
-	if err != nil {
-		return nil, err
-	}
-	if skipped {
-		return nil, nil
-	}
-
-	if err := s.ProcessDraftInvoice(ctx, draft.ID, paymentParams, parentSub, types.InvoiceFlowRenewal); err != nil {
-		return nil, err
-	}
-
-	inv, err := s.InvoiceRepo.Get(ctx, draft.ID)
-	if err != nil {
-		return nil, err
-	}
-	return dto.NewInvoiceResponse(inv), nil
 }
 
 func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {

@@ -1219,30 +1219,6 @@ func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 	return nil
 }
 
-// CreateGroupedSubscriptionInvoiceRequest is the internal request for generating a single
-// clubbed invoice for a parent subscription and its grouped_invoicing children.
-type CreateGroupedSubscriptionInvoiceRequest struct {
-	ParentSubscriptionID string                      `validate:"required"`
-	PeriodStart          time.Time                   `validate:"required"`
-	PeriodEnd            time.Time                   `validate:"required"`
-	ReferencePoint       types.InvoiceReferencePoint `validate:"required"`
-}
-
-func (r *CreateGroupedSubscriptionInvoiceRequest) Validate() error {
-	if err := validator.ValidateRequest(r); err != nil {
-		return err
-	}
-	if err := r.ReferencePoint.Validate(); err != nil {
-		return err
-	}
-	if r.PeriodStart.After(r.PeriodEnd) {
-		return ierr.NewError("period_start must be before period_end").
-			WithHint("Invoice period start must be before period end").
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
 // PaymentParameters encapsulates payment-related parameters for invoice processing
 type PaymentParameters struct {
 	// CollectionMethod defines how the payment should be collected (charge_automatically or send_invoice)

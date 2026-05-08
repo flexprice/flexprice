@@ -2918,33 +2918,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			// Apply backward compatibility normalization
 			paymentParams = paymentParams.NormalizePaymentParameters()
 
-			if sub.SubscriptionType == types.SubscriptionTypeParent && len(groupedChildren) > 0 {
-				// Clubbed invoice path: merge parent + children line items into one invoice.
-				clubbedInv, clubbedErr := invoiceService.CreateGroupedSubscriptionInvoice(
-					ctx,
-					&dto.CreateGroupedSubscriptionInvoiceRequest{
-						ParentSubscriptionID: sub.ID,
-						PeriodStart:          period.start,
-						PeriodEnd:            period.end,
-						ReferencePoint:       types.ReferencePointPeriodEnd,
-					},
-					paymentParams,
-				)
-				if clubbedErr != nil {
-					return clubbedErr
-				}
-				if clubbedInv != nil {
-					s.Logger.InfowCtx(ctx, "created grouped invoice for parent subscription",
-						"subscription_id", sub.ID,
-						"invoice_id", clubbedInv.ID,
-						"period_start", period.start,
-						"period_end", period.end,
-						"child_count", len(groupedChildren))
-				}
-				// Cancellation checks are skipped for the grouped path — the parent's
-				// period advancement below handles lifecycle correctly.
-			} else {
-				// Regular invoice path.
+			{
 				inv, updatedSub, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 					SubscriptionID: sub.ID,
 					PeriodStart:    period.start,
@@ -2953,6 +2927,14 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				}, paymentParams, types.InvoiceFlowRenewal, false)
 				if err != nil {
 					return err
+				}
+
+				if inv != nil {
+					s.Logger.InfowCtx(ctx, "created invoice for subscription",
+						"subscription_id", sub.ID,
+						"invoice_id", inv.ID,
+						"period_start", period.start,
+						"period_end", period.end)
 				}
 
 				// Use the updated subscription from CreateSubscriptionInvoice to avoid extra DB call
