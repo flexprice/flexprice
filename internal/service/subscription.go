@@ -269,34 +269,9 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		childCustomerIDs, err := s.prepareSubscriptionInheritanceForCreate(ctx, &req, sub)
+		groupedInvoicingSubIDs, childCustomerIDs, err := s.prepareSubscriptionInheritanceForCreate(ctx, &req, sub)
 		if err != nil {
 			return err
-		}
-		if sub.SubscriptionType == types.SubscriptionTypeStandalone || sub.SubscriptionType == types.SubscriptionTypeParent {
-			if sub.CustomerID != "" {
-				subscriberFilter := types.NewSubscriptionFilter()
-				subscriberFilter.CustomerID = sub.CustomerID
-				subscriberFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-				subscriberFilter.Status = lo.ToPtr(types.StatusPublished)
-				subscriberFilter.SubscriptionStatus = []types.SubscriptionStatus{
-					types.SubscriptionStatusActive,
-					types.SubscriptionStatusDraft,
-					types.SubscriptionStatusTrialing,
-				}
-				subscriberFilter.WithLineItems = false
-				subscriberFilter.Limit = lo.ToPtr(1)
-				inheritedCount, countErr := s.SubRepo.Count(ctx, subscriberFilter)
-				if countErr != nil {
-					return countErr
-				}
-				if inheritedCount > 0 {
-					return ierr.NewError("customer already has an inherited subscription").
-						WithHint("A customer that receives a subscription through hierarchy cannot create a standalone or parent subscription. Cancel the inherited subscription first or subscribe only via the parent subscription.").
-						WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
-						Mark(ierr.ErrValidation)
-				}
-			}
 		}
 
 		if err := s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
@@ -469,6 +444,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		// Inherited children must see the parent's final status/period fields after invoice + activation.
 		for _, childID := range childCustomerIDs {
 			if err := s.createInheritedSubscriptions(ctx, sub, childID); err != nil {
+				return err
+			}
+		}
+
+		// Convert existing standalone subscriptions to grouped_invoicing under the newly created parent
+		for _, gSubID := range groupedInvoicingSubIDs {
+			if err := s.addToGroupedInvoicing(ctx, sub, gSubID); err != nil {
 				return err
 			}
 		}
@@ -2738,6 +2720,15 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return nil
 	}
 
+	// Skip processing for grouped_invoicing children — the parent handles invoice generation
+	// and period advancement for these subscriptions.
+	if sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
+		s.Logger.InfowCtx(ctx, "skipping period processing for grouped_invoicing child subscription",
+			"subscription_id", sub.ID,
+			"parent_subscription_id", sub.ParentSubscriptionID)
+		return nil
+	}
+
 	// Check for scheduled pauses that should be activated
 	if sub.PauseStatus == types.PauseStatusScheduled && sub.ActivePauseID != nil {
 		pause, err := s.SubRepo.GetPause(ctx, *sub.ActivePauseID)
@@ -2856,6 +2847,17 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	}
 
 	// TODO: Check if subscription has ended and should be cancelled
+
+	// Fetch grouped_invoicing children once (before the transaction) so both the
+	// per-period invoice loop and the post-loop period-advancement step can reuse them.
+	var groupedChildren []*subscription.Subscription
+	if sub.SubscriptionType == types.SubscriptionTypeParent {
+		var gErr error
+		groupedChildren, gErr = s.getGroupedInvoicingSubscriptions(ctx, sub.ID)
+		if gErr != nil {
+			return gErr
+		}
+	}
 
 	// Initialize services
 	invoiceService := NewInvoiceService(s.ServiceParams)
@@ -3017,6 +3019,18 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// Update the subscription
 		if err := s.SubRepo.Update(ctx, sub); err != nil {
 			return err
+		}
+
+		// Advance grouped_invoicing children to match the parent's new period
+		if sub.SubscriptionType == types.SubscriptionTypeParent && len(groupedChildren) > 0 {
+			newPeriod := periods[len(periods)-1]
+			for _, child := range groupedChildren {
+				child.CurrentPeriodStart = newPeriod.start
+				child.CurrentPeriodEnd = newPeriod.end
+				if err := s.SubRepo.Update(ctx, child); err != nil {
+					return err
+				}
+			}
 		}
 
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
@@ -7328,86 +7342,102 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 // prepareSubscriptionInheritanceForCreate validates inheritance, applies parent-link invoicing,
 // resolves invoicing/child customers by external ID, and sets subscription type for parent rows.
 // Call before SubRepo.CreateWithLineItems so InvoicingCustomerID and SubscriptionType persist.
-// Returns internal customer IDs for inherited subscriptions to create after invoice/activation in the same tx.
-func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx context.Context, req *dto.CreateSubscriptionRequest, sub *subscription.Subscription) ([]string, error) {
-
-	var childCustomerIDs []string
-	if req.Inheritance != nil {
-		if err := req.Inheritance.Validate(); err != nil {
-			return nil, err
-		}
-		inh := req.Inheritance
-		childCustomerIDs = make([]string, 0, len(inh.ExternalCustomerIDsToInheritSubscription))
-
-		if inh.ParentSubscriptionID != "" {
-			parentSub, err := s.SubRepo.Get(ctx, inh.ParentSubscriptionID)
-			if err != nil {
-				return nil, err
-			}
-			if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
-				return nil, ierr.NewError("parent subscription is not active").
-					WithHint("The parent subscription must be active").
-					WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
-					Mark(ierr.ErrValidation)
-			}
-			sub.InvoicingCustomerID = parentSub.InvoicingCustomerID
-		}
-
-		if inh.InvoicingCustomerExternalID != nil {
-			invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, lo.FromPtr(inh.InvoicingCustomerExternalID))
-			if err != nil {
-				return nil, err
-			}
-			if invoicingCustomer.Status != types.StatusPublished {
-				return nil, ierr.NewError("invoicing customer is not active").
-					WithHint("The invoicing customer must be active").
-					WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
-					Mark(ierr.ErrValidation)
-			}
-			sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
-		}
-
-		if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
-			resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription)
-			if err != nil {
-				return nil, err
-			}
-			childCustomerIDs = resolved
-		}
-		// set the subscription type based on the number of child customer IDs
-		if len(childCustomerIDs) > 0 {
-			sub.SubscriptionType = types.SubscriptionTypeParent
-		} else {
-			sub.SubscriptionType = types.SubscriptionTypeStandalone
-		}
+// Returns groupedInvoicingSubIDs (existing standalone subs to convert post-create) and
+// childCustomerIDs (internal customer IDs for inherited subscriptions to create after invoice/activation).
+func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx context.Context, req *dto.CreateSubscriptionRequest, sub *subscription.Subscription) (groupedInvoicingSubIDs []string, childCustomerIDs []string, err error) {
+	if req.Inheritance == nil {
+		sub.SubscriptionType = types.SubscriptionTypeStandalone
+		return nil, nil, s.validateNoInheritedSubForSubscriber(ctx, sub)
 	}
 
-	// validate that the subscriber does not have an inherited subscription
-	if sub.SubscriptionType == types.SubscriptionTypeStandalone || sub.SubscriptionType == types.SubscriptionTypeParent {
-		subscriberFilter := types.NewSubscriptionFilter()
-		subscriberFilter.CustomerID = sub.CustomerID
-		subscriberFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-		subscriberFilter.Status = lo.ToPtr(types.StatusPublished)
-		subscriberFilter.SubscriptionStatus = []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusDraft,
-			types.SubscriptionStatusTrialing,
+	inh := req.Inheritance
+	if err := inh.Validate(); err != nil {
+		return nil, nil, err
+	}
+
+	// Auto-detection path (the only path): interpret inheritance fields and set SubscriptionType.
+	if inh.ParentSubscriptionID != "" {
+		parentSub, err := s.SubRepo.Get(ctx, inh.ParentSubscriptionID)
+		if err != nil {
+			return nil, nil, err
 		}
-		subscriberFilter.WithLineItems = false
-		subscriberFilter.Limit = lo.ToPtr(1)
-		inheritedCount, countErr := s.SubRepo.Count(ctx, subscriberFilter)
-		if countErr != nil {
-			return nil, countErr
-		}
-		if inheritedCount > 0 {
-			return nil, ierr.NewError("customer already has an inherited subscription").
-				WithHint("A customer that receives a subscription through hierarchy cannot create a standalone or parent subscription. Cancel the inherited subscription first or subscribe only via the parent subscription.").
-				WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
+		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
+			return nil, nil, ierr.NewError("parent subscription is not active").
+				WithHint("The parent subscription must be active").
+				WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
 				Mark(ierr.ErrValidation)
 		}
+		sub.InvoicingCustomerID = parentSub.InvoicingCustomerID
+		sub.SubscriptionType = types.SubscriptionTypeInherited
+		sub.ParentSubscriptionID = lo.ToPtr(inh.ParentSubscriptionID)
 	}
 
-	return childCustomerIDs, nil
+	if inh.InvoicingCustomerExternalID != nil {
+		invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, lo.FromPtr(inh.InvoicingCustomerExternalID))
+		if err != nil {
+			return nil, nil, err
+		}
+		if invoicingCustomer.Status != types.StatusPublished {
+			return nil, nil, ierr.NewError("invoicing customer is not active").
+				WithHint("The invoicing customer must be active").
+				WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
+				Mark(ierr.ErrValidation)
+		}
+		sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
+	}
+
+	if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
+		resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription)
+		if err != nil {
+			return nil, nil, err
+		}
+		childCustomerIDs = resolved
+	}
+
+	// SubIDsForGroupedInvoicing are processed post-create (parent.ID not known yet at this point).
+	groupedInvoicingSubIDs = inh.SubscriptionsIDsForGroupedInvoicing
+
+	if len(childCustomerIDs) > 0 || len(groupedInvoicingSubIDs) > 0 {
+		sub.SubscriptionType = types.SubscriptionTypeParent
+	} else if sub.SubscriptionType == "" {
+		sub.SubscriptionType = types.SubscriptionTypeStandalone
+	}
+
+	return groupedInvoicingSubIDs, childCustomerIDs, s.validateNoInheritedSubForSubscriber(ctx, sub)
+}
+
+// validateNoInheritedSubForSubscriber rejects standalone/parent/delegated creation when
+// the subscriber already has an inherited subscription under another parent.
+func (s *subscriptionService) validateNoInheritedSubForSubscriber(ctx context.Context, sub *subscription.Subscription) error {
+	skipTypes := map[types.SubscriptionType]bool{
+		types.SubscriptionTypeInherited:        true,
+		types.SubscriptionTypeGroupedInvoicing: true,
+	}
+	if skipTypes[sub.SubscriptionType] {
+		return nil
+	}
+	subscriberFilter := types.NewSubscriptionFilter()
+	subscriberFilter.CustomerID = sub.CustomerID
+	subscriberFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	subscriberFilter.Status = lo.ToPtr(types.StatusPublished)
+	subscriberFilter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusTrialing,
+	}
+	subscriberFilter.WithLineItems = false
+	subscriberFilter.Limit = lo.ToPtr(1)
+	count, err := s.SubRepo.Count(ctx, subscriberFilter)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return ierr.NewError("customer already has an inherited subscription").
+			WithHint("A customer that receives a subscription through hierarchy cannot create a standalone, parent, or delegated subscription.").
+			WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, parent *subscription.Subscription, childCustomerID string) error {
