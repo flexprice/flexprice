@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -95,10 +96,15 @@ func (s *subscriptionService) validateAddToGroupedInvoicing(
 			Mark(ierr.ErrValidation)
 	}
 
-	// 8. billing anchors must match exactly
-	if !child.BillingAnchor.Equal(parentSub.BillingAnchor) {
+	// 8. billing anchors must share the same day-of-month, hour, minute, and second (DD:HH:MM:SS).
+	// Year and month are zeroed on both sides before comparing so that a child added in a later
+	// month is accepted as long as its intra-cycle cadence aligns with the parent's.
+	billingAnchorKey := func(t time.Time) time.Time {
+		return time.Date(0, 1, t.Day(), t.Hour(), t.Minute(), t.Second(), 0, time.UTC)
+	}
+	if !billingAnchorKey(child.BillingAnchor).Equal(billingAnchorKey(parentSub.BillingAnchor)) {
 		return ierr.NewError("billing anchor mismatch between child and parent subscriptions").
-			WithHint("Child and parent subscriptions must share the same billing anchor").
+			WithHint("Child and parent subscriptions must share the same day-of-month and time-of-day billing anchor").
 			WithReportableDetails(map[string]any{
 				"child_billing_anchor":  child.BillingAnchor,
 				"parent_billing_anchor": parentSub.BillingAnchor,
