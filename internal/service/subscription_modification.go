@@ -51,11 +51,11 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 		return s.executeInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
 		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
-	case dto.SubscriptionModifyTypeGroupedInvoicingAdd, dto.SubscriptionModifyTypeGroupedInvoicingRemove:
-		return s.executeGroupedInvoicingMembership(ctx, req.Type, req.GroupedInvoicingParams)
+	case dto.SubscriptionModifyTypeGroupedInvoicing:
+		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	default:
 		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing_add, grouped_invoicing_remove").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing").
 			Mark(ierr.ErrValidation)
 	}
 }
@@ -71,11 +71,11 @@ func (s *subscriptionModificationService) Preview(ctx context.Context, subscript
 		return s.previewInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
 		return s.previewQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
-	case dto.SubscriptionModifyTypeGroupedInvoicingAdd, dto.SubscriptionModifyTypeGroupedInvoicingRemove:
-		return s.previewGroupedInvoicingMembership(ctx, req.Type, req.GroupedInvoicingParams)
+	case dto.SubscriptionModifyTypeGroupedInvoicing:
+		return s.previewGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	default:
 		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing_add, grouped_invoicing_remove").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing").
 			Mark(ierr.ErrValidation)
 	}
 }

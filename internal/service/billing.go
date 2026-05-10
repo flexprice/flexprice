@@ -2309,13 +2309,18 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		filter.SubscriptionStatus = []types.SubscriptionStatus{
 			types.SubscriptionStatusActive,
 			types.SubscriptionStatusTrialing,
-			types.SubscriptionStatusDraft,
 		}
 		children, err := s.SubRepo.List(ctx, filter)
 		if err != nil {
 			return nil, err
 		}
 		for _, child := range children {
+			// NOTE: ExcludeInvoiceID and OpeningInvoiceAdjustmentAmount from the parent params
+			// are intentionally not forwarded here.
+			//   - ExcludeInvoiceID: child subscriptions maintain their own invoice history;
+			//     filtering is done independently per child.
+			//   - OpeningInvoiceAdjustmentAmount: plan-change opening credits apply only to the
+			//     parent subscription's line items, not to grouped-invoicing children.
 			childReq, err := s.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
 				Subscription:   child,
 				PeriodStart:    periodStart,

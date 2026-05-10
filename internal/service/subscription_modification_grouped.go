@@ -10,13 +10,12 @@ import (
 
 func (s *subscriptionModificationService) previewGroupedInvoicingMembership(
 	ctx context.Context,
-	modifyType dto.SubscriptionModifyType,
 	params *dto.SubModifyGroupedInvoicingParams,
 ) (*dto.SubscriptionModifyResponse, error) {
 	subSvc := NewSubscriptionService(s.serviceParams).(*subscriptionService)
 
 	var parentSub *subscription.Subscription
-	if modifyType == dto.SubscriptionModifyTypeGroupedInvoicingAdd {
+	if params.Action == dto.GroupedInvoicingActionAdd {
 		var err error
 		parentSub, err = s.serviceParams.SubRepo.Get(ctx, params.ParentSubscriptionID)
 		if err != nil {
@@ -27,7 +26,7 @@ func (s *subscriptionModificationService) previewGroupedInvoicingMembership(
 	changed := make([]dto.ChangedSubscription, 0, len(params.ChildSubscriptionIDs))
 	for _, childID := range params.ChildSubscriptionIDs {
 		var validateErr error
-		if modifyType == dto.SubscriptionModifyTypeGroupedInvoicingAdd {
+		if params.Action == dto.GroupedInvoicingActionAdd {
 			validateErr = subSvc.validateAddToGroupedInvoicingDryRun(ctx, parentSub, childID)
 		} else {
 			validateErr = subSvc.validateRemoveFromGroupedInvoicingDryRun(ctx, childID)
@@ -51,13 +50,12 @@ func (s *subscriptionModificationService) previewGroupedInvoicingMembership(
 
 func (s *subscriptionModificationService) executeGroupedInvoicingMembership(
 	ctx context.Context,
-	modifyType dto.SubscriptionModifyType,
 	params *dto.SubModifyGroupedInvoicingParams,
 ) (*dto.SubscriptionModifyResponse, error) {
 	subSvc := NewSubscriptionService(s.serviceParams).(*subscriptionService)
 
 	var parentSub *subscription.Subscription
-	if modifyType == dto.SubscriptionModifyTypeGroupedInvoicingAdd {
+	if params.Action == dto.GroupedInvoicingActionAdd {
 		var err error
 		parentSub, err = s.serviceParams.SubRepo.Get(ctx, params.ParentSubscriptionID)
 		if err != nil {
@@ -69,7 +67,7 @@ func (s *subscriptionModificationService) executeGroupedInvoicingMembership(
 	err := s.serviceParams.DB.WithTx(ctx, func(txCtx context.Context) error {
 		for _, childID := range params.ChildSubscriptionIDs {
 			var opErr error
-			if modifyType == dto.SubscriptionModifyTypeGroupedInvoicingAdd {
+			if params.Action == dto.GroupedInvoicingActionAdd {
 				opErr = subSvc.addToGroupedInvoicing(txCtx, parentSub, childID)
 			} else {
 				opErr = subSvc.removeFromGroupedInvoicing(txCtx, childID)

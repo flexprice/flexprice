@@ -9,7 +9,7 @@ import (
 	"github.com/samber/lo"
 )
 
-// validateAddToGroupedInvoicing checks all 9 constraints required before a child subscription
+// validateAddToGroupedInvoicing checks all constraints required before a child subscription
 // can be attached to a parent for grouped invoicing. It performs no writes.
 func (s *subscriptionService) validateAddToGroupedInvoicing(
 	ctx context.Context,
@@ -106,7 +106,20 @@ func (s *subscriptionService) validateAddToGroupedInvoicing(
 			Mark(ierr.ErrValidation)
 	}
 
-	// 9. child start date must be >= parent start date
+	// 9. currencies must match — grouped invoicing merges line items into a single invoice
+	if child.Currency != parentSub.Currency {
+		return ierr.NewError("currency mismatch between child and parent subscriptions").
+			WithHint("Child and parent subscriptions must use the same currency for grouped invoicing").
+			WithReportableDetails(map[string]any{
+				"child_subscription_id":  child.ID,
+				"child_currency":         child.Currency,
+				"parent_subscription_id": parentSub.ID,
+				"parent_currency":        parentSub.Currency,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// 10. child start date must be >= parent start date
 	if child.StartDate.Before(parentSub.StartDate) {
 		return ierr.NewError("child subscription start date is before parent subscription start date").
 			WithHint("Child subscription cannot start before its parent").
@@ -122,6 +135,10 @@ func (s *subscriptionService) validateAddToGroupedInvoicing(
 
 // addToGroupedInvoicing fetches the child by ID, validates all constraints, then persists the
 // type and parent-link changes.
+//
+// Timing note: addition takes effect at the next billing period boundary. For the current period
+// any advance charges on the child have already been invoiced independently; only usage accrued
+// after the period rolls over will appear on the consolidated parent invoice.
 func (s *subscriptionService) addToGroupedInvoicing(
 	ctx context.Context,
 	parentSub *subscription.Subscription,
@@ -144,6 +161,10 @@ func (s *subscriptionService) addToGroupedInvoicing(
 
 // removeFromGroupedInvoicing fetches the child, verifies it is currently grouped_invoicing,
 // resets it to standalone and clears the parent link.
+//
+// Timing note: removal applies to the entire current billing period. The child's invoice for the
+// full current period (all usage and charges) will be raised directly against the child customer,
+// regardless of when during the period the removal occurred.
 func (s *subscriptionService) removeFromGroupedInvoicing(
 	ctx context.Context,
 	childSubID string,
@@ -208,7 +229,7 @@ func (s *subscriptionService) validateRemoveFromGroupedInvoicingDryRun(
 	return nil
 }
 
-// getGroupedInvoicingSubscriptions returns all active/trialing/draft child subscriptions
+// getGroupedInvoicingSubscriptions returns all active/trialing child subscriptions
 // of type grouped_invoicing that belong to the given parent subscription.
 func (s *subscriptionService) getGroupedInvoicingSubscriptions(
 	ctx context.Context,
@@ -221,7 +242,6 @@ func (s *subscriptionService) getGroupedInvoicingSubscriptions(
 	filter.SubscriptionStatus = []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
-		types.SubscriptionStatusDraft,
 	}
 	return s.SubRepo.List(ctx, filter)
 }

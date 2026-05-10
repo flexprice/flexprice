@@ -15,9 +15,9 @@ const (
 	// No invoicing_customer_id or parent_subscription_id may be set.
 	SubscriptionTypeStandalone SubscriptionType = "standalone"
 
-	// SubscriptionTypeDelegated has its own line items but the invoice is raised against a
+	// SubscriptionTypeDelegatedInvoicing has its own line items but the invoice is raised against a
 	// different customer (invoicing_customer_id is required; parent_subscription_id must be unset).
-	SubscriptionTypeDelegated SubscriptionType = "delegated"
+	SubscriptionTypeDelegatedInvoicing SubscriptionType = "delegated_invoicing"
 
 	// SubscriptionTypeParent is the primary subscription that owns line items and aggregates
 	// usage from child (inherited) subscriptions, and triggers clubbed invoices for grouped_invoicing children.
@@ -34,7 +34,7 @@ const (
 
 var SubscriptionTypeValues = []SubscriptionType{
 	SubscriptionTypeStandalone,
-	SubscriptionTypeDelegated,
+	SubscriptionTypeDelegatedInvoicing,
 	SubscriptionTypeParent,
 	SubscriptionTypeInherited,
 	SubscriptionTypeGroupedInvoicing,
@@ -51,7 +51,7 @@ func (t SubscriptionType) Validate() error {
 
 	if !lo.Contains(SubscriptionTypeValues, t) {
 		return ierr.NewError("invalid subscription type").
-			WithHint("Subscription type must be one of: standalone, delegated, parent, inherited, grouped_invoicing").
+			WithHint("Subscription type must be one of: standalone, delegated_invoicing, parent, inherited, grouped_invoicing").
 			WithReportableDetails(map[string]any{
 				"subscription_type": t,
 				"allowed_values":    SubscriptionTypeValues,

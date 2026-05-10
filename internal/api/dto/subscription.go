@@ -322,6 +322,22 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// Grouped invoicing conversions cannot be combined with inherited child creation.
+	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with external_customer_ids_to_inherit_subscription").
+			WithHint("Use either grouped invoicing conversion or inherited child creation, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate that no element in SubscriptionsIDsForGroupedInvoicing is empty.
+	for i, id := range c.SubscriptionsIDsForGroupedInvoicing {
+		if id == "" {
+			return ierr.NewError("subscriptions_ids_for_grouped_invoicing cannot contain empty values").
+				WithHint(fmt.Sprintf("Subscription ID at index %d is empty", i)).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
