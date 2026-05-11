@@ -105,6 +105,23 @@ from plaintext values — suitable for dev only.
 {{- end }}
 
 {{/*
+Migration helper-image reference.
+Usage: include "flexprice.migrationImage" (dict "ctx" . "name" "postgres")
+       name ∈ {postgres, busybox, clickhouse}
+Produces: <registry>/<repository>:<tag>  (registry optional)
+Backwards-compatible with the old hardcoded refs when the values block is unset.
+*/}}
+{{- define "flexprice.migrationImage" -}}
+{{- $img := dig "images" .name dict .ctx.Values.migration -}}
+{{- $registry := default "" $img.registry -}}
+{{- $repo := default "" $img.repository -}}
+{{- $tag := default "" $img.tag -}}
+{{- if $registry -}}{{- printf "%s/%s:%s" $registry $repo $tag -}}
+{{- else -}}{{- printf "%s:%s" $repo $tag -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Resolve the PostgreSQL host.
 Uses the bitnami/postgresql subchart service name when internal, or the user-supplied host when external.
 */}}

@@ -194,32 +194,34 @@ postgresql:
 postgres:
   external:
     enabled: true
-  host: "flexprice-prod.cluster-xxx.ap-south-1.rds.amazonaws.com"
+  host: "REPLACE-WITH-RDS-ENDPOINT.example.invalid"
   port: 5432
   user: "flexprice"
   database: "flexprice"
-  sslmode: "require"
+  sslmode: "require"   # bumps to "verify-full" require mounting a CA bundle (see docs/SECRETS.md)
   # password comes from existingSecret key: postgres-password
 
 # ── ClickHouse — EXTERNAL (ClickHouse Cloud or self-hosted Altinity) ──────────
 clickhouse:
   mode: external
-  address: "your-cluster.clickhouse.cloud:9440"
+  address: "REPLACE-WITH-CLICKHOUSE-ENDPOINT.example.invalid:9440"
   tls: true
   username: "default"
   database: "flexprice"
   # password comes from existingSecret key: clickhouse-password
 
 # ── Kafka — EXTERNAL (MSK / Confluent / Aiven) ────────────────────────────────
+# NOTE: MSK IAM SASL is NOT supported by the app today (no aws-msk-iam-sasl-signer
+# wiring). Use SCRAM-SHA-512 on MSK with a secret-backed username/password.
 kafka:
   enabled: false   # disable bitnami subchart
 
 kafkaConfig:
   external:
     enabled: true
-  brokers: "b-1.flexprice.xxxxxx.c2.kafka.ap-south-1.amazonaws.com:9098,b-2...:9098,b-3...:9098"
+  brokers: "REPLACE-WITH-KAFKA-BROKERS.example.invalid:9094"
   useSASL: true
-  saslMechanism: "AWS_MSK_IAM"   # or SCRAM-SHA-512
+  saslMechanism: "SCRAM-SHA-512"
   saslUsername: "flexprice"
   # saslPassword comes from existingSecret key: kafka-sasl-password
   tls: true
@@ -231,7 +233,7 @@ redis:
 redisConfig:
   external:
     enabled: true
-  host: "flexprice-prod.xxxxxx.use1.cache.amazonaws.com"
+  host: "REPLACE-WITH-REDIS-ENDPOINT.example.invalid"
   port: 6379
   tls: true
   # password comes from existingSecret key: redis-password (if auth enabled)
@@ -249,8 +251,8 @@ temporal:
 temporalConfig:
   external:
     enabled: true
-  address: "your-namespace.account.tmprl.cloud:7233"
-  namespace: "your-namespace.account"
+  address: "REPLACE-WITH-NAMESPACE.account.tmprl.cloud:7233"
+  namespace: "REPLACE-WITH-NAMESPACE.account"
   taskQueue: "billing-task-queue"
   tls: true
   # apiKey comes from existingSecret key: temporal-api-key

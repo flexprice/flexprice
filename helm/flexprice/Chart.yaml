@@ -16,7 +16,16 @@ maintainers:
 home: https://github.com/flexprice/flexprice
 sources:
   - https://github.com/flexprice/flexprice
+# kubeVersion floor — 1.24 is EOL as of mid-2024, but kept as the floor
+# because the chart's manifests use only stable APIs available in 1.24+.
+# CI tests against the latest two minors; bump per quarterly cadence in
+# PRODUCTION_READINESS.md.
 kubeVersion: ">=1.24.0"
+annotations:
+  # Helm convention (also picked up by Artifact Hub).
+  # Comma-separated SPDX identifiers — see https://spdx.org/licenses/
+  licenses: AGPL-3.0-only
+  category: "Application Infrastructure"
 
 # ClickHouse is managed by the Altinity operator (clickhouse.altinity.com/v1).
 # The operator is cluster-scoped and CANNOT be a Helm subchart dependency.

@@ -39,7 +39,7 @@ spec:
 
         # ── 1. Wait for PostgreSQL ────────────────────────────────────────────
         - name: wait-for-postgres
-          image: postgres:15.3-alpine
+          image: "{{ include "flexprice.migrationImage" (dict "ctx" . "name" "postgres") }}"
           command:
             - sh
             - -c
@@ -80,7 +80,7 @@ spec:
         {{- if .Values.migration.steps.clickhouse }}
         # ── 2. Wait for ClickHouse ────────────────────────────────────────────
         - name: wait-for-clickhouse
-          image: busybox:1.36
+          image: "{{ include "flexprice.migrationImage" (dict "ctx" . "name" "busybox") }}"
           command:
             - sh
             - -c
@@ -105,7 +105,7 @@ spec:
         # ── 3. Wait for Kafka ─────────────────────────────────────────────────
         {{- if .Values.migration.steps.kafka }}
         - name: wait-for-kafka
-          image: busybox:1.36
+          image: "{{ include "flexprice.migrationImage" (dict "ctx" . "name" "busybox") }}"
           command:
             - sh
             - -c
@@ -149,7 +149,7 @@ spec:
         {{- if .Values.migration.steps.postgresSetup }}
         # ── 4. PostgreSQL schema + extensions setup ───────────────────────────
         - name: setup-postgres-schema
-          image: postgres:15.3-alpine
+          image: "{{ include "flexprice.migrationImage" (dict "ctx" . "name" "postgres") }}"
           command:
             - sh
             - -c
@@ -211,7 +211,7 @@ spec:
 
         # ── 6. Run ClickHouse migrations ──────────────────────────────────────
         - name: run-clickhouse-migrations
-          image: clickhouse/clickhouse-server:{{ .Values.clickhouse.standalone.image.tag | default "24.8-alpine" }}
+          image: "{{ include "flexprice.migrationImage" (dict "ctx" . "name" "clickhouse") }}"
           command:
             - sh
             - -c
@@ -323,7 +323,7 @@ spec:
         {{- if .Values.migration.steps.seed }}
         # ── 8. Seed PostgreSQL with default tenant, user, environments ────────
         - name: seed-postgres
-          image: postgres:15.3-alpine
+          image: "{{ include "flexprice.migrationImage" (dict "ctx" . "name" "postgres") }}"
           command:
             - sh
             - -c

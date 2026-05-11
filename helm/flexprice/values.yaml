@@ -145,6 +145,24 @@ consumer:
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  # KEDA ScaledObject for Kafka consumer-lag-based autoscaling.
+  # When enabled, set `consumer.autoscaling.enabled: false` so the chart's
+  # HPA and KEDA don't fight over the same Deployment.
+  # Requires KEDA (https://keda.sh) installed cluster-wide.
+  keda:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    lagThreshold: 1000          # messages of consumer-group lag per replica
+    pollingInterval: 15         # seconds between KEDA polls
+    cooldownPeriod: 300         # seconds before scaling down to minReplicas
+    offsetResetPolicy: "earliest"
+    fallback: {}                # KEDA fallback (e.g. failureThreshold + replicas)
+    # Reference to a KEDA TriggerAuthentication when Kafka needs SASL/IAM.
+    # Example:
+    #   authenticationRef:
+    #     name: kafka-msk-auth
+    authenticationRef: {}
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
@@ -461,6 +479,25 @@ migration:
     kafka: true          # Create Kafka topics (idempotent, safe to re-run)
     ent: true            # Run Ent framework migrations
     seed: false          # Run seed data (optional, set to true to enable)
+  # Pinned helper images used by the migration Job init containers. Override
+  # `registry` per image if your cluster only allows pulls from a private
+  # mirror (common in regulated AWS accounts). All three images are multi-arch.
+  images:
+    postgres:
+      registry: docker.io
+      repository: postgres
+      tag: "15.3-alpine"
+      pullPolicy: IfNotPresent
+    busybox:
+      registry: docker.io
+      repository: busybox
+      tag: "1.36"
+      pullPolicy: IfNotPresent
+    clickhouse:
+      registry: docker.io
+      repository: clickhouse/clickhouse-server
+      tag: "24.8-alpine"
+      pullPolicy: IfNotPresent
   resources:
     limits:
       cpu: "500m"
