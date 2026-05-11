@@ -9,32 +9,6 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
-## [1.2.0] - 2026-05-11
-
-### Changed
-- **BREAKING:** Plaintext password defaults removed from `values.yaml`.
-  Installing the chart without `-f values-local.yaml` (dev) or
-  `-f values-prod.example.yaml` / `secrets.existingSecret` (prod)
-  will now fail fast with a clear `required: ...` error. This was
-  the silent-insecure behavior that PRODUCTION_READINESS.md
-  bucket #3 was tracking.
-- Dependency versions in `Chart.yaml` are now pinned to exact-minor
-  (postgresql 16.7.27, kafka 32.4.3, redis 20.13.4, temporal 0.74.0).
-  This makes the declared versions visible to Renovate.
-
-### CI
-- Chart publish workflow now triggers on `chart-v*` tags, decoupling
-  chart releases from app releases. Branch and app-tag triggers now
-  only publish when `Chart.yaml` `version` changed.
-
-### Docs
-- `docs/MIGRATION-GUIDE.md` now documents `helm rollback` schema-change
-  caveats.
-- `PRODUCTION_READINESS.md` reconciled with actual chart state (several
-  items were already done but still marked open).
-
----
-
 ## [Unreleased]
 
 ### Added
@@ -98,6 +72,32 @@ FlexPrice app release.
 
 ---
 
+## [1.2.0] - 2026-05-11
+
+### Changed
+- **BREAKING:** Plaintext password defaults removed from `values.yaml`.
+  Installing the chart without `-f values-local.yaml` (dev) or
+  `-f values-prod.example.yaml` / `secrets.existingSecret` (prod)
+  will now fail fast with a clear `required: ...` error. This was
+  the silent-insecure behavior that PRODUCTION_READINESS.md
+  bucket #3 was tracking.
+- Dependency versions in `Chart.yaml` are now pinned to exact-minor
+  (postgresql 16.7.27, kafka 32.4.3, redis 20.13.4, temporal 0.74.0).
+  This makes the declared versions visible to Renovate.
+
+### CI
+- Chart publish workflow now triggers on `chart-v*` tags, decoupling
+  chart releases from app releases. Branch and app-tag triggers now
+  only publish when `Chart.yaml` `version` changed.
+
+### Docs
+- `docs/MIGRATION-GUIDE.md` now documents `helm rollback` schema-change
+  caveats.
+- `PRODUCTION_READINESS.md` reconciled with actual chart state (several
+  items were already done but still marked open).
+
+---
+
 ## [1.0.0] — 2026-05-04
 
 Initial public release of the FlexPrice Helm chart.
@@ -118,5 +118,6 @@ Initial public release of the FlexPrice Helm chart.
 - `values-prod.example.yaml` template for production overrides.
 - `values-local.yaml` for local kind cluster bring-up.
 
-[Unreleased]: https://github.com/flexprice/flexprice/compare/chart-v1.0.0...HEAD
+[Unreleased]: https://github.com/flexprice/flexprice/compare/chart-v1.2.0...HEAD
+[1.2.0]: https://github.com/flexprice/flexprice/compare/chart-v1.0.0...chart-v1.2.0
 [1.0.0]: https://github.com/flexprice/flexprice/releases/tag/chart-v1.0.0

@@ -63,12 +63,11 @@ jobs:
       - name: Login to AWS Public ECR
         id: ecr-login
         run: |
+          set -euo pipefail
           echo "Logging into AWS Public ECR..."
           # Public ECR requires us-east-1 region
-          aws ecr-public get-login-password --region us-east-1 | \
-          helm registry login --username AWS --password-stdin public.ecr.aws
-          
-          if [ $? -eq 0 ]; then
+          if aws ecr-public get-login-password --region us-east-1 | \
+             helm registry login --username AWS --password-stdin public.ecr.aws; then
             echo "Successfully logged into AWS Public ECR"
           else
             echo "::warning::Failed to login to AWS Public ECR, continuing anyway"
@@ -107,9 +106,15 @@ jobs:
 
       - name: Check if chart version changed
         id: changed
-        if: steps.chart-version.outputs.trigger != 'chart-tag' && steps.chart-version.outputs.trigger != 'manual'
         run: |
           set -euo pipefail
+          TRIGGER="${{ steps.chart-version.outputs.trigger }}"
+          # chart-tag and manual triggers always publish — no diff check needed.
+          if [[ "$TRIGGER" == "chart-tag" || "$TRIGGER" == "manual" ]]; then
+            echo "Trigger is '$TRIGGER' — unconditionally publishing"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if git rev-parse HEAD^ >/dev/null 2>&1; then
             PREV=$(git show HEAD^:helm/flexprice/Chart.yaml 2>/dev/null | grep -E '^version:' | awk '{print $2}' | tr -d '"' || echo "")
           else
@@ -129,13 +134,13 @@ jobs:
           helm template flexprice-test helm/flexprice --set secrets.existingSecret=test --debug
 
       - name: Package Helm Chart
-        if: steps.changed.outputs.publish == 'true' || steps.chart-version.outputs.trigger == 'chart-tag' || steps.chart-version.outputs.trigger == 'manual'
+        if: ${{ steps.changed.outputs.publish == 'true' }}
         run: |
           helm package helm/flexprice --version ${{ steps.chart-version.outputs.version }}
 
       - name: Check if version already exists
         id: version-check
-        if: ${{ (steps.changed.outputs.publish == 'true' || steps.chart-version.outputs.trigger == 'chart-tag' || steps.chart-version.outputs.trigger == 'manual') && github.event.inputs.force != 'true' }}
+        if: ${{ steps.changed.outputs.publish == 'true' && github.event.inputs.force != 'true' }}
         run: |
           CHART_NAME="${{ steps.chart-name.outputs.name }}"
           CHART_VERSION="${{ steps.chart-version.outputs.version }}"
@@ -151,7 +156,7 @@ jobs:
         continue-on-error: true
 
       - name: Push Helm Chart to AWS Public ECR
-        if: ${{ (steps.changed.outputs.publish == 'true' || steps.chart-version.outputs.trigger == 'chart-tag' || steps.chart-version.outputs.trigger == 'manual') && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
+        if: ${{ steps.changed.outputs.publish == 'true' && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         run: |
           CHART_NAME="${{ steps.chart-name.outputs.name }}"
           CHART_VERSION="${{ steps.chart-version.outputs.version }}"
@@ -197,7 +202,7 @@ jobs:
           echo "::notice::Published $CHART_NAME:$CHART_VERSION to $TARGET"
 
       - name: Verify Published Chart (ECR)
-        if: ${{ (steps.changed.outputs.publish == 'true' || steps.chart-version.outputs.trigger == 'chart-tag' || steps.chart-version.outputs.trigger == 'manual') && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
+        if: ${{ steps.changed.outputs.publish == 'true' && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         run: |
           helm show chart ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }} || \
           helm show chart oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }}
