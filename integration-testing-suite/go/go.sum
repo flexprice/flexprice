@@ -1,7 +1,7 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/flexprice/go-sdk/v2 v2.1.2 h1:06W8HB3NHtTSvr3JQbRF5YXTIuoK6R6cQA6q/CSIfVo=
-github.com/flexprice/go-sdk/v2 v2.1.2/go.mod h1:dhmz7TIgaQuRVLiA8tR/i+4AUE+qdQCjF6ELJSxHBbU=
+github.com/flexprice/go-sdk/v2 v2.1.5 h1:6x2F8ILciUGh2ycybaS5qmT0GnaZtIMv3HVXk4sdS3w=
+github.com/flexprice/go-sdk/v2 v2.1.5/go.mod h1:dhmz7TIgaQuRVLiA8tR/i+4AUE+qdQCjF6ELJSxHBbU=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
