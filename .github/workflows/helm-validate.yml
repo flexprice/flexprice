@@ -35,6 +35,13 @@ jobs:
         with:
           version: '3.14.0'
 
+      - name: Add chart repositories
+        run: |
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
       - name: helm dependency build
         run: helm dependency build helm/flexprice
 
@@ -94,6 +101,13 @@ jobs:
           version: v0.24.0
           node_image: kindest/node:v1.30.0
           cluster_name: helm-validate
+
+      - name: Add chart repositories
+        run: |
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
 
       - name: helm dependency build
         run: helm dependency build helm/flexprice
