@@ -137,6 +137,13 @@ jobs:
           echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
           echo "Chart version: $CHART_VERSION"
 
+      - name: Add chart repositories
+        run: |
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
       - name: helm dependency build
         run: helm dependency build helm/flexprice
 
