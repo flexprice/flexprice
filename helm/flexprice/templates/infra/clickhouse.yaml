@@ -132,11 +132,11 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
   {{- if and .Values.dataProtection .Values.dataProtection.retainStorage }}
   annotations:
     {{- include "flexprice.keepAnnotation" . | nindent 4 }}
   {{- end }}
-    app.kubernetes.io/component: clickhouse
 spec:
   configuration:
     clusters:

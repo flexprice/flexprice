@@ -109,7 +109,7 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 - [x] Chart published (publish-helm-chart.yml → AWS Public ECR + GHCR on tag)
 - [x] GHCR package set to **public** (or pull-secret docs provided)
 - [ ] Chart signed with `cosign` (optional)
-- [x] `CHANGELOG.md` created ([`helm/flexprice/CHANGELOG.md`](flesprice/CHANGELOG.md))
+- [x] `CHANGELOG.md` created ([`helm/flexprice/CHANGELOG.md`](flexprice/CHANGELOG.md))
 - [x] Chart releases tagged independently from app: `chart-vX.Y.Z`
 - [x] Install instructions in `helm/flexprice/README.md`
 
