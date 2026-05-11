@@ -16,9 +16,12 @@ podSecurityContext:
 # Container-level securityContext must agree with pod-level: chart default sets
 # runAsNonRoot=true at container scope; kubelet rejects pods where pod.runAsUser=0
 # and container.runAsNonRoot=true (e.g. temporal-bootstrap Job on kind).
+# readOnlyRootFilesystem disabled so the frontend vite dev server can write its
+# /app/node_modules/.vite-temp/ scratch files at startup.
 securityContext:
   allowPrivilegeEscalation: false
   privileged: false
+  readOnlyRootFilesystem: false
   runAsNonRoot: false
 
 # Retain-StorageClass machinery is for production data preservation across
