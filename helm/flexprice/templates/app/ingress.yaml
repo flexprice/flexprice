@@ -34,7 +34,7 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "flexprice.fullname" $ }}
+                name: {{ include "flexprice.fullname" $ }}-api
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}
