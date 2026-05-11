@@ -60,7 +60,7 @@ spec:
               set -eu
               echo "Waiting for Temporal frontend at ${TEMPORAL_ADDRESS}..."
               for i in $(seq 1 60); do
-                if tctl --address "${TEMPORAL_ADDRESS}" cluster health >/dev/null 2>&1; then
+                if temporal --address "${TEMPORAL_ADDRESS}" operator cluster system >/dev/null 2>&1; then
                   echo "Temporal is healthy."
                   break
                 fi
@@ -72,7 +72,7 @@ spec:
               done
               {{- range $ns := .Values.temporalConfig.bootstrapNamespaces }}
               echo "Registering namespace: {{ $ns.name }} (retention {{ $ns.retention | default "72h" }})"
-              tctl --address "${TEMPORAL_ADDRESS}" --namespace {{ $ns.name | quote }} namespace register --retention {{ $ns.retention | default "72h" | quote }}{{ with $ns.description }} --description {{ . | quote }}{{ end }} 2>&1 | grep -v 'Namespace .* already exists' || true
+              temporal --address "${TEMPORAL_ADDRESS}" operator namespace create --namespace {{ $ns.name | quote }} --retention {{ $ns.retention | default "72h" | quote }}{{ with $ns.description }} --description {{ . | quote }}{{ end }} 2>&1 | grep -v 'Namespace .* already (exists|registered)' || true
               {{- end }}
               echo "Temporal namespace bootstrap complete."
           resources:

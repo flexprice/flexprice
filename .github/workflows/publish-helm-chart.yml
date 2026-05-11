@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - memetics19:ft/helm
     paths:
       - 'helm/flexprice/**'
       - '.github/workflows/publish-helm-chart.yml'

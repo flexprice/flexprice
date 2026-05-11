@@ -80,9 +80,21 @@ Error: `Memory limit (total) exceeded` or `Memory limit (for query) exceeded`.
 
 ```bash
 kubectl logs -n "$NS" deploy/${REL}-worker --tail=100 | grep -i namespace
+
+# Confirm which namespaces actually exist
+kubectl exec -n "$NS" deploy/${REL}-temporal-admintools -- \
+  temporal operator namespace list | grep "NamespaceInfo.Name"
+# Expect: temporal-system AND default. Missing 'default' → seed it.
 ```
 
 - Bootstrap Job missed → re-run `helm upgrade --reuse-values $REL ./flexprice -n $NS` (post-install hook fires again).
+- Bootstrap Job succeeded but `default` is still missing (e.g. it ran before Temporal frontend was Ready, or `provision.sh` aborted mid-Phase-1) → seed manually:
+
+  ```bash
+  kubectl exec -n "$NS" deploy/${REL}-temporal-admintools -- \
+    temporal operator namespace create --namespace default --retention 72h
+  ```
+
 - Temporal Cloud → namespaces must be created out-of-band; set `temporalConfig.bootstrapNamespaces: []` to disable the Job.
 
 ### Pods OOMKilled

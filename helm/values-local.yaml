@@ -13,6 +13,21 @@ podSecurityContext:
   runAsNonRoot: false
   runAsUser: 0
 
+# Container-level securityContext must agree with pod-level: chart default sets
+# runAsNonRoot=true at container scope; kubelet rejects pods where pod.runAsUser=0
+# and container.runAsNonRoot=true (e.g. temporal-bootstrap Job on kind).
+securityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  runAsNonRoot: false
+
+# Retain-StorageClass machinery is for production data preservation across
+# helm uninstall. On kind we tear the cluster down for cleanup, so disable it
+# and let the default StorageClass (local-path) back every PVC. Toggling this
+# post-install is unsafe — StatefulSet PVC templates are immutable.
+dataProtection:
+  retainStorage: false
+
 # ── App resources (trimmed for laptop) ───────────────────────────────────────
 
 api:
@@ -123,7 +138,7 @@ postgresql:
   enabled: true   # chart default is false (prod-safe); flipped on for local dev
   image:
     registry: docker.io
-    repository: bitnami/postgresql
+    repository: bitnamilegacy/postgresql
     tag: "16.4.0-debian-12-r17"   # pinned — avoid 'latest' for reproducible local installs
   primary:
     persistence:
@@ -178,7 +193,7 @@ redis:
   architecture: standalone
   image:
     registry: docker.io
-    repository: bitnami/redis
+    repository: bitnamilegacy/redis
     tag: "7.4.0-debian-12-r2"   # pinned — avoid 'latest' for reproducible local installs
   master:
     persistence:
