@@ -185,6 +185,11 @@ redis:
       size: 1Gi
       storageClass: "standard"
 
+# Bundled bitnami/redis is single-node; override the cluster-mode default
+# so the client speaks standalone protocol instead of probing for slot routing.
+redisExtended:
+  clusterMode: false
+
 temporalConfig:
   enabled: true  # disables hand-rolled temporal.yaml template; we use the temporal subchart
 
