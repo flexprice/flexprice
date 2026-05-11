@@ -8,6 +8,8 @@ on:
     paths:
       - 'helm/flexprice/**'
       - '.github/workflows/publish-helm-chart.yml'
+    tags:
+      - 'chart-v*'
   release:
     types: [published]
   workflow_dispatch:
@@ -75,13 +77,26 @@ jobs:
       - name: Extract Chart Version
         id: chart-version
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            CHART_VERSION="${{ github.event.inputs.version }}"
+          set -euo pipefail
+          CHART_VERSION=$(grep -E '^version:' helm/flexprice/Chart.yaml | awk '{print $2}' | tr -d '"')
+          if [[ "${GITHUB_REF:-}" == refs/tags/chart-v* ]]; then
+            TAG_VERSION="${GITHUB_REF#refs/tags/chart-v}"
+            if [[ "$TAG_VERSION" != "$CHART_VERSION" ]]; then
+              echo "❌ Tag chart-v$TAG_VERSION does not match Chart.yaml version $CHART_VERSION"
+              exit 1
+            fi
+            echo "version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+            echo "trigger=chart-tag" >> "$GITHUB_OUTPUT"
+            echo "Chart version (chart-tag): $CHART_VERSION"
+          elif [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "trigger=manual" >> "$GITHUB_OUTPUT"
+            echo "Chart version (manual): ${{ github.event.inputs.version }}"
           else
-            CHART_VERSION=$(helm show chart helm/flexprice | grep '^version:' | awk '{print $2}' | tr -d '"' || echo "1.0.0")
+            echo "version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+            echo "trigger=branch-or-app" >> "$GITHUB_OUTPUT"
+            echo "Chart version (branch-or-app): $CHART_VERSION"
           fi
-          echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
-          echo "Chart version: $CHART_VERSION"
 
       - name: Extract Chart Name
         id: chart-name
@@ -90,18 +105,37 @@ jobs:
           echo "name=$CHART_NAME" >> $GITHUB_OUTPUT
           echo "Chart name: $CHART_NAME"
 
+      - name: Check if chart version changed
+        id: changed
+        if: steps.chart-version.outputs.trigger != 'chart-tag' && steps.chart-version.outputs.trigger != 'manual'
+        run: |
+          set -euo pipefail
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            PREV=$(git show HEAD^:helm/flexprice/Chart.yaml 2>/dev/null | grep -E '^version:' | awk '{print $2}' | tr -d '"' || echo "")
+          else
+            PREV=""
+          fi
+          if [[ "$PREV" == "${{ steps.chart-version.outputs.version }}" ]]; then
+            echo "Chart version unchanged ($PREV) — skipping publish"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Chart version changed: $PREV → ${{ steps.chart-version.outputs.version }}"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Lint Helm Chart
         run: |
           helm lint helm/flexprice --set secrets.existingSecret=test
           helm template flexprice-test helm/flexprice --set secrets.existingSecret=test --debug
 
       - name: Package Helm Chart
+        if: steps.changed.outputs.publish == 'true' || steps.chart-version.outputs.trigger == 'chart-tag' || steps.chart-version.outputs.trigger == 'manual'
         run: |
           helm package helm/flexprice --version ${{ steps.chart-version.outputs.version }}
 
       - name: Check if version already exists
         id: version-check
-        if: ${{ github.event.inputs.force != 'true' }}
+        if: ${{ (steps.changed.outputs.publish == 'true' || steps.chart-version.outputs.trigger == 'chart-tag' || steps.chart-version.outputs.trigger == 'manual') && github.event.inputs.force != 'true' }}
         run: |
           CHART_NAME="${{ steps.chart-name.outputs.name }}"
           CHART_VERSION="${{ steps.chart-version.outputs.version }}"
@@ -117,7 +151,7 @@ jobs:
         continue-on-error: true
 
       - name: Push Helm Chart to AWS Public ECR
-        if: ${{ steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true' }}
+        if: ${{ (steps.changed.outputs.publish == 'true' || steps.chart-version.outputs.trigger == 'chart-tag' || steps.chart-version.outputs.trigger == 'manual') && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         run: |
           CHART_NAME="${{ steps.chart-name.outputs.name }}"
           CHART_VERSION="${{ steps.chart-version.outputs.version }}"
@@ -163,7 +197,7 @@ jobs:
           echo "::notice::Published $CHART_NAME:$CHART_VERSION to $TARGET"
 
       - name: Verify Published Chart (ECR)
-        if: ${{ steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true' }}
+        if: ${{ (steps.changed.outputs.publish == 'true' || steps.chart-version.outputs.trigger == 'chart-tag' || steps.chart-version.outputs.trigger == 'manual') && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         run: |
           helm show chart ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }} || \
           helm show chart oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }}
