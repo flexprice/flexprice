@@ -166,6 +166,7 @@ func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
+
 	return nil
 }
 

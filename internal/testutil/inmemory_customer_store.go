@@ -206,18 +206,3 @@ func (s *InMemoryCustomerStore) ListByFilter(ctx context.Context, filter *types.
 func (s *InMemoryCustomerStore) CountByFilter(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	return s.Count(ctx, filter)
 }
-
-// MergeMetadata merges meta into the stored customer's metadata map.
-func (s *InMemoryCustomerStore) MergeMetadata(ctx context.Context, customerID string, meta map[string]string) error {
-	c, err := s.InMemoryStore.Get(ctx, customerID)
-	if err != nil {
-		return err
-	}
-	if c.Metadata == nil {
-		c.Metadata = make(map[string]string)
-	}
-	for k, v := range meta {
-		c.Metadata[k] = v
-	}
-	return s.InMemoryStore.Update(ctx, c.ID, copyCustomer(c))
-}

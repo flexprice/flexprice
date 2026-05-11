@@ -16,7 +16,4 @@ type Repository interface {
 	Update(ctx context.Context, customer *Customer) error
 	Delete(ctx context.Context, customer *Customer) error
 	GetByLookupKey(ctx context.Context, lookupKey string) (*Customer, error)
-	// MergeMetadata merges the given key-value pairs into the customer's existing
-	// metadata without overwriting unrelated keys. Safe to call concurrently.
-	MergeMetadata(ctx context.Context, customerID string, meta map[string]string) error
 }

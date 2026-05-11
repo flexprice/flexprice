@@ -166,21 +166,8 @@ func (s *subscriptionService) addToGroupedInvoicing(
 		return err
 	}
 
-	// Set grouped-invoicing flag on child customer. Best-effort.
-	if mergeErr := s.CustomerRepo.MergeMetadata(ctx, child.CustomerID, map[string]string{types.MetaKeyHasGroupedInvoicingSub: "true"}); mergeErr != nil {
-		s.Logger.WarnwCtx(ctx, "failed to set grouped_invoicing metadata flag on child customer",
-			"child_customer_id", child.CustomerID,
-			"error", mergeErr,
-		)
-	}
-
-	// Set parent flag on parent customer. Best-effort (idempotent — likely already set).
-	if mergeErr := s.CustomerRepo.MergeMetadata(ctx, parentSub.CustomerID, map[string]string{types.MetaKeyHasParentSub: "true"}); mergeErr != nil {
-		s.Logger.WarnwCtx(ctx, "failed to set parent sub metadata flag on parent customer",
-			"parent_customer_id", parentSub.CustomerID,
-			"error", mergeErr,
-		)
-	}
+	 s.mergeSubscriptionCustomerMetadata(ctx, child.CustomerID, map[string]string{types.MetaKeyHasGroupedInvoicingSub: "true"})
+	
 
 	return nil
 }

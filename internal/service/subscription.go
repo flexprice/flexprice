@@ -464,13 +464,11 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	// Set system metadata flag on the customer to reflect this subscription's type.
 	// Best-effort: log on failure but do not block the subscription creation response.
 	if flagKey := types.SubscriptionTypeToMetaFlag(sub.SubscriptionType); flagKey != "" {
-		if mergeErr := s.CustomerRepo.MergeMetadata(ctx, sub.CustomerID, map[string]string{flagKey: "true"}); mergeErr != nil {
-			s.Logger.WarnwCtx(ctx, "failed to set subscription metadata flag on customer",
-				"customer_id", sub.CustomerID,
-				"flag", flagKey,
-				"error", mergeErr,
-			)
+		if customer.Metadata == nil {
+			customer.Metadata = make(map[string]string)
 		}
+		customer.Metadata[flagKey] = "true"
+		s.CustomerRepo.Update(ctx, customer)
 	}
 
 	// Handle phases (post-transaction)
@@ -7466,6 +7464,22 @@ func (s *subscriptionService) validateNoInheritedSubForSubscriber(ctx context.Co
 	return nil
 }
 
+// mergeSubscriptionCustomerMetadata loads the customer, merges patch into metadata, and persists.
+// Archived customers are skipped (same behavior as the former repository MergeMetadata).
+func (s *subscriptionService) mergeSubscriptionCustomerMetadata(ctx context.Context, customerID string, patch map[string]string) error {
+	cust, err := s.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		return err
+	}
+	if cust.Metadata == nil {
+		cust.Metadata = make(map[string]string)
+	}
+	for k, v := range patch {
+		cust.Metadata[k] = v
+	}
+	return s.CustomerRepo.Update(ctx, cust)
+}
+
 func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, parent *subscription.Subscription, childCustomerID string) error {
 	inheritedSub := &subscription.Subscription{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
@@ -7509,7 +7523,7 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 	}
 
 	// Set inherited-child flag on the child customer. Best-effort.
-	if mergeErr := s.CustomerRepo.MergeMetadata(ctx, childCustomerID, map[string]string{types.MetaKeyHasInheritedSub: "true"}); mergeErr != nil {
+	if mergeErr := s.mergeSubscriptionCustomerMetadata(ctx, childCustomerID, map[string]string{types.MetaKeyHasInheritedSub: "true"}); mergeErr != nil {
 		s.Logger.WarnwCtx(ctx, "failed to set inherited sub metadata flag on child customer",
 			"child_customer_id", childCustomerID,
 			"parent_subscription_id", parent.ID,
