@@ -29,6 +29,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      {{- with .Values.worker.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -48,6 +51,12 @@ spec:
               value: "temporal_worker"
             - name: TMPDIR
               value: "/tmp"
+          {{- if and .Values.worker.preStop .Values.worker.preStop.enabled }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep {{ .Values.worker.preStop.sleepSeconds | default 0 }}"]
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -96,6 +105,11 @@ spec:
       {{- with (default .Values.tolerations .Values.worker.tolerations) }}
       tolerations:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- $tsc := default .Values.topologySpreadConstraints .Values.worker.topologySpreadConstraints }}
+      {{- if $tsc }}
+      topologySpreadConstraints:
+        {{- toYaml $tsc | nindent 8 }}
       {{- end }}
 {{- end }}
 

@@ -85,8 +85,8 @@ spec:
             - sh
             - -c
             - |
-              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ split ":" .Values.clickhouse.address | first }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
-              CLICKHOUSE_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ split ":" .Values.clickhouse.address | last }}{{ else if eq .Values.clickhouse.mode "altinity" }}8123{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
+              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
+              CLICKHOUSE_HTTP_PORT="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 1 }}{{ else if eq .Values.clickhouse.mode "altinity" }}8123{{ else }}{{ .Values.clickhouse.standalone.service.httpPort }}{{ end }}"
               echo "Waiting for ClickHouse at ${CLICKHOUSE_HOST}:${CLICKHOUSE_HTTP_PORT}..."
               until nc -z "${CLICKHOUSE_HOST}" "${CLICKHOUSE_HTTP_PORT}"; do
                 echo "Not ready yet..."
@@ -110,8 +110,19 @@ spec:
             - sh
             - -c
             - |
-              KAFKA_HOST="{{ if .Values.kafkaConfig.external.enabled }}{{ index .Values.kafkaConfig.brokers 0 | splitList ":" | first }}{{ else }}{{ printf "%s-kafka" .Release.Name }}{{ end }}"
-              KAFKA_PORT="{{ if .Values.kafkaConfig.external.enabled }}{{ index .Values.kafkaConfig.brokers 0 | splitList ":" | last }}{{ else }}9092{{ end }}"
+              {{- /* brokers may be a comma-separated string (prod overrides) or a YAML list (default).
+                     Normalize to a list, take element 0, split host:port. */}}
+              {{- $brokersRaw := .Values.kafkaConfig.brokers }}
+              {{- $brokersList := list }}
+              {{- if kindIs "string" $brokersRaw }}
+                {{- $brokersList = splitList "," $brokersRaw }}
+              {{- else }}
+                {{- $brokersList = $brokersRaw }}
+              {{- end }}
+              {{- $firstBroker := trim (index $brokersList 0) }}
+              {{- $brokerParts := splitList ":" $firstBroker }}
+              KAFKA_HOST="{{ if .Values.kafkaConfig.external.enabled }}{{ index $brokerParts 0 }}{{ else }}{{ printf "%s-kafka" .Release.Name }}{{ end }}"
+              KAFKA_PORT="{{ if .Values.kafkaConfig.external.enabled }}{{ index $brokerParts 1 }}{{ else }}9092{{ end }}"
               echo "Waiting for Kafka at ${KAFKA_HOST}:${KAFKA_PORT}..."
               RETRIES=60
               i=1
@@ -205,7 +216,7 @@ spec:
             - sh
             - -c
             - |
-              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ split ":" .Values.clickhouse.address | first }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
+              CLICKHOUSE_HOST="{{ if eq .Values.clickhouse.mode "external" }}{{ index (splitList ":" .Values.clickhouse.address) 0 }}{{ else if eq .Values.clickhouse.mode "altinity" }}chi-{{ include "flexprice.fullname" . }}-flexprice-0-0{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
               CLICKHOUSE_PORT="{{ if eq .Values.clickhouse.mode "external" }}9000{{ else }}{{ .Values.clickhouse.standalone.service.nativePort | default 9000 }}{{ end }}"
               CLICKHOUSE_USER="{{ .Values.clickhouse.username }}"
               CLICKHOUSE_DB="{{ .Values.clickhouse.database }}"

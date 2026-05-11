@@ -5,9 +5,13 @@
 replicaCount: 1
 
 image:
-  repository: flexprice-app
+  # Default OSS image — published multi-arch (linux/amd64, linux/arm64) from CI on tag.
+  # Override `repository`/`tag` to pin to a private mirror or a specific build.
+  repository: ghcr.io/flexprice/flexprice
   pullPolicy: IfNotPresent
-  tag: "local"
+  # tag: defaults to .Chart.AppVersion when empty — keep that contract so chart upgrades
+  # automatically pull a matching image. Set explicitly to override.
+  tag: ""
 
 imagePullSecrets: []
 
@@ -61,6 +65,13 @@ api:
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
+  # Give in-flight HTTP requests time to drain. Must be ≥ server read/write
+  # timeouts. preStop sleep gives the ingress/Service endpoints controller
+  # time to remove this pod from the load-balancer pool before the process exits.
+  terminationGracePeriodSeconds: 30
+  preStop:
+    enabled: true
+    sleepSeconds: 5
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -81,6 +92,15 @@ consumer:
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  # Graceful shutdown: Kafka consumer needs time to finish processing in-flight
+  # messages and commit offsets before exit. Must be longer than the longest
+  # expected message processing time. The preStop hook sleeps so the pod stays
+  # in Terminating long enough for the readiness gate to drop it from the
+  # consumer-group rebalance, avoiding duplicate processing on the new pod.
+  terminationGracePeriodSeconds: 60
+  preStop:
+    enabled: true
+    sleepSeconds: 15
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -101,6 +121,12 @@ worker:
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  # Worker drains by letting Temporal SDK finish in-progress activities on SIGTERM.
+  # Bump if your longest workflow activity exceeds 30s.
+  terminationGracePeriodSeconds: 60
+  preStop:
+    enabled: false
+    sleepSeconds: 0
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -229,6 +255,11 @@ clickhouse:
   username: "default"
   password: "" # Set via secret or secrets.existingSecret key: clickhouse-password
   database: "flexprice"
+  # Per-query memory limit applied via clickhouse-go client Settings.
+  # Bound by the underlying server's max_memory_usage. Default 90 GB matches
+  # the legacy hardcoded value documented in CLAUDE.md. Lower for shared
+  # clusters or tighter resource isolation.
+  maxMemoryUsageGB: 90
 
   # ── external mode ────────────────────────────────────────────────────────────
   # address: "my-clickhouse.example.com:9000"
@@ -374,6 +405,26 @@ migration:
 #   3. Hand-rolled internal                   — temporal.enabled=false (top-level), temporal.external.enabled=false (legacy)
 temporalConfig:
   enabled: true   # Set false to disable Temporal entirely (no worker, no workflows)
+  # Namespaces created on install/upgrade via a post-install Helm hook Job.
+  # Empty list disables the bootstrap job entirely (use this for Temporal Cloud
+  # where namespaces are provisioned out-of-band).
+  bootstrapNamespaces:
+    - name: default
+      retention: 72h
+      description: "Default Temporal namespace bootstrapped by FlexPrice Helm chart"
+  # Override the admin-tools image used by the bootstrap job. Pinned by default
+  # to keep installs reproducible; bump alongside the temporal subchart version.
+  bootstrapImage:
+    repository: temporalio/admin-tools
+    tag: "1.24.2-tctl-1.18.1-cli-0.13.2"
+    pullPolicy: IfNotPresent
+  bootstrapResources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
   external:
     enabled: false  # Set true when pointing to an external Temporal or Temporal Cloud
   # External Temporal configuration (when external.enabled=true)
@@ -736,6 +787,24 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# Topology spread constraints — OFF by default. Enable per-component for
+# multi-AZ HA (typical EKS deployment). Constraints are merged across each
+# component's `topologySpreadConstraints` block and the global one below.
+#
+# Example (multi-AZ HA — paste into values-prod.yaml):
+#
+# topologySpreadConstraints:
+#   - maxSkew: 1
+#     topologyKey: topology.kubernetes.io/zone
+#     whenUnsatisfiable: ScheduleAnyway   # DoNotSchedule for stricter HA
+#     labelSelector:
+#       matchLabels:
+#         app.kubernetes.io/name: flexprice
+#
+# api:
+#   topologySpreadConstraints: []   # inherits global; or set per-component
+topologySpreadConstraints: []
+
 # Liveness probe
 livenessProbe:
   httpGet:
@@ -809,13 +878,25 @@ serviceMonitor:
 # Subchart conditions
 # These top-level keys enable/disable Bitnami and official subcharts.
 # They correspond to the `condition:` fields in Chart.yaml dependencies.
+#
+# DEFAULTS: ALL stateful subcharts (postgresql, kafka, redis, temporal) are OFF.
+# Production deployments must point to externally managed services via the
+# `postgres.external`, `kafkaConfig.external`, `redisConfig.external`, and
+# `temporalConfig.external` blocks above — or via Temporal Cloud.
+#
+# For local dev / demos, layer values-local.yaml on top:
+#   helm install flexprice ./flexprice -f ../values-local.yaml
+# It flips these flags to true with dev-safe credentials and small persistence.
+#
+# Running these stateful workloads in-cluster is acceptable for kicking the
+# tires, NOT for production — no backups, no HA, no upgrade story.
 # ---------------------------------------------------------------------------
 
 # bitnami/postgresql subchart
 # When enabled, the hand-rolled infra/postgres.yaml is NOT rendered.
 # Configure postgres credentials above under the `postgres:` key.
 postgresql:
-  enabled: true
+  enabled: false
   auth:
     username: flexprice
     password: flexprice123
@@ -828,7 +909,7 @@ postgresql:
 # bitnami/kafka subchart (KRaft mode, no Zookeeper)
 # When enabled, the hand-rolled infra/kafka.yaml is NOT rendered.
 kafka:
-  enabled: true
+  enabled: false
   kraft:
     enabled: true
   replicaCount: 1
@@ -842,7 +923,7 @@ kafka:
 # When enabled, the hand-rolled infra/redis.yaml is NOT rendered.
 # sentinel.enabled=false → standalone mode (no HA); set to true for HA sentinel setup.
 redis:
-  enabled: true
+  enabled: false
   architecture: standalone
   auth:
     enabled: false  # Set to true and provide password if auth is required
@@ -857,7 +938,7 @@ redis:
 # Temporal shares the same Postgres instance as FlexPrice (different DB: "temporal").
 # The connection is passed via server.config.persistence below.
 temporal:
-  enabled: true
+  enabled: false
   server:
     replicaCount: 1
     config:
