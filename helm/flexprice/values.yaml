@@ -950,23 +950,18 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
-# Topology spread constraints — OFF by default. Enable per-component for
-# multi-AZ HA (typical EKS deployment). Constraints are merged across each
-# component's `topologySpreadConstraints` block and the global one below.
-#
-# Example (multi-AZ HA — paste into values-prod.yaml):
-#
-# topologySpreadConstraints:
-#   - maxSkew: 1
-#     topologyKey: topology.kubernetes.io/zone
-#     whenUnsatisfiable: ScheduleAnyway   # DoNotSchedule for stricter HA
-#     labelSelector:
-#       matchLabels:
-#         app.kubernetes.io/name: flexprice
-#
-# api:
-#   topologySpreadConstraints: []   # inherits global; or set per-component
-topologySpreadConstraints: []
+# Topology spread constraints — ON by default with ScheduleAnyway so they
+# are a no-op on single-AZ clusters (kind, single-node) and free multi-AZ
+# HA on real EKS/GKE/AKS deployments. Override per-component via
+# `<component>.topologySpreadConstraints`. Use `whenUnsatisfiable: DoNotSchedule`
+# for strict HA where you'd rather pods stay Pending than land in one AZ.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: flexprice
 
 # Liveness probe
 livenessProbe:
