@@ -1,0 +1,195 @@
+name: Test GHCR Publish
+
+# Smoke test for the GHCR publish pipeline.
+#
+# Triggers ONLY on:
+#   - push to the test/ghcr branch (any change)
+#   - manual workflow_dispatch
+#
+# Publishes to the SAME GHCR repos as production, but with test-tagged
+# versions so they don't collide with real releases:
+#   - App image: ghcr.io/<owner>/flexprice:test-<short-sha>
+#   - Helm chart: oci://ghcr.io/<owner>/charts/flexprice:0.0.0-test.<short-sha>
+#
+# After this workflow proves the GHCR auth + push path works, the production
+# publish-app-image.yml and publish-helm-chart.yml workflows (tag-triggered)
+# can be enabled with confidence.
+#
+# No untrusted github.event.* inputs are interpolated into run: scripts —
+# user input flows through env: vars and is single-quoted at the shell.
+
+on:
+  push:
+    branches:
+      - test/ghcr
+  workflow_dispatch:
+    inputs:
+      tag_suffix:
+        description: 'Optional tag suffix (default: short SHA)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/flexprice
+  CHART_REPO: charts
+
+jobs:
+  publish-image-test:
+    name: Build & push test app image
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve test tag
+        id: tag
+        env:
+          INPUT_SUFFIX: ${{ github.event.inputs.tag_suffix }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          if [ -n "${INPUT_SUFFIX:-}" ]; then
+            # Sanitize: only [A-Za-z0-9._-] allowed in OCI tags
+            SAFE=$(printf '%s' "$INPUT_SUFFIX" | tr -c 'A-Za-z0-9._-' '_')
+            TAG="test-${SAFE}"
+          else
+            TAG="test-${SHORT_SHA}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push test image (linux/amd64 only — smoke test)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.description=Smoke-test image — not production
+
+      - name: Summary
+        env:
+          IMG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "## Test App Image Published"
+            echo ""
+            echo "- Image: \`${IMG}:${TAG}\`"
+            echo "- Digest: \`${DIGEST}\`"
+            echo "- Pull: \`docker pull ${IMG}:${TAG}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-chart-test:
+    name: Package & push test helm chart
+    runs-on: ubuntu-latest
+    needs: publish-image-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Resolve test chart version
+        id: ver
+        env:
+          IMAGE_TAG: ${{ needs.publish-image-test.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Always use a fresh 0.0.0 prefix so the smoke test never sorts
+          # ahead of a real release (1.x.x). The suffix carries the SHA so
+          # repeated test runs produce unique versions.
+          # `helm push` to OCI requires SemVer; use the pre-release form
+          # (hyphen, not plus/build-metadata) which is broadly supported.
+          CHART_VERSION="0.0.0-${IMAGE_TAG}"
+          echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Chart version: $CHART_VERSION"
+
+      - name: helm dependency build
+        run: helm dependency build helm/flexprice
+
+      - name: helm lint
+        run: helm lint helm/flexprice
+
+      - name: helm package (test version)
+        env:
+          CHART_VERSION: ${{ steps.ver.outputs.chart_version }}
+        run: |
+          set -euo pipefail
+          helm package helm/flexprice --version "$CHART_VERSION"
+          ls -1 flexprice-*.tgz
+
+      - name: Login to GHCR (helm registry)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | helm registry login "${{ env.REGISTRY }}" \
+            -u "$GH_USER" --password-stdin
+
+      - name: helm push (production chart repo, test version)
+        env:
+          CHART_VERSION: ${{ steps.ver.outputs.chart_version }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          TARGET="oci://${{ env.REGISTRY }}/${OWNER_LC}/${{ env.CHART_REPO }}"
+          CHART_FILE="flexprice-${CHART_VERSION}.tgz"
+          echo "Pushing ${CHART_FILE} → ${TARGET}"
+          helm push "$CHART_FILE" "$TARGET"
+
+      - name: Verify the chart pulls back
+        env:
+          CHART_VERSION: ${{ steps.ver.outputs.chart_version }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          helm show chart "oci://${{ env.REGISTRY }}/${OWNER_LC}/${{ env.CHART_REPO }}/flexprice" \
+            --version "$CHART_VERSION"
+
+      - name: Summary
+        env:
+          CHART_VERSION: ${{ steps.ver.outputs.chart_version }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          {
+            echo "## Test Helm Chart Published"
+            echo ""
+            echo "- Chart: \`flexprice:${CHART_VERSION}\`"
+            echo "- Registry: \`oci://${{ env.REGISTRY }}/${OWNER_LC}/${{ env.CHART_REPO }}\`"
+            echo "- Pull: \`helm pull oci://${{ env.REGISTRY }}/${OWNER_LC}/${{ env.CHART_REPO }}/flexprice --version ${CHART_VERSION}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
