@@ -317,7 +317,9 @@ build_load_image_dev() {
   local api_dir
   api_dir="$(cd "$(dirname "$0")/.." && pwd)"
   info "Building API image from $api_dir ..."
-  docker build -f "$api_dir/Dockerfile.local" -t "${LOCAL_IMAGE_REPO}:${LOCAL_IMAGE_TAG}" "$api_dir"
+  # Use the mainline Dockerfile — it now bundles the migrate binary +
+  # migrations/ that the chart's migration Job consumes.
+  DOCKER_BUILDKIT=1 docker build -f "$api_dir/Dockerfile" -t "${LOCAL_IMAGE_REPO}:${LOCAL_IMAGE_TAG}" "$api_dir"
   info "Loading into kind..."
   kind load docker-image "${LOCAL_IMAGE_REPO}:${LOCAL_IMAGE_TAG}" --name "$CLUSTER_NAME"
 }
