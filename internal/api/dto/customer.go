@@ -166,7 +166,13 @@ func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
-
+	for key := range r.Metadata {
+		if types.IsSystemMetaKey(key) {
+			return ierr.NewError("metadata key is reserved").
+				WithHintf("Key %q is managed by the system and cannot be set via the API", key).
+				Mark(ierr.ErrValidation)
+		}
+	}
 	return nil
 }
 
