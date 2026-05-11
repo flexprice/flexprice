@@ -26,10 +26,6 @@ metadata:
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: postgres
-  {{- if and .Values.dataProtection .Values.dataProtection.retainStorage }}
-  annotations:
-    {{- include "flexprice.keepAnnotation" . | nindent 4 }}
-  {{- end }}
 spec:
   serviceName: {{ include "flexprice.fullname" . }}-postgres
   replicas: 1
