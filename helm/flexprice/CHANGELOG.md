@@ -38,7 +38,11 @@ FlexPrice app release.
 - (Tracked in `claude/redis-cluster-mode`) Redis client now branches between
   standalone and cluster topologies via `FLEXPRICE_REDIS_CLUSTER_MODE`
   (Helm: `redisExtended.clusterMode`); previously always used `ClusterClient`
-  which broke against single-node ElastiCache.
+  which broke against single-node ElastiCache. `redisExtended.clusterMode`
+  **defaults to `true`** to preserve pre-1.1 behaviour for existing Redis
+  Cluster / ElastiCache cluster-mode-enabled installs; flip to `false` for
+  single-node Redis. `values-local.yaml` sets it to `false` since the bundled
+  bitnami/redis subchart is single-node.
 
 ### Documentation
 - ClickHouse 90 GB `max_memory_usage` now configurable as

@@ -551,7 +551,11 @@ cache:
 # Redis extended configuration (beyond host/port/db set above)
 redisExtended:
   keyPrefix: ""         # e.g. "flexprice:prod" — namespaces all keys
-  clusterMode: false    # set true for AWS ElastiCache cluster mode (clustercfg. endpoint)
+  # clusterMode preserves the pre-1.1 hardcoded client behaviour (always
+  # *redis.ClusterClient). Keep true for Redis Cluster / AWS ElastiCache
+  # cluster-mode-enabled. Flip to false for single-node Redis (bundled
+  # bitnami/redis chart, single-node ElastiCache, in-cluster redis).
+  clusterMode: true
   poolSize: 10          # connection pool size
 
 # Event processing configuration

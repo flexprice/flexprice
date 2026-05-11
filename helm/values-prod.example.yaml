@@ -237,7 +237,10 @@ redisConfig:
   # password comes from existingSecret key: redis-password (if auth enabled)
 
 redisExtended:
-  clusterMode: false   # set true if using ElastiCache Cluster Mode / MemoryDB
+  # Chart default is true (preserves pre-1.1 ClusterClient behaviour). Set this
+  # to false ONLY when targeting a single-node Redis (non-cluster ElastiCache).
+  # Keep true for ElastiCache cluster-mode-enabled / MemoryDB / Redis Cluster.
+  clusterMode: true
 
 # ── Temporal — EXTERNAL (Temporal Cloud) ──────────────────────────────────────
 temporal:
