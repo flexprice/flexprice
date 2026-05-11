@@ -2,6 +2,47 @@
 
 Deploy the full FlexPrice billing platform on any Kubernetes cluster with a single `helm install`.
 
+## Quickstart (production install)
+
+For end-to-end walkthroughs see [docs/EKS-QUICKSTART.md](../docs/EKS-QUICKSTART.md) (AWS) or [docs/PLATFORMS.md](../docs/PLATFORMS.md) (GKE/AKS/bare-metal/local). The minimum-viable install:
+
+```bash
+# 1. Create namespace + Secret (every key the chart consumes)
+kubectl create namespace flexprice
+
+kubectl create secret generic flexprice-secrets -n flexprice \
+  --from-literal=encryption-key="$(openssl rand -hex 32)" \
+  --from-literal=auth-secret="$(openssl rand -hex 32)" \
+  --from-literal=postgres-password='REPLACE-WITH-PG-PW' \
+  --from-literal=clickhouse-password='REPLACE-WITH-CH-PW' \
+  --from-literal=kafka-sasl-password='REPLACE-WITH-KAFKA-PW' \
+  --from-literal=redis-password='REPLACE-WITH-REDIS-PW' \
+  --from-literal=temporal-api-key='REPLACE-WITH-TEMPORAL-KEY'
+
+# 2. Copy values-prod.example.yaml and fill in your endpoints
+cp ../values-prod.example.yaml values-prod.yaml
+$EDITOR values-prod.yaml   # set RDS / ClickHouse / Kafka / Redis / Temporal endpoints
+
+# 3. Install
+helm install flexprice \
+  oci://ghcr.io/flexprice/charts/flexprice \
+  --version 1.1.0 \
+  -n flexprice \
+  -f values-prod.yaml \
+  --set secrets.existingSecret=flexprice-secrets \
+  --wait --timeout 10m
+
+# 4. Smoke test
+helm test flexprice -n flexprice
+```
+
+What this assumes is already done:
+- Kubernetes ≥ 1.27 with a working ingress controller (ingress-nginx by default), cert-manager for TLS, and one of EKS / GKE / AKS / bare-metal with persistent volumes if you flip on the bundled subcharts.
+- External Postgres, ClickHouse, Kafka, Redis, and Temporal endpoints (managed or self-hosted). The chart's bundled subcharts default to **off** — production should point at managed services.
+- See [docs/PREREQUISITES.md](../docs/PREREQUISITES.md) for the pre-flight checklist.
+
+For the **secret key inventory** (which keys the chart looks up, and when), see [docs/SECRETS.md](../docs/SECRETS.md). For a full **values reference**, see [docs/CONFIGURATION-REFERENCE.md](../docs/CONFIGURATION-REFERENCE.md) and the inline comments in [values.yaml](values.yaml).
+
 ## Architecture
 
 ```
