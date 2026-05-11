@@ -65,6 +65,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "flexprice.secretName" . }}
                   key: redis-password
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.secretName" . }}
+                  key: redis-password
           {{- end }}
           volumeMounts:
             - name: data
