@@ -98,7 +98,45 @@ If `gp2` was already default, demote it:
 kubectl annotate storageclass gp2 storageclass.kubernetes.io/is-default-class-
 ```
 
-## 3. ingress-nginx + cert-manager
+## 3. AWS Load Balancer Controller
+
+Install this **before** ingress-nginx. Without it, the NLB created in §3.1
+will provision but its security groups won't be wired to the EKS node SG,
+and health checks will fail (the "NLB stuck pending" gotcha at the bottom
+of this doc).
+
+```bash
+# IAM policy (download the latest from the upstream repo):
+curl -fsSLo iam-policy.json \
+  https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+
+aws iam create-policy \
+  --policy-name AWSLoadBalancerControllerIAMPolicy \
+  --policy-document file://iam-policy.json
+
+# IRSA role bound to the controller's SA:
+eksctl create iamserviceaccount \
+  --cluster flexprice-prod --region us-east-1 \
+  --namespace kube-system --name aws-load-balancer-controller \
+  --attach-policy-arn arn:aws:iam::<ACCOUNT_ID>:policy/AWSLoadBalancerControllerIAMPolicy \
+  --override-existing-serviceaccounts --approve
+
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  -n kube-system \
+  --set clusterName=flexprice-prod \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller
+```
+
+Verify the controller is running before continuing:
+
+```bash
+kubectl -n kube-system rollout status deploy/aws-load-balancer-controller
+```
+
+## 3.1 ingress-nginx + cert-manager
 
 ```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -373,7 +411,7 @@ sentry:
 ```bash
 helm install flexprice \
   oci://ghcr.io/flexprice/charts/flexprice \
-  --version 1.1.0 \
+  --version 1.0.0 \
   -n flexprice \
   -f values-flexprice-prod.yaml \
   --wait --timeout 10m
