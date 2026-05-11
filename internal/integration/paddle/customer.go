@@ -21,9 +21,6 @@ type PaddleCustomerService interface {
 	SyncCustomerToPaddle(ctx context.Context, flexpriceCustomer *customer.Customer) (string, error)
 	GetPaddleCustomerID(ctx context.Context, customerID string) (string, error)
 	CreateCustomerFromPaddle(ctx context.Context, paddleCustomer *paddlenotification.CustomerNotification, customerService interfaces.CustomerService) error
-	// PersistPaddleSubscriptionID idempotently stores a Paddle subscription ID on the customer's
-	// entity integration mapping metadata. Called from the transaction.completed webhook handler.
-	PersistPaddleSubscriptionID(ctx context.Context, paddleCustomerID string, subID string) error
 }
 
 // CustomerService handles Paddle customer operations
@@ -610,57 +607,6 @@ func buildCreateAddressRequest(c *customer.Customer) *paddle.CreateAddressReques
 		req.Region = paddle.PtrTo(c.AddressState)
 	}
 	return req
-}
-
-// PersistPaddleSubscriptionID idempotently stores the Paddle subscription ID on the customer's
-// entity integration mapping metadata. It looks up the FlexPrice customer via paddleCustomerID
-// and updates the mapping. Safe to call multiple times — no-op if subID already matches.
-func (s *CustomerService) PersistPaddleSubscriptionID(ctx context.Context, paddleCustomerID string, subID string) error {
-	if paddleCustomerID == "" || subID == "" {
-		return nil
-	}
-
-	filter := &types.EntityIntegrationMappingFilter{
-		ProviderTypes:     []string{string(types.SecretProviderPaddle)},
-		ProviderEntityIDs: []string{paddleCustomerID},
-		EntityType:        types.IntegrationEntityTypeCustomer,
-	}
-	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to look up customer mapping for subscription ID persistence").
-			Mark(ierr.ErrDatabase)
-	}
-	if len(mappings) == 0 {
-		s.logger.Warnw("no customer mapping found for Paddle customer — cannot persist subscription ID",
-			"paddle_customer_id", paddleCustomerID,
-			"subscription_id", subID)
-		return nil
-	}
-
-	mapping := mappings[0]
-	if existing, ok := mapping.Metadata["paddle_subscription_id"].(string); ok && existing == subID {
-		// Already stored — idempotent.
-		return nil
-	}
-
-	if mapping.Metadata == nil {
-		mapping.Metadata = make(map[string]interface{})
-	}
-	mapping.Metadata["paddle_subscription_id"] = subID
-	mapping.UpdatedAt = time.Now().UTC()
-
-	if err := s.entityIntegrationMappingRepo.Update(ctx, mapping); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to persist Paddle subscription ID on customer mapping").
-			Mark(ierr.ErrDatabase)
-	}
-
-	s.logger.Infow("persisted paddle_subscription_id on customer mapping",
-		"flexprice_customer_id", mapping.EntityID,
-		"paddle_customer_id", paddleCustomerID,
-		"subscription_id", subID)
-	return nil
 }
 
 // mergeCustomerMetadata merges new metadata with existing customer metadata
