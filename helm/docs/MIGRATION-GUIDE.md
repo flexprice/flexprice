@@ -8,6 +8,35 @@ indicates a value-key rename, default flip, or required infra prerequisite.
 
 ---
 
+## Schema changes and rollback
+
+`helm rollback` reverts Kubernetes manifests but does **not** reverse
+schema migrations that the upgrade Job applied. If a chart upgrade ran
+Ent migrations and ClickHouse migrations that change column types,
+drop columns, or otherwise produce data the rollback target can't read,
+`helm rollback` alone will leave the cluster in a broken state.
+
+**Before upgrading a production release:**
+1. Snapshot Postgres (see `docs/BACKUPS.md`).
+2. Snapshot ClickHouse (see `docs/BACKUPS.md`).
+3. Run the upgrade.
+4. If the new release fails health checks within the first hour and
+   you need to roll back:
+   - `helm rollback <release> <previous-revision>` reverts manifests.
+   - Restore Postgres from the snapshot if the migration was
+     destructive. Ent migrations are forward-only and have no
+     built-in down step.
+   - Restore ClickHouse from the snapshot if the migration changed
+     table schemas.
+
+If you are uncertain whether a chart upgrade will run a destructive
+migration, run `helm template` against the new chart and inspect
+`templates/jobs/migration.yaml` — every `IF NOT EXISTS` / `ON CONFLICT
+DO NOTHING` clause indicates an additive step; anything else warrants
+a snapshot first.
+
+---
+
 ## 1.x → 2.x  *(Unreleased — preview)*
 
 > Apply these changes before `helm upgrade` from any 1.x chart.

@@ -28,11 +28,11 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 
 ## 3. Secrets
 
-- [ ] No plaintext secrets in any values file
-- [ ] All sensitive fields support `existingSecret` references
-- [ ] Documented secret keys + format in `values.yaml` comments
-- [ ] External Secrets Operator / Sealed Secrets integration documented
-- [ ] Postgres / ClickHouse / Redis / Kafka / Temporal credentials all externalized
+- [x] No plaintext secrets in any values file
+- [x] All sensitive fields support `existingSecret` references
+- [x] Documented secret keys + format in `values.yaml` comments
+- [x] External Secrets Operator / Sealed Secrets integration documented
+- [x] Postgres / ClickHouse / Redis / Kafka / Temporal credentials all externalized
 - [ ] Stripe / Chargebee / payment provider keys via `existingSecret` only
 
 ## 4. External state (do not run stateful workloads in-chart for prod)
@@ -92,10 +92,10 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 
 ## 10. Data & migrations
 
-- [ ] Migration Job runs as Helm `pre-install` + `pre-upgrade` hook
-- [ ] Migration Job idempotent + safe to retry
+- [x] Migration Job runs as Helm `pre-install` + `pre-upgrade` hook
+- [x] Migration Job idempotent + safe to retry
 - [ ] Backup/restore procedures documented (out-of-band, not in chart)
-- [ ] `helm rollback` behavior documented (especially around schema changes)
+- [x] `helm rollback` behavior documented (especially around schema changes)
 
 ## 11. Multi-tenancy & limits
 
@@ -106,10 +106,10 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 ## 12. Release & distribution
 
 - [x] Chart published (publish-helm-chart.yml → AWS Public ECR + GHCR on tag)
-- [ ] GHCR package set to **public** (or pull-secret docs provided)
+- [x] GHCR package set to **public** (or pull-secret docs provided)
 - [ ] Chart signed with `cosign` (optional)
-- [x] `CHANGELOG.md` created ([`helm/flexprice/CHANGELOG.md`](flexprice/CHANGELOG.md))
-- [ ] Chart releases tagged independently from app: `chart-vX.Y.Z`
+- [x] `CHANGELOG.md` created ([`helm/flexprice/CHANGELOG.md`](flesprice/CHANGELOG.md))
+- [x] Chart releases tagged independently from app: `chart-vX.Y.Z`
 - [x] Install instructions in `helm/flexprice/README.md`
 
 ## 13. CI
