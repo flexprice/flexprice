@@ -170,13 +170,11 @@ clickhouse:
 
 # ── Kafka ─────────────────────────────────────────────────────────────────────
 
-kafkaConfig:
-  saslPassword: "flexprice123"
-
 kafka:
   enabled: false  # disable Bitnami subchart; hand-rolled template uses confluentinc/cp-kafka
 
 kafkaConfig:
+  saslPassword: "flexprice123"
   internal:
     persistence:
       storageClass: "standard"
