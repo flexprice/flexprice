@@ -173,7 +173,7 @@ jobs:
           echo "CHART_URL=${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:$CHART_VERSION" >> $GITHUB_ENV
 
       - name: Login to GHCR
-        if: ${{ github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/chart-v') }}
         env:
           # PAT auth — see comment in publish-app-image.yml. Override the
           # username via vars.GHCR_USERNAME if the PAT owner differs from
@@ -185,7 +185,7 @@ jobs:
           echo "$GH_TOKEN" | helm registry login "$GHCR_HOST" -u "$GH_USER" --password-stdin
 
       - name: Push Helm Chart to GHCR
-        if: ${{ (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
+        if: ${{ (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/chart-v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         env:
           CHART_NAME: ${{ steps.chart-name.outputs.name }}
           CHART_VERSION: ${{ steps.chart-version.outputs.version }}
@@ -207,7 +207,7 @@ jobs:
           helm show chart oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }}
 
       - name: Verify Published Chart (GHCR)
-        if: ${{ (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
+        if: ${{ (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/chart-v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         env:
           CHART_NAME: ${{ steps.chart-name.outputs.name }}
           CHART_VERSION: ${{ steps.chart-version.outputs.version }}
