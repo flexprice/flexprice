@@ -137,8 +137,11 @@ jobs:
       - name: Login to GHCR
         if: ${{ github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_USER: ${{ github.actor }}
+          # PAT auth — see comment in publish-app-image.yml. Override the
+          # username via vars.GHCR_USERNAME if the PAT owner differs from
+          # the action actor.
+          GH_TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+          GH_USER: ${{ vars.GHCR_USERNAME || github.actor }}
           GHCR_HOST: ${{ env.GHCR_HOST }}
         run: |
           echo "$GH_TOKEN" | helm registry login "$GHCR_HOST" -u "$GH_USER" --password-stdin

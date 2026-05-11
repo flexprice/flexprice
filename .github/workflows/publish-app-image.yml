@@ -58,8 +58,12 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # PAT auth — default GITHUB_TOKEN can't push to the org's GHCR
+          # package unless the package is linked to this repo with Write.
+          # Override the username via vars.GHCR_USERNAME if the PAT owner
+          # differs from the action actor.
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
 
       - name: Build & push multi-arch image
         id: build
