@@ -312,6 +312,18 @@ frontend:
     limits:
       cpu: "1000m"
       memory: "1536Mi"
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: ""
+  # Inherits global topologySpreadConstraints unless overridden here.
+  topologySpreadConstraints: []
 
 # Frontend ingress — serves the UI at its own hostname
 frontendIngress:
