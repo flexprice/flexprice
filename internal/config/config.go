@@ -343,7 +343,12 @@ type RedisConfig struct {
 	PoolSize    int           `mapstructure:"pool_size" default:"10"`
 	Timeout     time.Duration `mapstructure:"timeout" default:"5s"`
 	KeyPrefix   string        `mapstructure:"key_prefix" default:"flexprice"`
-	ClusterMode bool          `mapstructure:"cluster_mode" default:"false"`
+	// ClusterMode: true → *redis.ClusterClient (Redis Cluster, ElastiCache
+	// cluster-mode enabled). false → standalone *redis.Client. Default is
+	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
+	// single-node Redis. Baked default lives in config.yaml; env override:
+	// FLEXPRICE_REDIS_CLUSTER_MODE.
+	ClusterMode bool          `mapstructure:"cluster_mode"`
 }
 
 func NewConfig() (*Configuration, error) {
