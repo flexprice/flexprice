@@ -10,6 +10,10 @@ metadata:
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: clickhouse
+  {{- if and .Values.dataProtection .Values.dataProtection.retainStorage }}
+  annotations:
+    {{- include "flexprice.keepAnnotation" . | nindent 4 }}
+  {{- end }}
 spec:
   serviceName: {{ include "flexprice.fullname" . }}-clickhouse
   replicas: 1
@@ -76,10 +80,16 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: data
+        {{- $keep := include "flexprice.keepAnnotation" . }}
+        {{- if $keep }}
+        annotations:
+          {{- $keep | nindent 10 }}
+        {{- end }}
       spec:
         accessModes: ["ReadWriteOnce"]
-        {{- if .Values.clickhouse.standalone.persistence.storageClass }}
-        storageClassName: {{ .Values.clickhouse.standalone.persistence.storageClass | quote }}
+        {{- $sc := include "flexprice.componentStorageClass" (dict "ctx" . "override" .Values.clickhouse.standalone.persistence.storageClass) }}
+        {{- if $sc }}
+        storageClassName: {{ $sc | quote }}
         {{- end }}
         resources:
           requests:
@@ -122,6 +132,10 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
+  {{- if and .Values.dataProtection .Values.dataProtection.retainStorage }}
+  annotations:
+    {{- include "flexprice.keepAnnotation" . | nindent 4 }}
+  {{- end }}
     app.kubernetes.io/component: clickhouse
 spec:
   configuration:
@@ -218,7 +232,10 @@ spec:
       - name: clickhouse-data
         reclaimPolicy: Retain
         spec:
-          storageClassName: {{ .Values.clickhouse.altinity.persistence.storageClass | quote }}
+          {{- $sc := include "flexprice.componentStorageClass" (dict "ctx" . "override" .Values.clickhouse.altinity.persistence.storageClass) }}
+          {{- if $sc }}
+          storageClassName: {{ $sc | quote }}
+          {{- end }}
           accessModes:
             - ReadWriteOnce
           resources:

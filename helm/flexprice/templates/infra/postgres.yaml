@@ -26,6 +26,10 @@ metadata:
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: postgres
+  {{- if and .Values.dataProtection .Values.dataProtection.retainStorage }}
+  annotations:
+    {{- include "flexprice.keepAnnotation" . | nindent 4 }}
+  {{- end }}
 spec:
   serviceName: {{ include "flexprice.fullname" . }}-postgres
   replicas: 1
@@ -95,10 +99,16 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: data
+        {{- $keep := include "flexprice.keepAnnotation" . }}
+        {{- if $keep }}
+        annotations:
+          {{- $keep | nindent 10 }}
+        {{- end }}
       spec:
         accessModes: [ "ReadWriteOnce" ]
-        {{- if .Values.postgres.internal.persistence.storageClass }}
-        storageClassName: {{ .Values.postgres.internal.persistence.storageClass | quote }}
+        {{- $sc := include "flexprice.componentStorageClass" (dict "ctx" . "override" .Values.postgres.internal.persistence.storageClass) }}
+        {{- if $sc }}
+        storageClassName: {{ $sc | quote }}
         {{- end }}
         resources:
           requests:

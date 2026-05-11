@@ -231,6 +231,107 @@ temporal:
 
 ---
 
+## Data protection — keep PVs across `helm uninstall`
+
+By default the chart treats in-cluster database volumes as long-lived. Two
+mechanisms work together:
+
+1. **A chart-managed `StorageClass` with `reclaimPolicy: Retain`** — rendered
+   when `dataProtection.retainStorage: true` (default) and you set a
+   `provisioner`. Name: `<release>-retain` (override with
+   `dataProtection.storageClass.name`).
+2. **`helm.sh/resource-policy: keep` annotation** on every chart-rendered
+   StatefulSet and PVC template, plus `persistentVolumeClaimRetentionPolicy:
+   Retain` on the Bitnami subchart StatefulSets. This makes `helm uninstall`
+   leave the PVCs in place.
+
+### Quick start — production cluster (e.g. EKS)
+
+```yaml
+dataProtection:
+  retainStorage: true
+  storageClass:
+    provisioner: ebs.csi.aws.com   # EKS, see provisioner list below
+    parameters:
+      type: gp3
+      fsType: ext4
+
+# Point Bitnami subchart PVCs at the same Retain class.
+# Replace "flexprice" with your actual release name if different.
+postgresql:
+  primary:
+    persistence:
+      storageClass: flexprice-retain
+
+kafka:
+  controller:
+    persistence:
+      storageClass: flexprice-retain
+  broker:
+    persistence:
+      storageClass: flexprice-retain
+
+redis:
+  master:
+    persistence:
+      storageClass: flexprice-retain
+```
+
+| Cluster | `provisioner` |
+|---|---|
+| AWS EKS | `ebs.csi.aws.com` |
+| GKE | `pd.csi.storage.gke.io` |
+| AKS | `disk.csi.azure.com` |
+| kind / dev | `rancher.io/local-path` |
+
+### What this protects against
+
+- `helm uninstall <release>` — StatefulSets/PVCs stay (keep annotation).
+- StatefulSet scale-down — PVC retained (Bitnami
+  `persistentVolumeClaimRetentionPolicy: Retain`).
+- A user accidentally `kubectl delete pvc` — Kubernetes still removes the
+  PVC, but the underlying PV (and disk) survives because the StorageClass is
+  `Retain`. You can reclaim it by editing the orphan PV's `claimRef`.
+
+### Opting out
+
+Set `dataProtection.retainStorage: false`. The chart-managed StorageClass is
+skipped, no annotations are added, and PVCs follow the cluster default
+StorageClass `reclaimPolicy` (almost always `Delete` on cloud providers).
+Existing PVCs are unchanged — `storageClassName` is immutable on a bound PVC.
+
+### Cleanup after `helm uninstall`
+
+Because PVs are `Retain`ed, the disks behind them stick around (and so does
+the bill). Manual cleanup:
+
+```bash
+# 1. Find orphan PVCs in the release namespace
+kubectl get pvc -n <namespace>
+
+# 2. Delete them — the underlying PV moves to "Released" but is NOT reclaimed
+kubectl delete pvc -n <namespace> <pvc-name>
+
+# 3. Find the released PVs and delete them (this releases the disk for the
+#    CSI driver to deprovision)
+kubectl get pv | grep Released
+kubectl delete pv <pv-name>
+```
+
+If you want to keep the data and remount it in a new release, do step 2 only,
+then patch the freed PV with the new PVC's `claimRef`.
+
+### Multi-release in the same cluster
+
+`StorageClass` is cluster-scoped. If you run two Flexprice releases side by
+side, both will try to create a chart-managed SC. Set
+`dataProtection.storageClass.name` to a shared value (e.g. `flexprice-retain`)
+on all releases so they reference the same StorageClass, or enable
+`retainStorage` only on the first release and point the others at the same
+SC name via per-component `persistence.storageClass`.
+
+---
+
 ## High Availability
 
 HA is off by default — everything runs as a single replica. To enable for production, put overrides in a separate file and layer it on:

@@ -64,6 +64,57 @@ networkPolicy:
           matchLabels:
             app.kubernetes.io/name: ingress-nginx
 
+# Data protection — keep PVs around when StatefulSets/PVCs are deleted.
+#
+# When enabled (default), the chart renders a cluster-scoped StorageClass
+# named `<release>-retain` with `reclaimPolicy: Retain`, and every in-cluster
+# database (postgres, clickhouse, redis, kafka, temporal stores) is wired to
+# use it. Chart-rendered PVCs/StatefulSets also get `helm.sh/resource-policy: keep`
+# so `helm uninstall` will not delete them.
+#
+# Trade-off: this is safer for production data, but `helm uninstall` will
+# leave behind orphan PVs/disks that must be cleaned up manually (see the
+# "Data protection" section of the chart README for the cleanup procedure).
+#
+# To opt out (back to cluster-default StorageClass + Delete reclaim policy):
+#   dataProtection.retainStorage: false
+#
+# To use a StorageClass you already manage (and skip the chart-rendered one),
+# set retainStorage: false and point each component's persistence.storageClass
+# at your own class.
+dataProtection:
+  # Toggle the whole feature. true = create the chart's Retain StorageClass
+  # AND default every in-cluster DB persistence.storageClass to it, AND add
+  # helm.sh/resource-policy: keep to chart-rendered stateful resources.
+  retainStorage: true
+  storageClass:
+    # If empty, the chart computes the name as "<release>-retain". Override
+    # if you need to share one across releases or match an external naming
+    # convention.
+    name: ""
+    # Provisioner the StorageClass should use. Empty = cluster default
+    # provisioner (the in-tree one). Common values:
+    #   AWS EBS CSI:    ebs.csi.aws.com
+    #   GCE PD CSI:     pd.csi.storage.gke.io
+    #   Azure Disk CSI: disk.csi.azure.com
+    #   kind / dev:     rancher.io/local-path
+    # Leave empty for clusters that already have a CSI driver wired to the
+    # default StorageClass — kubectl get sc to inspect.
+    provisioner: ""
+    # Optional CSI parameters (pass-through to the StorageClass spec).
+    # Example for EBS gp3:
+    #   parameters:
+    #     type: gp3
+    #     fsType: ext4
+    parameters: {}
+    # WaitForFirstConsumer is safer (binds PV in the same AZ as the pod);
+    # Immediate is faster but can pin storage to the wrong AZ. Keep
+    # WaitForFirstConsumer unless you know you need otherwise.
+    volumeBindingMode: WaitForFirstConsumer
+    # allowVolumeExpansion lets you grow PVCs in place via kubectl edit.
+    # Almost always desirable.
+    allowVolumeExpansion: true
+
 # Pod-level security context. Compatible with the Kubernetes PodSecurityStandard
 # "restricted" profile (fsGroup non-zero, runAsNonRoot, seccomp RuntimeDefault).
 podSecurityContext:
@@ -1025,6 +1076,11 @@ prometheusRule:
 # bitnami/postgresql subchart
 # When enabled, the hand-rolled infra/postgres.yaml is NOT rendered.
 # Configure postgres credentials above under the `postgres:` key.
+#
+# Data protection wiring: when dataProtection.retainStorage=true (default),
+# set `primary.persistence.storageClass` to the chart's Retain class (default
+# name: "<release>-retain") and keep the PVC retention policy below set to
+# Retain. The chart README "Data protection" section walks through this.
 postgresql:
   enabled: false
   auth:
@@ -1035,23 +1091,69 @@ postgresql:
     persistence:
       enabled: true
       size: 20Gi
+      # Set this to "<release>-retain" (or whatever dataProtection.storageClass.name
+      # resolves to) to inherit the chart's Retain reclaim policy. Leave empty
+      # to use the cluster default StorageClass (data may be deleted on PV release).
+      storageClass: ""
+      # Add helm.sh/resource-policy: keep so `helm uninstall` does not delete the
+      # PVC. Removed only via explicit `kubectl delete pvc`. Disable by setting
+      # dataProtection.retainStorage=false at the top level AND clearing this.
+      annotations:
+        helm.sh/resource-policy: keep
+    # Keep the PVC alive across StatefulSet scale-down and StatefulSet deletion.
+    # Combined with the StorageClass `reclaimPolicy: Retain` above, this means
+    # data survives both `kubectl delete statefulset` and `helm uninstall`.
+    persistentVolumeClaimRetentionPolicy:
+      enabled: true
+      whenScaled: Retain
+      whenDeleted: Retain
 
 # bitnami/kafka subchart (KRaft mode, no Zookeeper)
 # When enabled, the hand-rolled infra/kafka.yaml is NOT rendered.
+#
+# Data protection wiring: Kafka KRaft has two stateful pools — `controller`
+# and `broker`. Both PVCs must point at the Retain StorageClass (default name:
+# "<release>-retain") and carry the keep annotation. See chart README
+# "Data protection" section.
 kafka:
   enabled: false
   kraft:
     enabled: true
   replicaCount: 1
-  persistence:
-    enabled: true
-    size: 20Gi
   # Auto-create topics disabled — migration job handles topic creation
   autoCreateTopicsEnable: false
+  controller:
+    persistence:
+      enabled: true
+      size: 20Gi
+      # Set to "<release>-retain" (or dataProtection.storageClass.name) to
+      # inherit Retain reclaim policy. Empty = cluster default.
+      storageClass: ""
+      annotations:
+        helm.sh/resource-policy: keep
+    persistentVolumeClaimRetentionPolicy:
+      enabled: true
+      whenScaled: Retain
+      whenDeleted: Retain
+  broker:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""
+      annotations:
+        helm.sh/resource-policy: keep
+    persistentVolumeClaimRetentionPolicy:
+      enabled: true
+      whenScaled: Retain
+      whenDeleted: Retain
 
 # bitnami/redis subchart
 # When enabled, the hand-rolled infra/redis.yaml is NOT rendered.
 # sentinel.enabled=false → standalone mode (no HA); set to true for HA sentinel setup.
+#
+# Data protection wiring: set master.persistence.storageClass to the chart's
+# Retain class (default "<release>-retain") and keep the retention policy below.
+# When architecture=replication, mirror the same settings under `replica`.
 redis:
   enabled: false
   architecture: standalone
@@ -1062,6 +1164,15 @@ redis:
     persistence:
       enabled: true
       size: 5Gi
+      # Set to "<release>-retain" (or dataProtection.storageClass.name) to
+      # inherit Retain reclaim policy. Empty = cluster default.
+      storageClass: ""
+      annotations:
+        helm.sh/resource-policy: keep
+    persistentVolumeClaimRetentionPolicy:
+      enabled: true
+      whenScaled: Retain
+      whenDeleted: Retain
 
 # temporalio/temporal subchart
 # When enabled, the hand-rolled infra/temporal.yaml is NOT rendered.

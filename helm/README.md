@@ -123,6 +123,17 @@ Prod-only flags: `--skip-infra`, `--skip-db-ping`, `--skip-ext-health`, `--dry-r
 
 See [`values-prod.example.yaml`](values-prod.example.yaml) for the prod values template, and [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md) for the checklist.
 
+**Data protection for in-cluster databases:** when running stateful workloads
+inside the cluster (kicking the tires, single-node prod), the chart renders a
+`reclaimPolicy: Retain` StorageClass and adds `helm.sh/resource-policy: keep`
+to every stateful resource it owns. `helm uninstall` therefore keeps PVCs/PVs
+in place. You **must** set `dataProtection.storageClass.provisioner` for the
+StorageClass to render (e.g. `ebs.csi.aws.com` on EKS,
+`pd.csi.storage.gke.io` on GKE, `rancher.io/local-path` on kind). See the
+[chart README "Data protection" section](flexprice/README.md#data-protection--keep-pvs-across-helm-uninstall)
+for the full wiring (including Bitnami subchart pointers) and the cleanup
+procedure when decommissioning a release.
+
 ---
 
 ## How the chart gets published

@@ -43,6 +43,7 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 - [x] Redis: chart default `redis.enabled=false`; require external endpoint
 - [x] Temporal: chart default `temporal.enabled=false`; require external Temporal (Cloud or self-hosted)
 - [x] Connection strings, TLS, SASL/SCRAM auth all configurable
+- [x] When in-cluster databases are used (kicking the tires / single-node prod), `dataProtection.retainStorage=true` (default) renders a `reclaimPolicy: Retain` StorageClass and adds `helm.sh/resource-policy: keep` to chart-rendered stateful resources — `helm uninstall` keeps PVCs/PVs. Operators must set `dataProtection.storageClass.provisioner` (otherwise the SC is skipped silently) and follow the cleanup procedure in [`flexprice/README.md`](flexprice/README.md#data-protection--keep-pvs-across-helm-uninstall) when decommissioning.
 
 ## 5. Known app blockers (must fix before prod)
 

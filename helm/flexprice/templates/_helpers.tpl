@@ -105,6 +105,48 @@ from plaintext values — suitable for dev only.
 {{- end }}
 
 {{/*
+Name of the chart-managed Retain StorageClass.
+Returns "" when data protection is disabled — callers should guard with
+`{{- if .Values.dataProtection.retainStorage }}` before using the value
+as a storageClass field.
+*/}}
+{{- define "flexprice.retainStorageClassName" -}}
+{{- if and .Values.dataProtection .Values.dataProtection.retainStorage .Values.dataProtection.storageClass.provisioner -}}
+{{- if .Values.dataProtection.storageClass.name -}}
+{{- .Values.dataProtection.storageClass.name -}}
+{{- else -}}
+{{- printf "%s-retain" (include "flexprice.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Pick the storageClass for an in-cluster DB component.
+Usage: include "flexprice.componentStorageClass" (dict "ctx" . "override" .Values.postgres.internal.persistence.storageClass)
+Precedence: explicit per-component override > chart Retain SC > "" (cluster default).
+*/}}
+{{- define "flexprice.componentStorageClass" -}}
+{{- if .override -}}
+{{- .override -}}
+{{- else -}}
+{{- include "flexprice.retainStorageClassName" .ctx -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Render `helm.sh/resource-policy: keep` annotation key/value when data protection
+is enabled. Intended to be embedded under `metadata.annotations:` of resources
+that own data (StatefulSets, PVCs, the StorageClass itself). When the feature
+is disabled this renders nothing — keep the parent `annotations:` block
+guarded with `{{- if ... }}` or otherwise tolerant of an empty mapping.
+*/}}
+{{- define "flexprice.keepAnnotation" -}}
+{{- if and .Values.dataProtection .Values.dataProtection.retainStorage -}}
+helm.sh/resource-policy: keep
+{{- end -}}
+{{- end }}
+
+{{/*
 Migration helper-image reference.
 Usage: include "flexprice.migrationImage" (dict "ctx" . "name" "postgres")
        name ∈ {postgres, busybox, clickhouse}
@@ -306,7 +348,7 @@ All service addresses are resolved via named templates above so this block stays
 {{- end }}
 {{- /* ---- Temporal ---- */}}
 - name: FLEXPRICE_TEMPORAL_ENABLED
-  value: {{ .Values.temporalConfig.enabled | default true | quote }}
+  value: {{ .Values.temporalConfig.enabled | quote }}
 - name: FLEXPRICE_TEMPORAL_ADDRESS
   value: {{ include "flexprice.temporalAddress" . | quote }}
 - name: FLEXPRICE_TEMPORAL_TASK_QUEUE

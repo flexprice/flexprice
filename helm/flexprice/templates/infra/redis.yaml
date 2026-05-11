@@ -26,6 +26,10 @@ metadata:
   labels:
     {{- include "flexprice.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis
+  {{- if and .Values.dataProtection .Values.dataProtection.retainStorage }}
+  annotations:
+    {{- include "flexprice.keepAnnotation" . | nindent 4 }}
+  {{- end }}
 spec:
   serviceName: {{ include "flexprice.fullname" . }}-redis
   replicas: 1
@@ -87,10 +91,16 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: data
+        {{- $keep := include "flexprice.keepAnnotation" . }}
+        {{- if $keep }}
+        annotations:
+          {{- $keep | nindent 10 }}
+        {{- end }}
       spec:
         accessModes: [ "ReadWriteOnce" ]
-        {{- if .Values.redisConfig.internal.persistence.storageClass }}
-        storageClassName: {{ .Values.redisConfig.internal.persistence.storageClass | quote }}
+        {{- $sc := include "flexprice.componentStorageClass" (dict "ctx" . "override" .Values.redisConfig.internal.persistence.storageClass) }}
+        {{- if $sc }}
+        storageClassName: {{ $sc | quote }}
         {{- end }}
         resources:
           requests:

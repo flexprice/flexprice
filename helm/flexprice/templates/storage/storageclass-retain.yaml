@@ -1,0 +1,37 @@
+{{- /*
+Chart-managed StorageClass with reclaimPolicy: Retain.
+
+Rendered when dataProtection.retainStorage is true (the default). Every
+in-cluster database component (postgres, clickhouse, redis, kafka, temporal
+stores) is wired to consume this class by default via templates that resolve
+storageClass through `flexprice.componentStorageClass`. Users can opt out
+globally by setting `dataProtection.retainStorage: false`, or per-component
+by setting `<component>.persistence.storageClass` explicitly.
+
+Carries `helm.sh/resource-policy: keep` so `helm uninstall` does NOT delete
+the StorageClass itself — that would otherwise orphan PVs referencing a
+class name that no longer exists.
+
+NOTE: StorageClass is cluster-scoped. If you run multiple Flexprice releases
+in the same cluster, set dataProtection.storageClass.name to a shared value
+in each release so they reference the same class, or only enable retainStorage
+on one release and point the others at it via component overrides.
+*/ -}}
+{{- if and .Values.dataProtection.retainStorage .Values.dataProtection.storageClass.provisioner }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ include "flexprice.retainStorageClassName" . }}
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+  annotations:
+    {{- include "flexprice.keepAnnotation" . | nindent 4 }}
+provisioner: {{ .Values.dataProtection.storageClass.provisioner | quote }}
+reclaimPolicy: Retain
+volumeBindingMode: {{ .Values.dataProtection.storageClass.volumeBindingMode | default "WaitForFirstConsumer" }}
+allowVolumeExpansion: {{ .Values.dataProtection.storageClass.allowVolumeExpansion | default true }}
+{{- with .Values.dataProtection.storageClass.parameters }}
+parameters:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
