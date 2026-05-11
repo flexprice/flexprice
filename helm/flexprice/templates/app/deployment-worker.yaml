@@ -8,6 +8,10 @@ metadata:
     app.kubernetes.io/component: worker
 spec:
   replicas: {{ .Values.worker.replicaCount }}
+  {{- with .Values.worker.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "flexprice.selectorLabels" . | nindent 6 }}
@@ -28,7 +32,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      serviceAccountName: {{ include "flexprice.componentServiceAccountName" (dict "ctx" . "component" "worker") }}
       {{- with .Values.worker.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ . }}
       {{- end }}

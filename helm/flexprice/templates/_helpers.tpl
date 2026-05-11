@@ -54,7 +54,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create the name of the service account to use
+Default ServiceAccount name (shared across components when per-workload SAs are off).
 */}}
 {{- define "flexprice.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
@@ -62,6 +62,30 @@ Create the name of the service account to use
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
+{{- end }}
+
+{{/*
+Per-component ServiceAccount name.
+Usage: include "flexprice.componentServiceAccountName" (dict "ctx" . "component" "api")
+
+When serviceAccount.perComponent=true, returns "<fullname>-<component>" (or the
+component-specific override under serviceAccount.components.<component>.name).
+Otherwise falls back to the shared flexprice.serviceAccountName so the chart
+keeps working for operators who don't want per-workload IAM (IRSA) separation.
+*/}}
+{{- define "flexprice.componentServiceAccountName" -}}
+{{- $ctx := .ctx -}}
+{{- $component := .component -}}
+{{- if $ctx.Values.serviceAccount.perComponent -}}
+  {{- $override := dig "components" $component "name" "" $ctx.Values.serviceAccount -}}
+  {{- if $override -}}
+    {{- $override -}}
+  {{- else -}}
+    {{- printf "%s-%s" (include "flexprice.fullname" $ctx) $component -}}
+  {{- end -}}
+{{- else -}}
+  {{- include "flexprice.serviceAccountName" $ctx -}}
+{{- end -}}
 {{- end }}
 
 {{/*

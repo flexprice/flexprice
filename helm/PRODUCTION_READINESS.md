@@ -54,23 +54,23 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 
 - [x] Resource `requests` AND `limits` set on every container (api, consumer, worker)
 - [x] Liveness / readiness / startup probes on all services
-- [~] `PodDisruptionBudget` for api only — add consumer + worker (P1 follow-up)
+- [x] `PodDisruptionBudget` for api + consumer + worker
 - [x] `HorizontalPodAutoscaler` for api (CPU + custom metric if available)
 - [x] `topologySpreadConstraints` across zones *(opt-in via `topologySpreadConstraints` value)*
 - [x] Graceful shutdown: `terminationGracePeriodSeconds` + SIGTERM handling
 - [x] `preStop` hook for consumer to drain in-flight Kafka messages
-- [ ] Rolling update strategy with `maxSurge` / `maxUnavailable` tuned
+- [x] Rolling update strategy with `maxSurge` / `maxUnavailable` tuned (api/worker: surge+0; consumer: 0+1 to minimise rebalance churn)
 
 ## 7. Security
 
-- [ ] `securityContext`: non-root, `runAsNonRoot: true`, `readOnlyRootFilesystem: true`
-- [ ] `allowPrivilegeEscalation: false`, drop `ALL` capabilities
-- [ ] `seccompProfile: RuntimeDefault`
-- [ ] NetworkPolicies: default-deny + explicit allows for api↔db, consumer↔kafka, etc.
-- [ ] ServiceAccount per workload (no shared default SA)
-- [ ] PodSecurityStandard: `restricted` namespace label compatible
-- [ ] No `hostNetwork` / `hostPath` / `privileged`
-- [ ] Image pull from GHCR over HTTPS only
+- [x] `securityContext`: non-root, `runAsNonRoot: true`, `readOnlyRootFilesystem: true`
+- [x] `allowPrivilegeEscalation: false`, drop `ALL` capabilities
+- [x] `seccompProfile: RuntimeDefault` (pod + container)
+- [~] NetworkPolicy template ships as ingress-only (api ← ingress-nginx); egress allow-list deferred until prod egress topology stabilises
+- [x] ServiceAccount per workload via `serviceAccount.perComponent=true` (default off; flip on when scoping IRSA per workload)
+- [x] PodSecurityStandard: `restricted` namespace label compatible (runAsNonRoot + seccompProfile + capabilities drop ALL + no privileged + non-zero fsGroup)
+- [x] No `hostNetwork` / `hostPath` / `privileged` in chart templates
+- [x] Image pull from GHCR over HTTPS only (`ghcr.io/...` repository, no insecure registry config)
 
 ## 8. Networking & ingress
 
@@ -83,12 +83,12 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 
 ## 9. Observability
 
-- [ ] Prometheus `ServiceMonitor` (or annotations) for api, consumer, worker
-- [ ] Grafana dashboards committed under `helm/flexprice/dashboards/`
-- [ ] Structured JSON logging enabled by default
-- [ ] Log shipping documented (Loki / CloudWatch / Datadog)
-- [ ] Tracing (OpenTelemetry) endpoint configurable
-- [ ] Alert rules: pod restarts, error rate, queue lag, DB pool saturation
+- [ ] Prometheus `ServiceMonitor` template — deferred until app exposes `/metrics` endpoint
+- [ ] Grafana dashboards committed under `helm/flexprice/dashboards/` — deferred (depends on `/metrics`)
+- [x] Structured JSON logging enabled by default (`logging.format: "json"`)
+- [x] Log shipping configurable via `logging.otel.*` (any OTLP-compatible collector: Loki/Grafana, Datadog Agent, AWS Distro, SigNoz)
+- [x] Tracing (OpenTelemetry) endpoint configurable via `logging.otel.endpoint`
+- [ ] Alert rules: pod restarts, error rate, queue lag, DB pool saturation — deferred with ServiceMonitor
 
 ## 10. Data & migrations
 
@@ -101,7 +101,7 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 
 - [ ] `ResourceQuota` + `LimitRange` examples documented
 - [x] ClickHouse per-query memory limit surfaced as configurable (`clickhouse.maxMemoryUsageGB`, default 90)
-- [ ] Connection pool sizes (Postgres, Redis) tunable per-environment
+- [x] Connection pool sizes (Postgres, Redis) tunable per-environment (`postgres.maxOpenConns`, `postgres.maxIdleConns`, `postgres.connMaxLifetimeMinutes`, `redisExtended.poolSize`)
 
 ## 12. Release & distribution
 
@@ -114,12 +114,12 @@ Status legend: `[ ]` todo · `[~]` partial · `[x]` done
 
 ## 13. CI
 
-- [ ] `helm lint` on every PR touching `helm/**`
-- [ ] `helm template` + `kubeconform` on every PR
-- [ ] `helm install --dry-run` against a kind cluster on PR
-- [ ] Image build pushes to GHCR on tag (multi-arch)
-- [ ] Chart publish to GHCR on tag
-- [ ] Renovate / Dependabot enabled for chart `dependencies:` and image tags
+- [x] `helm lint` on every PR touching `helm/**` ([`.github/workflows/helm-validate.yml`](../.github/workflows/helm-validate.yml))
+- [x] `helm template` + `kubeconform` on every PR (across default + values-local + values-prod.example profiles)
+- [x] `helm install --dry-run` against a kind cluster on PR
+- [x] Image build pushes to GHCR on tag (multi-arch) — [`.github/workflows/publish-app-image.yml`](../.github/workflows/publish-app-image.yml)
+- [x] Chart publish to GHCR on tag — [`.github/workflows/publish-helm-chart.yml`](../.github/workflows/publish-helm-chart.yml)
+- [x] Renovate enabled for chart `dependencies:` and image tags ([`renovate.json`](../renovate.json))
 
 ## 14. Pre-ship validation
 

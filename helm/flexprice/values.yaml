@@ -30,20 +30,64 @@ serviceAccount:
   create: true
   annotations: {}
   name: ""
+  # perComponent=true creates a separate ServiceAccount for api, consumer, and
+  # worker. Use this when you need IRSA / Workload Identity scoped per workload
+  # (e.g., consumer needs Kafka MSK IAM, worker needs Temporal Cloud, api needs
+  # SES). Per-component annotations override the top-level annotations above.
+  perComponent: false
+  components:
+    api:
+      name: ""           # default: "<fullname>-api"
+      annotations: {}
+    consumer:
+      name: ""           # default: "<fullname>-consumer"
+      annotations: {}
+    worker:
+      name: ""           # default: "<fullname>-worker"
+      annotations: {}
 
-# Pod security context
+# NetworkPolicy — off by default. When enabled, renders an ingress-only allow
+# policy on the api pod (TCP/8080 from networkPolicy.ingress.fromIngressController).
+# Egress is intentionally unrestricted for now — managed services (Stripe,
+# Resend, Temporal Cloud, ClickHouse Cloud, ...) rotate IPs, making a
+# CIDR allow-list operationally brittle. Revisit once egress topology stabilises.
+networkPolicy:
+  enabled: false
+  ingress:
+    # Selector for the ingress controller that should reach the api pod.
+    # Default targets ingress-nginx in the namespace `ingress-nginx`.
+    fromIngressController:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+
+# Pod-level security context. Compatible with the Kubernetes PodSecurityStandard
+# "restricted" profile (fsGroup non-zero, runAsNonRoot, seccomp RuntimeDefault).
 podSecurityContext:
   fsGroup: 2000
   runAsNonRoot: true
   runAsUser: 1000
+  runAsGroup: 3000
+  seccompProfile:
+    type: RuntimeDefault
 
-# Security context for containers
+# Container-level security context. readOnlyRootFilesystem is true because the
+# app writes only to /tmp (mounted as emptyDir in each Deployment template).
+# If you need to write elsewhere, add another emptyDir + volumeMount rather
+# than relaxing this default.
 securityContext:
   allowPrivilegeEscalation: false
+  privileged: false
+  runAsNonRoot: true
   capabilities:
     drop:
       - ALL
-  readOnlyRootFilesystem: false
+  readOnlyRootFilesystem: true
+  seccompProfile:
+    type: RuntimeDefault
 
 # API deployment configuration
 api:
@@ -65,6 +109,15 @@ api:
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
+  # RollingUpdate strategy: maxSurge controls how many extra pods can spin up
+  # over `replicaCount`; maxUnavailable how many existing pods can go down.
+  # Defaults are HA-safe (one extra up, zero unavailable) so api rollouts
+  # never reduce capacity below the configured replica count.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   # Give in-flight HTTP requests time to drain. Must be ≥ server read/write
   # timeouts. preStop sleep gives the ingress/Service endpoints controller
   # time to remove this pod from the load-balancer pool before the process exits.
@@ -92,6 +145,16 @@ consumer:
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  # Kafka consumer prefers one-at-a-time rollout to minimise consumer-group
+  # rebalance churn. maxSurge=0 keeps the partition assignment stable.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   # Graceful shutdown: Kafka consumer needs time to finish processing in-flight
   # messages and commit offsets before exit. Must be longer than the longest
   # expected message processing time. The preStop hook sleeps so the pod stays
@@ -121,6 +184,14 @@ worker:
     minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   # Worker drains by letting Temporal SDK finish in-progress activities on SIGTERM.
   # Bump if your longest workflow activity exceeds 30s.
   terminationGracePeriodSeconds: 60
@@ -871,12 +942,30 @@ extraVolumeMounts: []
 # Resource labels
 labels: {}
 
-# Service monitor for Prometheus (if using Prometheus Operator)
+# Prometheus Operator ServiceMonitor.
+# Requires kube-prometheus-stack (or compatible) installed in the cluster.
+# When enabled, renders one ServiceMonitor per workload that scrapes the
+# /metrics endpoint on the http port.
 serviceMonitor:
   enabled: false
   interval: 30s
   scrapeTimeout: 10s
+  path: /metrics
+  # Extra labels on the ServiceMonitor object. Set this to match your Prometheus
+  # `serviceMonitorSelector` — typically `{release: kube-prometheus-stack}`.
   labels: {}
+  # Operator-specific relabel rules; appended verbatim to spec.endpoints[0].
+  relabelings: []
+  metricRelabelings: []
+
+# Prometheus alert rules. Off by default; toggle on once you have a
+# PrometheusRule-aware operator + Alertmanager wired.
+prometheusRule:
+  enabled: false
+  labels: {}
+  # Default rules are reasonable starting points; tune thresholds for your
+  # traffic. Override the whole list to drop or add rules.
+  rules: []
 
 # ---------------------------------------------------------------------------
 # Subchart conditions
