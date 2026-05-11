@@ -29,6 +29,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      {{- with .Values.consumer.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -48,6 +51,14 @@ spec:
               value: "consumer"
             - name: TMPDIR
               value: "/tmp"
+          {{- if and .Values.consumer.preStop .Values.consumer.preStop.enabled }}
+          lifecycle:
+            preStop:
+              exec:
+                # Give endpoints controller time to drop this pod before the
+                # Kafka consumer-group rebalance kicks off the new owner.
+                command: ["/bin/sh", "-c", "sleep {{ .Values.consumer.preStop.sleepSeconds | default 15 }}"]
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -96,6 +107,11 @@ spec:
       {{- with (default .Values.tolerations .Values.consumer.tolerations) }}
       tolerations:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- $tsc := default .Values.topologySpreadConstraints .Values.consumer.topologySpreadConstraints }}
+      {{- if $tsc }}
+      topologySpreadConstraints:
+        {{- toYaml $tsc | nindent 8 }}
       {{- end }}
 {{- end }}
 

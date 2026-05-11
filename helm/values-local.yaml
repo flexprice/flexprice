@@ -120,10 +120,11 @@ postgres:
   sslmode: "disable"   # Bitnami subchart has no TLS; production default 'require' would fail
 
 postgresql:
+  enabled: true   # chart default is false (prod-safe); flipped on for local dev
   image:
     registry: docker.io
     repository: bitnami/postgresql
-    tag: "latest"
+    tag: "16.4.0-debian-12-r17"   # pinned — avoid 'latest' for reproducible local installs
   primary:
     persistence:
       size: 5Gi
@@ -173,12 +174,12 @@ kafkaConfig:
 # ── Redis ─────────────────────────────────────────────────────────────────────
 
 redis:
-  enabled: true
+  enabled: true   # chart default is false (prod-safe); flipped on for local dev
   architecture: standalone
   image:
     registry: docker.io
     repository: bitnami/redis
-    tag: "latest"
+    tag: "7.4.0-debian-12-r2"   # pinned — avoid 'latest' for reproducible local installs
   master:
     persistence:
       size: 1Gi
@@ -190,6 +191,7 @@ temporalConfig:
 # ── Temporal (official subchart keys, not temporalConfig which is app config) ──
 
 temporal:
+  enabled: true   # chart default is false (prod-safe); flipped on for local dev
   prometheus:
     enabled: false
   elasticsearch:

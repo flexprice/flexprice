@@ -1,0 +1,72 @@
+# Changelog
+
+All notable changes to the FlexPrice Helm chart are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+Chart versions are independent of the application (`appVersion`) version —
+`Chart.yaml#version` bumps on every chart change, `appVersion` follows the
+FlexPrice app release.
+
+## [Unreleased]
+
+### Added
+- Default `image.repository` set to `ghcr.io/flexprice/flexprice`; default
+  `image.tag` resolves to `.Chart.AppVersion` when empty.
+- Multi-arch (`linux/amd64`, `linux/arm64`) app-image publish workflow
+  (`.github/workflows/publish-app-image.yml`) with SBOM, provenance attestation,
+  and Trivy HIGH/CRITICAL scan.
+- Temporal namespace bootstrap Helm `post-install`/`post-upgrade` hook Job
+  ([templates/jobs/temporal-namespace-bootstrap.yaml](templates/jobs/temporal-namespace-bootstrap.yaml));
+  configurable via `temporalConfig.bootstrapNamespaces`.
+- `terminationGracePeriodSeconds` + optional `preStop` sleep on api, consumer,
+  and worker for graceful shutdown (Kafka consumer-group rebalance, in-flight
+  HTTP drain, Temporal activity completion).
+- `topologySpreadConstraints` value (global + per-component override) for
+  multi-AZ HA. Empty list by default.
+- `helm test` connectivity probe at
+  [templates/tests/test-api-health.yaml](templates/tests/test-api-health.yaml).
+
+### Changed
+- All bundled stateful subcharts (`postgresql`, `kafka`, `redis`, `temporal`)
+  now default to `enabled: false`. Production deployments must point at
+  externally managed services. Local development uses `values-local.yaml`
+  which flips them back on with pinned image tags.
+
+### Fixed
+- (Tracked in `claude/redis-cluster-mode`) Redis client now branches between
+  standalone and cluster topologies via `FLEXPRICE_REDIS_CLUSTER_MODE`
+  (Helm: `redisExtended.clusterMode`); previously always used `ClusterClient`
+  which broke against single-node ElastiCache.
+
+### Documentation
+- ClickHouse 90 GB `max_memory_usage` now configurable as
+  `clickhouse.maxMemoryUsageBytes` (per `PRODUCTION_READINESS.md#11`).
+- Architecture diagram, troubleshooting runbook, and pre-ship validation
+  procedure documented under [`helm/docs/`](../docs/).
+
+---
+
+## [1.0.0] — 2026-05-04
+
+Initial public release of the FlexPrice Helm chart.
+
+### Added
+- Application Deployments: `api`, `consumer`, `worker`.
+- HorizontalPodAutoscaler for api, consumer, worker.
+- PodDisruptionBudget for api.
+- Migration Job as Helm `pre-install`/`pre-upgrade` hook.
+- Subchart dependencies (bundled tarballs in `charts/`):
+  - `postgresql` 16.7.27 (bitnami)
+  - `kafka` 32.4.3 (bitnami)
+  - `redis` 20.13.4 (bitnami)
+  - `temporal` 0.74.0 (temporalio)
+- ClickHouse modes: `standalone`, `altinity` (CRD-managed), `external`.
+- Externalized credentials via `secrets.existingSecret`.
+- Ingress (api, frontend, temporal-web) with `nginx` className default.
+- `values-prod.example.yaml` template for production overrides.
+- `values-local.yaml` for local kind cluster bring-up.
+
+[Unreleased]: https://github.com/flexprice/flexprice/compare/chart-v1.0.0...HEAD
+[1.0.0]: https://github.com/flexprice/flexprice/releases/tag/chart-v1.0.0

@@ -29,6 +29,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      {{- with .Values.api.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -48,6 +51,12 @@ spec:
             - name: TMPDIR
               value: "/tmp"
             {{- include "flexprice.env" . | nindent 12 }}
+          {{- if and .Values.api.preStop .Values.api.preStop.enabled }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep {{ .Values.api.preStop.sleepSeconds | default 5 }}"]
+          {{- end }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
@@ -86,6 +95,11 @@ spec:
       {{- with (default .Values.tolerations .Values.api.tolerations) }}
       tolerations:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- $tsc := default .Values.topologySpreadConstraints .Values.api.topologySpreadConstraints }}
+      {{- if $tsc }}
+      topologySpreadConstraints:
+        {{- toYaml $tsc | nindent 8 }}
       {{- end }}
 {{- end }}
 
