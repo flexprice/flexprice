@@ -461,6 +461,18 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		return nil, err
 	}
 
+	// Set system metadata flag on the customer to reflect this subscription's type.
+	// Best-effort: log on failure but do not block the subscription creation response.
+	if flagKey := types.SubscriptionTypeToMetaFlag(sub.SubscriptionType); flagKey != "" {
+		if mergeErr := s.CustomerRepo.MergeMetadata(ctx, sub.CustomerID, map[string]string{flagKey: "true"}); mergeErr != nil {
+			s.Logger.WarnwCtx(ctx, "failed to set subscription metadata flag on customer",
+				"customer_id", sub.CustomerID,
+				"flag", flagKey,
+				"error", mergeErr,
+			)
+		}
+	}
+
 	// Handle phases (post-transaction)
 	if req.SubscriptionStatus != types.SubscriptionStatusDraft && len(phases) > 0 {
 		if err = s.handleSubscriptionPhases(ctx, sub, phases, req.Phases, plan, validPrices); err != nil {
@@ -7494,6 +7506,15 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 				"child_customer_id":      childCustomerID,
 			}).
 			Mark(ierr.ErrDatabase)
+	}
+
+	// Set inherited-child flag on the child customer. Best-effort.
+	if mergeErr := s.CustomerRepo.MergeMetadata(ctx, childCustomerID, map[string]string{types.MetaKeyHasInheritedSub: "true"}); mergeErr != nil {
+		s.Logger.WarnwCtx(ctx, "failed to set inherited sub metadata flag on child customer",
+			"child_customer_id", childCustomerID,
+			"parent_subscription_id", parent.ID,
+			"error", mergeErr,
+		)
 	}
 	return nil
 }

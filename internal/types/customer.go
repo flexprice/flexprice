@@ -153,3 +153,32 @@ func ValidateCustomerID(id string) error {
 func ValidateExternalCustomerID(id string) error {
 	return validateID(id, "external customer id")
 }
+
+const (
+	// System-managed readonly customer metadata keys (prefix _fp_).
+	// Set automatically when subscriptions are created or change type.
+	MetaKeyHasStandaloneSub         = "_fp_has_standalone_sub"
+	MetaKeyHasParentSub             = "_fp_has_parent_sub"
+	MetaKeyHasInheritedSub          = "_fp_has_inherited_sub"
+	MetaKeyHasGroupedInvoicingSub   = "_fp_has_grouped_invoicing_sub"
+	MetaKeyHasDelegatedInvoicingSub = "_fp_has_delegated_invoicing_sub"
+)
+
+// SubscriptionTypeToMetaFlag maps a subscription type to its corresponding
+// customer metadata flag key. Returns "" for unknown types.
+func SubscriptionTypeToMetaFlag(t SubscriptionType) string {
+	switch t {
+	case SubscriptionTypeStandalone:
+		return MetaKeyHasStandaloneSub
+	case SubscriptionTypeParent:
+		return MetaKeyHasParentSub
+	case SubscriptionTypeInherited:
+		return MetaKeyHasInheritedSub
+	case SubscriptionTypeGroupedInvoicing:
+		return MetaKeyHasGroupedInvoicingSub
+	case SubscriptionTypeDelegatedInvoicing:
+		return MetaKeyHasDelegatedInvoicingSub
+	default:
+		return ""
+	}
+}
