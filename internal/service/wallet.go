@@ -1776,6 +1776,7 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 	subFilter.CustomerID = tx.CustomerID
 	subFilter.Limit = lo.ToPtr(1)
 	subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+	subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeStandalone, types.SubscriptionTypeParent}
 	subFilter.TimeRangeFilter = &types.TimeRangeFilter{
 		EndTime: lo.ToPtr(time.Now().UTC()),
 	}

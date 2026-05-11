@@ -2924,6 +2924,20 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return nil
 	}
 
+	// For inherited subscriptions, skip invoice creation and only advance the billing period.
+	// Invoices are created on the parent subscription; the child just needs its period kept current.
+	if sub.SubscriptionType == types.SubscriptionTypeInherited {
+		newPeriod := periods[len(periods)-1]
+		sub.CurrentPeriodStart = newPeriod.start
+		sub.CurrentPeriodEnd = newPeriod.end
+		s.Logger.InfowCtx(ctx, "advancing period for inherited subscription (no invoice created)",
+			"subscription_id", sub.ID,
+			"new_period_start", sub.CurrentPeriodStart,
+			"new_period_end", sub.CurrentPeriodEnd,
+			"periods_skipped", len(periods)-1)
+		return s.SubRepo.Update(ctx, sub)
+	}
+
 	// Use db's WithTx for atomic operations
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Process all periods except the last one (which becomes the new current period)
