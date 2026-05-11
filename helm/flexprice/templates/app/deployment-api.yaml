@@ -8,6 +8,10 @@ metadata:
     app.kubernetes.io/component: api
 spec:
   replicas: {{ .Values.api.replicaCount }}
+  {{- with .Values.api.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "flexprice.selectorLabels" . | nindent 6 }}
@@ -28,7 +32,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      serviceAccountName: {{ include "flexprice.componentServiceAccountName" (dict "ctx" . "component" "api") }}
       {{- with .Values.api.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ . }}
       {{- end }}

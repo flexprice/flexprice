@@ -27,6 +27,26 @@ FlexPrice app release.
   multi-AZ HA. Empty list by default.
 - `helm test` connectivity probe at
   [templates/tests/test-api-health.yaml](templates/tests/test-api-health.yaml).
+- PodDisruptionBudget for consumer + worker (matches the existing api PDB).
+- Per-component RollingUpdate strategy: api/worker default to `maxSurge: 1,
+  maxUnavailable: 0`; consumer defaults to `maxSurge: 0, maxUnavailable: 1` to
+  minimise Kafka consumer-group rebalance churn during rollouts.
+- Opt-in per-workload ServiceAccounts via `serviceAccount.perComponent=true`
+  (with per-component annotations for IRSA / Workload Identity).
+- Opt-in ingress-only NetworkPolicy for api (TCP/8080 from a configurable
+  ingress controller selector). Egress is intentionally unrestricted.
+- CI workflow [`.github/workflows/helm-validate.yml`](../../.github/workflows/helm-validate.yml):
+  `helm lint` + `helm template | kubeconform` across three profiles +
+  `helm install --dry-run` against a kind cluster on every PR touching `helm/**`.
+- Renovate config ([`renovate.json`](../../renovate.json)) for chart subchart
+  versions, image tags, and GitHub Actions, grouped and scheduled weekly.
+
+### Security
+- Hardened pod and container `securityContext` defaults to be
+  PodSecurityStandard `restricted`-compatible: `runAsNonRoot: true`,
+  `runAsUser/Group/fsGroup` non-zero, `readOnlyRootFilesystem: true`,
+  `allowPrivilegeEscalation: false`, `privileged: false`, drop `ALL`
+  capabilities, and `seccompProfile: RuntimeDefault` on both pod and container.
 
 ### Changed
 - All bundled stateful subcharts (`postgresql`, `kafka`, `redis`, `temporal`)
