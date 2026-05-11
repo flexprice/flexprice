@@ -184,7 +184,7 @@ secrets:
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 auth:
-  provider: "supabase"   # or "api_key" depending on your stack
+  provider: "api_key"   # or "api_key" depending on your stack
   # secret + supabase keys come from existingSecret
 
 # ── PostgreSQL — EXTERNAL (RDS / Cloud SQL / Aurora) ──────────────────────────
