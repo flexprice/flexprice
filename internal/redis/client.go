@@ -10,46 +10,54 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Client wraps Redis client functionality
+// Client wraps a Redis client. The underlying *redis.UniversalClient transparently
+// targets a standalone node or a Redis Cluster based on RedisConfig.ClusterMode.
 type Client struct {
-	rdb *redis.ClusterClient
+	rdb redis.UniversalClient
 	log *logger.Logger
 }
 
-// NewClient creates a new Redis client
+// NewClient creates a new Redis client. Set RedisConfig.ClusterMode=true for
+// Redis Cluster (e.g. AWS ElastiCache cluster mode enabled); leave false for
+// standalone Redis (single ElastiCache node, in-cluster redis, Redis sentinel
+// via the universal client's failover path).
 func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error) {
-
-	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), config.Redis.Timeout)
 	defer cancel()
 
-	// Create cluster client
-	clusterOpts := &redis.ClusterOptions{
-		Addrs:        []string{fmt.Sprintf("%s:%d", config.Redis.Host, config.Redis.Port)},
-		Password:     config.Redis.Password,
-		ReadTimeout:  config.Redis.Timeout,
-		WriteTimeout: config.Redis.Timeout,
-		PoolSize:     config.Redis.PoolSize,
-	}
-
+	var tlsConfig *tls.Config
 	if config.Redis.UseTLS {
-		clusterOpts.TLSConfig = &tls.Config{
+		tlsConfig = &tls.Config{
 			MinVersion:         tls.VersionTLS12,
 			InsecureSkipVerify: true, // Required for AWS ElastiCache wildcard certificates
 		}
 	}
 
-	rdb := redis.NewClusterClient(clusterOpts)
+	opts := &redis.UniversalOptions{
+		Addrs:        []string{fmt.Sprintf("%s:%d", config.Redis.Host, config.Redis.Port)},
+		Password:     config.Redis.Password,
+		DB:           config.Redis.DB,
+		ReadTimeout:  config.Redis.Timeout,
+		WriteTimeout: config.Redis.Timeout,
+		PoolSize:     config.Redis.PoolSize,
+		TLSConfig:    tlsConfig,
+	}
+
+	var rdb redis.UniversalClient
+	if config.Redis.ClusterMode {
+		rdb = redis.NewClusterClient(opts.Cluster())
+	} else {
+		// UniversalOptions.Simple() routes to a standalone *redis.Client; DB index applies.
+		rdb = redis.NewClient(opts.Simple())
+	}
 
 	result, err := rdb.Ping(ctx).Result()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to create redis client: %w", err)
 	}
 
-	log.Infow("PING result", "result", result)
-
-	log.Infow("Connected to Redis Cluster successfully", "addr", clusterOpts.Addrs)
+	log.Infow("PING result", "result", result, "cluster_mode", config.Redis.ClusterMode)
+	log.Infow("Connected to Redis successfully", "addr", opts.Addrs, "cluster_mode", config.Redis.ClusterMode)
 
 	return &Client{
 		rdb: rdb,
@@ -57,8 +65,10 @@ func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error
 	}, nil
 }
 
-// GetClient returns the underlying Redis client
-func (c *Client) GetClient() *redis.ClusterClient {
+// GetClient returns the underlying Redis client. Callers should depend on
+// redis.UniversalClient (or redis.Cmdable) rather than the concrete type so
+// they work for both cluster and standalone deployments.
+func (c *Client) GetClient() redis.UniversalClient {
 	return c.rdb
 }
 

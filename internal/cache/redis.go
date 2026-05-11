@@ -21,9 +21,10 @@ const (
 	ScanCount = 100
 )
 
-// RedisCache implements the Cache interface using Redis
+// RedisCache implements the Cache interface using Redis.
+// The client is a UniversalClient so it works for both standalone and cluster deployments.
 type RedisCache struct {
-	client *redis.ClusterClient
+	client redis.UniversalClient
 	config *config.Configuration
 }
 

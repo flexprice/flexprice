@@ -335,14 +335,15 @@ type CustomerPortalConfig struct {
 
 // RedisConfig holds configuration for Redis
 type RedisConfig struct {
-	Host      string        `mapstructure:"host" default:"localhost"`
-	Port      int           `mapstructure:"port" default:"6379"`
-	Password  string        `mapstructure:"password" default:""`
-	DB        int           `mapstructure:"db" default:"0"`
-	UseTLS    bool          `mapstructure:"use_tls" default:"false"`
-	PoolSize  int           `mapstructure:"pool_size" default:"10"`
-	Timeout   time.Duration `mapstructure:"timeout" default:"5s"`
-	KeyPrefix string        `mapstructure:"key_prefix" default:"flexprice"`
+	Host        string        `mapstructure:"host" default:"localhost"`
+	Port        int           `mapstructure:"port" default:"6379"`
+	Password    string        `mapstructure:"password" default:""`
+	DB          int           `mapstructure:"db" default:"0"`
+	UseTLS      bool          `mapstructure:"use_tls" default:"false"`
+	PoolSize    int           `mapstructure:"pool_size" default:"10"`
+	Timeout     time.Duration `mapstructure:"timeout" default:"5s"`
+	KeyPrefix   string        `mapstructure:"key_prefix" default:"flexprice"`
+	ClusterMode bool          `mapstructure:"cluster_mode" default:"false"`
 }
 
 func NewConfig() (*Configuration, error) {
