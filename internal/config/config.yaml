@@ -303,6 +303,10 @@ redis:
   pool_size: 10 # Maximum number of connections in the pool
   timeout: 5s # Timeout for Redis operations
   key_prefix: "flexprice:local"
+  # cluster_mode preserves the pre-existing hardcoded behaviour (the client
+  # was always *redis.ClusterClient). Set to false when targeting a single-node
+  # Redis (in-cluster bitnami/redis chart, single-node ElastiCache).
+  cluster_mode: true
 
 # Raw events reprocessing configuration
 raw_events_reprocessing:
