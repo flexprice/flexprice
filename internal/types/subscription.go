@@ -12,21 +12,32 @@ type SubscriptionType string
 
 const (
 	// SubscriptionTypeStandalone is a regular subscription with no hierarchy relationship.
+	// No invoicing_customer_id or parent_subscription_id may be set.
 	SubscriptionTypeStandalone SubscriptionType = "standalone"
 
+	// SubscriptionTypeDelegatedInvoicing has its own line items but the invoice is raised against a
+	// different customer (invoicing_customer_id is required; parent_subscription_id must be unset).
+	SubscriptionTypeDelegatedInvoicing SubscriptionType = "delegated_invoicing"
+
 	// SubscriptionTypeParent is the primary subscription that owns line items and aggregates
-	// usage from child (inherited) subscriptions.
+	// usage from child (inherited) subscriptions, and triggers clubbed invoices for grouped_invoicing children.
 	SubscriptionTypeParent SubscriptionType = "parent"
 
 	// SubscriptionTypeInherited is a skeleton subscription created for each child customer
 	// in a hierarchy. It carries no line items; events are matched via the parent subscription.
 	SubscriptionTypeInherited SubscriptionType = "inherited"
+
+	// SubscriptionTypeGroupedInvoicing has its own line items and entitlements but its invoice
+	// is clubbed into the parent's invoice. parent_subscription_id is required; invoicing_customer_id is optional.
+	SubscriptionTypeGroupedInvoicing SubscriptionType = "grouped_invoicing"
 )
 
 var SubscriptionTypeValues = []SubscriptionType{
 	SubscriptionTypeStandalone,
+	SubscriptionTypeDelegatedInvoicing,
 	SubscriptionTypeParent,
 	SubscriptionTypeInherited,
+	SubscriptionTypeGroupedInvoicing,
 }
 
 func (t SubscriptionType) String() string {
@@ -40,7 +51,7 @@ func (t SubscriptionType) Validate() error {
 
 	if !lo.Contains(SubscriptionTypeValues, t) {
 		return ierr.NewError("invalid subscription type").
-			WithHint("Subscription type must be standalone, parent, or inherited").
+			WithHint("Subscription type must be one of: standalone, delegated_invoicing, parent, inherited, grouped_invoicing").
 			WithReportableDetails(map[string]any{
 				"subscription_type": t,
 				"allowed_values":    SubscriptionTypeValues,

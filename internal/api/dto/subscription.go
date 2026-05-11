@@ -268,32 +268,76 @@ func (r *SubscriptionCouponRequest) Validate() error {
 	return nil
 }
 
-// SubscriptionInheritanceConfig groups all inheritance-related fields for
-// subscription creation. Child customers and invoicing customer are specified
-// by external (lookup) IDs; the service resolves them to internal IDs.
+// SubscriptionInheritanceConfig groups all hierarchy and invoicing-routing fields for
+// subscription creation.
 type SubscriptionInheritanceConfig struct {
+	// ExternalCustomerIDsToInheritSubscription: child customer external IDs for which
+	// inherited skeleton subscriptions will be created. Only valid for parent behavior.
 	ExternalCustomerIDsToInheritSubscription []string `json:"external_customer_ids_to_inherit_subscription,omitempty"`
-	ParentSubscriptionID                     string   `json:"parent_subscription_id,omitempty"`
-	InvoicingCustomerExternalID              *string  `json:"invoicing_customer_external_id,omitempty"`
+
+	// ParentSubscriptionID links this subscription to an existing parent.
+	// Required for inherited and grouped_invoicing; rejected for standalone, delegated, parent.
+	ParentSubscriptionID string `json:"parent_subscription_id,omitempty"`
+
+	// InvoicingCustomerExternalID sets a different billing recipient (external ID).
+	// Required for delegated; rejected for inherited; optional for others.
+	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
+
+	// SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to
+	// grouped_invoicing under this parent at creation time. Only valid for parent behavior.
+	SubscriptionsIDsForGroupedInvoicing []string `json:"subscriptions_ids_for_grouped_invoicing,omitempty"`
 }
 
-// Validate enforces mutual exclusivity:
-//   - parent_subscription_id vs non-empty external_customer_ids_to_inherit_subscription
-//   - invoicing_customer_external_id vs non-empty external_customer_ids_to_inherit_subscription
+// Validate enforces mutual-exclusivity constraints between inheritance fields.
 func (c *SubscriptionInheritanceConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
+
+	// Cannot combine explicit parent link with "create inherited children".
 	if c.ParentSubscriptionID != "" && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
 		return ierr.NewError("cannot set parent_subscription_id together with external_customer_ids_to_inherit_subscription").
 			WithHint("Use either a parent subscription link or child customers to inherit, not both").
 			Mark(ierr.ErrValidation)
 	}
+
+	// Cannot delegate invoicing while also creating inherited children.
 	if c.InvoicingCustomerExternalID != nil && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
 		return ierr.NewError("cannot set invoicing_customer_external_id together with external_customer_ids_to_inherit_subscription").
 			WithHint("Use either invoicing_customer_external_id or external_customer_ids_to_inherit_subscription, not both").
 			Mark(ierr.ErrValidation)
 	}
+
+	// Grouped invoicing conversions only make sense when creating a parent (no parent link).
+	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && c.ParentSubscriptionID != "" {
+		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with parent_subscription_id").
+			WithHint("subscriptions_ids_for_grouped_invoicing can only be used when creating a parent subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Grouped invoicing conversions cannot be combined with delegated invoicing.
+	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && c.InvoicingCustomerExternalID != nil {
+		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with invoicing_customer_external_id").
+			WithHint("Use either grouped invoicing conversion or delegated invoicing, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Grouped invoicing conversions cannot be combined with inherited child creation.
+	if len(c.SubscriptionsIDsForGroupedInvoicing) > 0 && len(c.ExternalCustomerIDsToInheritSubscription) > 0 {
+		return ierr.NewError("cannot set subscriptions_ids_for_grouped_invoicing together with external_customer_ids_to_inherit_subscription").
+			WithHint("Use either grouped invoicing conversion or inherited child creation, not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate that no element in SubscriptionsIDsForGroupedInvoicing is empty.
+	for i, id := range c.SubscriptionsIDsForGroupedInvoicing {
+		if id == "" {
+			return ierr.NewError("subscriptions_ids_for_grouped_invoicing cannot contain empty values").
+				WithHint(fmt.Sprintf("Subscription ID at index %d is empty", i)).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 

@@ -377,7 +377,8 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 		if err != nil {
 			return false, err
 		}
-		if sub.SubscriptionType == types.SubscriptionTypeInherited {
+		if sub.SubscriptionType == types.SubscriptionTypeInherited ||
+			sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
 			return true, nil
 		}
 	}
