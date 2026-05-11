@@ -92,8 +92,8 @@ jobs:
 
       - name: Lint Helm Chart
         run: |
-          helm lint helm/flexprice
-          helm template flexprice-test helm/flexprice --debug
+          helm lint helm/flexprice --set secrets.existingSecret=test
+          helm template flexprice-test helm/flexprice --set secrets.existingSecret=test --debug
 
       - name: Package Helm Chart
         run: |

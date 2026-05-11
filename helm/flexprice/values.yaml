@@ -281,7 +281,7 @@ temporalIngress:
 # Auth configuration
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
-  secret: "flexprice123" # Set via secret
+  secret: "" # Required — set via secret (existingSecret or auth.secret)
   supabase:
     baseUrl: ""
     serviceKey: "" # Set via secret
@@ -301,7 +301,7 @@ postgres:
   host: "postgres-service"  # Override when using external PostgreSQL
   port: 5432
   user: "flexprice"
-  password: "flexprice123" # Set via secret
+  password: "" # Required — set via secret (existingSecret or postgres.password)
   dbname: "flexprice"
   sslmode: "require"
   maxOpenConns: 10
@@ -421,7 +421,7 @@ kafkaConfig:
   useSASL: false
   saslMechanism: ""
   saslUser: ""
-  saslPassword: "flexprice123" # Set via secret
+  saslPassword: "" # Required only when kafkaConfig.useSASL=true — set via secret
   clientId: "flexprice-client"
   routeTenantsOnLazyMode: []
   # Internal Kafka configuration (when external.enabled=false)
@@ -539,7 +539,7 @@ temporalConfig:
   address: "temporal-service:7233"  # Override when using external Temporal
   taskQueue: "billing-task-queue"
   namespace: "default"
-  apiKey: "flexprice123" # Set via secret (optional, for Temporal Cloud)
+  apiKey: "" # Required only when using Temporal Cloud — set via secret
   apiKeyName: ""  # Optional: name of the API key for reference
   tls: false  # Set to true if using TLS with external Temporal
   # Internal Temporal configuration (when external.enabled=false)
@@ -609,7 +609,7 @@ pyroscope:
   serverAddress: ""
   applicationName: "flexprice"
   basicAuthUser: ""
-  basicAuthPassword: "flexprice123" # Set via secret
+  basicAuthPassword: "" # Required only when pyroscope.basicAuthUser is set — set via secret
   sampleRate: 100
   disableGCRuns: false
   profileTypes:
@@ -1029,7 +1029,7 @@ postgresql:
   enabled: false
   auth:
     username: flexprice
-    password: flexprice123
+    password: ""  # Required only when postgresql.enabled=true — override via -f
     database: flexprice
   primary:
     persistence:
@@ -1085,7 +1085,7 @@ temporal:
             port: 5432
             database: temporal
             user: "flexprice"
-            password: "flexprice123"
+            password: ""  # Required only when temporal.enabled=true — override via -f
             maxConns: 20
             maxConnLifetime: "1h"
         visibility:
@@ -1096,7 +1096,7 @@ temporal:
             port: 5432
             database: temporal_visibility
             user: "flexprice"
-            password: "flexprice123"
+            password: ""  # Required only when temporal.enabled=true — override via -f
             maxConns: 20
             maxConnLifetime: "1h"
   cassandra:
