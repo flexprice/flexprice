@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -464,6 +465,56 @@ func (o CustomerQueryOptions) ApplyPaginationFilter(query CustomerQuery, limit i
 		query = query.Offset(offset)
 	}
 	return query
+}
+
+// MergeMetadata atomically merges the provided key-value pairs into the customer's
+// JSONB metadata column using the PostgreSQL || operator. Existing keys not present
+// in meta are left untouched. Skips archived customers.
+func (r *customerRepository) MergeMetadata(ctx context.Context, customerID string, meta map[string]string) error {
+	span := StartRepositorySpan(ctx, "customer", "merge_metadata", map[string]interface{}{
+		"customer_id": customerID,
+	})
+	defer FinishSpan(span)
+
+	jsonBytes, err := json.Marshal(meta)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to marshal metadata for merge").
+			Mark(ierr.ErrSystem)
+	}
+
+	client := r.client.Writer(ctx)
+	_, err = client.ExecContext(ctx,
+		`UPDATE customers
+		 SET metadata   = COALESCE(metadata, '{}'::jsonb) || $1::jsonb,
+		     updated_at = NOW(),
+		     updated_by = $2
+		 WHERE id             = $3
+		   AND tenant_id      = $4
+		   AND environment_id = $5
+		   AND status        != 'archived'`,
+		string(jsonBytes),
+		types.GetUserID(ctx),
+		customerID,
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to merge customer metadata").
+			WithReportableDetails(map[string]any{"customer_id": customerID}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Invalidate ID-based cache entry so next Get reflects the merged metadata.
+	idKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), customerID)
+	r.cache.Delete(ctx, idKey)
+
+	SetSpanSuccess(span)
+	r.log.Debugw("merged customer metadata", "customer_id", customerID, "keys", meta)
+	return nil
 }
 
 // GetFieldName returns the ent field name for customer; delegates to ent's ValidColumn so new schema fields are supported automatically.
