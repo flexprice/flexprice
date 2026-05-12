@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type subscriptionRepository struct {
@@ -1182,6 +1183,7 @@ func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx co
 			subscription.Status(string(types.StatusPublished)),
 			subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive),
 			subscription.AutoInvoiceThresholdNotNil(),
+			subscription.AutoInvoiceThresholdGT(decimal.Zero),
 		).
 		Order(ent.Asc(subscription.FieldID)).
 		Limit(limit).
