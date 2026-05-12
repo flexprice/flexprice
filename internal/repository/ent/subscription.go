@@ -1226,7 +1226,7 @@ func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx co
 
 	if len(ids) == 0 {
 		SetSpanSuccess(span)
-		return nil, nil
+		return []*domainSub.Subscription{}, nil
 	}
 
 	// Step 2: fetch full objects via ent using the collected IDs.
@@ -1236,6 +1236,7 @@ func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx co
 			subscription.TenantID(tenantID),
 			subscription.EnvironmentID(envID),
 			subscription.Status(string(types.StatusPublished)),
+			subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive),
 		).
 		All(ctx)
 	if err != nil {
