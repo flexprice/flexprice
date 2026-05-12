@@ -7694,15 +7694,8 @@ func (s *subscriptionService) processOneThresholdSubscription(
 		return nil
 	}
 
-	// Resolve effective threshold: subscription overrides plan.
+	// Threshold is set directly on the subscription; nil means disabled.
 	effectiveThreshold := sub.AutoInvoiceThreshold
-	if effectiveThreshold == nil {
-		plan, err := s.PlanRepo.Get(ctx, sub.PlanID)
-		if err != nil {
-			return fmt.Errorf("fetching plan %s: %w", sub.PlanID, err)
-		}
-		effectiveThreshold = plan.AutoInvoiceThreshold
-	}
 	if effectiveThreshold == nil {
 		return nil
 	}

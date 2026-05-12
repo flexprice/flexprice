@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/plan"
-	"github.com/shopspring/decimal"
 )
 
 // Plan is the model entity for the Plan schema.
@@ -43,8 +42,6 @@ type Plan struct {
 	Description string `json:"description,omitempty"`
 	// DisplayOrder holds the value of the "display_order" field.
 	DisplayOrder int `json:"display_order,omitempty"`
-	// AutoInvoiceThreshold holds the value of the "auto_invoice_threshold" field.
-	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PlanQuery when eager-loading is set.
 	Edges        PlanEdges `json:"edges"`
@@ -74,8 +71,6 @@ func (*Plan) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case plan.FieldAutoInvoiceThreshold:
-			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case plan.FieldMetadata:
 			values[i] = new([]byte)
 		case plan.FieldDisplayOrder:
@@ -179,13 +174,6 @@ func (pl *Plan) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pl.DisplayOrder = int(value.Int64)
 			}
-		case plan.FieldAutoInvoiceThreshold:
-			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field auto_invoice_threshold", values[i])
-			} else if value.Valid {
-				pl.AutoInvoiceThreshold = new(decimal.Decimal)
-				*pl.AutoInvoiceThreshold = *value.S.(*decimal.Decimal)
-			}
 		default:
 			pl.selectValues.Set(columns[i], values[i])
 		}
@@ -262,11 +250,6 @@ func (pl *Plan) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("display_order=")
 	builder.WriteString(fmt.Sprintf("%v", pl.DisplayOrder))
-	builder.WriteString(", ")
-	if v := pl.AutoInvoiceThreshold; v != nil {
-		builder.WriteString("auto_invoice_threshold=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
 	builder.WriteByte(')')
 	return builder.String()
 }

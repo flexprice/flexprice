@@ -7,7 +7,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
-	"github.com/shopspring/decimal"
 )
 
 var Idx_tenant_environment_lookup_key = "idx_tenant_environment_lookup_key"
@@ -49,12 +48,6 @@ func (Plan) Fields() []ent.Field {
 			Optional(),
 		field.Int("display_order").
 			Default(0),
-		field.Other("auto_invoice_threshold", decimal.Decimal{}).
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{
-				"postgres": "decimal(20,6)",
-			}),
 	}
 }
 

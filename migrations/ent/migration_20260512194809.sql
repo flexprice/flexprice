@@ -32,7 +32,6 @@ CREATE UNIQUE INDEX "idx_tenant_environment_invoice_number_unique" ON "invoices"
 DROP INDEX "idx_tenant_gateway_payment";
 CREATE INDEX "idx_tenant_gateway_payment" ON "payments" ("tenant_id", "environment_id", "payment_gateway", "gateway_payment_id") WHERE payment_gateway IS NOT NULL AND gateway_payment_id IS NOT NULL;
 DROP INDEX "idx_tenant_environment_lookup_key";
-ALTER TABLE "plans" ADD COLUMN "auto_invoice_threshold" numeric(20,6) NULL;
 CREATE UNIQUE INDEX "idx_tenant_environment_lookup_key" ON "plans" ("tenant_id", "environment_id", "lookup_key") WHERE status = 'published' AND lookup_key IS NOT NULL AND lookup_key != '';
 DROP INDEX "priceunit_tenant_id_environment_id_code";
 CREATE UNIQUE INDEX "priceunit_tenant_id_environment_id_code" ON "price_units" ("tenant_id", "environment_id", "code") WHERE status = 'published';

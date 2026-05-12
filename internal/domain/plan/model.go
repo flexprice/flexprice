@@ -6,7 +6,6 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type Plan struct {
@@ -17,9 +16,6 @@ type Plan struct {
 	EnvironmentID string         `db:"environment_id" json:"environment_id"`
 	Metadata      types.Metadata `db:"metadata" json:"metadata"`
 	DisplayOrder  *int           `db:"display_order" json:"display_order,omitempty"`
-	// AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
-	// an invoice mid-period. Nil means threshold billing is not configured at plan level.
-	AutoInvoiceThreshold *decimal.Decimal `db:"auto_invoice_threshold" json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
 	types.BaseModel
 }
 
@@ -31,9 +27,8 @@ type PlanCloneOverrides struct {
 	Description          *string
 	EnvironmentID        *string // nil = derive from ctx; non-nil = use explicit value
 	Metadata             types.Metadata
-	DisplayOrder         *int
-	AutoInvoiceThreshold *decimal.Decimal
-	BaseModel            *types.BaseModel
+	DisplayOrder  *int
+	BaseModel     *types.BaseModel
 }
 
 // CopyWith returns a shallow copy of the plan with optional overrides applied.
@@ -64,9 +59,6 @@ func (p *Plan) CopyWith(ctx context.Context, overrides *PlanCloneOverrides) *Pla
 	if overrides.DisplayOrder != nil {
 		out.DisplayOrder = overrides.DisplayOrder
 	}
-	if overrides.AutoInvoiceThreshold != nil {
-		out.AutoInvoiceThreshold = overrides.AutoInvoiceThreshold
-	}
 	if overrides.BaseModel != nil {
 		out.BaseModel = lo.FromPtr(overrides.BaseModel)
 	} else {
@@ -93,8 +85,7 @@ func FromEnt(e *ent.Plan) *Plan {
 		Description:          e.Description,
 		EnvironmentID:        e.EnvironmentID,
 		Metadata:             types.Metadata(e.Metadata),
-		DisplayOrder:         &e.DisplayOrder,
-		AutoInvoiceThreshold: e.AutoInvoiceThreshold,
+		DisplayOrder: &e.DisplayOrder,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

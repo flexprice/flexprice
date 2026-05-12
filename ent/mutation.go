@@ -36672,30 +36672,29 @@ func (m *PaymentAttemptMutation) ResetEdge(name string) error {
 // PlanMutation represents an operation that mutates the Plan nodes in the graph.
 type PlanMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *string
-	tenant_id              *string
-	status                 *string
-	created_at             *time.Time
-	updated_at             *time.Time
-	created_by             *string
-	updated_by             *string
-	environment_id         *string
-	metadata               *map[string]string
-	lookup_key             *string
-	name                   *string
-	description            *string
-	display_order          *int
-	adddisplay_order       *int
-	auto_invoice_threshold *decimal.Decimal
-	clearedFields          map[string]struct{}
-	credit_grants          map[string]struct{}
-	removedcredit_grants   map[string]struct{}
-	clearedcredit_grants   bool
-	done                   bool
-	oldValue               func(context.Context) (*Plan, error)
-	predicates             []predicate.Plan
+	op                   Op
+	typ                  string
+	id                   *string
+	tenant_id            *string
+	status               *string
+	created_at           *time.Time
+	updated_at           *time.Time
+	created_by           *string
+	updated_by           *string
+	environment_id       *string
+	metadata             *map[string]string
+	lookup_key           *string
+	name                 *string
+	description          *string
+	display_order        *int
+	adddisplay_order     *int
+	clearedFields        map[string]struct{}
+	credit_grants        map[string]struct{}
+	removedcredit_grants map[string]struct{}
+	clearedcredit_grants bool
+	done                 bool
+	oldValue             func(context.Context) (*Plan, error)
+	predicates           []predicate.Plan
 }
 
 var _ ent.Mutation = (*PlanMutation)(nil)
@@ -37332,55 +37331,6 @@ func (m *PlanMutation) ResetDisplayOrder() {
 	m.adddisplay_order = nil
 }
 
-// SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
-func (m *PlanMutation) SetAutoInvoiceThreshold(d decimal.Decimal) {
-	m.auto_invoice_threshold = &d
-}
-
-// AutoInvoiceThreshold returns the value of the "auto_invoice_threshold" field in the mutation.
-func (m *PlanMutation) AutoInvoiceThreshold() (r decimal.Decimal, exists bool) {
-	v := m.auto_invoice_threshold
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAutoInvoiceThreshold returns the old "auto_invoice_threshold" field's value of the Plan entity.
-// If the Plan object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PlanMutation) OldAutoInvoiceThreshold(ctx context.Context) (v *decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAutoInvoiceThreshold is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAutoInvoiceThreshold requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAutoInvoiceThreshold: %w", err)
-	}
-	return oldValue.AutoInvoiceThreshold, nil
-}
-
-// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
-func (m *PlanMutation) ClearAutoInvoiceThreshold() {
-	m.auto_invoice_threshold = nil
-	m.clearedFields[plan.FieldAutoInvoiceThreshold] = struct{}{}
-}
-
-// AutoInvoiceThresholdCleared returns if the "auto_invoice_threshold" field was cleared in this mutation.
-func (m *PlanMutation) AutoInvoiceThresholdCleared() bool {
-	_, ok := m.clearedFields[plan.FieldAutoInvoiceThreshold]
-	return ok
-}
-
-// ResetAutoInvoiceThreshold resets all changes to the "auto_invoice_threshold" field.
-func (m *PlanMutation) ResetAutoInvoiceThreshold() {
-	m.auto_invoice_threshold = nil
-	delete(m.clearedFields, plan.FieldAutoInvoiceThreshold)
-}
-
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by ids.
 func (m *PlanMutation) AddCreditGrantIDs(ids ...string) {
 	if m.credit_grants == nil {
@@ -37469,7 +37419,7 @@ func (m *PlanMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PlanMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 12)
 	if m.tenant_id != nil {
 		fields = append(fields, plan.FieldTenantID)
 	}
@@ -37506,9 +37456,6 @@ func (m *PlanMutation) Fields() []string {
 	if m.display_order != nil {
 		fields = append(fields, plan.FieldDisplayOrder)
 	}
-	if m.auto_invoice_threshold != nil {
-		fields = append(fields, plan.FieldAutoInvoiceThreshold)
-	}
 	return fields
 }
 
@@ -37541,8 +37488,6 @@ func (m *PlanMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case plan.FieldDisplayOrder:
 		return m.DisplayOrder()
-	case plan.FieldAutoInvoiceThreshold:
-		return m.AutoInvoiceThreshold()
 	}
 	return nil, false
 }
@@ -37576,8 +37521,6 @@ func (m *PlanMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldDescription(ctx)
 	case plan.FieldDisplayOrder:
 		return m.OldDisplayOrder(ctx)
-	case plan.FieldAutoInvoiceThreshold:
-		return m.OldAutoInvoiceThreshold(ctx)
 	}
 	return nil, fmt.Errorf("unknown Plan field %s", name)
 }
@@ -37671,13 +37614,6 @@ func (m *PlanMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDisplayOrder(v)
 		return nil
-	case plan.FieldAutoInvoiceThreshold:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAutoInvoiceThreshold(v)
-		return nil
 	}
 	return fmt.Errorf("unknown Plan field %s", name)
 }
@@ -37741,9 +37677,6 @@ func (m *PlanMutation) ClearedFields() []string {
 	if m.FieldCleared(plan.FieldDescription) {
 		fields = append(fields, plan.FieldDescription)
 	}
-	if m.FieldCleared(plan.FieldAutoInvoiceThreshold) {
-		fields = append(fields, plan.FieldAutoInvoiceThreshold)
-	}
 	return fields
 }
 
@@ -37775,9 +37708,6 @@ func (m *PlanMutation) ClearField(name string) error {
 		return nil
 	case plan.FieldDescription:
 		m.ClearDescription()
-		return nil
-	case plan.FieldAutoInvoiceThreshold:
-		m.ClearAutoInvoiceThreshold()
 		return nil
 	}
 	return fmt.Errorf("unknown Plan nullable field %s", name)
@@ -37822,9 +37752,6 @@ func (m *PlanMutation) ResetField(name string) error {
 		return nil
 	case plan.FieldDisplayOrder:
 		m.ResetDisplayOrder()
-		return nil
-	case plan.FieldAutoInvoiceThreshold:
-		m.ResetAutoInvoiceThreshold()
 		return nil
 	}
 	return fmt.Errorf("unknown Plan field %s", name)
