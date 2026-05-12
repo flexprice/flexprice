@@ -7620,7 +7620,146 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 
 // ProcessThresholdBilling checks all subscriptions with an effective auto_invoice_threshold
 // and generates mid-period invoices for those whose current-period usage has crossed the threshold.
-// The full implementation will be provided in a subsequent task.
 func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto.ThresholdBillingResult, error) {
-	return &dto.ThresholdBillingResult{}, nil
+	const batchSize = 100
+	now := time.Now().UTC()
+
+	s.Logger.InfowCtx(ctx, "starting threshold billing run", "now", now)
+
+	result := &dto.ThresholdBillingResult{
+		Items: make([]*dto.ThresholdBillingResultItem, 0),
+	}
+
+	invoiceService := NewInvoiceService(s.ServiceParams)
+
+	offset := 0
+	for {
+		subs, err := s.SubRepo.GetSubscriptionsWithAutoInvoiceThreshold(ctx, batchSize, offset)
+		if err != nil {
+			return result, fmt.Errorf("fetching threshold subscriptions: %w", err)
+		}
+		if len(subs) == 0 {
+			break
+		}
+
+		for _, sub := range subs {
+			subCtx := context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
+			subCtx = context.WithValue(subCtx, types.CtxEnvironmentID, sub.EnvironmentID)
+			subCtx = context.WithValue(subCtx, types.CtxUserID, sub.CreatedBy)
+
+			result.TotalChecked++
+			item := &dto.ThresholdBillingResultItem{SubscriptionID: sub.ID}
+
+			if err := s.processOneThresholdSubscription(subCtx, sub, now, invoiceService, item); err != nil {
+				s.Logger.ErrorwCtx(subCtx, "threshold billing failed for subscription",
+					"subscription_id", sub.ID, "error", err)
+				result.TotalFailed++
+				item.Error = err.Error()
+			} else if item.Invoiced {
+				result.TotalInvoiced++
+			} else {
+				result.TotalSkipped++
+			}
+			result.Items = append(result.Items, item)
+		}
+
+		offset += len(subs)
+		if len(subs) < batchSize {
+			break
+		}
+	}
+
+	s.Logger.InfowCtx(ctx, "threshold billing run complete",
+		"total_checked", result.TotalChecked,
+		"total_invoiced", result.TotalInvoiced,
+		"total_skipped", result.TotalSkipped,
+		"total_failed", result.TotalFailed)
+
+	return result, nil
+}
+
+func (s *subscriptionService) processOneThresholdSubscription(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	now time.Time,
+	invoiceService interfaces.InvoiceService,
+	item *dto.ThresholdBillingResultItem,
+) error {
+	// Skip non-active or inherited types.
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		return nil
+	}
+	if sub.SubscriptionType == types.SubscriptionTypeInherited ||
+		sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
+		return nil
+	}
+
+	// Resolve effective threshold: subscription overrides plan.
+	effectiveThreshold := sub.AutoInvoiceThreshold
+	if effectiveThreshold == nil {
+		plan, err := s.PlanRepo.Get(ctx, sub.PlanID)
+		if err != nil {
+			return fmt.Errorf("fetching plan %s: %w", sub.PlanID, err)
+		}
+		effectiveThreshold = plan.AutoInvoiceThreshold
+	}
+	if effectiveThreshold == nil {
+		return nil
+	}
+
+	// Calculate current-period usage amount.
+	usageResp, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: sub.ID,
+		StartTime:      sub.CurrentPeriodStart,
+		EndTime:        now,
+	})
+	if err != nil {
+		return fmt.Errorf("calculating usage for subscription %s: %w", sub.ID, err)
+	}
+
+	usageAmount := decimal.NewFromFloat(usageResp.Amount)
+	if usageAmount.LessThan(*effectiveThreshold) {
+		return nil
+	}
+
+	// Threshold crossed — create invoice for current_period_start → now.
+	billingPeriod := string(sub.BillingPeriod)
+	idempotencyKey := fmt.Sprintf("threshold-%s-%d", sub.ID, sub.CurrentPeriodStart.Unix())
+
+	draft, err := invoiceService.CreateEmptyDraftInvoice(ctx, dto.CreateDraftInvoiceRequest{
+		CustomerID:             sub.GetInvoicingCustomerID(),
+		SubscriptionCustomerID: lo.ToPtr(sub.CustomerID),
+		SubscriptionID:         lo.ToPtr(sub.ID),
+		InvoiceType:            types.InvoiceTypeSubscription,
+		Currency:               sub.Currency,
+		BillingPeriod:          &billingPeriod,
+		PeriodStart:            lo.ToPtr(sub.CurrentPeriodStart),
+		PeriodEnd:              lo.ToPtr(now),
+		BillingReason:          types.InvoiceBillingReasonThresholdBilling,
+		IdempotencyKey:         &idempotencyKey,
+	})
+	if err != nil {
+		return fmt.Errorf("creating draft invoice for subscription %s: %w", sub.ID, err)
+	}
+
+	skipped, err := invoiceService.ComputeInvoice(ctx, draft.ID, nil)
+	if err != nil {
+		return fmt.Errorf("computing invoice %s for subscription %s: %w", draft.ID, sub.ID, err)
+	}
+
+	if !skipped {
+		if err := invoiceService.FinalizeInvoice(ctx, draft.ID); err != nil {
+			return fmt.Errorf("finalizing invoice %s for subscription %s: %w", draft.ID, sub.ID, err)
+		}
+	}
+
+	// Advance current_period_start only after successful invoice creation.
+	sub.CurrentPeriodStart = now
+	if err := s.SubRepo.Update(ctx, sub); err != nil {
+		return fmt.Errorf("advancing current_period_start for subscription %s: %w", sub.ID, err)
+	}
+
+	item.Invoiced = true
+	item.InvoiceID = draft.ID
+	return nil
 }
