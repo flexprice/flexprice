@@ -461,6 +461,7 @@ func buildWorkerConfig(
 			cronWorkflows.SubscriptionRenewalDueAlertsWorkflow,
 			cronWorkflows.SubscriptionTrialEndDueWorkflow,
 			cronWorkflows.OutboundWebhookStaleRetryWorkflow,
+			cronWorkflows.ThresholdBillingWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -470,6 +471,7 @@ func buildWorkerConfig(
 			cron.subscription.ProcessRenewalDueAlertsActivity,
 			cron.subscription.ProcessTrialEndDueActivity,
 			cron.webhookOutboundRetry.RetryStaleOutboundWebhooksActivity,
+			cron.subscription.ProcessThresholdBillingActivity,
 		)
 	}
 	return WorkerConfig{
