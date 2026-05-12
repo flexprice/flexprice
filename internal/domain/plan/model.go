@@ -25,14 +25,15 @@ type Plan struct {
 
 // PlanCloneOverrides holds optional overrides for CopyWith. Nil fields mean "keep existing value".
 type PlanCloneOverrides struct {
-	ID            *string
-	Name          *string
-	LookupKey     *string
-	Description   *string
-	EnvironmentID *string // nil = derive from ctx; non-nil = use explicit value
-	Metadata      types.Metadata
-	DisplayOrder  *int
-	BaseModel     *types.BaseModel
+	ID                   *string
+	Name                 *string
+	LookupKey            *string
+	Description          *string
+	EnvironmentID        *string // nil = derive from ctx; non-nil = use explicit value
+	Metadata             types.Metadata
+	DisplayOrder         *int
+	AutoInvoiceThreshold *decimal.Decimal
+	BaseModel            *types.BaseModel
 }
 
 // CopyWith returns a shallow copy of the plan with optional overrides applied.
@@ -63,6 +64,9 @@ func (p *Plan) CopyWith(ctx context.Context, overrides *PlanCloneOverrides) *Pla
 	if overrides.DisplayOrder != nil {
 		out.DisplayOrder = overrides.DisplayOrder
 	}
+	if overrides.AutoInvoiceThreshold != nil {
+		out.AutoInvoiceThreshold = overrides.AutoInvoiceThreshold
+	}
 	if overrides.BaseModel != nil {
 		out.BaseModel = lo.FromPtr(overrides.BaseModel)
 	} else {
@@ -83,12 +87,12 @@ func FromEnt(e *ent.Plan) *Plan {
 		return nil
 	}
 	return &Plan{
-		ID:            e.ID,
-		Name:          e.Name,
-		LookupKey:     e.LookupKey,
-		Description:   e.Description,
-		EnvironmentID: e.EnvironmentID,
-		Metadata:      types.Metadata(e.Metadata),
+		ID:                   e.ID,
+		Name:                 e.Name,
+		LookupKey:            e.LookupKey,
+		Description:          e.Description,
+		EnvironmentID:        e.EnvironmentID,
+		Metadata:             types.Metadata(e.Metadata),
 		DisplayOrder:         &e.DisplayOrder,
 		AutoInvoiceThreshold: e.AutoInvoiceThreshold,
 		BaseModel: types.BaseModel{
