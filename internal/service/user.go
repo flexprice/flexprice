@@ -153,9 +153,13 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		return nil, ierr.NewError("invalid user type").WithHint("Type must be 'user' or 'service_account'").Mark(ierr.ErrValidation)
 	}
 
+	passwordValue := ""
+	if password != nil {
+		passwordValue = *password
+	}
 	return &dto.CreateUserResponse{
 		UserResponse: dto.NewUserResponse(newUser, tenant),
-		Password:     *password,
+		Password:     passwordValue,
 	}, nil
 }
 
