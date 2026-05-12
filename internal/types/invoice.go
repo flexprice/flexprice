@@ -228,6 +228,14 @@ const (
 	// Flow: manual invoice creation API
 	// Zero-dollar: marked SKIPPED.
 	InvoiceBillingReasonManual InvoiceBillingReason = "MANUAL"
+
+	// InvoiceBillingReasonThresholdBilling is generated mid-period when cumulative usage for the
+	// current billing period crosses the subscription's auto_invoice_threshold.
+	// Flow: ThresholdBillingWorkflow (5-min cron) → ProcessThresholdBilling service method
+	// Compute: arrear usage charges for current_period_start → now (ReferencePointPeriodEnd)
+	// Zero-dollar: marked SKIPPED; current_period_start still advances to avoid re-checking.
+	// Side-effect: advances current_period_start to the invoice's period_end after finalization.
+	InvoiceBillingReasonThresholdBilling InvoiceBillingReason = "THRESHOLD_BILLING"
 )
 
 func (r InvoiceBillingReason) String() string {
@@ -243,6 +251,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionTrialStart,
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
+		InvoiceBillingReasonThresholdBilling,
 	}
 
 	if r != "" && !lo.Contains(allowed, r) {
