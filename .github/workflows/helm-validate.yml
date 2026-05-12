@@ -1,0 +1,132 @@
+name: Helm Chart Validate
+
+# No untrusted github.event.* inputs are interpolated into run: scripts in
+# this workflow — only static checkout + tooling commands. Pre-commit hook
+# warning is informational.
+
+on:
+  pull_request:
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm-validate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-template:
+    name: Lint, template & kubeconform
+    runs-on: ubuntu-latest
+    env:
+      # Skip CRD-backed kinds (ServiceMonitor, ClickHouseInstallation, etc.) —
+      # kubeconform can't validate them without their schemas, and we don't
+      # want CI to fail just because the operator isn't a hard dependency.
+      SKIP_KINDS: ServiceMonitor,PrometheusRule,ClickHouseInstallation
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Add chart repositories
+        run: |
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
+      - name: helm dependency build
+        run: helm dependency build helm/flexprice
+
+      - name: helm lint (default values)
+        run: helm lint helm/flexprice
+
+      - name: helm lint (values-local)
+        run: helm lint helm/flexprice -f helm/values-local.yaml
+
+      - name: helm lint (values-prod.example)
+        run: |
+          helm lint helm/flexprice \
+            -f helm/values-prod.example.yaml \
+            --set secrets.existingSecret=flexprice-secrets
+
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+          curl -sSLo /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp
+          sudo mv /tmp/kubeconform /usr/local/bin/
+
+      - name: helm template + kubeconform (default)
+        run: |
+          helm template flexprice helm/flexprice \
+            --set secrets.existingSecret=test \
+            | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
+
+      - name: helm template + kubeconform (values-local)
+        run: |
+          helm template flexprice helm/flexprice -f helm/values-local.yaml \
+            | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
+
+      - name: helm template + kubeconform (values-prod.example)
+        run: |
+          helm template flexprice helm/flexprice \
+            -f helm/values-prod.example.yaml \
+            --set secrets.existingSecret=flexprice-secrets \
+            | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
+
+  install-dry-run-kind:
+    name: helm install --dry-run on kind
+    runs-on: ubuntu-latest
+    needs: lint-and-template
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          version: v0.24.0
+          node_image: kindest/node:v1.30.0
+          cluster_name: helm-validate
+
+      - name: Add chart repositories
+        run: |
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
+      - name: helm dependency build
+        run: helm dependency build helm/flexprice
+
+      - name: helm install --dry-run (default profile with placeholder secret)
+        run: |
+          set -euo pipefail
+          kubectl create namespace flexprice-rc
+          kubectl create secret generic flexprice-secrets -n flexprice-rc \
+            --from-literal=encryption-key=placeholder \
+            --from-literal=postgres-password=placeholder \
+            --from-literal=clickhouse-password=placeholder \
+            --from-literal=kafka-sasl-password=placeholder \
+            --from-literal=redis-password=placeholder \
+            --from-literal=temporal-api-key=placeholder \
+            --from-literal=auth-secret=placeholder
+          helm install flexprice helm/flexprice \
+            -n flexprice-rc \
+            --set secrets.existingSecret=flexprice-secrets \
+            --dry-run \
+            --debug \
+            --timeout 5m
