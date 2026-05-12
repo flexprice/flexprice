@@ -534,6 +534,38 @@ func (s *InMemorySubscriptionStore) GetRecentSubscriptionsByPlan(ctx context.Con
 	return result, nil
 }
 
+// GetSubscriptionsWithAutoInvoiceThreshold returns active subscriptions where either the
+// subscription itself or its plan has auto_invoice_threshold set.
+// In the in-memory store, plan-level threshold is not available, so only subscription-level is checked.
+func (s *InMemorySubscriptionStore) GetSubscriptionsWithAutoInvoiceThreshold(ctx context.Context, limit, offset int) ([]*subscription.Subscription, error) {
+	all, err := s.ListAll(ctx, &types.SubscriptionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		SubscriptionStatus: []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*subscription.Subscription
+	for _, sub := range all {
+		if sub.AutoInvoiceThreshold != nil {
+			results = append(results, sub)
+		}
+	}
+
+	// Apply offset and limit
+	if offset >= len(results) {
+		return nil, nil
+	}
+	results = results[offset:]
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
+	return results, nil
+}
+
 // Clear removes all data from the store
 func (s *InMemorySubscriptionStore) Clear() {
 	// Clear the base subscription store

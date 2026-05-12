@@ -1160,3 +1160,96 @@ func (r *subscriptionRepository) GetRecentSubscriptionsByPlan(ctx context.Contex
 	SetSpanSuccess(span)
 	return results, nil
 }
+
+// GetSubscriptionsWithAutoInvoiceThreshold returns active, published subscriptions (paginated)
+// where either the subscription or its parent plan has auto_invoice_threshold set.
+// Uses a two-step approach: raw SQL to collect matching IDs, then ent for full objects.
+func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx context.Context, limit, offset int) ([]*domainSub.Subscription, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "subscription", "get_subscriptions_with_auto_invoice_threshold", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": envID,
+		"limit":          limit,
+		"offset":         offset,
+	})
+	defer FinishSpan(span)
+
+	// Step 1: collect matching subscription IDs via a plan join.
+	idQuery := `
+		SELECT s.id
+		FROM subscriptions s
+		LEFT JOIN plans p
+			ON  p.id             = s.plan_id
+			AND p.status         = 'published'
+			AND p.tenant_id      = $1
+			AND p.environment_id = $2
+		WHERE s.tenant_id              = $1
+		  AND s.environment_id         = $2
+		  AND s.status                 = 'published'
+		  AND s.subscription_status    = 'active'
+		  AND (
+				s.auto_invoice_threshold IS NOT NULL
+			OR  p.auto_invoice_threshold IS NOT NULL
+		  )
+		ORDER BY s.id
+		LIMIT  $3
+		OFFSET $4`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, idQuery, tenantID, envID, limit, offset)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query threshold subscription IDs").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan threshold subscription ID").
+				Mark(ierr.ErrDatabase)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate threshold subscription IDs").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(ids) == 0 {
+		SetSpanSuccess(span)
+		return nil, nil
+	}
+
+	// Step 2: fetch full objects via ent using the collected IDs.
+	subs, err := r.client.Reader(ctx).Subscription.Query().
+		Where(
+			subscription.IDIn(ids...),
+			subscription.TenantID(tenantID),
+			subscription.EnvironmentID(envID),
+			subscription.Status(string(types.StatusPublished)),
+		).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch threshold subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+
+	result := make([]*domainSub.Subscription, len(subs))
+	for i, sub := range subs {
+		result[i] = domainSub.GetSubscriptionFromEnt(sub)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
+}
