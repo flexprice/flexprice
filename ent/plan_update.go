@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // PlanUpdate is the builder for updating Plan entities.
@@ -153,6 +154,26 @@ func (pu *PlanUpdate) SetNillableDisplayOrder(i *int) *PlanUpdate {
 // AddDisplayOrder adds i to the "display_order" field.
 func (pu *PlanUpdate) AddDisplayOrder(i int) *PlanUpdate {
 	pu.mutation.AddDisplayOrder(i)
+	return pu
+}
+
+// SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
+func (pu *PlanUpdate) SetAutoInvoiceThreshold(d decimal.Decimal) *PlanUpdate {
+	pu.mutation.SetAutoInvoiceThreshold(d)
+	return pu
+}
+
+// SetNillableAutoInvoiceThreshold sets the "auto_invoice_threshold" field if the given value is not nil.
+func (pu *PlanUpdate) SetNillableAutoInvoiceThreshold(d *decimal.Decimal) *PlanUpdate {
+	if d != nil {
+		pu.SetAutoInvoiceThreshold(*d)
+	}
+	return pu
+}
+
+// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
+func (pu *PlanUpdate) ClearAutoInvoiceThreshold() *PlanUpdate {
+	pu.mutation.ClearAutoInvoiceThreshold()
 	return pu
 }
 
@@ -299,6 +320,12 @@ func (pu *PlanUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := pu.mutation.AddedDisplayOrder(); ok {
 		_spec.AddField(plan.FieldDisplayOrder, field.TypeInt, value)
+	}
+	if value, ok := pu.mutation.AutoInvoiceThreshold(); ok {
+		_spec.SetField(plan.FieldAutoInvoiceThreshold, field.TypeOther, value)
+	}
+	if pu.mutation.AutoInvoiceThresholdCleared() {
+		_spec.ClearField(plan.FieldAutoInvoiceThreshold, field.TypeOther)
 	}
 	if pu.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -492,6 +519,26 @@ func (puo *PlanUpdateOne) AddDisplayOrder(i int) *PlanUpdateOne {
 	return puo
 }
 
+// SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
+func (puo *PlanUpdateOne) SetAutoInvoiceThreshold(d decimal.Decimal) *PlanUpdateOne {
+	puo.mutation.SetAutoInvoiceThreshold(d)
+	return puo
+}
+
+// SetNillableAutoInvoiceThreshold sets the "auto_invoice_threshold" field if the given value is not nil.
+func (puo *PlanUpdateOne) SetNillableAutoInvoiceThreshold(d *decimal.Decimal) *PlanUpdateOne {
+	if d != nil {
+		puo.SetAutoInvoiceThreshold(*d)
+	}
+	return puo
+}
+
+// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
+func (puo *PlanUpdateOne) ClearAutoInvoiceThreshold() *PlanUpdateOne {
+	puo.mutation.ClearAutoInvoiceThreshold()
+	return puo
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (puo *PlanUpdateOne) AddCreditGrantIDs(ids ...string) *PlanUpdateOne {
 	puo.mutation.AddCreditGrantIDs(ids...)
@@ -665,6 +712,12 @@ func (puo *PlanUpdateOne) sqlSave(ctx context.Context) (_node *Plan, err error) 
 	}
 	if value, ok := puo.mutation.AddedDisplayOrder(); ok {
 		_spec.AddField(plan.FieldDisplayOrder, field.TypeInt, value)
+	}
+	if value, ok := puo.mutation.AutoInvoiceThreshold(); ok {
+		_spec.SetField(plan.FieldAutoInvoiceThreshold, field.TypeOther, value)
+	}
+	if puo.mutation.AutoInvoiceThresholdCleared() {
+		_spec.ClearField(plan.FieldAutoInvoiceThreshold, field.TypeOther)
 	}
 	if puo.mutation.CreditGrantsCleared() {
 		edge := &sqlgraph.EdgeSpec{

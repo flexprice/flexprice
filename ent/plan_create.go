@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/plan"
+	"github.com/shopspring/decimal"
 )
 
 // PlanCreate is the builder for creating a Plan entity.
@@ -161,6 +162,20 @@ func (pc *PlanCreate) SetDisplayOrder(i int) *PlanCreate {
 func (pc *PlanCreate) SetNillableDisplayOrder(i *int) *PlanCreate {
 	if i != nil {
 		pc.SetDisplayOrder(*i)
+	}
+	return pc
+}
+
+// SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
+func (pc *PlanCreate) SetAutoInvoiceThreshold(d decimal.Decimal) *PlanCreate {
+	pc.mutation.SetAutoInvoiceThreshold(d)
+	return pc
+}
+
+// SetNillableAutoInvoiceThreshold sets the "auto_invoice_threshold" field if the given value is not nil.
+func (pc *PlanCreate) SetNillableAutoInvoiceThreshold(d *decimal.Decimal) *PlanCreate {
+	if d != nil {
+		pc.SetAutoInvoiceThreshold(*d)
 	}
 	return pc
 }
@@ -355,6 +370,10 @@ func (pc *PlanCreate) createSpec() (*Plan, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.DisplayOrder(); ok {
 		_spec.SetField(plan.FieldDisplayOrder, field.TypeInt, value)
 		_node.DisplayOrder = value
+	}
+	if value, ok := pc.mutation.AutoInvoiceThreshold(); ok {
+		_spec.SetField(plan.FieldAutoInvoiceThreshold, field.TypeOther, value)
+		_node.AutoInvoiceThreshold = &value
 	}
 	if nodes := pc.mutation.CreditGrantsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

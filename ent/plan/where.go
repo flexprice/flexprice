@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // ID filters vertices based on their ID field.
@@ -118,6 +119,11 @@ func Description(v string) predicate.Plan {
 // DisplayOrder applies equality check predicate on the "display_order" field. It's identical to DisplayOrderEQ.
 func DisplayOrder(v int) predicate.Plan {
 	return predicate.Plan(sql.FieldEQ(FieldDisplayOrder, v))
+}
+
+// AutoInvoiceThreshold applies equality check predicate on the "auto_invoice_threshold" field. It's identical to AutoInvoiceThresholdEQ.
+func AutoInvoiceThreshold(v decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldEQ(FieldAutoInvoiceThreshold, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -818,6 +824,56 @@ func DisplayOrderLT(v int) predicate.Plan {
 // DisplayOrderLTE applies the LTE predicate on the "display_order" field.
 func DisplayOrderLTE(v int) predicate.Plan {
 	return predicate.Plan(sql.FieldLTE(FieldDisplayOrder, v))
+}
+
+// AutoInvoiceThresholdEQ applies the EQ predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdEQ(v decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldEQ(FieldAutoInvoiceThreshold, v))
+}
+
+// AutoInvoiceThresholdNEQ applies the NEQ predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdNEQ(v decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldNEQ(FieldAutoInvoiceThreshold, v))
+}
+
+// AutoInvoiceThresholdIn applies the In predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdIn(vs ...decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldIn(FieldAutoInvoiceThreshold, vs...))
+}
+
+// AutoInvoiceThresholdNotIn applies the NotIn predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdNotIn(vs ...decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldNotIn(FieldAutoInvoiceThreshold, vs...))
+}
+
+// AutoInvoiceThresholdGT applies the GT predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdGT(v decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldGT(FieldAutoInvoiceThreshold, v))
+}
+
+// AutoInvoiceThresholdGTE applies the GTE predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdGTE(v decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldGTE(FieldAutoInvoiceThreshold, v))
+}
+
+// AutoInvoiceThresholdLT applies the LT predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdLT(v decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldLT(FieldAutoInvoiceThreshold, v))
+}
+
+// AutoInvoiceThresholdLTE applies the LTE predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdLTE(v decimal.Decimal) predicate.Plan {
+	return predicate.Plan(sql.FieldLTE(FieldAutoInvoiceThreshold, v))
+}
+
+// AutoInvoiceThresholdIsNil applies the IsNil predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdIsNil() predicate.Plan {
+	return predicate.Plan(sql.FieldIsNull(FieldAutoInvoiceThreshold))
+}
+
+// AutoInvoiceThresholdNotNil applies the NotNil predicate on the "auto_invoice_threshold" field.
+func AutoInvoiceThresholdNotNil() predicate.Plan {
+	return predicate.Plan(sql.FieldNotNull(FieldAutoInvoiceThreshold))
 }
 
 // HasCreditGrants applies the HasEdge predicate on the "credit_grants" edge.

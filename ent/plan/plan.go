@@ -38,6 +38,8 @@ const (
 	FieldDescription = "description"
 	// FieldDisplayOrder holds the string denoting the display_order field in the database.
 	FieldDisplayOrder = "display_order"
+	// FieldAutoInvoiceThreshold holds the string denoting the auto_invoice_threshold field in the database.
+	FieldAutoInvoiceThreshold = "auto_invoice_threshold"
 	// EdgeCreditGrants holds the string denoting the credit_grants edge name in mutations.
 	EdgeCreditGrants = "credit_grants"
 	// Table holds the table name of the plan in the database.
@@ -66,6 +68,7 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldDisplayOrder,
+	FieldAutoInvoiceThreshold,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -158,6 +161,11 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByDisplayOrder orders the results by the display_order field.
 func ByDisplayOrder(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDisplayOrder, opts...).ToFunc()
+}
+
+// ByAutoInvoiceThreshold orders the results by the auto_invoice_threshold field.
+func ByAutoInvoiceThreshold(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAutoInvoiceThreshold, opts...).ToFunc()
 }
 
 // ByCreditGrantsCount orders the results by credit_grants count.
