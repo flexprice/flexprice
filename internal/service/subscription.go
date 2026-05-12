@@ -7617,3 +7617,10 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 	}
 	return nil
 }
+
+// ProcessThresholdBilling checks all subscriptions with an effective auto_invoice_threshold
+// and generates mid-period invoices for those whose current-period usage has crossed the threshold.
+// The full implementation will be provided in a subsequent task.
+func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto.ThresholdBillingResult, error) {
+	return &dto.ThresholdBillingResult{}, nil
+}

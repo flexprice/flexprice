@@ -1772,6 +1772,23 @@ type SubscriptionUpdatePeriodResponseItem struct {
 	Error          string    `json:"error"`
 }
 
+// ThresholdBillingResult is the result of a single ProcessThresholdBilling run.
+type ThresholdBillingResult struct {
+	TotalChecked  int                           `json:"total_checked"`
+	TotalInvoiced int                           `json:"total_invoiced"`
+	TotalSkipped  int                           `json:"total_skipped"`
+	TotalFailed   int                           `json:"total_failed"`
+	Items         []*ThresholdBillingResultItem `json:"items,omitempty"`
+}
+
+// ThresholdBillingResultItem is the per-subscription outcome.
+type ThresholdBillingResultItem struct {
+	SubscriptionID string `json:"subscription_id"`
+	Invoiced       bool   `json:"invoiced"`
+	InvoiceID      string `json:"invoice_id,omitempty"`
+	Error          string `json:"error,omitempty"`
+}
+
 // GetUpcomingCreditGrantApplicationsRequest represents the request to get upcoming credit grant applications
 type GetUpcomingCreditGrantApplicationsRequest struct {
 	// SubscriptionIDs is a list of subscription IDs to get upcoming credit grant applications for
