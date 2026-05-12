@@ -453,6 +453,11 @@ type CreateSubscriptionRequest struct {
 	// Enable Commitment True Up Fee
 	EnableTrueUp bool `json:"enable_true_up"`
 
+	// AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
+	// an intermediate invoice mid-period. Set once at creation; cannot be changed later.
+	// Nil means threshold billing is disabled for this subscription.
+	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
+
 	// Inheritance groups all customer-hierarchy fields.
 	// When provided with at least one child ID, the subscription becomes a PARENT type.
 	Inheritance *SubscriptionInheritanceConfig `json:"inheritance,omitempty"`
@@ -1270,6 +1275,10 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		sub.OverageFactor = r.OverageFactor
 	} else {
 		sub.OverageFactor = lo.ToPtr(decimal.NewFromInt(1)) // Default value
+	}
+
+	if r.AutoInvoiceThreshold != nil {
+		sub.AutoInvoiceThreshold = r.AutoInvoiceThreshold
 	}
 
 	return sub
