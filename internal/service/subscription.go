@@ -257,10 +257,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 	syncTrialingStateFromCreateRequest(&req, sub)
 
-	if err := s.validateAutoInvoiceThresholdForCreate(sub); err != nil {
-		return nil, err
-	}
-
 	s.Logger.InfowCtx(ctx, "creating subscription",
 		"customer_id", sub.CustomerID, "plan_id", sub.PlanID, "start_date", sub.StartDate,
 		"billing_anchor", sub.BillingAnchor, "current_period_start", sub.CurrentPeriodStart,
@@ -275,6 +271,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		groupedInvoicingSubIDs, childCustomerIDs, err := s.prepareSubscriptionInheritanceForCreate(ctx, &req, sub)
 		if err != nil {
+			return err
+		}
+
+		if err := s.validateAutoInvoiceThresholdForCreate(sub); err != nil {
 			return err
 		}
 
@@ -7450,15 +7450,6 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 		sub.SubscriptionType = types.SubscriptionTypeParent
 	} else if sub.SubscriptionType == "" {
 		sub.SubscriptionType = types.SubscriptionTypeStandalone
-	}
-
-	if sub.HasPositiveAutoInvoiceThreshold() && sub.SubscriptionType != types.SubscriptionTypeStandalone {
-		return nil, nil, ierr.NewError("auto_invoice_threshold is only allowed for standalone subscriptions").
-			WithHint("Remove auto_invoice_threshold or create the subscription without parent/inheritance, delegated invoicing, or grouped invoicing").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_type": sub.SubscriptionType,
-			}).
-			Mark(ierr.ErrValidation)
 	}
 
 	return groupedInvoicingSubIDs, childCustomerIDs, s.validateNoInheritedSubForSubscriber(ctx, sub)
