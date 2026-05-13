@@ -456,6 +456,7 @@ type CreateSubscriptionRequest struct {
 	// AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
 	// an intermediate invoice mid-period. Set once at creation; cannot be changed later.
 	// Allowed only when the subscription resolves to type standalone (no parent hierarchy rows).
+	// Plan line items must be usage-based only (no fixed or other non-usage plan prices).
 	// Nil means auto invoice threshold billing is disabled for this subscription.
 	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
 

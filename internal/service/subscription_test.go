@@ -1180,9 +1180,50 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_AutoInvoiceThresholdRe
 func (s *SubscriptionServiceSuite) TestCreateSubscription_StandaloneWithPositiveAutoInvoiceThreshold_Succeeds() {
 	ctx := s.GetContext()
 	th := decimal.RequireFromString("50")
+
+	usageOnlyPlan := &plan.Plan{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:      "Usage Only Auto Invoice Plan",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, usageOnlyPlan))
+
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Auto Invoice Meter",
+		EventName: "auto_invoice_evt",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationCount,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	upTo := uint64(1000)
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           usageOnlyPlan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		TierMode:           types.BILLING_TIER_SLAB,
+		MeterID:            m.ID,
+		Tiers: []price.PriceTier{
+			{UpTo: &upTo, UnitAmount: decimal.NewFromFloat(0.02)},
+			{UpTo: nil, UnitAmount: decimal.NewFromFloat(0.01)},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
 	req := dto.CreateSubscriptionRequest{
 		CustomerID:           s.testData.customer.ID,
-		PlanID:               s.testData.plan.ID,
+		PlanID:               usageOnlyPlan.ID,
 		StartDate:            lo.ToPtr(s.testData.now),
 		Currency:             "usd",
 		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
@@ -1198,6 +1239,27 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_StandaloneWithPositive
 	s.Equal(types.SubscriptionTypeStandalone, resp.SubscriptionType)
 	s.Require().NotNil(resp.AutoInvoiceThreshold)
 	s.True(resp.AutoInvoiceThreshold.Equal(th))
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_AutoInvoiceThresholdRejectedWhenPlanHasFixedPrice() {
+	ctx := s.GetContext()
+	th := decimal.RequireFromString("50")
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:           s.testData.customer.ID,
+		PlanID:               s.testData.plan.ID,
+		StartDate:            lo.ToPtr(s.testData.now),
+		Currency:             "usd",
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		BillingCycle:         types.BillingCycleAnniversary,
+		CollectionMethod:     lo.ToPtr(types.CollectionMethodSendInvoice),
+		AutoInvoiceThreshold: &th,
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.Contains(strings.ToLower(err.Error()), "auto_invoice_threshold")
+	s.Contains(strings.ToLower(err.Error()), "non-usage")
 }
 
 func (s *SubscriptionServiceSuite) TestCreateSubscription_ZeroAutoInvoiceThreshold_WithInheritanceChildren_Succeeds() {

@@ -257,6 +257,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 	syncTrialingStateFromCreateRequest(&req, sub)
 
+	if err := s.validateAutoInvoiceThresholdForCreate(sub); err != nil {
+		return nil, err
+	}
+
 	s.Logger.InfowCtx(ctx, "creating subscription",
 		"customer_id", sub.CustomerID, "plan_id", sub.PlanID, "start_date", sub.StartDate,
 		"billing_anchor", sub.BillingAnchor, "current_period_start", sub.CurrentPeriodStart,
@@ -7351,6 +7355,37 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 		childCustomerIDs = append(childCustomerIDs, cust.ID)
 	}
 	return childCustomerIDs, nil
+}
+
+// validateAutoInvoiceThresholdForCreate enforces auto_invoice_threshold before create: the effective
+// subscription type (same rules as prepareSubscriptionInheritanceForCreate) must be standalone, and
+// every plan line item must be usage-based.
+func (s *subscriptionService) validateAutoInvoiceThresholdForCreate(sub *subscription.Subscription) error {
+	if !sub.HasPositiveAutoInvoiceThreshold() {
+		return nil
+	}
+
+	if sub.SubscriptionType != types.SubscriptionTypeStandalone {
+		return ierr.NewError("auto_invoice_threshold is only allowed for standalone subscriptions").
+			WithHint("Remove auto_invoice_threshold or create the subscription without parent/inheritance, delegated invoicing, or grouped invoicing").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_type": sub.SubscriptionType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	for _, li := range sub.LineItems {
+		if li.PriceType != types.PRICE_TYPE_USAGE {
+			return ierr.NewError("auto_invoice_threshold is not allowed when the plan includes non-usage prices").
+				WithHint("Use a plan with only usage-based prices for auto-invoice threshold billing, or remove fixed and other non-usage prices from this subscription's plan line items").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":   li.PriceID,
+					"price_type": li.PriceType,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
 
 // prepareSubscriptionInheritanceForCreate validates inheritance, applies parent-link invoicing,
