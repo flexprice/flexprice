@@ -453,6 +453,12 @@ type CreateSubscriptionRequest struct {
 	// Enable Commitment True Up Fee
 	EnableTrueUp bool `json:"enable_true_up"`
 
+	// AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
+	// an intermediate invoice mid-period. Set once at creation; cannot be changed later.
+	// Allowed only when the subscription resolves to type standalone (no parent hierarchy rows).
+	// Nil means auto invoice threshold billing is disabled for this subscription.
+	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
+
 	// Inheritance groups all customer-hierarchy fields.
 	// When provided with at least one child ID, the subscription becomes a PARENT type.
 	Inheritance *SubscriptionInheritanceConfig `json:"inheritance,omitempty"`
@@ -685,6 +691,14 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	if r.OpeningInvoiceAdjustmentAmount != nil && r.OpeningInvoiceAdjustmentAmount.IsNegative() {
 		return ierr.NewError("opening invoice adjustment amount must be >= 0").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.AutoInvoiceThreshold != nil && r.AutoInvoiceThreshold.IsNegative() {
+		return ierr.NewError("auto_invoice_threshold must be zero or greater").
+			WithReportableDetails(map[string]any{
+				"auto_invoice_threshold": r.AutoInvoiceThreshold.String(),
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1272,6 +1286,10 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		sub.OverageFactor = lo.ToPtr(decimal.NewFromInt(1)) // Default value
 	}
 
+	if r.AutoInvoiceThreshold != nil {
+		sub.AutoInvoiceThreshold = r.AutoInvoiceThreshold
+	}
+
 	return sub
 }
 
@@ -1770,6 +1788,23 @@ type SubscriptionUpdatePeriodResponseItem struct {
 	PeriodEnd      time.Time `json:"period_end"`
 	Success        bool      `json:"success"`
 	Error          string    `json:"error"`
+}
+
+// AutoInvoiceThresholdBillingResult is the result of a single ProcessAutoInvoiceThresholdBilling run.
+type AutoInvoiceThresholdBillingResult struct {
+	TotalChecked  int                                    `json:"total_checked"`
+	TotalInvoiced int                                    `json:"total_invoiced"`
+	TotalSkipped  int                                    `json:"total_skipped"`
+	TotalFailed   int                                    `json:"total_failed"`
+	Items         []*AutoInvoiceThresholdBillingResultItem `json:"items,omitempty"`
+}
+
+// AutoInvoiceThresholdBillingResultItem is the per-subscription outcome for auto invoice threshold billing.
+type AutoInvoiceThresholdBillingResultItem struct {
+	SubscriptionID string `json:"subscription_id"`
+	Invoiced       bool   `json:"invoiced"`
+	InvoiceID      string `json:"invoice_id,omitempty"`
+	Error          string `json:"error,omitempty"`
 }
 
 // GetUpcomingCreditGrantApplicationsRequest represents the request to get upcoming credit grant applications

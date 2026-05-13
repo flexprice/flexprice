@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type subscriptionRepository struct {
@@ -1159,4 +1160,52 @@ func (r *subscriptionRepository) GetRecentSubscriptionsByPlan(ctx context.Contex
 
 	SetSpanSuccess(span)
 	return results, nil
+}
+
+// GetSubscriptionsWithAutoInvoiceThreshold returns active, published subscriptions (paginated)
+// where auto_invoice_threshold is set directly on the subscription.
+func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx context.Context, limit, offset int) ([]*domainSub.Subscription, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "subscription", "get_subscriptions_with_auto_invoice_threshold", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": envID,
+		"limit":          limit,
+		"offset":         offset,
+	})
+	defer FinishSpan(span)
+
+	subs, err := r.client.Reader(ctx).Subscription.Query().
+		Where(
+			subscription.TenantID(tenantID),
+			subscription.EnvironmentID(envID),
+			subscription.Status(string(types.StatusPublished)),
+			subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive),
+			subscription.AutoInvoiceThresholdNotNil(),
+			subscription.AutoInvoiceThresholdGT(decimal.Zero),
+		).
+		Order(ent.Asc(subscription.FieldID)).
+		Limit(limit).
+		Offset(offset).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch threshold subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(subs) == 0 {
+		SetSpanSuccess(span)
+		return []*domainSub.Subscription{}, nil
+	}
+
+	result := make([]*domainSub.Subscription, len(subs))
+	for i, sub := range subs {
+		result[i] = domainSub.GetSubscriptionFromEnt(sub)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
 }

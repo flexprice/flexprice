@@ -559,6 +559,26 @@ func (su *SubscriptionUpdate) SetNillableSubscriptionType(tt *types.Subscription
 	return su
 }
 
+// SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
+func (su *SubscriptionUpdate) SetAutoInvoiceThreshold(d decimal.Decimal) *SubscriptionUpdate {
+	su.mutation.SetAutoInvoiceThreshold(d)
+	return su
+}
+
+// SetNillableAutoInvoiceThreshold sets the "auto_invoice_threshold" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableAutoInvoiceThreshold(d *decimal.Decimal) *SubscriptionUpdate {
+	if d != nil {
+		su.SetAutoInvoiceThreshold(*d)
+	}
+	return su
+}
+
+// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
+func (su *SubscriptionUpdate) ClearAutoInvoiceThreshold() *SubscriptionUpdate {
+	su.mutation.ClearAutoInvoiceThreshold()
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -1015,6 +1035,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.SubscriptionType(); ok {
 		_spec.SetField(subscription.FieldSubscriptionType, field.TypeString, value)
+	}
+	if value, ok := su.mutation.AutoInvoiceThreshold(); ok {
+		_spec.SetField(subscription.FieldAutoInvoiceThreshold, field.TypeOther, value)
+	}
+	if su.mutation.AutoInvoiceThresholdCleared() {
+		_spec.ClearField(subscription.FieldAutoInvoiceThreshold, field.TypeOther)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1901,6 +1927,26 @@ func (suo *SubscriptionUpdateOne) SetNillableSubscriptionType(tt *types.Subscrip
 	return suo
 }
 
+// SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
+func (suo *SubscriptionUpdateOne) SetAutoInvoiceThreshold(d decimal.Decimal) *SubscriptionUpdateOne {
+	suo.mutation.SetAutoInvoiceThreshold(d)
+	return suo
+}
+
+// SetNillableAutoInvoiceThreshold sets the "auto_invoice_threshold" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableAutoInvoiceThreshold(d *decimal.Decimal) *SubscriptionUpdateOne {
+	if d != nil {
+		suo.SetAutoInvoiceThreshold(*d)
+	}
+	return suo
+}
+
+// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
+func (suo *SubscriptionUpdateOne) ClearAutoInvoiceThreshold() *SubscriptionUpdateOne {
+	suo.mutation.ClearAutoInvoiceThreshold()
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -2387,6 +2433,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if value, ok := suo.mutation.SubscriptionType(); ok {
 		_spec.SetField(subscription.FieldSubscriptionType, field.TypeString, value)
+	}
+	if value, ok := suo.mutation.AutoInvoiceThreshold(); ok {
+		_spec.SetField(subscription.FieldAutoInvoiceThreshold, field.TypeOther, value)
+	}
+	if suo.mutation.AutoInvoiceThresholdCleared() {
+		_spec.ClearField(subscription.FieldAutoInvoiceThreshold, field.TypeOther)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

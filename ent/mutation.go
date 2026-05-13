@@ -45541,6 +45541,7 @@ type SubscriptionMutation struct {
 	parent_subscription_id     *string
 	payment_terms              *types.PaymentTerms
 	subscription_type          *types.SubscriptionType
+	auto_invoice_threshold     *decimal.Decimal
 	clearedFields              map[string]struct{}
 	line_items                 map[string]struct{}
 	removedline_items          map[string]struct{}
@@ -47496,6 +47497,55 @@ func (m *SubscriptionMutation) ResetSubscriptionType() {
 	m.subscription_type = nil
 }
 
+// SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
+func (m *SubscriptionMutation) SetAutoInvoiceThreshold(d decimal.Decimal) {
+	m.auto_invoice_threshold = &d
+}
+
+// AutoInvoiceThreshold returns the value of the "auto_invoice_threshold" field in the mutation.
+func (m *SubscriptionMutation) AutoInvoiceThreshold() (r decimal.Decimal, exists bool) {
+	v := m.auto_invoice_threshold
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAutoInvoiceThreshold returns the old "auto_invoice_threshold" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldAutoInvoiceThreshold(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAutoInvoiceThreshold is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAutoInvoiceThreshold requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAutoInvoiceThreshold: %w", err)
+	}
+	return oldValue.AutoInvoiceThreshold, nil
+}
+
+// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
+func (m *SubscriptionMutation) ClearAutoInvoiceThreshold() {
+	m.auto_invoice_threshold = nil
+	m.clearedFields[subscription.FieldAutoInvoiceThreshold] = struct{}{}
+}
+
+// AutoInvoiceThresholdCleared returns if the "auto_invoice_threshold" field was cleared in this mutation.
+func (m *SubscriptionMutation) AutoInvoiceThresholdCleared() bool {
+	_, ok := m.clearedFields[subscription.FieldAutoInvoiceThreshold]
+	return ok
+}
+
+// ResetAutoInvoiceThreshold resets all changes to the "auto_invoice_threshold" field.
+func (m *SubscriptionMutation) ResetAutoInvoiceThreshold() {
+	m.auto_invoice_threshold = nil
+	delete(m.clearedFields, subscription.FieldAutoInvoiceThreshold)
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
 func (m *SubscriptionMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -47935,7 +47985,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 43)
+	fields := make([]string, 0, 44)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -48065,6 +48115,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.subscription_type != nil {
 		fields = append(fields, subscription.FieldSubscriptionType)
 	}
+	if m.auto_invoice_threshold != nil {
+		fields = append(fields, subscription.FieldAutoInvoiceThreshold)
+	}
 	return fields
 }
 
@@ -48159,6 +48212,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.PaymentTerms()
 	case subscription.FieldSubscriptionType:
 		return m.SubscriptionType()
+	case subscription.FieldAutoInvoiceThreshold:
+		return m.AutoInvoiceThreshold()
 	}
 	return nil, false
 }
@@ -48254,6 +48309,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldPaymentTerms(ctx)
 	case subscription.FieldSubscriptionType:
 		return m.OldSubscriptionType(ctx)
+	case subscription.FieldAutoInvoiceThreshold:
+		return m.OldAutoInvoiceThreshold(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -48564,6 +48621,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSubscriptionType(v)
 		return nil
+	case subscription.FieldAutoInvoiceThreshold:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAutoInvoiceThreshold(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -48675,6 +48739,9 @@ func (m *SubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(subscription.FieldPaymentTerms) {
 		fields = append(fields, subscription.FieldPaymentTerms)
 	}
+	if m.FieldCleared(subscription.FieldAutoInvoiceThreshold) {
+		fields = append(fields, subscription.FieldAutoInvoiceThreshold)
+	}
 	return fields
 }
 
@@ -48742,6 +48809,9 @@ func (m *SubscriptionMutation) ClearField(name string) error {
 		return nil
 	case subscription.FieldPaymentTerms:
 		m.ClearPaymentTerms()
+		return nil
+	case subscription.FieldAutoInvoiceThreshold:
+		m.ClearAutoInvoiceThreshold()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription nullable field %s", name)
@@ -48879,6 +48949,9 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldSubscriptionType:
 		m.ResetSubscriptionType()
+		return nil
+	case subscription.FieldAutoInvoiceThreshold:
+		m.ResetAutoInvoiceThreshold()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)

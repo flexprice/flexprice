@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -279,7 +280,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		CouponRepo:                 s.GetStores().CouponRepo,
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
-		AddonRepo:                  testutil.NewInMemoryAddonStore(),
+		AddonRepo:                  s.GetStores().AddonRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
@@ -1101,6 +1102,138 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithInheritanceChildren
 	s.Equal(child.ID, inherited[0].CustomerID)
 	s.NotNil(inherited[0].ParentSubscriptionID)
 	s.Equal(resp.ID, *inherited[0].ParentSubscriptionID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_AutoInvoiceThresholdRejectedWithInheritanceChildren() {
+	ctx := s.GetContext()
+
+	childExternal := "ext_child_org_thresh"
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: childExternal,
+		Name:       "Child Org Thresh",
+		Email:      "child-thresh@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	th := decimal.RequireFromString("100")
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:           s.testData.customer.ID,
+		PlanID:               s.testData.plan.ID,
+		StartDate:            lo.ToPtr(s.testData.now),
+		EndDate:              lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:             "usd",
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		BillingCycle:         types.BillingCycleAnniversary,
+		CollectionMethod:     lo.ToPtr(types.CollectionMethodSendInvoice),
+		AutoInvoiceThreshold: &th,
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{childExternal},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.Contains(strings.ToLower(err.Error()), "auto_invoice_threshold")
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_AutoInvoiceThresholdRejectedWhenInheritedFromParent() {
+	ctx := s.GetContext()
+
+	parentSub, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, s.testData.subscription.ID)
+	s.Require().NoError(err)
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, parentSub))
+
+	subscriber := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_inherited_subscriber_thresh",
+		Name:       "Inherited Subscriber Thresh",
+		Email:      "inh-thresh@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, subscriber))
+
+	th := decimal.RequireFromString("99")
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:           subscriber.ID,
+		PlanID:               s.testData.plan.ID,
+		StartDate:            lo.ToPtr(s.testData.now),
+		Currency:             "usd",
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		BillingCycle:         types.BillingCycleAnniversary,
+		CollectionMethod:     lo.ToPtr(types.CollectionMethodSendInvoice),
+		AutoInvoiceThreshold: &th,
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ParentSubscriptionID: parentSub.ID,
+		},
+	}
+
+	_, err = s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.Contains(strings.ToLower(err.Error()), "standalone")
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_StandaloneWithPositiveAutoInvoiceThreshold_Succeeds() {
+	ctx := s.GetContext()
+	th := decimal.RequireFromString("50")
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:           s.testData.customer.ID,
+		PlanID:               s.testData.plan.ID,
+		StartDate:            lo.ToPtr(s.testData.now),
+		Currency:             "usd",
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		BillingCycle:         types.BillingCycleAnniversary,
+		CollectionMethod:     lo.ToPtr(types.CollectionMethodSendInvoice),
+		AutoInvoiceThreshold: &th,
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.SubscriptionTypeStandalone, resp.SubscriptionType)
+	s.Require().NotNil(resp.AutoInvoiceThreshold)
+	s.True(resp.AutoInvoiceThreshold.Equal(th))
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_ZeroAutoInvoiceThreshold_WithInheritanceChildren_Succeeds() {
+	ctx := s.GetContext()
+
+	childExternal := "ext_child_zero_thresh"
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: childExternal,
+		Name:       "Child Zero Thresh",
+		Email:      "child-zero-thresh@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	z := decimal.Zero
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:           s.testData.customer.ID,
+		PlanID:               s.testData.plan.ID,
+		StartDate:            lo.ToPtr(s.testData.now),
+		EndDate:              lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:             "usd",
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		BillingCycle:         types.BillingCycleAnniversary,
+		CollectionMethod:     lo.ToPtr(types.CollectionMethodSendInvoice),
+		AutoInvoiceThreshold: &z,
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{childExternal},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.SubscriptionTypeParent, resp.SubscriptionType)
 }
 
 func (s *SubscriptionServiceSuite) TestCancelSubscription_RejectedForInheritedSubscription() {
