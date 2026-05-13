@@ -2058,6 +2058,14 @@ definitions:
         items:
           $ref: '#/definitions/AddAddonToSubscriptionRequest'
         type: array
+      auto_invoice_threshold:
+        description: |-
+          AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
+          an intermediate invoice mid-period. Set once at creation; cannot be changed later.
+          Allowed only when the subscription resolves to type standalone (no parent hierarchy rows).
+          Plan line items must be usage-based only (no fixed or other non-usage plan prices).
+          Nil means auto invoice threshold billing is disabled for this subscription.
+        type: string
       billing_anchor:
         description: |-
           BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.
@@ -5248,6 +5256,12 @@ definitions:
           ActivePauseID references the current active pause configuration
           This will be null if no pause is active or scheduled
         type: string
+      auto_invoice_threshold:
+        description: |-
+          AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
+          an intermediate invoice. Overrides the plan-level threshold when set.
+          Nil means: inherit from the plan's threshold (which may also be nil = disabled).
+        type: string
       billing_anchor:
         description: |-
           BillingAnchor is the reference point that aligns future billing cycle dates.
@@ -5431,6 +5445,12 @@ definitions:
         description: |-
           ActivePauseID references the current active pause configuration
           This will be null if no pause is active or scheduled
+        type: string
+      auto_invoice_threshold:
+        description: |-
+          AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
+          an intermediate invoice. Overrides the plan-level threshold when set.
+          Nil means: inherit from the plan's threshold (which may also be nil = disabled).
         type: string
       billing_anchor:
         description: |-
@@ -7915,6 +7935,7 @@ definitions:
     - SUBSCRIPTION_TRIAL_START
     - PRORATION
     - MANUAL
+    - AUTO_INVOICE_THRESHOLD
     type: string
     x-enum-varnames:
     - InvoiceBillingReasonSubscriptionCreate
@@ -7924,6 +7945,7 @@ definitions:
     - InvoiceBillingReasonSubscriptionTrialStart
     - InvoiceBillingReasonProration
     - InvoiceBillingReasonManual
+    - InvoiceBillingReasonAutoInvoiceThreshold
   types.InvoiceCadence:
     enum:
     - ARREAR

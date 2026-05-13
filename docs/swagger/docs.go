@@ -14308,6 +14308,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/AddAddonToSubscriptionRequest"
                     }
                 },
+                "auto_invoice_threshold": {
+                    "description": "AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers\nan intermediate invoice mid-period. Set once at creation; cannot be changed later.\nAllowed only when the subscription resolves to type standalone (no parent hierarchy rows).\nPlan line items must be usage-based only (no fixed or other non-usage plan prices).\nNil means auto invoice threshold billing is disabled for this subscription.",
+                    "type": "string"
+                },
                 "billing_anchor": {
                     "description": "BillingAnchor overrides the derived billing anchor when billing_cycle is anniversary.\nFor monthly billing, the day-of-month (and time-of-day) define cycle boundaries: if start_date\nis before that day in the month, the first billing period ends on the next occurrence of that\nday in the same month (a shorter first period); subsequent periods follow the usual interval.",
                     "type": "string"
@@ -18687,6 +18691,10 @@ const docTemplate = `{
                     "description": "ActivePauseID references the current active pause configuration\nThis will be null if no pause is active or scheduled",
                     "type": "string"
                 },
+                "auto_invoice_threshold": {
+                    "description": "AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers\nan intermediate invoice. Overrides the plan-level threshold when set.\nNil means: inherit from the plan's threshold (which may also be nil = disabled).",
+                    "type": "string"
+                },
                 "billing_anchor": {
                     "description": "BillingAnchor is the reference point that aligns future billing cycle dates.\nIt sets the day of week for week intervals, the day of month for month and year intervals,\nand the month of year for year intervals. The timestamp is in UTC format.",
                     "type": "string"
@@ -18916,6 +18924,10 @@ const docTemplate = `{
             "properties": {
                 "active_pause_id": {
                     "description": "ActivePauseID references the current active pause configuration\nThis will be null if no pause is active or scheduled",
+                    "type": "string"
+                },
+                "auto_invoice_threshold": {
+                    "description": "AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers\nan intermediate invoice. Overrides the plan-level threshold when set.\nNil means: inherit from the plan's threshold (which may also be nil = disabled).",
                     "type": "string"
                 },
                 "billing_anchor": {
@@ -22380,7 +22392,8 @@ const docTemplate = `{
                 "SUBSCRIPTION_TRIAL_END",
                 "SUBSCRIPTION_TRIAL_START",
                 "PRORATION",
-                "MANUAL"
+                "MANUAL",
+                "AUTO_INVOICE_THRESHOLD"
             ],
             "x-enum-varnames": [
                 "InvoiceBillingReasonSubscriptionCreate",
@@ -22389,7 +22402,8 @@ const docTemplate = `{
                 "InvoiceBillingReasonSubscriptionTrialEnd",
                 "InvoiceBillingReasonSubscriptionTrialStart",
                 "InvoiceBillingReasonProration",
-                "InvoiceBillingReasonManual"
+                "InvoiceBillingReasonManual",
+                "InvoiceBillingReasonAutoInvoiceThreshold"
             ]
         },
         "types.InvoiceCadence": {
