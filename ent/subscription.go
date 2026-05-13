@@ -770,6 +770,7 @@ func (s *Subscription) String() string {
 		builder.WriteString("auto_invoice_threshold=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
 	builder.WriteString("synced_price_sequence=")
 	builder.WriteString(fmt.Sprintf("%v", s.SyncedPriceSequence))
 	builder.WriteByte(')')

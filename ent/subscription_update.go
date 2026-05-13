@@ -573,6 +573,12 @@ func (su *SubscriptionUpdate) SetNillableAutoInvoiceThreshold(d *decimal.Decimal
 	return su
 }
 
+// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
+func (su *SubscriptionUpdate) ClearAutoInvoiceThreshold() *SubscriptionUpdate {
+	su.mutation.ClearAutoInvoiceThreshold()
+	return su
+}
+
 // SetSyncedPriceSequence sets the "synced_price_sequence" field.
 func (su *SubscriptionUpdate) SetSyncedPriceSequence(i int64) *SubscriptionUpdate {
 	su.mutation.ResetSyncedPriceSequence()
@@ -585,12 +591,6 @@ func (su *SubscriptionUpdate) SetNillableSyncedPriceSequence(i *int64) *Subscrip
 	if i != nil {
 		su.SetSyncedPriceSequence(*i)
 	}
-	return su
-}
-
-// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
-func (su *SubscriptionUpdate) ClearAutoInvoiceThreshold() *SubscriptionUpdate {
-	su.mutation.ClearAutoInvoiceThreshold()
 	return su
 }
 
@@ -1968,6 +1968,12 @@ func (suo *SubscriptionUpdateOne) SetNillableAutoInvoiceThreshold(d *decimal.Dec
 	return suo
 }
 
+// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
+func (suo *SubscriptionUpdateOne) ClearAutoInvoiceThreshold() *SubscriptionUpdateOne {
+	suo.mutation.ClearAutoInvoiceThreshold()
+	return suo
+}
+
 // SetSyncedPriceSequence sets the "synced_price_sequence" field.
 func (suo *SubscriptionUpdateOne) SetSyncedPriceSequence(i int64) *SubscriptionUpdateOne {
 	suo.mutation.ResetSyncedPriceSequence()
@@ -1980,12 +1986,6 @@ func (suo *SubscriptionUpdateOne) SetNillableSyncedPriceSequence(i *int64) *Subs
 	if i != nil {
 		suo.SetSyncedPriceSequence(*i)
 	}
-	return suo
-}
-
-// ClearAutoInvoiceThreshold clears the value of the "auto_invoice_threshold" field.
-func (suo *SubscriptionUpdateOne) ClearAutoInvoiceThreshold() *SubscriptionUpdateOne {
-	suo.mutation.ClearAutoInvoiceThreshold()
 	return suo
 }
 

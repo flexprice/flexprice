@@ -1648,7 +1648,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscriptions_customers_invoicing_customer",
-				Columns:    []*schema.Column{SubscriptionsColumns[44]},
+				Columns:    []*schema.Column{SubscriptionsColumns[45]},
 				RefColumns: []*schema.Column{CustomersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1680,9 +1680,9 @@ var (
 			{
 				Name:    "subscription_tenant_id_environment_id_plan_id_synced_price_sequence",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[43]},
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[44]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published' AND subscription_status IN ('active','trialing')",
+					Where: "status = 'published'",
 				},
 			},
 		},

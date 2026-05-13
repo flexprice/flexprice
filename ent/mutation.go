@@ -47600,21 +47600,6 @@ func (m *SubscriptionMutation) AutoInvoiceThreshold() (r decimal.Decimal, exists
 	return *v, true
 }
 
-// SetSyncedPriceSequence sets the "synced_price_sequence" field.
-func (m *SubscriptionMutation) SetSyncedPriceSequence(i int64) {
-	m.synced_price_sequence = &i
-	m.addsynced_price_sequence = nil
-}
-
-// SyncedPriceSequence returns the value of the "synced_price_sequence" field in the mutation.
-func (m *SubscriptionMutation) SyncedPriceSequence() (r int64, exists bool) {
-	v := m.synced_price_sequence
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // OldAutoInvoiceThreshold returns the old "auto_invoice_threshold" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
@@ -47648,6 +47633,21 @@ func (m *SubscriptionMutation) AutoInvoiceThresholdCleared() bool {
 func (m *SubscriptionMutation) ResetAutoInvoiceThreshold() {
 	m.auto_invoice_threshold = nil
 	delete(m.clearedFields, subscription.FieldAutoInvoiceThreshold)
+}
+
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (m *SubscriptionMutation) SetSyncedPriceSequence(i int64) {
+	m.synced_price_sequence = &i
+	m.addsynced_price_sequence = nil
+}
+
+// SyncedPriceSequence returns the value of the "synced_price_sequence" field in the mutation.
+func (m *SubscriptionMutation) SyncedPriceSequence() (r int64, exists bool) {
+	v := m.synced_price_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
 }
 
 // OldSyncedPriceSequence returns the old "synced_price_sequence" field's value of the Subscription entity.
@@ -48130,7 +48130,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 44)
+	fields := make([]string, 0, 45)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -48779,6 +48779,7 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAutoInvoiceThreshold(v)
+		return nil
 	case subscription.FieldSyncedPriceSequence:
 		v, ok := value.(int64)
 		if !ok {
@@ -49122,6 +49123,7 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldAutoInvoiceThreshold:
 		m.ResetAutoInvoiceThreshold()
+		return nil
 	case subscription.FieldSyncedPriceSequence:
 		m.ResetSyncedPriceSequence()
 		return nil
