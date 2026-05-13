@@ -118,6 +118,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListSubscriptionLineItemsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/SubscriptionLineItemResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListSubscriptionsResponse:
     properties:
       items:
@@ -2964,6 +2973,8 @@ definitions:
     type: object
   ExecuteSubscriptionModifyRequest:
     properties:
+      grouped_invoicing_params:
+        $ref: '#/definitions/SubModifyGroupedInvoicingParams'
       inheritance_params:
         $ref: '#/definitions/SubModifyInheritanceRequest'
       quantity_change_params:
@@ -3517,6 +3528,14 @@ definitions:
       updated_at:
         type: string
     type: object
+  GroupedInvoicingAction:
+    enum:
+    - add
+    - remove
+    type: string
+    x-enum-varnames:
+    - GroupedInvoicingActionAdd
+    - GroupedInvoicingActionRemove
   IngestEventRequest:
     properties:
       customer_id:
@@ -4751,6 +4770,23 @@ definitions:
           additional context)
         type: string
     type: object
+  SubModifyGroupedInvoicingParams:
+    properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/GroupedInvoicingAction'
+        description: Action specifies whether to add or remove the child subscriptions
+          from grouped invoicing.
+      child_subscription_ids:
+        items:
+          type: string
+        type: array
+      parent_subscription_id:
+        description: ParentSubscriptionID is required for action 'add'.
+        type: string
+    required:
+    - action
+    type: object
   SubModifyInheritanceRequest:
     properties:
       external_customer_ids_to_inherit_subscription:
@@ -4931,13 +4967,29 @@ definitions:
   SubscriptionInheritanceConfig:
     properties:
       external_customer_ids_to_inherit_subscription:
+        description: |-
+          ExternalCustomerIDsToInheritSubscription: child customer external IDs for which
+          inherited skeleton subscriptions will be created. Only valid for parent behavior.
         items:
           type: string
         type: array
       invoicing_customer_external_id:
+        description: |-
+          InvoicingCustomerExternalID sets a different billing recipient (external ID).
+          Required for delegated; rejected for inherited; optional for others.
         type: string
       parent_subscription_id:
+        description: |-
+          ParentSubscriptionID links this subscription to an existing parent.
+          Required for inherited and grouped_invoicing; rejected for standalone, delegated, parent.
         type: string
+      subscriptions_ids_for_grouped_invoicing:
+        description: |-
+          SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to
+          grouped_invoicing under this parent at creation time. Only valid for parent behavior.
+        items:
+          type: string
+        type: array
     type: object
   SubscriptionLineItemLookupResult:
     properties:
@@ -5048,10 +5100,12 @@ definitions:
     enum:
     - inheritance
     - quantity_change
+    - grouped_invoicing
     type: string
     x-enum-varnames:
     - SubscriptionModifyTypeInheritance
     - SubscriptionModifyTypeQuantityChange
+    - SubscriptionModifyTypeGroupedInvoicing
   SubscriptionPhaseCreateRequest:
     properties:
       coupons:
@@ -7513,6 +7567,10 @@ definitions:
         maximum: 1000
         minimum: 1
         type: integer
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
       offset:
         minimum: 0
         type: integer
@@ -7854,6 +7912,7 @@ definitions:
     - SUBSCRIPTION_CYCLE
     - SUBSCRIPTION_UPDATE
     - SUBSCRIPTION_TRIAL_END
+    - SUBSCRIPTION_TRIAL_START
     - PRORATION
     - MANUAL
     type: string
@@ -7862,6 +7921,7 @@ definitions:
     - InvoiceBillingReasonSubscriptionCycle
     - InvoiceBillingReasonSubscriptionUpdate
     - InvoiceBillingReasonSubscriptionTrialEnd
+    - InvoiceBillingReasonSubscriptionTrialStart
     - InvoiceBillingReasonProration
     - InvoiceBillingReasonManual
   types.InvoiceCadence:
@@ -8130,6 +8190,10 @@ definitions:
         type: integer
       lookup_key:
         type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
       offset:
         minimum: 0
         type: integer
@@ -8381,6 +8445,11 @@ definitions:
       endpoint_url:
         description: Custom S3 endpoint URL (e.g., "http://minio:9000" for MinIO)
         type: string
+      export_metadata_fields:
+        description: Optional user-selected metadata columns
+        items:
+          $ref: '#/definitions/types.ExportMetadataField'
+        type: array
       key_prefix:
         description: Optional prefix for S3 keys (e.g., "flexprice-exports/")
         type: string
@@ -8388,8 +8457,7 @@ definitions:
         description: AWS region (e.g., "us-west-2")
         type: string
       use_path_style:
-        description: Use path-style addressing instead of virtual-hosted-style (required
-          for MinIO)
+        description: Use path-style addressing (required for MinIO)
         type: boolean
     type: object
   types.ScheduleStatus:
@@ -8420,12 +8488,14 @@ definitions:
     - invoice
     - credit_topups
     - credit_usage
+    - usage_analytics
     type: string
     x-enum-varnames:
     - ScheduledTaskEntityTypeEvents
     - ScheduledTaskEntityTypeInvoice
     - ScheduledTaskEntityTypeCreditTopups
     - ScheduledTaskEntityTypeCreditUsage
+    - ScheduledTaskEntityTypeUsageAnalytics
   types.ScheduledTaskInterval:
     enum:
     - 15MIN
@@ -8646,13 +8716,17 @@ definitions:
   types.SubscriptionType:
     enum:
     - standalone
+    - delegated_invoicing
     - parent
     - inherited
+    - grouped_invoicing
     type: string
     x-enum-varnames:
     - SubscriptionTypeStandalone
+    - SubscriptionTypeDelegatedInvoicing
     - SubscriptionTypeParent
     - SubscriptionTypeInherited
+    - SubscriptionTypeGroupedInvoicing
   types.TaskStatus:
     enum:
     - PENDING
@@ -9698,6 +9772,30 @@ definitions:
     x-enum-varnames:
     - EnvironmentDevelopment
     - EnvironmentProduction
+  types.ExportMetadataEntityType:
+    enum:
+    - customer
+    - wallet
+    type: string
+    x-enum-varnames:
+    - ExportMetadataEntityTypeCustomer
+    - ExportMetadataEntityTypeWallet
+  types.ExportMetadataField:
+    properties:
+      column_name:
+        description: CSV column header to be shown in the exported file
+        type: string
+      entity_type:
+        allOf:
+        - $ref: '#/definitions/types.ExportMetadataEntityType'
+        description: which entity's metadata to read from
+      field_key:
+        description: metadata key to look up
+        type: string
+    required:
+    - entity_type
+    - field_key
+    type: object
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -9710,6 +9808,77 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
+    type: object
+  types.SubscriptionLineItemFilter:
+    properties:
+      active_filter:
+        default: true
+        type: boolean
+      addon_association_ids:
+        items:
+          type: string
+        type: array
+      billing_periods:
+        items:
+          type: string
+        type: array
+      currencies:
+        items:
+          type: string
+        type: array
+      current_period_start:
+        type: string
+      customer_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      meter_ids:
+        items:
+          type: string
+        type: array
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      price_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_ids:
+        description: Specific filters
+        items:
+          type: string
+        type: array
     type: object
   webhookDto.AlertWebhookPayload:
     properties:
@@ -14830,6 +14999,41 @@ paths:
       summary: Update subscription line item
       tags:
       - Subscriptions
+  /subscriptions/lineitems/search:
+    post:
+      consumes:
+      - application/json
+      description: List subscription line items with a JSON filter (subscription,
+        customer, price, pagination, expand=prices, etc.).
+      operationId: querySubscriptionLineItems
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.SubscriptionLineItemFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListSubscriptionLineItemsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Search subscription line items
+      tags:
+      - Subscriptions
+      x-scope: read
   /subscriptions/search:
     post:
       consumes:
