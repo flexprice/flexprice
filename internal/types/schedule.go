@@ -19,6 +19,7 @@ const (
 	ScheduleIDSubscriptionBilling          ScheduleID = "subscription-billing"
 	ScheduleIDSubscriptionRenewalAlerts    ScheduleID = "subscription-renewal-due-alerts"
 	ScheduleIDSubscriptionTrialEndDue      ScheduleID = "subscription-trial-end-due"
+	ScheduleIDSubscriptionThresholdBilling ScheduleID = "subscription-threshold-billing"
 	ScheduleIDOutboundWebhookStaleRetry    ScheduleID = "webhook-stale-retry"
 )
 
@@ -35,6 +36,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDSubscriptionBilling,
 		ScheduleIDSubscriptionRenewalAlerts,
 		ScheduleIDSubscriptionTrialEndDue,
+		ScheduleIDSubscriptionThresholdBilling,
 		ScheduleIDOutboundWebhookStaleRetry,
 	}
 }
