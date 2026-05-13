@@ -34,11 +34,33 @@ type ContactResponse struct {
 	PrimaryContact string `json:"primary_contact_id,omitempty"`
 }
 
+type ItemCreateRequest struct {
+	Name           string  `json:"name"`
+	Rate           float64 `json:"rate"`
+	Description    string  `json:"description,omitempty"`
+	ProductType    string  `json:"product_type,omitempty"`
+	ItemType       string  `json:"item_type,omitempty"`
+	SKU            string  `json:"sku,omitempty"`
+	TaxID          string  `json:"tax_id,omitempty"`
+	IsTaxable      *bool   `json:"is_taxable,omitempty"`
+	TaxExemptionID string  `json:"tax_exemption_id,omitempty"`
+}
+
+type ItemResponse struct {
+	ItemID string  `json:"item_id"`
+	Name   string  `json:"name"`
+	Status string  `json:"status,omitempty"`
+	Rate   float64 `json:"rate,omitempty"`
+}
+
 type InvoiceLineItem struct {
-	Name        string          `json:"name,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Rate        decimal.Decimal `json:"rate"`
-	Quantity    decimal.Decimal `json:"quantity"`
+	ItemID         string          `json:"item_id,omitempty"`
+	Name           string          `json:"name,omitempty"`
+	Description    string          `json:"description,omitempty"`
+	Rate           decimal.Decimal `json:"rate"`
+	Quantity       decimal.Decimal `json:"quantity"`
+	TaxID          string          `json:"tax_id,omitempty"`
+	TaxExemptionID string          `json:"tax_exemption_id,omitempty"`
 }
 
 type InvoiceCreateRequest struct {
@@ -68,4 +90,48 @@ type ZohoInvoiceSyncResponse struct {
 	Status        string          `json:"status"`
 	Total         decimal.Decimal `json:"total"`
 	Currency      string          `json:"currency"`
+}
+
+// Tax DTOs
+
+type TaxResponse struct {
+	TaxID            string  `json:"tax_id"`
+	TaxName          string  `json:"tax_name"`
+	TaxPercentage    float64 `json:"tax_percentage"`
+	TaxType          string  `json:"tax_type"`
+	TaxFactor        string  `json:"tax_factor,omitempty"`
+	TaxAuthorityID   string  `json:"tax_authority_id,omitempty"`
+	TaxAuthorityName string  `json:"tax_authority_name,omitempty"`
+	IsValueAdded     bool    `json:"is_value_added"`
+	IsDefaultTax     bool    `json:"is_default_tax"`
+	IsEditable       bool    `json:"is_editable"`
+	TaxSpecificType  string  `json:"tax_specific_type,omitempty"`
+}
+
+type PageContext struct {
+	Page          int    `json:"page"`
+	PerPage       int    `json:"per_page"`
+	HasMorePage   bool   `json:"has_more_page"`
+	ReportName    string `json:"report_name,omitempty"`
+	AppliedFilter string `json:"applied_filter,omitempty"`
+	SortColumn    string `json:"sort_column,omitempty"`
+	SortOrder     string `json:"sort_order,omitempty"`
+}
+
+type ListTaxesResponse struct {
+	Taxes       []TaxResponse `json:"taxes"`
+	PageContext PageContext   `json:"page_context"`
+}
+
+type TaxExemption struct {
+	TaxExemptionID   string `json:"tax_exemption_id,omitempty"`
+	TaxExemptionCode string `json:"tax_exemption_code"`
+	Description      string `json:"description,omitempty"`
+	Type             string `json:"type"`
+}
+
+type CreateTaxExemptionRequest struct {
+	TaxExemptionCode string `json:"tax_exemption_code"`
+	Description      string `json:"description,omitempty"`
+	Type             string `json:"type"`
 }
