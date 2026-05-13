@@ -215,9 +215,9 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Price_Synchronization() {
 		err = s.GetStores().SubscriptionRepo.Create(s.GetContext(), testSub)
 		s.NoError(err)
 
-		// Terminate the price
+		// Terminate the price (bumpSequence=true: end_date is being set)
 		priceToTerminate.EndDate = lo.ToPtr(time.Now().UTC().AddDate(0, 0, 1))
-		err = s.GetStores().PriceRepo.Update(s.GetContext(), priceToTerminate)
+		err = s.GetStores().PriceRepo.Update(s.GetContext(), priceToTerminate, true)
 		s.NoError(err)
 
 		// Sync should end line item for terminated price
@@ -283,9 +283,9 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Price_Synchronization() {
 		err = s.GetStores().PriceRepo.Create(s.GetContext(), overridePrice)
 		s.NoError(err)
 
-		// Terminate parent price
+		// Terminate parent price (bumpSequence=true: end_date is being set)
 		parentPrice.EndDate = lo.ToPtr(time.Now().UTC().AddDate(0, 0, 1))
-		err = s.GetStores().PriceRepo.Update(s.GetContext(), parentPrice)
+		err = s.GetStores().PriceRepo.Update(s.GetContext(), parentPrice, true)
 		s.NoError(err)
 
 		// Sync should preserve override line item

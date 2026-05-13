@@ -15,7 +15,7 @@ type Repository interface {
 	List(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
 	Count(ctx context.Context, filter *types.PriceFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
-	Update(ctx context.Context, price *Price) error
+	Update(ctx context.Context, price *Price, bumpSequence bool) error
 	Delete(ctx context.Context, id string) error
 
 	// Bulk operations
