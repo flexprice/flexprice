@@ -7707,7 +7707,7 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 	paymentParams = paymentParams.NormalizePaymentParameters()
 
 	var inv *dto.InvoiceResponse
-	if s.DB.WithTx(ctx, func(ctx context.Context) error {
+	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 
 		inv, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 			SubscriptionID: sub.ID,
@@ -7727,7 +7727,7 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 			return err
 		}
 		return nil
-	}) != nil {
+	}); err != nil {
 		return err
 	}
 
