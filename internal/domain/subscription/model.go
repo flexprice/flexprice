@@ -136,6 +136,9 @@ type Subscription struct {
 	// SubscriptionType categorises the subscription within a customer hierarchy (standalone, parent, inherited).
 	SubscriptionType types.SubscriptionType `db:"subscription_type" json:"subscription_type"`
 
+	// OutOfSync is true if the subscription is out of sync with the plan. This is used to determine if the subscription is out of sync with the plan.
+	OutOfSync bool `json:"out_of_sync"`
+
 	types.BaseModel
 }
 

@@ -1531,6 +1531,9 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 	response.CreditGrants = creditGrantsResponse.Items
 
+	// set out of sync
+	sub.OutOfSync = s.setOutOfSync(ctx, sub, sub.LineItems, plan.Prices)
+
 	return response, nil
 }
 
@@ -1648,6 +1651,14 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 
 		response.LineItems = lineItemResponses
 	}
+
+	var planPrices []*dto.PriceResponse
+	if response.Plan != nil {
+		planPrices = response.Plan.Prices
+	}
+	// set out of sync
+	// lineItems is nil when not fetched — setOutOfSync fetches internally
+	sub.OutOfSync = s.setOutOfSync(ctx, sub, lineItems, planPrices)
 
 	return response, nil
 }
@@ -2163,6 +2174,9 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 					"available_customer_ids", lo.Keys(customerIDMap))
 			}
 		}
+
+		// set out of sync
+		sub.OutOfSync = s.setOutOfSync(ctx, sub, sub.LineItems, planResp.Prices)
 
 		response.Items[i] = &dto.SubscriptionResponse{
 			Subscription: sub,
@@ -7616,4 +7630,61 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 		}
 	}
 	return nil
+}
+
+// setOutOfSync marks sub.OutOfSync=true when the plan has a usage price with no matching subscription line item.
+// Pass the data you already have; nil means fetch internally. On any fetch error it marks sub.OutOfSync=true and logs the error.
+// sub.OutOfSync is set to false if every plan usage price has a matching subscription line item.
+func (s *subscriptionService) setOutOfSync(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	lineItems []*subscription.SubscriptionLineItem, // nil → fetched internally
+	planPrices []*dto.PriceResponse, // nil → fetched internally
+) bool {
+	if lineItems == nil {
+		liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+		liFilter.SubscriptionIDs = []string{sub.ID}
+		liFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+		var err error
+		lineItems, err = s.SubscriptionLineItemRepo.List(ctx, liFilter)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "setOutOfSync: failed to fetch line items", "subscription_id", sub.ID, "error", err)
+			return true
+		}
+	}
+
+	if planPrices == nil {
+		planSvc := NewPlanService(s.ServiceParams)
+		planFilter := types.NewNoLimitPlanFilter()
+		planFilter.PlanIDs = []string{sub.PlanID}
+		planFilter.Expand = lo.ToPtr(string(types.ExpandPrices))
+		plans, err := planSvc.GetPlans(ctx, planFilter)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "setOutOfSync: failed to fetch plan prices", "subscription_id", sub.ID, "plan_id", sub.PlanID, "error", err)
+			return true
+		}
+		if len(plans.Items) > 0 {
+			planPrices = plans.Items[0].Prices
+		}
+	}
+
+	if len(planPrices) == 0 {
+		return false
+	}
+
+	// Only usage charges are tracked for sync — skip flat/fixed prices on both sides
+	subPriceIDs := make(map[string]struct{}, len(lineItems))
+	for _, li := range lineItems {
+		if li.IsUsage() {
+			subPriceIDs[li.PriceID] = struct{}{}
+		}
+	}
+	for _, p := range planPrices {
+		if p.Price != nil && p.IsUsage() {
+			if _, ok := subPriceIDs[p.ID]; !ok {
+				return true
+			}
+		}
+	}
+	return false
 }
