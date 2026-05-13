@@ -116,19 +116,6 @@ func (h *MeterUsageHandler) GetAnalytics(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ToMeterUsageAnalyticsResponse(results))
 }
 
-// GetDetailedAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series
-// @Summary Get detailed meter usage analytics
-// @ID getDetailedMeterUsageAnalytics
-// @Description Query detailed analytics from meter_usage table with support for group by, property filters, source filtering, and time-series breakdown
-// @Tags MeterUsage
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param request body dto.MeterUsageDetailedAnalyticsRequest true "Detailed analytics parameters"
-// @Success 200 {object} dto.GetUsageAnalyticsResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /meter-usage/detailed-analytics [post]
 func (h *MeterUsageHandler) GetDetailedAnalytics(c *gin.Context) {
 	ctx := c.Request.Context()
 
