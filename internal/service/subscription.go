@@ -7634,7 +7634,7 @@ func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto
 	for {
 		subs, err := s.SubRepo.GetSubscriptionsWithAutoInvoiceThreshold(ctx, batchSize, offset)
 		if err != nil {
-			return result, fmt.Errorf("fetching threshold subscriptions: %w", err)
+			return nil, err
 		}
 		if len(subs) == 0 {
 			break
@@ -7648,7 +7648,7 @@ func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto
 			result.TotalChecked++
 			item := &dto.ThresholdBillingResultItem{SubscriptionID: sub.ID}
 
-			if err := s.processOneThresholdSubscription(subCtx, sub, effectiveTime, item); err != nil {
+			if err := s.processAutoInvoiceThresholdSubscription(subCtx, sub, effectiveTime, item); err != nil {
 				s.Logger.ErrorwCtx(subCtx, "threshold billing failed for subscription",
 					"subscription_id", sub.ID, "error", err)
 				result.TotalFailed++
@@ -7676,7 +7676,7 @@ func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto
 	return result, nil
 }
 
-func (s *subscriptionService) processOneThresholdSubscription(
+func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	effectiveTime time.Time,
