@@ -80,6 +80,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetBillingCycle(sub.BillingCycle).
 		SetNillableCommitmentAmount(sub.CommitmentAmount).
 		SetNillableOverageFactor(sub.OverageFactor).
+		SetNillableAutoInvoiceThreshold(sub.AutoInvoiceThreshold).
 		SetNillableCommitmentDuration(sub.CommitmentDuration).
 		SetStatus(string(sub.Status)).
 		SetCreatedBy(sub.CreatedBy).
