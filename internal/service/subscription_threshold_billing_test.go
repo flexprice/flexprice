@@ -222,3 +222,46 @@ func (s *SubscriptionThresholdBillingTestSuite) insertEvents(n int, ts time.Time
 		}))
 	}
 }
+
+// TestThresholdBilling_InvoiceCreatedWhenThresholdExceeded verifies that when
+// current-period usage exceeds the subscription's AutoInvoiceThreshold, a mid-period
+// invoice is created and CurrentPeriodStart is advanced.
+func (s *SubscriptionThresholdBillingTestSuite) TestThresholdBilling_InvoiceCreatedWhenThresholdExceeded() {
+	ctx := s.GetContext()
+
+	// 1001 calls x $0.01 = $10.01, which exceeds the $10 threshold.
+	// All events are timestamped 1 hour ago, inside CurrentPeriodStart (now-7d) .. now.
+	s.insertEvents(1001, s.testData.now.Add(-1*time.Hour))
+
+	result, err := s.service.ProcessAutoInvoiceThresholdBilling(ctx)
+	s.NoError(err)
+	s.Require().NotNil(result)
+
+	// Only subA qualifies (subB has no threshold).
+	s.Equal(1, result.TotalChecked)
+	s.Equal(1, result.TotalInvoiced)
+	s.Equal(0, result.TotalSkipped)
+	s.Equal(0, result.TotalFailed)
+
+	s.Require().Len(result.Items, 1)
+	item := result.Items[0]
+	s.Equal(s.testData.subA.ID, item.SubscriptionID)
+	s.True(item.Invoiced)
+	s.NotEmpty(item.InvoiceID)
+	s.Empty(item.Error)
+
+	// Verify invoice is persisted with the correct billing reason.
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = s.testData.subA.ID
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(invoices, 1)
+	s.Equal(string(types.InvoiceBillingReasonAutoInvoiceThreshold), invoices[0].BillingReason)
+
+	// Verify CurrentPeriodStart was advanced (no longer the original now-7d).
+	reloaded, err := s.GetStores().SubscriptionRepo.Get(ctx, s.testData.subA.ID)
+	s.NoError(err)
+	originalStart := s.testData.now.Add(-7 * 24 * time.Hour)
+	s.True(reloaded.CurrentPeriodStart.After(originalStart),
+		"CurrentPeriodStart should have advanced beyond the original now-7d")
+}
