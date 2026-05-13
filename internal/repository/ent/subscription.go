@@ -1164,22 +1164,11 @@ func (r *subscriptionRepository) GetRecentSubscriptionsByPlan(ctx context.Contex
 
 // GetSubscriptionsWithAutoInvoiceThreshold returns active, published subscriptions (paginated)
 // where auto_invoice_threshold is set directly on the subscription.
+// this runs without the tenant and environment filters applied,only use this for auto invoice threshold billing.
 func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx context.Context, limit, offset int) ([]*domainSub.Subscription, error) {
-	tenantID := types.GetTenantID(ctx)
-	envID := types.GetEnvironmentID(ctx)
-
-	span := StartRepositorySpan(ctx, "subscription", "get_subscriptions_with_auto_invoice_threshold", map[string]interface{}{
-		"tenant_id":      tenantID,
-		"environment_id": envID,
-		"limit":          limit,
-		"offset":         offset,
-	})
-	defer FinishSpan(span)
 
 	subs, err := r.client.Reader(ctx).Subscription.Query().
 		Where(
-			subscription.TenantID(tenantID),
-			subscription.EnvironmentID(envID),
 			subscription.Status(string(types.StatusPublished)),
 			subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive),
 			subscription.AutoInvoiceThresholdNotNil(),
@@ -1190,14 +1179,12 @@ func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx co
 		Offset(offset).
 		All(ctx)
 	if err != nil {
-		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to fetch threshold subscriptions").
 			Mark(ierr.ErrDatabase)
 	}
 
 	if len(subs) == 0 {
-		SetSpanSuccess(span)
 		return []*domainSub.Subscription{}, nil
 	}
 
@@ -1206,6 +1193,5 @@ func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx co
 		result[i] = domainSub.GetSubscriptionFromEnt(sub)
 	}
 
-	SetSpanSuccess(span)
 	return result, nil
 }
