@@ -235,7 +235,7 @@ const (
 	// Compute: arrear usage charges for current_period_start → now (ReferencePointPeriodEnd)
 	// Zero-dollar: marked SKIPPED; current_period_start still advances to avoid re-checking.
 	// Side-effect: advances current_period_start to the invoice's period_end after finalization.
-	InvoiceBillingReasonThresholdBilling InvoiceBillingReason = "THRESHOLD_BILLING"
+	InvoiceBillingReasonAutoInvoiceThreshold InvoiceBillingReason = "AUTO_INVOICE_THRESHOLD"
 )
 
 func (r InvoiceBillingReason) String() string {
@@ -251,7 +251,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonSubscriptionTrialStart,
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
-		InvoiceBillingReasonThresholdBilling,
+		InvoiceBillingReasonAutoInvoiceThreshold,
 	}
 
 	if r != "" && !lo.Contains(allowed, r) {
