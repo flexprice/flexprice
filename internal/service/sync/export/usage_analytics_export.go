@@ -61,6 +61,8 @@ const (
 	UsageAnalyticsCSVHeadersTotalCost          UsageAnalyticsCSVHeaders = "total_cost"
 	UsageAnalyticsCSVHeadersCurrency           UsageAnalyticsCSVHeaders = "currency"
 	UsageAnalyticsCSVHeadersSource             UsageAnalyticsCSVHeaders = "source"
+	UsageAnalyticsCSVHeadersFeatureGroupName   UsageAnalyticsCSVHeaders = "feature_group_name"
+	UsageAnalyticsCSVHeadersAggregationField   UsageAnalyticsCSVHeaders = "aggregation_field"
 )
 
 // usageAnalyticsStaticHeaders is the fixed set of base CSV columns.
@@ -72,8 +74,10 @@ var usageAnalyticsStaticHeaders = []string{
 	string(UsageAnalyticsCSVHeadersEndTime),
 	string(UsageAnalyticsCSVHeadersFeatureName),
 	string(UsageAnalyticsCSVHeadersFeatureID),
+	string(UsageAnalyticsCSVHeadersFeatureGroupName),
 	string(UsageAnalyticsCSVHeadersEventName),
 	string(UsageAnalyticsCSVHeadersEventCount),
+	string(UsageAnalyticsCSVHeadersAggregationField),
 	string(UsageAnalyticsCSVHeadersTotalUsage),
 	string(UsageAnalyticsCSVHeadersTotalCost),
 	string(UsageAnalyticsCSVHeadersCurrency),
@@ -95,6 +99,8 @@ type usageAnalyticsRecord struct {
 	TotalCost          decimal.Decimal
 	Currency           string
 	Source             string
+	FeatureGroupName   string
+	AggregationField   string
 	// CustomerMetadata holds the customer's raw metadata for dynamic column lookup.
 	CustomerMetadata types.Metadata
 }
@@ -194,7 +200,11 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 				TotalCost:          item.TotalCost,
 				Currency:           item.Currency,
 				Source:             item.Source,
+				AggregationField:   string(item.AggregationType),
 				CustomerMetadata:   c.Metadata,
+			}
+			if item.Group != nil {
+				record.FeatureGroupName = item.Group.Name
 			}
 
 			if err := csvWriter.Write(e.buildRow(record, metadataFields)); err != nil {
@@ -264,8 +274,10 @@ func (e *UsageAnalyticsExporter) buildRow(record *usageAnalyticsRecord, metadata
 		record.EndTime.Format(time.RFC3339),
 		record.FeatureName,
 		record.FeatureID,
+		record.FeatureGroupName,
 		record.EventName,
 		strconv.FormatInt(record.EventCount, 10),
+		record.AggregationField,
 		record.TotalUsage.String(),
 		record.TotalCost.String(),
 		record.Currency,
