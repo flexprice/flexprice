@@ -104,6 +104,8 @@ const (
 	FieldSubscriptionType = "subscription_type"
 	// FieldAutoInvoiceThreshold holds the string denoting the auto_invoice_threshold field in the database.
 	FieldAutoInvoiceThreshold = "auto_invoice_threshold"
+	// FieldSyncedPriceSequence holds the string denoting the synced_price_sequence field in the database.
+	FieldSyncedPriceSequence = "synced_price_sequence"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -227,6 +229,7 @@ var Columns = []string{
 	FieldPaymentTerms,
 	FieldSubscriptionType,
 	FieldAutoInvoiceThreshold,
+	FieldSyncedPriceSequence,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -300,6 +303,8 @@ var (
 	DefaultEnableTrueUp bool
 	// DefaultSubscriptionType holds the default value on creation for the "subscription_type" field.
 	DefaultSubscriptionType types.SubscriptionType
+	// DefaultSyncedPriceSequence holds the default value on creation for the "synced_price_sequence" field.
+	DefaultSyncedPriceSequence int64
 )
 
 // OrderOption defines the ordering options for the Subscription queries.
@@ -523,6 +528,11 @@ func BySubscriptionType(opts ...sql.OrderTermOption) OrderOption {
 // ByAutoInvoiceThreshold orders the results by the auto_invoice_threshold field.
 func ByAutoInvoiceThreshold(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAutoInvoiceThreshold, opts...).ToFunc()
+}
+
+// BySyncedPriceSequence orders the results by the synced_price_sequence field.
+func BySyncedPriceSequence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSyncedPriceSequence, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

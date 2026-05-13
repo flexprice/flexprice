@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/lib/pq"
 	"github.com/samber/lo"
 )
 
@@ -267,18 +268,20 @@ func (r *priceRepository) ListAll(ctx context.Context, filter *types.PriceFilter
 	return r.List(ctx, filter)
 }
 
-func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) error {
+func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price, bumpSequence bool) error {
 	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating price",
 		"price_id", p.ID,
 		"tenant_id", p.TenantID,
+		"bump_sequence", bumpSequence,
 	)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "price", "update", map[string]interface{}{
-		"price_id":  p.ID,
-		"tenant_id": p.TenantID,
+		"price_id":      p.ID,
+		"tenant_id":     p.TenantID,
+		"bump_sequence": bumpSequence,
 	})
 	defer FinishSpan(span)
 
@@ -296,6 +299,18 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetMetadata(map[string]string(p.Metadata)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx))
+
+	// Caller asserts a sync-relevant field is changing (i.e. end_date being
+	// set or cleared). Update prices.sequence for plan-price sync.
+	if bumpSequence {
+		nextSeq, err := r.nextPriceSequence(ctx)
+		if err != nil {
+			SetSpanError(span, err)
+			return err
+		}
+		update = update.SetSequence(nextSeq)
+		p.Sequence = nextSeq
+	}
 
 	// Handle group_id: empty string clears (NULL), non-empty sets the value
 	if p.GroupID == "" {
@@ -326,6 +341,37 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 	return nil
 }
 
+// nextPriceSequence fetches the next value from prices_sequence_seq, used to
+// stamp prices.sequence on state changes that subscriptions need to react to.
+// The sequence is defined in migrations/postgres/V4_prices_sequence.up.sql and
+// referenced as the DB-side DEFAULT on prices.sequence.
+func (r *priceRepository) nextPriceSequence(ctx context.Context) (int64, error) {
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, "SELECT nextval('prices_sequence_seq')")
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to advance price sequence").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return 0, ierr.WithError(rowsErr).
+				WithHint("Failed to advance price sequence").
+				Mark(ierr.ErrDatabase)
+		}
+		return 0, ierr.NewError("no sequence value returned").Mark(ierr.ErrInternal)
+	}
+
+	var next int64
+	if scanErr := rows.Scan(&next); scanErr != nil {
+		return 0, ierr.WithError(scanErr).
+			WithHint("Failed to read price sequence value").
+			Mark(ierr.ErrDatabase)
+	}
+	return next, nil
+}
+
 func (r *priceRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
@@ -341,12 +387,21 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Price.Update().
+	// Archival is a state change subs need to react to (the price drops out
+	// of the published set the sync looks at). Bump the sequence so the next
+	// sync sees the change.
+	nextSeq, err := r.nextPriceSequence(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.Price.Update().
 		Where(
 			price.ID(id),
 			price.TenantID(types.GetTenantID(ctx)),
 			price.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
+		SetSequence(nextSeq).
 		SetStatus(string(types.StatusArchived)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -449,8 +504,6 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 }
 
 func (r *priceRepository) DeleteBulk(ctx context.Context, ids []string) error {
-	client := r.client.Writer(ctx)
-
 	r.log.Debugw("bulk deleting prices",
 		"count", len(ids),
 		"tenant_id", types.GetTenantID(ctx),
@@ -467,18 +520,29 @@ func (r *priceRepository) DeleteBulk(ctx context.Context, ids []string) error {
 		return nil
 	}
 
-	_, err := client.Price.Update().
-		Where(
-			price.IDIn(ids...),
-			price.TenantID(types.GetTenantID(ctx)),
-			price.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
-
+	// Bump prices.sequence per row by inlining nextval() in the UPDATE so each
+	// archived price gets a distinct sequence value. Done via raw SQL because
+	// Ent's typed Update doesn't expose SQL function expressions.
+	query := `
+		UPDATE prices
+		SET sequence   = nextval('prices_sequence_seq'),
+		    status     = $1,
+		    updated_at = NOW(),
+		    updated_by = $2
+		WHERE id = ANY($3)
+		  AND tenant_id      = $4
+		  AND environment_id = $5
+	`
+	_, err := r.client.Writer(ctx).ExecContext(
+		ctx, query,
+		string(types.StatusArchived),
+		types.GetUserID(ctx),
+		pq.Array(ids),
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+	)
 	if err != nil {
+		SetSpanError(span, err)
 		return ierr.WithError(err).
 			WithHint("Failed to delete prices in bulk").
 			Mark(ierr.ErrDatabase)

@@ -141,6 +141,11 @@ type Subscription struct {
 	// Nil means: inherit from the plan's threshold (which may also be nil = disabled).
 	AutoInvoiceThreshold *decimal.Decimal `db:"auto_invoice_threshold" json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
 
+	// SyncedPriceSequence is the plan-price sequence up to which this
+	// subscription's line items have been reconciled. Bumped by the
+	// plan-price sync after a successful pass.
+	SyncedPriceSequence int64 `db:"synced_price_sequence" json:"synced_price_sequence,omitempty"`
+
 	types.BaseModel
 }
 
@@ -263,6 +268,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		PaymentTerms:         sub.PaymentTerms,
 		SubscriptionType:     types.SubscriptionType(sub.SubscriptionType),
 		AutoInvoiceThreshold: sub.AutoInvoiceThreshold,
+		SyncedPriceSequence:  sub.SyncedPriceSequence,
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

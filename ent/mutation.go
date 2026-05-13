@@ -37890,6 +37890,8 @@ type PriceMutation struct {
 	start_date                *time.Time
 	end_date                  *time.Time
 	group_id                  *string
+	sequence                  *int64
+	addsequence               *int64
 	clearedFields             map[string]struct{}
 	costsheet                 map[string]struct{}
 	removedcostsheet          map[string]struct{}
@@ -39842,6 +39844,62 @@ func (m *PriceMutation) ResetGroupID() {
 	delete(m.clearedFields, price.FieldGroupID)
 }
 
+// SetSequence sets the "sequence" field.
+func (m *PriceMutation) SetSequence(i int64) {
+	m.sequence = &i
+	m.addsequence = nil
+}
+
+// Sequence returns the value of the "sequence" field in the mutation.
+func (m *PriceMutation) Sequence() (r int64, exists bool) {
+	v := m.sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSequence returns the old "sequence" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldSequence(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSequence: %w", err)
+	}
+	return oldValue.Sequence, nil
+}
+
+// AddSequence adds i to the "sequence" field.
+func (m *PriceMutation) AddSequence(i int64) {
+	if m.addsequence != nil {
+		*m.addsequence += i
+	} else {
+		m.addsequence = &i
+	}
+}
+
+// AddedSequence returns the value that was added to the "sequence" field in this mutation.
+func (m *PriceMutation) AddedSequence() (r int64, exists bool) {
+	v := m.addsequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSequence resets all changes to the "sequence" field.
+func (m *PriceMutation) ResetSequence() {
+	m.sequence = nil
+	m.addsequence = nil
+}
+
 // AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by ids.
 func (m *PriceMutation) AddCostsheetIDs(ids ...string) {
 	if m.costsheet == nil {
@@ -39970,7 +40028,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 40)
+	fields := make([]string, 0, 41)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -40091,6 +40149,9 @@ func (m *PriceMutation) Fields() []string {
 	if m.group_id != nil {
 		fields = append(fields, price.FieldGroupID)
 	}
+	if m.sequence != nil {
+		fields = append(fields, price.FieldSequence)
+	}
 	return fields
 }
 
@@ -40179,6 +40240,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.EndDate()
 	case price.FieldGroupID:
 		return m.GroupID()
+	case price.FieldSequence:
+		return m.Sequence()
 	}
 	return nil, false
 }
@@ -40268,6 +40331,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldEndDate(ctx)
 	case price.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case price.FieldSequence:
+		return m.OldSequence(ctx)
 	}
 	return nil, fmt.Errorf("unknown Price field %s", name)
 }
@@ -40557,6 +40622,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGroupID(v)
 		return nil
+	case price.FieldSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSequence(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Price field %s", name)
 }
@@ -40571,6 +40643,9 @@ func (m *PriceMutation) AddedFields() []string {
 	if m.addtrial_period_days != nil {
 		fields = append(fields, price.FieldTrialPeriodDays)
 	}
+	if m.addsequence != nil {
+		fields = append(fields, price.FieldSequence)
+	}
 	return fields
 }
 
@@ -40583,6 +40658,8 @@ func (m *PriceMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBillingPeriodCount()
 	case price.FieldTrialPeriodDays:
 		return m.AddedTrialPeriodDays()
+	case price.FieldSequence:
+		return m.AddedSequence()
 	}
 	return nil, false
 }
@@ -40605,6 +40682,13 @@ func (m *PriceMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddTrialPeriodDays(v)
+		return nil
+	case price.FieldSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSequence(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Price numeric field %s", name)
@@ -40905,6 +40989,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case price.FieldSequence:
+		m.ResetSequence()
 		return nil
 	}
 	return fmt.Errorf("unknown Price field %s", name)
@@ -45542,6 +45629,8 @@ type SubscriptionMutation struct {
 	payment_terms              *types.PaymentTerms
 	subscription_type          *types.SubscriptionType
 	auto_invoice_threshold     *decimal.Decimal
+	synced_price_sequence      *int64
+	addsynced_price_sequence   *int64
 	clearedFields              map[string]struct{}
 	line_items                 map[string]struct{}
 	removedline_items          map[string]struct{}
@@ -47511,6 +47600,21 @@ func (m *SubscriptionMutation) AutoInvoiceThreshold() (r decimal.Decimal, exists
 	return *v, true
 }
 
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (m *SubscriptionMutation) SetSyncedPriceSequence(i int64) {
+	m.synced_price_sequence = &i
+	m.addsynced_price_sequence = nil
+}
+
+// SyncedPriceSequence returns the value of the "synced_price_sequence" field in the mutation.
+func (m *SubscriptionMutation) SyncedPriceSequence() (r int64, exists bool) {
+	v := m.synced_price_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
 // OldAutoInvoiceThreshold returns the old "auto_invoice_threshold" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
@@ -47544,6 +47648,47 @@ func (m *SubscriptionMutation) AutoInvoiceThresholdCleared() bool {
 func (m *SubscriptionMutation) ResetAutoInvoiceThreshold() {
 	m.auto_invoice_threshold = nil
 	delete(m.clearedFields, subscription.FieldAutoInvoiceThreshold)
+}
+
+// OldSyncedPriceSequence returns the old "synced_price_sequence" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldSyncedPriceSequence(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncedPriceSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncedPriceSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncedPriceSequence: %w", err)
+	}
+	return oldValue.SyncedPriceSequence, nil
+}
+
+// AddSyncedPriceSequence adds i to the "synced_price_sequence" field.
+func (m *SubscriptionMutation) AddSyncedPriceSequence(i int64) {
+	if m.addsynced_price_sequence != nil {
+		*m.addsynced_price_sequence += i
+	} else {
+		m.addsynced_price_sequence = &i
+	}
+}
+
+// AddedSyncedPriceSequence returns the value that was added to the "synced_price_sequence" field in this mutation.
+func (m *SubscriptionMutation) AddedSyncedPriceSequence() (r int64, exists bool) {
+	v := m.addsynced_price_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSyncedPriceSequence resets all changes to the "synced_price_sequence" field.
+func (m *SubscriptionMutation) ResetSyncedPriceSequence() {
+	m.synced_price_sequence = nil
+	m.addsynced_price_sequence = nil
 }
 
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
@@ -48118,6 +48263,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.auto_invoice_threshold != nil {
 		fields = append(fields, subscription.FieldAutoInvoiceThreshold)
 	}
+	if m.synced_price_sequence != nil {
+		fields = append(fields, subscription.FieldSyncedPriceSequence)
+	}
 	return fields
 }
 
@@ -48214,6 +48362,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionType()
 	case subscription.FieldAutoInvoiceThreshold:
 		return m.AutoInvoiceThreshold()
+	case subscription.FieldSyncedPriceSequence:
+		return m.SyncedPriceSequence()
 	}
 	return nil, false
 }
@@ -48311,6 +48461,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldSubscriptionType(ctx)
 	case subscription.FieldAutoInvoiceThreshold:
 		return m.OldAutoInvoiceThreshold(ctx)
+	case subscription.FieldSyncedPriceSequence:
+		return m.OldSyncedPriceSequence(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -48627,6 +48779,12 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAutoInvoiceThreshold(v)
+	case subscription.FieldSyncedPriceSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncedPriceSequence(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
@@ -48642,6 +48800,9 @@ func (m *SubscriptionMutation) AddedFields() []string {
 	if m.addversion != nil {
 		fields = append(fields, subscription.FieldVersion)
 	}
+	if m.addsynced_price_sequence != nil {
+		fields = append(fields, subscription.FieldSyncedPriceSequence)
+	}
 	return fields
 }
 
@@ -48654,6 +48815,8 @@ func (m *SubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBillingPeriodCount()
 	case subscription.FieldVersion:
 		return m.AddedVersion()
+	case subscription.FieldSyncedPriceSequence:
+		return m.AddedSyncedPriceSequence()
 	}
 	return nil, false
 }
@@ -48676,6 +48839,13 @@ func (m *SubscriptionMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddVersion(v)
+		return nil
+	case subscription.FieldSyncedPriceSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSyncedPriceSequence(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription numeric field %s", name)
@@ -48952,6 +49122,8 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldAutoInvoiceThreshold:
 		m.ResetAutoInvoiceThreshold()
+	case subscription.FieldSyncedPriceSequence:
+		m.ResetSyncedPriceSequence()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)

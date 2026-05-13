@@ -101,6 +101,8 @@ type Price struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *string `json:"group_id,omitempty"`
+	// Sequence holds the value of the "sequence" field.
+	Sequence int64 `json:"sequence,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
@@ -149,7 +151,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case price.FieldAmount:
 			values[i] = new(decimal.Decimal)
-		case price.FieldBillingPeriodCount, price.FieldTrialPeriodDays:
+		case price.FieldBillingPeriodCount, price.FieldTrialPeriodDays, price.FieldSequence:
 			values[i] = new(sql.NullInt64)
 		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldDisplayName, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID:
 			values[i] = new(sql.NullString)
@@ -437,6 +439,12 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.GroupID = new(string)
 				*pr.GroupID = value.String
 			}
+		case price.FieldSequence:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sequence", values[i])
+			} else if value.Valid {
+				pr.Sequence = value.Int64
+			}
 		default:
 			pr.selectValues.Set(columns[i], values[i])
 		}
@@ -624,6 +632,9 @@ func (pr *Price) String() string {
 		builder.WriteString("group_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("sequence=")
+	builder.WriteString(fmt.Sprintf("%v", pr.Sequence))
 	builder.WriteByte(')')
 	return builder.String()
 }
