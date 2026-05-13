@@ -312,3 +312,43 @@ func (s *SubscriptionThresholdBillingTestSuite) TestThresholdBilling_PeriodAdvan
 	s.True(reloadedAfterSecond.CurrentPeriodStart.Equal(t1),
 		"CurrentPeriodStart should remain at T1 after the skipped second run")
 }
+
+// TestThresholdBilling_SkipsSubscriptionWithNoUsage verifies that a subscription
+// with AutoInvoiceThreshold set but zero current-period usage is skipped without
+// creating an invoice or advancing CurrentPeriodStart.
+func (s *SubscriptionThresholdBillingTestSuite) TestThresholdBilling_SkipsSubscriptionWithNoUsage() {
+	ctx := s.GetContext()
+
+	// No events inserted — usage = $0.00, well below the $10 threshold.
+
+	result, err := s.service.ProcessAutoInvoiceThresholdBilling(ctx)
+	s.NoError(err)
+	s.Require().NotNil(result)
+
+	s.Equal(1, result.TotalChecked)
+	s.Equal(0, result.TotalInvoiced)
+	s.Equal(1, result.TotalSkipped)
+	s.Equal(0, result.TotalFailed)
+
+	s.Require().Len(result.Items, 1)
+	item := result.Items[0]
+	s.Equal(s.testData.subA.ID, item.SubscriptionID)
+	s.False(item.Invoiced)
+	s.Empty(item.InvoiceID)
+	s.Empty(item.Error)
+
+	// No invoice should have been created.
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = s.testData.subA.ID
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Empty(invoices, "no invoice should exist when usage is zero")
+
+	// CurrentPeriodStart must be unchanged.
+	reloaded, err := s.GetStores().SubscriptionRepo.Get(ctx, s.testData.subA.ID)
+	s.NoError(err)
+	originalStart := s.testData.now.Add(-7 * 24 * time.Hour)
+	s.True(reloaded.CurrentPeriodStart.Equal(originalStart) ||
+		reloaded.CurrentPeriodStart.Sub(originalStart).Abs() < time.Second,
+		"CurrentPeriodStart should be unchanged when usage is below threshold")
+}
