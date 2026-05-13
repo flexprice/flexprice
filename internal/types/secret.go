@@ -30,7 +30,7 @@ type SecretProvider string
 const (
 	SecretProviderFlexPrice  SecretProvider = "flexprice"
 	SecretProviderStripe     SecretProvider = "stripe"
-	SecretProviderS3         SecretProvider = "s3"
+	SecretProviderS3         SecretProvider = "s3" // supports multiple connections per environment
 	SecretProviderHubSpot    SecretProvider = "hubspot"
 	SecretProviderRazorpay   SecretProvider = "razorpay"
 	SecretProviderChargebee  SecretProvider = "chargebee"

@@ -420,6 +420,9 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 }
 
 func (s *connectionService) CreateConnection(ctx context.Context, req dto.CreateConnectionRequest) (*dto.ConnectionResponse, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
 	s.Logger.DebugwCtx(ctx, "creating connection",
 		"name", req.Name,
 		"provider_type", req.ProviderType,
@@ -446,13 +449,9 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	}
 
 	// Check if there's already a published connection for this provider, tenant, and environment
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
 	for _, existingConn := range existingConnections {
-		if existingConn.TenantID == tenantID &&
-			existingConn.EnvironmentID == environmentID &&
-			existingConn.ProviderType == req.ProviderType &&
+		if existingConn.ProviderType == req.ProviderType &&
+			existingConn.ProviderType != types.SecretProviderS3 &&
 			existingConn.Status == types.StatusPublished {
 			return nil, ierr.NewError("connection already exists").
 				WithHintf("A published connection for provider '%s' already exists in this environment", req.ProviderType).
@@ -471,8 +470,8 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 
 	// Set required fields
 	conn.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONNECTION)
-	conn.TenantID = types.GetTenantID(ctx)
-	conn.EnvironmentID = types.GetEnvironmentID(ctx)
+	conn.TenantID = tenantID
+	conn.EnvironmentID = environmentID
 	conn.Status = types.StatusPublished
 	conn.CreatedAt = time.Now()
 	conn.UpdatedAt = time.Now()

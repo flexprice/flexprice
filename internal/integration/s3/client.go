@@ -50,26 +50,22 @@ type S3Config struct {
 }
 
 // GetS3Client returns a configured S3 client with the provided job config and connection ID
-func (c *Client) GetS3Client(ctx context.Context, jobConfig *types.S3JobConfig, connectionID ...string) (*s3Client, *S3Config, error) {
+func (c *Client) GetS3Client(ctx context.Context, jobConfig *types.S3JobConfig, connectionID string) (*s3Client, *S3Config, error) {
 	var conn *connection.Connection
 	var err error
 
-	// If connection ID is provided, use it directly. Otherwise, query by provider
-	if len(connectionID) > 0 && connectionID[0] != "" {
-		conn, err = c.connectionRepo.Get(ctx, connectionID[0])
-		if err != nil {
-			return nil, nil, ierr.NewError("failed to get S3 connection by ID").
-				WithHintf("Connection ID '%s' not found", connectionID[0]).
-				Mark(ierr.ErrNotFound)
-		}
-	} else {
-		// Fallback to provider-based lookup (for backward compatibility)
-		conn, err = c.connectionRepo.GetByProvider(ctx, types.SecretProviderS3)
-		if err != nil {
-			return nil, nil, ierr.NewError("failed to get S3 connection").
-				WithHint("S3 connection not configured for this environment").
-				Mark(ierr.ErrNotFound)
-		}
+	// Connection ID is mandatory — S3 supports multiple connections per environment
+	if connectionID == "" {
+		return nil, nil, ierr.NewError("connection ID is required for S3").
+			WithHint("Provide a connection_id when using S3; multiple S3 connections are supported per environment").
+			Mark(ierr.ErrValidation)
+	}
+
+	conn, err = c.connectionRepo.Get(ctx, connectionID)
+	if err != nil {
+		return nil, nil, ierr.NewError("failed to get S3 connection by ID").
+			WithHintf("Connection ID '%s' not found", connectionID).
+			Mark(ierr.ErrNotFound)
 	}
 
 	s3Config, err := c.GetDecryptedS3Config(conn, jobConfig)
@@ -252,10 +248,4 @@ func (c *s3Client) ValidateConnection(ctx context.Context) error {
 	)
 
 	return nil
-}
-
-// HasS3Connection checks if the tenant has an S3 connection available
-func (c *Client) HasS3Connection(ctx context.Context) bool {
-	conn, err := c.connectionRepo.GetByProvider(ctx, types.SecretProviderS3)
-	return err == nil && conn != nil && conn.Status == types.StatusPublished
 }
