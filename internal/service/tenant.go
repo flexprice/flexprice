@@ -301,6 +301,13 @@ func (s *tenantService) UpdateTenantAccess(ctx context.Context, id string, req d
 		return nil, err
 	}
 
+	if types.GetTenantID(ctx) == id {
+		return nil, ierr.NewError("a tenant cannot update its own internal status").
+			WithHint("use operator credentials belonging to a different tenant").
+			WithReportableDetails(map[string]any{"tenant_id": id}).
+			Mark(ierr.ErrPermissionDenied)
+	}
+
 	existingTenant, err := s.TenantRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
