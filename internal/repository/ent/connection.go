@@ -93,6 +93,8 @@ func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.C
 	return nil
 }
 
+// Get is used for providers that support multiple connections per environment.
+// this method returns the connection by the given connection ID.
 func (r *connectionRepository) Get(ctx context.Context, id string) (*domainConnection.Connection, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "connection", "get", map[string]interface{}{
@@ -142,6 +144,8 @@ func (r *connectionRepository) Get(ctx context.Context, id string) (*domainConne
 	return domainConn, nil
 }
 
+// GetByProvider is used for providers that does not support multiple connections per environment.
+// this method returns the first result only and should NOT be used if the provider supports multiple connections per environment.
 func (r *connectionRepository) GetByProvider(ctx context.Context, provider types.SecretProvider) (*domainConnection.Connection, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "connection", "get_by_provider", map[string]interface{}{
