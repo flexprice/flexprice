@@ -7621,16 +7621,14 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 // ProcessThresholdBilling checks all subscriptions with an effective auto_invoice_threshold
 // and generates mid-period invoices for those whose current-period usage has crossed the threshold.
 func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto.ThresholdBillingResult, error) {
-	const batchSize = 100
-	now := time.Now().UTC()
+	const batchSize = 1000
+	effectiveTime := time.Now().UTC()
 
-	s.Logger.InfowCtx(ctx, "starting threshold billing run", "now", now)
+	s.Logger.InfowCtx(ctx, "starting threshold billing run", "effective_time", effectiveTime)
 
 	result := &dto.ThresholdBillingResult{
 		Items: make([]*dto.ThresholdBillingResultItem, 0),
 	}
-
-	invoiceService := NewInvoiceService(s.ServiceParams)
 
 	offset := 0
 	for {
@@ -7650,7 +7648,7 @@ func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto
 			result.TotalChecked++
 			item := &dto.ThresholdBillingResultItem{SubscriptionID: sub.ID}
 
-			if err := s.processOneThresholdSubscription(subCtx, sub, now, invoiceService, item); err != nil {
+			if err := s.processOneThresholdSubscription(subCtx, sub, effectiveTime, item); err != nil {
 				s.Logger.ErrorwCtx(subCtx, "threshold billing failed for subscription",
 					"subscription_id", sub.ID, "error", err)
 				result.TotalFailed++
@@ -7681,78 +7679,58 @@ func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto
 func (s *subscriptionService) processOneThresholdSubscription(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	now time.Time,
-	invoiceService interfaces.InvoiceService,
+	effectiveTime time.Time,
 	item *dto.ThresholdBillingResultItem,
 ) error {
-	// Skip non-active or inherited types.
-	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
-		return nil
-	}
-	if sub.SubscriptionType == types.SubscriptionTypeInherited ||
-		sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
-		return nil
-	}
-
-	// Threshold is set directly on the subscription; nil means disabled.
-	effectiveThreshold := sub.AutoInvoiceThreshold
-	if effectiveThreshold == nil {
-		return nil
-	}
 
 	// Calculate current-period usage amount.
 	usageResp, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 		SubscriptionID: sub.ID,
 		StartTime:      sub.CurrentPeriodStart,
-		EndTime:        now,
+		EndTime:        effectiveTime,
 	})
 	if err != nil {
-		return fmt.Errorf("calculating usage for subscription %s: %w", sub.ID, err)
+		return err
 	}
 
 	usageAmount := decimal.NewFromFloat(usageResp.Amount)
-	if usageAmount.LessThan(*effectiveThreshold) {
+	if usageAmount.LessThan(lo.FromPtr(sub.AutoInvoiceThreshold)) {
 		return nil
 	}
 
-	// Threshold crossed — create invoice for current_period_start → now.
-	billingPeriod := string(sub.BillingPeriod)
-	idempotencyKey := fmt.Sprintf("threshold-%s-%d", sub.ID, sub.CurrentPeriodStart.Unix())
+	invoiceService := NewInvoiceService(s.ServiceParams)
 
-	draft, err := invoiceService.CreateEmptyDraftInvoice(ctx, dto.CreateDraftInvoiceRequest{
-		CustomerID:             sub.GetInvoicingCustomerID(),
-		SubscriptionCustomerID: lo.ToPtr(sub.CustomerID),
-		SubscriptionID:         lo.ToPtr(sub.ID),
-		InvoiceType:            types.InvoiceTypeSubscription,
-		Currency:               sub.Currency,
-		BillingPeriod:          &billingPeriod,
-		PeriodStart:            lo.ToPtr(sub.CurrentPeriodStart),
-		PeriodEnd:              lo.ToPtr(now),
-		BillingReason:          types.InvoiceBillingReasonThresholdBilling,
-		IdempotencyKey:         &idempotencyKey,
-	})
-	if err != nil {
-		return fmt.Errorf("creating draft invoice for subscription %s: %w", sub.ID, err)
-	}
+	paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
+	paymentParams = paymentParams.NormalizePaymentParameters()
 
-	skipped, err := invoiceService.ComputeInvoice(ctx, draft.ID, nil)
-	if err != nil {
-		return fmt.Errorf("computing invoice %s for subscription %s: %w", draft.ID, sub.ID, err)
-	}
+	var inv *dto.InvoiceResponse
+	if s.DB.WithTx(ctx, func(ctx context.Context) error {
 
-	if !skipped {
-		if err := invoiceService.FinalizeInvoice(ctx, draft.ID); err != nil {
-			return fmt.Errorf("finalizing invoice %s for subscription %s: %w", draft.ID, sub.ID, err)
+		inv, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+			SubscriptionID: sub.ID,
+			PeriodStart:    sub.CurrentPeriodStart,
+			PeriodEnd:      effectiveTime,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+			BillingReason:  types.InvoiceBillingReasonAutoInvoiceThreshold,
+		}, paymentParams, types.InvoiceFlowRenewal, false)
+
+		if err != nil {
+			return err
 		}
-	}
 
-	// Advance current_period_start only after successful invoice creation.
-	sub.CurrentPeriodStart = now
-	if err := s.SubRepo.Update(ctx, sub); err != nil {
-		return fmt.Errorf("advancing current_period_start for subscription %s: %w", sub.ID, err)
+		// Advance current_period_start only after successful invoice creation.
+		sub.CurrentPeriodStart = effectiveTime
+		if err := s.SubRepo.Update(ctx, sub); err != nil {
+			return err
+		}
+		return nil
+	}) != nil {
+		return err
 	}
 
 	item.Invoiced = true
-	item.InvoiceID = draft.ID
+	if inv != nil {
+		item.InvoiceID = inv.ID
+	}
 	return nil
 }
