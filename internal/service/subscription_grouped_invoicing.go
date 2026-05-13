@@ -51,10 +51,11 @@ func (s *subscriptionService) validateAddToGroupedInvoicing(
 			Mark(ierr.ErrValidation)
 	}
 
-	// 4. parent must have type "parent"
-	if parentSub.SubscriptionType != types.SubscriptionTypeParent {
-		return ierr.NewError("parent subscription must have type 'parent'").
-			WithHint("The target parent subscription does not have the correct type").
+	// 4. parent must have type "parent" or "standalone" (standalone will be promoted to parent)
+	if parentSub.SubscriptionType != types.SubscriptionTypeParent &&
+		parentSub.SubscriptionType != types.SubscriptionTypeStandalone {
+		return ierr.NewError("parent subscription must have type 'parent' or 'standalone'").
+			WithHint("Only parent or standalone subscriptions can act as a grouped invoicing parent; standalone subscriptions are automatically promoted").
 			WithReportableDetails(map[string]any{
 				"parent_subscription_id":   parentSub.ID,
 				"parent_subscription_type": parentSub.SubscriptionType,
@@ -157,6 +158,14 @@ func (s *subscriptionService) addToGroupedInvoicing(
 
 	if err := s.validateAddToGroupedInvoicing(ctx, parentSub, child); err != nil {
 		return err
+	}
+
+	// Promote standalone parent to parent type on first child attachment
+	if parentSub.SubscriptionType == types.SubscriptionTypeStandalone {
+		parentSub.SubscriptionType = types.SubscriptionTypeParent
+		if err := s.SubRepo.Update(ctx, parentSub); err != nil {
+			return err
+		}
 	}
 
 	child.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
