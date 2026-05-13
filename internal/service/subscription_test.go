@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -1101,6 +1102,79 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithInheritanceChildren
 	s.Equal(child.ID, inherited[0].CustomerID)
 	s.NotNil(inherited[0].ParentSubscriptionID)
 	s.Equal(resp.ID, *inherited[0].ParentSubscriptionID)
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_AutoInvoiceThresholdRejectedWithInheritanceChildren() {
+	ctx := s.GetContext()
+
+	childExternal := "ext_child_org_thresh"
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: childExternal,
+		Name:       "Child Org Thresh",
+		Email:      "child-thresh@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	th := decimal.RequireFromString("100")
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:           s.testData.customer.ID,
+		PlanID:               s.testData.plan.ID,
+		StartDate:            lo.ToPtr(s.testData.now),
+		EndDate:              lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:             "usd",
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		BillingCycle:         types.BillingCycleAnniversary,
+		CollectionMethod:     lo.ToPtr(types.CollectionMethodSendInvoice),
+		AutoInvoiceThreshold: &th,
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{childExternal},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.Contains(strings.ToLower(err.Error()), "auto_invoice_threshold")
+}
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_AutoInvoiceThresholdRejectedWhenInheritedFromParent() {
+	ctx := s.GetContext()
+
+	parentSub, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(ctx, s.testData.subscription.ID)
+	s.Require().NoError(err)
+	parentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, parentSub))
+
+	subscriber := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_inherited_subscriber_thresh",
+		Name:       "Inherited Subscriber Thresh",
+		Email:      "inh-thresh@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, subscriber))
+
+	th := decimal.RequireFromString("99")
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:           subscriber.ID,
+		PlanID:               s.testData.plan.ID,
+		StartDate:            lo.ToPtr(s.testData.now),
+		Currency:             "usd",
+		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:   1,
+		BillingCycle:         types.BillingCycleAnniversary,
+		CollectionMethod:     lo.ToPtr(types.CollectionMethodSendInvoice),
+		AutoInvoiceThreshold: &th,
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ParentSubscriptionID: parentSub.ID,
+		},
+	}
+
+	_, err = s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.Contains(strings.ToLower(err.Error()), "standalone")
 }
 
 func (s *SubscriptionServiceSuite) TestCancelSubscription_RejectedForInheritedSubscription() {

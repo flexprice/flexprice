@@ -7417,6 +7417,15 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 		sub.SubscriptionType = types.SubscriptionTypeStandalone
 	}
 
+	if sub.HasPositiveAutoInvoiceThreshold() && sub.SubscriptionType != types.SubscriptionTypeStandalone {
+		return nil, nil, ierr.NewError("auto_invoice_threshold is only allowed for standalone subscriptions").
+			WithHint("Remove auto_invoice_threshold or create the subscription without parent/inheritance, delegated invoicing, or grouped invoicing").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_type": sub.SubscriptionType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return groupedInvoicingSubIDs, childCustomerIDs, s.validateNoInheritedSubForSubscriber(ctx, sub)
 }
 

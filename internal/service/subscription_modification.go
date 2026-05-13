@@ -110,6 +110,12 @@ func (s *subscriptionModificationService) executeInheritance(
 			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID, "status": sub.SubscriptionStatus}).
 			Mark(ierr.ErrValidation)
 	}
+	if sub.HasPositiveAutoInvoiceThreshold() {
+		return nil, ierr.NewError("cannot add inherited subscriptions while auto_invoice_threshold is set").
+			WithHint("Remove subscription-level auto_invoice_threshold first; it applies only to standalone subscriptions").
+			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID}).
+			Mark(ierr.ErrValidation)
+	}
 
 	// 3. Resolve external customers for inheritance
 	childCustomerIDs, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, params.ExternalCustomerIDsToInheritSubscription)
@@ -214,6 +220,12 @@ func (s *subscriptionModificationService) previewInheritance(
 		return nil, ierr.NewError("subscription is not active").
 			WithHint("Only active subscriptions can be modified for inheritance").
 			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID, "status": sub.SubscriptionStatus}).
+			Mark(ierr.ErrValidation)
+	}
+	if sub.HasPositiveAutoInvoiceThreshold() {
+		return nil, ierr.NewError("cannot add inherited subscriptions while auto_invoice_threshold is set").
+			WithHint("Remove subscription-level auto_invoice_threshold first; it applies only to standalone subscriptions").
+			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID}).
 			Mark(ierr.ErrValidation)
 	}
 

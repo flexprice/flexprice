@@ -8,6 +8,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // InMemorySubscriptionStore implements subscription.Repository
@@ -549,7 +550,10 @@ func (s *InMemorySubscriptionStore) GetSubscriptionsWithAutoInvoiceThreshold(ctx
 
 	var results []*subscription.Subscription
 	for _, sub := range all {
-		if sub.AutoInvoiceThreshold != nil {
+		if sub.SubscriptionType != types.SubscriptionTypeStandalone || sub.Status != types.StatusPublished {
+			continue
+		}
+		if sub.AutoInvoiceThreshold != nil && sub.AutoInvoiceThreshold.GreaterThan(decimal.Zero) {
 			results = append(results, sub)
 		}
 	}

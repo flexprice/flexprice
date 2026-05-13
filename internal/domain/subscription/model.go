@@ -182,6 +182,12 @@ func (s *Subscription) HasCommitment() bool {
 		s.OverageFactor.GreaterThan(decimal.NewFromInt(1))
 }
 
+// HasPositiveAutoInvoiceThreshold reports whether subscription-level mid-period
+// auto invoice threshold billing is configured (> 0). Matches cron/repo eligibility.
+func (s *Subscription) HasPositiveAutoInvoiceThreshold() bool {
+	return s.AutoInvoiceThreshold != nil && s.AutoInvoiceThreshold.GreaterThan(decimal.Zero)
+}
+
 func FromEntList(subs []*ent.Subscription) []*Subscription {
 	return lo.Map(subs, func(sub *ent.Subscription, _ int) *Subscription {
 		return GetSubscriptionFromEnt(sub)
