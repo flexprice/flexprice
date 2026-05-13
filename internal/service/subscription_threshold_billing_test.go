@@ -265,3 +265,50 @@ func (s *SubscriptionThresholdBillingTestSuite) TestThresholdBilling_InvoiceCrea
 	s.True(reloaded.CurrentPeriodStart.After(originalStart),
 		"CurrentPeriodStart should have advanced beyond the original now-7d")
 }
+
+// TestThresholdBilling_PeriodAdvanceResetsUsageWindow verifies that after a threshold
+// invoice advances CurrentPeriodStart, events from the previous period are excluded
+// from the next run's usage window — preventing double-counting.
+func (s *SubscriptionThresholdBillingTestSuite) TestThresholdBilling_PeriodAdvanceResetsUsageWindow() {
+	ctx := s.GetContext()
+
+	// Period 1: 1001 events -> $10.01, crosses threshold.
+	// Timestamp 1 hour before now, inside the original period (now-7d .. now).
+	s.insertEvents(1001, s.testData.now.Add(-1*time.Hour))
+
+	result1, err := s.service.ProcessAutoInvoiceThresholdBilling(ctx)
+	s.NoError(err)
+	s.Equal(1, result1.TotalInvoiced, "first run should invoice subA")
+
+	// Record the new CurrentPeriodStart (T1 approx time of first run).
+	reloadedAfterFirst, err := s.GetStores().SubscriptionRepo.Get(ctx, s.testData.subA.ID)
+	s.NoError(err)
+	t1 := reloadedAfterFirst.CurrentPeriodStart
+
+	// Period 2: only 500 events -> $5.00, below the $10 threshold.
+	// Timestamps are 1 minute after T1 to ensure they fall inside the new window.
+	s.insertEvents(500, t1.Add(1*time.Minute))
+
+	result2, err := s.service.ProcessAutoInvoiceThresholdBilling(ctx)
+	s.NoError(err)
+	s.Require().NotNil(result2)
+
+	// Second run must skip subA: $5 usage < $10 threshold.
+	s.Equal(1, result2.TotalChecked)
+	s.Equal(0, result2.TotalInvoiced)
+	s.Equal(1, result2.TotalSkipped)
+	s.Equal(0, result2.TotalFailed)
+
+	// Still exactly one invoice in the store (the one from the first run).
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = s.testData.subA.ID
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Len(invoices, 1, "no second invoice should have been created")
+
+	// CurrentPeriodStart must not have moved again.
+	reloadedAfterSecond, err := s.GetStores().SubscriptionRepo.Get(ctx, s.testData.subA.ID)
+	s.NoError(err)
+	s.True(reloadedAfterSecond.CurrentPeriodStart.Equal(t1),
+		"CurrentPeriodStart should remain at T1 after the skipped second run")
+}
