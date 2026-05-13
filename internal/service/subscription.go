@@ -274,6 +274,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
+		if err := s.validateAutoInvoiceThresholdForCreate(sub); err != nil {
+			return err
+		}
+
 		if err := s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
 			return err
 		}
@@ -7353,6 +7357,37 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 	return childCustomerIDs, nil
 }
 
+// validateAutoInvoiceThresholdForCreate enforces auto_invoice_threshold before create: the effective
+// subscription type (same rules as prepareSubscriptionInheritanceForCreate) must be standalone, and
+// every plan line item must be usage-based.
+func (s *subscriptionService) validateAutoInvoiceThresholdForCreate(sub *subscription.Subscription) error {
+	if !sub.HasPositiveAutoInvoiceThreshold() {
+		return nil
+	}
+
+	if sub.SubscriptionType != types.SubscriptionTypeStandalone {
+		return ierr.NewError("auto_invoice_threshold is only allowed for standalone subscriptions").
+			WithHint("Remove auto_invoice_threshold or create the subscription without parent/inheritance, delegated invoicing, or grouped invoicing").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_type": sub.SubscriptionType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	for _, li := range sub.LineItems {
+		if li.PriceType != types.PRICE_TYPE_USAGE {
+			return ierr.NewError("auto_invoice_threshold is not allowed when the plan includes non-usage prices").
+				WithHint("Use a plan with only usage-based prices for auto-invoice threshold billing, or remove fixed and other non-usage prices from this subscription's plan line items").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":   li.PriceID,
+					"price_type": li.PriceType,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 // prepareSubscriptionInheritanceForCreate validates inheritance, applies parent-link invoicing,
 // resolves invoicing/child customers by external ID, and sets subscription type for parent rows.
 // Call before SubRepo.CreateWithLineItems so InvoicingCustomerID and SubscriptionType persist.
@@ -7614,6 +7649,126 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 				WithHintf("Failed to cascade resume to inherited subscription %s", child.ID).
 				Mark(ierr.ErrInternal)
 		}
+	}
+	return nil
+}
+
+// ProcessAutoInvoiceThresholdBilling checks active, published subscriptions that have auto_invoice_threshold
+// set on the subscription (not inherited from a plan) and runs auto invoice threshold billing:
+// mid-period invoices when current-period usage has crossed that threshold.
+func (s *subscriptionService) ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*dto.AutoInvoiceThresholdBillingResult, error) {
+	const batchSize = 1000
+	effectiveTime := time.Now().UTC()
+
+	s.Logger.InfowCtx(ctx, "starting auto invoice threshold billing run", "effective_time", effectiveTime)
+
+	result := &dto.AutoInvoiceThresholdBillingResult{
+		Items: make([]*dto.AutoInvoiceThresholdBillingResultItem, 0),
+	}
+
+	offset := 0
+	for {
+		subs, err := s.SubRepo.GetSubscriptionsWithAutoInvoiceThreshold(ctx, batchSize, offset)
+		if err != nil {
+			return nil, err
+		}
+		if len(subs) == 0 {
+			break
+		}
+
+		for _, sub := range subs {
+			subCtx := context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
+			subCtx = context.WithValue(subCtx, types.CtxEnvironmentID, sub.EnvironmentID)
+			subCtx = context.WithValue(subCtx, types.CtxUserID, sub.CreatedBy)
+
+			result.TotalChecked++
+			item := &dto.AutoInvoiceThresholdBillingResultItem{SubscriptionID: sub.ID}
+
+			if err := s.processAutoInvoiceThresholdSubscription(subCtx, sub, effectiveTime, item); err != nil {
+				s.Logger.ErrorwCtx(subCtx, "auto invoice threshold billing failed for subscription",
+					"subscription_id", sub.ID, "error", err)
+				result.TotalFailed++
+				item.Error = err.Error()
+			} else if item.Invoiced {
+				result.TotalInvoiced++
+			} else {
+				result.TotalSkipped++
+			}
+			result.Items = append(result.Items, item)
+		}
+
+		offset += len(subs)
+		if len(subs) < batchSize {
+			break
+		}
+	}
+
+	s.Logger.InfowCtx(ctx, "auto invoice threshold billing run complete",
+		"total_checked", result.TotalChecked,
+		"total_invoiced", result.TotalInvoiced,
+		"total_skipped", result.TotalSkipped,
+		"total_failed", result.TotalFailed)
+
+	return result, nil
+}
+
+// processAutoInvoiceThresholdSubscription implements one subscription's auto invoice threshold billing run;
+// plan-level thresholds are not used.
+func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	effectiveTime time.Time,
+	item *dto.AutoInvoiceThresholdBillingResultItem,
+) error {
+
+	// Calculate current-period usage amount.
+	usageResp, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: sub.ID,
+		StartTime:      sub.CurrentPeriodStart,
+		EndTime:        effectiveTime,
+	})
+	if err != nil {
+		return err
+	}
+
+	usageAmount := decimal.NewFromFloat(usageResp.Amount)
+	if usageAmount.LessThan(lo.FromPtr(sub.AutoInvoiceThreshold)) {
+		return nil
+	}
+
+	invoiceService := NewInvoiceService(s.ServiceParams)
+
+	paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
+	paymentParams = paymentParams.NormalizePaymentParameters()
+
+	var inv *dto.InvoiceResponse
+	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+
+		inv, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+			SubscriptionID: sub.ID,
+			PeriodStart:    sub.CurrentPeriodStart,
+			PeriodEnd:      effectiveTime,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+			BillingReason:  types.InvoiceBillingReasonAutoInvoiceThreshold,
+		}, paymentParams, types.InvoiceFlowRenewal, false)
+
+		if err != nil {
+			return err
+		}
+
+		// Advance current_period_start only after successful invoice creation.
+		sub.CurrentPeriodStart = effectiveTime
+		if err := s.SubRepo.Update(ctx, sub); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	item.Invoiced = true
+	if inv != nil {
+		item.InvoiceID = inv.ID
 	}
 	return nil
 }

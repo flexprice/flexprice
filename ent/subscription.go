@@ -107,6 +107,8 @@ type Subscription struct {
 	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
 	// Subscription type within a customer hierarchy (standalone, parent, inherited)
 	SubscriptionType types.SubscriptionType `json:"subscription_type,omitempty"`
+	// Threshold usage amount (in subscription currency) that triggers an intermediate invoice. Overrides plan-level threshold when set.
+	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.
 	Edges        SubscriptionEdges `json:"edges"`
@@ -215,7 +217,7 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case subscription.FieldCommitmentAmount, subscription.FieldOverageFactor:
+		case subscription.FieldCommitmentAmount, subscription.FieldOverageFactor, subscription.FieldAutoInvoiceThreshold:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case subscription.FieldMetadata:
 			values[i] = new([]byte)
@@ -520,6 +522,13 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.SubscriptionType = types.SubscriptionType(value.String)
 			}
+		case subscription.FieldAutoInvoiceThreshold:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field auto_invoice_threshold", values[i])
+			} else if value.Valid {
+				s.AutoInvoiceThreshold = new(decimal.Decimal)
+				*s.AutoInvoiceThreshold = *value.S.(*decimal.Decimal)
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -748,6 +757,11 @@ func (s *Subscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("subscription_type=")
 	builder.WriteString(fmt.Sprintf("%v", s.SubscriptionType))
+	builder.WriteString(", ")
+	if v := s.AutoInvoiceThreshold; v != nil {
+		builder.WriteString("auto_invoice_threshold=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

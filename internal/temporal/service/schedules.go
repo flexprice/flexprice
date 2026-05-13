@@ -65,6 +65,13 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
+			ID:        types.ScheduleIDSubscriptionAutoInvoiceThresholdBilling,
+			Interval:  5 * time.Minute,
+			Workflow:  cronWorkflows.AutoInvoiceThresholdBillingWorkflow,
+			Input:     models.AutoInvoiceThresholdBillingWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
 			ID:        types.ScheduleIDOutboundWebhookStaleRetry,
 			Interval:  15 * time.Minute,
 			Workflow:  cronWorkflows.OutboundWebhookStaleRetryWorkflow,

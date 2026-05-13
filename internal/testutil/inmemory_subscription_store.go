@@ -8,6 +8,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // InMemorySubscriptionStore implements subscription.Repository
@@ -532,6 +533,40 @@ func (s *InMemorySubscriptionStore) GetRecentSubscriptionsByPlan(ctx context.Con
 	}
 
 	return result, nil
+}
+
+// GetSubscriptionsWithAutoInvoiceThreshold returns active subscriptions where
+// auto_invoice_threshold is set on the subscription (see subscription.Repository).
+func (s *InMemorySubscriptionStore) GetSubscriptionsWithAutoInvoiceThreshold(ctx context.Context, limit, offset int) ([]*subscription.Subscription, error) {
+	all, err := s.ListAll(ctx, &types.SubscriptionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		SubscriptionStatus: []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*subscription.Subscription
+	for _, sub := range all {
+		if sub.SubscriptionType != types.SubscriptionTypeStandalone || sub.Status != types.StatusPublished {
+			continue
+		}
+		if sub.AutoInvoiceThreshold != nil && sub.AutoInvoiceThreshold.GreaterThan(decimal.Zero) {
+			results = append(results, sub)
+		}
+	}
+
+	// Apply offset and limit
+	if offset >= len(results) {
+		return []*subscription.Subscription{}, nil
+	}
+	results = results[offset:]
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
+	return results, nil
 }
 
 // Clear removes all data from the store

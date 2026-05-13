@@ -583,8 +583,8 @@ func (s *oauthService) BuildOAuthURL(provider types.OAuthProvider, clientID, red
 		if scopes == "" {
 			scopes = strings.Join([]string{
 				"ZohoBooks.settings.READ",
-				"ZohoBooks.settings.CREATE",
 				"ZohoBooks.settings.UPDATE",
+				"ZohoBooks.settings.CREATE",
 				"ZohoBooks.contacts.READ",
 				"ZohoBooks.contacts.CREATE",
 				"ZohoBooks.contacts.UPDATE",

@@ -1,0 +1,51 @@
+{{- if and .Values.consumer.enabled .Values.consumer.keda.enabled -}}
+{{- /*
+  KEDA ScaledObject for the consumer Deployment. Scales on Kafka consumer-group
+  lag rather than CPU — the right signal for a Kafka consumer where each
+  message's processing cost is small but throughput matters.
+
+  Requires KEDA (https://keda.sh) installed cluster-wide. Off by default.
+
+  When this resource is rendered, KEDA takes over autoscaling for the
+  consumer Deployment — disable the chart-rendered HPA via
+  `consumer.autoscaling.enabled=false` to avoid two controllers fighting.
+*/}}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "flexprice.fullname" . }}-consumer
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: consumer
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "flexprice.fullname" . }}-consumer
+  pollingInterval: {{ .Values.consumer.keda.pollingInterval | default 15 }}
+  cooldownPeriod: {{ .Values.consumer.keda.cooldownPeriod | default 300 }}
+  minReplicaCount: {{ .Values.consumer.keda.minReplicas | default 1 }}
+  maxReplicaCount: {{ .Values.consumer.keda.maxReplicas | default 10 }}
+  {{- with .Values.consumer.keda.fallback }}
+  fallback:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ include "flexprice.kafkaBrokers" . | quote }}
+        consumerGroup: {{ .Values.kafkaConfig.consumerGroup | quote }}
+        topic: {{ .Values.kafkaConfig.topic | quote }}
+        lagThreshold: {{ .Values.consumer.keda.lagThreshold | default 1000 | quote }}
+        offsetResetPolicy: {{ .Values.consumer.keda.offsetResetPolicy | default "earliest" | quote }}
+        {{- if .Values.kafkaConfig.tls }}
+        tls: enable
+        {{- end }}
+        {{- if .Values.kafkaConfig.useSASL }}
+        sasl: {{ .Values.kafkaConfig.saslMechanism | default "plaintext" | quote }}
+        {{- end }}
+      {{- with .Values.consumer.keda.authenticationRef }}
+      authenticationRef:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
