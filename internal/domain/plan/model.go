@@ -21,12 +21,12 @@ type Plan struct {
 
 // PlanCloneOverrides holds optional overrides for CopyWith. Nil fields mean "keep existing value".
 type PlanCloneOverrides struct {
-	ID                   *string
-	Name                 *string
-	LookupKey            *string
-	Description          *string
-	EnvironmentID        *string // nil = derive from ctx; non-nil = use explicit value
-	Metadata             types.Metadata
+	ID            *string
+	Name          *string
+	LookupKey     *string
+	Description   *string
+	EnvironmentID *string // nil = derive from ctx; non-nil = use explicit value
+	Metadata      types.Metadata
 	DisplayOrder  *int
 	BaseModel     *types.BaseModel
 }
@@ -79,13 +79,13 @@ func FromEnt(e *ent.Plan) *Plan {
 		return nil
 	}
 	return &Plan{
-		ID:                   e.ID,
-		Name:                 e.Name,
-		LookupKey:            e.LookupKey,
-		Description:          e.Description,
-		EnvironmentID:        e.EnvironmentID,
-		Metadata:             types.Metadata(e.Metadata),
-		DisplayOrder: &e.DisplayOrder,
+		ID:            e.ID,
+		Name:          e.Name,
+		LookupKey:     e.LookupKey,
+		Description:   e.Description,
+		EnvironmentID: e.EnvironmentID,
+		Metadata:      types.Metadata(e.Metadata),
+		DisplayOrder:  &e.DisplayOrder,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
