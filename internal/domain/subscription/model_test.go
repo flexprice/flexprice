@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // TestHasMixedBillingPeriods implements PRD Appendix E.2.1 HasMixedBillingPeriods test cases.
@@ -62,5 +63,30 @@ func TestHasMixedBillingPeriods_nil_safe(t *testing.T) {
 	sub.LineItems = []*SubscriptionLineItem{}
 	if sub.HasMixedBillingPeriods() {
 		t.Error("empty LineItems should return false")
+	}
+}
+
+func TestSubscription_HasPositiveAutoInvoiceThreshold(t *testing.T) {
+	z := decimal.Zero
+	neg := decimal.NewFromInt(-1)
+	one := decimal.NewFromInt(1)
+
+	tests := []struct {
+		name string
+		sub  *Subscription
+		want bool
+	}{
+		{"nil_pointer", &Subscription{AutoInvoiceThreshold: nil}, false},
+		{"zero", &Subscription{AutoInvoiceThreshold: &z}, false},
+		{"negative", &Subscription{AutoInvoiceThreshold: &neg}, false},
+		{"positive", &Subscription{AutoInvoiceThreshold: &one}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.sub.HasPositiveAutoInvoiceThreshold(); got != tt.want {
+				t.Errorf("HasPositiveAutoInvoiceThreshold() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
