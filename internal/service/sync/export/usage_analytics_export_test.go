@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -134,8 +135,10 @@ func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 		string(UsageAnalyticsCSVHeadersEndTime),
 		string(UsageAnalyticsCSVHeadersFeatureName),
 		string(UsageAnalyticsCSVHeadersFeatureID),
+		string(UsageAnalyticsCSVHeadersFeatureGroupName),
 		string(UsageAnalyticsCSVHeadersEventName),
 		string(UsageAnalyticsCSVHeadersEventCount),
+		string(UsageAnalyticsCSVHeadersAggregationField),
 		string(UsageAnalyticsCSVHeadersTotalUsage),
 		string(UsageAnalyticsCSVHeadersTotalCost),
 		string(UsageAnalyticsCSVHeadersCurrency),
@@ -194,13 +197,14 @@ func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 				env.addEvent(t, c.ExternalID, env.req.StartTime.Add(1*time.Minute))
 				env.setAnalytics(c.ExternalID, []dto.UsageAnalyticItem{
 					{
-						FeatureID:   "feat-1",
-						FeatureName: "API Calls",
-						EventName:   "api_call",
-						EventCount:  42,
-						TotalUsage:  decimal.NewFromInt(42),
-						TotalCost:   decimal.NewFromFloat(4.20),
-						Currency:    "USD",
+						FeatureID:       "feat-1",
+						FeatureName:     "API Calls",
+						EventName:       "api_call",
+						EventCount:      42,
+						TotalUsage:      decimal.NewFromInt(42),
+						TotalCost:       decimal.NewFromFloat(4.20),
+						Currency:        "USD",
+						AggregationType: types.AggregationCount,
 					},
 				})
 			},
@@ -237,6 +241,43 @@ func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 				}
 				if got := col(string(UsageAnalyticsCSVHeadersCurrency)); got != "USD" {
 					t.Errorf("currency: want USD got %q", got)
+				}
+				if got := col(string(UsageAnalyticsCSVHeadersFeatureGroupName)); got != "" {
+					t.Errorf("feature_group_name: want empty got %q", got)
+				}
+				if got := col(string(UsageAnalyticsCSVHeadersAggregationField)); got != string(types.AggregationCount) {
+					t.Errorf("aggregation_field: want %q got %q", types.AggregationCount, got)
+				}
+			},
+		},
+		{
+			name: "feature group name and aggregation field populated",
+			setup: func(t *testing.T, env *usageAnalyticsTestEnv) {
+				c := env.addCustomer(t, "cust-grp", "ext-grp", "Group Corp", nil)
+				env.addEvent(t, c.ExternalID, env.req.StartTime.Add(1*time.Minute))
+				env.setAnalytics(c.ExternalID, []dto.UsageAnalyticItem{
+					{
+						FeatureID:       "feat-grp",
+						FeatureName:     "LLM Calls",
+						EventName:       "llm_call",
+						EventCount:      10,
+						TotalUsage:      decimal.NewFromInt(10),
+						TotalCost:       decimal.NewFromInt(1),
+						Currency:        "USD",
+						AggregationType: types.AggregationSum,
+						Group:           &group.Group{ID: "grp-1", Name: "AI Features"},
+					},
+				})
+			},
+			wantCount: 1,
+			wantRows:  1,
+			assertRow: func(t *testing.T, headers []string, rows [][]string, _ *usageAnalyticsTestEnv) {
+				col := func(name string) string { return colVal(t, headers, rows[0], name) }
+				if got := col(string(UsageAnalyticsCSVHeadersFeatureGroupName)); got != "AI Features" {
+					t.Errorf("feature_group_name: want 'AI Features' got %q", got)
+				}
+				if got := col(string(UsageAnalyticsCSVHeadersAggregationField)); got != string(types.AggregationSum) {
+					t.Errorf("aggregation_field: want %q got %q", types.AggregationSum, got)
 				}
 			},
 		},
