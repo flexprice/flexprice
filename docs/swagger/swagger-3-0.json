@@ -8000,6 +8000,66 @@
         "x-codegen-request-body-name": "request"
       }
     },
+    "/subscriptions/lineitems/search": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Search subscription line items",
+        "description": "List subscription line items with a JSON filter (subscription, customer, price, pagination, expand=prices, etc.).",
+        "operationId": "querySubscriptionLineItems",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.SubscriptionLineItemFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSubscriptionLineItemsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
     "/subscriptions/lineitems/{id}": {
       "put": {
         "tags": [
@@ -13504,6 +13564,20 @@
           }
         }
       },
+      "ListSubscriptionLineItemsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionLineItemResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListSubscriptionsResponse": {
         "type": "object",
         "properties": {
@@ -17248,6 +17322,9 @@
         ],
         "type": "object",
         "properties": {
+          "grouped_invoicing_params": {
+            "$ref": "#/components/schemas/SubModifyGroupedInvoicingParams"
+          },
           "inheritance_params": {
             "$ref": "#/components/schemas/SubModifyInheritanceRequest"
           },
@@ -17990,6 +18067,17 @@
             "format": "date-time"
           }
         }
+      },
+      "GroupedInvoicingAction": {
+        "type": "string",
+        "enum": [
+          "add",
+          "remove"
+        ],
+        "x-enum-varnames": [
+          "GroupedInvoicingActionAdd",
+          "GroupedInvoicingActionRemove"
+        ]
       },
       "IngestEventRequest": {
         "required": [
@@ -19657,6 +19745,27 @@
           }
         }
       },
+      "SubModifyGroupedInvoicingParams": {
+        "required": [
+          "action"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/GroupedInvoicingAction"
+          },
+          "child_subscription_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parent_subscription_id": {
+            "type": "string",
+            "description": "ParentSubscriptionID is required for action 'add'."
+          }
+        }
+      },
       "SubModifyInheritanceRequest": {
         "type": "object",
         "properties": {
@@ -19848,15 +19957,25 @@
         "properties": {
           "external_customer_ids_to_inherit_subscription": {
             "type": "array",
+            "description": "ExternalCustomerIDsToInheritSubscription: child customer external IDs for which\ninherited skeleton subscriptions will be created. Only valid for parent behavior.",
             "items": {
               "type": "string"
             }
           },
           "invoicing_customer_external_id": {
-            "type": "string"
+            "type": "string",
+            "description": "InvoicingCustomerExternalID sets a different billing recipient (external ID).\nRequired for delegated; rejected for inherited; optional for others."
           },
           "parent_subscription_id": {
-            "type": "string"
+            "type": "string",
+            "description": "ParentSubscriptionID links this subscription to an existing parent.\nRequired for inherited and grouped_invoicing; rejected for standalone, delegated, parent."
+          },
+          "subscriptions_ids_for_grouped_invoicing": {
+            "type": "array",
+            "description": "SubscriptionsIDsForGroupedInvoicing: existing standalone subscription IDs to convert to\ngrouped_invoicing under this parent at creation time. Only valid for parent behavior.",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -20020,11 +20139,13 @@
         "type": "string",
         "enum": [
           "inheritance",
-          "quantity_change"
+          "quantity_change",
+          "grouped_invoicing"
         ],
         "x-enum-varnames": [
           "SubscriptionModifyTypeInheritance",
-          "SubscriptionModifyTypeQuantityChange"
+          "SubscriptionModifyTypeQuantityChange",
+          "SubscriptionModifyTypeGroupedInvoicing"
         ]
       },
       "SubscriptionPhaseCreateRequest": {
@@ -23395,6 +23516,12 @@
             "minimum": 1,
             "type": "integer"
           },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "offset": {
             "minimum": 0,
             "type": "integer"
@@ -23880,6 +24007,7 @@
           "SUBSCRIPTION_CYCLE",
           "SUBSCRIPTION_UPDATE",
           "SUBSCRIPTION_TRIAL_END",
+          "SUBSCRIPTION_TRIAL_START",
           "PRORATION",
           "MANUAL"
         ],
@@ -23888,6 +24016,7 @@
           "InvoiceBillingReasonSubscriptionCycle",
           "InvoiceBillingReasonSubscriptionUpdate",
           "InvoiceBillingReasonSubscriptionTrialEnd",
+          "InvoiceBillingReasonSubscriptionTrialStart",
           "InvoiceBillingReasonProration",
           "InvoiceBillingReasonManual"
         ],
@@ -24231,6 +24360,12 @@
           },
           "lookup_key": {
             "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "offset": {
             "minimum": 0,
@@ -24595,6 +24730,13 @@
             "type": "string",
             "description": "Custom S3 endpoint URL (e.g., \"http://minio:9000\" for MinIO)"
           },
+          "export_metadata_fields": {
+            "type": "array",
+            "description": "Optional user-selected metadata columns",
+            "items": {
+              "$ref": "#/components/schemas/types.ExportMetadataField"
+            }
+          },
           "key_prefix": {
             "type": "string",
             "description": "Optional prefix for S3 keys (e.g., \"flexprice-exports/\")"
@@ -24605,7 +24747,7 @@
           },
           "use_path_style": {
             "type": "boolean",
-            "description": "Use path-style addressing instead of virtual-hosted-style (required for MinIO)"
+            "description": "Use path-style addressing (required for MinIO)"
           }
         },
         "x-speakeasy-name-override": "S3JobConfig"
@@ -24646,13 +24788,15 @@
           "events",
           "invoice",
           "credit_topups",
-          "credit_usage"
+          "credit_usage",
+          "usage_analytics"
         ],
         "x-enum-varnames": [
           "ScheduledTaskEntityTypeEvents",
           "ScheduledTaskEntityTypeInvoice",
           "ScheduledTaskEntityTypeCreditTopups",
-          "ScheduledTaskEntityTypeCreditUsage"
+          "ScheduledTaskEntityTypeCreditUsage",
+          "ScheduledTaskEntityTypeUsageAnalytics"
         ],
         "x-speakeasy-name-override": "ScheduledTaskEntityType"
       },
@@ -24956,13 +25100,17 @@
         "type": "string",
         "enum": [
           "standalone",
+          "delegated_invoicing",
           "parent",
-          "inherited"
+          "inherited",
+          "grouped_invoicing"
         ],
         "x-enum-varnames": [
           "SubscriptionTypeStandalone",
+          "SubscriptionTypeDelegatedInvoicing",
           "SubscriptionTypeParent",
-          "SubscriptionTypeInherited"
+          "SubscriptionTypeInherited",
+          "SubscriptionTypeGroupedInvoicing"
         ],
         "x-speakeasy-name-override": "SubscriptionType"
       },
@@ -26363,6 +26511,39 @@
         ],
         "x-speakeasy-name-override": "EnvironmentType"
       },
+      "types.ExportMetadataEntityType": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "wallet"
+        ],
+        "x-enum-varnames": [
+          "ExportMetadataEntityTypeCustomer",
+          "ExportMetadataEntityTypeWallet"
+        ],
+        "x-speakeasy-name-override": "ExportMetadataEntityType"
+      },
+      "types.ExportMetadataField": {
+        "required": [
+          "entity_type",
+          "field_key"
+        ],
+        "type": "object",
+        "properties": {
+          "column_name": {
+            "type": "string",
+            "description": "CSV column header to be shown in the exported file"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.ExportMetadataEntityType"
+          },
+          "field_key": {
+            "type": "string",
+            "description": "metadata key to look up"
+          }
+        },
+        "x-speakeasy-name-override": "ExportMetadataField"
+      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -26384,6 +26565,114 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.SubscriptionLineItemFilter": {
+        "type": "object",
+        "properties": {
+          "active_filter": {
+            "type": "boolean",
+            "default": true
+          },
+          "addon_association_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "billing_periods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "currencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "current_period_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.SubscriptionLineItemEntityType"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "meter_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "price_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_ids": {
+            "type": "array",
+            "description": "Specific filters",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "SubscriptionLineItemFilter"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",
