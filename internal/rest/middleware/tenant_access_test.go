@@ -29,10 +29,6 @@ func (m *mockTenantRepo) Create(_ context.Context, _ *domainTenant.Tenant) error
 func (m *mockTenantRepo) List(_ context.Context) ([]*domainTenant.Tenant, error) { return nil, nil }
 func (m *mockTenantRepo) Update(_ context.Context, _ *domainTenant.Tenant) error { return nil }
 
-// newTestRouter builds a minimal Gin router that:
-//  1. Seeds tenantID into the request context (simulating AuthenticateMiddleware)
-//  2. Runs TenantAccessMiddleware
-//  3. Has a /test handler that writes the internal_status from ctx into the response
 func newTestLogger(t *testing.T) *logger.Logger {
 	t.Helper()
 	log, err := logger.NewLogger(&config.Configuration{
@@ -44,6 +40,10 @@ func newTestLogger(t *testing.T) *logger.Logger {
 	return log
 }
 
+// newTestRouter builds a minimal Gin router that:
+//  1. Seeds tenantID into the request context (simulating AuthenticateMiddleware)
+//  2. Runs TenantAccessMiddleware
+//  3. Has a /test handler that writes the internal_status from ctx into the response
 func newTestRouter(t *testing.T, tenantID string, repo *mockTenantRepo) *gin.Engine {
 	log := newTestLogger(t)
 
@@ -115,10 +115,10 @@ func TestTenantAccessMiddleware(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "repo error fails open and passes through",
+			name:       "repo error fails closed with 500",
 			tenantID:   "tenant-4",
 			repoErr:    errors.New("db unavailable"),
-			wantStatus: http.StatusOK,
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 

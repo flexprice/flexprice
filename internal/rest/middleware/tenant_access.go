@@ -24,7 +24,10 @@ func TenantAccessMiddleware(tenantRepo tenant.Repository, logger *logger.Logger)
 		t, err := tenantRepo.GetByID(c.Request.Context(), tenantID)
 		if err != nil {
 			logger.Errorw("tenant access: failed to load tenant", "tenant_id", tenantID, "error", err)
-			c.Next()
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "failed to verify tenant access",
+			})
+			c.Abort()
 			return
 		}
 
