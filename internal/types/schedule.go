@@ -13,14 +13,14 @@ import (
 type ScheduleID string
 
 const (
-	ScheduleIDCreditGrantProcessing        ScheduleID = "credit-grants-processing"
-	ScheduleIDSubscriptionAutoCancellation ScheduleID = "subscription-auto-cancellation"
-	ScheduleIDWalletCreditExpiry           ScheduleID = "wallet-credit-expiry"
-	ScheduleIDSubscriptionBilling          ScheduleID = "subscription-billing"
-	ScheduleIDSubscriptionRenewalAlerts    ScheduleID = "subscription-renewal-due-alerts"
-	ScheduleIDSubscriptionTrialEndDue      ScheduleID = "subscription-trial-end-due"
+	ScheduleIDCreditGrantProcessing                   ScheduleID = "credit-grants-processing"
+	ScheduleIDSubscriptionAutoCancellation            ScheduleID = "subscription-auto-cancellation"
+	ScheduleIDWalletCreditExpiry                      ScheduleID = "wallet-credit-expiry"
+	ScheduleIDSubscriptionBilling                     ScheduleID = "subscription-billing"
+	ScheduleIDSubscriptionRenewalAlerts               ScheduleID = "subscription-renewal-due-alerts"
+	ScheduleIDSubscriptionTrialEndDue                 ScheduleID = "subscription-trial-end-due"
 	ScheduleIDSubscriptionAutoInvoiceThresholdBilling ScheduleID = "subscription-auto-invoice-threshold-billing"
-	ScheduleIDOutboundWebhookStaleRetry    ScheduleID = "webhook-stale-retry"
+	ScheduleIDOutboundWebhookStaleRetry               ScheduleID = "webhook-stale-retry"
 )
 
 // String returns the raw schedule id.
