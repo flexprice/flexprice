@@ -74,17 +74,17 @@ func (a *SubscriptionCronActivities) ProcessRenewalDueAlertsActivity(ctx context
 	return &cronModels.SubscriptionRenewalDueAlertsWorkflowResult{}, nil
 }
 
-// ProcessThresholdBillingActivity runs ProcessThresholdBilling for all qualifying subscriptions.
-func (a *SubscriptionCronActivities) ProcessThresholdBillingActivity(ctx context.Context) (*cronModels.ThresholdBillingWorkflowResult, error) {
+// ProcessAutoInvoiceThresholdBillingActivity runs ProcessAutoInvoiceThresholdBilling for all qualifying subscriptions.
+func (a *SubscriptionCronActivities) ProcessAutoInvoiceThresholdBillingActivity(ctx context.Context) (*cronModels.AutoInvoiceThresholdBillingWorkflowResult, error) {
 	log := activity.GetLogger(ctx)
-	log.Info("Processing threshold billing (cron activity)")
+	log.Info("Processing auto invoice threshold billing (cron activity)")
 
-	result, err := a.subscriptionService.ProcessThresholdBilling(ctx)
+	result, err := a.subscriptionService.ProcessAutoInvoiceThresholdBilling(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &cronModels.ThresholdBillingWorkflowResult{
+	return &cronModels.AutoInvoiceThresholdBillingWorkflowResult{
 		TotalChecked:  result.TotalChecked,
 		TotalInvoiced: result.TotalInvoiced,
 		TotalSkipped:  result.TotalSkipped,

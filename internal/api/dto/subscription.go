@@ -455,7 +455,7 @@ type CreateSubscriptionRequest struct {
 
 	// AutoInvoiceThreshold is the usage amount (in subscription currency) that triggers
 	// an intermediate invoice mid-period. Set once at creation; cannot be changed later.
-	// Nil means threshold billing is disabled for this subscription.
+	// Nil means auto invoice threshold billing is disabled for this subscription.
 	AutoInvoiceThreshold *decimal.Decimal `json:"auto_invoice_threshold,omitempty" swaggertype:"string"`
 
 	// Inheritance groups all customer-hierarchy fields.
@@ -690,6 +690,14 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 	if r.OpeningInvoiceAdjustmentAmount != nil && r.OpeningInvoiceAdjustmentAmount.IsNegative() {
 		return ierr.NewError("opening invoice adjustment amount must be >= 0").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.AutoInvoiceThreshold != nil && r.AutoInvoiceThreshold.IsNegative() {
+		return ierr.NewError("auto_invoice_threshold must be zero or greater").
+			WithReportableDetails(map[string]any{
+				"auto_invoice_threshold": r.AutoInvoiceThreshold.String(),
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1781,17 +1789,17 @@ type SubscriptionUpdatePeriodResponseItem struct {
 	Error          string    `json:"error"`
 }
 
-// ThresholdBillingResult is the result of a single ProcessThresholdBilling run.
-type ThresholdBillingResult struct {
-	TotalChecked  int                           `json:"total_checked"`
-	TotalInvoiced int                           `json:"total_invoiced"`
-	TotalSkipped  int                           `json:"total_skipped"`
-	TotalFailed   int                           `json:"total_failed"`
-	Items         []*ThresholdBillingResultItem `json:"items,omitempty"`
+// AutoInvoiceThresholdBillingResult is the result of a single ProcessAutoInvoiceThresholdBilling run.
+type AutoInvoiceThresholdBillingResult struct {
+	TotalChecked  int                                    `json:"total_checked"`
+	TotalInvoiced int                                    `json:"total_invoiced"`
+	TotalSkipped  int                                    `json:"total_skipped"`
+	TotalFailed   int                                    `json:"total_failed"`
+	Items         []*AutoInvoiceThresholdBillingResultItem `json:"items,omitempty"`
 }
 
-// ThresholdBillingResultItem is the per-subscription outcome.
-type ThresholdBillingResultItem struct {
+// AutoInvoiceThresholdBillingResultItem is the per-subscription outcome for auto invoice threshold billing.
+type AutoInvoiceThresholdBillingResultItem struct {
 	SubscriptionID string `json:"subscription_id"`
 	Invoiced       bool   `json:"invoiced"`
 	InvoiceID      string `json:"invoice_id,omitempty"`

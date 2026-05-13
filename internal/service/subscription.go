@@ -7618,16 +7618,17 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 	return nil
 }
 
-// ProcessThresholdBilling checks all subscriptions with an effective auto_invoice_threshold
-// and generates mid-period invoices for those whose current-period usage has crossed the threshold.
-func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto.ThresholdBillingResult, error) {
+// ProcessAutoInvoiceThresholdBilling checks active, published subscriptions that have auto_invoice_threshold
+// set on the subscription (not inherited from a plan) and runs auto invoice threshold billing:
+// mid-period invoices when current-period usage has crossed that threshold.
+func (s *subscriptionService) ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*dto.AutoInvoiceThresholdBillingResult, error) {
 	const batchSize = 1000
 	effectiveTime := time.Now().UTC()
 
-	s.Logger.InfowCtx(ctx, "starting threshold billing run", "effective_time", effectiveTime)
+	s.Logger.InfowCtx(ctx, "starting auto invoice threshold billing run", "effective_time", effectiveTime)
 
-	result := &dto.ThresholdBillingResult{
-		Items: make([]*dto.ThresholdBillingResultItem, 0),
+	result := &dto.AutoInvoiceThresholdBillingResult{
+		Items: make([]*dto.AutoInvoiceThresholdBillingResultItem, 0),
 	}
 
 	offset := 0
@@ -7646,10 +7647,10 @@ func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto
 			subCtx = context.WithValue(subCtx, types.CtxUserID, sub.CreatedBy)
 
 			result.TotalChecked++
-			item := &dto.ThresholdBillingResultItem{SubscriptionID: sub.ID}
+			item := &dto.AutoInvoiceThresholdBillingResultItem{SubscriptionID: sub.ID}
 
 			if err := s.processAutoInvoiceThresholdSubscription(subCtx, sub, effectiveTime, item); err != nil {
-				s.Logger.ErrorwCtx(subCtx, "threshold billing failed for subscription",
+				s.Logger.ErrorwCtx(subCtx, "auto invoice threshold billing failed for subscription",
 					"subscription_id", sub.ID, "error", err)
 				result.TotalFailed++
 				item.Error = err.Error()
@@ -7667,7 +7668,7 @@ func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto
 		}
 	}
 
-	s.Logger.InfowCtx(ctx, "threshold billing run complete",
+	s.Logger.InfowCtx(ctx, "auto invoice threshold billing run complete",
 		"total_checked", result.TotalChecked,
 		"total_invoiced", result.TotalInvoiced,
 		"total_skipped", result.TotalSkipped,
@@ -7676,11 +7677,13 @@ func (s *subscriptionService) ProcessThresholdBilling(ctx context.Context) (*dto
 	return result, nil
 }
 
+// processAutoInvoiceThresholdSubscription implements one subscription's auto invoice threshold billing run;
+// plan-level thresholds are not used.
 func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	effectiveTime time.Time,
-	item *dto.ThresholdBillingResultItem,
+	item *dto.AutoInvoiceThresholdBillingResultItem,
 ) error {
 
 	// Calculate current-period usage amount.

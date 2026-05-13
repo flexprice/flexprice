@@ -45,7 +45,7 @@ func TestAllTemporalServerScheduleIDs_covers_all_consts(t *testing.T) {
 		ScheduleIDSubscriptionBilling,
 		ScheduleIDSubscriptionRenewalAlerts,
 		ScheduleIDSubscriptionTrialEndDue,
-		ScheduleIDSubscriptionThresholdBilling,
+		ScheduleIDSubscriptionAutoInvoiceThresholdBilling,
 		ScheduleIDOutboundWebhookStaleRetry,
 	} {
 		_, ok := seen[c]

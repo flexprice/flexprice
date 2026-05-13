@@ -229,9 +229,9 @@ const (
 	// Zero-dollar: marked SKIPPED.
 	InvoiceBillingReasonManual InvoiceBillingReason = "MANUAL"
 
-	// InvoiceBillingReasonThresholdBilling is generated mid-period when cumulative usage for the
+	// InvoiceBillingReasonAutoInvoiceThreshold is generated mid-period when cumulative usage for the
 	// current billing period crosses the subscription's auto_invoice_threshold.
-	// Flow: ThresholdBillingWorkflow (5-min cron) → ProcessThresholdBilling service method
+	// Flow: AutoInvoiceThresholdBillingWorkflow (5-min schedule) → ProcessAutoInvoiceThresholdBilling service method
 	// Compute: arrear usage charges for current_period_start → now (ReferencePointPeriodEnd)
 	// Zero-dollar: marked SKIPPED; current_period_start still advances to avoid re-checking.
 	// Side-effect: advances current_period_start to the invoice's period_end after finalization.

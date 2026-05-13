@@ -32,7 +32,7 @@ type Repository interface {
 	// Dashboard methods
 	GetRecentSubscriptionsByPlan(ctx context.Context) ([]types.SubscriptionPlanCount, error)
 
-	// GetSubscriptionsWithAutoInvoiceThreshold returns active subscriptions (paginated) where
-	// either the subscription itself or its plan has auto_invoice_threshold set.
+	// GetSubscriptionsWithAutoInvoiceThreshold returns active, published subscriptions (paginated)
+	// where auto_invoice_threshold is set on the subscription (non-nil and > 0).
 	GetSubscriptionsWithAutoInvoiceThreshold(ctx context.Context, limit, offset int) ([]*Subscription, error)
 }

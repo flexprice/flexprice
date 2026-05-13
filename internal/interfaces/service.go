@@ -116,9 +116,9 @@ type SubscriptionService interface {
 	// Renewal due alert methods
 	ProcessSubscriptionRenewalDueAlert(ctx context.Context) error
 
-	// ProcessThresholdBilling checks all subscriptions with an effective auto_invoice_threshold
-	// and generates mid-period invoices for those whose current-period usage has crossed the threshold.
-	ProcessThresholdBilling(ctx context.Context) (*dto.ThresholdBillingResult, error)
+	// ProcessAutoInvoiceThresholdBilling checks subscriptions with subscription-level auto_invoice_threshold
+	// set and runs auto invoice threshold billing (mid-period invoices when usage crosses that threshold).
+	ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*dto.AutoInvoiceThresholdBillingResult, error)
 
 	// Feature usage tracking
 	GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
