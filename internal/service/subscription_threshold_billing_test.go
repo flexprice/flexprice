@@ -80,7 +80,7 @@ func (s *SubscriptionThresholdBillingTestSuite) setupService() {
 		CouponRepo:                 s.GetStores().CouponRepo,
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
-		AddonRepo:                  testutil.NewInMemoryAddonStore(),
+		AddonRepo:                  testutil.NewInMemoryAddonStore(), // not in GetStores(); matches pattern used by other suites
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
@@ -94,7 +94,7 @@ func (s *SubscriptionThresholdBillingTestSuite) setupService() {
 
 func (s *SubscriptionThresholdBillingTestSuite) setupTestData() {
 	ctx := s.GetContext()
-	s.testData.now = time.Now().UTC()
+	s.testData.now = s.GetNow()
 
 	// Customer
 	s.testData.customer = &customer.Customer{
@@ -165,7 +165,7 @@ func (s *SubscriptionThresholdBillingTestSuite) setupTestData() {
 		Currency:         "usd",
 		BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
 		InvoiceCadence:   types.InvoiceCadenceArrear,
-		StartDate:        s.testData.now.Add(-30 * 24 * time.Hour),
+		StartDate:        s.testData.now.Add(-7 * 24 * time.Hour),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 	s.testData.subA = &subscription.Subscription{
@@ -181,6 +181,7 @@ func (s *SubscriptionThresholdBillingTestSuite) setupTestData() {
 		BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount:   1,
 		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeStandalone,
 		AutoInvoiceThreshold: &threshold,
 		BaseModel:            types.GetDefaultBaseModel(ctx),
 	}
@@ -200,6 +201,7 @@ func (s *SubscriptionThresholdBillingTestSuite) setupTestData() {
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
+		SubscriptionType:   types.SubscriptionTypeStandalone,
 		// AutoInvoiceThreshold intentionally nil
 		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
