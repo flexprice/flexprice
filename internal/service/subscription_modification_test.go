@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ func (s *SubscriptionModificationServiceSuite) buildServiceParams() ServiceParam
 		CouponRepo:                 s.GetStores().CouponRepo,
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
-		AddonRepo:                  testutil.NewInMemoryAddonStore(),
+		AddonRepo:                  s.GetStores().AddonRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
@@ -633,6 +634,56 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_InheritedS
 		},
 	})
 	s.Require().Error(err)
+}
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_RejectedWhenParentHasAutoInvoiceThreshold() {
+	ctx := s.GetContext()
+
+	parent := s.createCustomer("ext-parent-thresh-guard")
+	child := s.createCustomer("ext-child-thresh-guard")
+	sub := s.createActiveSub(parent.ID)
+	th := decimal.RequireFromString("42")
+	sub.AutoInvoiceThreshold = &th
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeInheritance,
+		InheritanceParams: &dto.SubModifyInheritanceRequest{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	}
+
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(strings.ToLower(err.Error()), "auto_invoice_threshold")
+
+	_, err = s.service.Preview(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(strings.ToLower(err.Error()), "auto_invoice_threshold")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_AllowedWhenAutoInvoiceThresholdZero() {
+	ctx := s.GetContext()
+
+	parent := s.createCustomer("ext-parent-zero-thresh-ok")
+	child := s.createCustomer("ext-child-zero-thresh-ok")
+	sub := s.createActiveSub(parent.ID)
+	z := decimal.Zero
+	sub.AutoInvoiceThreshold = &z
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeInheritance,
+		InheritanceParams: &dto.SubModifyInheritanceRequest{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	}
+
+	_, err := s.service.Preview(ctx, sub.ID, req)
+	s.Require().NoError(err)
+
+	_, err = s.service.Execute(ctx, sub.ID, req)
+	s.Require().NoError(err)
 }
 
 // ─────────────────────────────────────────────

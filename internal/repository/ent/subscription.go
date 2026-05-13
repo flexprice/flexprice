@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type subscriptionRepository struct {
@@ -1159,4 +1160,38 @@ func (r *subscriptionRepository) GetRecentSubscriptionsByPlan(ctx context.Contex
 
 	SetSpanSuccess(span)
 	return results, nil
+}
+
+// GetSubscriptionsWithAutoInvoiceThreshold returns active, published subscriptions (paginated)
+// where auto_invoice_threshold is set directly on the subscription.
+// this runs without the tenant and environment filters applied,only use this for auto invoice threshold billing.
+func (r *subscriptionRepository) GetSubscriptionsWithAutoInvoiceThreshold(ctx context.Context, limit, offset int) ([]*domainSub.Subscription, error) {
+
+	subs, err := r.client.Reader(ctx).Subscription.Query().
+		Where(
+			subscription.Status(string(types.StatusPublished)),
+			subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive),
+			subscription.AutoInvoiceThresholdNotNil(),
+			subscription.AutoInvoiceThresholdGT(decimal.Zero),
+		).
+		Order(ent.Asc(subscription.FieldID)).
+		Limit(limit).
+		Offset(offset).
+		All(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch threshold subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(subs) == 0 {
+		return []*domainSub.Subscription{}, nil
+	}
+
+	result := make([]*domainSub.Subscription, len(subs))
+	for i, sub := range subs {
+		result[i] = domainSub.GetSubscriptionFromEnt(sub)
+	}
+
+	return result, nil
 }

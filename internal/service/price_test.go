@@ -29,6 +29,7 @@ type PriceServiceSuite struct {
 	meterRepo     *testutil.InMemoryMeterStore
 	planRepo      *testutil.InMemoryPlanStore
 	priceUnitRepo *testutil.InMemoryPriceUnitStore
+	addonRepo     *testutil.InMemoryAddonStore
 	logger        *logger.Logger
 }
 
@@ -42,13 +43,14 @@ func (s *PriceServiceSuite) SetupTest() {
 	s.meterRepo = testutil.NewInMemoryMeterStore()
 	s.planRepo = testutil.NewInMemoryPlanStore()
 	s.priceUnitRepo = testutil.NewInMemoryPriceUnitStore()
+	s.addonRepo = testutil.NewInMemoryAddonStore()
 	s.logger = logger.GetLogger()
 
 	serviceParams := ServiceParams{
 		PriceRepo:     s.priceRepo,
 		MeterRepo:     s.meterRepo,
 		PlanRepo:      s.planRepo,
-		AddonRepo:     testutil.NewInMemoryAddonStore(),
+		AddonRepo:     s.addonRepo,
 		SubRepo:       testutil.NewInMemorySubscriptionStore(),
 		PriceUnitRepo: s.priceUnitRepo,
 		Logger:        s.logger,
@@ -2237,11 +2239,12 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 	s.Run("bulk_creation_at_exact_limit", func() {
 		// Clear previous prices for this test
 		s.priceRepo = testutil.NewInMemoryPriceStore()
+		s.addonRepo.Clear()
 		serviceParams := ServiceParams{
 			PriceRepo:     s.priceRepo,
 			MeterRepo:     s.meterRepo,
 			PlanRepo:      s.planRepo,
-			AddonRepo:     testutil.NewInMemoryAddonStore(),
+			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
 			Logger:        s.logger,
@@ -2289,11 +2292,12 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 	s.Run("bulk_creation_multiple_prices_same_entity", func() {
 		// Clear previous prices for this test
 		s.priceRepo = testutil.NewInMemoryPriceStore()
+		s.addonRepo.Clear()
 		serviceParams := ServiceParams{
 			PriceRepo:     s.priceRepo,
 			MeterRepo:     s.meterRepo,
 			PlanRepo:      s.planRepo,
-			AddonRepo:     testutil.NewInMemoryAddonStore(),
+			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
 			Logger:        s.logger,
@@ -2374,11 +2378,12 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 
 		// Clear previous prices for this test
 		s.priceRepo = testutil.NewInMemoryPriceStore()
+		s.addonRepo.Clear()
 		serviceParams := ServiceParams{
 			PriceRepo:     s.priceRepo,
 			MeterRepo:     s.meterRepo,
 			PlanRepo:      s.planRepo,
-			AddonRepo:     testutil.NewInMemoryAddonStore(),
+			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
 			Logger:        s.logger,
@@ -2440,11 +2445,12 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 	s.Run("bulk_creation_with_skip_entity_validation", func() {
 		// Clear previous prices for this test
 		s.priceRepo = testutil.NewInMemoryPriceStore()
+		s.addonRepo.Clear()
 		serviceParams := ServiceParams{
 			PriceRepo:     s.priceRepo,
 			MeterRepo:     s.meterRepo,
 			PlanRepo:      s.planRepo,
-			AddonRepo:     testutil.NewInMemoryAddonStore(),
+			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
 			Logger:        s.logger,
@@ -2506,11 +2512,12 @@ func (s *PriceServiceSuite) TestCreateBulkPrice_EntityPriceLimitValidation() {
 	s.Run("bulk_creation_mixed_skip_validation", func() {
 		// Clear previous prices for this test
 		s.priceRepo = testutil.NewInMemoryPriceStore()
+		s.addonRepo.Clear()
 		serviceParams := ServiceParams{
 			PriceRepo:     s.priceRepo,
 			MeterRepo:     s.meterRepo,
 			PlanRepo:      s.planRepo,
-			AddonRepo:     testutil.NewInMemoryAddonStore(),
+			AddonRepo:     s.addonRepo,
 			SubRepo:       testutil.NewInMemorySubscriptionStore(),
 			PriceUnitRepo: s.priceUnitRepo,
 			Logger:        s.logger,

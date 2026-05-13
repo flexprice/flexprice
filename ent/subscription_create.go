@@ -576,6 +576,20 @@ func (sc *SubscriptionCreate) SetNillableSubscriptionType(tt *types.Subscription
 	return sc
 }
 
+// SetAutoInvoiceThreshold sets the "auto_invoice_threshold" field.
+func (sc *SubscriptionCreate) SetAutoInvoiceThreshold(d decimal.Decimal) *SubscriptionCreate {
+	sc.mutation.SetAutoInvoiceThreshold(d)
+	return sc
+}
+
+// SetNillableAutoInvoiceThreshold sets the "auto_invoice_threshold" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableAutoInvoiceThreshold(d *decimal.Decimal) *SubscriptionCreate {
+	if d != nil {
+		sc.SetAutoInvoiceThreshold(*d)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -1167,6 +1181,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.SubscriptionType(); ok {
 		_spec.SetField(subscription.FieldSubscriptionType, field.TypeString, value)
 		_node.SubscriptionType = value
+	}
+	if value, ok := sc.mutation.AutoInvoiceThreshold(); ok {
+		_spec.SetField(subscription.FieldAutoInvoiceThreshold, field.TypeOther, value)
+		_node.AutoInvoiceThreshold = &value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

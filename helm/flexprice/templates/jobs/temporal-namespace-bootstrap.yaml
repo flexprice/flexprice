@@ -1,0 +1,80 @@
+{{- /*
+  Bootstraps Temporal namespaces declared in `.Values.temporalConfig.bootstrapNamespaces`.
+
+  Default value (see values.yaml): a single "default" namespace with 72h retention,
+  matching the legacy `provision.sh` behaviour. Idempotent — `tctl namespace register`
+  exits non-zero only if Temporal itself is unreachable; "already exists" is filtered.
+
+  Skipped when:
+    - .Values.temporalConfig.enabled = false  (no Temporal at all)
+    - .Values.temporalConfig.bootstrapNamespaces is empty / nil
+    - .Values.temporal.admintools.enabled = false  AND no external bootstrap image override
+
+  The hook fires post-install and post-upgrade so it runs after Temporal's own
+  schema-setup hooks complete and the frontend service is reachable.
+*/}}
+{{- if and .Values.temporalConfig.enabled (gt (len (default (list) .Values.temporalConfig.bootstrapNamespaces)) 0) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "flexprice.fullname" . }}-temporal-bootstrap
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: temporal-bootstrap
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: bootstrap
+          image: "{{ .Values.temporalConfig.bootstrapImage.repository | default "temporalio/admin-tools" }}:{{ .Values.temporalConfig.bootstrapImage.tag | default "1.24.2-tctl-1.18.1-cli-0.13.2" }}"
+          imagePullPolicy: {{ .Values.temporalConfig.bootstrapImage.pullPolicy | default "IfNotPresent" }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: {{ include "flexprice.temporalAddress" . | quote }}
+            - name: TEMPORAL_CLI_ADDRESS
+              value: {{ include "flexprice.temporalAddress" . | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              echo "Waiting for Temporal frontend at ${TEMPORAL_ADDRESS}..."
+              for i in $(seq 1 60); do
+                if temporal --address "${TEMPORAL_ADDRESS}" operator cluster system >/dev/null 2>&1; then
+                  echo "Temporal is healthy."
+                  break
+                fi
+                if [ "$i" -eq 60 ]; then
+                  echo "ERROR: Temporal frontend unreachable after 60s"
+                  exit 1
+                fi
+                sleep 1
+              done
+              {{- range $ns := .Values.temporalConfig.bootstrapNamespaces }}
+              echo "Registering namespace: {{ $ns.name }} (retention {{ $ns.retention | default "72h" }})"
+              temporal --address "${TEMPORAL_ADDRESS}" operator namespace create --namespace {{ $ns.name | quote }} --retention {{ $ns.retention | default "72h" | quote }}{{ with $ns.description }} --description {{ . | quote }}{{ end }} 2>&1 | grep -v 'Namespace .* already (exists|registered)' || true
+              {{- end }}
+              echo "Temporal namespace bootstrap complete."
+          resources:
+            {{- toYaml (.Values.temporalConfig.bootstrapResources | default dict) | nindent 12 }}
+{{- end }}

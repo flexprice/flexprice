@@ -59,6 +59,7 @@ const (
 	TemporalSubscriptionBillingPeriodsWorkflow         TemporalWorkflowType = "SubscriptionBillingPeriodsWorkflow"
 	TemporalSubscriptionRenewalDueAlertsWorkflow       TemporalWorkflowType = "SubscriptionRenewalDueAlertsWorkflow"
 	TemporalOutboundWebhookStaleRetryWorkflow          TemporalWorkflowType = "OutboundWebhookStaleRetryWorkflow"
+	TemporalAutoInvoiceThresholdBillingWorkflow        TemporalWorkflowType = "AutoInvoiceThresholdBillingWorkflow"
 	TemporalChargebeeCustomerSyncWorkflow              TemporalWorkflowType = "ChargebeeCustomerSyncWorkflow"
 	TemporalChargebeeInvoiceSyncWorkflow               TemporalWorkflowType = "ChargebeeInvoiceSyncWorkflow"
 	TemporalComputeInvoiceWorkflow                     TemporalWorkflowType = "ComputeInvoiceWorkflow"
@@ -108,6 +109,7 @@ var temporalCronWorkflowTypes = []TemporalWorkflowType{
 	TemporalSubscriptionBillingPeriodsWorkflow,
 	TemporalSubscriptionRenewalDueAlertsWorkflow,
 	TemporalOutboundWebhookStaleRetryWorkflow,
+	TemporalAutoInvoiceThresholdBillingWorkflow,
 }
 
 var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{

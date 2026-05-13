@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 func baseCreateSubscriptionRequest() CreateSubscriptionRequest {
@@ -78,6 +79,46 @@ func TestCreateSubscriptionRequestValidate_BillingAnchorOnOrAfterStartDate(t *te
 		err := req.Validate()
 		if err != nil {
 			t.Fatalf("expected no error, got: %v", err)
+		}
+	})
+}
+
+func TestCreateSubscriptionRequestValidate_AutoInvoiceThreshold(t *testing.T) {
+	t.Run("nil passes", func(t *testing.T) {
+		req := baseCreateSubscriptionRequest()
+		if err := req.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+	})
+
+	t.Run("zero passes", func(t *testing.T) {
+		req := baseCreateSubscriptionRequest()
+		z := decimal.Zero
+		req.AutoInvoiceThreshold = &z
+		if err := req.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+	})
+
+	t.Run("positive passes", func(t *testing.T) {
+		req := baseCreateSubscriptionRequest()
+		p := decimal.RequireFromString("10")
+		req.AutoInvoiceThreshold = &p
+		if err := req.Validate(); err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+	})
+
+	t.Run("negative fails mentioning auto_invoice_threshold", func(t *testing.T) {
+		req := baseCreateSubscriptionRequest()
+		n := decimal.NewFromInt(-1)
+		req.AutoInvoiceThreshold = &n
+		err := req.Validate()
+		if err == nil {
+			t.Fatal("expected validation error, got nil")
+		}
+		if !strings.Contains(strings.ToLower(err.Error()), "auto_invoice_threshold") {
+			t.Fatalf("expected error to mention auto_invoice_threshold, got: %v", err)
 		}
 	})
 }

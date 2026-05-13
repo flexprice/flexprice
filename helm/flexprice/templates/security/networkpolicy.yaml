@@ -1,0 +1,37 @@
+{{- if .Values.networkPolicy.enabled -}}
+{{- /*
+  Opt-in NetworkPolicy. Currently restricts INGRESS to the api pod only —
+  egress is intentionally unrestricted because the chart talks to many
+  managed services (Postgres, ClickHouse, Kafka, Redis, Temporal, Stripe,
+  Resend, Sentry, ...) on IPs that rotate; an allow-list is operationally
+  brittle until we have a stable egress pattern.
+
+  Renders:
+    - <fullname>-api : allows TCP/8080 ingress only from
+                       networkPolicy.ingress.fromIngressController.
+
+  TODO: revisit and add default-deny + per-workload egress allow-lists once
+  the prod egress topology stabilises.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "flexprice.fullname" . }}-api
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- with .Values.networkPolicy.ingress.fromIngressController }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: 8080
+          protocol: TCP
+{{- end }}
