@@ -115,3 +115,36 @@ func (h *MeterUsageHandler) GetAnalytics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.ToMeterUsageAnalyticsResponse(results))
 }
+
+func (h *MeterUsageHandler) GetDetailedAnalytics(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	var req dto.MeterUsageDetailedAnalyticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.NewError("invalid request payload").
+			WithHint("Check your request body").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	params := req.ToParams(tenantID, environmentID)
+
+	response, err := h.meterUsageService.GetDetailedAnalytics(ctx, params)
+	if err != nil {
+		h.log.ErrorwCtx(ctx, "failed to query detailed meter usage analytics",
+			"error", err,
+			"meter_ids", req.MeterIDs,
+		)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}

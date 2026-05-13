@@ -93,6 +93,7 @@ type Stores struct {
 	SettingsRepo                 settings.Repository
 	AlertLogsRepo                alertlogs.Repository
 	FeatureUsageRepo             events.FeatureUsageRepository
+	MeterUsageRepo               events.MeterUsageRepository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -238,6 +239,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		SettingsRepo:                 NewInMemorySettingsStore(),
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
 		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
+		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -291,6 +293,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.SubscriptionPhaseRepo.(*InMemorySubscriptionPhaseStore).Clear()
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
 	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
+	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {
