@@ -80,4 +80,66 @@ type Repository interface {
 		ctx context.Context,
 		p ListPlanLineItemsToCreateParams,
 	) (lastSubID *string, err error)
+
+	// ────────────────────────────────────────────────────────────────────
+	// V2 sync (sequence-driven).
+	//
+	// V2 narrows discovery and termination to prices changed since each
+	// subscription's `synced_price_sequence`. Subscriptions are stamped to
+	// a target sequence at the end of every successful page, so partial
+	// failures resume cleanly and there's a per-sub observability column.
+	// ────────────────────────────────────────────────────────────────────
+
+	// CurrentPlanSequence returns max(prices.sequence) for the plan's
+	// published, non-fixed prices. Used as the target sequence subscriptions
+	// are stamped to after a successful sync pass. Returns 0 if the plan
+	// has no qualifying prices.
+	CurrentPlanSequence(ctx context.Context, planID string) (int64, error)
+
+	// ListPlanLineItemsToCreateV2 returns missing (subscription_id, price_id)
+	// pairs for a plan, narrowed to prices that changed since each
+	// subscription's synced_price_sequence. Also returns the full set of
+	// stale sub IDs in this page (so termination and stamp can be scoped
+	// exactly to the discovery window even when no pairs were produced)
+	// and the last sub ID scanned (cursor advance).
+	ListPlanLineItemsToCreateV2(
+		ctx context.Context,
+		p ListPlanLineItemsToCreateV2Params,
+	) (items []PlanLineItemCreationDelta, staleSubIDs []string, lastSubID string, hasMore bool, err error)
+
+	// TerminatePlanPricesLineItemsV2 sets end_date on plan-derived line items
+	// for subs in the given batch where their price has been terminated
+	// since the sub's synced_price_sequence. Returns rows affected.
+	TerminatePlanPricesLineItemsV2(
+		ctx context.Context,
+		p TerminatePlanPricesLineItemsV2Params,
+	) (int, error)
+
+	// StampSubsAsSynced sets synced_price_sequence on the given subs.
+	// Always uses target as a forward-only update (idempotent).
+	StampSubsAsSynced(
+		ctx context.Context,
+		p StampSubsAsSyncedParams,
+	) (int, error)
+}
+
+// ListPlanLineItemsToCreateV2Params drives the V2 discovery query.
+type ListPlanLineItemsToCreateV2Params struct {
+	PlanID       string
+	TargetSeq    int64  // subs stale relative to this value are in scope
+	AfterSubID   string // cursor; "" for first page
+	Limit        int    // page size (defaults to implementation-defined)
+}
+
+// TerminatePlanPricesLineItemsV2Params drives the V2 termination UPDATE.
+type TerminatePlanPricesLineItemsV2Params struct {
+	PlanID    string
+	TargetSeq int64  // bound; only touches subs with synced_price_sequence < TargetSeq
+	SubIDs    []string // restrict to this page of subs (matches the discovery page)
+}
+
+// StampSubsAsSyncedParams sets synced_price_sequence on a set of subs.
+type StampSubsAsSyncedParams struct {
+	TargetSeq int64
+	SubIDs    []string
 }

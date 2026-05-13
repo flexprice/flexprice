@@ -61,6 +61,33 @@ type Configuration struct {
 	OnboardingEvents           OnboardingEventsConfig           `mapstructure:"onboarding_events" validate:"omitempty"`
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
+	PlanPriceSync              PlanPriceSyncConfig              `mapstructure:"plan_price_sync" validate:"omitempty"`
+}
+
+// PlanPriceSyncConfig controls the rollout of the V2 plan-price sync workflow.
+// V2 uses a sequence-driven SQL-only sync against the prices.sequence and
+// subscriptions.synced_price_sequence columns; V1 is the legacy multi-query
+// workflow. Empty config falls back to V1.
+type PlanPriceSyncConfig struct {
+	// V2Enabled flips the sync to V2 for every plan. V2PlanIDs is consulted
+	// first, so it acts as a per-plan canary even when V2Enabled is false.
+	V2Enabled bool `mapstructure:"v2_enabled"`
+
+	// V2PlanIDs is an allowlist of plan IDs that always use V2 regardless of
+	// V2Enabled. Use this to canary V2 on specific plans before flipping the
+	// global flag.
+	V2PlanIDs []string `mapstructure:"v2_plan_ids"`
+}
+
+// UseV2ForPlan reports whether the V2 sync workflow should be used for the
+// given plan ID. Per-plan allowlist takes precedence over the global flag.
+func (c PlanPriceSyncConfig) UseV2ForPlan(planID string) bool {
+	for _, id := range c.V2PlanIDs {
+		if id == planID {
+			return true
+		}
+	}
+	return c.V2Enabled
 }
 
 // GeminiConfig holds Google Gemini API settings for server-side AI pricing parse (portal).

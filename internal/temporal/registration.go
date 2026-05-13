@@ -359,10 +359,12 @@ func buildWorkerConfig(
 	case types.TemporalTaskQueuePrice:
 		workflowsList = append(workflowsList,
 			workflows.PriceSyncWorkflow,
+			workflows.PriceSyncV2Workflow,
 			workflows.QuickBooksPriceSyncWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			planActivities.SyncPlanPrices,
+			planActivities.SyncPlanPricesV2,
 			qbPriceSyncActivities.SyncPriceToQuickBooks,
 		)
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -20,6 +21,7 @@ type PlanHandler struct {
 	entitlementService service.EntitlementService
 	creditGrantService service.CreditGrantService
 	temporalService    temporalservice.TemporalService
+	cfg                *config.Configuration
 	log                *logger.Logger
 }
 
@@ -28,6 +30,7 @@ func NewPlanHandler(
 	entitlementService service.EntitlementService,
 	creditGrantService service.CreditGrantService,
 	temporalService temporalservice.TemporalService,
+	cfg *config.Configuration,
 	log *logger.Logger,
 ) *PlanHandler {
 	return &PlanHandler{
@@ -35,6 +38,7 @@ func NewPlanHandler(
 		entitlementService: entitlementService,
 		creditGrantService: creditGrantService,
 		temporalService:    temporalService,
+		cfg:                cfg,
 		log:                log,
 	}
 }
@@ -311,15 +315,25 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		return
 	}
 	h.log.Infow("price_sync_lock_acquired", "plan_id", id, "lock_key", lockKey)
+
+	// Pick V1 or V2 based on per-plan allowlist + global flag.
+	workflowType := types.TemporalPriceSyncWorkflow
+	version := "v1"
+	if h.cfg != nil && h.cfg.PlanPriceSync.UseV2ForPlan(id) {
+		workflowType = types.TemporalPriceSyncV2Workflow
+		version = "v2"
+	}
+	h.log.Infow("price_sync_workflow_dispatch", "plan_id", id, "version", version)
+
 	// Start the price sync workflow (activity will release lock when done)
-	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, id)
+	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), workflowType, id)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
 	c.JSON(http.StatusOK, models.TemporalWorkflowResult{
-		Message:    "price sync workflow started successfully",
+		Message:    "price sync workflow started successfully (" + version + ")",
 		WorkflowID: workflowRun.GetID(),
 		RunID:      workflowRun.GetRunID(),
 	})
