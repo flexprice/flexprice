@@ -7,7 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 )
 
-const flexpriceStandardExemptionCode = "FLEXPRICE_STANDARD_EXEMPTION"
+const FLEXPRICE_STANDARD_EXEMPTION = "FLEXPRICE_STANDARD_EXEMPTION"
 
 // ItemTaxResolution holds the resolved tax fields to attach to a Zoho item.
 // When IsTaxable is true, TaxID is set. When false, TaxExemptionID is set.
@@ -62,7 +62,7 @@ func (s *TaxService) ResolveItemTax(ctx context.Context) (*ItemTaxResolution, er
 		return nil, ierr.WithError(err).WithHint("failed to list Zoho tax exemptions").Mark(ierr.ErrInternal)
 	}
 	for _, e := range exemptions {
-		if e.TaxExemptionCode == flexpriceStandardExemptionCode {
+		if e.TaxExemptionCode == FLEXPRICE_STANDARD_EXEMPTION {
 			s.logger.Debugw("using existing tax exemption for item", "tax_exemption_id", e.TaxExemptionID)
 			return &ItemTaxResolution{TaxExemptionID: e.TaxExemptionID, IsTaxable: false}, nil
 		}
@@ -70,7 +70,7 @@ func (s *TaxService) ResolveItemTax(ctx context.Context) (*ItemTaxResolution, er
 
 	s.logger.Infow("creating FLEXPRICE_STANDARD_EXEMPTION in Zoho Books")
 	created, err := s.client.CreateTaxExemption(ctx, &CreateTaxExemptionRequest{
-		TaxExemptionCode: flexpriceStandardExemptionCode,
+		TaxExemptionCode: FLEXPRICE_STANDARD_EXEMPTION,
 		Description:      "Standard tax exemption for FlexPrice items",
 		Type:             "item",
 	})

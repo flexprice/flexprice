@@ -180,36 +180,26 @@ func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *inv
 // It bulk-queries Zoho item mappings for all price IDs and creates missing items.
 // If item creation fails for any price, that line item is still sent using name+rate.
 func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoice.Invoice) ([]InvoiceLineItem, error) {
-	out := make([]InvoiceLineItem, 0, len(flexInvoice.LineItems))
 	inputs := make([]ItemSyncInput, 0, len(flexInvoice.LineItems))
-	lineItems := make([]InvoiceLineItem, 0, len(flexInvoice.LineItems))
-
 	for _, li := range flexInvoice.LineItems {
 		if li == nil || li.Amount.IsZero() {
 			continue
 		}
-		name := lo.FromPtrOr(li.DisplayName, "Charge")
-		priceID := lo.FromPtr(li.PriceID)
-		desc := formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd)
-		lineItems = append(lineItems, InvoiceLineItem{
-			Name:        name,
-			Description: desc,
-			Quantity:    decimal.NewFromInt(1),
-			Rate:        li.Amount,
+		inputs = append(inputs, ItemSyncInput{
+			PriceID: lo.FromPtr(li.PriceID),
+			Name:    lo.FromPtrOr(li.DisplayName, "Charge"),
+			Rate:    li.Amount,
 		})
-		inputs = append(inputs, ItemSyncInput{PriceID: priceID, Name: name, Rate: li.Amount})
 	}
 
-	// Resolve tax once — shared by item creation and line item fields
 	taxRes, err := s.taxSvc.ResolveItemTax(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("failed to resolve tax for invoice").Mark(ierr.ErrInternal)
 	}
 
-	// Bulk resolve Zoho item mappings — pass resolved tax so newly created items are tagged correctly
 	priceToItemID := map[string]string{}
 	if len(inputs) > 0 {
-		mapped, err := s.itemSyncSvc.EnsureItemsMapped(ctx, inputs, flexInvoice.EnvironmentID, flexInvoice.TenantID, taxRes)
+		mapped, err := s.itemSyncSvc.EnsureItemsMapped(ctx, inputs, taxRes)
 		if err != nil {
 			s.logger.Warnw("failed to ensure Zoho item mappings, sending line items without item_id",
 				"invoice_id", flexInvoice.ID,
@@ -219,15 +209,21 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		priceToItemID = mapped
 	}
 
-	// Build output — apply the same tax resolution to each line item
-	for i, in := range inputs {
-		lineItems[i].ItemID = priceToItemID[in.PriceID]
-		if taxRes.IsTaxable {
-			lineItems[i].TaxID = taxRes.TaxID
-		} else {
-			lineItems[i].TaxExemptionID = taxRes.TaxExemptionID
+	out := make([]InvoiceLineItem, 0, len(inputs))
+	for _, li := range flexInvoice.LineItems {
+		if li == nil || li.Amount.IsZero() {
+			continue
 		}
-		out = append(out, lineItems[i])
+		name := lo.FromPtrOr(li.DisplayName, "Charge")
+		out = append(out, InvoiceLineItem{
+			Name:           name,
+			Description:    formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
+			Quantity:       decimal.NewFromInt(1),
+			Rate:           li.Amount,
+			ItemID:         priceToItemID[lo.FromPtr(li.PriceID)],
+			TaxID:          taxRes.TaxID,
+			TaxExemptionID: taxRes.TaxExemptionID,
+		})
 	}
 	return out, nil
 }

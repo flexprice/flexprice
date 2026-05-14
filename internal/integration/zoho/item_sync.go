@@ -8,6 +8,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -23,7 +24,7 @@ type ZohoItemSyncService interface {
 	// EnsureItemsMapped bulk-queries existing mappings for all given price IDs,
 	// creates missing items in Zoho, and returns a map of priceID → zohoItemID.
 	// taxRes is resolved once by the caller and applied to every newly created item.
-	EnsureItemsMapped(ctx context.Context, inputs []ItemSyncInput, environmentID string, tenantID string, taxRes *ItemTaxResolution) (map[string]string, error)
+	EnsureItemsMapped(ctx context.Context, inputs []ItemSyncInput, taxRes *ItemTaxResolution) (map[string]string, error)
 }
 
 type ItemSyncServiceParams struct {
@@ -40,7 +41,7 @@ func NewItemSyncService(params ItemSyncServiceParams) ZohoItemSyncService {
 	return &ItemSyncService{ItemSyncServiceParams: params}
 }
 
-func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSyncInput, environmentID string, tenantID string, taxRes *ItemTaxResolution) (map[string]string, error) {
+func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSyncInput, taxRes *ItemTaxResolution) (map[string]string, error) {
 	if len(inputs) == 0 {
 		return map[string]string{}, nil
 	}
@@ -53,6 +54,7 @@ func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSy
 
 	// Single bulk query for all price IDs
 	filter := types.NewEntityIntegrationMappingFilter()
+	filter.Status = lo.ToPtr(types.StatusPublished)
 	filter.EntityType = types.IntegrationEntityTypePrice
 	filter.EntityIDs = priceIDs
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
@@ -76,7 +78,7 @@ func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSy
 			continue
 		}
 
-		zohoItemID, errCreate := s.createAndSaveItem(ctx, in, environmentID, tenantID, taxRes)
+		zohoItemID, errCreate := s.createAndSaveItem(ctx, in, taxRes)
 		if errCreate != nil {
 			s.Logger.Errorw("failed to create Zoho item, line item will fall back to name+rate",
 				"price_id", in.PriceID,
@@ -90,7 +92,7 @@ func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSy
 	return result, nil
 }
 
-func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInput, environmentID string, tenantID string, taxRes *ItemTaxResolution) (string, error) {
+func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInput, taxRes *ItemTaxResolution) (string, error) {
 	createReq := &ItemCreateRequest{
 		Name:        in.Name,
 		Rate:        in.Rate.InexactFloat64(),
@@ -128,7 +130,7 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 		"item_name", itemResp.Name)
 
 	baseModel := types.GetDefaultBaseModel(ctx)
-	baseModel.TenantID = tenantID
+	baseModel.TenantID = types.GetTenantID(ctx)
 
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
@@ -136,7 +138,7 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 		EntityID:         in.PriceID,
 		ProviderType:     string(types.SecretProviderZohoBooks),
 		ProviderEntityID: itemResp.ItemID,
-		EnvironmentID:    environmentID,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
 			"synced_at":      time.Now().UTC().Format(time.RFC3339),
