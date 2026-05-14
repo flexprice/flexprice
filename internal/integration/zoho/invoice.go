@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -181,52 +182,33 @@ func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *inv
 func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoice.Invoice) ([]InvoiceLineItem, error) {
 	out := make([]InvoiceLineItem, 0, len(flexInvoice.LineItems))
 	inputs := make([]ItemSyncInput, 0, len(flexInvoice.LineItems))
-
-	// Single pass: filter, extract name, build sync inputs
-	type lineItemMeta struct {
-		name    string
-		priceID string
-		amount  decimal.Decimal
-	}
-	metas := make([]lineItemMeta, 0, len(flexInvoice.LineItems))
+	lineItems := make([]InvoiceLineItem, 0, len(flexInvoice.LineItems))
 
 	for _, li := range flexInvoice.LineItems {
 		if li == nil || li.Amount.IsZero() {
 			continue
-			//todo: check handling
 		}
-		name := "Charge"
-		if li.DisplayName != nil && *li.DisplayName != "" {
-			name = *li.DisplayName
-		}
-		priceID := ""
-		if li.PriceID != nil {
-			priceID = *li.PriceID
-		} else {
-			continue
-			//todo: check handling
-		}
-		metas = append(metas, lineItemMeta{name: name, priceID: priceID, amount: li.Amount})
-		if priceID != "" {
-			inputs = append(inputs, ItemSyncInput{PriceID: priceID, Name: name, Rate: li.Amount})
-		}
+		name := lo.FromPtrOr(li.DisplayName, "Charge")
+		priceID := lo.FromPtr(li.PriceID)
+		desc := formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd)
+		lineItems = append(lineItems, InvoiceLineItem{
+			Name:        name,
+			Description: desc,
+			Quantity:    decimal.NewFromInt(1),
+			Rate:        li.Amount,
+		})
+		inputs = append(inputs, ItemSyncInput{PriceID: priceID, Name: name, Rate: li.Amount})
 	}
 
 	// Resolve tax once — shared by item creation and line item fields
-	var taxRes *ItemTaxResolution
-	if s.taxSvc != nil {
-		resolved, taxErr := s.taxSvc.ResolveItemTax(ctx)
-		if taxErr != nil {
-			s.logger.Warnw("failed to resolve tax for invoice, building without tax info",
-				"invoice_id", flexInvoice.ID, "error", taxErr)
-		} else {
-			taxRes = resolved
-		}
+	taxRes, err := s.taxSvc.ResolveItemTax(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to resolve tax for invoice").Mark(ierr.ErrInternal)
 	}
 
 	// Bulk resolve Zoho item mappings — pass resolved tax so newly created items are tagged correctly
 	priceToItemID := map[string]string{}
-	if len(inputs) > 0 && s.itemSyncSvc != nil {
+	if len(inputs) > 0 {
 		mapped, err := s.itemSyncSvc.EnsureItemsMapped(ctx, inputs, flexInvoice.EnvironmentID, flexInvoice.TenantID, taxRes)
 		if err != nil {
 			s.logger.Warnw("failed to ensure Zoho item mappings, sending line items without item_id",
@@ -238,22 +220,21 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 	}
 
 	// Build output — apply the same tax resolution to each line item
-	for _, m := range metas {
-		li := InvoiceLineItem{
-			ItemID:      priceToItemID[m.priceID],
-			Name:        m.name,
-			Description: m.name,
-			Quantity:    decimal.NewFromInt(1),
-			Rate:        m.amount,
+	for i, in := range inputs {
+		lineItems[i].ItemID = priceToItemID[in.PriceID]
+		if taxRes.IsTaxable {
+			lineItems[i].TaxID = taxRes.TaxID
+		} else {
+			lineItems[i].TaxExemptionID = taxRes.TaxExemptionID
 		}
-		if taxRes != nil {
-			if taxRes.IsTaxable {
-				li.TaxID = taxRes.TaxID
-			} else {
-				li.TaxExemptionID = taxRes.TaxExemptionID
-			}
-		}
-		out = append(out, li)
+		out = append(out, lineItems[i])
 	}
 	return out, nil
+}
+
+func formatPeriodDescription(fallback string, start, end *time.Time) string {
+	if start == nil || end == nil {
+		return fallback
+	}
+	return start.Format("2006-01-02") + " - " + end.Add(-time.Nanosecond).Format("2006-01-02")
 }
