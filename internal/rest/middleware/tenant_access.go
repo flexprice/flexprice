@@ -4,16 +4,18 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/cache"
+	domainTenant "github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
-// TenantAccessMiddleware fetches the tenant (served from in-memory cache after the first
-// request per tenant), stamps internal_status onto the context, and blocks the request if
-// the tenant is suspended.
-func TenantAccessMiddleware(tenantRepo tenant.Repository, logger *logger.Logger) gin.HandlerFunc {
+// TenantAccessMiddleware checks the tenant's internal_status on every authenticated request.
+// It reads from the force-cache (always enabled) to avoid a DB round-trip on hot paths,
+// falling back to the DB only on a cache miss and re-populating the cache afterwards.
+// Suspended tenants are blocked with 401; all other statuses pass through.
+func TenantAccessMiddleware(tenantRepo domainTenant.Repository, logger *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tenantID := types.GetTenantID(c.Request.Context())
 		if tenantID == "" {
@@ -21,14 +23,25 @@ func TenantAccessMiddleware(tenantRepo tenant.Repository, logger *logger.Logger)
 			return
 		}
 
-		t, err := tenantRepo.GetByID(c.Request.Context(), tenantID)
-		if err != nil {
-			logger.Errorw("tenant access: failed to load tenant", "tenant_id", tenantID, "error", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to verify tenant access",
-			})
-			c.Abort()
-			return
+		var t *domainTenant.Tenant
+
+		cacheClient := cache.GetInMemoryCache()
+		cacheKey := cache.GenerateKey(cache.PrefixTenant, tenantID)
+
+		if cached, found := cacheClient.ForceCacheGet(c.Request.Context(), cacheKey); found {
+			t = cached.(*domainTenant.Tenant)
+		} else {
+			var err error
+			t, err = tenantRepo.GetByID(c.Request.Context(), tenantID)
+			if err != nil {
+				logger.Errorw("tenant access: failed to load tenant", "tenant_id", tenantID, "error", err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": "failed to verify tenant access",
+				})
+				c.Abort()
+				return
+			}
+			cacheClient.ForceCacheSet(c.Request.Context(), cacheKey, t, cache.ExpiryDefaultInMemory)
 		}
 
 		if t.InternalStatus == types.TenantInternalStatusSuspended {
