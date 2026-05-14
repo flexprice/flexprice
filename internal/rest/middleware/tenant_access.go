@@ -29,8 +29,13 @@ func TenantAccessMiddleware(tenantRepo domainTenant.Repository, logger *logger.L
 		cacheKey := cache.GenerateKey(cache.PrefixTenant, tenantID)
 
 		if cached, found := cacheClient.ForceCacheGet(c.Request.Context(), cacheKey); found {
-			t = cached.(*domainTenant.Tenant)
-		} else {
+			if tenant, ok := cached.(*domainTenant.Tenant); ok {
+				logger.Debugw("tenant access: cache hit", "tenant_id", tenantID)
+				t = tenant
+			}
+		}
+
+		if t == nil {
 			var err error
 			t, err = tenantRepo.GetByID(c.Request.Context(), tenantID)
 			if err != nil {
