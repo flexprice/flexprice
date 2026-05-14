@@ -44,7 +44,9 @@ func TenantAccessMiddleware(tenantRepo domainTenant.Repository, logger *logger.L
 			cacheClient.ForceCacheSet(c.Request.Context(), cacheKey, t, cache.ExpiryDefaultInMemory)
 		}
 
-		if t.InternalStatus == types.TenantInternalStatusSuspended {
+		// Suspended tenants can still read data; block only write operations.
+		isWriteRequest := c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead
+		if isWriteRequest && t.InternalStatus == types.TenantInternalStatusSuspended {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "tenant account is suspended",
 			})
