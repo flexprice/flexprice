@@ -47,10 +47,8 @@ func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSy
 
 	// Collect all price IDs for bulk query
 	priceIDs := make([]string, len(inputs))
-	inputByPriceID := make(map[string]ItemSyncInput, len(inputs))
 	for i, in := range inputs {
 		priceIDs[i] = in.PriceID
-		inputByPriceID[in.PriceID] = in
 	}
 
 	// Single bulk query for all price IDs
@@ -80,7 +78,6 @@ func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSy
 
 		zohoItemID, errCreate := s.createAndSaveItem(ctx, in, environmentID, tenantID, taxRes)
 		if errCreate != nil {
-			// Log and skip — don't abort the whole invoice sync for one missing item
 			s.Logger.Errorw("failed to create Zoho item, line item will fall back to name+rate",
 				"price_id", in.PriceID,
 				"item_name", in.Name,
