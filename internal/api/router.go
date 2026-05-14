@@ -537,10 +537,7 @@ func NewRouter(
 		adminRoutes := v1Private.Group("/admin")
 		adminRoutes.Use(middleware.APIKeyAuthMiddleware(cfg, secretService, logger))
 		{
-			adminTenants := adminRoutes.Group("/tenants")
-			{
-				adminTenants.PUT("/:id/internal-status", handlers.Tenant.UpdateTenantAccess)
-			}
+			// All admin routes to go here
 		}
 
 		// AI helpers (authenticated; same middleware as other /v1 private routes)
