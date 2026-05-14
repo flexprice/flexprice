@@ -303,6 +303,7 @@ func (s *WalletServiceSuite) setupTestData() {
 		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
 		Currency:           "usd",
+		SubscriptionType:   types.SubscriptionTypeStandalone,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
@@ -1778,7 +1779,7 @@ func (s *WalletServiceSuite) TestGetCustomerWallets() {
 		includeRealTimeBalance bool
 		setup                  func()
 		expectedError          bool
-		expectedErrorCode      string
+		expectedErrorCode      ierr.ErrorCode
 		expectedWalletsCount   int
 	}{
 		{

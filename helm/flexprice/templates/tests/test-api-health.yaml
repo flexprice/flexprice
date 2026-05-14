@@ -1,0 +1,65 @@
+{{- if .Values.api.enabled }}
+{{- /*
+  Connectivity probe runnable via `helm test <release>`.
+  Hits the FlexPrice api Service's /health endpoint and exits non-zero on
+  anything other than HTTP 200. Intentionally minimal — full integration
+  suites live outside the chart.
+
+  The pod is cleaned up automatically on `helm uninstall` because of the
+  `helm.sh/hook-delete-policy` annotation; on a passing run, kubectl shows it
+  briefly as Completed.
+*/}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "flexprice.fullname" . }}-test-api-health
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  containers:
+    - name: curl
+      image: curlimages/curl:8.10.1
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      command:
+        - /bin/sh
+        - -ec
+        - |
+          URL="http://{{ include "flexprice.fullname" . }}-api:{{ .Values.service.port | default 80 }}/health"
+          echo "GET $URL"
+          # Retry for up to 30s to absorb rolling-update race when test runs right after upgrade.
+          for i in $(seq 1 15); do
+            STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 3 "$URL" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "OK: api /health returned 200"
+              exit 0
+            fi
+            echo "attempt $i: got '$STATUS', retrying..."
+            sleep 2
+          done
+          echo "FAIL: api /health did not return 200 within 30s"
+          exit 1
+      resources:
+        requests:
+          cpu: "10m"
+          memory: "16Mi"
+        limits:
+          cpu: "100m"
+          memory: "64Mi"
+{{- end }}

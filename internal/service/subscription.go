@@ -13,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	meterDomain "github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/interfaces"
 
@@ -269,34 +268,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		childCustomerIDs, err := s.prepareSubscriptionInheritanceForCreate(ctx, &req, sub)
+		groupedInvoicingSubIDs, childCustomerIDs, err := s.prepareSubscriptionInheritanceForCreate(ctx, &req, sub)
 		if err != nil {
 			return err
 		}
-		if sub.SubscriptionType == types.SubscriptionTypeStandalone || sub.SubscriptionType == types.SubscriptionTypeParent {
-			if sub.CustomerID != "" {
-				subscriberFilter := types.NewSubscriptionFilter()
-				subscriberFilter.CustomerID = sub.CustomerID
-				subscriberFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-				subscriberFilter.Status = lo.ToPtr(types.StatusPublished)
-				subscriberFilter.SubscriptionStatus = []types.SubscriptionStatus{
-					types.SubscriptionStatusActive,
-					types.SubscriptionStatusDraft,
-					types.SubscriptionStatusTrialing,
-				}
-				subscriberFilter.WithLineItems = false
-				subscriberFilter.Limit = lo.ToPtr(1)
-				inheritedCount, countErr := s.SubRepo.Count(ctx, subscriberFilter)
-				if countErr != nil {
-					return countErr
-				}
-				if inheritedCount > 0 {
-					return ierr.NewError("customer already has an inherited subscription").
-						WithHint("A customer that receives a subscription through hierarchy cannot create a standalone or parent subscription. Cancel the inherited subscription first or subscribe only via the parent subscription.").
-						WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
-						Mark(ierr.ErrValidation)
-				}
-			}
+
+		if err := s.validateAutoInvoiceThresholdForCreate(sub); err != nil {
+			return err
 		}
 
 		if err := s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
@@ -469,6 +447,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		// Inherited children must see the parent's final status/period fields after invoice + activation.
 		for _, childID := range childCustomerIDs {
 			if err := s.createInheritedSubscriptions(ctx, sub, childID); err != nil {
+				return err
+			}
+		}
+
+		// Convert existing standalone subscriptions to grouped_invoicing under the newly created parent
+		for _, gSubID := range groupedInvoicingSubIDs {
+			if err := s.addToGroupedInvoicing(ctx, sub, gSubID); err != nil {
 				return err
 			}
 		}
@@ -2738,6 +2723,15 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return nil
 	}
 
+	// Skip processing for grouped_invoicing children — the parent handles invoice generation
+	// and period advancement for these subscriptions.
+	if sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
+		s.Logger.InfowCtx(ctx, "skipping period processing for grouped_invoicing child subscription",
+			"subscription_id", sub.ID,
+			"parent_subscription_id", sub.ParentSubscriptionID)
+		return nil
+	}
+
 	// Check for scheduled pauses that should be activated
 	if sub.PauseStatus == types.PauseStatusScheduled && sub.ActivePauseID != nil {
 		pause, err := s.SubRepo.GetPause(ctx, *sub.ActivePauseID)
@@ -2857,6 +2851,17 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 	// TODO: Check if subscription has ended and should be cancelled
 
+	// Fetch grouped_invoicing children once (before the transaction) so both the
+	// per-period invoice loop and the post-loop period-advancement step can reuse them.
+	var groupedChildren []*subscription.Subscription
+	if sub.SubscriptionType == types.SubscriptionTypeParent {
+		var gErr error
+		groupedChildren, gErr = s.getGroupedInvoicingSubscriptions(ctx, sub.ID)
+		if gErr != nil {
+			return gErr
+		}
+	}
+
 	// Initialize services
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
@@ -2922,6 +2927,20 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			"current_period_end", sub.CurrentPeriodEnd,
 			"process_up_to", now)
 		return nil
+	}
+
+	// For inherited subscriptions, skip invoice creation and only advance the billing period.
+	// Invoices are created on the parent subscription; the child just needs its period kept current.
+	if sub.SubscriptionType == types.SubscriptionTypeInherited {
+		newPeriod := periods[len(periods)-1]
+		sub.CurrentPeriodStart = newPeriod.start
+		sub.CurrentPeriodEnd = newPeriod.end
+		s.Logger.InfowCtx(ctx, "advancing period for inherited subscription (no invoice created)",
+			"subscription_id", sub.ID,
+			"new_period_start", sub.CurrentPeriodStart,
+			"new_period_end", sub.CurrentPeriodEnd,
+			"periods_skipped", len(periods)-1)
+		return s.SubRepo.Update(ctx, sub)
 	}
 
 	// Use db's WithTx for atomic operations
@@ -3017,6 +3036,18 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// Update the subscription
 		if err := s.SubRepo.Update(ctx, sub); err != nil {
 			return err
+		}
+
+		// Advance grouped_invoicing children to match the parent's new period
+		if sub.SubscriptionType == types.SubscriptionTypeParent && len(groupedChildren) > 0 {
+			newPeriod := periods[len(periods)-1]
+			for _, child := range groupedChildren {
+				child.CurrentPeriodStart = newPeriod.start
+				child.CurrentPeriodEnd = newPeriod.end
+				if err := s.SubRepo.Update(ctx, child); err != nil {
+					return err
+				}
+			}
 		}
 
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
@@ -5851,40 +5882,30 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 }
 
 // GetMeterUsageBySubscription queries the meter_usage table for usage data.
-// Follows the same pattern as GetFeatureUsageBySubscription but reads from the
-// meter_usage ClickHouse table instead of feature_usage. No subscription_id/period_id
-// coupling — queries by (meter_id, external_customer_id, time_range).
+// Delegates to MeterUsageService.GetSubscriptionMeterUsage for the actual querying,
+// then converts results to billing charges and applies commitment/overage logic.
 func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
 	response := &dto.GetUsageBySubscriptionResponse{}
-	priceService := NewPriceService(s.ServiceParams)
 
-	// Get subscription with line items
-	sub, err := s.SubRepo.Get(ctx, req.SubscriptionID)
+	useFinal := req.Source == string(types.UsageSourceInvoiceCreation)
+
+	// Delegate querying to the centralized function
+	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
+	subMeterUsage, err := meterUsageSvc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID:  req.SubscriptionID,
+		StartTime:       req.StartTime,
+		EndTime:         req.EndTime,
+		LifetimeUsage:   req.LifetimeUsage,
+		UseFinal:        useFinal,
+		IncludeFeatures: false,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Resolve internal customer IDs, then map to external IDs for meter_usage queries
-	internalCustomerIDs, err := s.usageCustomerIDsForSubscription(ctx, sub)
-	if err != nil {
-		return nil, err
-	}
+	sub := subMeterUsage.Subscription
 
-	custFilter := types.NewNoLimitCustomerFilter()
-	custFilter.CustomerIDs = internalCustomerIDs
-	customers, err := s.CustomerRepo.List(ctx, custFilter)
-	if err != nil {
-		return nil, err
-	}
-	externalCustomerIDs := make([]string, 0, len(customers))
-	for _, cust := range customers {
-		if cust.ExternalID != "" {
-			externalCustomerIDs = append(externalCustomerIDs, cust.ExternalID)
-		}
-	}
-	externalCustomerIDs = lo.Uniq(externalCustomerIDs)
-
-	// Time range resolution
+	// Resolve effective time range for response
 	usageStartTime := req.StartTime
 	if usageStartTime.IsZero() {
 		usageStartTime = sub.CurrentPeriodStart
@@ -5898,282 +5919,17 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 		usageEndTime = time.Now().UTC()
 	}
 
-	// For inherited subscriptions, line items live on the parent
-	lineItemSubID := sub.ID
-	if sub.SubscriptionType == types.SubscriptionTypeInherited &&
-		sub.ParentSubscriptionID != nil && lo.FromPtr(sub.ParentSubscriptionID) != "" {
-		lineItemSubID = lo.FromPtr(sub.ParentSubscriptionID)
-	}
-
-	lineItems, err := s.listSubscriptionLineItemsForUsageWindow(ctx, lineItemSubID, usageStartTime, req.LifetimeUsage)
-	if err != nil {
-		return nil, err
-	}
-	sub.LineItems = lineItems
-
-	// Collect usage line items and fetch prices with meter expansion
-	priceIDs := make([]string, 0, len(lineItems))
-	for _, item := range lineItems {
-		if item.PriceType == types.PRICE_TYPE_USAGE && item.MeterID != "" {
-			priceIDs = append(priceIDs, item.PriceID)
-		}
-	}
-
-	if len(priceIDs) == 0 {
+	if len(subMeterUsage.LineItemUsages) == 0 {
 		response.Currency = sub.Currency
 		response.StartTime = usageStartTime
 		response.EndTime = usageEndTime
 		return response, nil
 	}
 
-	priceFilter := types.NewNoLimitPriceFilter()
-	priceFilter.PriceIDs = priceIDs
-	priceFilter.Expand = lo.ToPtr(string(types.ExpandMeters))
-	priceFilter.AllowExpiredPrices = true
-	pricesList, err := priceService.GetPrices(ctx, priceFilter)
+	// Convert to billing charges
+	usageCharges, totalCost, err := meterUsageSvc.ConvertToBillingCharges(ctx, subMeterUsage)
 	if err != nil {
 		return nil, err
-	}
-
-	priceMap := make(map[string]*price.Price, len(pricesList.Items))
-	meterMap := make(map[string]*dto.MeterResponse, len(pricesList.Items))
-	meterDisplayNames := make(map[string]string)
-	for _, p := range pricesList.Items {
-		priceMap[p.ID] = p.Price
-		meterMap[p.Price.MeterID] = p.Meter
-		if p.Meter != nil {
-			meterDisplayNames[p.Price.MeterID] = p.Meter.Name
-		}
-	}
-
-	s.Logger.DebugwCtx(ctx, "calculating meter usage for subscription",
-		"subscription_id", req.SubscriptionID,
-		"start_time", usageStartTime,
-		"end_time", usageEndTime,
-		"metered_line_items", len(priceIDs))
-
-	// Performance optimization: query distinct meter_ids that have data in meter_usage
-	// for this customer and time range. Skips meters with zero usage — reduces processing
-	// from potentially hundreds of meters down to only those with actual data.
-	useFinal := req.Source == string(types.UsageSourceInvoiceCreation)
-	distinctMeterIDs, err := s.MeterUsageRepo.GetDistinctMeterIDs(ctx, &events.MeterUsageQueryParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs: externalCustomerIDs,
-		StartTime:           usageStartTime,
-		EndTime:             usageEndTime,
-		UseFinal:            useFinal,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get distinct meter_ids from meter_usage: %w", err)
-	}
-	activeMeterIDs := make(map[string]bool, len(distinctMeterIDs))
-	for _, id := range distinctMeterIDs {
-		activeMeterIDs[id] = true
-	}
-
-	s.Logger.DebugwCtx(ctx, "distinct meter_ids optimization",
-		"subscription_id", req.SubscriptionID,
-		"total_distinct_meters", len(distinctMeterIDs),
-		"total_line_items", len(lineItems))
-
-	// Build meter_id → line items map, skipping meters with no data in meter_usage
-	meterToLineItems := make(map[string][]*subscription.SubscriptionLineItem)
-	meterAggType := make(map[string]types.AggregationType)
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
-			continue
-		}
-		if !activeMeterIDs[item.MeterID] {
-			continue
-		}
-		meterToLineItems[item.MeterID] = append(meterToLineItems[item.MeterID], item)
-		if m := meterMap[item.MeterID]; m != nil {
-			meterAggType[item.MeterID] = m.Aggregation.Type
-		}
-	}
-
-	// Separate bucketed meters (MAX/SUM with bucket_size) from non-bucketed meters.
-	// Bucketed meters need windowed queries with per-line-item time ranges,
-	// while non-bucketed meters can be batched by aggregation type.
-	bucketedMeterIDs := make(map[string]bool)
-	meterDomainMap := make(map[string]*meterDomain.Meter) // converted meter objects for bucketed meters
-	for meterID, meterResp := range meterMap {
-		if meterResp != nil {
-			m := meterResp.ToMeter()
-			if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
-				bucketedMeterIDs[meterID] = true
-				meterDomainMap[meterID] = m
-			}
-		}
-	}
-
-	// Only non-bucketed meters go into the batch GetUsageMultiMeter calls
-	aggTypeToMeterIDs := make(map[types.AggregationType][]string)
-	for meterID, aggType := range meterAggType {
-		if !bucketedMeterIDs[meterID] {
-			aggTypeToMeterIDs[aggType] = append(aggTypeToMeterIDs[aggType], meterID)
-		}
-	}
-
-	// --- Query non-bucketed meters via GetUsageMultiMeter (scalar, batched) ---
-	meterResults := make(map[string]*events.MeterUsageAggregationResult)
-	for aggType, meterIDs := range aggTypeToMeterIDs {
-		results, err := s.MeterUsageRepo.GetUsageMultiMeter(ctx, &events.MeterUsageQueryParams{
-			TenantID:            types.GetTenantID(ctx),
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerIDs: externalCustomerIDs,
-			MeterIDs:            meterIDs,
-			StartTime:           usageStartTime,
-			EndTime:             usageEndTime,
-			AggregationType:     aggType,
-			UseFinal:            useFinal,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to query meter_usage for agg type %s: %w", aggType, err)
-		}
-		for _, r := range results {
-			meterResults[r.MeterID] = r
-		}
-	}
-
-	s.Logger.DebugwCtx(ctx, "fetched meter usage results",
-		"meter_ids", lo.Keys(meterResults),
-		"total_meters_with_usage", len(meterResults),
-		"bucketed_meter_count", len(bucketedMeterIDs),
-		"subscription_id", req.SubscriptionID)
-
-	// Map results back to line items and build charges
-	var usageCharges []*dto.SubscriptionUsageByMetersResponse
-	totalCost := decimal.Zero
-	processedLineItems := make(map[string]bool)
-
-	// Build charges for non-bucketed meters (flat scalar totals)
-	for meterID, result := range meterResults {
-		items := meterToLineItems[meterID]
-		for _, item := range items {
-			priceObj := priceMap[item.PriceID]
-			if priceObj == nil {
-				s.Logger.WarnwCtx(ctx, "price object not found for meter usage, skipping",
-					"price_id", item.PriceID,
-					"meter_id", meterID,
-					"subscription_id", req.SubscriptionID)
-				continue
-			}
-
-			quantity := result.TotalValue
-			cost := priceService.CalculateCost(ctx, priceObj, quantity)
-			totalCost = totalCost.Add(cost)
-
-			charge := &dto.SubscriptionUsageByMetersResponse{
-				SubscriptionLineItemID: item.ID,
-				Amount:                 cost.InexactFloat64(),
-				Currency:               priceObj.Currency,
-				DisplayAmount:          fmt.Sprintf("%.2f %s", cost.InexactFloat64(), priceObj.Currency),
-				Quantity:               quantity.InexactFloat64(),
-				FilterValues:           make(price.JSONBFilters),
-				MeterID:                meterID,
-				MeterDisplayName:       meterDisplayNames[meterID],
-				Price:                  priceObj,
-			}
-
-			if m := meterMap[meterID]; m != nil {
-				for _, filter := range m.Filters {
-					charge.FilterValues[filter.Key] = filter.Values
-				}
-			}
-
-			usageCharges = append(usageCharges, charge)
-			processedLineItems[item.ID] = true
-		}
-	}
-
-	// --- Query bucketed meters per line item (windowed, with BucketedUsageResult) ---
-	for meterID := range bucketedMeterIDs {
-		m := meterDomainMap[meterID]
-		items := meterToLineItems[meterID]
-		for _, item := range items {
-			priceObj := priceMap[item.PriceID]
-			if priceObj == nil {
-				s.Logger.WarnwCtx(ctx, "price object not found for bucketed meter usage, skipping",
-					"price_id", item.PriceID,
-					"meter_id", meterID,
-					"subscription_id", req.SubscriptionID)
-				continue
-			}
-
-			itemStart := item.GetPeriodStart(usageStartTime)
-			itemEnd := item.GetPeriodEnd(usageEndTime)
-
-			usageResult, err := s.queryBucketedMeterUsage(
-				ctx, m, externalCustomerIDs,
-				itemStart, itemEnd, &sub.BillingAnchor, useFinal,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
-			}
-
-			hasGroupBy := m.IsBucketedMaxMeter() && m.Aggregation.GroupBy != ""
-			bucketedCost := calculateBucketedMeterCost(ctx, priceService, priceObj, usageResult, hasGroupBy)
-			totalCost = totalCost.Add(bucketedCost.Amount)
-
-			charge := &dto.SubscriptionUsageByMetersResponse{
-				SubscriptionLineItemID: item.ID,
-				Amount:                 bucketedCost.Amount.InexactFloat64(),
-				Currency:               priceObj.Currency,
-				DisplayAmount:          fmt.Sprintf("%.2f %s", bucketedCost.Amount.InexactFloat64(), priceObj.Currency),
-				Quantity:               bucketedCost.Quantity.InexactFloat64(),
-				FilterValues:           make(price.JSONBFilters),
-				MeterID:                meterID,
-				MeterDisplayName:       meterDisplayNames[meterID],
-				Price:                  priceObj,
-				BucketedUsageResult:    usageResult,
-			}
-
-			if meterResp := meterMap[meterID]; meterResp != nil {
-				for _, filter := range meterResp.Filters {
-					charge.FilterValues[filter.Key] = filter.Values
-				}
-			}
-
-			usageCharges = append(usageCharges, charge)
-			processedLineItems[item.ID] = true
-		}
-	}
-
-	// Zero-quantity charges for line items with no usage
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
-			continue
-		}
-		if processedLineItems[item.ID] {
-			continue
-		}
-
-		priceObj := priceMap[item.PriceID]
-		if priceObj == nil {
-			continue
-		}
-
-		charge := &dto.SubscriptionUsageByMetersResponse{
-			SubscriptionLineItemID: item.ID,
-			Amount:                 0.0,
-			Currency:               priceObj.Currency,
-			DisplayAmount:          fmt.Sprintf("0.00 %s", priceObj.Currency),
-			Quantity:               0.0,
-			FilterValues:           make(price.JSONBFilters),
-			MeterID:                item.MeterID,
-			MeterDisplayName:       meterDisplayNames[item.MeterID],
-			Price:                  priceObj,
-		}
-
-		if m := meterMap[item.MeterID]; m != nil {
-			for _, filter := range m.Filters {
-				charge.FilterValues[filter.Key] = filter.Values
-			}
-		}
-
-		usageCharges = append(usageCharges, charge)
 	}
 
 	// Apply commitment-based overage logic if configured
@@ -6298,33 +6054,6 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 	return response, nil
 }
 
-// queryBucketedMeterUsage queries the meter_usage table for a single bucketed meter,
-// returning a per-bucket AggregationResult suitable for calculateBucketedMeterCost.
-func (s *subscriptionService) queryBucketedMeterUsage(
-	ctx context.Context,
-	m *meterDomain.Meter,
-	externalCustomerIDs []string,
-	periodStart, periodEnd time.Time,
-	billingAnchor *time.Time,
-	useFinal bool,
-) (*events.AggregationResult, error) {
-	aggType := m.Aggregation.Type
-	groupBy := m.Aggregation.GroupBy
-	params := &events.MeterUsageQueryParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs: externalCustomerIDs,
-		MeterID:             m.ID,
-		StartTime:           periodStart,
-		EndTime:             periodEnd,
-		AggregationType:     aggType,
-		WindowSize:          m.Aggregation.BucketSize,
-		BillingAnchor:       billingAnchor,
-		GroupByProperty:     groupBy,
-		UseFinal:            useFinal,
-	}
-	return s.MeterUsageRepo.GetUsageForBucketedMeters(ctx, params)
-}
 
 // GetSubscriptionEntitlements retrieves all entitlements associated with a subscription
 // This includes entitlements from:
@@ -7325,89 +7054,136 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 	return childCustomerIDs, nil
 }
 
-// prepareSubscriptionInheritanceForCreate validates inheritance, applies parent-link invoicing,
-// resolves invoicing/child customers by external ID, and sets subscription type for parent rows.
-// Call before SubRepo.CreateWithLineItems so InvoicingCustomerID and SubscriptionType persist.
-// Returns internal customer IDs for inherited subscriptions to create after invoice/activation in the same tx.
-func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx context.Context, req *dto.CreateSubscriptionRequest, sub *subscription.Subscription) ([]string, error) {
-
-	var childCustomerIDs []string
-	if req.Inheritance != nil {
-		if err := req.Inheritance.Validate(); err != nil {
-			return nil, err
-		}
-		inh := req.Inheritance
-		childCustomerIDs = make([]string, 0, len(inh.ExternalCustomerIDsToInheritSubscription))
-
-		if inh.ParentSubscriptionID != "" {
-			parentSub, err := s.SubRepo.Get(ctx, inh.ParentSubscriptionID)
-			if err != nil {
-				return nil, err
-			}
-			if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
-				return nil, ierr.NewError("parent subscription is not active").
-					WithHint("The parent subscription must be active").
-					WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
-					Mark(ierr.ErrValidation)
-			}
-			sub.InvoicingCustomerID = parentSub.InvoicingCustomerID
-		}
-
-		if inh.InvoicingCustomerExternalID != nil {
-			invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, lo.FromPtr(inh.InvoicingCustomerExternalID))
-			if err != nil {
-				return nil, err
-			}
-			if invoicingCustomer.Status != types.StatusPublished {
-				return nil, ierr.NewError("invoicing customer is not active").
-					WithHint("The invoicing customer must be active").
-					WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
-					Mark(ierr.ErrValidation)
-			}
-			sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
-		}
-
-		if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
-			resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription)
-			if err != nil {
-				return nil, err
-			}
-			childCustomerIDs = resolved
-		}
-		// set the subscription type based on the number of child customer IDs
-		if len(childCustomerIDs) > 0 {
-			sub.SubscriptionType = types.SubscriptionTypeParent
-		} else {
-			sub.SubscriptionType = types.SubscriptionTypeStandalone
-		}
+// validateAutoInvoiceThresholdForCreate enforces auto_invoice_threshold before create: the effective
+// subscription type (same rules as prepareSubscriptionInheritanceForCreate) must be standalone, and
+// every plan line item must be usage-based.
+func (s *subscriptionService) validateAutoInvoiceThresholdForCreate(sub *subscription.Subscription) error {
+	if !sub.HasPositiveAutoInvoiceThreshold() {
+		return nil
 	}
 
-	// validate that the subscriber does not have an inherited subscription
-	if sub.SubscriptionType == types.SubscriptionTypeStandalone || sub.SubscriptionType == types.SubscriptionTypeParent {
-		subscriberFilter := types.NewSubscriptionFilter()
-		subscriberFilter.CustomerID = sub.CustomerID
-		subscriberFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-		subscriberFilter.Status = lo.ToPtr(types.StatusPublished)
-		subscriberFilter.SubscriptionStatus = []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusDraft,
-			types.SubscriptionStatusTrialing,
-		}
-		subscriberFilter.WithLineItems = false
-		subscriberFilter.Limit = lo.ToPtr(1)
-		inheritedCount, countErr := s.SubRepo.Count(ctx, subscriberFilter)
-		if countErr != nil {
-			return nil, countErr
-		}
-		if inheritedCount > 0 {
-			return nil, ierr.NewError("customer already has an inherited subscription").
-				WithHint("A customer that receives a subscription through hierarchy cannot create a standalone or parent subscription. Cancel the inherited subscription first or subscribe only via the parent subscription.").
-				WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
+	if sub.SubscriptionType != types.SubscriptionTypeStandalone {
+		return ierr.NewError("auto_invoice_threshold is only allowed for standalone subscriptions").
+			WithHint("Remove auto_invoice_threshold or create the subscription without parent/inheritance, delegated invoicing, or grouped invoicing").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_type": sub.SubscriptionType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	for _, li := range sub.LineItems {
+		if li.PriceType != types.PRICE_TYPE_USAGE {
+			return ierr.NewError("auto_invoice_threshold is not allowed when the plan includes non-usage prices").
+				WithHint("Use a plan with only usage-based prices for auto-invoice threshold billing, or remove fixed and other non-usage prices from this subscription's plan line items").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":   li.PriceID,
+					"price_type": li.PriceType,
+				}).
 				Mark(ierr.ErrValidation)
 		}
 	}
+	return nil
+}
 
-	return childCustomerIDs, nil
+// prepareSubscriptionInheritanceForCreate validates inheritance, applies parent-link invoicing,
+// resolves invoicing/child customers by external ID, and sets subscription type for parent rows.
+// Call before SubRepo.CreateWithLineItems so InvoicingCustomerID and SubscriptionType persist.
+// Returns groupedInvoicingSubIDs (existing standalone subs to convert post-create) and
+// childCustomerIDs (internal customer IDs for inherited subscriptions to create after invoice/activation).
+func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx context.Context, req *dto.CreateSubscriptionRequest, sub *subscription.Subscription) (groupedInvoicingSubIDs []string, childCustomerIDs []string, err error) {
+	if req.Inheritance == nil {
+		sub.SubscriptionType = types.SubscriptionTypeStandalone
+		return nil, nil, s.validateNoInheritedSubForSubscriber(ctx, sub)
+	}
+
+	inh := req.Inheritance
+	if err := inh.Validate(); err != nil {
+		return nil, nil, err
+	}
+
+	// Auto-detection path (the only path): interpret inheritance fields and set SubscriptionType.
+	if inh.ParentSubscriptionID != "" {
+		parentSub, err := s.SubRepo.Get(ctx, inh.ParentSubscriptionID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
+			return nil, nil, ierr.NewError("parent subscription is not active").
+				WithHint("The parent subscription must be active").
+				WithReportableDetails(map[string]interface{}{"parent_subscription_id": inh.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
+				Mark(ierr.ErrValidation)
+		}
+		sub.InvoicingCustomerID = parentSub.InvoicingCustomerID
+		sub.SubscriptionType = types.SubscriptionTypeInherited
+		sub.ParentSubscriptionID = lo.ToPtr(inh.ParentSubscriptionID)
+	}
+
+	if inh.InvoicingCustomerExternalID != nil {
+		invoicingCustomer, err := s.CustomerRepo.GetByLookupKey(ctx, lo.FromPtr(inh.InvoicingCustomerExternalID))
+		if err != nil {
+			return nil, nil, err
+		}
+		if invoicingCustomer.Status != types.StatusPublished {
+			return nil, nil, ierr.NewError("invoicing customer is not active").
+				WithHint("The invoicing customer must be active").
+				WithReportableDetails(map[string]interface{}{"external_id": lo.FromPtr(inh.InvoicingCustomerExternalID), "status": invoicingCustomer.Status}).
+				Mark(ierr.ErrValidation)
+		}
+		sub.InvoicingCustomerID = lo.ToPtr(invoicingCustomer.ID)
+	}
+
+	if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
+		resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription)
+		if err != nil {
+			return nil, nil, err
+		}
+		childCustomerIDs = resolved
+	}
+
+	// SubIDsForGroupedInvoicing are processed post-create (parent.ID not known yet at this point).
+	groupedInvoicingSubIDs = inh.SubscriptionsIDsForGroupedInvoicing
+
+	if len(childCustomerIDs) > 0 || len(groupedInvoicingSubIDs) > 0 {
+		sub.SubscriptionType = types.SubscriptionTypeParent
+	} else if sub.SubscriptionType == "" {
+		sub.SubscriptionType = types.SubscriptionTypeStandalone
+	}
+
+	return groupedInvoicingSubIDs, childCustomerIDs, s.validateNoInheritedSubForSubscriber(ctx, sub)
+}
+
+// validateNoInheritedSubForSubscriber rejects standalone/parent/delegated creation when
+// the subscriber already has an inherited subscription under another parent.
+func (s *subscriptionService) validateNoInheritedSubForSubscriber(ctx context.Context, sub *subscription.Subscription) error {
+	skipTypes := map[types.SubscriptionType]bool{
+		types.SubscriptionTypeInherited:        true,
+		types.SubscriptionTypeGroupedInvoicing: true,
+	}
+	if skipTypes[sub.SubscriptionType] {
+		return nil
+	}
+	subscriberFilter := types.NewSubscriptionFilter()
+	subscriberFilter.CustomerID = sub.CustomerID
+	subscriberFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	subscriberFilter.Status = lo.ToPtr(types.StatusPublished)
+	subscriberFilter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusTrialing,
+	}
+	subscriberFilter.WithLineItems = false
+	subscriberFilter.Limit = lo.ToPtr(1)
+	count, err := s.SubRepo.Count(ctx, subscriberFilter)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return ierr.NewError("customer already has an inherited subscription").
+			WithHint("A customer that receives a subscription through hierarchy cannot create a standalone, parent, or delegated subscription.").
+			WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, parent *subscription.Subscription, childCustomerID string) error {
@@ -7570,6 +7346,126 @@ func (s *subscriptionService) cascadeResumeToInherited(ctx context.Context, pare
 				WithHintf("Failed to cascade resume to inherited subscription %s", child.ID).
 				Mark(ierr.ErrInternal)
 		}
+	}
+	return nil
+}
+
+// ProcessAutoInvoiceThresholdBilling checks active, published subscriptions that have auto_invoice_threshold
+// set on the subscription (not inherited from a plan) and runs auto invoice threshold billing:
+// mid-period invoices when current-period usage has crossed that threshold.
+func (s *subscriptionService) ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*dto.AutoInvoiceThresholdBillingResult, error) {
+	const batchSize = 1000
+	effectiveTime := time.Now().UTC()
+
+	s.Logger.InfowCtx(ctx, "starting auto invoice threshold billing run", "effective_time", effectiveTime)
+
+	result := &dto.AutoInvoiceThresholdBillingResult{
+		Items: make([]*dto.AutoInvoiceThresholdBillingResultItem, 0),
+	}
+
+	offset := 0
+	for {
+		subs, err := s.SubRepo.GetSubscriptionsWithAutoInvoiceThreshold(ctx, batchSize, offset)
+		if err != nil {
+			return nil, err
+		}
+		if len(subs) == 0 {
+			break
+		}
+
+		for _, sub := range subs {
+			subCtx := context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
+			subCtx = context.WithValue(subCtx, types.CtxEnvironmentID, sub.EnvironmentID)
+			subCtx = context.WithValue(subCtx, types.CtxUserID, sub.CreatedBy)
+
+			result.TotalChecked++
+			item := &dto.AutoInvoiceThresholdBillingResultItem{SubscriptionID: sub.ID}
+
+			if err := s.processAutoInvoiceThresholdSubscription(subCtx, sub, effectiveTime, item); err != nil {
+				s.Logger.ErrorwCtx(subCtx, "auto invoice threshold billing failed for subscription",
+					"subscription_id", sub.ID, "error", err)
+				result.TotalFailed++
+				item.Error = err.Error()
+			} else if item.Invoiced {
+				result.TotalInvoiced++
+			} else {
+				result.TotalSkipped++
+			}
+			result.Items = append(result.Items, item)
+		}
+
+		offset += len(subs)
+		if len(subs) < batchSize {
+			break
+		}
+	}
+
+	s.Logger.InfowCtx(ctx, "auto invoice threshold billing run complete",
+		"total_checked", result.TotalChecked,
+		"total_invoiced", result.TotalInvoiced,
+		"total_skipped", result.TotalSkipped,
+		"total_failed", result.TotalFailed)
+
+	return result, nil
+}
+
+// processAutoInvoiceThresholdSubscription implements one subscription's auto invoice threshold billing run;
+// plan-level thresholds are not used.
+func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	effectiveTime time.Time,
+	item *dto.AutoInvoiceThresholdBillingResultItem,
+) error {
+
+	// Calculate current-period usage amount.
+	usageResp, err := s.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: sub.ID,
+		StartTime:      sub.CurrentPeriodStart,
+		EndTime:        effectiveTime,
+	})
+	if err != nil {
+		return err
+	}
+
+	usageAmount := decimal.NewFromFloat(usageResp.Amount)
+	if usageAmount.LessThan(lo.FromPtr(sub.AutoInvoiceThreshold)) {
+		return nil
+	}
+
+	invoiceService := NewInvoiceService(s.ServiceParams)
+
+	paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
+	paymentParams = paymentParams.NormalizePaymentParameters()
+
+	var inv *dto.InvoiceResponse
+	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+
+		inv, _, err = invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
+			SubscriptionID: sub.ID,
+			PeriodStart:    sub.CurrentPeriodStart,
+			PeriodEnd:      effectiveTime,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+			BillingReason:  types.InvoiceBillingReasonAutoInvoiceThreshold,
+		}, paymentParams, types.InvoiceFlowRenewal, false)
+
+		if err != nil {
+			return err
+		}
+
+		// Advance current_period_start only after successful invoice creation.
+		sub.CurrentPeriodStart = effectiveTime
+		if err := s.SubRepo.Update(ctx, sub); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	item.Invoiced = true
+	if inv != nil {
+		item.InvoiceID = inv.ID
 	}
 	return nil
 }

@@ -66,7 +66,7 @@ func (s *CustomerServiceSuite) TestCreateCustomer() {
 		request       dto.CreateCustomerRequest
 		setup         func()
 		expectedError bool
-		errorCode     string
+		errorCode     ierr.ErrorCode
 	}{
 		{
 			name: "valid_customer",
@@ -176,7 +176,7 @@ func (s *CustomerServiceSuite) TestGetCustomer() {
 		id               string
 		setup            func()
 		expectedError    bool
-		errorCode        string
+		errorCode        ierr.ErrorCode
 		expectedCustomer *domainCustomer.Customer
 	}{
 		{
@@ -279,7 +279,7 @@ func (s *CustomerServiceSuite) TestUpdateCustomer() {
 		request       dto.UpdateCustomerRequest
 		setup         func()
 		expectedError bool
-		errorCode     string
+		errorCode     ierr.ErrorCode
 	}{
 		{
 			name: "valid_update",
@@ -356,7 +356,7 @@ func (s *CustomerServiceSuite) TestDeleteCustomer() {
 		id            string
 		setup         func()
 		expectedError bool
-		errorCode     string
+		errorCode     ierr.ErrorCode
 	}{
 		{
 			name: "delete_existing_customer",
@@ -598,7 +598,7 @@ func (s *CustomerServiceSuite) TestGetCustomerByLookupKey() {
 		lookupKey        string
 		setup            func()
 		expectedError    bool
-		errorCode        string
+		errorCode        ierr.ErrorCode
 		expectedCustomer *domainCustomer.Customer
 	}{
 		{

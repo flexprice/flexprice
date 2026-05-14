@@ -1184,14 +1184,16 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		// Filter subscriptions by currency
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
-			if sub.Currency == w.Currency {
-				filteredSubscriptions = append(filteredSubscriptions, sub)
-				s.Logger.InfowCtx(ctx, "found matching subscription",
-					"subscription_id", sub.ID,
-					"currency", sub.Currency,
-					"period_start", sub.CurrentPeriodStart,
-					"period_end", sub.CurrentPeriodEnd)
+			if sub.Currency != w.Currency {
+				s.Logger.InfowCtx(ctx, "skipping subscription - currency mismatch")
+				continue
 			}
+			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
+				s.Logger.InfowCtx(ctx, "skipping subscription - not a standalone or parent subscription")
+				continue
+			}
+
+			filteredSubscriptions = append(filteredSubscriptions, sub)
 		}
 
 		billingService := NewBillingService(s.ServiceParams)
@@ -1776,6 +1778,9 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 	subFilter.CustomerID = tx.CustomerID
 	subFilter.Limit = lo.ToPtr(1)
 	subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+
+	// This is very important to only check for active subscriptions of type standalone and parent
+	subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeStandalone, types.SubscriptionTypeParent}
 	subFilter.TimeRangeFilter = &types.TimeRangeFilter{
 		EndTime: lo.ToPtr(time.Now().UTC()),
 	}
@@ -2403,14 +2408,16 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		// Filter subscriptions by currency
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
-			if sub.Currency == w.Currency {
-				filteredSubscriptions = append(filteredSubscriptions, sub)
-				s.Logger.InfowCtx(ctx, "found matching subscription",
-					"subscription_id", sub.ID,
-					"currency", sub.Currency,
-					"period_start", sub.CurrentPeriodStart,
-					"period_end", sub.CurrentPeriodEnd)
+			if sub.Currency != w.Currency {
+				s.Logger.InfowCtx(ctx, "skipping subscription - currency mismatch")
+				continue
 			}
+			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
+				s.Logger.InfowCtx(ctx, "skipping subscription - not a standalone or parent subscription")
+				continue
+			}
+
+			filteredSubscriptions = append(filteredSubscriptions, sub)
 		}
 
 		billingService := NewBillingService(s.ServiceParams)
@@ -2566,14 +2573,16 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		// Filter subscriptions by currency
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
-			if sub.Currency == w.Currency {
-				filteredSubscriptions = append(filteredSubscriptions, sub)
-				s.Logger.InfowCtx(ctx, "found matching subscription",
-					"subscription_id", sub.ID,
-					"currency", sub.Currency,
-					"period_start", sub.CurrentPeriodStart,
-					"period_end", sub.CurrentPeriodEnd)
+			if sub.Currency != w.Currency {
+				s.Logger.InfowCtx(ctx, "skipping subscription - currency mismatch")
+				continue
 			}
+			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
+				s.Logger.InfowCtx(ctx, "skipping subscription - not a standalone or parent subscription")
+				continue
+			}
+
+			filteredSubscriptions = append(filteredSubscriptions, sub)
 		}
 
 		billingService := NewBillingService(s.ServiceParams)

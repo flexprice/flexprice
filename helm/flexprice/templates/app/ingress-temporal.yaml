@@ -1,0 +1,36 @@
+{{- if and .Values.temporalIngress.enabled .Values.temporal.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "flexprice.fullname" . }}-temporal
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: temporal-ui
+  {{- with .Values.temporalIngress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.temporalIngress.className }}
+  ingressClassName: {{ .Values.temporalIngress.className }}
+  {{- end }}
+  {{- if .Values.temporalIngress.tls }}
+  tls:
+    {{- range .Values.temporalIngress.tls }}
+    - hosts:
+        - {{ $.Values.temporalIngress.host | quote }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.temporalIngress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-temporal-web
+                port:
+                  number: 8080
+{{- end }}

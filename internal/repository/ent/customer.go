@@ -275,36 +275,42 @@ func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFi
 }
 
 func (r *customerRepository) ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*domainCustomer.Customer, error) {
-	client := r.client.Reader(ctx)
-
-	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "customer", "list_all", map[string]interface{}{
 		"filter": filter,
 	})
 	defer FinishSpan(span)
 
-	query := client.Customer.Query()
-	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
-
-	var err error
-	query, err = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to apply query options").
-			Mark(ierr.ErrDatabase)
+	if filter == nil {
+		filter = types.NewNoLimitCustomerFilter()
+	}
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewNoLimitQueryFilter()
 	}
 
-	customers, err := query.All(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list customers").
-			Mark(ierr.ErrDatabase)
+	const batchSize = 1000
+	batchLimit := batchSize
+	offset := 0
+	filter.QueryFilter.Limit = &batchLimit
+	filter.QueryFilter.Offset = &offset
+
+	var fetchedCustomers []*domainCustomer.Customer
+	for {
+		batch, err := r.List(ctx, filter)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+
+		fetchedCustomers = append(fetchedCustomers, batch...)
+		if len(batch) < batchSize {
+			break
+		}
+		offset += batchSize
+		filter.QueryFilter.Offset = &offset
 	}
 
 	SetSpanSuccess(span)
-	return domainCustomer.FromEntList(customers), nil
+	return fetchedCustomers, nil
 }
 
 func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Customer) error {

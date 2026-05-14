@@ -51,9 +51,11 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 		return s.executeInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
 		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
+	case dto.SubscriptionModifyTypeGroupedInvoicing:
+		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	default:
 		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
-			WithHint("Valid values: inheritance, quantity_change").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing").
 			Mark(ierr.ErrValidation)
 	}
 }
@@ -69,9 +71,11 @@ func (s *subscriptionModificationService) Preview(ctx context.Context, subscript
 		return s.previewInheritance(ctx, subscriptionID, req.InheritanceParams)
 	case dto.SubscriptionModifyTypeQuantityChange:
 		return s.previewQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
+	case dto.SubscriptionModifyTypeGroupedInvoicing:
+		return s.previewGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
 	default:
 		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
-			WithHint("Valid values: inheritance, quantity_change").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing").
 			Mark(ierr.ErrValidation)
 	}
 }
@@ -104,6 +108,12 @@ func (s *subscriptionModificationService) executeInheritance(
 		return nil, ierr.NewError("subscription is not active").
 			WithHint("Only active subscriptions can be modified for inheritance").
 			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID, "status": sub.SubscriptionStatus}).
+			Mark(ierr.ErrValidation)
+	}
+	if sub.HasPositiveAutoInvoiceThreshold() {
+		return nil, ierr.NewError("cannot add inherited subscriptions while auto_invoice_threshold is set").
+			WithHint("Remove subscription-level auto_invoice_threshold first; it applies only to standalone subscriptions").
+			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -210,6 +220,12 @@ func (s *subscriptionModificationService) previewInheritance(
 		return nil, ierr.NewError("subscription is not active").
 			WithHint("Only active subscriptions can be modified for inheritance").
 			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID, "status": sub.SubscriptionStatus}).
+			Mark(ierr.ErrValidation)
+	}
+	if sub.HasPositiveAutoInvoiceThreshold() {
+		return nil, ierr.NewError("cannot add inherited subscriptions while auto_invoice_threshold is set").
+			WithHint("Remove subscription-level auto_invoice_threshold first; it applies only to standalone subscriptions").
+			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID}).
 			Mark(ierr.ErrValidation)
 	}
 

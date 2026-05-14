@@ -2288,7 +2288,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	}
 
 	// Create invoice request for the calculated charges
-	return s.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{
+	invReq, err := s.CreateInvoiceRequestForCharges(ctx, &dto.CreateInvoiceRequestForChargesParams{
 		Subscription: sub,
 		Result:       calculationResult,
 		PeriodStart:  periodStart,
@@ -2296,6 +2296,55 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		Description:  description,
 		Metadata:     metadata,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	// For parent subscriptions, merge line items from all grouped_invoicing children.
+	if sub.SubscriptionType == types.SubscriptionTypeParent {
+		filter := types.NewNoLimitSubscriptionFilter()
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+		filter.ParentSubscriptionIDs = []string{sub.ID}
+		filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeGroupedInvoicing}
+		filter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+		}
+		children, err := s.SubRepo.List(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+		for _, child := range children {
+			// NOTE: ExcludeInvoiceID and OpeningInvoiceAdjustmentAmount from the parent params
+			// are intentionally not forwarded here.
+			//   - ExcludeInvoiceID: child subscriptions maintain their own invoice history;
+			//     filtering is done independently per child.
+			//   - OpeningInvoiceAdjustmentAmount: plan-change opening credits apply only to the
+			//     parent subscription's line items, not to grouped-invoicing children.
+			childReq, err := s.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+				Subscription:   child,
+				PeriodStart:    periodStart,
+				PeriodEnd:      periodEnd,
+				ReferencePoint: referencePoint,
+			})
+			if err != nil {
+				return nil, err
+			}
+			invReq.LineItems = append(invReq.LineItems, childReq.LineItems...)
+		}
+		// Recalculate totals from merged line items
+		if len(children) > 0 {
+			var subtotal decimal.Decimal
+			for _, li := range invReq.LineItems {
+				subtotal = subtotal.Add(li.Amount)
+			}
+			invReq.Subtotal = subtotal
+			invReq.Total = subtotal
+			invReq.AmountDue = subtotal
+		}
+	}
+
+	return invReq, nil
 }
 
 // validatePeriodAgainstSubscriptionEndDate ensures billing periods don't exceed subscription end date
