@@ -330,6 +330,10 @@ type ExportMetadataFields []ExportMetadataField
 // export entity type, then normalises defaults. The entity-type check runs first so the error
 // message is meaningful before any defaulting happens.
 func (fields ExportMetadataFields) ValidateAndDefault(exportEntity ScheduledTaskEntityType) error {
+	if len(fields) == 0 {
+		return nil
+	}
+
 	allowed, ok := allowedMetadataEntityTypes[exportEntity]
 	if !ok {
 		return ierr.NewError("export_metadata_fields are not supported for this export type").
