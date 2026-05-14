@@ -7,11 +7,29 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+// ErrorCode is the machine-readable error code returned in API responses.
+type ErrorCode string
+
+const (
+	ErrCodeHTTPClient         ErrorCode = "http_client_error"
+	ErrCodeSystemError        ErrorCode = "system_error"
+	ErrCodeInternalError      ErrorCode = "internal_error"
+	ErrCodeNotFound           ErrorCode = "not_found"
+	ErrCodeAlreadyExists      ErrorCode = "already_exists"
+	ErrCodeVersionConflict    ErrorCode = "version_conflict"
+	ErrCodeValidation         ErrorCode = "validation_error"
+	ErrCodeInvalidOperation   ErrorCode = "invalid_operation"
+	ErrCodePermissionDenied   ErrorCode = "permission_denied"
+	ErrCodeDatabase           ErrorCode = "database_error"
+	ErrCodeServiceUnavailable ErrorCode = "service_unavailable"
+	ErrCodeTooManyRequests    ErrorCode = "too_many_requests"
+)
+
 // errorMapping holds both the HTTP status and machine-readable code for a
 // sentinel error. Single source of truth — one iteration resolves both.
 type errorMapping struct {
 	Status int
-	Code   string
+	Code   ErrorCode
 }
 
 // Common error types that can be used across the application
@@ -47,27 +65,12 @@ var (
 	}
 )
 
-const (
-	ErrCodeHTTPClient         = "http_client_error"
-	ErrCodeSystemError        = "system_error"
-	ErrCodeInternalError      = "internal_error"
-	ErrCodeNotFound           = "not_found"
-	ErrCodeAlreadyExists      = "already_exists"
-	ErrCodeVersionConflict    = "version_conflict"
-	ErrCodeValidation         = "validation_error"
-	ErrCodeInvalidOperation   = "invalid_operation"
-	ErrCodePermissionDenied   = "permission_denied"
-	ErrCodeDatabase           = "database_error"
-	ErrCodeServiceUnavailable = "service_unavailable"
-	ErrCodeTooManyRequests    = "too_many_requests"
-)
-
 // InternalError represents a domain error
 type InternalError struct {
-	Code    string // Machine-readable error code
-	Message string // Human-readable error message
-	Op      string // Logical operation name
-	Err     error  // Underlying error
+	Code    ErrorCode // Machine-readable error code
+	Message string    // Human-readable error message
+	Op      string    // Logical operation name
+	Err     error     // Underlying error
 }
 
 func (e *InternalError) Error() string {
@@ -100,7 +103,7 @@ func (e *InternalError) Is(target error) bool {
 }
 
 // New creates a new InternalError
-func new(code string, message string) *InternalError {
+func new(code ErrorCode, message string) *InternalError {
 	return &InternalError{
 		Code:    code,
 		Message: message,
@@ -170,7 +173,7 @@ func IsTooManyRequests(err error) bool {
 
 // ResolveError returns both the HTTP status code and machine-readable error
 // code for the given error in a single pass over errMappings.
-func ResolveError(err error) (httpStatus int, code string) {
+func ResolveError(err error) (httpStatus int, code ErrorCode) {
 	for sentinel, m := range errMappings {
 		if errors.Is(err, sentinel) {
 			return m.Status, m.Code

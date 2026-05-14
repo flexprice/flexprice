@@ -60,6 +60,49 @@ type MeterUsageAggregationResult struct {
 	Points          []MeterUsageResult    `json:"points,omitempty"`
 }
 
+// MeterUsageDetailedAnalyticsParams defines parameters for detailed meter usage analytics
+// with support for group by, property filters, source filtering, and time-series breakdown.
+type MeterUsageDetailedAnalyticsParams struct {
+	TenantID            string
+	EnvironmentID       string
+	ExternalCustomerID  string
+	ExternalCustomerIDs []string
+	MeterIDs            []string
+	StartTime           time.Time
+	EndTime             time.Time
+	GroupBy             []string            // "source", "meter_id", "properties.<field>"
+	PropertyFilters     map[string][]string // e.g. {"model": ["gpt-4", "gpt-3.5"]}
+	Sources             []string
+	AggregationTypes    []types.AggregationType // SUM, MAX, LATEST, COUNT_UNIQUE, COUNT
+	WindowSize          types.WindowSize
+	BillingAnchor       *time.Time
+	UseFinal            bool
+}
+
+// MeterUsageDetailedResult holds aggregated analytics for a single group combination
+type MeterUsageDetailedResult struct {
+	MeterID          string
+	Source           string
+	Sources          []string          // populated when source is NOT in group_by
+	Properties       map[string]string // property group-by values
+	TotalUsage       decimal.Decimal
+	MaxUsage         decimal.Decimal
+	LatestUsage      decimal.Decimal
+	CountUniqueUsage uint64
+	EventCount       uint64
+	Points           []MeterUsageDetailedPoint
+}
+
+// MeterUsageDetailedPoint is a single time-bucketed data point with all aggregation values
+type MeterUsageDetailedPoint struct {
+	WindowStart      time.Time
+	TotalUsage       decimal.Decimal
+	MaxUsage         decimal.Decimal
+	LatestUsage      decimal.Decimal
+	CountUniqueUsage uint64
+	EventCount       uint64
+}
+
 // MeterUsageRepository defines read/write operations on the meter_usage ClickHouse table
 type MeterUsageRepository interface {
 	// BulkInsertMeterUsage inserts multiple meter usage records in batches
@@ -81,4 +124,7 @@ type MeterUsageRepository interface {
 	// GetDistinctMeterIDs returns the set of meter_ids that have data in the meter_usage table
 	// for the given customer(s) and time range. Used to skip meters with zero usage.
 	GetDistinctMeterIDs(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)
+
+	// GetDetailedAnalytics provides comprehensive analytics with filtering, grouping, and time-series data
+	GetDetailedAnalytics(ctx context.Context, params *MeterUsageDetailedAnalyticsParams) ([]*MeterUsageDetailedResult, error)
 }

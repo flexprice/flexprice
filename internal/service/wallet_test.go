@@ -1779,7 +1779,7 @@ func (s *WalletServiceSuite) TestGetCustomerWallets() {
 		includeRealTimeBalance bool
 		setup                  func()
 		expectedError          bool
-		expectedErrorCode      string
+		expectedErrorCode      ierr.ErrorCode
 		expectedWalletsCount   int
 	}{
 		{
