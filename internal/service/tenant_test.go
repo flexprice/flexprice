@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -256,100 +255,6 @@ func (s *TenantServiceSuite) TestGetTenantWithBillingDetails() {
 					s.Equal(tc.expectedPhone, resp.BillingDetails.Phone)
 					s.Equal(tc.expectedCountry, resp.BillingDetails.Address.Country)
 				}
-			}
-		})
-	}
-}
-
-func (s *TenantServiceSuite) TestUpdateTenantAccess() {
-	operatorCtx := context.WithValue(s.GetContext(), types.CtxTenantID, accessTestOperatorTenantID)
-
-	testCases := []struct {
-		name           string
-		ctx            context.Context
-		targetID       string
-		initialStatus  types.TenantInternalStatus
-		request        dto.UpdateTenantAccessRequest
-		expectedError  bool
-		expectedStatus types.TenantInternalStatus
-	}{
-		{
-			name:           "operator_promotes_trialing_to_active",
-			ctx:            operatorCtx,
-			targetID:       accessTestTargetTenantID,
-			initialStatus:  types.TenantInternalStatusTrialing,
-			request:        dto.UpdateTenantAccessRequest{InternalStatus: types.TenantInternalStatusActive},
-			expectedStatus: types.TenantInternalStatusActive,
-		},
-		{
-			name:           "operator_suspends_active_tenant",
-			ctx:            operatorCtx,
-			targetID:       accessTestTargetTenantID,
-			initialStatus:  types.TenantInternalStatusActive,
-			request:        dto.UpdateTenantAccessRequest{InternalStatus: types.TenantInternalStatusSuspended},
-			expectedStatus: types.TenantInternalStatusSuspended,
-		},
-		{
-			name:           "operator_reinstates_suspended_tenant",
-			ctx:            operatorCtx,
-			targetID:       accessTestTargetTenantID,
-			initialStatus:  types.TenantInternalStatusSuspended,
-			request:        dto.UpdateTenantAccessRequest{InternalStatus: types.TenantInternalStatusActive},
-			expectedStatus: types.TenantInternalStatusActive,
-		},
-		{
-			name:          "tenant_cannot_update_own_status",
-			ctx:           context.WithValue(s.GetContext(), types.CtxTenantID, accessTestTargetTenantID),
-			targetID:      accessTestTargetTenantID,
-			initialStatus: types.TenantInternalStatusTrialing,
-			request:       dto.UpdateTenantAccessRequest{InternalStatus: types.TenantInternalStatusActive},
-			expectedError: true,
-		},
-		{
-			name:          "same_status_rejected",
-			ctx:           operatorCtx,
-			targetID:      accessTestTargetTenantID,
-			initialStatus: types.TenantInternalStatusActive,
-			request:       dto.UpdateTenantAccessRequest{InternalStatus: types.TenantInternalStatusActive},
-			expectedError: true,
-		},
-		{
-			name:          "invalid_status_rejected",
-			ctx:           operatorCtx,
-			targetID:      accessTestTargetTenantID,
-			initialStatus: types.TenantInternalStatusTrialing,
-			request:       dto.UpdateTenantAccessRequest{InternalStatus: "unknown"},
-			expectedError: true,
-		},
-		{
-			name:          "target_tenant_not_found",
-			ctx:           operatorCtx,
-			targetID:      "nonexistent-tenant",
-			initialStatus: types.TenantInternalStatusTrialing,
-			request:       dto.UpdateTenantAccessRequest{InternalStatus: types.TenantInternalStatusActive},
-			expectedError: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		s.Run(tc.name, func() {
-			_ = s.tenantRepo.Update(s.GetContext(), &tenant.Tenant{
-				ID:             accessTestTargetTenantID,
-				Name:           "Target Tenant",
-				InternalStatus: tc.initialStatus,
-			})
-
-			resp, err := s.tenantService.UpdateTenantAccess(tc.ctx, tc.targetID, tc.request)
-
-			if tc.expectedError {
-				s.Error(err)
-				s.Nil(resp)
-			} else {
-				s.NoError(err)
-				s.NotNil(resp)
-				updated, err := s.tenantRepo.GetByID(s.GetContext(), tc.targetID)
-				s.NoError(err)
-				s.Equal(tc.expectedStatus, updated.InternalStatus)
 			}
 		})
 	}

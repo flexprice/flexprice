@@ -104,24 +104,3 @@ func (h *TenantHandler) GetTenantBillingUsage(c *gin.Context) {
 
 	c.JSON(http.StatusOK, usage)
 }
-
-// UpdateTenantAccess updates the internal_status of a tenant
-func (h *TenantHandler) UpdateTenantAccess(c *gin.Context) {
-	id := c.Param("id")
-
-	var req dto.UpdateTenantAccessRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Please check the request payload").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	resp, err := h.service.UpdateTenantAccess(c.Request.Context(), id, req)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}

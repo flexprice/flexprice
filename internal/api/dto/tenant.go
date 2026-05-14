@@ -129,14 +129,3 @@ type TenantBillingUsage struct {
 	Usage         *CustomerUsageSummaryResponse `json:"usage"`
 	Subscriptions []*SubscriptionResponse       `json:"subscriptions"`
 }
-
-type UpdateTenantAccessRequest struct {
-	InternalStatus types.TenantInternalStatus `json:"internal_status" validate:"required"`
-}
-
-func (r *UpdateTenantAccessRequest) Validate() error {
-	if err := validator.ValidateRequest(r); err != nil {
-		return err
-	}
-	return r.InternalStatus.Validate()
-}
