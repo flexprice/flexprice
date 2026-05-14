@@ -50,6 +50,7 @@ type AggregatedFeature struct {
 type AggregatedEntitlement struct {
 	IsEnabled        bool                              `json:"is_enabled"`
 	UsageLimit       *int64                            `json:"usage_limit,omitempty"`
+	IsUnlimited      bool                              `json:"is_unlimited"`
 	IsSoftLimit      bool                              `json:"is_soft_limit"`
 	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period,omitempty"`
 	StaticValues     []string                          `json:"static_values,omitempty"` // For static/SLA features
@@ -91,6 +92,7 @@ type EntitlementSource struct {
 	EntitlementID    string                      `json:"entitlement_id"`
 	IsEnabled        bool                        `json:"is_enabled"`
 	UsageLimit       *int64                      `json:"usage_limit,omitempty"`
+	IsUnlimited      bool                        `json:"is_unlimited"`
 	StaticValue      string                      `json:"static_value,omitempty"`
 	UsageResetPeriod types.BillingPeriod         `json:"usage_reset_period,omitempty"`
 }
