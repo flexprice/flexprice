@@ -71,3 +71,17 @@ type OutboundWebhookStaleRetryWorkflowResult struct {
 	Succeeded int `json:"succeeded"`
 	Failed    int `json:"failed"`
 }
+
+// ===================== Auto invoice threshold billing =====================
+
+// AutoInvoiceThresholdBillingWorkflowInput is the input for AutoInvoiceThresholdBillingWorkflow.
+// No fields required — the activity fetches all qualifying subscriptions itself.
+type AutoInvoiceThresholdBillingWorkflowInput struct{}
+
+// AutoInvoiceThresholdBillingWorkflowResult mirrors key counts from ProcessAutoInvoiceThresholdBilling.
+type AutoInvoiceThresholdBillingWorkflowResult struct {
+	TotalChecked  int `json:"total_checked"`
+	TotalInvoiced int `json:"total_invoiced"`
+	TotalSkipped  int `json:"total_skipped"`
+	TotalFailed   int `json:"total_failed"`
+}

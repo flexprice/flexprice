@@ -188,7 +188,7 @@ func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @x-scope read
+// @x-scope "read"
 // @Param filter body types.SubscriptionLineItemFilter true "Filter"
 // @Success 200 {object} dto.ListSubscriptionLineItemsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"

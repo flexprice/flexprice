@@ -41,14 +41,19 @@ func NewTaxService(client ZohoClient, logger *logger.Logger) ZohoTaxService {
 //  2. No default tax → list exemptions → return FLEXPRICE_STANDARD_EXEMPTION if present.
 //  3. Exemption missing → create it, then return it.
 func (s *TaxService) ResolveItemTax(ctx context.Context) (*ItemTaxResolution, error) {
-	taxesResp, err := s.client.ListTaxes(ctx, 1, 200)
-	if err != nil {
-		return nil, ierr.WithError(err).WithHint("failed to list Zoho taxes").Mark(ierr.ErrInternal)
-	}
-	for _, t := range taxesResp.Taxes {
-		if t.IsDefaultTax {
-			s.logger.Debugw("resolved default tax for item", "tax_id", t.TaxID, "tax_name", t.TaxName)
-			return &ItemTaxResolution{TaxID: t.TaxID, IsTaxable: true}, nil
+	for page := 1; ; page++ {
+		taxesResp, err := s.client.ListTaxes(ctx, page, 200)
+		if err != nil {
+			return nil, ierr.WithError(err).WithHint("failed to list Zoho taxes").Mark(ierr.ErrInternal)
+		}
+		for _, t := range taxesResp.Taxes {
+			if t.IsDefaultTax {
+				s.logger.Debugw("resolved default tax for item", "tax_id", t.TaxID, "tax_name", t.TaxName)
+				return &ItemTaxResolution{TaxID: t.TaxID, IsTaxable: true}, nil
+			}
+		}
+		if !taxesResp.PageContext.HasMorePage {
+			break
 		}
 	}
 

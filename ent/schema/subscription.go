@@ -202,6 +202,13 @@ func (Subscription) Fields() []ent.Field {
 			Default(string(types.SubscriptionTypeStandalone)).
 			GoType(types.SubscriptionType("")).
 			Comment("Subscription type within a customer hierarchy (standalone, parent, inherited)"),
+		field.Other("auto_invoice_threshold", decimal.Decimal{}).
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{
+				"postgres": "decimal(20,6)",
+			}).
+			Comment("Threshold usage amount (in subscription currency) that triggers an intermediate invoice. Overrides plan-level threshold when set."),
 	}
 }
 

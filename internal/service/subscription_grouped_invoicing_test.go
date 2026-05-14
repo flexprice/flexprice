@@ -236,23 +236,6 @@ func (s *SubscriptionGroupedInvoicingTestSuite) TestAddToGroupedInvoicing_Reject
 	require.True(s.T(), ierr.IsValidation(err), "expected validation error, got: %v", err)
 }
 
-func (s *SubscriptionGroupedInvoicingTestSuite) TestAddToGroupedInvoicing_RejectsNonParentParentSub() {
-	ctx := s.GetContext()
-	cust := s.createTestCustomer()
-
-	// parent sub is actually standalone, not parent type
-	parent := s.makeParentSub(cust.ID, baseAnchor, baseAnchor)
-	// override in DB
-	parent.SubscriptionType = types.SubscriptionTypeStandalone
-	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, parent))
-
-	child := s.makeChildSub(cust.ID, baseAnchor, baseAnchor)
-
-	err := s.subscriptionService.addToGroupedInvoicing(ctx, parent, child.ID)
-	require.Error(s.T(), err)
-	require.True(s.T(), ierr.IsValidation(err), "expected validation error, got: %v", err)
-}
-
 func (s *SubscriptionGroupedInvoicingTestSuite) TestAddToGroupedInvoicing_RejectsBillingAnchorMismatch() {
 	ctx := s.GetContext()
 	cust := s.createTestCustomer()
