@@ -60,6 +60,15 @@ type MeterUsageAggregationResult struct {
 	Points          []MeterUsageResult    `json:"points,omitempty"`
 }
 
+// MeterUsageQueryResult holds the combined results of a QueryUsageByMeters call.
+// Regular contains scalar results for non-bucketed meters, keyed by meter_id.
+// Bucketed contains windowed results for bucketed meters (MAX/SUM with BucketSize), keyed by meter_id.
+// Only meters with actual data in the period are present — meters with zero usage are omitted.
+type MeterUsageQueryResult struct {
+	Regular  map[string]*MeterUsageAggregationResult
+	Bucketed map[string]*AggregationResult
+}
+
 // MeterUsageRepository defines read/write operations on the meter_usage ClickHouse table
 type MeterUsageRepository interface {
 	// BulkInsertMeterUsage inserts multiple meter usage records in batches

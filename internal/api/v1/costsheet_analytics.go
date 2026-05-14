@@ -33,15 +33,15 @@ func NewRevenueAnalyticsHandler(
 	}
 }
 
-// GetCombinedAnalytics retrieves combined cost and revenue analytics with derived metrics
-// @Summary Get combined revenue and cost analytics
+// GetCostAnalytics retrieves cost analytics
+// @Summary Get cost analytics
 // @ID getDetailedCostAnalytics
-// @Description Use when building dashboards or reports that need revenue vs cost, ROI, and margin over a time period (e.g. finance views or executive summaries).
+// @Description Use when building dashboards or reports that need cost analytics over a time period (e.g. finance views or executive summaries).
 // @Tags Costs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body dto.GetCostAnalyticsRequest true "Combined analytics request (start_time/end_time optional - defaults to last 7 days)"
+// @Param request body dto.GetCostAnalyticsRequest true "Cost analytics request (start_time/end_time optional - defaults to last 7 days)"
 // @Success 200 {object} dto.GetDetailedCostAnalyticsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"

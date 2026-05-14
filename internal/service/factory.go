@@ -71,6 +71,7 @@ type ServiceParams struct {
 	FeatureUsageRepo             events.FeatureUsageRepository
 	RawEventRepo                 events.RawEventRepository
 	MeterUsageRepo               events.MeterUsageRepository
+	MeterUsageSvc                MeterUsageService
 	MeterRepo                    meter.Repository
 	PriceRepo                    price.Repository
 	PriceUnitRepo                priceunit.Repository
@@ -145,6 +146,7 @@ func NewServiceParams(
 	featureUsageRepo events.FeatureUsageRepository,
 	rawEventRepo events.RawEventRepository,
 	meterUsageRepo events.MeterUsageRepository,
+	meterUsageSvc MeterUsageService,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
 	priceUnitRepo priceunit.Repository,
@@ -208,6 +210,7 @@ func NewServiceParams(
 		FeatureUsageRepo:             featureUsageRepo,
 		RawEventRepo:                 rawEventRepo,
 		MeterUsageRepo:               meterUsageRepo,
+		MeterUsageSvc:                meterUsageSvc,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,
 		PriceUnitRepo:                priceUnitRepo,
