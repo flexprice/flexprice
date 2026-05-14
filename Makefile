@@ -116,7 +116,7 @@ test-coverage:
 	go tool cover -html=coverage.out -o coverage.html
 
 # Database related targets
-.PHONY: init-db migrate-postgres migrate-clickhouse seed-db migrate-ent
+.PHONY: init-db migrate-postgres migrate-clickhouse seed-db migrate-ent migrate-ent-env
 
 .PHONY: install-ent
 install-ent:
@@ -131,6 +131,12 @@ generate-ent: install-ent
 migrate-ent:
 	@echo "Running Ent migrations..."
 	@go run cmd/migrate/main.go --timeout 300
+	@echo "Ent migrations complete"
+
+.PHONY: migrate-ent-env
+migrate-ent-env:
+	@echo "Running Ent migrations from ENT_MIGRATE_POSTGRES_DSN or -dsn..."
+	@go run ./cmd/migrate-env --timeout 300
 	@echo "Ent migrations complete"
 
 .PHONY: migrate-ent-dry-run
