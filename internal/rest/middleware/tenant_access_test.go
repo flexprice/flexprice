@@ -43,7 +43,7 @@ func newTestLogger(t *testing.T) *logger.Logger {
 // newTestRouter builds a minimal Gin router that:
 //  1. Seeds tenantID into the request context (simulating AuthenticateMiddleware)
 //  2. Runs TenantAccessMiddleware
-//  3. Has a /test handler that writes the internal_status from ctx into the response
+//  3. Has GET and POST /test handlers that write the internal_status from ctx into the response
 func newTestRouter(t *testing.T, tenantID string, repo *mockTenantRepo) *gin.Engine {
 	log := newTestLogger(t)
 
@@ -61,11 +61,13 @@ func newTestRouter(t *testing.T, tenantID string, repo *mockTenantRepo) *gin.Eng
 
 	r.Use(TenantAccessMiddleware(repo, log))
 
-	r.GET("/test", func(c *gin.Context) {
+	handler := func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"internal_status": string(types.GetTenantInternalStatus(c.Request.Context())),
 		})
-	})
+	}
+	r.GET("/test", handler)
+	r.POST("/test", handler)
 
 	return r
 }
@@ -73,6 +75,7 @@ func newTestRouter(t *testing.T, tenantID string, repo *mockTenantRepo) *gin.Eng
 func TestTenantAccessMiddleware(t *testing.T) {
 	testCases := []struct {
 		name               string
+		method             string
 		tenantID           string
 		repoTenant         *domainTenant.Tenant
 		repoErr            error
@@ -80,7 +83,8 @@ func TestTenantAccessMiddleware(t *testing.T) {
 		wantInternalStatus string // only checked on 200
 	}{
 		{
-			name:     "suspended tenant is blocked",
+			name:   "suspended tenant is blocked on write",
+			method: http.MethodPost,
 			tenantID: "tenant-1",
 			repoTenant: &domainTenant.Tenant{
 				ID:             "tenant-1",
@@ -89,7 +93,19 @@ func TestTenantAccessMiddleware(t *testing.T) {
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
-			name:     "active tenant passes through and stamps ctx",
+			name:   "suspended tenant can still read",
+			method: http.MethodGet,
+			tenantID: "tenant-1",
+			repoTenant: &domainTenant.Tenant{
+				ID:             "tenant-1",
+				InternalStatus: types.TenantInternalStatusSuspended,
+			},
+			wantStatus:         http.StatusOK,
+			wantInternalStatus: string(types.TenantInternalStatusSuspended),
+		},
+		{
+			name:   "active tenant passes through on write",
+			method: http.MethodPost,
 			tenantID: "tenant-2",
 			repoTenant: &domainTenant.Tenant{
 				ID:             "tenant-2",
@@ -99,7 +115,8 @@ func TestTenantAccessMiddleware(t *testing.T) {
 			wantInternalStatus: string(types.TenantInternalStatusActive),
 		},
 		{
-			name:     "trialing tenant passes through and stamps ctx",
+			name:   "trialing tenant passes through on read",
+			method: http.MethodGet,
 			tenantID: "tenant-3",
 			repoTenant: &domainTenant.Tenant{
 				ID:             "tenant-3",
@@ -110,12 +127,14 @@ func TestTenantAccessMiddleware(t *testing.T) {
 		},
 		{
 			name:       "empty tenantID skips check and passes through",
+			method:     http.MethodGet,
 			tenantID:   "",
 			repoTenant: nil,
 			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "repo error fails closed with 500",
+			method:     http.MethodGet,
 			tenantID:   "tenant-4",
 			repoErr:    errors.New("db unavailable"),
 			wantStatus: http.StatusInternalServerError,
@@ -128,7 +147,7 @@ func TestTenantAccessMiddleware(t *testing.T) {
 			router := newTestRouter(t, tc.tenantID, repo)
 
 			w := httptest.NewRecorder()
-			req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+			req, _ := http.NewRequest(tc.method, "/test", nil)
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, tc.wantStatus, w.Code)
