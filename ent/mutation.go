@@ -26031,6 +26031,7 @@ type InvoiceMutation struct {
 	paid_at                       *time.Time
 	voided_at                     *time.Time
 	finalized_at                  *time.Time
+	issue_date                    *time.Time
 	last_computed_at              *time.Time
 	billing_period                *types.BillingPeriod
 	period_start                  *time.Time
@@ -27378,6 +27379,55 @@ func (m *InvoiceMutation) ResetFinalizedAt() {
 	delete(m.clearedFields, invoice.FieldFinalizedAt)
 }
 
+// SetIssueDate sets the "issue_date" field.
+func (m *InvoiceMutation) SetIssueDate(t time.Time) {
+	m.issue_date = &t
+}
+
+// IssueDate returns the value of the "issue_date" field in the mutation.
+func (m *InvoiceMutation) IssueDate() (r time.Time, exists bool) {
+	v := m.issue_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIssueDate returns the old "issue_date" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldIssueDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIssueDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIssueDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIssueDate: %w", err)
+	}
+	return oldValue.IssueDate, nil
+}
+
+// ClearIssueDate clears the value of the "issue_date" field.
+func (m *InvoiceMutation) ClearIssueDate() {
+	m.issue_date = nil
+	m.clearedFields[invoice.FieldIssueDate] = struct{}{}
+}
+
+// IssueDateCleared returns if the "issue_date" field was cleared in this mutation.
+func (m *InvoiceMutation) IssueDateCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldIssueDate]
+	return ok
+}
+
+// ResetIssueDate resets all changes to the "issue_date" field.
+func (m *InvoiceMutation) ResetIssueDate() {
+	m.issue_date = nil
+	delete(m.clearedFields, invoice.FieldIssueDate)
+}
+
 // SetLastComputedAt sets the "last_computed_at" field.
 func (m *InvoiceMutation) SetLastComputedAt(t time.Time) {
 	m.last_computed_at = &t
@@ -28185,7 +28235,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 41)
+	fields := make([]string, 0, 42)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -28269,6 +28319,9 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.finalized_at != nil {
 		fields = append(fields, invoice.FieldFinalizedAt)
+	}
+	if m.issue_date != nil {
+		fields = append(fields, invoice.FieldIssueDate)
 	}
 	if m.last_computed_at != nil {
 		fields = append(fields, invoice.FieldLastComputedAt)
@@ -28373,6 +28426,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.VoidedAt()
 	case invoice.FieldFinalizedAt:
 		return m.FinalizedAt()
+	case invoice.FieldIssueDate:
+		return m.IssueDate()
 	case invoice.FieldLastComputedAt:
 		return m.LastComputedAt()
 	case invoice.FieldBillingPeriod:
@@ -28464,6 +28519,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldVoidedAt(ctx)
 	case invoice.FieldFinalizedAt:
 		return m.OldFinalizedAt(ctx)
+	case invoice.FieldIssueDate:
+		return m.OldIssueDate(ctx)
 	case invoice.FieldLastComputedAt:
 		return m.OldLastComputedAt(ctx)
 	case invoice.FieldBillingPeriod:
@@ -28695,6 +28752,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetFinalizedAt(v)
 		return nil
+	case invoice.FieldIssueDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIssueDate(v)
+		return nil
 	case invoice.FieldLastComputedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -28891,6 +28955,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldFinalizedAt) {
 		fields = append(fields, invoice.FieldFinalizedAt)
 	}
+	if m.FieldCleared(invoice.FieldIssueDate) {
+		fields = append(fields, invoice.FieldIssueDate)
+	}
 	if m.FieldCleared(invoice.FieldLastComputedAt) {
 		fields = append(fields, invoice.FieldLastComputedAt)
 	}
@@ -28988,6 +29055,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldFinalizedAt:
 		m.ClearFinalizedAt()
+		return nil
+	case invoice.FieldIssueDate:
+		m.ClearIssueDate()
 		return nil
 	case invoice.FieldLastComputedAt:
 		m.ClearLastComputedAt()
@@ -29116,6 +29186,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldFinalizedAt:
 		m.ResetFinalizedAt()
+		return nil
+	case invoice.FieldIssueDate:
+		m.ResetIssueDate()
 		return nil
 	case invoice.FieldLastComputedAt:
 		m.ResetLastComputedAt()

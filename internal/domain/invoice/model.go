@@ -83,6 +83,9 @@ type Invoice struct {
 	// finalized_at is the timestamp when this invoice was finalized and made ready for payment
 	FinalizedAt *time.Time `json:"finalized_at,omitempty"`
 
+	// issue_date is the user-facing date of the invoice. Defaults to created_at if not set.
+	IssueDate *time.Time `json:"issue_date,omitempty"`
+
 	// last_computed_at is the timestamp when this invoice was last computed by ComputeInvoice
 	LastComputedAt *time.Time `json:"last_computed_at,omitempty"`
 
@@ -182,6 +185,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		PaidAt:                     e.PaidAt,
 		VoidedAt:                   e.VoidedAt,
 		FinalizedAt:                e.FinalizedAt,
+		IssueDate:                  e.IssueDate,
 		LastComputedAt:             e.LastComputedAt,
 		BillingPeriod:              lo.ToPtr(string(lo.FromPtr(e.BillingPeriod))),
 		PeriodStart:                e.PeriodStart,

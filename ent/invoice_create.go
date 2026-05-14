@@ -384,6 +384,20 @@ func (ic *InvoiceCreate) SetNillableFinalizedAt(t *time.Time) *InvoiceCreate {
 	return ic
 }
 
+// SetIssueDate sets the "issue_date" field.
+func (ic *InvoiceCreate) SetIssueDate(t time.Time) *InvoiceCreate {
+	ic.mutation.SetIssueDate(t)
+	return ic
+}
+
+// SetNillableIssueDate sets the "issue_date" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableIssueDate(t *time.Time) *InvoiceCreate {
+	if t != nil {
+		ic.SetIssueDate(*t)
+	}
+	return ic
+}
+
 // SetLastComputedAt sets the "last_computed_at" field.
 func (ic *InvoiceCreate) SetLastComputedAt(t time.Time) *InvoiceCreate {
 	ic.mutation.SetLastComputedAt(t)
@@ -921,6 +935,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.FinalizedAt(); ok {
 		_spec.SetField(invoice.FieldFinalizedAt, field.TypeTime, value)
 		_node.FinalizedAt = &value
+	}
+	if value, ok := ic.mutation.IssueDate(); ok {
+		_spec.SetField(invoice.FieldIssueDate, field.TypeTime, value)
+		_node.IssueDate = &value
 	}
 	if value, ok := ic.mutation.LastComputedAt(); ok {
 		_spec.SetField(invoice.FieldLastComputedAt, field.TypeTime, value)

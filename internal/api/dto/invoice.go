@@ -114,6 +114,10 @@ type CreateInvoiceRequest struct {
 
 	// invoice_pdf_url is the URL where customers can download the PDF version of this invoice
 	InvoicePDFURL *string `json:"invoice_pdf_url,omitempty"`
+
+	// issue_date overrides the user-facing date of the invoice.
+	// Defaults to created_at if not provided.
+	IssueDate *time.Time `json:"issue_date,omitempty"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
@@ -133,6 +137,7 @@ func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 		Metadata:       r.Metadata,
 		IdempotencyKey: r.IdempotencyKey,
 		InvoicePDFURL:  r.InvoicePDFURL,
+		IssueDate:      r.IssueDate,
 	}
 }
 
@@ -188,6 +193,7 @@ type CreateDraftInvoiceRequest struct {
 	Metadata               types.Metadata             `json:"metadata,omitempty"`
 	IdempotencyKey         *string                    `json:"idempotency_key,omitempty"`
 	InvoicePDFURL          *string                    `json:"invoice_pdf_url,omitempty"`
+	IssueDate              *time.Time                 `json:"issue_date,omitempty"`
 }
 
 // Validate validates the draft invoice creation request.
@@ -235,6 +241,13 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		return nil, err
 	}
 
+	baseModel := types.GetDefaultBaseModel(ctx)
+
+	issueDate := r.IssueDate
+	if issueDate == nil {
+		issueDate = &baseModel.CreatedAt
+	}
+
 	return &invoice.Invoice{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
 		CustomerID:             r.CustomerID,
@@ -259,7 +272,8 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		InvoicePDFURL:          r.InvoicePDFURL,
 		InvoiceStatus:          types.InvoiceStatusDraft,
 		PaymentStatus:          types.PaymentStatusPending,
-		BaseModel:              types.GetDefaultBaseModel(ctx),
+		IssueDate:              issueDate,
+		BaseModel:              baseModel,
 	}, nil
 }
 
