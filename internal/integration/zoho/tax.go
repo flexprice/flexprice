@@ -46,6 +46,9 @@ func (s *TaxService) ResolveItemTax(ctx context.Context) (*ItemTaxResolution, er
 		if err != nil {
 			return nil, ierr.WithError(err).WithHint("failed to list Zoho taxes").Mark(ierr.ErrInternal)
 		}
+		if taxesResp == nil {
+			break
+		}
 		for _, t := range taxesResp.Taxes {
 			if t.IsDefaultTax {
 				s.logger.Debugw("resolved default tax for item", "tax_id", t.TaxID, "tax_name", t.TaxName)
@@ -76,6 +79,11 @@ func (s *TaxService) ResolveItemTax(ctx context.Context) (*ItemTaxResolution, er
 	})
 	if err != nil {
 		return nil, ierr.WithError(err).
+			WithHint("failed to create FLEXPRICE_STANDARD_EXEMPTION in Zoho Books").
+			Mark(ierr.ErrInternal)
+	}
+	if created == nil {
+		return nil, ierr.NewError("Zoho CreateTaxExemption returned nil response").
 			WithHint("failed to create FLEXPRICE_STANDARD_EXEMPTION in Zoho Books").
 			Mark(ierr.ErrInternal)
 	}

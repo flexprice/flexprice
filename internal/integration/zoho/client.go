@@ -123,23 +123,11 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 }
 
 func (c *Client) CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error) {
-	var resp struct {
-		Item struct {
-			ItemID string  `json:"item_id"`
-			Name   string  `json:"name"`
-			Status string  `json:"status"`
-			Rate   float64 `json:"rate"`
-		} `json:"item"`
-	}
+	var resp CreateItemResponse
 	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/items", nil, req, &resp); err != nil {
 		return nil, err
 	}
-	return &ItemResponse{
-		ItemID: resp.Item.ItemID,
-		Name:   resp.Item.Name,
-		Status: resp.Item.Status,
-		Rate:   resp.Item.Rate,
-	}, nil
+	return resp.Item, nil
 }
 
 func (c *Client) ListTaxes(ctx context.Context, page, perPage int) (*ListTaxesResponse, error) {
@@ -150,30 +138,23 @@ func (c *Client) ListTaxes(ctx context.Context, page, perPage int) (*ListTaxesRe
 	if perPage > 0 {
 		query["per_page"] = fmt.Sprintf("%d", perPage)
 	}
-	var resp struct {
-		Taxes       []TaxResponse `json:"taxes"`
-		PageContext PageContext   `json:"page_context"`
-	}
+	var resp ListTaxesResponse
 	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/settings/taxes", query, nil, &resp); err != nil {
 		return nil, err
 	}
-	return &ListTaxesResponse{Taxes: resp.Taxes, PageContext: resp.PageContext}, nil
+	return &resp, nil
 }
 
 func (c *Client) CreateTaxExemption(ctx context.Context, req *CreateTaxExemptionRequest) (*TaxExemption, error) {
-	var resp struct {
-		TaxExemption TaxExemption `json:"tax_exemption"`
-	}
+	var resp TaxExemptionResponse
 	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/settings/taxexemptions", nil, req, &resp); err != nil {
 		return nil, err
 	}
-	return &resp.TaxExemption, nil
+	return resp.TaxExemption, nil
 }
 
 func (c *Client) ListTaxExemptions(ctx context.Context) ([]TaxExemption, error) {
-	var resp struct {
-		TaxExemptions []TaxExemption `json:"tax_exemptions"`
-	}
+	var resp ListTaxExemptionsResponse
 	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/settings/taxexemptions", nil, nil, &resp); err != nil {
 		return nil, err
 	}

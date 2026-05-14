@@ -53,6 +53,10 @@ type ItemResponse struct {
 	Rate   float64 `json:"rate,omitempty"`
 }
 
+type CreateItemResponse struct {
+	Item *ItemResponse `json:"item"`
+}
+
 type InvoiceLineItem struct {
 	ItemID         string          `json:"item_id,omitempty"`
 	Name           string          `json:"name,omitempty"`
@@ -121,6 +125,14 @@ type PageContext struct {
 type ListTaxesResponse struct {
 	Taxes       []TaxResponse `json:"taxes"`
 	PageContext PageContext   `json:"page_context"`
+}
+
+type TaxExemptionResponse struct {
+	TaxExemption *TaxExemption `json:"tax_exemption"`
+}
+
+type ListTaxExemptionsResponse struct {
+	TaxExemptions []TaxExemption `json:"tax_exemptions"`
 }
 
 type TaxExemption struct {

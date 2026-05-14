@@ -123,6 +123,15 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 			}).
 			Mark(ierr.ErrInternal)
 	}
+	if itemResp == nil {
+		return "", ierr.NewError("Zoho CreateItem returned nil response").
+			WithHint("Failed to create item in Zoho Books").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":  in.PriceID,
+				"item_name": in.Name,
+			}).
+			Mark(ierr.ErrInternal)
+	}
 
 	s.Logger.Infow("created item in Zoho Books",
 		"price_id", in.PriceID,
