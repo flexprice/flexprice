@@ -23,10 +23,17 @@ type ZohoClient interface {
 	QueryContactByEmail(ctx context.Context, email string) (*ContactResponse, error)
 	CreateContact(ctx context.Context, req *ContactCreateRequest) (*ContactResponse, error)
 	CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error)
+	CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error)
 	// ResolveInvoiceCurrency returns currency_code and exchange_rate for Zoho create-invoice (base-currency conversion per Zoho Books).
 	ResolveInvoiceCurrency(ctx context.Context, invoiceCurrency string) (currencyCode string, exchangeRate float64, err error)
 	// GetZohoBooksWebhookConfig loads the published connection and returns the decrypted webhook signing secret (empty if unset).
 	GetZohoBooksWebhookConfig(ctx context.Context) (*connection.Connection, string, error)
+	// ListTaxes returns a paginated list of taxes from Zoho Books settings.
+	ListTaxes(ctx context.Context, page, perPage int) (*ListTaxesResponse, error)
+	// CreateTaxExemption creates a new tax exemption in Zoho Books (US edition).
+	CreateTaxExemption(ctx context.Context, req *CreateTaxExemptionRequest) (*TaxExemption, error)
+	// ListTaxExemptions returns all tax exemptions configured in Zoho Books (US edition).
+	ListTaxExemptions(ctx context.Context) ([]TaxExemption, error)
 }
 
 type Client struct {
@@ -113,6 +120,45 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 		return nil, err
 	}
 	return &resp.Invoice, nil
+}
+
+func (c *Client) CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error) {
+	var resp CreateItemResponse
+	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/items", nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Item, nil
+}
+
+func (c *Client) ListTaxes(ctx context.Context, page, perPage int) (*ListTaxesResponse, error) {
+	query := map[string]string{}
+	if page > 0 {
+		query["page"] = fmt.Sprintf("%d", page)
+	}
+	if perPage > 0 {
+		query["per_page"] = fmt.Sprintf("%d", perPage)
+	}
+	var resp ListTaxesResponse
+	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/settings/taxes", query, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) CreateTaxExemption(ctx context.Context, req *CreateTaxExemptionRequest) (*TaxExemption, error) {
+	var resp TaxExemptionResponse
+	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/settings/taxexemptions", nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.TaxExemption, nil
+}
+
+func (c *Client) ListTaxExemptions(ctx context.Context) ([]TaxExemption, error) {
+	var resp ListTaxExemptionsResponse
+	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/settings/taxexemptions", nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.TaxExemptions, nil
 }
 
 // ResolveInvoiceCurrency maps a FlexPrice invoice currency to Zoho Books invoice fields.
