@@ -210,6 +210,11 @@ func FinalizedAt(v time.Time) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldFinalizedAt, v))
 }
 
+// IssueDate applies equality check predicate on the "issue_date" field. It's identical to IssueDateEQ.
+func IssueDate(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldIssueDate, v))
+}
+
 // LastComputedAt applies equality check predicate on the "last_computed_at" field. It's identical to LastComputedAtEQ.
 func LastComputedAt(v time.Time) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldLastComputedAt, v))
@@ -1931,6 +1936,56 @@ func FinalizedAtIsNil() predicate.Invoice {
 // FinalizedAtNotNil applies the NotNil predicate on the "finalized_at" field.
 func FinalizedAtNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldFinalizedAt))
+}
+
+// IssueDateEQ applies the EQ predicate on the "issue_date" field.
+func IssueDateEQ(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldIssueDate, v))
+}
+
+// IssueDateNEQ applies the NEQ predicate on the "issue_date" field.
+func IssueDateNEQ(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldIssueDate, v))
+}
+
+// IssueDateIn applies the In predicate on the "issue_date" field.
+func IssueDateIn(vs ...time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldIssueDate, vs...))
+}
+
+// IssueDateNotIn applies the NotIn predicate on the "issue_date" field.
+func IssueDateNotIn(vs ...time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldIssueDate, vs...))
+}
+
+// IssueDateGT applies the GT predicate on the "issue_date" field.
+func IssueDateGT(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldIssueDate, v))
+}
+
+// IssueDateGTE applies the GTE predicate on the "issue_date" field.
+func IssueDateGTE(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldIssueDate, v))
+}
+
+// IssueDateLT applies the LT predicate on the "issue_date" field.
+func IssueDateLT(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldIssueDate, v))
+}
+
+// IssueDateLTE applies the LTE predicate on the "issue_date" field.
+func IssueDateLTE(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldIssueDate, v))
+}
+
+// IssueDateIsNil applies the IsNil predicate on the "issue_date" field.
+func IssueDateIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldIssueDate))
+}
+
+// IssueDateNotNil applies the NotNil predicate on the "issue_date" field.
+func IssueDateNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldIssueDate))
 }
 
 // LastComputedAtEQ applies the EQ predicate on the "last_computed_at" field.
