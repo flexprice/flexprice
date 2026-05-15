@@ -1037,31 +1037,6 @@ extraVolumeMounts: []
 # Resource labels
 labels: {}
 
-# Prometheus Operator ServiceMonitor.
-# Requires kube-prometheus-stack (or compatible) installed in the cluster.
-# When enabled, renders one ServiceMonitor per workload that scrapes the
-# /metrics endpoint on the http port.
-serviceMonitor:
-  enabled: false
-  interval: 30s
-  scrapeTimeout: 10s
-  path: /metrics
-  # Extra labels on the ServiceMonitor object. Set this to match your Prometheus
-  # `serviceMonitorSelector` — typically `{release: kube-prometheus-stack}`.
-  labels: {}
-  # Operator-specific relabel rules; appended verbatim to spec.endpoints[0].
-  relabelings: []
-  metricRelabelings: []
-
-# Prometheus alert rules. Off by default; toggle on once you have a
-# PrometheusRule-aware operator + Alertmanager wired.
-prometheusRule:
-  enabled: false
-  labels: {}
-  # Default rules are reasonable starting points; tune thresholds for your
-  # traffic. Override the whole list to drop or add rules.
-  rules: []
-
 # ---------------------------------------------------------------------------
 # Subchart conditions
 # These top-level keys enable/disable Bitnami and official subcharts.
