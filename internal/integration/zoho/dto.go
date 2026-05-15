@@ -77,7 +77,7 @@ type InvoiceCreateRequest struct {
 	Notes           string            `json:"notes,omitempty"`
 	Terms           string            `json:"terms,omitempty"`
 	LineItems       []InvoiceLineItem `json:"line_items"`
-	Adjustment      decimal.Decimal   `json:"adjustment,omitempty"`
+	Adjustment      decimal.Decimal   `json:"adjustment,omitzero"`
 }
 
 type InvoiceResponse struct {
