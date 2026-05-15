@@ -593,9 +593,17 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.entityIntegrationMappingRepo,
 		f.logger,
 	)
+	taxSvc := zoho.NewTaxService(zohoClient, f.logger)
+	itemSyncSvc := zoho.NewItemSyncService(zoho.ItemSyncServiceParams{
+		Client:      zohoClient,
+		MappingRepo: f.entityIntegrationMappingRepo,
+		Logger:      f.logger,
+	})
 	invoiceSvc := zoho.NewInvoiceService(
 		zohoClient,
 		customerSvc,
+		itemSyncSvc,
+		taxSvc,
 		f.customerRepo,
 		f.invoiceRepo,
 		f.entityIntegrationMappingRepo,
@@ -603,9 +611,11 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 	)
 
 	return &ZohoBooksIntegration{
-		Client:     zohoClient,
+		Client:      zohoClient,
 		CustomerSvc: customerSvc,
-		InvoiceSvc: invoiceSvc,
+		InvoiceSvc:  invoiceSvc,
+		ItemSyncSvc: itemSyncSvc,
+		TaxSvc:      taxSvc,
 	}, nil
 }
 
@@ -747,6 +757,8 @@ type ZohoBooksIntegration struct {
 	Client      zoho.ZohoClient
 	CustomerSvc zoho.ZohoCustomerService
 	InvoiceSvc  zoho.ZohoInvoiceService
+	ItemSyncSvc zoho.ZohoItemSyncService
+	TaxSvc      zoho.ZohoTaxService
 }
 
 // IntegrationProvider defines the interface for all integration providers

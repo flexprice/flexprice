@@ -95,7 +95,7 @@ logging:
 
 webhook:
   enabled: true
-  topic: "system_events"
+  topic: "flexprice_system_events"
   consumer_group: "system-events-consumer"
   rate_limit: 5
   max_retries: 3

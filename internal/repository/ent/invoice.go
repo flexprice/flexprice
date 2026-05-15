@@ -97,6 +97,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetAdjustmentAmount(inv.AdjustmentAmount).
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
+		SetNillableIssueDate(inv.IssueDate).
 		Save(ctx)
 
 	if err != nil {
@@ -202,6 +203,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillablePeriodEnd(inv.PeriodEnd).
 			SetEnvironmentID(inv.EnvironmentID).
 			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
+			SetNillableIssueDate(inv.IssueDate).
 			Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
