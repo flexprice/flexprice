@@ -255,6 +255,35 @@ func (s *InMemorySubscriptionLineItemStore) List(ctx context.Context, filter *ty
 	return items, nil
 }
 
+// GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
+// line items where commitment_true_up_enabled is true.
+func (s *InMemorySubscriptionLineItemStore) GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error) {
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.ActiveFilter = false
+	if filter.QueryFilter != nil {
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	}
+
+	items, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{})
+	var customerIDs []string
+	for _, item := range items {
+		if !item.CommitmentTrueUpEnabled {
+			continue
+		}
+		if _, ok := seen[item.CustomerID]; ok {
+			continue
+		}
+		seen[item.CustomerID] = struct{}{}
+		customerIDs = append(customerIDs, item.CustomerID)
+	}
+	return customerIDs, nil
+}
+
 // Count counts subscription line items based on filter
 func (s *InMemorySubscriptionLineItemStore) Count(ctx context.Context, filter *types.SubscriptionLineItemFilter) (int, error) {
 	count, err := s.InMemoryStore.Count(ctx, filter, lineItemFilterFn)

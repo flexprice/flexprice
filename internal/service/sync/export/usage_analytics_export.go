@@ -10,9 +10,11 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -25,6 +27,7 @@ type UsageAnalyticsGetter interface {
 type UsageAnalyticsExporter struct {
 	customerRepo         customer.Repository
 	eventRepo            events.Repository
+	lineItemRepo         subscription.LineItemRepository
 	usageAnalyticsGetter UsageAnalyticsGetter
 	logger               *logger.Logger
 }
@@ -33,12 +36,14 @@ type UsageAnalyticsExporter struct {
 func NewUsageAnalyticsExporter(
 	customerRepo customer.Repository,
 	eventRepo events.Repository,
+	lineItemRepo subscription.LineItemRepository,
 	usageAnalyticsGetter UsageAnalyticsGetter,
 	logger *logger.Logger,
 ) *UsageAnalyticsExporter {
 	return &UsageAnalyticsExporter{
 		customerRepo:         customerRepo,
 		eventRepo:            eventRepo,
+		lineItemRepo:         lineItemRepo,
 		usageAnalyticsGetter: usageAnalyticsGetter,
 		logger:               logger,
 	}
@@ -129,16 +134,13 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 			Mark(ierr.ErrInternal)
 	}
 
-	externalCustomerIDs, err := e.eventRepo.GetDistinctExternalCustomerIDs(ctx, request.StartTime, request.EndTime)
+	customers, err := e.resolveExportCustomers(ctx, request.StartTime, request.EndTime)
 	if err != nil {
-		return nil, 0, ierr.WithError(err).
-			WithHint("Failed to get distinct external customer ids").
-			Mark(ierr.ErrDatabase)
+		return nil, 0, err
 	}
 
-	// if no external customer ids found, return empty CSV with headers only
-	if len(externalCustomerIDs) == 0 {
-		e.logger.Infow("no external customer ids found, uploading empty CSV with headers only",
+	if len(customers) == 0 {
+		e.logger.Infow("no customers found for usage analytics export, uploading empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"start_time", request.StartTime,
@@ -150,16 +152,6 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 				Mark(ierr.ErrInternal)
 		}
 		return buf.Bytes(), 0, nil
-	}
-
-	filter := types.NewCustomerFilter()
-	filter.ExternalIDs = externalCustomerIDs
-
-	customers, err := e.customerRepo.ListAll(ctx, filter)
-	if err != nil {
-		return nil, 0, ierr.WithError(err).
-			WithHint("Failed to list customers").
-			Mark(ierr.ErrDatabase)
 	}
 
 	e.logger.Infow("found customers to process",
@@ -244,6 +236,54 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 	}
 
 	return csvBytes, recordCount, nil
+}
+
+// resolveExportCustomers returns the union of customers that had events in the export window
+// and customers with published commitment true-up subscription line items.
+func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, startTime, endTime time.Time) ([]*customer.Customer, error) {
+	externalCustomerIDs, err := e.eventRepo.GetDistinctExternalCustomerIDs(ctx, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+
+	trueUpCustomerIDs, err := e.lineItemRepo.GetDistinctCustomerIDsWithCommitmentTrueUp(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var customers []*customer.Customer
+
+	if len(externalCustomerIDs) > 0 {
+		eventFilter := types.NewCustomerFilter()
+		eventFilter.ExternalIDs = externalCustomerIDs
+		eventCustomers, err := e.customerRepo.ListAll(ctx, eventFilter)
+		if err != nil {
+			return nil, err
+		}
+		customers = append(customers, eventCustomers...)
+	}
+
+	remainingTrueUpCustomerIDs := trueUpCustomerIDs
+	if len(customers) > 0 {
+		fetchedCustomerIDs := lo.Map(customers, func(c *customer.Customer, _ int) string {
+			return c.ID
+		})
+		remainingTrueUpCustomerIDs = lo.Without(trueUpCustomerIDs, fetchedCustomerIDs...)
+	}
+
+	if len(remainingTrueUpCustomerIDs) > 0 {
+		trueUpFilter := types.NewCustomerFilter()
+		trueUpFilter.CustomerIDs = remainingTrueUpCustomerIDs
+		trueUpCustomers, err := e.customerRepo.ListAll(ctx, trueUpFilter)
+		if err != nil {
+			return nil, err
+		}
+		customers = append(customers, trueUpCustomers...)
+	}
+
+	return lo.UniqBy(customers, func(c *customer.Customer) string {
+		return c.ID
+	}), nil
 }
 
 // resolveHeaders returns the full CSV header row: static columns followed by one column per

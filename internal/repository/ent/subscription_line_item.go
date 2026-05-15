@@ -543,6 +543,58 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 	return count, nil
 }
 
+// GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
+// subscription line items with commitment true-up enabled.
+func (r *subscriptionLineItemRepository) GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "subscription_line_item", "get_distinct_customer_ids_commitment_true_up", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": envID,
+	})
+	defer FinishSpan(span)
+
+	const query = `
+		SELECT DISTINCT customer_id
+		FROM subscription_line_items
+		WHERE tenant_id = $1
+			AND environment_id = $2
+			AND status = $3
+			AND commitment_true_up_enabled = true
+	`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, tenantID, envID, string(types.StatusPublished))
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get distinct customer ids with commitment true-up").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var customerIDs []string
+	for rows.Next() {
+		var customerID string
+		if err := rows.Scan(&customerID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan customer id").
+				Mark(ierr.ErrDatabase)
+		}
+		customerIDs = append(customerIDs, customerID)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate customer ids").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return customerIDs, nil
+}
+
 // SubscriptionLineItemQuery type alias for better readability
 type SubscriptionLineItemQuery = *ent.SubscriptionLineItemQuery
 
