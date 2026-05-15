@@ -178,7 +178,6 @@ func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *inv
 
 // buildLineItems converts FlexPrice invoice line items to Zoho line items.
 // It bulk-queries Zoho item mappings for all price IDs and creates missing items.
-// If item creation fails for any price, that line item is still sent using name+rate.
 func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoice.Invoice) ([]InvoiceLineItem, error) {
 	inputs := make([]ItemSyncInput, 0, len(flexInvoice.LineItems))
 	for _, li := range flexInvoice.LineItems {
