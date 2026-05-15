@@ -2648,7 +2648,9 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		data.DueDate = pdf.CustomTime{Time: *inv.DueDate}
 	}
 
-	if inv.FinalizedAt != nil {
+	if inv.IssueDate != nil {
+		data.IssuingDate = pdf.CustomTime{Time: *inv.IssueDate}
+	} else if inv.FinalizedAt != nil {
 		data.IssuingDate = pdf.CustomTime{Time: *inv.FinalizedAt}
 	}
 
