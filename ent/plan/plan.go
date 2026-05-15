@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -36,6 +37,10 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldInvoiceCadence holds the string denoting the invoice_cadence field in the database.
+	FieldInvoiceCadence = "invoice_cadence"
+	// FieldTrialPeriod holds the string denoting the trial_period field in the database.
+	FieldTrialPeriod = "trial_period"
 	// FieldDisplayOrder holds the string denoting the display_order field in the database.
 	FieldDisplayOrder = "display_order"
 	// EdgeCreditGrants holds the string denoting the credit_grants edge name in mutations.
@@ -65,6 +70,8 @@ var Columns = []string{
 	FieldLookupKey,
 	FieldName,
 	FieldDescription,
+	FieldInvoiceCadence,
+	FieldTrialPeriod,
 	FieldDisplayOrder,
 }
 
@@ -93,6 +100,10 @@ var (
 	DefaultEnvironmentID string
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultInvoiceCadence holds the default value on creation for the "invoice_cadence" field.
+	DefaultInvoiceCadence types.InvoiceCadence
+	// DefaultTrialPeriod holds the default value on creation for the "trial_period" field.
+	DefaultTrialPeriod int
 	// DefaultDisplayOrder holds the default value on creation for the "display_order" field.
 	DefaultDisplayOrder int
 )
@@ -153,6 +164,16 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByDescription orders the results by the description field.
 func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
+}
+
+// ByInvoiceCadence orders the results by the invoice_cadence field.
+func ByInvoiceCadence(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceCadence, opts...).ToFunc()
+}
+
+// ByTrialPeriod orders the results by the trial_period field.
+func ByTrialPeriod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTrialPeriod, opts...).ToFunc()
 }
 
 // ByDisplayOrder orders the results by the display_order field.
