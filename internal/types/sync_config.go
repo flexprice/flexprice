@@ -1,8 +1,6 @@
 package types
 
 import (
-	"time"
-
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
@@ -63,23 +61,6 @@ func periodQuantity(billingPeriod string, target BillingPeriod) int {
 	}
 
 	return bp / t
-}
-
-func monthsBetween(start, end time.Time) int {
-	years := end.Year() - start.Year()
-	months := int(end.Month()) - int(start.Month())
-	total := years*12 + months
-	if end.Day() < start.Day() && !isLastDayOfMonth(end) {
-		total--
-	}
-	if total < 0 {
-		return 0
-	}
-	return total
-}
-
-func isLastDayOfMonth(t time.Time) bool {
-	return t.Day() == time.Date(t.Year(), t.Month()+1, 0, 0, 0, 0, 0, t.Location()).Day()
 }
 
 // DefaultSyncConfig returns a sync config with all entities disabled
