@@ -98,6 +98,7 @@ func NewRouter(
 
 	// Initialize permission middleware
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
+	write := permissionMW.RequirePermission // shorthand used on every write route
 
 	// Add middleware to set swagger host dynamically
 	router.Use(func(c *gin.Context) {
@@ -124,7 +125,7 @@ func NewRouter(
 	}
 
 	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, logger))
-	private.Use(middleware.TenantAccessMiddleware(tenantRepo, logger))
+	private.Use(middleware.TenantContextMiddleware(tenantRepo, logger))
 	private.Use(middleware.EnvAccessMiddleware(envAccessService, logger))
 	private.Use(middleware.SentryTenantContextMiddleware)
 
@@ -134,24 +135,24 @@ func NewRouter(
 		user := v1Private.Group("/users")
 		{
 			user.GET("/me", handlers.User.GetUserInfo)
-			user.POST("", handlers.User.CreateUser)
+			user.POST("", write("user", "write"), handlers.User.CreateUser)
 			user.POST("/search", handlers.User.QueryUsers)
 		}
 
 		environment := v1Private.Group("/environments")
 		{
-			environment.POST("", handlers.Environment.CreateEnvironment)
+			environment.POST("", write("environment", "write"), handlers.Environment.CreateEnvironment)
 			environment.GET("", handlers.Environment.GetEnvironments)
 			environment.GET("/:id", handlers.Environment.GetEnvironment)
-			environment.PUT("/:id", handlers.Environment.UpdateEnvironment)
-			environment.POST("/:id/clone", handlers.Environment.CloneEnvironment)
+			environment.PUT("/:id", write("environment", "write"), handlers.Environment.UpdateEnvironment)
+			environment.POST("/:id/clone", write("environment", "write"), handlers.Environment.CloneEnvironment)
 		}
 
 		// Events routes
 		events := v1Private.Group("/events")
 		{
-			events.POST("", permissionMW.RequirePermission("event", "write"), handlers.Events.IngestEvent)
-			events.POST("/bulk", permissionMW.RequirePermission("event", "write"), handlers.Events.BulkIngestEvent)
+			events.POST("", write("event", "write"), handlers.Events.IngestEvent)
+			events.POST("/bulk", write("event", "write"), handlers.Events.BulkIngestEvent)
 			events.GET("", handlers.Events.GetEvents)
 			events.GET("/:id", handlers.Events.GetEventByID)
 			events.POST("/query", handlers.Events.QueryEvents)
@@ -161,15 +162,11 @@ func NewRouter(
 			events.POST("/analytics-v2", handlers.Events.GetUsageAnalyticsV2)
 			events.POST("/huggingface-billing", handlers.Events.GetHuggingFaceBillingData)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
-			// Reprocess events endpoint
-			events.POST("/reprocess", handlers.Events.ReprocessEvents)
-			// Raw event ingestion (Bento-format, publishes directly to raw_events topic)
-			events.POST("/raw/bulk", permissionMW.RequirePermission("event", "write"), handlers.Events.BulkIngestRawEvent)
-			// Reprocess raw events endpoints
+			events.POST("/reprocess", write("event", "write"), handlers.Events.ReprocessEvents)
+			events.POST("/raw/bulk", write("event", "write"), handlers.Events.BulkIngestRawEvent)
 			events.POST("/raw/reprocess/all", handlers.Events.ReprocessRawEvents)
 			events.POST("/raw/reprocess/pending", handlers.Events.ReprocessUnprocessedRawEvents)
-			// Internal reprocess events endpoint (no external_customer_id required)
-			events.POST("/reprocess/internal", handlers.Events.ReprocessEventsInternal)
+			events.POST("/reprocess/internal", write("event", "write"), handlers.Events.ReprocessEventsInternal)
 		}
 
 		// Meter usage query endpoints (reads from meter_usage ClickHouse table)
@@ -182,56 +179,55 @@ func NewRouter(
 
 		meters := v1Private.Group("/meters")
 		{
-			meters.POST("", handlers.Meter.CreateMeter)
+			meters.POST("", write("meter", "write"), handlers.Meter.CreateMeter)
 			meters.GET("", handlers.Meter.GetAllMeters)
 			meters.GET("/:id", handlers.Meter.GetMeter)
-			meters.POST("/:id/disable", handlers.Meter.DisableMeter)
-			meters.DELETE("/:id", handlers.Meter.DeleteMeter)
-			meters.PUT("/:id", handlers.Meter.UpdateMeter)
+			meters.POST("/:id/disable", write("meter", "write"), handlers.Meter.DisableMeter)
+			meters.DELETE("/:id", write("meter", "write"), handlers.Meter.DeleteMeter)
+			meters.PUT("/:id", write("meter", "write"), handlers.Meter.UpdateMeter)
 		}
 
 		price := v1Private.Group("/prices")
 		{
-			price.POST("", handlers.Price.CreatePrice)
-			price.POST("/bulk", handlers.Price.CreateBulkPrice)
+			price.POST("", write("price", "write"), handlers.Price.CreatePrice)
+			price.POST("/bulk", write("price", "write"), handlers.Price.CreateBulkPrice)
 			price.GET("", handlers.Price.ListPrices)
 			price.GET("/:id", handlers.Price.GetPrice)
-			price.PUT("/:id", handlers.Price.UpdatePrice)
-			price.DELETE("/:id", handlers.Price.DeletePrice)
+			price.PUT("/:id", write("price", "write"), handlers.Price.UpdatePrice)
+			price.DELETE("/:id", write("price", "write"), handlers.Price.DeletePrice)
 			price.GET("/lookup/:lookup_key", handlers.Price.GetByLookupKey)
 			price.POST("/search", handlers.Price.QueryPrices)
 
 			priceUnit := price.Group("/units")
 			{
-				priceUnit.POST("", handlers.PriceUnit.CreatePriceUnit)
+				priceUnit.POST("", write("price", "write"), handlers.PriceUnit.CreatePriceUnit)
 				priceUnit.GET("", handlers.PriceUnit.ListPriceUnits)
 				priceUnit.GET("/:id", handlers.PriceUnit.GetPriceUnit)
 				priceUnit.GET("/code/:code", handlers.PriceUnit.GetPriceUnitByCode)
-				priceUnit.PUT("/:id", handlers.PriceUnit.UpdatePriceUnit)
-				priceUnit.DELETE("/:id", handlers.PriceUnit.DeletePriceUnit)
+				priceUnit.PUT("/:id", write("price", "write"), handlers.PriceUnit.UpdatePriceUnit)
+				priceUnit.DELETE("/:id", write("price", "write"), handlers.PriceUnit.DeletePriceUnit)
 				priceUnit.POST("/search", handlers.PriceUnit.QueryPriceUnits)
 			}
 		}
 
 		customer := v1Private.Group("/customers")
 		{
-
 			// list customers by filter
 			customer.POST("/search", handlers.Customer.QueryCustomers)
 
-			customer.POST("", handlers.Customer.CreateCustomer)
+			customer.POST("", write("customer", "write"), handlers.Customer.CreateCustomer)
 			customer.GET("", handlers.Customer.ListCustomers)
-			customer.PUT("", handlers.Customer.UpdateCustomer) // Supports query params (id or external_customer_id)
+			customer.PUT("", write("customer", "write"), handlers.Customer.UpdateCustomer)
 			customer.GET("/:id", handlers.Customer.GetCustomer)
-			customer.PUT("/:id", handlers.Customer.UpdateCustomer) // Supports path parameter or query params
-			customer.DELETE("/:id", handlers.Customer.DeleteCustomer)
-			customer.GET("/lookup/:lookup_key", handlers.Customer.GetCustomerByLookupKey)    // Legacy route with lookup_key as path parameter
-			customer.GET("/external/:external_id", handlers.Customer.GetCustomerByLookupKey) // New route with external_id as path parameter
+			customer.PUT("/:id", write("customer", "write"), handlers.Customer.UpdateCustomer)
+			customer.DELETE("/:id", write("customer", "write"), handlers.Customer.DeleteCustomer)
+			customer.GET("/lookup/:lookup_key", handlers.Customer.GetCustomerByLookupKey)
+			customer.GET("/external/:external_id", handlers.Customer.GetCustomerByLookupKey)
 
 			// New endpoints for entitlements and usage
 			customer.GET("/:id/entitlements", handlers.Customer.GetCustomerEntitlements)
-			customer.GET("/usage", handlers.Customer.GetCustomerUsageSummary)     // New route with query parameters (must come first!)
-			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary) // Deprecated route with path parameter
+			customer.GET("/usage", handlers.Customer.GetCustomerUsageSummary)
+			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary)
 			customer.GET("/:id/grants/upcoming", handlers.Customer.GetUpcomingCreditGrantApplications)
 
 			// other routes for customer
@@ -241,7 +237,6 @@ func NewRouter(
 
 			// Customer Dashboard - Session creation (requires tenant auth)
 			customer.GET("/portal/:external_id", handlers.CustomerPortal.CreateSession)
-
 		}
 
 		plan := v1Private.Group("/plans")
@@ -249,14 +244,14 @@ func NewRouter(
 			// list plans by filter
 			plan.POST("/search", handlers.Plan.QueryPlans)
 
-			plan.POST("", handlers.Plan.CreatePlan)
+			plan.POST("", write("plan", "write"), handlers.Plan.CreatePlan)
 			plan.GET("", handlers.Plan.ListPlans)
 			plan.GET("/:id", handlers.Plan.GetPlan)
-			plan.PUT("/:id", handlers.Plan.UpdatePlan)
-			plan.DELETE("/:id", handlers.Plan.DeletePlan)
-			plan.POST("/:id/clone", handlers.Plan.ClonePlan)
-			plan.POST("/:id/sync/subscriptions", handlers.Plan.SyncPlanPrices)
-			plan.POST("/:id/sync/subscriptions/v2", handlers.Plan.SyncPlanPricesV2)
+			plan.PUT("/:id", write("plan", "write"), handlers.Plan.UpdatePlan)
+			plan.DELETE("/:id", write("plan", "write"), handlers.Plan.DeletePlan)
+			plan.POST("/:id/clone", write("plan", "write"), handlers.Plan.ClonePlan)
+			plan.POST("/:id/sync/subscriptions", write("plan", "write"), handlers.Plan.SyncPlanPrices)
+			plan.POST("/:id/sync/subscriptions/v2", write("plan", "write"), handlers.Plan.SyncPlanPricesV2)
 
 			// entitlement routes
 			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)
@@ -268,61 +263,61 @@ func NewRouter(
 			// list addons by filter
 			addon.POST("/search", handlers.Addon.QueryAddons)
 
-			addon.POST("", handlers.Addon.CreateAddon)
+			addon.POST("", write("addon", "write"), handlers.Addon.CreateAddon)
 			addon.GET("", handlers.Addon.ListAddons)
 			addon.GET("/:id", handlers.Addon.GetAddon)
 			addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
-			addon.PUT("/:id", handlers.Addon.UpdateAddon)
+			addon.PUT("/:id", write("addon", "write"), handlers.Addon.UpdateAddon)
 			addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)
-			addon.DELETE("/:id", handlers.Addon.DeleteAddon)
+			addon.DELETE("/:id", write("addon", "write"), handlers.Addon.DeleteAddon)
 		}
 
 		group := v1Private.Group("/groups")
 		{
-			group.POST("", handlers.Group.CreateGroup)
+			group.POST("", write("group", "write"), handlers.Group.CreateGroup)
 			group.POST("/search", handlers.Group.QueryGroups)
 			group.GET("/:id", handlers.Group.GetGroup)
-			group.DELETE("/:id", handlers.Group.DeleteGroup)
+			group.DELETE("/:id", write("group", "write"), handlers.Group.DeleteGroup)
 		}
 
 		subscription := v1Private.Group("/subscriptions")
 		{
 			subscription.POST("/search", handlers.Subscription.QuerySubscriptions)
-			subscription.POST("", handlers.Subscription.CreateSubscription)
+			subscription.POST("", write("subscription", "write"), handlers.Subscription.CreateSubscription)
 			subscription.GET("", handlers.Subscription.ListSubscriptions)
 			subscription.POST("/lineitems/search", handlers.Subscription.QuerySubscriptionLineItems)
 			subscription.GET("/:id", handlers.Subscription.GetSubscription)
-			subscription.PUT("/:id", handlers.Subscription.UpdateSubscription)
+			subscription.PUT("/:id", write("subscription", "write"), handlers.Subscription.UpdateSubscription)
 			subscription.GET("/:id/v2", handlers.Subscription.GetSubscriptionV2)
-			subscription.POST("/:id/activate", handlers.Subscription.ActivateDraftSubscription)
-			subscription.POST("/:id/cancel", handlers.Subscription.CancelSubscription)
+			subscription.POST("/:id/activate", write("subscription", "write"), handlers.Subscription.ActivateDraftSubscription)
+			subscription.POST("/:id/cancel", write("subscription", "write"), handlers.Subscription.CancelSubscription)
 			subscription.POST("/usage", handlers.Subscription.GetUsageBySubscription)
 
 			subscription.GET("/:id/entitlements", handlers.Subscription.GetSubscriptionEntitlements)
 			subscription.GET("/:id/grants/upcoming", handlers.Subscription.GetUpcomingCreditGrantApplications)
 
 			// Addon management for subscriptions - moved under subscription handler
-			subscription.POST("/addon", handlers.Subscription.AddAddonToSubscription)
-			subscription.DELETE("/addon", handlers.Subscription.RemoveAddonToSubscription)
+			subscription.POST("/addon", write("subscription", "write"), handlers.Subscription.AddAddonToSubscription)
+			subscription.DELETE("/addon", write("subscription", "write"), handlers.Subscription.RemoveAddonToSubscription)
 			subscription.GET("/:id/addons/associations", handlers.Subscription.GetActiveAddonAssociations)
 
 			// Subscription plan changes (upgrade/downgrade)
 			subscription.POST("/:id/change/preview", handlers.SubscriptionChange.PreviewSubscriptionChange)
-			subscription.POST("/:id/change/execute", handlers.SubscriptionChange.ExecuteSubscriptionChange)
-			subscription.POST(":id/modify/execute", handlers.SubscriptionModification.Execute)
+			subscription.POST("/:id/change/execute", write("subscription", "write"), handlers.SubscriptionChange.ExecuteSubscriptionChange)
+			subscription.POST(":id/modify/execute", write("subscription", "write"), handlers.SubscriptionModification.Execute)
 			subscription.POST(":id/modify/preview", handlers.SubscriptionModification.Preview)
 
 			// Subscription line item management (POST /lineitems/search registered above)
-			subscription.POST("/:id/lineitems", handlers.Subscription.AddSubscriptionLineItem)
-			subscription.PUT("/lineitems/:id", handlers.Subscription.UpdateSubscriptionLineItem)
-			subscription.DELETE("/lineitems/:id", handlers.Subscription.DeleteSubscriptionLineItem)
+			subscription.POST("/:id/lineitems", write("subscription", "write"), handlers.Subscription.AddSubscriptionLineItem)
+			subscription.PUT("/lineitems/:id", write("subscription", "write"), handlers.Subscription.UpdateSubscriptionLineItem)
+			subscription.DELETE("/lineitems/:id", write("subscription", "write"), handlers.Subscription.DeleteSubscriptionLineItem)
 
-			subscription.POST("/temporal/schedule-update-billing-period", handlers.ScheduledTask.ScheduleUpdateBillingPeriod)
-			subscription.POST("/temporal/schedule-draft-finalization", handlers.ScheduledTask.ScheduleDraftFinalization)
+			subscription.POST("/temporal/schedule-update-billing-period", write("subscription", "write"), handlers.ScheduledTask.ScheduleUpdateBillingPeriod)
+			subscription.POST("/temporal/schedule-draft-finalization", write("subscription", "write"), handlers.ScheduledTask.ScheduleDraftFinalization)
 
 			// Trigger subscription billing workflow
-			subscription.POST("/temporal/:subscription_id/trigger-workflow", handlers.Subscription.TriggerSubscriptionWorkflow)
-			subscription.POST("/temporal/:subscription_id/draft-and-compute", handlers.Subscription.TriggerSubscriptionDraftAndComputeWorkflow)
+			subscription.POST("/temporal/:subscription_id/trigger-workflow", write("subscription", "write"), handlers.Subscription.TriggerSubscriptionWorkflow)
+			subscription.POST("/temporal/:subscription_id/draft-and-compute", write("subscription", "write"), handlers.Subscription.TriggerSubscriptionDraftAndComputeWorkflow)
 
 			// Subscription schedules - nested group
 			subscription.GET("/:id/schedules", handlers.SubscriptionSchedule.ListSchedulesForSubscription)
@@ -331,123 +326,122 @@ func NewRouter(
 			{
 				schedules.GET("", handlers.SubscriptionSchedule.ListSchedules)
 				schedules.GET("/:schedule_id", handlers.SubscriptionSchedule.GetSchedule)
-				schedules.POST("/:schedule_id/cancel", handlers.SubscriptionSchedule.CancelSchedule)
-				schedules.POST("/cancel", handlers.SubscriptionSchedule.CancelSchedule) // Cancel by body only
+				schedules.POST("/:schedule_id/cancel", write("subscription", "write"), handlers.SubscriptionSchedule.CancelSchedule)
+				schedules.POST("/cancel", write("subscription", "write"), handlers.SubscriptionSchedule.CancelSchedule)
 			}
 		}
 
 		wallet := v1Private.Group("/wallets")
 		{
-			wallet.POST("", handlers.Wallet.CreateWallet)
+			wallet.POST("", write("wallet", "write"), handlers.Wallet.CreateWallet)
 			wallet.GET("", handlers.Wallet.ListWallets)
 			wallet.GET("/:id", handlers.Wallet.GetWalletByID)
 			wallet.GET("/:id/transactions", handlers.Wallet.GetWalletTransactions)
-			wallet.POST("/:id/top-up", handlers.Wallet.TopUpWallet)
-			wallet.POST("/:id/terminate", handlers.Wallet.TerminateWallet)
+			wallet.POST("/:id/top-up", write("wallet", "write"), handlers.Wallet.TopUpWallet)
+			wallet.POST("/:id/terminate", write("wallet", "write"), handlers.Wallet.TerminateWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
 			wallet.GET("/:id/balance/real-time-cached", handlers.Wallet.GetWalletBalanceForceCached)
-			wallet.PUT("/:id", handlers.Wallet.UpdateWallet)
-			wallet.POST("/:id/debit", handlers.Wallet.ManualBalanceDebit)
+			wallet.PUT("/:id", write("wallet", "write"), handlers.Wallet.UpdateWallet)
+			wallet.POST("/:id/debit", write("wallet", "write"), handlers.Wallet.ManualBalanceDebit)
 			wallet.POST("/transactions/search", handlers.Wallet.QueryWalletTransactions)
 			wallet.POST("/search", handlers.Wallet.QueryWallets)
 		}
+
 		// Tenant routes
 		tenantRoutes := v1Private.Group("/tenants")
 		{
-			tenantRoutes.PUT("/update", handlers.Tenant.UpdateTenant)
+			tenantRoutes.PUT("/update", write("tenant", "write"), handlers.Tenant.UpdateTenant)
 			tenantRoutes.GET("/:id", handlers.Tenant.GetTenantByID)
 			tenantRoutes.GET("/billing", handlers.Tenant.GetTenantBillingUsage)
 		}
 
 		invoices := v1Private.Group("/invoices")
 		{
-			invoices.POST("/temporal/:invoice_id/finalize", handlers.Invoice.TriggerFinalizeDraftInvoiceWorkflow)
+			invoices.POST("/temporal/:invoice_id/finalize", write("invoice", "write"), handlers.Invoice.TriggerFinalizeDraftInvoiceWorkflow)
 			invoices.POST("/search", handlers.Invoice.QueryInvoices)
-			invoices.POST("", handlers.Invoice.CreateOneOffInvoice)
+			invoices.POST("", write("invoice", "write"), handlers.Invoice.CreateOneOffInvoice)
 			invoices.GET("", handlers.Invoice.ListInvoices)
 			invoices.GET("/:id", handlers.Invoice.GetInvoice)
-			invoices.PUT("/:id", handlers.Invoice.UpdateInvoice)
-			invoices.POST("/:id/finalize", handlers.Invoice.FinalizeInvoice)
-			invoices.POST("/:id/compute", handlers.Invoice.ComputeInvoice)
-			invoices.POST("/:id/void", handlers.Invoice.VoidInvoice)
+			invoices.PUT("/:id", write("invoice", "write"), handlers.Invoice.UpdateInvoice)
+			invoices.POST("/:id/finalize", write("invoice", "write"), handlers.Invoice.FinalizeInvoice)
+			invoices.POST("/:id/compute", write("invoice", "write"), handlers.Invoice.ComputeInvoice)
+			invoices.POST("/:id/void", write("invoice", "write"), handlers.Invoice.VoidInvoice)
 			invoices.POST("/preview", handlers.Invoice.GetPreviewInvoice)
 			invoices.POST("/internal/preview", handlers.Invoice.GetInternalPreviewInvoice)
 			invoices.POST("/meter-usage-preview", handlers.Invoice.GetMeterUsagePreviewInvoice)
-			invoices.PUT("/:id/payment", handlers.Invoice.UpdatePaymentStatus)
-			invoices.POST("/:id/payment/attempt", handlers.Invoice.AttemptPayment)
+			invoices.PUT("/:id/payment", write("invoice", "write"), handlers.Invoice.UpdatePaymentStatus)
+			invoices.POST("/:id/payment/attempt", write("invoice", "write"), handlers.Invoice.AttemptPayment)
 			invoices.GET("/:id/pdf", handlers.Invoice.GetInvoicePDF)
-			invoices.POST("/:id/recalculate", handlers.Invoice.RecalculateInvoice)
-			invoices.POST("/:id/recalculate-v2", handlers.Invoice.RecalculateInvoiceV2)
-			invoices.POST("/:id/comms/trigger", handlers.Invoice.TriggerCommunication)
-			invoices.POST("/:id/webhook/trigger", handlers.Invoice.TriggerWebhook)
+			invoices.POST("/:id/recalculate", write("invoice", "write"), handlers.Invoice.RecalculateInvoice)
+			invoices.POST("/:id/recalculate-v2", write("invoice", "write"), handlers.Invoice.RecalculateInvoiceV2)
+			invoices.POST("/:id/comms/trigger", write("invoice", "write"), handlers.Invoice.TriggerCommunication)
+			invoices.POST("/:id/webhook/trigger", write("invoice", "write"), handlers.Invoice.TriggerWebhook)
 		}
 
 		feature := v1Private.Group("/features")
 		{
-
-			feature.POST("", handlers.Feature.CreateFeature)
+			feature.POST("", write("feature", "write"), handlers.Feature.CreateFeature)
 			feature.GET("", handlers.Feature.ListFeatures)
 			feature.GET("/:id", handlers.Feature.GetFeature)
-			feature.PUT("/:id", handlers.Feature.UpdateFeature)
-			feature.DELETE("/:id", handlers.Feature.DeleteFeature)
+			feature.PUT("/:id", write("feature", "write"), handlers.Feature.UpdateFeature)
+			feature.DELETE("/:id", write("feature", "write"), handlers.Feature.DeleteFeature)
 			feature.POST("/search", handlers.Feature.QueryFeatures)
-			feature.POST("/:id/clone", handlers.Feature.CloneFeature)
+			feature.POST("/:id/clone", write("feature", "write"), handlers.Feature.CloneFeature)
 		}
 
 		entitlement := v1Private.Group("/entitlements")
 		{
 			entitlement.POST("/search", handlers.Entitlement.QueryEntitlements)
-			entitlement.POST("", handlers.Entitlement.CreateEntitlement)
-			entitlement.POST("/bulk", handlers.Entitlement.CreateBulkEntitlement)
+			entitlement.POST("", write("entitlement", "write"), handlers.Entitlement.CreateEntitlement)
+			entitlement.POST("/bulk", write("entitlement", "write"), handlers.Entitlement.CreateBulkEntitlement)
 			entitlement.GET("", handlers.Entitlement.ListEntitlements)
 			entitlement.GET("/:id", handlers.Entitlement.GetEntitlement)
-			entitlement.PUT("/:id", handlers.Entitlement.UpdateEntitlement)
-			entitlement.DELETE("/:id", handlers.Entitlement.DeleteEntitlement)
+			entitlement.PUT("/:id", write("entitlement", "write"), handlers.Entitlement.UpdateEntitlement)
+			entitlement.DELETE("/:id", write("entitlement", "write"), handlers.Entitlement.DeleteEntitlement)
 		}
 
 		creditGrant := v1Private.Group("/creditgrants")
 		{
-			creditGrant.POST("", handlers.CreditGrant.CreateCreditGrant)
+			creditGrant.POST("", write("creditgrant", "write"), handlers.CreditGrant.CreateCreditGrant)
 			creditGrant.GET("", handlers.CreditGrant.ListCreditGrants)
 			creditGrant.GET("/:id", handlers.CreditGrant.GetCreditGrant)
-			creditGrant.PUT("/:id", handlers.CreditGrant.UpdateCreditGrant)
-			creditGrant.DELETE("/:id", handlers.CreditGrant.DeleteCreditGrant)
+			creditGrant.PUT("/:id", write("creditgrant", "write"), handlers.CreditGrant.UpdateCreditGrant)
+			creditGrant.DELETE("/:id", write("creditgrant", "write"), handlers.CreditGrant.DeleteCreditGrant)
 		}
 
 		payments := v1Private.Group("/payments")
 		{
-			payments.POST("", handlers.Payment.CreatePayment)
+			payments.POST("", write("payment", "write"), handlers.Payment.CreatePayment)
 			payments.GET("", handlers.Payment.ListPayments)
 			payments.GET("/:id", handlers.Payment.GetPayment)
-			payments.PUT("/:id", handlers.Payment.UpdatePayment)
-			payments.DELETE("/:id", handlers.Payment.DeletePayment)
-			payments.POST("/:id/process", handlers.Payment.ProcessPayment)
+			payments.PUT("/:id", write("payment", "write"), handlers.Payment.UpdatePayment)
+			payments.DELETE("/:id", write("payment", "write"), handlers.Payment.DeletePayment)
+			payments.POST("/:id/process", write("payment", "write"), handlers.Payment.ProcessPayment)
 
 			custPaymentsGroup := payments.Group("/customers")
 			{
 				custPaymentsGroup.GET("/:id/methods", handlers.SetupIntent.ListCustomerPaymentMethods)
-				custPaymentsGroup.POST("/:id/setup/intent", handlers.SetupIntent.CreateSetupIntentSession)
+				custPaymentsGroup.POST("/:id/setup/intent", write("payment", "write"), handlers.SetupIntent.CreateSetupIntentSession)
 			}
 		}
 
 		tasks := v1Private.Group("/tasks")
 		{
-			tasks.POST("", handlers.Task.CreateTask)
+			tasks.POST("", write("task", "write"), handlers.Task.CreateTask)
 			tasks.GET("", handlers.Task.ListTasks)
 			tasks.GET("/:id", handlers.Task.GetTask)
-			tasks.PUT("/:id/status", handlers.Task.UpdateTaskStatus)
+			tasks.PUT("/:id/status", write("task", "write"), handlers.Task.UpdateTaskStatus)
 			tasks.GET("/:id/download", handlers.Task.DownloadTaskFile)
 
 			// Scheduled tasks routes under /tasks/scheduled
 			scheduledTasks := tasks.Group("/scheduled")
 			{
-				scheduledTasks.POST("", handlers.ScheduledTask.CreateScheduledTask)
+				scheduledTasks.POST("", write("task", "write"), handlers.ScheduledTask.CreateScheduledTask)
 				scheduledTasks.GET("", handlers.ScheduledTask.ListScheduledTasks)
 				scheduledTasks.GET("/:id", handlers.ScheduledTask.GetScheduledTask)
-				scheduledTasks.PUT("/:id", handlers.ScheduledTask.UpdateScheduledTask)
-				scheduledTasks.DELETE("/:id", handlers.ScheduledTask.DeleteScheduledTask)
-				scheduledTasks.POST("/:id/run", handlers.ScheduledTask.TriggerForceRun)
-
+				scheduledTasks.PUT("/:id", write("task", "write"), handlers.ScheduledTask.UpdateScheduledTask)
+				scheduledTasks.DELETE("/:id", write("task", "write"), handlers.ScheduledTask.DeleteScheduledTask)
+				scheduledTasks.POST("/:id/run", write("task", "write"), handlers.ScheduledTask.TriggerForceRun)
 			}
 		}
 
@@ -455,20 +449,20 @@ func NewRouter(
 		tax := v1Private.Group("/taxes")
 		taxRates := tax.Group("/rates")
 		{
-			taxRates.POST("", handlers.Tax.CreateTaxRate)
+			taxRates.POST("", write("tax", "write"), handlers.Tax.CreateTaxRate)
 			taxRates.GET("", handlers.Tax.ListTaxRates)
 			taxRates.GET("/:id", handlers.Tax.GetTaxRate)
-			taxRates.PUT("/:id", handlers.Tax.UpdateTaxRate)
-			taxRates.DELETE("/:id", handlers.Tax.DeleteTaxRate)
+			taxRates.PUT("/:id", write("tax", "write"), handlers.Tax.UpdateTaxRate)
+			taxRates.DELETE("/:id", write("tax", "write"), handlers.Tax.DeleteTaxRate)
 		}
 
 		taxAssociations := tax.Group("/associations")
 		{
-			taxAssociations.POST("", handlers.Tax.CreateTaxAssociation)
+			taxAssociations.POST("", write("tax", "write"), handlers.Tax.CreateTaxAssociation)
 			taxAssociations.GET("", handlers.Tax.ListTaxAssociations)
 			taxAssociations.GET("/:id", handlers.Tax.GetTaxAssociation)
-			taxAssociations.PUT("/:id", handlers.Tax.UpdateTaxAssociation)
-			taxAssociations.DELETE("/:id", handlers.Tax.DeleteTaxAssociation)
+			taxAssociations.PUT("/:id", write("tax", "write"), handlers.Tax.UpdateTaxAssociation)
+			taxAssociations.DELETE("/:id", write("tax", "write"), handlers.Tax.DeleteTaxAssociation)
 		}
 
 		// Secret routes
@@ -478,19 +472,19 @@ func NewRouter(
 			apiKeys := secrets.Group("/api/keys")
 			{
 				apiKeys.GET("", handlers.Secret.ListAPIKeys)
-				apiKeys.POST("", handlers.Secret.CreateAPIKey)
-				apiKeys.DELETE("/:id", handlers.Secret.DeleteAPIKey)
+				apiKeys.POST("", write("secret", "write"), handlers.Secret.CreateAPIKey)
+				apiKeys.DELETE("/:id", write("secret", "write"), handlers.Secret.DeleteAPIKey)
 			}
 		}
 
 		// Connection routes
 		connections := v1Private.Group("/connections")
 		{
-			connections.POST("", handlers.Connection.CreateConnection)
+			connections.POST("", write("connection", "write"), handlers.Connection.CreateConnection)
 			connections.GET("", handlers.Connection.ListConnections)
 			connections.GET("/:id", handlers.Connection.GetConnection)
-			connections.PUT("/:id", handlers.Connection.UpdateConnection)
-			connections.DELETE("/:id", handlers.Connection.DeleteConnection)
+			connections.PUT("/:id", write("connection", "write"), handlers.Connection.UpdateConnection)
+			connections.DELETE("/:id", write("connection", "write"), handlers.Connection.DeleteConnection)
 			connections.POST("/search", handlers.Connection.QueryConnections)
 		}
 
@@ -498,10 +492,10 @@ func NewRouter(
 		costsheets := v1Private.Group("/costs")
 		{
 			costsheets.POST("/search", handlers.Costsheet.QueryCostsheets)
-			costsheets.POST("", handlers.Costsheet.CreateCostsheet)
+			costsheets.POST("", write("costsheet", "write"), handlers.Costsheet.CreateCostsheet)
 			costsheets.GET("/:id", handlers.Costsheet.GetCostsheet)
-			costsheets.PUT("/:id", handlers.Costsheet.UpdateCostsheet)
-			costsheets.DELETE("/:id", handlers.Costsheet.DeleteCostsheet)
+			costsheets.PUT("/:id", write("costsheet", "write"), handlers.Costsheet.UpdateCostsheet)
+			costsheets.DELETE("/:id", write("costsheet", "write"), handlers.Costsheet.DeleteCostsheet)
 			costsheets.GET("/active", handlers.Costsheet.GetActiveCostsheetForTenant)
 			costsheets.POST("/analytics", handlers.RevenueAnalytics.GetDetailedCostAnalytics)
 			costsheets.POST("/analytics-v2", handlers.RevenueAnalytics.GetDetailedCostAnalyticsV2)
@@ -510,11 +504,11 @@ func NewRouter(
 		// Credit note routes
 		creditNotes := v1Private.Group("/creditnotes")
 		{
-			creditNotes.POST("", handlers.CreditNote.CreateCreditNote)
+			creditNotes.POST("", write("creditnote", "write"), handlers.CreditNote.CreateCreditNote)
 			creditNotes.GET("", handlers.CreditNote.ListCreditNotes)
 			creditNotes.GET("/:id", handlers.CreditNote.GetCreditNote)
-			creditNotes.POST("/:id/void", handlers.CreditNote.VoidCreditNote)
-			creditNotes.POST("/:id/finalize", handlers.CreditNote.FinalizeCreditNote)
+			creditNotes.POST("/:id/void", write("creditnote", "write"), handlers.CreditNote.VoidCreditNote)
+			creditNotes.POST("/:id/finalize", write("creditnote", "write"), handlers.CreditNote.FinalizeCreditNote)
 		}
 
 		// Integration routes
@@ -531,11 +525,11 @@ func NewRouter(
 		// Coupon routes
 		coupon := v1Private.Group("/coupons")
 		{
-			coupon.POST("", handlers.Coupon.CreateCoupon)
+			coupon.POST("", write("coupon", "write"), handlers.Coupon.CreateCoupon)
 			coupon.GET("", handlers.Coupon.ListCoupons)
 			coupon.GET("/:id", handlers.Coupon.GetCoupon)
-			coupon.PUT("/:id", handlers.Coupon.UpdateCoupon)
-			coupon.DELETE("/:id", handlers.Coupon.DeleteCoupon)
+			coupon.PUT("/:id", write("coupon", "write"), handlers.Coupon.UpdateCoupon)
+			coupon.DELETE("/:id", write("coupon", "write"), handlers.Coupon.DeleteCoupon)
 			coupon.POST("/search", handlers.Coupon.QueryCoupons)
 		}
 
@@ -551,7 +545,7 @@ func NewRouter(
 		{
 			aiPricing := aiRoutes.Group("/pricing")
 			{
-				aiPricing.POST("/parse-gemini", handlers.AIPricing.ParseGeminiPricing)
+				aiPricing.POST("/parse-gemini", write("ai", "write"), handlers.AIPricing.ParseGeminiPricing)
 			}
 		}
 
@@ -560,8 +554,8 @@ func NewRouter(
 		{
 			onboarding := portalRoutes.Group("/onboarding")
 			{
-				onboarding.POST("/events", handlers.Onboarding.GenerateEvents)
-				onboarding.POST("/setup", handlers.Onboarding.SetupDemo)
+				onboarding.POST("/events", write("portal", "write"), handlers.Onboarding.GenerateEvents)
+				onboarding.POST("/setup", write("portal", "write"), handlers.Onboarding.SetupDemo)
 			}
 		}
 
@@ -569,7 +563,7 @@ func NewRouter(
 		webhookGroup := v1Private.Group("/webhooks")
 		{
 			webhookGroup.GET("/dashboard", handlers.Webhook.GetDashboardURL)
-			webhookGroup.POST("/retry", handlers.Webhook.RetryOutboundWebhook)
+			webhookGroup.POST("/retry", write("webhook", "write"), handlers.Webhook.RetryOutboundWebhook)
 		}
 	}
 
@@ -605,7 +599,6 @@ func NewRouter(
 
 		// Cost Analytics
 		customerPortalAPI.POST("/analytics/cost", handlers.CustomerPortal.GetCostAnalytics)
-
 	}
 
 	// Public webhook endpoints (no authentication required)
@@ -637,35 +630,35 @@ func NewRouter(
 	cron := v1Private.Group("/cron")
 	subscriptionGroup := cron.Group("/subscriptions")
 	{
-		subscriptionGroup.POST("/update-periods", handlers.CronSubscription.UpdateBillingPeriods)
+		subscriptionGroup.POST("/update-periods", write("cron", "write"), handlers.CronSubscription.UpdateBillingPeriods)
 		// Deprecated: automation uses Temporal schedule subscription-trial-end-due.
-		subscriptionGroup.POST("/process-trial-end-due", handlers.CronSubscription.ProcessTrialEndDue)
-		subscriptionGroup.POST("/process-auto-cancellation", handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
-		subscriptionGroup.POST("/renewal-due-alerts", handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
+		subscriptionGroup.POST("/process-trial-end-due", write("cron", "write"), handlers.CronSubscription.ProcessTrialEndDue)
+		subscriptionGroup.POST("/process-auto-cancellation", write("cron", "write"), handlers.CronSubscription.ProcessAutoCancellationSubscriptions)
+		subscriptionGroup.POST("/renewal-due-alerts", write("cron", "write"), handlers.CronSubscription.ProcessSubscriptionRenewalDueAlerts)
 	}
 	walletGroup := cron.Group("/wallets")
 	{
-		walletGroup.POST("/expire-credits", handlers.CronWallet.ExpireCredits)
+		walletGroup.POST("/expire-credits", write("cron", "write"), handlers.CronWallet.ExpireCredits)
 	}
 	creditGrantGroup := cron.Group("/creditgrants")
 	{
-		creditGrantGroup.POST("/process-scheduled-applications", handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
+		creditGrantGroup.POST("/process-scheduled-applications", write("cron", "write"), handlers.CronCreditGrant.ProcessScheduledCreditGrantApplications)
 	}
 	invoiceGroup := cron.Group("/invoices")
 	{
-		invoiceGroup.POST("/void-old-pending", handlers.CronInvoice.VoidOldPendingInvoices)
+		invoiceGroup.POST("/void-old-pending", write("cron", "write"), handlers.CronInvoice.VoidOldPendingInvoices)
 	}
 	kafkaLagMonitoringGroup := cron.Group("/events")
 	{
-		kafkaLagMonitoringGroup.POST("/monitoring", handlers.CronKafkaLagMonitoring.HandleKafkaLagMonitoring)
+		kafkaLagMonitoringGroup.POST("/monitoring", write("cron", "write"), handlers.CronKafkaLagMonitoring.HandleKafkaLagMonitoring)
 	}
 
 	// Settings routes
 	settings := v1Private.Group("/settings")
 	{
 		settings.GET("/:key", handlers.Settings.GetSettingByKey)
-		settings.PUT("/:key", handlers.Settings.UpdateSettingByKey)
-		settings.DELETE("/:key", handlers.Settings.DeleteSettingByKey)
+		settings.PUT("/:key", write("setting", "write"), handlers.Settings.UpdateSettingByKey)
+		settings.DELETE("/:key", write("setting", "write"), handlers.Settings.DeleteSettingByKey)
 	}
 
 	// Alert routes
@@ -685,8 +678,8 @@ func NewRouter(
 	// OAuth routes
 	oauth := v1Private.Group("/oauth")
 	{
-		oauth.POST("/init", handlers.OAuth.InitiateOAuth)
-		oauth.POST("/complete", handlers.OAuth.CompleteOAuth)
+		oauth.POST("/init", write("oauth", "write"), handlers.OAuth.InitiateOAuth)
+		oauth.POST("/complete", write("oauth", "write"), handlers.OAuth.CompleteOAuth)
 	}
 
 	// Dashboard routes

@@ -24,23 +24,29 @@ func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logge
 	}
 }
 
-// RequirePermission returns a middleware that checks for specific entity.action
-// This is called explicitly in route definitions
+// RequirePermission returns a middleware that checks for specific entity.action.
+// For write actions it also blocks suspended tenants, so a single inline call
+// handles both RBAC and tenant access control.
 func (pm *PermissionMiddleware) RequirePermission(entity string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get roles from context (set by auth middleware)
-		roles := types.GetRoles(c.Request.Context())
+		ctx := c.Request.Context()
 
-		// Check permission using set-based lookup
+		if action == "write" && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "tenant account is suspended",
+			})
+			return
+		}
+
+		roles := types.GetRoles(ctx)
 		if !pm.rbacService.HasPermission(roles, entity, action) {
 			pm.logger.Info("Permission denied",
-				"user_id", types.GetUserID(c.Request.Context()),
+				"user_id", types.GetUserID(ctx),
 				"roles", roles,
 				"entity", entity,
 				"action", action,
 				"path", c.Request.URL.Path,
 			)
-
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":   "Forbidden",
 				"message": fmt.Sprintf("Insufficient permissions to %s %s", action, entity),
@@ -48,7 +54,6 @@ func (pm *PermissionMiddleware) RequirePermission(entity string, action string) 
 			return
 		}
 
-		// Permission granted, continue to handler
 		c.Next()
 	}
 }
