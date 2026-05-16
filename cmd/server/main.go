@@ -42,7 +42,6 @@ import (
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/proration"
-	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ee "github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/security"
@@ -428,7 +427,7 @@ func provideRouter(
 	secretService service.SecretService,
 	envAccessService service.EnvAccessService,
 	rbacService *rbac.RBACService,
-	tenantRepo tenant.Repository,
+	tenantService service.TenantService,
 ) *gin.Engine {
 	return api.NewRouter(
 		handlers,
@@ -437,7 +436,7 @@ func provideRouter(
 		secretService,
 		envAccessService,
 		rbacService,
-		tenantRepo,
+		tenantService,
 	)
 }
 
