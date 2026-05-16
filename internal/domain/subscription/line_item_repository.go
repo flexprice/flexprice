@@ -31,4 +31,8 @@ type LineItemRepository interface {
 
 	// Count counts subscription line items matching the filter (same predicates as List).
 	Count(ctx context.Context, filter *types.SubscriptionLineItemFilter) (int, error)
+
+	// GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
+	// line items where commitment_true_up_enabled is true.
+	GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error)
 }

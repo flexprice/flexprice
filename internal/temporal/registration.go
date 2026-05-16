@@ -117,6 +117,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.Logger,
 		featureUsageTrackingService,
 		params.EventRepo,
+		params.SubscriptionLineItemRepo,
 	)
 
 	// HubSpot activities - clean and simple, delegates to existing services
