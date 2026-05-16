@@ -72,6 +72,10 @@ func (c *InMemoryCache) ForceCacheSet(ctx context.Context, key string, value int
 	c.cache.Set(key, value, expiration)
 }
 
+func (c *InMemoryCache) ForceCacheDelete(_ context.Context, key string) {
+	c.cache.Delete(key)
+}
+
 // Set adds a value to the cache with the specified expiration
 func (c *InMemoryCache) Set(_ context.Context, key string, value interface{}, expiration time.Duration) {
 	if !c.cfg.Cache.Enabled {

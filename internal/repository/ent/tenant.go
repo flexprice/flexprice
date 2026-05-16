@@ -73,9 +73,13 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 		"tenant_id": id,
 	})
 	defer FinishSpan(span)
-	// Try to get from cache first
-	if cachedTenant := r.GetCache(ctx, id); cachedTenant != nil {
-		return cachedTenant, nil
+
+	// Always check force-cache first so tenant access works even when cache.enabled=false.
+	cacheKey := cache.GenerateKey(cache.PrefixTenant, id)
+	if value, found := r.cache.ForceCacheGet(ctx, cacheKey); found {
+		if t, ok := value.(*domainTenant.Tenant); ok {
+			return t, nil
+		}
 	}
 
 	client := r.client.Reader(ctx)
@@ -106,7 +110,7 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 
 	SetSpanSuccess(span)
 	tenantData := domainTenant.FromEnt(tenant)
-	r.SetCache(ctx, tenantData)
+	r.cache.ForceCacheSet(ctx, cacheKey, tenantData, cache.ExpiryDefaultInMemory)
 	return tenantData, nil
 }
 
@@ -195,5 +199,5 @@ func (r *tenantRepository) DeleteCache(ctx context.Context, key string) {
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
-	r.cache.Delete(ctx, cacheKey)
+	cache.GetInMemoryCache().ForceCacheDelete(ctx, cacheKey)
 }
