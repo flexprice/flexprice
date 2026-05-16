@@ -27,11 +27,11 @@ func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logge
 // RequirePermission returns a middleware that checks for specific entity.action.
 // For write actions it also blocks suspended tenants, so a single inline call
 // handles both RBAC and tenant access control.
-func (pm *PermissionMiddleware) RequirePermission(entity string, action string) gin.HandlerFunc {
+func (pm *PermissionMiddleware) RequirePermission(entity string, action types.Action) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
-		if action == "write" && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
+		if action == types.ActionWrite && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "tenant account is suspended",
 			})
@@ -39,7 +39,7 @@ func (pm *PermissionMiddleware) RequirePermission(entity string, action string) 
 		}
 
 		roles := types.GetRoles(ctx)
-		if !pm.rbacService.HasPermission(roles, entity, action) {
+		if !pm.rbacService.HasPermission(roles, entity, string(action)) {
 			pm.logger.Info("Permission denied",
 				"user_id", types.GetUserID(ctx),
 				"roles", roles,
