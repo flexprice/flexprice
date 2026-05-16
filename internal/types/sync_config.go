@@ -1,7 +1,6 @@
 package types
 
 import (
-	"math"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -36,41 +35,34 @@ type InvoiceSyncSettings struct {
 	// For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
 	// qty=3, rate=$100. Empty string means no normalization (keep original).
 	NormalizeFixedTo BillingPeriod `json:"normalize_fixed_to,omitempty"`
-
-	// CollapseUsage when true collapses usage line items to qty=1 with rate=total amount.
-	CollapseUsage bool `json:"collapse_usage,omitempty"`
 }
 
 // NormalizedFixedQuantity returns how many units of NormalizeFixedTo fit between start and end.
 // Returns 0 if either date is nil, settings are nil, or NormalizeFixedTo is empty.
-func (s *InvoiceSyncSettings) NormalizedFixedQuantity(start, end *time.Time) int {
-	if s == nil || s.NormalizeFixedTo == "" || start == nil || end == nil {
+func (s *InvoiceSyncSettings) NormalizedFixedQuantity(billingPeriod *string) int {
+	if s == nil || s.NormalizeFixedTo == "" || billingPeriod == nil || *billingPeriod == "" {
 		return 0
 	}
-	return periodQuantity(*start, *end, s.NormalizeFixedTo)
+	return periodQuantity(*billingPeriod, s.NormalizeFixedTo)
 }
 
 // periodQuantity computes how many whole units of the target billing period fit in [start, end).
-func periodQuantity(start, end time.Time, target BillingPeriod) int {
-	if !end.After(start) {
+func periodQuantity(billingPeriod string, target BillingPeriod) int {
+	monthsFor := map[BillingPeriod]int{
+		BILLING_PERIOD_MONTHLY:   1,
+		BILLING_PERIOD_QUARTER:   3,
+		BILLING_PERIOD_HALF_YEAR: 6,
+		BILLING_PERIOD_ANNUAL:    12,
+	}
+
+	bp, bpOk := monthsFor[BillingPeriod(billingPeriod)]
+	t, tOk := monthsFor[target]
+
+	if !bpOk || !tOk || t == 0 || t > bp {
 		return 0
 	}
-	switch target {
-	case BILLING_PERIOD_DAILY:
-		return int(math.Round(end.Sub(start).Hours() / 24))
-	case BILLING_PERIOD_WEEKLY:
-		return int(math.Round(end.Sub(start).Hours() / (24 * 7)))
-	case BILLING_PERIOD_MONTHLY:
-		return monthsBetween(start, end)
-	case BILLING_PERIOD_QUARTER:
-		return monthsBetween(start, end) / 3
-	case BILLING_PERIOD_HALF_YEAR:
-		return monthsBetween(start, end) / 6
-	case BILLING_PERIOD_ANNUAL:
-		return monthsBetween(start, end) / 12
-	default:
-		return 0
-	}
+
+	return bp / t
 }
 
 func monthsBetween(start, end time.Time) int {

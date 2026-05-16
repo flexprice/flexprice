@@ -26,7 +26,6 @@ type InvoiceService struct {
 	customerRepo customer.Repository
 	invoiceRepo  invoice.Repository
 	mappingRepo  entityintegrationmapping.Repository
-	syncConfig   *types.SyncConfig
 	logger       *logger.Logger
 }
 
@@ -39,7 +38,6 @@ func NewInvoiceService(
 	invoiceRepo invoice.Repository,
 	mappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
-	syncConfig *types.SyncConfig,
 ) ZohoInvoiceService {
 	return &InvoiceService{
 		client:       client,
@@ -49,7 +47,6 @@ func NewInvoiceService(
 		customerRepo: customerRepo,
 		invoiceRepo:  invoiceRepo,
 		mappingRepo:  mappingRepo,
-		syncConfig:   syncConfig,
 		logger:       logger,
 	}
 }
@@ -213,14 +210,17 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		priceToItemID = mapped
 	}
 
-	settings := s.getInvoiceSyncSettings()
+	settings, err := s.getInvoiceSyncSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	out := make([]InvoiceLineItem, 0, len(inputs))
 	for _, li := range flexInvoice.LineItems {
 		if li == nil || li.Amount.IsZero() {
 			continue
 		}
-		qty, rate := s.transformLineItem(li, settings)
+		qty, rate := s.normalizeRateAndQuantity(li, settings, flexInvoice.BillingPeriod)
 		name := lo.FromPtrOr(li.DisplayName, "Charge")
 		out = append(out, InvoiceLineItem{
 			Name:           name,
@@ -235,18 +235,22 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 	return out, nil
 }
 
-func (s *InvoiceService) getInvoiceSyncSettings() *types.InvoiceSyncSettings {
-	if s.syncConfig != nil && s.syncConfig.InvoiceSyncSettings != nil {
-		return s.syncConfig.InvoiceSyncSettings
+func (s *InvoiceService) getInvoiceSyncSettings(ctx context.Context) (*types.InvoiceSyncSettings, error) {
+	syncConfig, err := s.client.GetZohoBooksSyncConfig(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if syncConfig != nil && syncConfig.InvoiceSyncSettings != nil {
+		return syncConfig.InvoiceSyncSettings, nil
+	}
+	return nil, nil
 }
 
-func (s *InvoiceService) transformLineItem(li *invoice.InvoiceLineItem, settings *types.InvoiceSyncSettings) (qty decimal.Decimal, rate decimal.Decimal) {
+func (s *InvoiceService) normalizeRateAndQuantity(li *invoice.InvoiceLineItem, settings *types.InvoiceSyncSettings, billingPeriod *string) (qty decimal.Decimal, rate decimal.Decimal) {
 	priceType := lo.FromPtr(li.PriceType)
 
 	if priceType == string(types.PRICE_TYPE_FIXED) && settings != nil {
-		if n := settings.NormalizedFixedQuantity(li.PeriodStart, li.PeriodEnd); n > 0 {
+		if n := settings.NormalizedFixedQuantity(billingPeriod); n > 0 {
 			dQty := decimal.NewFromInt(int64(n))
 			return dQty, li.Amount.Div(dQty)
 		}

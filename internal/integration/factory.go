@@ -608,7 +608,6 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.invoiceRepo,
 		f.entityIntegrationMappingRepo,
 		f.logger,
-		conn.GetSyncConfig(),
 	)
 
 	return &ZohoBooksIntegration{
