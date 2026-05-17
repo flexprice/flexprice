@@ -557,7 +557,7 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 	}
 
 	// entity id filter
-	if f.EntityIDs != nil {
+	if len(f.EntityIDs) > 0 {
 		query = query.Where(price.EntityIDIn(f.EntityIDs...))
 	}
 
