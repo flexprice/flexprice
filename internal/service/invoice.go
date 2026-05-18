@@ -3051,8 +3051,8 @@ func (s *invoiceService) reconcileLineItems(
 	// Update-in-place path
 	existingBySubLineItemID := make(map[string]*invoice.InvoiceLineItem, len(existing))
 	for _, item := range existing {
-		if item.SubLineItemID != nil {
-			existingBySubLineItemID[*item.SubLineItemID] = item
+		if !lo.IsNil(item.SubLineItemID) {
+			existingBySubLineItemID[lo.FromPtr(item.SubLineItemID)] = item
 		}
 	}
 
@@ -3061,7 +3061,7 @@ func (s *invoiceService) reconcileLineItems(
 
 	for _, req := range newLineItemReqs {
 		newItem := req.ToInvoiceLineItem(ctx, inv)
-		if newItem.SubLineItemID == nil {
+		if lo.IsNil(newItem.SubLineItemID) {
 			toInsert = append(toInsert, newItem)
 			continue
 		}
