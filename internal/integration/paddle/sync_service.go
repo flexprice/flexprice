@@ -322,6 +322,178 @@ func (s *PaddleSyncService) EnsureProductsSynced(ctx context.Context, req Ensure
 	return &EnsureProductsSyncedResponse{PriceIDToPaddlePriceID: result}, nil
 }
 
+// getOrCreateZeroDollarPrice returns the Paddle price ID used to bootstrap zero-dollar
+// subscriptions. Created once per Paddle connection and cached in connection.Metadata.
+func (s *PaddleSyncService) getOrCreateZeroDollarPrice(ctx context.Context) (string, error) {
+	conn, err := s.connectionRepo.GetByProvider(ctx, types.SecretProviderPaddle)
+	if err != nil {
+		return "", ierr.WithError(err).WithHint("Failed to load Paddle connection").Mark(ierr.ErrDatabase)
+	}
+	if conn == nil {
+		return "", ierr.NewError("Paddle connection not found").Mark(ierr.ErrNotFound)
+	}
+
+	// Return cached price ID if present.
+	if conn.Metadata != nil {
+		if priceID, ok := conn.Metadata[ConnKeyZeroDollarPriceID].(string); ok && priceID != "" {
+			return priceID, nil
+		}
+	}
+
+	// Bootstrap: create product + $0/month price.
+	product, err := s.client.CreateProduct(ctx, &paddlesdk.CreateProductRequest{
+		Name:        "FlexPrice Subscription Anchor",
+		TaxCategory: defaultTaxCategory,
+		CustomData:  map[string]interface{}{"created_by": "flexprice_subscription_bootstrap"},
+	})
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Failed to create Paddle anchor product for $0 subscription").
+			Mark(ierr.ErrInternal)
+	}
+
+	price, err := s.client.CreatePrice(ctx, &paddlesdk.CreatePriceRequest{
+		ProductID:   product.ID,
+		Description: "FlexPrice zero-dollar subscription anchor price",
+		Name:        paddlesdk.PtrTo("FlexPrice Subscription Anchor"),
+		UnitPrice: paddlesdk.Money{
+			Amount:       "0",
+			CurrencyCode: paddlesdk.CurrencyCodeUSD,
+		},
+		BillingCycle: &paddlesdk.Duration{
+			Interval:  paddlesdk.IntervalMonth,
+			Frequency: 1,
+		},
+		Quantity: &paddlesdk.PriceQuantity{Minimum: 1, Maximum: 1},
+	})
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Failed to create Paddle $0/month anchor price").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Cache in connection metadata.
+	if conn.Metadata == nil {
+		conn.Metadata = make(map[string]interface{})
+	}
+	conn.Metadata[ConnKeyZeroDollarProductID] = product.ID
+	conn.Metadata[ConnKeyZeroDollarPriceID] = price.ID
+	conn.UpdatedAt = time.Now().UTC()
+	if err := s.connectionRepo.Update(ctx, conn); err != nil {
+		s.logger.Warnw("created Paddle anchor price but failed to cache in connection metadata — will re-create on next call",
+			"paddle_price_id", price.ID, "error", err)
+	}
+
+	s.logger.Infow("successfully bootstrapped Paddle zero-dollar subscription anchor",
+		"paddle_product_id", product.ID, "paddle_price_id", price.ID)
+	return price.ID, nil
+}
+
+// EnsureSubscriptionSynced ensures a zero-dollar Paddle subscription exists for the given
+// FlexPrice subscription. The Paddle subscription is bootstrapped via a $0 transaction.
+// Returns immediately if already mapped — this is the primary guard against duplicate subscriptions.
+func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req EnsureSubscriptionSyncedRequest) (*EnsureSubscriptionSyncedResponse, error) {
+	if req.SubscriptionID == "" {
+		return nil, ierr.NewError("subscription ID is required").Mark(ierr.ErrValidation)
+	}
+
+	// Idempotency check — prevents creating duplicate Paddle subscriptions.
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityID:      req.SubscriptionID,
+		EntityType:    types.IntegrationEntityTypeSubscription,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	}
+	mappings, err := s.mappingRepo.List(ctx, filter)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to query subscription mapping").Mark(ierr.ErrDatabase)
+	}
+	if len(mappings) > 0 {
+		s.logger.Infow("subscription already synced to Paddle",
+			"subscription_id", req.SubscriptionID, "paddle_subscription_id", mappings[0].ProviderEntityID)
+		return &EnsureSubscriptionSyncedResponse{
+			PaddleSubscriptionID: mappings[0].ProviderEntityID,
+			Created:              false,
+		}, nil
+	}
+
+	// Get the $0 anchor price (created once per connection).
+	zeroPriceID, err := s.getOrCreateZeroDollarPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ensure customer is synced first.
+	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: req.CustomerID})
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Customer must be synced to Paddle before subscription can be created").
+			Mark(ierr.ErrInternal)
+	}
+	if customerResp.PaddleAddressID == "" {
+		return nil, ierr.NewError("Paddle address ID not found after customer sync").
+			WithHint("Customer must have an address (country required) for Paddle subscription creation").
+			WithReportableDetails(map[string]interface{}{"customer_id": req.CustomerID}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Create a $0 transaction; Paddle processes it automatically and creates a subscription.
+	txn, err := s.client.CreateTransaction(ctx, &paddlesdk.CreateTransactionRequest{
+		CustomerID:     paddlesdk.PtrTo(customerResp.PaddleCustomerID),
+		AddressID:      paddlesdk.PtrTo(customerResp.PaddleAddressID),
+		CollectionMode: paddlesdk.PtrTo(paddlesdk.CollectionModeAutomatic),
+		Items: []paddlesdk.CreateTransactionItems{
+			*paddlesdk.NewCreateTransactionItemsTransactionItemFromCatalog(
+				&paddlesdk.TransactionItemFromCatalog{
+					PriceID:  zeroPriceID,
+					Quantity: 1,
+				},
+			),
+		},
+		CustomData: map[string]interface{}{
+			"flexprice_subscription_id": req.SubscriptionID,
+			"environment_id":            types.GetEnvironmentID(ctx),
+		},
+	})
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create $0 Paddle transaction for subscription bootstrap").
+			Mark(ierr.ErrInternal)
+	}
+
+	if txn.SubscriptionID == nil || *txn.SubscriptionID == "" {
+		return nil, ierr.NewError("Paddle transaction did not produce a subscription_id").
+			WithHint("Ensure the anchor price has billing_cycle set (monthly) so Paddle creates a subscription").
+			WithReportableDetails(map[string]interface{}{"paddle_transaction_id": txn.ID}).
+			Mark(ierr.ErrInternal)
+	}
+	paddleSubID := *txn.SubscriptionID
+
+	// Persist mapping.
+	mapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         req.SubscriptionID,
+		EntityType:       types.IntegrationEntityTypeSubscription,
+		ProviderType:     string(types.SecretProviderPaddle),
+		ProviderEntityID: paddleSubID,
+		Metadata: map[string]interface{}{
+			MetaKeyCreatedVia:          CreatedViaFlexpriceToProvider,
+			MetaKeyPaddleTransactionID: txn.ID,
+			MetaKeySyncedAt:            time.Now().UTC().Format(time.RFC3339),
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	if err := s.mappingRepo.Create(ctx, mapping); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Subscription created in Paddle but mapping failed to save").
+			Mark(ierr.ErrDatabase)
+	}
+
+	s.logger.Infow("successfully created Paddle subscription for FlexPrice subscription",
+		"subscription_id", req.SubscriptionID, "paddle_subscription_id", paddleSubID)
+	return &EnsureSubscriptionSyncedResponse{PaddleSubscriptionID: paddleSubID, Created: true}, nil
+}
+
 // syncAddressForMapping ensures the Paddle address for an already-mapped customer is up to date.
 // paddleAddressID is the value currently stored in the mapping metadata (may be empty).
 // It returns the final paddleAddressID (possibly newly created).
