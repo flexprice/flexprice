@@ -462,23 +462,9 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 
 		// Populate invoice from the computed request (uniform for all invoice types)
 		if applyReq != nil {
-			lineItemDomains := make([]*invoice.InvoiceLineItem, 0, len(applyReq.LineItems))
-			for _, item := range applyReq.LineItems {
-				lineItemDomains = append(lineItemDomains, item.ToInvoiceLineItem(txCtx, inv))
-			}
-
-			// Always replace line items on re-compute: remove old, insert new.
-			// Amounts/quantities may change between computes even if the count stays the same.
-			if len(inv.LineItems) > 0 {
-				itemIDs := lo.Map(inv.LineItems, func(item *invoice.InvoiceLineItem, _ int) string { return item.ID })
-				if err := s.InvoiceRepo.RemoveLineItems(txCtx, inv.ID, itemIDs); err != nil {
-					return err
-				}
-			}
-			if len(lineItemDomains) > 0 {
-				if err := s.InvoiceRepo.AddLineItems(txCtx, inv.ID, lineItemDomains); err != nil {
-					return err
-				}
+			reconciledItems, err := s.reconcileLineItems(txCtx, inv, applyReq.LineItems)
+			if err != nil {
+				return err
 			}
 
 			inv.Subtotal = applyReq.Subtotal
@@ -487,7 +473,7 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
 			inv.Description = applyReq.Description
 			inv.DueDate = applyReq.DueDate
-			inv.LineItems = lineItemDomains
+			inv.LineItems = reconciledItems
 		}
 
 		isTrialStart := types.InvoiceBillingReason(inv.BillingReason) == types.InvoiceBillingReasonSubscriptionTrialStart
@@ -3019,6 +3005,118 @@ func (s *invoiceService) publishSystemEvent(ctx context.Context, eventName types
 	)
 }
 
+// reconcileLineItems updates existing line items in-place when sub_line_item_id matches,
+// inserts new ones, and archives unmatched old ones.
+// Falls back to delete+create when existing items have no sub_line_item_id (pre-migration data).
+// Credits/discounts are NOT applied here — call applyCreditsAndCouponsToInvoice after this returns.
+func (s *invoiceService) reconcileLineItems(
+	ctx context.Context,
+	inv *invoice.Invoice,
+	newLineItemReqs []dto.CreateInvoiceLineItemRequest,
+) ([]*invoice.InvoiceLineItem, error) {
+	existing := inv.LineItems
+
+	// Determine whether any existing item has sub_line_item_id (update-in-place eligible)
+	hasSubLineItemID := false
+	for _, item := range existing {
+		if item.SubLineItemID != nil {
+			hasSubLineItemID = true
+			break
+		}
+	}
+
+	if !hasSubLineItemID || len(existing) == 0 {
+		// Fallback path: delete+create (pre-migration data or empty invoice)
+		if len(existing) > 0 {
+			ids := make([]string, len(existing))
+			for i, item := range existing {
+				ids[i] = item.ID
+			}
+			if err := s.InvoiceRepo.RemoveLineItems(ctx, inv.ID, ids); err != nil {
+				return nil, err
+			}
+		}
+		newItems := make([]*invoice.InvoiceLineItem, len(newLineItemReqs))
+		for i, req := range newLineItemReqs {
+			newItems[i] = req.ToInvoiceLineItem(ctx, inv)
+		}
+		if len(newItems) > 0 {
+			if err := s.InvoiceRepo.AddLineItems(ctx, inv.ID, newItems); err != nil {
+				return nil, err
+			}
+		}
+		return newItems, nil
+	}
+
+	// Update-in-place path
+	existingBySubLineItemID := make(map[string]*invoice.InvoiceLineItem, len(existing))
+	for _, item := range existing {
+		if item.SubLineItemID != nil {
+			existingBySubLineItemID[lo.FromPtr(item.SubLineItemID)] = item
+		}
+	}
+
+	var toInsert []*invoice.InvoiceLineItem
+	var toUpdate []*invoice.InvoiceLineItem
+
+	for _, req := range newLineItemReqs {
+		newItem := req.ToInvoiceLineItem(ctx, inv)
+		if lo.IsNil(newItem.SubLineItemID) {
+			toInsert = append(toInsert, newItem)
+			continue
+		}
+		if old, ok := existingBySubLineItemID[lo.FromPtr(newItem.SubLineItemID)]; ok {
+			// Replace the entire computed payload, then restore immutable identity/audit fields.
+			// This ensures every field produced by ToInvoiceLineItem is refreshed (PriceID,
+			// MeterID, PriceType, PeriodStart/End, display names, etc.) without requiring
+			// this call-site to enumerate each mutable field individually.
+			newItem.ID = old.ID
+			newItem.BaseModel.TenantID = old.BaseModel.TenantID
+			newItem.BaseModel.Status = old.BaseModel.Status
+			newItem.BaseModel.CreatedAt = old.BaseModel.CreatedAt
+			newItem.BaseModel.CreatedBy = old.BaseModel.CreatedBy
+			// Reset credit/discount fields — reapplied by applyCreditsAndCouponsToInvoice
+			newItem.PrepaidCreditsApplied = decimal.Zero
+			newItem.LineItemDiscount = decimal.Zero
+			newItem.InvoiceLevelDiscount = decimal.Zero
+			toUpdate = append(toUpdate, newItem)
+			delete(existingBySubLineItemID, lo.FromPtr(newItem.SubLineItemID))
+		} else {
+			toInsert = append(toInsert, newItem)
+		}
+	}
+
+	// Archive old items that no longer appear in the new calculation
+	var toArchiveIDs []string
+	for _, item := range existingBySubLineItemID {
+		toArchiveIDs = append(toArchiveIDs, item.ID)
+	}
+	if len(toArchiveIDs) > 0 {
+		if err := s.InvoiceRepo.RemoveLineItems(ctx, inv.ID, toArchiveIDs); err != nil {
+			return nil, err
+		}
+	}
+
+	// Update matched items in-place
+	for _, item := range toUpdate {
+		if err := s.InvoiceLineItemRepo.Update(ctx, item); err != nil {
+			return nil, err
+		}
+	}
+
+	// Insert brand-new items
+	if len(toInsert) > 0 {
+		if err := s.InvoiceRepo.AddLineItems(ctx, inv.ID, toInsert); err != nil {
+			return nil, err
+		}
+	}
+
+	result := make([]*invoice.InvoiceLineItem, 0, len(toUpdate)+len(toInsert))
+	result = append(result, toUpdate...)
+	result = append(result, toInsert...)
+	return result, nil
+}
+
 // RecalculateInvoiceV2 recalculates a draft subscription invoice in-place (replaces line items, reapplies credits/coupons/taxes).
 func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error) {
 	s.Logger.InfowCtx(ctx, "recalculating invoice v2 (draft)", "invoice_id", id)
@@ -3066,26 +3164,8 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 
 	// Start transaction to update invoice atomically
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// STEP 1: Remove existing line items FIRST to ensure fresh calculation
-		// This is crucial - we need to "archive" existing line items before calling
-		// PrepareSubscriptionInvoiceRequest so it treats this as a fresh calculation
-		existingLineItemIDs := make([]string, len(inv.LineItems))
-		for i, item := range inv.LineItems {
-			existingLineItemIDs[i] = item.ID
-		}
-
-		if len(existingLineItemIDs) > 0 {
-			if err := s.InvoiceRepo.RemoveLineItems(txCtx, inv.ID, existingLineItemIDs); err != nil {
-				return err
-			}
-			s.Logger.InfowCtx(ctx, "archived existing line items for fresh recalculation",
-				"invoice_id", inv.ID,
-				"archived_items", len(existingLineItemIDs))
-		}
-
-		// STEP 2: Now call PrepareSubscriptionInvoiceRequest for fresh calculation
-		// Since we removed existing line items, the billing service will see no already
-		// invoiced items and will recalculate everything completely
+		// STEP 2: Call PrepareSubscriptionInvoiceRequest for fresh calculation.
+		// Line items are reconciled after this call (update-in-place or delete+create).
 		billingService := NewBillingService(s.ServiceParams)
 
 		// Use period_end reference point to include both arrear and advance charges
@@ -3104,6 +3184,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		// STEP 3: Update invoice totals, metadata, and customer ID
 		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
 		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
+		prevAmountDue := inv.AmountDue
 		inv.Total = newInvoiceReq.Total
 		inv.Subtotal = newInvoiceReq.Subtotal
 		inv.CustomerID = newInvoiceReq.CustomerID
@@ -3123,47 +3204,12 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 			inv.PaymentStatus = types.PaymentStatusPending // Partially paid
 		}
 
-		// STEP 4: Create new line items from the fresh calculation
-		newLineItems := make([]*invoice.InvoiceLineItem, len(newInvoiceReq.LineItems))
-		for i, lineItemReq := range newInvoiceReq.LineItems {
-
-			lineItem := &invoice.InvoiceLineItem{
-				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-				InvoiceID:        inv.ID,
-				CustomerID:       inv.CustomerID,
-				SubscriptionID:   inv.SubscriptionID,
-				EntityID:         lineItemReq.EntityID,
-				EntityType:       lineItemReq.EntityType,
-				PlanDisplayName:  lineItemReq.PlanDisplayName,
-				PriceID:          lineItemReq.PriceID,
-				PriceType:        lineItemReq.PriceType,
-				DisplayName:      lineItemReq.DisplayName,
-				MeterID:          lineItemReq.MeterID,
-				MeterDisplayName: lineItemReq.MeterDisplayName,
-				PriceUnit:        lineItemReq.PriceUnit,
-				PriceUnitAmount:  lineItemReq.PriceUnitAmount,
-				Amount:           lineItemReq.Amount,
-				Quantity:         lineItemReq.Quantity,
-				Currency:         inv.Currency,
-				PeriodStart:      lineItemReq.PeriodStart,
-				PeriodEnd:        lineItemReq.PeriodEnd,
-				Metadata:         lineItemReq.Metadata,
-				EnvironmentID:    inv.EnvironmentID,
-				CommitmentInfo:   lineItemReq.CommitmentInfo,
-				BaseModel:        types.GetDefaultBaseModel(txCtx),
-			}
-			newLineItems[i] = lineItem
+		// STEP 4+5: Reconcile line items (update-in-place or delete+create fallback)
+		reconciledItems, err := s.reconcileLineItems(txCtx, inv, newInvoiceReq.LineItems)
+		if err != nil {
+			return err
 		}
-
-		// STEP 5: Add the newly calculated line items
-		if len(newLineItems) > 0 {
-			if err := s.InvoiceRepo.AddLineItems(txCtx, inv.ID, newLineItems); err != nil {
-				return err
-			}
-		}
-
-		// Attach new line items to inv so credits/coupons apply to them
-		inv.LineItems = newLineItems
+		inv.LineItems = reconciledItems
 
 		// STEP 6: Update the invoice with subtotal/totals from billing
 		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
@@ -3187,10 +3233,9 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		s.Logger.InfowCtx(ctx, "successfully recalculated invoice with fresh calculation",
 			"invoice_id", inv.ID,
 			"subscription_id", *inv.SubscriptionID,
-			"old_amount_due", inv.AmountDue,
+			"old_amount_due", prevAmountDue,
 			"new_amount_due", newInvoiceReq.AmountDue,
-			"old_line_items", len(existingLineItemIDs),
-			"new_line_items", len(newLineItems),
+			"new_line_items", len(reconciledItems),
 			"recalculation_type", "complete_fresh_calculation")
 
 		return nil

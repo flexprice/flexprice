@@ -281,6 +281,7 @@ func (s *billingService) CalculateFixedCharges(
 			Quantity:        item.Quantity,
 			PeriodStart:     lo.ToPtr(linePeriodStart),
 			PeriodEnd:       lo.ToPtr(linePeriodEnd),
+			SubLineItemID:   lo.ToPtr(item.ID),
 			Metadata: types.Metadata{
 				"description": fmt.Sprintf("%s (Fixed Charge)", item.DisplayName),
 			},
@@ -487,6 +488,7 @@ func (s *billingService) CalculateUsageCharges(
 		for _, matchingCharge := range matchingCharges {
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
 			matchingEntitlement, entitlementOk := entitlementsByMeterID[item.MeterID]
+			var entitlementAdjustedQty *decimal.Decimal
 
 			// Get meter from pre-fetched map for bucketed meter checks
 			meter, meterOk := meterMap[item.MeterID]
@@ -526,6 +528,8 @@ func (s *billingService) CalculateUsageCharges(
 				quantityForCalculation = cost.Quantity
 			}
 
+			rawQtyBeforeEntitlement := quantityForCalculation
+
 			// Apply entitlement adjustments for bucketed meters.
 			// Bucketed meters price each bucket independently, so entitlements apply at the
 			// aggregate level (total quantity = sum of bucket maxes).
@@ -542,11 +546,14 @@ func (s *billingService) CalculateUsageCharges(
 							adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
 							matchingCharge.Amount = priceDomain.FormatAmountToFloat64WithPrecision(adjustedAmount, matchingCharge.Price.Currency)
 						}
+						adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+						entitlementAdjustedQty = &adj
 					}
 				} else {
 					// Unlimited entitlement → zero cost
 					quantityForCalculation = decimal.Zero
 					matchingCharge.Amount = 0
+					entitlementAdjustedQty = lo.ToPtr(decimal.Max(rawQtyBeforeEntitlement, decimal.Zero))
 				}
 			}
 
@@ -568,6 +575,8 @@ func (s *billingService) CalculateUsageCharges(
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
 						adjustedQuantity := decimal.NewFromFloat(matchingCharge.Quantity).Sub(usageAllowed)
 						quantityForCalculation = decimal.Max(adjustedQuantity, decimal.Zero)
+						adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
 
 					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY {
 
@@ -627,6 +636,9 @@ func (s *billingService) CalculateUsageCharges(
 
 						// Use the total billable quantity for calculation
 						quantityForCalculation = totalBillableQuantity
+						adj := rawQtyBeforeEntitlement.Sub(totalBillableQuantity)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+
 					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY {
 
 						// case 3 : when the usage reset period is monthly
@@ -686,6 +698,9 @@ func (s *billingService) CalculateUsageCharges(
 
 						// Use the total billable quantity for calculation
 						quantityForCalculation = totalBillableQuantity
+						adj := rawQtyBeforeEntitlement.Sub(totalBillableQuantity)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+
 					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER {
 						// Calculate usage for never reset entitlements using helper function
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
@@ -693,10 +708,14 @@ func (s *billingService) CalculateUsageCharges(
 						if err != nil {
 							return nil, err
 						}
+						adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
 					} else {
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
 						adjustedQuantity := decimal.NewFromFloat(matchingCharge.Quantity).Sub(usageAllowed)
 						quantityForCalculation = decimal.Max(adjustedQuantity, decimal.Zero)
+						adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
 					}
 
 					// Recalculate the amount based on the adjusted quantity (only for non-bucketed meters)
@@ -709,6 +728,7 @@ func (s *billingService) CalculateUsageCharges(
 					// unlimited usage allowed, so we set the usage quantity for calculation to 0
 					quantityForCalculation = decimal.Zero
 					matchingCharge.Amount = 0
+					entitlementAdjustedQty = lo.ToPtr(decimal.Max(rawQtyBeforeEntitlement, decimal.Zero))
 				}
 			}
 			// For all other cases (no entitlement, disabled entitlement, or overage),
@@ -866,22 +886,24 @@ func (s *billingService) CalculateUsageCharges(
 			}
 
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-				EntityID:         lo.ToPtr(item.EntityID),
-				EntityType:       lo.ToPtr(string(item.EntityType)),
-				PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
-				PriceType:        lo.ToPtr(string(item.PriceType)),
-				PriceID:          lo.ToPtr(item.PriceID),
-				MeterID:          lo.ToPtr(item.MeterID),
-				MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-				PriceUnit:        item.PriceUnit,
-				PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
-				DisplayName:      displayName,
-				Amount:           roundedLineItemAmount,
-				Quantity:         quantityForCalculation,
-				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
-				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
-				Metadata:         metadata,
-				CommitmentInfo:   commitmentInfo,
+				EntityID:                    lo.ToPtr(item.EntityID),
+				EntityType:                  lo.ToPtr(string(item.EntityType)),
+				PlanDisplayName:             lo.ToPtr(item.PlanDisplayName),
+				PriceType:                   lo.ToPtr(string(item.PriceType)),
+				PriceID:                     lo.ToPtr(item.PriceID),
+				MeterID:                     lo.ToPtr(item.MeterID),
+				MeterDisplayName:            lo.ToPtr(item.MeterDisplayName),
+				PriceUnit:                   item.PriceUnit,
+				PriceUnitAmount:             lo.ToPtr(priceUnitAmount),
+				DisplayName:                 displayName,
+				Amount:                      roundedLineItemAmount,
+				Quantity:                    quantityForCalculation,
+				PeriodStart:                 lo.ToPtr(item.GetPeriodStart(periodStart)),
+				PeriodEnd:                   lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+				SubLineItemID:               lo.ToPtr(item.ID),
+				Metadata:                    metadata,
+				CommitmentInfo:              commitmentInfo,
+				AdjustedEntitlementQuantity: entitlementAdjustedQty,
 			})
 		}
 	}
@@ -1126,6 +1148,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 		priceUnitAmount        decimal.Decimal
 		displayName            *string
 		metadata               types.Metadata
+		entitlementAdjustedQty *decimal.Decimal
 	}
 	baseChargesForCumulative := make([]baseChargeInfo, 0)
 
@@ -1218,6 +1241,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 		for _, matchingCharge := range matchingCharges {
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
 			matchingEntitlement, entitlementOk := entitlementsByMeterID[item.MeterID]
+			var entitlementAdjustedQty *decimal.Decimal
 
 			// Cache bucketed usage result to avoid a duplicate ClickHouse call when the same
 			// line item also has windowed commitment. The bucketed meter section and the
@@ -1260,6 +1284,8 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				quantityForCalculation = cost.Quantity
 			}
 
+			rawQtyBeforeEntitlement := quantityForCalculation
+
 			// Apply entitlement adjustments for bucketed meters (same logic as CalculateUsageCharges).
 			if !matchingCharge.IsOverage && entitlementOk && matchingEntitlement.IsEnabled &&
 				(meter.IsBucketedMaxMeter() || meter.IsBucketedSumMeter()) {
@@ -1272,10 +1298,13 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
 							matchingCharge.Amount = price.FormatAmountToFloat64WithPrecision(adjustedAmount, matchingCharge.Price.Currency)
 						}
+						adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+						entitlementAdjustedQty = &adj
 					}
 				} else {
 					quantityForCalculation = decimal.Zero
 					matchingCharge.Amount = 0
+					entitlementAdjustedQty = lo.ToPtr(decimal.Max(rawQtyBeforeEntitlement, decimal.Zero))
 				}
 			}
 
@@ -1297,6 +1326,8 @@ func (s *billingService) CalculateFeatureUsageCharges(
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
 						adjustedQuantity := decimal.NewFromFloat(matchingCharge.Quantity).Sub(usageAllowed)
 						quantityForCalculation = decimal.Max(adjustedQuantity, decimal.Zero)
+						adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
 
 					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY {
 
@@ -1356,6 +1387,9 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 						// Use the total billable quantity for calculation
 						quantityForCalculation = totalBillableQuantity
+						adj := rawQtyBeforeEntitlement.Sub(totalBillableQuantity)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+
 					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY {
 
 						// case 3 : when the usage reset period is monthly
@@ -1415,6 +1449,9 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 						// Use the total billable quantity for calculation
 						quantityForCalculation = totalBillableQuantity
+						adj := rawQtyBeforeEntitlement.Sub(totalBillableQuantity)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
+
 					} else if matchingEntitlement.UsageResetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER {
 						// Calculate usage for never reset entitlements using helper function
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
@@ -1422,10 +1459,14 @@ func (s *billingService) CalculateFeatureUsageCharges(
 						if err != nil {
 							return nil, err
 						}
+						adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
 					} else {
 						usageAllowed := decimal.NewFromFloat(float64(*matchingEntitlement.UsageLimit))
 						adjustedQuantity := decimal.NewFromFloat(matchingCharge.Quantity).Sub(usageAllowed)
 						quantityForCalculation = decimal.Max(adjustedQuantity, decimal.Zero)
+						adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+						entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
 					}
 
 					// Recalculate the amount based on the adjusted quantity (only for non-bucketed meters and non-sum-with-bucket meters)
@@ -1438,6 +1479,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 					// unlimited usage allowed, so we set the usage quantity for calculation to 0
 					quantityForCalculation = decimal.Zero
 					matchingCharge.Amount = 0
+					entitlementAdjustedQty = lo.ToPtr(decimal.Max(rawQtyBeforeEntitlement, decimal.Zero))
 				}
 			} else if !matchingCharge.IsOverage && !meter.IsBucketedMaxMeter() && !meter.IsBucketedSumMeter() && matchingCharge.Price != nil {
 				// For non-bucketed meters without entitlements (but not overage charges),
@@ -1497,6 +1539,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 					priceUnitAmount:        priceUnitAmount,
 					displayName:            displayName,
 					metadata:               metadata,
+					entitlementAdjustedQty: entitlementAdjustedQty,
 				})
 				continue
 			}
@@ -1663,22 +1706,24 @@ func (s *billingService) CalculateFeatureUsageCharges(
 			}
 
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-				EntityID:         lo.ToPtr(item.EntityID),
-				EntityType:       lo.ToPtr(string(item.EntityType)),
-				PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
-				PriceType:        lo.ToPtr(string(item.PriceType)),
-				PriceID:          lo.ToPtr(item.PriceID),
-				MeterID:          lo.ToPtr(item.MeterID),
-				MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-				PriceUnit:        item.PriceUnit,
-				PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
-				DisplayName:      displayName,
-				Amount:           lineItemAmount,
-				Quantity:         quantityForCalculation,
-				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
-				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
-				Metadata:         metadata,
-				CommitmentInfo:   commitmentInfo,
+				EntityID:                    lo.ToPtr(item.EntityID),
+				EntityType:                  lo.ToPtr(string(item.EntityType)),
+				PlanDisplayName:             lo.ToPtr(item.PlanDisplayName),
+				PriceType:                   lo.ToPtr(string(item.PriceType)),
+				PriceID:                     lo.ToPtr(item.PriceID),
+				MeterID:                     lo.ToPtr(item.MeterID),
+				MeterDisplayName:            lo.ToPtr(item.MeterDisplayName),
+				PriceUnit:                   item.PriceUnit,
+				PriceUnitAmount:             lo.ToPtr(priceUnitAmount),
+				DisplayName:                 displayName,
+				Amount:                      lineItemAmount,
+				Quantity:                    quantityForCalculation,
+				PeriodStart:                 lo.ToPtr(item.GetPeriodStart(periodStart)),
+				PeriodEnd:                   lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+				SubLineItemID:               lo.ToPtr(item.ID),
+				Metadata:                    metadata,
+				CommitmentInfo:              commitmentInfo,
+				AdjustedEntitlementQuantity: entitlementAdjustedQty,
 			})
 		}
 	}
@@ -1709,21 +1754,23 @@ func (s *billingService) CalculateFeatureUsageCharges(
 			}
 			displayQuantity = types.RoundToCurrencyPrecision(displayQuantity, sub.Currency)
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-				EntityID:         lo.ToPtr(bc.item.EntityID),
-				EntityType:       lo.ToPtr(string(bc.item.EntityType)),
-				PlanDisplayName:  lo.ToPtr(bc.item.PlanDisplayName),
-				PriceType:        lo.ToPtr(string(bc.item.PriceType)),
-				PriceID:          lo.ToPtr(bc.item.PriceID),
-				MeterID:          lo.ToPtr(bc.item.MeterID),
-				MeterDisplayName: lo.ToPtr(bc.item.MeterDisplayName),
-				PriceUnit:        bc.item.PriceUnit,
-				PriceUnitAmount:  lo.ToPtr(bc.priceUnitAmount),
-				DisplayName:      bc.displayName,
-				Amount:           roundedAmount,
-				Quantity:         displayQuantity,
-				PeriodStart:      lo.ToPtr(bc.item.GetPeriodStart(periodStart)),
-				PeriodEnd:        lo.ToPtr(bc.item.GetPeriodEnd(periodEnd)),
-				Metadata:         bc.metadata,
+				EntityID:                    lo.ToPtr(bc.item.EntityID),
+				EntityType:                  lo.ToPtr(string(bc.item.EntityType)),
+				PlanDisplayName:             lo.ToPtr(bc.item.PlanDisplayName),
+				PriceType:                   lo.ToPtr(string(bc.item.PriceType)),
+				PriceID:                     lo.ToPtr(bc.item.PriceID),
+				MeterID:                     lo.ToPtr(bc.item.MeterID),
+				MeterDisplayName:            lo.ToPtr(bc.item.MeterDisplayName),
+				PriceUnit:                   bc.item.PriceUnit,
+				PriceUnitAmount:             lo.ToPtr(bc.priceUnitAmount),
+				DisplayName:                 bc.displayName,
+				Amount:                      roundedAmount,
+				Quantity:                    displayQuantity,
+				PeriodStart:                 lo.ToPtr(bc.item.GetPeriodStart(periodStart)),
+				PeriodEnd:                   lo.ToPtr(bc.item.GetPeriodEnd(periodEnd)),
+				SubLineItemID:               lo.ToPtr(bc.item.ID),
+				Metadata:                    bc.metadata,
+				AdjustedEntitlementQuantity: bc.entitlementAdjustedQty,
 			})
 			totalUsageCost = totalUsageCost.Add(roundedAmount)
 		}
@@ -2329,6 +2376,9 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			})
 			if err != nil {
 				return nil, err
+			}
+			for i := range childReq.LineItems {
+				childReq.LineItems[i].SubscriptionID = lo.ToPtr(child.ID)
 			}
 			invReq.LineItems = append(invReq.LineItems, childReq.LineItems...)
 		}
