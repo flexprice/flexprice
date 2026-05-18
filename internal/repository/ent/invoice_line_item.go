@@ -122,6 +122,8 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetMetadata(item.Metadata).
 		SetEnvironmentID(item.EnvironmentID).
 		SetCommitmentInfo(item.CommitmentInfo).
+		SetNillableSubLineItemID(item.SubLineItemID).
+		SetNillableAdjustedFromEntitlementQuantity(item.AdjustedFromEntitlementQuantity).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -206,6 +208,8 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetMetadata(item.Metadata).
 				SetEnvironmentID(item.EnvironmentID).
 				SetCommitmentInfo(item.CommitmentInfo).
+				SetNillableSubLineItemID(item.SubLineItemID).
+				SetNillableAdjustedFromEntitlementQuantity(item.AdjustedFromEntitlementQuantity).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
 				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -308,6 +312,9 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 			invoicelineitem.TenantID(types.GetTenantID(ctx)),
 			invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
+		SetAmount(item.Amount).
+		SetQuantity(item.Quantity).
+		SetNillableAdjustedFromEntitlementQuantity(item.AdjustedFromEntitlementQuantity).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
