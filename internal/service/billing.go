@@ -553,7 +553,9 @@ func (s *billingService) CalculateUsageCharges(
 					// Unlimited entitlement → zero cost
 					quantityForCalculation = decimal.Zero
 					matchingCharge.Amount = 0
-					entitlementAdjustedQty = &rawQtyBeforeEntitlement
+					if rawQtyBeforeEntitlement.GreaterThan(decimal.Zero) {
+						entitlementAdjustedQty = &rawQtyBeforeEntitlement
+					}
 				}
 			}
 
@@ -1314,7 +1316,9 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				} else {
 					quantityForCalculation = decimal.Zero
 					matchingCharge.Amount = 0
-					entitlementAdjustedQty = &rawQtyBeforeEntitlement
+					if rawQtyBeforeEntitlement.GreaterThan(decimal.Zero) {
+						entitlementAdjustedQty = &rawQtyBeforeEntitlement
+					}
 				}
 			}
 
