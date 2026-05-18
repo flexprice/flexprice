@@ -32,6 +32,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
@@ -48,6 +49,7 @@ type Factory struct {
 	paymentRepo                  payment.Repository
 	priceRepo                    price.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
+	entityIntegrationMappingSvc  interfaces.EntityIntegrationMappingService
 	meterRepo                    meter.Repository
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
@@ -81,6 +83,7 @@ func NewFactory(
 		paymentRepo:                  paymentRepo,
 		priceRepo:                    priceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		entityIntegrationMappingSvc:  newEntityIntegrationMappingServiceAdapter(entityIntegrationMappingRepo),
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
@@ -433,8 +436,7 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 		paddleClient,
 		f.customerRepo,
 		f.invoiceRepo,
-		f.subscriptionRepo,
-		f.entityIntegrationMappingRepo,
+		f.entityIntegrationMappingSvc,
 		f.connectionRepo,
 		f.logger,
 		f.config.Auth.Secret,

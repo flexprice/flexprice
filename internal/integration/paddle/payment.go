@@ -120,18 +120,18 @@ func (s *PaymentService) createExternalPaymentRecord(
 
 	gatewayType := types.PaymentGatewayTypePaddle
 	metadata := types.Metadata{
-		"payment_source":        "paddle_external",
-		"paddle_transaction_id": paddleTransactionID,
-		"external_payment":      "true",
+		"payment_source":           MetaKeyPaddlePaymentSource,
+		MetaKeyPaddleTransactionID: paddleTransactionID,
+		"external_payment":         "true",
 	}
 	if paddlePaymentAttemptID != "" {
-		metadata["paddle_payment_attempt_id"] = paddlePaymentAttemptID
+		metadata[MetaKeyPaddlePaymentAttemptID] = paddlePaymentAttemptID
 	}
 	if paddlePaymentMethodType != "" {
-		metadata["paddle_payment_method_type"] = paddlePaymentMethodType
+		metadata[MetaKeyPaddlePaymentMethodType] = paddlePaymentMethodType
 	}
 	if cardLast4 != "" {
-		metadata["paddle_card_last4"] = cardLast4
+		metadata[MetaKeyPaddleCardLast4] = cardLast4
 	}
 
 	createReq := &apidto.CreatePaymentRequest{
