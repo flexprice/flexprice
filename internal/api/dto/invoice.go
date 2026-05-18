@@ -832,17 +832,16 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 }
 
 func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, inv *invoice.Invoice) *invoice.InvoiceLineItem {
+	subscriptionID := inv.SubscriptionID
+	if r.SubscriptionID != nil {
+		subscriptionID = r.SubscriptionID
+	}
 	return &invoice.InvoiceLineItem{
-		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-		InvoiceID:             inv.ID,
-		CustomerID:            inv.CustomerID,
-		SubscriptionID: func() *string {
-			if r.SubscriptionID != nil {
-				return r.SubscriptionID
-			}
-			return inv.SubscriptionID
-		}(),
-		PriceID: r.PriceID,
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:      inv.ID,
+		CustomerID:     inv.CustomerID,
+		SubscriptionID: subscriptionID,
+		PriceID:        r.PriceID,
 		EntityID:              r.EntityID,
 		EntityType:            r.EntityType,
 		PlanDisplayName:       r.PlanDisplayName,

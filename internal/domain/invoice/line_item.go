@@ -145,6 +145,15 @@ func (i *InvoiceLineItem) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if i.AdjustedFromEntitlementQuantity != nil && i.AdjustedFromEntitlementQuantity.IsNegative() {
+		return ierr.NewError("invoice line item validation failed").
+			WithHint("adjusted_from_entitlement_quantity must be non-negative").
+			WithReportableDetails(map[string]any{
+				"adjusted_from_entitlement_quantity": i.AdjustedFromEntitlementQuantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
