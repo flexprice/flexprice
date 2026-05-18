@@ -828,6 +828,15 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 			Mark(ierr.ErrValidation)
 	}
 
+	if r.AdjustedEntitlementQuantity != nil && r.AdjustedEntitlementQuantity.IsNegative() {
+		return ierr.NewError("adjusted_entitlement_quantity must be non-negative").
+			WithHint("adjusted_entitlement_quantity cannot be negative").
+			WithReportableDetails(map[string]any{
+				"adjusted_entitlement_quantity": r.AdjustedEntitlementQuantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
