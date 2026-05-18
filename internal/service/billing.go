@@ -281,6 +281,7 @@ func (s *billingService) CalculateFixedCharges(
 			Quantity:        item.Quantity,
 			PeriodStart:     lo.ToPtr(linePeriodStart),
 			PeriodEnd:       lo.ToPtr(linePeriodEnd),
+			SubLineItemID:   lo.ToPtr(item.ID),
 			Metadata: types.Metadata{
 				"description": fmt.Sprintf("%s (Fixed Charge)", item.DisplayName),
 			},
@@ -880,6 +881,7 @@ func (s *billingService) CalculateUsageCharges(
 				Quantity:         quantityForCalculation,
 				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
 				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+				SubLineItemID:    lo.ToPtr(item.ID),
 				Metadata:         metadata,
 				CommitmentInfo:   commitmentInfo,
 			})
@@ -1677,6 +1679,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				Quantity:         quantityForCalculation,
 				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
 				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+				SubLineItemID:    lo.ToPtr(item.ID),
 				Metadata:         metadata,
 				CommitmentInfo:   commitmentInfo,
 			})
@@ -1723,6 +1726,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				Quantity:         displayQuantity,
 				PeriodStart:      lo.ToPtr(bc.item.GetPeriodStart(periodStart)),
 				PeriodEnd:        lo.ToPtr(bc.item.GetPeriodEnd(periodEnd)),
+				SubLineItemID:    lo.ToPtr(bc.item.ID),
 				Metadata:         bc.metadata,
 			})
 			totalUsageCost = totalUsageCost.Add(roundedAmount)
@@ -2329,6 +2333,9 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			})
 			if err != nil {
 				return nil, err
+			}
+			for i := range childReq.LineItems {
+				childReq.LineItems[i].SubscriptionID = lo.ToPtr(child.ID)
 			}
 			invReq.LineItems = append(invReq.LineItems, childReq.LineItems...)
 		}
