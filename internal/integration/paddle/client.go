@@ -405,6 +405,7 @@ func (c *Client) ListTransactions(ctx context.Context, req *paddle.ListTransacti
 			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
 			Mark(ierr.ErrInternal)
 	}
+	c.logger.Infow("listed transactions in Paddle", "count", result.EstimatedTotal())
 	return result, nil
 }
 
