@@ -319,6 +319,7 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 		SetMetadata(item.Metadata).
+		SetCommitmentInfo(item.CommitmentInfo).
 		SetStatus(string(item.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
