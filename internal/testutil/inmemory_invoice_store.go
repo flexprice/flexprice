@@ -43,33 +43,35 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			continue
 		}
 		lineItems = append(lineItems, &invoice.InvoiceLineItem{
-			ID:                    item.ID,
-			InvoiceID:             item.InvoiceID,
-			CustomerID:            item.CustomerID,
-			SubscriptionID:        item.SubscriptionID,
-			EntityID:              item.EntityID,
-			EntityType:            item.EntityType,
-			PlanDisplayName:       item.PlanDisplayName,
-			PriceID:               item.PriceID,
-			PriceType:             item.PriceType,
-			MeterID:               item.MeterID,
-			MeterDisplayName:      item.MeterDisplayName,
-			PriceUnitID:           item.PriceUnitID,
-			PriceUnit:             item.PriceUnit,
-			PriceUnitAmount:       item.PriceUnitAmount,
-			DisplayName:           item.DisplayName,
-			Amount:                item.Amount,
-			Quantity:              item.Quantity,
-			Currency:              item.Currency,
-			PeriodStart:           item.PeriodStart,
-			PeriodEnd:             item.PeriodEnd,
-			Metadata:              item.Metadata,
-			CommitmentInfo:        item.CommitmentInfo,
-			PrepaidCreditsApplied: item.PrepaidCreditsApplied,
-			LineItemDiscount:      item.LineItemDiscount,
-			InvoiceLevelDiscount:  item.InvoiceLevelDiscount,
-			EnvironmentID:         item.EnvironmentID,
-			BaseModel:             item.BaseModel,
+			ID:                          item.ID,
+			InvoiceID:                   item.InvoiceID,
+			CustomerID:                  item.CustomerID,
+			SubscriptionID:              item.SubscriptionID,
+			EntityID:                    item.EntityID,
+			EntityType:                  item.EntityType,
+			PlanDisplayName:             item.PlanDisplayName,
+			PriceID:                     item.PriceID,
+			PriceType:                   item.PriceType,
+			MeterID:                     item.MeterID,
+			MeterDisplayName:            item.MeterDisplayName,
+			PriceUnitID:                 item.PriceUnitID,
+			PriceUnit:                   item.PriceUnit,
+			PriceUnitAmount:             item.PriceUnitAmount,
+			DisplayName:                 item.DisplayName,
+			Amount:                      item.Amount,
+			Quantity:                    item.Quantity,
+			Currency:                    item.Currency,
+			PeriodStart:                 item.PeriodStart,
+			PeriodEnd:                   item.PeriodEnd,
+			Metadata:                    item.Metadata,
+			CommitmentInfo:              item.CommitmentInfo,
+			PrepaidCreditsApplied:       item.PrepaidCreditsApplied,
+			LineItemDiscount:            item.LineItemDiscount,
+			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
+			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
+			SubLineItemID:               item.SubLineItemID,
+			EnvironmentID:               item.EnvironmentID,
+			BaseModel:                   item.BaseModel,
 		})
 	}
 
@@ -173,6 +175,17 @@ func (s *InMemoryInvoiceStore) RemoveLineItems(ctx context.Context, invoiceID st
 	inv.LineItems = lo.Filter(inv.LineItems, func(item *invoice.InvoiceLineItem, _ int) bool {
 		return !lo.Contains(itemIDs, item.ID)
 	})
+
+	// Also mark items as deleted in the dedicated line item store (mirrors real DB behaviour
+	// where RemoveLineItems sets status=deleted rather than hard-deleting).
+	if s.lineItemStore != nil {
+		for _, id := range itemIDs {
+			if err := s.lineItemStore.Delete(ctx, id); err != nil {
+				// Ignore not-found errors; item may not exist in lineItemStore
+				continue
+			}
+		}
+	}
 
 	return s.Update(ctx, inv)
 }
