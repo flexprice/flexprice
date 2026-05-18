@@ -73,11 +73,11 @@ func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 	}
 
 	// Sync the invoice to Paddle.
-	syncReq := paddle.PaddleInvoiceSyncRequest{
+	syncReq := paddle.SyncInvoiceRequest{
 		InvoiceID: input.InvoiceID,
 	}
 
-	_, err = paddleIntegration.InvoiceSyncSvc.SyncInvoiceToPaddle(ctx, syncReq, a.customerService)
+	_, err = paddleIntegration.SyncSvc.SyncInvoice(ctx, syncReq)
 	if err != nil {
 		if ierr.IsValidation(err) {
 			a.logger.Warnw("invoice cannot be synced to Paddle: validation error (non-retryable)",

@@ -8,17 +8,25 @@ import (
 	"time"
 
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
+	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+)
+
+const (
+	defaultProductName = "Flexprice Invoice Item"
+	defaultTaxCategory = paddlesdk.TaxCategoryStandard
 )
 
 // PaddleSyncService orchestrates syncing FlexPrice entities to Paddle.
@@ -1041,6 +1049,140 @@ func (s *PaddleSyncService) GetFlexPriceInvoiceIDByTransaction(ctx context.Conte
 			Mark(ierr.ErrNotFound)
 	}
 	return mappings[0].EntityID, nil
+}
+
+// buildCreateAddressRequest builds a Paddle CreateAddressRequest from a FlexPrice customer.
+// Caller must ensure AddressCountry is non-empty before calling.
+func buildCreateAddressRequest(c *customer.Customer) *paddlesdk.CreateAddressRequest {
+	req := &paddlesdk.CreateAddressRequest{
+		CountryCode: toCountryCode(c.AddressCountry),
+	}
+	if c.AddressLine1 != "" {
+		req.FirstLine = paddlesdk.PtrTo(c.AddressLine1)
+	}
+	if c.AddressLine2 != "" {
+		req.SecondLine = paddlesdk.PtrTo(c.AddressLine2)
+	}
+	if c.AddressCity != "" {
+		req.City = paddlesdk.PtrTo(c.AddressCity)
+	}
+	if c.AddressPostalCode != "" {
+		req.PostalCode = paddlesdk.PtrTo(c.AddressPostalCode)
+	}
+	if c.AddressState != "" {
+		req.Region = paddlesdk.PtrTo(c.AddressState)
+	}
+	return req
+}
+
+// CreateCustomerFromPaddle creates a FlexPrice customer from Paddle webhook data (customer.created).
+func (s *PaddleSyncService) CreateCustomerFromPaddle(ctx context.Context, paddleCustomer *paddlenotification.CustomerNotification, customerService interfaces.CustomerService) error {
+	paddleCustomerID := paddleCustomer.ID
+
+	// Idempotency: check if mapping already exists
+	filter := &types.EntityIntegrationMappingFilter{
+		ProviderTypes:     []string{string(types.SecretProviderPaddle)},
+		ProviderEntityIDs: []string{paddleCustomerID},
+		EntityType:        types.IntegrationEntityTypeCustomer,
+	}
+	mappings, err := s.mappingRepo.List(ctx, filter)
+	if err != nil {
+		s.logger.Errorw("failed to check Paddle customer mapping",
+			"error", err,
+			MetaKeyPaddleCustomerID, paddleCustomerID)
+		return err
+	}
+	if len(mappings) > 0 {
+		s.logger.Infow("FlexPrice customer already exists for Paddle customer, skipping creation",
+			"flexprice_customer_id", mappings[0].EntityID,
+			MetaKeyPaddleCustomerID, paddleCustomerID)
+		return nil
+	}
+
+	// Deduplication by email: if customer exists by email, create mapping and skip creation
+	if paddleCustomer.Email != "" {
+		emailFilter := &types.CustomerFilter{
+			Email:       paddleCustomer.Email,
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+		existingCustomers, err := customerService.GetCustomers(ctx, emailFilter)
+		if err == nil && existingCustomers != nil && len(existingCustomers.Items) > 0 {
+			existingCustomer := existingCustomers.Items[0]
+			s.logger.Infow("customer with same email already exists, creating mapping",
+				"customer_id", existingCustomer.ID,
+				MetaKeyPaddleCustomerID, paddleCustomerID)
+
+			mapping := &entityintegrationmapping.EntityIntegrationMapping{
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+				EntityID:         existingCustomer.ID,
+				EntityType:       types.IntegrationEntityTypeCustomer,
+				ProviderType:     string(types.SecretProviderPaddle),
+				ProviderEntityID: paddleCustomerID,
+				Metadata: map[string]interface{}{
+					MetaKeyCreatedVia:           CreatedViaProviderToFlexprice,
+					MetaKeyPaddleCustomerEmail: paddleCustomer.Email,
+					MetaKeySyncedAt:             time.Now().UTC().Format(time.RFC3339),
+				},
+				EnvironmentID: types.GetEnvironmentID(ctx),
+				BaseModel:     types.GetDefaultBaseModel(ctx),
+			}
+			if err := s.mappingRepo.Create(ctx, mapping); err != nil {
+				s.logger.Warnw("failed to create mapping for existing customer",
+					"error", err,
+					"customer_id", existingCustomer.ID,
+					MetaKeyPaddleCustomerID, paddleCustomerID)
+			}
+			return nil
+		}
+	}
+
+	// Create new customer
+	name := paddleCustomerID
+	if paddleCustomer.Name != nil && *paddleCustomer.Name != "" {
+		name = *paddleCustomer.Name
+	} else if paddleCustomer.Email != "" {
+		name = paddleCustomer.Email
+	}
+
+	createReq := dto.CreateCustomerRequest{
+		ExternalID:             paddleCustomerID,
+		Name:                   name,
+		Email:                  paddleCustomer.Email,
+		SkipOnboardingWorkflow: true,
+		Metadata: map[string]string{
+			MetaKeyPaddleCustomerID: paddleCustomerID,
+		},
+	}
+
+	customerResp, err := customerService.CreateCustomer(ctx, createReq)
+	if err != nil {
+		return err
+	}
+
+	// Create entity mapping
+	mapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         customerResp.ID,
+		EntityType:       types.IntegrationEntityTypeCustomer,
+		ProviderType:     string(types.SecretProviderPaddle),
+		ProviderEntityID: paddleCustomerID,
+		Metadata: map[string]interface{}{
+			MetaKeyCreatedVia:           CreatedViaProviderToFlexprice,
+			MetaKeyPaddleCustomerEmail: paddleCustomer.Email,
+			MetaKeySyncedAt:             time.Now().UTC().Format(time.RFC3339),
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+
+	if err := s.mappingRepo.Create(ctx, mapping); err != nil {
+		s.logger.Warnw("failed to create mapping for new customer",
+			"error", err,
+			"customer_id", customerResp.ID,
+			MetaKeyPaddleCustomerID, paddleCustomerID)
+	}
+
+	return nil
 }
 
 // parsePaddleCents converts a Paddle amount string (cents) to a decimal in the major currency unit.
