@@ -13802,6 +13802,10 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "issue_date": {
+                    "description": "issue_date overrides the user-facing date of the invoice.\nDefaults to created_at if not provided.",
+                    "type": "string"
+                },
                 "line_item_coupons": {
                     "description": "Invoice Line Item Coupons",
                     "type": "array",
@@ -16657,6 +16661,10 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.InvoiceType"
                         }
                     ]
+                },
+                "issue_date": {
+                    "description": "issue_date is the user-facing date of the invoice. Defaults to created_at if not set.",
+                    "type": "string"
                 },
                 "last_computed_at": {
                     "description": "last_computed_at is the timestamp when this invoice was last computed by ComputeInvoice",
@@ -20901,6 +20909,37 @@ const docTemplate = `{
                 }
             }
         },
+        "errors.ErrorCode": {
+            "type": "string",
+            "enum": [
+                "http_client_error",
+                "system_error",
+                "internal_error",
+                "not_found",
+                "already_exists",
+                "version_conflict",
+                "validation_error",
+                "invalid_operation",
+                "permission_denied",
+                "database_error",
+                "service_unavailable",
+                "too_many_requests"
+            ],
+            "x-enum-varnames": [
+                "ErrCodeHTTPClient",
+                "ErrCodeSystemError",
+                "ErrCodeInternalError",
+                "ErrCodeNotFound",
+                "ErrCodeAlreadyExists",
+                "ErrCodeVersionConflict",
+                "ErrCodeValidation",
+                "ErrCodeInvalidOperation",
+                "ErrCodePermissionDenied",
+                "ErrCodeDatabase",
+                "ErrCodeServiceUnavailable",
+                "ErrCodeTooManyRequests"
+            ]
+        },
         "Addon": {
             "type": "object",
             "properties": {
@@ -21207,24 +21246,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "code": {
-                    "type": "string",
-                    "enum": [
-                        "not_found",
-                        "already_exists",
-                        "version_conflict",
-                        "validation_error",
-                        "invalid_operation",
-                        "permission_denied",
-                        "http_client_error",
-                        "database_error",
-                        "system_error",
-                        "internal_error",
-                        "service_unavailable"
-                    ]
-                },
-                "details": {
-                    "type": "object",
-                    "additionalProperties": {}
+                    "$ref": "#/definitions/errors.ErrorCode"
                 },
                 "http_status_code": {
                     "type": "integer"
@@ -21245,6 +21267,17 @@ const docTemplate = `{
                 "AddonAssociationEntityTypeSubscription",
                 "AddonAssociationEntityTypePlan",
                 "AddonAssociationEntityTypeAddon"
+            ]
+        },
+        "types.AddonCadence": {
+            "type": "string",
+            "enum": [
+                "onetime",
+                "recurring"
+            ],
+            "x-enum-varnames": [
+                "AddonCadenceOnetime",
+                "AddonCadenceRecurring"
             ]
         },
         "types.AddonFilter": {
@@ -22107,6 +22140,17 @@ const docTemplate = `{
                 "EntityTypeFeatures"
             ]
         },
+        "types.EnvironmentType": {
+            "type": "string",
+            "enum": [
+                "development",
+                "production"
+            ],
+            "x-enum-varnames": [
+                "EnvironmentDevelopment",
+                "EnvironmentProduction"
+            ]
+        },
         "types.EventProcessingStatusType": {
             "type": "string",
             "enum": [
@@ -22119,6 +22163,42 @@ const docTemplate = `{
                 "EventProcessingStatusTypeProcessing",
                 "EventProcessingStatusTypeFailed"
             ]
+        },
+        "types.ExportMetadataEntityType": {
+            "type": "string",
+            "enum": [
+                "customer",
+                "wallet"
+            ],
+            "x-enum-varnames": [
+                "ExportMetadataEntityTypeCustomer",
+                "ExportMetadataEntityTypeWallet"
+            ]
+        },
+        "types.ExportMetadataField": {
+            "type": "object",
+            "required": [
+                "entity_type",
+                "field_key"
+            ],
+            "properties": {
+                "column_name": {
+                    "description": "CSV column header to be shown in the exported file",
+                    "type": "string"
+                },
+                "entity_type": {
+                    "description": "which entity's metadata to read from",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ExportMetadataEntityType"
+                        }
+                    ]
+                },
+                "field_key": {
+                    "description": "metadata key to look up",
+                    "type": "string"
+                }
+            }
         },
         "types.FailurePoint": {
             "type": "object",
@@ -23195,6 +23275,9 @@ const docTemplate = `{
                 "moyasar",
                 "paddle"
             ],
+            "x-enum-comments": {
+                "SecretProviderS3": "supports multiple connections per environment"
+            },
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
                 "SecretProviderStripe",
@@ -23410,6 +23493,110 @@ const docTemplate = `{
                 "SubscriptionLineItemEntityTypeAddon",
                 "SubscriptionLineItemEntityTypeSubscription"
             ]
+        },
+        "types.SubscriptionLineItemFilter": {
+            "type": "object",
+            "properties": {
+                "active_filter": {
+                    "type": "boolean",
+                    "default": true
+                },
+                "addon_association_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "billing_periods": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "currencies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "current_period_start": {
+                    "type": "string"
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "entity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.SubscriptionLineItemEntityType"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "meter_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "price_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_ids": {
+                    "description": "Specific filters",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
         },
         "types.SubscriptionScheduleChangeType": {
             "type": "string",
@@ -23978,7 +24165,6 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
-                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -23988,10 +24174,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
+                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
-                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -24001,7 +24187,8 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth"
+                "WindowSizeMonth",
+                "DefaultWindowSize"
             ]
         },
         "types.WorkflowExecutionFilter": {
@@ -24822,64 +25009,6 @@ const docTemplate = `{
                 }
             }
         },
-        "types.AddonCadence": {
-            "type": "string",
-            "enum": [
-                "onetime",
-                "recurring"
-            ],
-            "x-enum-varnames": [
-                "AddonCadenceOnetime",
-                "AddonCadenceRecurring"
-            ]
-        },
-        "types.EnvironmentType": {
-            "type": "string",
-            "enum": [
-                "development",
-                "production"
-            ],
-            "x-enum-varnames": [
-                "EnvironmentDevelopment",
-                "EnvironmentProduction"
-            ]
-        },
-        "types.ExportMetadataEntityType": {
-            "type": "string",
-            "enum": [
-                "customer",
-                "wallet"
-            ],
-            "x-enum-varnames": [
-                "ExportMetadataEntityTypeCustomer",
-                "ExportMetadataEntityTypeWallet"
-            ]
-        },
-        "types.ExportMetadataField": {
-            "type": "object",
-            "required": [
-                "entity_type",
-                "field_key"
-            ],
-            "properties": {
-                "column_name": {
-                    "description": "CSV column header to be shown in the exported file",
-                    "type": "string"
-                },
-                "entity_type": {
-                    "description": "which entity's metadata to read from",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ExportMetadataEntityType"
-                        }
-                    ]
-                },
-                "field_key": {
-                    "description": "metadata key to look up",
-                    "type": "string"
-                }
-            }
-        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -24898,110 +25027,6 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
-            }
-        },
-        "types.SubscriptionLineItemFilter": {
-            "type": "object",
-            "properties": {
-                "active_filter": {
-                    "type": "boolean",
-                    "default": true
-                },
-                "addon_association_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "billing_periods": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "currencies": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "current_period_start": {
-                    "type": "string"
-                },
-                "customer_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "entity_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "entity_type": {
-                    "$ref": "#/definitions/types.SubscriptionLineItemEntityType"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "filters": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "meter_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "price_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "subscription_ids": {
-                    "description": "Specific filters",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
             }
         },
         "webhookDto.AlertWebhookPayload": {
