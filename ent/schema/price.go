@@ -296,7 +296,7 @@ func (Price) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id"),
 		index.Fields("start_date", "end_date"),
 		index.Fields("tenant_id", "environment_id", "group_id"),
-		// To get "what changed since the sub's last synced_price_sequence?"
+		// To get "what changed since the sub's last synced_price_sequence"
 		index.Fields("tenant_id", "environment_id", "entity_id", "entity_type", "sequence").
 			Annotations(entsql.IndexWhere("status = 'published'")),
 	}

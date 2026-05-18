@@ -711,7 +711,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 			// statement insert size. Chunk the bulk insert.
 			const bulkInsertBatchSize = 2000
 			for i := 0; i < len(lineItems); i += bulkInsertBatchSize {
-				end := min(i + bulkInsertBatchSize, len(lineItems))
+				end := min(i+bulkInsertBatchSize, len(lineItems))
 				batch := lineItems[i:end]
 				if cerr := s.SubscriptionLineItemRepo.CreateBulk(ctx, batch); cerr != nil {
 					s.Logger.ErrorwCtx(ctx, "failed to create plan line items in bulk batch (v2)",

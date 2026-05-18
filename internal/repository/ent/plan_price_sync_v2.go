@@ -3,11 +3,13 @@ package ent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/lib/pq"
+	"github.com/samber/lo"
 )
 
 // CurrentPlanSequence returns max(prices.sequence) for the plan's published,
@@ -98,7 +100,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 			  AND status = '%s'
 			  AND plan_id = $3
 			  AND subscription_status IN ('%s','%s')
-			  AND subscription_type IN ('%s','%s','%s','%s')
+			  AND subscription_type IN (%s)
 			  AND synced_price_sequence < $4
 			ORDER BY id
 			LIMIT $5
@@ -148,10 +150,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 		string(types.SubscriptionStatusActive),
 		string(types.SubscriptionStatusTrialing),
 		// Sub types that own plan line items. Inherited is excluded by design
-		string(types.SubscriptionTypeStandalone),
-		string(types.SubscriptionTypeDelegatedInvoicing),
-		string(types.SubscriptionTypeParent),
-		string(types.SubscriptionTypeGroupedInvoicing),
+		strings.Join(lo.Map(types.SubscriptionTypesWithLineItems, func(t types.SubscriptionType, _ int) string { return fmt.Sprintf("'%s'", string(t)) }), ","),
 		string(types.StatusPublished),
 		string(types.PRICE_ENTITY_TYPE_PLAN),
 		string(types.PRICE_TYPE_USAGE),
