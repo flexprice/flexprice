@@ -21,8 +21,6 @@ import (
 const (
 	defaultProductName = "Flexprice Invoice Item"
 	defaultTaxCategory = paddle.TaxCategoryStandard
-	defaultPaymentDays = 30
-	intervalDay        = paddle.IntervalDay
 )
 
 // InvoiceSyncService handles synchronization of FlexPrice invoices with Paddle
@@ -99,13 +97,13 @@ func (s *InvoiceSyncService) SyncInvoiceToPaddle(
 	// Secondary idempotency guard: if the mapping save previously failed but the invoice
 	// metadata update succeeded, we can recover the transaction ID from invoice metadata and
 	// avoid creating a duplicate Paddle transaction on retry.
-	if paddleTxnID := flexInvoice.Metadata["paddle_transaction_id"]; paddleTxnID != "" {
+	if paddleTxnID := flexInvoice.Metadata[MetaKeyPaddleTransactionID]; paddleTxnID != "" {
 		s.logger.Infow("invoice already has Paddle transaction ID in metadata (mapping may have been lost), skipping transaction creation",
 			"invoice_id", req.InvoiceID,
 			"paddle_transaction_id", paddleTxnID)
 		resp := &PaddleInvoiceSyncResponse{
 			PaddleTransactionID: paddleTxnID,
-			CheckoutURL:         flexInvoice.Metadata["paddle_checkout_url"],
+			CheckoutURL:         flexInvoice.Metadata[MetaKeyPaddleCheckoutURL],
 		}
 		return resp, nil
 	}
@@ -122,7 +120,7 @@ func (s *InvoiceSyncService) SyncInvoiceToPaddle(
 			Mark(ierr.ErrInternal)
 	}
 
-	paddleCustomerID := flexpriceCustomer.Metadata["paddle_customer_id"]
+	paddleCustomerID := flexpriceCustomer.Metadata[MetaKeyPaddleCustomerID]
 	if paddleCustomerID == "" {
 		s.logger.Errorw("invoice and customer not synced to Paddle: Paddle customer ID not found after sync",
 			"invoice_id", req.InvoiceID,
@@ -230,34 +228,12 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 		currency = paddle.CurrencyCodeUSD
 	}
 
-	paymentDays := defaultPaymentDays
-	if flexInvoice.DueDate != nil {
-		days := int(flexInvoice.DueDate.Sub(flexInvoice.CreatedAt).Hours() / 24)
-		if days > 0 {
-			paymentDays = days
-		}
-	}
-
-	// For zero-dollar invoices (e.g. trial-start): omit Status entirely and use automatic collection.
-	// When customer_id + address_id are present, Paddle auto-assigns Status=ready and returns
-	// checkout.url immediately — the customer can complete checkout to save their card.
-	// For non-zero invoices: Manual+Billed so Paddle sends the invoice to the customer.
-	var statusPtr *paddle.TransactionStatus
-	collectionMode := paddle.CollectionModeManual
-	if !flexInvoice.Total.IsZero() {
-		billed := paddle.TransactionStatusBilled
-		statusPtr = &billed
-	} else {
-		collectionMode = paddle.CollectionModeAutomatic
-	}
-
 	req := &paddle.CreateTransactionRequest{
 		Items:          items,
 		CustomerID:     paddle.PtrTo(paddleCustomerID),
 		AddressID:      paddle.PtrTo(paddleAddressID),
 		CurrencyCode:   paddle.PtrTo(currency),
-		CollectionMode: paddle.PtrTo(collectionMode),
-		Status:         statusPtr,
+		CollectionMode: paddle.PtrTo(paddle.CollectionModeAutomatic),
 		CustomData: map[string]interface{}{
 			"flexprice_invoice_id":  flexInvoice.ID,
 			"flexprice_customer_id": flexInvoice.CustomerID,
@@ -265,20 +241,8 @@ func (s *InvoiceSyncService) buildCreateTransactionRequest(
 		},
 	}
 
-	// BillingDetails is only relevant for manual collection (invoice sending + checkout config).
-	// Automatic collection ($0 card-capture transactions) must leave it nil.
-	if collectionMode == paddle.CollectionModeManual {
-		req.BillingDetails = &paddle.BillingDetails{
-			EnableCheckout: true,
-			PaymentTerms: paddle.Duration{
-				Interval:  intervalDay,
-				Frequency: paymentDays,
-			},
-		}
-	}
-
 	if flexInvoice.InvoiceNumber != nil && *flexInvoice.InvoiceNumber != "" {
-		req.CustomData["invoice_number"] = *flexInvoice.InvoiceNumber
+		req.CustomData[MetaKeyInvoiceNumber] = *flexInvoice.InvoiceNumber
 	}
 
 	if flexInvoice.SubscriptionCustomerID != nil && *flexInvoice.SubscriptionCustomerID != "" {
@@ -424,19 +388,6 @@ func (s *InvoiceSyncService) buildPreviewItems(flexInvoice *invoice.Invoice) ([]
 	return previewItems, includedLineItems
 }
 
-// parsePaddleCents converts a Paddle amount string (cents) to a decimal in the major currency unit.
-// Paddle returns all monetary values as strings in the lowest denomination (e.g. "160" = $1.60).
-func parsePaddleCents(s string) decimal.Decimal {
-	if s == "" {
-		return decimal.Zero
-	}
-	v, err := decimal.NewFromString(s)
-	if err != nil {
-		return decimal.Zero
-	}
-	return v.Div(decimal.NewFromInt(100))
-}
-
 // previewAndSyncTax calls the Paddle transactions/preview endpoint to get the exact
 // tax breakdown before creating the real transaction, then updates the FlexPrice invoice
 // so that its totals match what Paddle will actually charge the customer.
@@ -497,8 +448,8 @@ func (s *InvoiceSyncService) previewAndSyncTax(
 			flexLineItem.Metadata = make(types.Metadata)
 		}
 		// Store Paddle-calculated per-line tax for display/audit purposes
-		flexLineItem.Metadata["paddle_tax_amount"] = lineTax.String()
-		flexLineItem.Metadata["paddle_tax_rate"] = previewLineItem.TaxRate
+		flexLineItem.Metadata[MetaKeyPaddleTaxAmount] = lineTax.String()
+		flexLineItem.Metadata[MetaKeyPaddleTaxRate] = previewLineItem.TaxRate
 
 		s.logger.Debugw("per-line Paddle tax synced",
 			"invoice_id", flexInvoice.ID,
@@ -525,9 +476,9 @@ func (s *InvoiceSyncService) previewAndSyncTax(
 		if flexInvoice.Metadata == nil {
 			flexInvoice.Metadata = make(types.Metadata)
 		}
-		flexInvoice.Metadata["paddle_tax_amount"] = aggTax.String()
-		flexInvoice.Metadata["paddle_grand_total"] = grandTotal.String()
-		flexInvoice.Metadata["paddle_subtotal"] = parsePaddleCents(preview.Details.Totals.Subtotal).String()
+		flexInvoice.Metadata[MetaKeyPaddleTaxAmount] = aggTax.String()
+		flexInvoice.Metadata[MetaKeyPaddleGrandTotal] = grandTotal.String()
+		flexInvoice.Metadata[MetaKeyPaddleSubtotal] = parsePaddleCents(preview.Details.Totals.Subtotal).String()
 
 		if err := s.invoiceRepo.Update(ctx, flexInvoice); err != nil {
 			s.logger.Errorw("failed to persist tax-synced invoice totals",
@@ -581,7 +532,7 @@ func (s *InvoiceSyncService) getPaddleAddressID(ctx context.Context, customerID 
 	if err != nil || len(mappings) == 0 {
 		return ""
 	}
-	if id, ok := mappings[0].Metadata["paddle_address_id"].(string); ok {
+	if id, ok := mappings[0].Metadata[MetaKeyPaddleAddressID].(string); ok {
 		return id
 	}
 	return ""
@@ -613,8 +564,8 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 	syncResp *PaddleInvoiceSyncResponse,
 ) error {
 	metadata := map[string]interface{}{
-		"paddle_transaction_id": txn.ID,
-		"synced_at":             txn.CreatedAt,
+		MetaKeyPaddleTransactionID: txn.ID,
+		MetaKeySyncedAt:            txn.CreatedAt,
 	}
 	// Use final payment link (with _success appended) from syncResp, fallback to raw URL
 	checkoutURL := syncResp.CheckoutURL
@@ -622,10 +573,10 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		checkoutURL = lo.FromPtrOr(txn.Checkout.URL, "")
 	}
 	if checkoutURL != "" {
-		metadata["paddle_checkout_url"] = checkoutURL
+		metadata[MetaKeyPaddleCheckoutURL] = checkoutURL
 	}
 	if txn.InvoiceNumber != nil {
-		metadata["invoice_number"] = *txn.InvoiceNumber
+		metadata[MetaKeyInvoiceNumber] = *txn.InvoiceNumber
 	}
 
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
@@ -694,7 +645,7 @@ func (s *InvoiceSyncService) appendCheckoutToken(ctx context.Context, syncResp *
 	if err != nil || conn == nil || conn.Metadata == nil {
 		return
 	}
-	successURL, _ := conn.Metadata["redirect_url"].(string)
+	successURL, _ := conn.Metadata[ConnKeyRedirectURL].(string)
 
 	claims := jwt.MapClaims{
 		"client_side_token": paddleConfig.ClientSideToken,
@@ -725,10 +676,10 @@ func (s *InvoiceSyncService) buildResponseFromMapping(mapping *entityintegration
 	resp := &PaddleInvoiceSyncResponse{
 		PaddleTransactionID: mapping.ProviderEntityID,
 	}
-	if url, ok := mapping.Metadata["paddle_checkout_url"].(string); ok {
+	if url, ok := mapping.Metadata[MetaKeyPaddleCheckoutURL].(string); ok {
 		resp.CheckoutURL = url
 	}
-	if num, ok := mapping.Metadata["invoice_number"].(string); ok {
+	if num, ok := mapping.Metadata[MetaKeyInvoiceNumber].(string); ok {
 		resp.InvoiceNumber = num
 	}
 	return resp
@@ -745,9 +696,9 @@ func (s *InvoiceSyncService) updateFlexPriceInvoiceFromPaddle(ctx context.Contex
 	if flexInvoice.Metadata == nil {
 		flexInvoice.Metadata = make(types.Metadata)
 	}
-	flexInvoice.Metadata["paddle_transaction_id"] = syncResp.PaddleTransactionID
+	flexInvoice.Metadata[MetaKeyPaddleTransactionID] = syncResp.PaddleTransactionID
 	if syncResp.CheckoutURL != "" {
-		flexInvoice.Metadata["paddle_checkout_url"] = syncResp.CheckoutURL
+		flexInvoice.Metadata[MetaKeyPaddleCheckoutURL] = syncResp.CheckoutURL
 	}
 
 	// Log a warning if the created transaction's grand total differs from what the preview set.
