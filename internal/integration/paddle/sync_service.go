@@ -993,7 +993,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		invoiceMeta[MetaKeyPaddleCheckoutURL] = checkoutURL
 	}
 	if txn.InvoiceNumber != nil {
-		invoiceMeta["invoice_number"] = *txn.InvoiceNumber
+		invoiceMeta[MetaKeyInvoiceNumber] = *txn.InvoiceNumber
 	}
 	invoiceMapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
@@ -1041,4 +1041,17 @@ func (s *PaddleSyncService) GetFlexPriceInvoiceIDByTransaction(ctx context.Conte
 			Mark(ierr.ErrNotFound)
 	}
 	return mappings[0].EntityID, nil
+}
+
+// parsePaddleCents converts a Paddle amount string (cents) to a decimal in the major currency unit.
+// Paddle returns all monetary values as strings in the lowest denomination (e.g. "160" = $1.60).
+func parsePaddleCents(s string) decimal.Decimal {
+	if s == "" {
+		return decimal.Zero
+	}
+	v, err := decimal.NewFromString(s)
+	if err != nil {
+		return decimal.Zero
+	}
+	return v.Div(decimal.NewFromInt(100))
 }
