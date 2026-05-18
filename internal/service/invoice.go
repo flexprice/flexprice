@@ -3160,9 +3160,8 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 
 	// Start transaction to update invoice atomically
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// STEP 2: Now call PrepareSubscriptionInvoiceRequest for fresh calculation
-		// Since we removed existing line items, the billing service will see no already
-		// invoiced items and will recalculate everything completely
+		// STEP 2: Call PrepareSubscriptionInvoiceRequest for fresh calculation.
+		// Line items are reconciled after this call (update-in-place or delete+create).
 		billingService := NewBillingService(s.ServiceParams)
 
 		// Use period_end reference point to include both arrear and advance charges
@@ -3181,6 +3180,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		// STEP 3: Update invoice totals, metadata, and customer ID
 		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
 		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
+		prevAmountDue := inv.AmountDue
 		inv.Total = newInvoiceReq.Total
 		inv.Subtotal = newInvoiceReq.Subtotal
 		inv.CustomerID = newInvoiceReq.CustomerID
@@ -3229,7 +3229,7 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 		s.Logger.InfowCtx(ctx, "successfully recalculated invoice with fresh calculation",
 			"invoice_id", inv.ID,
 			"subscription_id", *inv.SubscriptionID,
-			"old_amount_due", inv.AmountDue,
+			"old_amount_due", prevAmountDue,
 			"new_amount_due", newInvoiceReq.AmountDue,
 			"new_line_items", len(reconciledItems),
 			"recalculation_type", "complete_fresh_calculation")
