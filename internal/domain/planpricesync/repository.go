@@ -81,15 +81,6 @@ type Repository interface {
 		p ListPlanLineItemsToCreateParams,
 	) (lastSubID *string, err error)
 
-	// ────────────────────────────────────────────────────────────────────
-	// V2 sync (sequence-driven).
-	//
-	// V2 narrows discovery and termination to prices changed since each
-	// subscription's `synced_price_sequence`. Subscriptions are stamped to
-	// a target sequence at the end of every successful page, so partial
-	// failures resume cleanly and there's a per-sub observability column.
-	// ────────────────────────────────────────────────────────────────────
-
 	// CurrentPlanSequence returns max(prices.sequence) for the plan's
 	// published, non-fixed prices. Used as the target sequence subscriptions
 	// are stamped to after a successful sync pass. Returns 0 if the plan
@@ -99,17 +90,20 @@ type Repository interface {
 	// ListPlanLineItemsToCreateV2 returns missing (subscription_id, price_id)
 	// pairs for a plan, narrowed to prices that changed since each
 	// subscription's synced_price_sequence. Also returns the full set of
-	// stale sub IDs in this page (so termination and stamp can be scoped
-	// exactly to the discovery window even when no pairs were produced)
-	// and the last sub ID scanned (cursor advance).
+	// stale sub IDs in this page (so stamp can be scoped exactly to the
+	// discovery window even when no pairs were produced). The page
+	// advances implicitly via stamping — stamped subs fall out of the
+	// `synced_price_sequence < TargetSeq` filter on the next call.
 	ListPlanLineItemsToCreateV2(
 		ctx context.Context,
 		p ListPlanLineItemsToCreateV2Params,
-	) (items []PlanLineItemCreationDelta, staleSubIDs []string, lastSubID string, hasMore bool, err error)
+	) (items []PlanLineItemCreationDelta, staleSubIDs []string, err error)
 
-	// TerminatePlanPricesLineItemsV2 sets end_date on plan-derived line items
-	// for subs in the given batch where their price has been terminated
-	// since the sub's synced_price_sequence. Returns rows affected.
+	// TerminatePlanPricesLineItemsV2 sets end_date on live plan-derived line
+	// items belonging to the given subs whose price has been ended. Scoping
+	// to a sub set bounds the UPDATE per page (no plan-wide locks). The
+	// `li.end_date IS NULL` guard makes this idempotent — re-runs are no-ops.
+	// Returns rows affected.
 	TerminatePlanPricesLineItemsV2(
 		ctx context.Context,
 		p TerminatePlanPricesLineItemsV2Params,
@@ -125,17 +119,15 @@ type Repository interface {
 
 // ListPlanLineItemsToCreateV2Params drives the V2 discovery query.
 type ListPlanLineItemsToCreateV2Params struct {
-	PlanID       string
-	TargetSeq    int64  // subs stale relative to this value are in scope
-	AfterSubID   string // cursor; "" for first page
-	Limit        int    // page size (defaults to implementation-defined)
+	PlanID    string
+	TargetSeq int64 // subs stale relative to this value are in scope
+	Limit     int   // page size (defaults to implementation-defined)
 }
 
 // TerminatePlanPricesLineItemsV2Params drives the V2 termination UPDATE.
 type TerminatePlanPricesLineItemsV2Params struct {
-	PlanID    string
-	TargetSeq int64  // bound; only touches subs with synced_price_sequence < TargetSeq
-	SubIDs    []string // restrict to this page of subs (matches the discovery page)
+	PlanID string
+	SubIDs []string
 }
 
 // StampSubsAsSyncedParams sets synced_price_sequence on a set of subs.

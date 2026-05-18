@@ -251,6 +251,7 @@ func (Subscription) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "current_period_end", "subscription_status", "status"),
 		// Drives the plan-price sync's "which subs are behind?" lookup.
 		index.Fields("tenant_id", "environment_id", "plan_id", "synced_price_sequence").
-			Annotations(entsql.IndexWhere("status = 'published'")),
+			Annotations(entsql.IndexWhere(
+				"status = 'published' AND subscription_type IN ('standalone','delegated_invoicing','parent','grouped_invoicing')")),
 	}
 }

@@ -598,10 +598,19 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 //   - Discovery is narrowed to prices whose `sequence` is greater than each
 //     candidate sub's `synced_price_sequence`. Plans with many historical
 //     prices but few recent changes scan a tiny fraction of what V1 would.
-//   - Termination is a single bounded UPDATE (no batch loop, no rescan of
-//     subs/prices CTEs each iteration).
-//   - Every page stamps its subs to the captured target sequence in the same
-//     transaction as the line-item writes, so partial failures resume cleanly.
+//   - Each iteration does discover → create → terminate → stamp. Stamping
+//     last preserves the invariant that "stamped = fully caught up"; running
+//     terminate after create (within the same page) closes the race where a
+//     price ends mid-loop and a just-created line item would otherwise leak
+//     as live. Stamping is the implicit cursor: stamped subs fall out of
+//     the next discovery via `synced_price_sequence < TargetSeq`.
+//
+// No transactions: every step (create, terminate, stamp) is idempotent, so a
+// mid-run failure resumes correctly on the next invocation. Subs that aren't
+// stamped get re-discovered; already-created line items are skipped via the
+// NOT EXISTS guard in the discovery query; already-terminated line items are
+// skipped by the `end_date IS NULL` guard; stamping is forward-only via
+// GREATEST.
 //
 // The line-item construction logic (display name, quantity, metadata, etc.)
 // is reused from `createPlanLineItem` to avoid behavior drift.
@@ -614,8 +623,8 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		return nil, err
 	}
 
-	// Capture the target sequence once. Subs are stamped to this value at the
-	// end of every page. Writes that happen mid-sync get picked up by the
+	// Capture the target sequence once. Subs are stamped to this value as
+	// each page completes. Writes that happen mid-sync get picked up by the
 	// next run (their sequence will exceed this captured target).
 	targetSeq, err := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, planID)
 	if err != nil {
@@ -630,102 +639,131 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		}, nil
 	}
 
+	// Page through stale subs, doing discover → create → terminate → stamp.
 	lineItemsFoundForCreation := 0
 	lineItemsCreated := 0
 	lineItemsTerminated := 0
 	subsStamped := 0
-	cursor := ""
+	pageIteration := 0
+
+	var creationTotalDuration time.Duration
+	var terminationTotalDuration time.Duration
+	var stampTotalDuration time.Duration
 
 	for {
-		pageParams := planpricesync.ListPlanLineItemsToCreateV2Params{
-			PlanID:     planID,
-			TargetSeq:  targetSeq,
-			AfterSubID: cursor,
-			Limit:      1000,
-		}
-
-		missingPairs, subIDsInPage, lastSubID, hasMore, listErr := s.PlanPriceSyncRepo.ListPlanLineItemsToCreateV2(ctx, pageParams)
+		pageIteration++
+		missingPairs, subIDsInPage, listErr := s.PlanPriceSyncRepo.ListPlanLineItemsToCreateV2(ctx, planpricesync.ListPlanLineItemsToCreateV2Params{
+			PlanID:    planID,
+			TargetSeq: targetSeq,
+			Limit:     1000,
+		})
 		if listErr != nil {
 			return nil, listErr
 		}
-		if lastSubID == "" {
+		if len(subIDsInPage) == 0 {
 			break
 		}
 
 		lineItemsFoundForCreation += len(missingPairs)
 
-		txErr := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-			// 1. Build & insert any missing line items for this page.
-			if len(missingPairs) > 0 {
-				priceIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string { return pair.PriceID }))
-				subscriptionIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string { return pair.SubscriptionID }))
+		// 1. Build & insert any missing line items for this page.
+		if len(missingPairs) > 0 {
+			creationStart := time.Now()
+			priceIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string { return pair.PriceID }))
+			subscriptionIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string { return pair.SubscriptionID }))
 
-				priceFilter := types.NewNoLimitPriceFilter().
-					WithPriceIDs(priceIDs).
-					WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
-					WithAllowExpiredPrices(true)
-				prices, err := s.PriceRepo.List(txCtx, priceFilter)
-				if err != nil {
-					return err
-				}
-				priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
-
-				subFilter := types.NewNoLimitSubscriptionFilter()
-				subFilter.SubscriptionIDs = subscriptionIDs
-				subs, err := s.SubRepo.List(txCtx, subFilter)
-				if err != nil {
-					return err
-				}
-				subMap := lo.KeyBy(subs, func(sub *subscription.Subscription) string { return sub.ID })
-
-				lineItems := make([]*subscription.SubscriptionLineItem, 0, len(missingPairs))
-				for _, pair := range missingPairs {
-					price, okPrice := priceMap[pair.PriceID]
-					sub, okSub := subMap[pair.SubscriptionID]
-					if !okPrice || !okSub {
-						return ierr.NewError("price or subscription not found for v2 sync").
-							WithHint("Price or subscription not found").
-							WithReportableDetails(map[string]interface{}{
-								"price_id":        pair.PriceID,
-								"subscription_id": pair.SubscriptionID,
-							}).
-							Mark(ierr.ErrDatabase)
-					}
-					lineItems = append(lineItems, createPlanLineItem(txCtx, sub, price, plan))
-				}
-
-				if err := s.SubscriptionLineItemRepo.CreateBulk(txCtx, lineItems); err != nil {
-					return err
-				}
-				lineItemsCreated += len(lineItems)
+			priceFilter := types.NewNoLimitPriceFilter().
+				WithPriceIDs(priceIDs).
+				WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
+				WithAllowExpiredPrices(true)
+			prices, perr := s.PriceRepo.List(ctx, priceFilter)
+			if perr != nil {
+				return nil, perr
 			}
+			priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
 
-			// 2. Terminate live line items whose price was ended since the
-			//    sub's synced_price_sequence (scoped to subs in this page).
-			n, terr := s.PlanPriceSyncRepo.TerminatePlanPricesLineItemsV2(txCtx, planpricesync.TerminatePlanPricesLineItemsV2Params{
-				PlanID:    planID,
-				TargetSeq: targetSeq,
-				SubIDs:    subIDsInPage,
-			})
-			if terr != nil {
-				return terr
-			}
-			lineItemsTerminated += n
-
-			// 3. Stamp this page's subs as caught up.
-			stamped, serr := s.PlanPriceSyncRepo.StampSubsAsSynced(txCtx, planpricesync.StampSubsAsSyncedParams{
-				TargetSeq: targetSeq,
-				SubIDs:    subIDsInPage,
-			})
+			subFilter := types.NewNoLimitSubscriptionFilter()
+			subFilter.SubscriptionIDs = subscriptionIDs
+			subs, serr := s.SubRepo.List(ctx, subFilter)
 			if serr != nil {
-				return serr
+				return nil, serr
 			}
-			subsStamped += stamped
-			return nil
-		})
-		if txErr != nil {
-			return nil, txErr
+			subMap := lo.KeyBy(subs, func(sub *subscription.Subscription) string { return sub.ID })
+
+			lineItems := make([]*subscription.SubscriptionLineItem, 0, len(missingPairs))
+			for _, pair := range missingPairs {
+				price, okPrice := priceMap[pair.PriceID]
+				sub, okSub := subMap[pair.SubscriptionID]
+				if !okPrice || !okSub {
+					return nil, ierr.NewError("price or subscription not found for v2 sync").
+						WithHint("Price or subscription not found").
+						WithReportableDetails(map[string]interface{}{
+							"price_id":        pair.PriceID,
+							"subscription_id": pair.SubscriptionID,
+						}).
+						Mark(ierr.ErrDatabase)
+				}
+				lineItems = append(lineItems, createPlanLineItem(ctx, sub, price, plan))
+			}
+
+			// Page size is 1000 subs but each sub can match multiple prices,
+			// so total line items per page can exceed a sensible single-
+			// statement insert size. Chunk the bulk insert.
+			const bulkInsertBatchSize = 2000
+			for i := 0; i < len(lineItems); i += bulkInsertBatchSize {
+				end := min(i + bulkInsertBatchSize, len(lineItems))
+				batch := lineItems[i:end]
+				if cerr := s.SubscriptionLineItemRepo.CreateBulk(ctx, batch); cerr != nil {
+					s.Logger.ErrorwCtx(ctx, "failed to create plan line items in bulk batch (v2)",
+						"plan_id", planID,
+						"page", pageIteration,
+						"batch_start", i,
+						"batch_end", end,
+						"batch_count", len(batch),
+						"total_count", len(lineItems),
+						"error", cerr)
+					return nil, cerr
+				}
+			}
+			lineItemsCreated += len(lineItems)
+			creationTotalDuration += time.Since(creationStart)
 		}
+
+		// 2. Terminate live plan line items for this page's subs whose price
+		//    has ended. Scoping to the page's subs keeps each UPDATE bounded
+		//    (no plan-wide row locks) and lets the SLI index on
+		//    (tenant, env, subscription_id, status) drive the lookup.
+		//    Running this between create and stamp closes the race where a
+		//    price ends after we cached it but before we stamp the sub — the
+		//    just-created LI gets cleaned up in the same page so the stamp
+		//    truly means "caught up". Subs already stamped earlier in this
+		//    run aren't re-checked; any LI leaked for them by a mid-run
+		//    price-end is picked up by the next sync invocation.
+		terminationStart := time.Now()
+		terminated, terr := s.PlanPriceSyncRepo.TerminatePlanPricesLineItemsV2(ctx, planpricesync.TerminatePlanPricesLineItemsV2Params{
+			PlanID: planID,
+			SubIDs: subIDsInPage,
+		})
+		if terr != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to terminate plan line items (v2)", "plan_id", planID, "page", pageIteration, "error", terr)
+			return nil, terr
+		}
+		lineItemsTerminated += terminated
+		terminationTotalDuration += time.Since(terminationStart)
+
+		// 3. Stamp this page's subs as caught up. This is the progress
+		//    marker — if we crash before reaching here, the same subs
+		//    re-appear in the next run's discovery.
+		stampStart := time.Now()
+		stamped, serr := s.PlanPriceSyncRepo.StampSubsAsSynced(ctx, planpricesync.StampSubsAsSyncedParams{
+			TargetSeq: targetSeq,
+			SubIDs:    subIDsInPage,
+		})
+		if serr != nil {
+			return nil, serr
+		}
+		subsStamped += stamped
+		stampTotalDuration += time.Since(stampStart)
 
 		// Fire-and-forget reprocess workflow for the same set of newly-created pairs.
 		if len(missingPairs) > 0 {
@@ -744,16 +782,18 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 					EnvironmentID: types.GetEnvironmentID(ctx),
 					UserID:        types.GetUserID(ctx),
 				}
-				if _, werr := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsForPlanWorkflow, workflowInput); werr != nil {
+				workflowRun, werr := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsForPlanWorkflow, workflowInput)
+				if werr != nil {
 					s.Logger.WarnwCtx(ctx, "failed to start v2 reprocess events for plan workflow",
 						"plan_id", planID, "missing_pairs_count", len(missingPairs), "error", werr)
+				} else {
+					s.Logger.DebugwCtx(ctx, "v2 reprocess events for plan workflow started",
+						"plan_id", planID,
+						"missing_pairs_count", len(missingPairs),
+						"workflow_id", workflowRun.GetID(),
+						"run_id", workflowRun.GetRunID())
 				}
 			}
-		}
-
-		cursor = lastSubID
-		if !hasMore {
-			break
 		}
 	}
 
@@ -761,11 +801,15 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 	s.Logger.InfowCtx(ctx, "completed plan price synchronization (v2)",
 		"plan_id", planID,
 		"target_sequence", targetSeq,
+		"page_iterations", pageIteration,
 		"line_items_found_for_creation", lineItemsFoundForCreation,
 		"line_items_created", lineItemsCreated,
 		"line_items_terminated", lineItemsTerminated,
 		"subs_stamped", subsStamped,
-		"total_duration_ms", totalSyncDuration.Milliseconds())
+		"total_duration_ms", totalSyncDuration.Milliseconds(),
+		"creation_duration_ms", creationTotalDuration.Milliseconds(),
+		"termination_duration_ms", terminationTotalDuration.Milliseconds(),
+		"stamp_duration_ms", stampTotalDuration.Milliseconds())
 
 	return &dto.SyncPlanPricesResponse{
 		PlanID:  planID,
@@ -1167,4 +1211,3 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		CreditGrants: grantResponses,
 	}, nil
 }
-

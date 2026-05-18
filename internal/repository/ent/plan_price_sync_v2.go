@@ -10,15 +10,6 @@ import (
 	"github.com/lib/pq"
 )
 
-// ─────────────────────────────────────────────────────────────────────────────
-// V2 sync — sequence-driven.
-//
-// All three methods key off `prices.sequence` and
-// `subscriptions.synced_price_sequence`, declared in the Ent schema and
-// maintained by the BEFORE UPDATE trigger in
-// migrations/postgres/post-ent/V5_prices_sequence_trigger.up.sql.
-// ─────────────────────────────────────────────────────────────────────────────
-
 // CurrentPlanSequence returns max(prices.sequence) for the plan's published,
 // non-fixed prices. 0 means no qualifying prices.
 func (r *planPriceSyncRepository) CurrentPlanSequence(
@@ -40,11 +31,11 @@ func (r *planPriceSyncRepository) CurrentPlanSequence(
 		  AND status = '%s'
 		  AND entity_type = '%s'
 		  AND entity_id = $3
-		  AND type <> '%s'
+		  AND type = '%s'
 	`,
 		string(types.StatusPublished),
 		string(types.PRICE_ENTITY_TYPE_PLAN),
-		string(types.PRICE_TYPE_FIXED),
+		string(types.PRICE_TYPE_USAGE),
 	)
 
 	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, tenantID, environmentID, planID)
@@ -68,15 +59,15 @@ func (r *planPriceSyncRepository) CurrentPlanSequence(
 
 // ListPlanLineItemsToCreateV2 returns missing (sub, price) pairs narrowed by
 // sequence: only prices whose sequence is greater than each candidate sub's
-// synced_price_sequence are considered. Cursor advances by max(sub.id) in the
-// page so it progresses even if every pair gets filtered out by the
-// NOT EXISTS guards.
+// synced_price_sequence are considered. Pagination is driven by stamping —
+// once subs are stamped to TargetSeq they fall out of the
+// `synced_price_sequence < TargetSeq` filter on the next call. No cursor.
 func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 	ctx context.Context,
 	p planpricesync.ListPlanLineItemsToCreateV2Params,
-) (items []planpricesync.PlanLineItemCreationDelta, staleSubIDs []string, lastSubID string, hasMore bool, err error) {
+) (items []planpricesync.PlanLineItemCreationDelta, staleSubIDs []string, err error) {
 	if p.PlanID == "" {
-		return nil, nil, "", false, ierr.NewError("plan_id is required").Mark(ierr.ErrValidation)
+		return nil, nil, ierr.NewError("plan_id is required").Mark(ierr.ErrValidation)
 	}
 	limit := p.Limit
 	if limit <= 0 {
@@ -87,19 +78,16 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 	environmentID := types.GetEnvironmentID(ctx)
 
 	span := StartRepositorySpan(ctx, "plan_price_sync_v2", "list_plan_line_items_to_create", map[string]interface{}{
-		"plan_id":      p.PlanID,
-		"target_seq":   p.TargetSeq,
-		"limit":        limit,
-		"cursor":       p.AfterSubID,
+		"plan_id":    p.PlanID,
+		"target_seq": p.TargetSeq,
+		"limit":      limit,
 	})
 	defer FinishSpan(span)
 
-	// Three result sets in one round trip:
-	//   kind='pair'   — actual missing pair
-	//   kind='sub'    — one row per stale sub in the page (for stamping and
-	//                   termination scoping; includes subs that produced no pairs)
-	//   kind='cursor' — sentinel with the max sub_id in the page so the
-	//                   service can advance even with zero pairs.
+	// Two result sets in one round trip:
+	//   kind='pair' — actual missing pair
+	//   kind='sub'  — one row per stale sub in the page (for stamping;
+	//                 includes subs that produced no pairs)
 	query := fmt.Sprintf(`
 		WITH stale_subs AS (
 			SELECT id, customer_id, currency, billing_period, billing_period_count,
@@ -110,10 +98,10 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 			  AND status = '%s'
 			  AND plan_id = $3
 			  AND subscription_status IN ('%s','%s')
+			  AND subscription_type IN ('%s','%s','%s','%s')
 			  AND synced_price_sequence < $4
-			  AND ($5 = '' OR id > $5)
 			ORDER BY id
-			LIMIT $6
+			LIMIT $5
 		),
 		plan_prices AS (
 			SELECT id, currency, billing_period, billing_period_count,
@@ -124,7 +112,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 			  AND status = '%s'
 			  AND entity_type = '%s'
 			  AND entity_id = $3
-			  AND type <> '%s'
+			  AND type = '%s'
 		),
 		pairs AS (
 			SELECT s.id AS subscription_id, p.id AS price_id, s.customer_id
@@ -152,18 +140,21 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 			        AND li.entity_type = '%s'
 			  )
 		)
-		SELECT 'pair'::text   AS kind, subscription_id, price_id, customer_id FROM pairs
+		SELECT 'pair'::text AS kind, subscription_id, price_id, customer_id FROM pairs
 		UNION ALL
-		SELECT 'sub'::text    AS kind, id, '', '' FROM stale_subs
-		UNION ALL
-		SELECT 'cursor'::text AS kind, COALESCE(MAX(id), ''), '', '' FROM stale_subs
+		SELECT 'sub'::text  AS kind, id, '', '' FROM stale_subs
 	`,
 		string(types.StatusPublished),
 		string(types.SubscriptionStatusActive),
 		string(types.SubscriptionStatusTrialing),
+		// Sub types that own plan line items. Inherited is excluded by design
+		string(types.SubscriptionTypeStandalone),
+		string(types.SubscriptionTypeDelegatedInvoicing),
+		string(types.SubscriptionTypeParent),
+		string(types.SubscriptionTypeGroupedInvoicing),
 		string(types.StatusPublished),
 		string(types.PRICE_ENTITY_TYPE_PLAN),
-		string(types.PRICE_TYPE_FIXED),
+		string(types.PRICE_TYPE_USAGE),
 		string(types.StatusPublished),
 		string(types.PRICE_ENTITY_TYPE_SUBSCRIPTION),
 		string(types.StatusPublished),
@@ -172,11 +163,11 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 
 	rows, qerr := r.client.Reader(ctx).QueryContext(
 		ctx, query,
-		tenantID, environmentID, p.PlanID, p.TargetSeq, p.AfterSubID, limit,
+		tenantID, environmentID, p.PlanID, p.TargetSeq, limit,
 	)
 	if qerr != nil {
 		SetSpanError(span, qerr)
-		return nil, nil, "", false, ierr.WithError(qerr).
+		return nil, nil, ierr.WithError(qerr).
 			WithHint("Failed to list V2 plan line items to create").
 			Mark(ierr.ErrDatabase)
 	}
@@ -186,7 +177,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 		var kind, sub, price, customer string
 		if scanErr := rows.Scan(&kind, &sub, &price, &customer); scanErr != nil {
 			SetSpanError(span, scanErr)
-			return nil, nil, "", false, ierr.WithError(scanErr).
+			return nil, nil, ierr.WithError(scanErr).
 				WithHint("Failed to scan V2 sync row").
 				Mark(ierr.ErrDatabase)
 		}
@@ -199,26 +190,23 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 			})
 		case "sub":
 			staleSubIDs = append(staleSubIDs, sub)
-		case "cursor":
-			lastSubID = sub
 		}
 	}
 	if rerr := rows.Err(); rerr != nil {
 		SetSpanError(span, rerr)
-		return nil, nil, "", false, ierr.WithError(rerr).
+		return nil, nil, ierr.WithError(rerr).
 			WithHint("Failed to iterate V2 sync rows").
 			Mark(ierr.ErrDatabase)
 	}
-	// hasMore is true when the cursor actually advanced — the next call will
-	// have a different AfterSubID. Empty pages signal end of subs to scan.
-	hasMore = lastSubID != "" && lastSubID != p.AfterSubID
+
 	SetSpanSuccess(span)
-	return items, staleSubIDs, lastSubID, hasMore, nil
+	return items, staleSubIDs, nil
 }
 
-// TerminatePlanPricesLineItemsV2 sets end_date on plan-derived line items
-// belonging to the given subs whose price has been terminated since each
-// sub's synced_price_sequence. Returns rows affected.
+// TerminatePlanPricesLineItemsV2 sets end_date on live plan-derived line
+// items belonging to the given subs whose price has been ended. Scoping to
+// the page's sub set bounds the UPDATE so we don't lock thousands of rows
+// in a single statement. Idempotent via `li.end_date IS NULL`.
 func (r *planPriceSyncRepository) TerminatePlanPricesLineItemsV2(
 	ctx context.Context,
 	p planpricesync.TerminatePlanPricesLineItemsV2Params,
@@ -235,9 +223,8 @@ func (r *planPriceSyncRepository) TerminatePlanPricesLineItemsV2(
 	userID := types.GetUserID(ctx)
 
 	span := StartRepositorySpan(ctx, "plan_price_sync_v2", "terminate_line_items", map[string]interface{}{
-		"plan_id":    p.PlanID,
-		"target_seq": p.TargetSeq,
-		"sub_count":  len(p.SubIDs),
+		"plan_id":   p.PlanID,
+		"sub_count": len(p.SubIDs),
 	})
 	defer FinishSpan(span)
 
@@ -245,40 +232,29 @@ func (r *planPriceSyncRepository) TerminatePlanPricesLineItemsV2(
 		UPDATE subscription_line_items li
 		SET end_date   = GREATEST(COALESCE(li.start_date, p.end_date), p.end_date),
 		    updated_at = NOW(),
-		    updated_by = $5
-		FROM subscriptions s, prices p
-		WHERE li.tenant_id      = $1
-		  AND li.environment_id = $2
-		  AND li.status         = '%s'
-		  AND li.entity_type    = '%s'
+		    updated_by = $4
+		FROM prices p
+		WHERE li.tenant_id       = $1
+		  AND li.environment_id  = $2
+		  AND li.status          = '%s'
+		  AND li.entity_type     = '%s'
 		  AND li.end_date IS NULL
-		  AND li.subscription_id = s.id
+		  AND li.subscription_id = ANY($5)
 		  AND li.price_id        = p.id
-		  AND s.tenant_id      = $1
-		  AND s.environment_id = $2
-		  AND s.plan_id        = $3
-		  AND s.subscription_status IN ('%s','%s')
-		  AND s.synced_price_sequence < $4
-		  AND s.id = ANY($6)
-		  AND p.tenant_id      = $1
-		  AND p.environment_id = $2
-		  AND p.entity_id      = $3
-		  AND p.entity_type    = '%s'
-		  AND p.status         = '%s'
+		  AND p.tenant_id        = $1
+		  AND p.environment_id   = $2
+		  AND p.entity_id        = $3
+		  AND p.entity_type      = '%s'
 		  AND p.end_date IS NOT NULL
-		  AND p.sequence > s.synced_price_sequence
 	`,
 		string(types.StatusPublished),
 		string(types.SubscriptionLineItemEntityTypePlan),
-		string(types.SubscriptionStatusActive),
-		string(types.SubscriptionStatusTrialing),
 		string(types.PRICE_ENTITY_TYPE_PLAN),
-		string(types.StatusPublished),
 	)
 
 	result, qerr := r.client.Writer(ctx).ExecContext(
 		ctx, query,
-		tenantID, environmentID, p.PlanID, p.TargetSeq, userID, pq.Array(p.SubIDs),
+		tenantID, environmentID, p.PlanID, userID, pq.Array(p.SubIDs),
 	)
 	if qerr != nil {
 		SetSpanError(span, qerr)

@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -333,7 +334,7 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, models.TemporalWorkflowResult{
-		Message:    "price sync workflow started successfully (" + version + ")",
+		Message:    fmt.Sprintf("price sync workflow started successfully (%s)", version),
 		WorkflowID: workflowRun.GetID(),
 		RunID:      workflowRun.GetRunID(),
 	})
