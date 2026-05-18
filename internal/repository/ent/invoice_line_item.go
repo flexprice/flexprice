@@ -307,14 +307,13 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 
 	r.log.Debugw("updating invoice line item", "line_item_id", item.ID)
 
-	_, err := r.client.Writer(ctx).InvoiceLineItem.UpdateOneID(item.ID).
+	q := r.client.Writer(ctx).InvoiceLineItem.UpdateOneID(item.ID).
 		Where(
 			invoicelineitem.TenantID(types.GetTenantID(ctx)),
 			invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetAmount(item.Amount).
 		SetQuantity(item.Quantity).
-		SetNillableAdjustedFromEntitlementQuantity(item.AdjustedFromEntitlementQuantity).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -322,8 +321,15 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		SetCommitmentInfo(item.CommitmentInfo).
 		SetStatus(string(item.Status)).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	if item.AdjustedFromEntitlementQuantity != nil {
+		q = q.SetAdjustedFromEntitlementQuantity(*item.AdjustedFromEntitlementQuantity)
+	} else {
+		q = q.ClearAdjustedFromEntitlementQuantity()
+	}
+
+	_, err := q.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
