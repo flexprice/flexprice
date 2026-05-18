@@ -1,4 +1,4 @@
-name: Publish Helm Chart to AWS Public ECR
+name: Publish Helm Chart to GHCR
 
 on:
   push:
@@ -29,9 +29,6 @@ permissions:
   packages: write
 
 env:
-  AWS_REGION: us-east-1
-  HELM_REGISTRY: oci://public.ecr.aws/l7n1c1i5/flexprice
-  HELM_REPOSITORY: helm-charts
   GHCR_HOST: ghcr.io
   GHCR_REPOSITORY: charts
 
@@ -50,27 +47,6 @@ jobs:
         uses: azure/setup-helm@v4
         with:
           version: '3.14.0'
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-        continue-on-error: true
-
-      - name: Login to AWS Public ECR
-        id: ecr-login
-        run: |
-          set -euo pipefail
-          echo "Logging into AWS Public ECR..."
-          # Public ECR requires us-east-1 region
-          if aws ecr-public get-login-password --region us-east-1 | \
-             helm registry login --username AWS --password-stdin public.ecr.aws; then
-            echo "Successfully logged into AWS Public ECR"
-          else
-            echo "::warning::Failed to login to AWS Public ECR, continuing anyway"
-          fi
 
       - name: Extract Chart Version
         id: chart-version
@@ -127,6 +103,17 @@ jobs:
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Add chart repositories
+        run: |
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add temporal https://go.temporal.io/helm-charts
+          helm repo update
+
+      - name: Build Helm Dependencies
+        run: |
+          helm dependency build helm/flexprice
+
       - name: Lint Helm Chart
         run: |
           helm lint helm/flexprice --set secrets.existingSecret=test
@@ -140,12 +127,15 @@ jobs:
       - name: Check if version already exists
         id: version-check
         if: ${{ steps.changed.outputs.publish == 'true' && github.event.inputs.force != 'true' }}
+        env:
+          CHART_NAME: ${{ steps.chart-name.outputs.name }}
+          CHART_VERSION: ${{ steps.chart-version.outputs.version }}
+          OWNER: ${{ github.repository_owner }}
+          GHCR_HOST: ${{ env.GHCR_HOST }}
+          GHCR_REPOSITORY: ${{ env.GHCR_REPOSITORY }}
         run: |
-          CHART_NAME="${{ steps.chart-name.outputs.name }}"
-          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
-          
-          # Try to fetch the chart version from ECR
-          if helm show chart ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }} 2>/dev/null | grep -q "version: $CHART_VERSION"; then
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          if helm show chart "oci://${GHCR_HOST}/${OWNER_LC}/${GHCR_REPOSITORY}/${CHART_NAME}" --version "$CHART_VERSION" 2>/dev/null | grep -q "version: $CHART_VERSION"; then
             echo "exists=true" >> $GITHUB_OUTPUT
             echo "::warning::Chart version $CHART_VERSION already exists in registry"
           else
@@ -153,24 +143,6 @@ jobs:
             echo "Chart version $CHART_VERSION does not exist, proceeding with publish"
           fi
         continue-on-error: true
-
-      - name: Push Helm Chart to AWS Public ECR
-        if: ${{ steps.changed.outputs.publish == 'true' && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
-        run: |
-          CHART_NAME="${{ steps.chart-name.outputs.name }}"
-          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
-          CHART_FILE="${CHART_NAME}-${CHART_VERSION}.tgz"
-          
-          echo "Pushing chart: $CHART_FILE"
-          
-          # Push to OCI registry
-          helm push $CHART_FILE ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }} || \
-          helm push $CHART_FILE oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}
-          
-          echo "::notice::Successfully published $CHART_NAME:$CHART_VERSION to ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}"
-          
-          # Output for summary
-          echo "CHART_URL=${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:$CHART_VERSION" >> $GITHUB_ENV
 
       - name: Login to GHCR
         if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/chart-v') }}
@@ -200,12 +172,6 @@ jobs:
           helm push "$CHART_FILE" "$TARGET"
           echo "::notice::Published $CHART_NAME:$CHART_VERSION to $TARGET"
 
-      - name: Verify Published Chart (ECR)
-        if: ${{ steps.changed.outputs.publish == 'true' && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
-        run: |
-          helm show chart ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }} || \
-          helm show chart oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }}
-
       - name: Verify Published Chart (GHCR)
         if: ${{ (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/chart-v')) && (steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true') }}
         env:
@@ -220,17 +186,27 @@ jobs:
 
       - name: Create Summary
         if: always()
+        env:
+          OWNER: ${{ github.repository_owner }}
+          GHCR_HOST: ${{ env.GHCR_HOST }}
+          GHCR_REPOSITORY: ${{ env.GHCR_REPOSITORY }}
+          CHART_NAME: ${{ steps.chart-name.outputs.name }}
+          CHART_VERSION: ${{ steps.chart-version.outputs.version }}
+          EXISTS: ${{ steps.version-check.outputs.exists }}
+          FORCE: ${{ github.event.inputs.force }}
         run: |
+          OWNER_LC=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          TARGET="oci://${GHCR_HOST}/${OWNER_LC}/${GHCR_REPOSITORY}/${CHART_NAME}"
           echo "## Helm Chart Publish Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Chart Name**: ${{ steps.chart-name.outputs.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Chart Version**: ${{ steps.chart-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Registry**: ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.version-check.outputs.exists }}" == "true" ] && [ "${{ github.event.inputs.force }}" != "true" ]; then
+          echo "- **Chart Name**: $CHART_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Chart Version**: $CHART_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry**: $TARGET" >> $GITHUB_STEP_SUMMARY
+          if [ "$EXISTS" == "true" ] && [ "$FORCE" != "true" ]; then
             echo "- **Status**: ⚠️ Version already exists (skipped)" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ steps.version-check.outputs.exists }}" != "true" ] || [ "${{ github.event.inputs.force }}" == "true" ]; then
+          elif [ "$EXISTS" != "true" ] || [ "$FORCE" == "true" ]; then
             echo "- **Status**: ✅ Published successfully" >> $GITHUB_STEP_SUMMARY
-            echo "- **Chart URL**: \`helm pull oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Chart URL**: \`helm pull $TARGET --version $CHART_VERSION\`" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Upload Chart Artifact
