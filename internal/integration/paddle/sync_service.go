@@ -146,6 +146,10 @@ func (s *PaddleSyncService) EnsureCustomerSynced(ctx context.Context, req Ensure
 			// Concurrent race — use the mapping that won.
 			existing, listErr := s.mappingRepo.List(ctx, filter)
 			if listErr == nil && len(existing) > 0 {
+				s.logger.Warnw("concurrent customer creation detected — discarding orphaned Paddle customer",
+					"customer_id", req.CustomerID,
+					"discarded_paddle_customer_id", paddleCustomerID,
+					"winner_paddle_customer_id", existing[0].ProviderEntityID)
 				existingAddressID, _ := existing[0].Metadata[MetaKeyPaddleAddressID].(string)
 				return &EnsureCustomerSyncedResponse{
 					PaddleCustomerID: existing[0].ProviderEntityID,
@@ -184,6 +188,9 @@ func (s *PaddleSyncService) syncAddressForMapping(
 		}
 		if c.AddressLine1 != "" {
 			updateReq.FirstLine = paddlesdk.NewPtrPatchField(c.AddressLine1)
+		}
+		if c.AddressLine2 != "" {
+			updateReq.SecondLine = paddlesdk.NewPtrPatchField(c.AddressLine2)
 		}
 		if c.AddressCity != "" {
 			updateReq.City = paddlesdk.NewPtrPatchField(c.AddressCity)
