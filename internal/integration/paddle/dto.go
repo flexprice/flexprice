@@ -43,8 +43,6 @@ type EnsureProductSyncedRequest struct {
 
 // EnsureProductSyncedResponse is returned by PaddleSyncService.EnsureProductSynced.
 type EnsureProductSyncedResponse struct {
-	// PaddlePriceID is a catalog price ID (pri_xxx) for use in SubscriptionChargeItemFromCatalog.
-	PaddlePriceID   string
 	PaddleProductID string
 	// Created is true when the Paddle product+price were newly created.
 	Created bool
@@ -57,8 +55,8 @@ type EnsureProductsSyncedRequest struct {
 
 // EnsureProductsSyncedResponse is returned by PaddleSyncService.EnsureProductsSynced.
 type EnsureProductsSyncedResponse struct {
-	// PriceIDToPaddlePriceID maps FlexPrice priceID → Paddle catalog pri_xxx.
-	PriceIDToPaddlePriceID map[string]string
+	// PriceIDToPaddleProductID maps FlexPrice priceID → Paddle product ID.
+	PriceIDToPaddleProductID map[string]string
 }
 
 // EnsureSubscriptionSyncedRequest is the input to PaddleSyncService.EnsureSubscriptionSynced.
