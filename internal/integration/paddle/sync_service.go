@@ -170,7 +170,7 @@ func (s *PaddleSyncService) EnsureProductSynced(ctx context.Context, req EnsureP
 	}
 	resp, err := s.mappingService.GetEntityIntegrationMappings(ctx, filter)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to query price mapping").Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 	if len(resp.Items) > 0 {
 		m := resp.Items[0]
@@ -194,9 +194,7 @@ func (s *PaddleSyncService) EnsureProductSynced(ctx context.Context, req EnsureP
 		},
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHintf("Failed to create Paddle product for price %s", req.PriceID).
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
 	// Persist mapping: EntityID=priceID → ProviderEntityID=paddleProductID.
@@ -211,9 +209,7 @@ func (s *PaddleSyncService) EnsureProductSynced(ctx context.Context, req EnsureP
 		},
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Product created in Paddle but mapping failed to save").
-			Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
 	return &EnsureProductSyncedResponse{
@@ -244,7 +240,7 @@ func (s *PaddleSyncService) EnsureProductsSynced(ctx context.Context, req Ensure
 	}
 	bulkResp, err := s.mappingService.GetEntityIntegrationMappings(ctx, bulkFilter)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to bulk query price mappings").Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 	result := make(map[string]string, len(req.Items))
 	for _, m := range bulkResp.Items {
@@ -271,7 +267,7 @@ func (s *PaddleSyncService) EnsureProductsSynced(ctx context.Context, req Ensure
 func (s *PaddleSyncService) getOrCreateZeroDollarPrice(ctx context.Context) (string, error) {
 	conn, err := s.connectionRepo.GetByProvider(ctx, types.SecretProviderPaddle)
 	if err != nil {
-		return "", ierr.WithError(err).WithHint("Failed to load Paddle connection").Mark(ierr.ErrDatabase)
+		return "", err
 	}
 	if conn == nil {
 		return "", ierr.NewError("Paddle connection not found").Mark(ierr.ErrNotFound)
@@ -291,9 +287,7 @@ func (s *PaddleSyncService) getOrCreateZeroDollarPrice(ctx context.Context) (str
 		CustomData:  map[string]interface{}{"created_by": "flexprice_subscription_bootstrap"},
 	})
 	if err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Failed to create Paddle anchor product for $0 subscription").
-			Mark(ierr.ErrInternal)
+		return "", err
 	}
 
 	price, err := s.client.CreatePrice(ctx, &paddlesdk.CreatePriceRequest{
@@ -311,9 +305,7 @@ func (s *PaddleSyncService) getOrCreateZeroDollarPrice(ctx context.Context) (str
 		Quantity: &paddlesdk.PriceQuantity{Minimum: 1, Maximum: 1},
 	})
 	if err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Failed to create Paddle $0/month anchor price").
-			Mark(ierr.ErrInternal)
+		return "", err
 	}
 
 	// Cache in connection metadata.
@@ -347,7 +339,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	}
 	resp, err := s.mappingService.GetEntityIntegrationMappings(ctx, filter)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to query subscription mapping").Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 	if len(resp.Items) > 0 {
 		return &EnsureSubscriptionSyncedResponse{
@@ -365,9 +357,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	// Ensure customer is synced first.
 	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: req.CustomerID})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Customer must be synced to Paddle before subscription can be created").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 	if customerResp.PaddleAddressID == "" {
 		return nil, ierr.NewError("Paddle address ID not found after customer sync").
@@ -395,9 +385,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		},
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to create $0 Paddle transaction for subscription bootstrap").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
 	if txn.SubscriptionID == nil || *txn.SubscriptionID == "" {
@@ -421,9 +409,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		},
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Subscription created in Paddle but mapping failed to save").
-			Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
 	return &EnsureSubscriptionSyncedResponse{PaddleSubscriptionID: paddleSubID, Created: true}, nil
@@ -471,7 +457,7 @@ func (s *PaddleSyncService) syncAddressForMapping(
 	// No address ID yet — create one.
 	addr, err := s.client.CreateAddress(ctx, paddleCustomerID, buildCreateAddressRequest(c))
 	if err != nil {
-		return "", ierr.WithError(err).WithHint("Failed to create Paddle address").Mark(ierr.ErrInternal)
+		return "", err
 	}
 	if mappingID != "" {
 		_, err = s.mappingService.UpdateEntityIntegrationMapping(ctx, mappingID, apidto.UpdateEntityIntegrationMappingRequest{
@@ -499,7 +485,7 @@ func (s *PaddleSyncService) getExistingInvoiceMapping(ctx context.Context, invoi
 	}
 	resp, err := s.mappingService.GetEntityIntegrationMappings(ctx, filter)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to check invoice mapping").Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 	if len(resp.Items) == 0 {
 		return nil, nil
@@ -782,7 +768,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 
 	flexInvoice, err := s.invoiceRepo.Get(ctx, req.InvoiceID)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to load invoice").Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
 	// Primary idempotency guard (entity_integration_mapping is the single source of truth).
@@ -810,7 +796,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	// Step 1: Ensure customer.
 	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: flexInvoice.CustomerID})
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Customer sync failed").Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
 	// Step 2: Ensure products (product IDs for all line items).
@@ -836,7 +822,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	}
 	productsResp, err := s.EnsureProductsSynced(ctx, EnsureProductsSyncedRequest{Items: productItems})
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Product sync failed").Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
 	// Step 3: Ensure subscription.
@@ -845,7 +831,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		CustomerID:     flexInvoice.CustomerID,
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Subscription sync failed").Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
 	// Optional tax preview (non-fatal).
@@ -869,9 +855,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		Items:          chargeItems,
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to create Paddle subscription charge").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
 	// Step 6: Fetch the created transaction (CreateSubscriptionCharge returns Subscription, not Transaction).
@@ -883,9 +867,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		PerPage:        &perPage,
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Subscription charge created but failed to retrieve the resulting transaction").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 	if txnCollection == nil || txnCollection.EstimatedTotal() == 0 {
 		return nil, ierr.NewError("no transactions found for subscription after charge").
@@ -940,9 +922,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		Metadata:         invoiceMeta,
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Invoice synced to Paddle but mapping failed to save — retry will recover from invoice metadata").
-			Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
 	return &SyncInvoiceResponse{
@@ -963,7 +943,7 @@ func (s *PaddleSyncService) GetFlexPriceInvoiceIDByTransaction(ctx context.Conte
 	}
 	resp, err := s.mappingService.GetEntityIntegrationMappings(ctx, filter)
 	if err != nil {
-		return "", ierr.WithError(err).WithHint("Failed to look up invoice mapping").Mark(ierr.ErrDatabase)
+		return "", err
 	}
 	if len(resp.Items) == 0 {
 		return "", ierr.NewError("invoice mapping not found for Paddle transaction").
@@ -1110,7 +1090,7 @@ func (s *PaddleSyncService) ProcessAddressCreatedWebhook(
 	}
 	resp, err := s.mappingService.GetEntityIntegrationMappings(ctx, filter)
 	if err != nil {
-		return ierr.WithError(err).WithHint("Failed to find customer mapping for Paddle address").Mark(ierr.ErrDatabase)
+		return err
 	}
 	if len(resp.Items) == 0 {
 		// No FlexPrice customer mapped — skip silently.
@@ -1123,9 +1103,7 @@ func (s *PaddleSyncService) ProcessAddressCreatedWebhook(
 	updateReq := mapToUpdateCustomerAddressRequest(addr)
 	_, err = customerService.UpdateCustomer(ctx, flexCustomerID, updateReq)
 	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to update customer address from Paddle webhook").
-			Mark(ierr.ErrInternal)
+		return err
 	}
 
 	// Update mapping metadata with the new Paddle address ID.
