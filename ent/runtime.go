@@ -1673,6 +1673,10 @@ func init() {
 	subscriptionDescSubscriptionType := subscriptionFields[36].Descriptor()
 	// subscription.DefaultSubscriptionType holds the default value on creation for the subscription_type field.
 	subscription.DefaultSubscriptionType = types.SubscriptionType(subscriptionDescSubscriptionType.Default.(string))
+	// subscriptionDescSyncedPriceSequence is the schema descriptor for synced_price_sequence field.
+	subscriptionDescSyncedPriceSequence := subscriptionFields[38].Descriptor()
+	// subscription.DefaultSyncedPriceSequence holds the default value on creation for the synced_price_sequence field.
+	subscription.DefaultSyncedPriceSequence = subscriptionDescSyncedPriceSequence.Default.(int64)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0

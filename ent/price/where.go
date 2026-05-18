@@ -250,6 +250,11 @@ func GroupID(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldGroupID, v))
 }
 
+// Sequence applies equality check predicate on the "sequence" field. It's identical to SequenceEQ.
+func Sequence(v int64) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldSequence, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldTenantID, v))
@@ -2675,6 +2680,46 @@ func GroupIDEqualFold(v string) predicate.Price {
 // GroupIDContainsFold applies the ContainsFold predicate on the "group_id" field.
 func GroupIDContainsFold(v string) predicate.Price {
 	return predicate.Price(sql.FieldContainsFold(FieldGroupID, v))
+}
+
+// SequenceEQ applies the EQ predicate on the "sequence" field.
+func SequenceEQ(v int64) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldSequence, v))
+}
+
+// SequenceNEQ applies the NEQ predicate on the "sequence" field.
+func SequenceNEQ(v int64) predicate.Price {
+	return predicate.Price(sql.FieldNEQ(FieldSequence, v))
+}
+
+// SequenceIn applies the In predicate on the "sequence" field.
+func SequenceIn(vs ...int64) predicate.Price {
+	return predicate.Price(sql.FieldIn(FieldSequence, vs...))
+}
+
+// SequenceNotIn applies the NotIn predicate on the "sequence" field.
+func SequenceNotIn(vs ...int64) predicate.Price {
+	return predicate.Price(sql.FieldNotIn(FieldSequence, vs...))
+}
+
+// SequenceGT applies the GT predicate on the "sequence" field.
+func SequenceGT(v int64) predicate.Price {
+	return predicate.Price(sql.FieldGT(FieldSequence, v))
+}
+
+// SequenceGTE applies the GTE predicate on the "sequence" field.
+func SequenceGTE(v int64) predicate.Price {
+	return predicate.Price(sql.FieldGTE(FieldSequence, v))
+}
+
+// SequenceLT applies the LT predicate on the "sequence" field.
+func SequenceLT(v int64) predicate.Price {
+	return predicate.Price(sql.FieldLT(FieldSequence, v))
+}
+
+// SequenceLTE applies the LTE predicate on the "sequence" field.
+func SequenceLTE(v int64) predicate.Price {
+	return predicate.Price(sql.FieldLTE(FieldSequence, v))
 }
 
 // HasCostsheet applies the HasEdge predicate on the "costsheet" edge.

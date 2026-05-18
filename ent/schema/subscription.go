@@ -209,6 +209,13 @@ func (Subscription) Fields() []ent.Field {
 				"postgres": "decimal(20,6)",
 			}).
 			Comment("Threshold usage amount (in subscription currency) that triggers an intermediate invoice. Overrides plan-level threshold when set."),
+
+		// Plan-price sequence up to which this subscription's line items
+		// have been reconciled with its plan's prices. Bumped by the
+		// plan-price sync after a successful reconciliation pass.
+		field.Int64("synced_price_sequence").
+			Default(0).
+			Annotations(entsql.Default("0")),
 	}
 }
 
@@ -242,5 +249,8 @@ func (Subscription) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "subscription_status", "status"),
 		// For billing period updates
 		index.Fields("tenant_id", "environment_id", "current_period_end", "subscription_status", "status"),
+		// Drives the plan-price sync's "which subs are behind?" lookup.
+		index.Fields("tenant_id", "environment_id", "plan_id", "synced_price_sequence").
+			Annotations(entsql.IndexWhere("status = 'published'")),
 	}
 }
