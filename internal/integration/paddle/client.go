@@ -33,6 +33,10 @@ type PaddleClient interface {
 	CreateTransaction(ctx context.Context, req *paddle.CreateTransactionRequest) (*paddle.Transaction, error)
 	PreviewTransaction(ctx context.Context, req *paddle.PreviewTransactionCreateRequest) (*paddle.TransactionPreview, error)
 	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string, webhookSecret string) error
+	CreateProduct(ctx context.Context, req *paddle.CreateProductRequest) (*paddle.Product, error)
+	CreatePrice(ctx context.Context, req *paddle.CreatePriceRequest) (*paddle.Price, error)
+	CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error)
+	ListTransactions(ctx context.Context, req *paddle.ListTransactionsRequest) (*paddle.Collection[*paddle.Transaction], error)
 }
 
 // PaddleConfig holds decrypted Paddle connection configuration
@@ -331,6 +335,77 @@ func (c *Client) PreviewTransaction(ctx context.Context, req *paddle.PreviewTran
 
 	c.logger.Infow("successfully previewed transaction in Paddle")
 	return preview, nil
+}
+
+// CreateProduct creates a product in Paddle
+func (c *Client) CreateProduct(ctx context.Context, req *paddle.CreateProductRequest) (*paddle.Product, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	product, err := client.CreateProduct(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to create product in Paddle", "error", err)
+		return nil, ierr.NewError("failed to create product in Paddle: "+err.Error()).
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Infow("created product in Paddle", "product_id", product.ID)
+	return product, nil
+}
+
+// CreatePrice creates a price in Paddle
+func (c *Client) CreatePrice(ctx context.Context, req *paddle.CreatePriceRequest) (*paddle.Price, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	price, err := client.CreatePrice(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to create price in Paddle", "error", err)
+		return nil, ierr.NewError("failed to create price in Paddle: "+err.Error()).
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Infow("created price in Paddle", "price_id", price.ID)
+	return price, nil
+}
+
+// CreateSubscriptionCharge creates a one-time charge on an existing Paddle subscription
+func (c *Client) CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := client.CreateSubscriptionCharge(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to create subscription charge in Paddle",
+			"subscription_id", req.SubscriptionID, "error", err)
+		return nil, ierr.NewError("failed to create subscription charge in Paddle: "+err.Error()).
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": req.SubscriptionID,
+				"error":           err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Infow("created subscription charge in Paddle", "subscription_id", sub.ID)
+	return sub, nil
+}
+
+// ListTransactions lists transactions in Paddle
+func (c *Client) ListTransactions(ctx context.Context, req *paddle.ListTransactionsRequest) (*paddle.Collection[*paddle.Transaction], error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.ListTransactions(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to list transactions in Paddle", "error", err)
+		return nil, ierr.NewError("failed to list transactions in Paddle: "+err.Error()).
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return result, nil
 }
 
 // toCountryCode converts a string to Paddle CountryCode (uppercase ISO 3166-1 alpha-2)
