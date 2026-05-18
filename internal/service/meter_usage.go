@@ -403,6 +403,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				}
 				if r != nil {
 					usage.Usage = r.TotalValue
+					usage.EventCount = r.EventCount
 				}
 				result.LineItemUsages = append(result.LineItemUsages, usage)
 			}
@@ -902,7 +903,6 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 	}
 
 	for _, analytic := range data.Analytics {
-		totalUsage := getCorrectMeterUsageValue(analytic)
 
 		item := dto.UsageAnalyticItem{
 			FeatureID:       analytic.FeatureID,
@@ -917,7 +917,7 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			Unit:            analytic.Unit,
 			UnitPlural:      analytic.UnitPlural,
 			AggregationType: analytic.AggregationType,
-			TotalUsage:      totalUsage,
+			TotalUsage:      analytic.TotalUsage,
 			TotalCost:       analytic.TotalCost,
 			Currency:        analytic.Currency,
 			EventCount:      analytic.EventCount,
@@ -966,23 +966,6 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// getCorrectMeterUsageValue returns the correct usage value based on the aggregation type.
-func getCorrectMeterUsageValue(item *events.DetailedUsageAnalytic) decimal.Decimal {
-	switch item.AggregationType {
-	case types.AggregationCountUnique:
-		return decimal.NewFromInt(int64(item.CountUniqueUsage))
-	case types.AggregationMax:
-		if !item.TotalUsage.IsZero() {
-			return item.TotalUsage
-		}
-		return item.MaxUsage
-	case types.AggregationLatest:
-		return item.LatestUsage
-	default:
-		return item.TotalUsage
-	}
-}
 
 // getUsageValueFromDetailedResult extracts the correct scalar usage from a
 // MeterUsageDetailedResult based on aggregation type.
@@ -1559,8 +1542,6 @@ func (s *meterUsageService) sumPointCosts(points []events.UsageAnalyticPoint) de
 
 // calculateRegularCost calculates cost for regular (non-bucketed) meters.
 func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, m *meter.Meter, p *price.Price, data *AnalyticsData) {
-	item.TotalUsage = s.getCorrectUsageValue(item, m.Aggregation.Type)
-
 	cost := priceService.CalculateCost(ctx, p, item.TotalUsage)
 
 	if item.SubLineItemID != "" {
