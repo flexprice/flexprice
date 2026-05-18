@@ -4485,65 +4485,6 @@
         "x-codegen-request-body-name": "invoice"
       }
     },
-    "/invoices/meter-usage-preview": {
-      "post": {
-        "tags": [
-          "Invoices"
-        ],
-        "summary": "Get invoice preview using meter_usage data",
-        "description": "Preview invoice using the meter_usage table for usage data instead of feature_usage.",
-        "operationId": "getMeterUsagePreviewInvoice",
-        "requestBody": {
-          "description": "Preview Invoice Request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetPreviewInvoiceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvoiceResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "request"
-      }
-    },
     "/invoices/preview": {
       "post": {
         "tags": [
@@ -5379,124 +5320,6 @@
             "ApiKeyAuth": []
           }
         ]
-      }
-    },
-    "/meter-usage/analytics": {
-      "post": {
-        "tags": [
-          "MeterUsage"
-        ],
-        "summary": "Get meter usage analytics",
-        "description": "Query aggregated usage from meter_usage table for multiple meters",
-        "operationId": "getMeterUsageAnalytics",
-        "requestBody": {
-          "description": "Analytics parameters",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MeterUsageAnalyticsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MeterUsageAnalyticsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "request"
-      }
-    },
-    "/meter-usage/query": {
-      "post": {
-        "tags": [
-          "MeterUsage"
-        ],
-        "summary": "Query meter usage",
-        "description": "Query aggregated usage from meter_usage table for a single meter with optional time-window bucketing",
-        "operationId": "queryMeterUsage",
-        "requestBody": {
-          "description": "Query parameters",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MeterUsageQueryRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MeterUsageQueryResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "request"
       }
     },
     "/payments": {
@@ -15693,6 +15516,11 @@
           "invoice_type": {
             "$ref": "#/components/schemas/types.InvoiceType"
           },
+          "issue_date": {
+            "type": "string",
+            "description": "issue_date overrides the user-facing date of the invoice.\nDefaults to created_at if not provided.",
+            "format": "date-time"
+          },
           "line_item_coupons": {
             "type": "array",
             "description": "Invoice Line Item Coupons",
@@ -18447,6 +18275,11 @@
           "invoice_type": {
             "$ref": "#/components/schemas/types.InvoiceType"
           },
+          "issue_date": {
+            "type": "string",
+            "description": "issue_date is the user-facing date of the invoice. Defaults to created_at if not set.",
+            "format": "date-time"
+          },
           "last_computed_at": {
             "type": "string",
             "description": "last_computed_at is the timestamp when this invoice was last computed by ComputeInvoice",
@@ -18836,148 +18669,6 @@
             "type": "string",
             "example": "2024-03-20T15:04:05Z",
             "format": "date-time"
-          }
-        }
-      },
-      "MeterUsageAnalyticsRequest": {
-        "required": [
-          "aggregation_type",
-          "end_time",
-          "external_customer_id",
-          "meter_ids",
-          "start_time"
-        ],
-        "type": "object",
-        "properties": {
-          "aggregation_type": {
-            "$ref": "#/components/schemas/types.AggregationType"
-          },
-          "billing_anchor": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "end_time": {
-            "type": "string",
-            "example": "2024-02-01T00:00:00Z",
-            "format": "date-time"
-          },
-          "external_customer_id": {
-            "type": "string",
-            "example": "cust_123"
-          },
-          "meter_ids": {
-            "minItems": 1,
-            "type": "array",
-            "example": [
-              "mtr_abc",
-              "mtr_def"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "start_time": {
-            "type": "string",
-            "example": "2024-01-01T00:00:00Z",
-            "format": "date-time"
-          },
-          "window_size": {
-            "$ref": "#/components/schemas/types.WindowSize"
-          }
-        }
-      },
-      "MeterUsageAnalyticsResponse": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MeterUsageQueryResponse"
-            }
-          }
-        }
-      },
-      "MeterUsagePoint": {
-        "type": "object",
-        "properties": {
-          "event_count": {
-            "type": "integer",
-            "example": 10
-          },
-          "timestamp": {
-            "type": "string",
-            "example": "2024-01-01T00:00:00Z"
-          },
-          "value": {
-            "type": "string",
-            "example": "100.0000"
-          }
-        }
-      },
-      "MeterUsageQueryRequest": {
-        "required": [
-          "aggregation_type",
-          "end_time",
-          "external_customer_id",
-          "meter_id",
-          "start_time"
-        ],
-        "type": "object",
-        "properties": {
-          "aggregation_type": {
-            "$ref": "#/components/schemas/types.AggregationType"
-          },
-          "billing_anchor": {
-            "type": "string",
-            "example": "2024-01-15T00:00:00Z",
-            "format": "date-time"
-          },
-          "end_time": {
-            "type": "string",
-            "example": "2024-02-01T00:00:00Z",
-            "format": "date-time"
-          },
-          "external_customer_id": {
-            "type": "string",
-            "example": "cust_123"
-          },
-          "meter_id": {
-            "type": "string",
-            "example": "mtr_abc"
-          },
-          "start_time": {
-            "type": "string",
-            "example": "2024-01-01T00:00:00Z",
-            "format": "date-time"
-          },
-          "window_size": {
-            "$ref": "#/components/schemas/types.WindowSize"
-          }
-        }
-      },
-      "MeterUsageQueryResponse": {
-        "type": "object",
-        "properties": {
-          "aggregation_type": {
-            "$ref": "#/components/schemas/types.AggregationType"
-          },
-          "event_count": {
-            "type": "integer",
-            "example": 42
-          },
-          "meter_id": {
-            "type": "string",
-            "example": "mtr_abc"
-          },
-          "points": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MeterUsagePoint"
-            }
-          },
-          "total_value": {
-            "type": "string",
-            "example": "1234.5678"
           }
         }
       },
@@ -22455,6 +22146,38 @@
           }
         }
       },
+      "errors.ErrorCode": {
+        "type": "string",
+        "enum": [
+          "http_client_error",
+          "system_error",
+          "internal_error",
+          "not_found",
+          "already_exists",
+          "version_conflict",
+          "validation_error",
+          "invalid_operation",
+          "permission_denied",
+          "database_error",
+          "service_unavailable",
+          "too_many_requests"
+        ],
+        "x-enum-varnames": [
+          "ErrCodeHTTPClient",
+          "ErrCodeSystemError",
+          "ErrCodeInternalError",
+          "ErrCodeNotFound",
+          "ErrCodeAlreadyExists",
+          "ErrCodeVersionConflict",
+          "ErrCodeValidation",
+          "ErrCodeInvalidOperation",
+          "ErrCodePermissionDenied",
+          "ErrCodeDatabase",
+          "ErrCodeServiceUnavailable",
+          "ErrCodeTooManyRequests"
+        ],
+        "x-speakeasy-name-override": "ErrorCode"
+      },
       "Addon": {
         "type": "object",
         "properties": {
@@ -22766,26 +22489,7 @@
         "type": "object",
         "properties": {
           "code": {
-            "type": "string",
-            "enum": [
-              "not_found",
-              "already_exists",
-              "version_conflict",
-              "validation_error",
-              "invalid_operation",
-              "permission_denied",
-              "http_client_error",
-              "database_error",
-              "system_error",
-              "internal_error",
-              "service_unavailable"
-            ]
-          },
-          "details": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "object"
-            }
+            "$ref": "#/components/schemas/errors.ErrorCode"
           },
           "http_status_code": {
             "type": "integer"
@@ -22809,6 +22513,18 @@
           "AddonAssociationEntityTypeAddon"
         ],
         "x-speakeasy-name-override": "AddonAssociationEntityType"
+      },
+      "types.AddonCadence": {
+        "type": "string",
+        "enum": [
+          "onetime",
+          "recurring"
+        ],
+        "x-enum-varnames": [
+          "AddonCadenceOnetime",
+          "AddonCadenceRecurring"
+        ],
+        "x-speakeasy-name-override": "AddonCadence"
       },
       "types.AddonFilter": {
         "type": "object",
@@ -23721,6 +23437,18 @@
         ],
         "x-speakeasy-name-override": "EntityType"
       },
+      "types.EnvironmentType": {
+        "type": "string",
+        "enum": [
+          "development",
+          "production"
+        ],
+        "x-enum-varnames": [
+          "EnvironmentDevelopment",
+          "EnvironmentProduction"
+        ],
+        "x-speakeasy-name-override": "EnvironmentType"
+      },
       "types.EventProcessingStatusType": {
         "type": "string",
         "enum": [
@@ -23734,6 +23462,39 @@
           "EventProcessingStatusTypeFailed"
         ],
         "x-speakeasy-name-override": "EventProcessingStatusType"
+      },
+      "types.ExportMetadataEntityType": {
+        "type": "string",
+        "enum": [
+          "customer",
+          "wallet"
+        ],
+        "x-enum-varnames": [
+          "ExportMetadataEntityTypeCustomer",
+          "ExportMetadataEntityTypeWallet"
+        ],
+        "x-speakeasy-name-override": "ExportMetadataEntityType"
+      },
+      "types.ExportMetadataField": {
+        "required": [
+          "entity_type",
+          "field_key"
+        ],
+        "type": "object",
+        "properties": {
+          "column_name": {
+            "type": "string",
+            "description": "CSV column header to be shown in the exported file"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.ExportMetadataEntityType"
+          },
+          "field_key": {
+            "type": "string",
+            "description": "metadata key to look up"
+          }
+        },
+        "x-speakeasy-name-override": "ExportMetadataField"
       },
       "types.FailurePoint": {
         "type": "object",
@@ -24850,6 +24611,9 @@
           "moyasar",
           "paddle"
         ],
+        "x-enum-comments": {
+          "SecretProviderS3": "supports multiple connections per environment"
+        },
         "x-enum-varnames": [
           "SecretProviderFlexPrice",
           "SecretProviderStripe",
@@ -25077,6 +24841,114 @@
           "SubscriptionLineItemEntityTypeSubscription"
         ],
         "x-speakeasy-name-override": "SubscriptionLineItemEntityType"
+      },
+      "types.SubscriptionLineItemFilter": {
+        "type": "object",
+        "properties": {
+          "active_filter": {
+            "type": "boolean",
+            "default": true
+          },
+          "addon_association_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "billing_periods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "currencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "current_period_start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.SubscriptionLineItemEntityType"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.FilterCondition"
+            }
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "meter_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "price_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.SortCondition"
+            }
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "subscription_ids": {
+            "type": "array",
+            "description": "Specific filters",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "SubscriptionLineItemFilter"
       },
       "types.SubscriptionScheduleChangeType": {
         "type": "string",
@@ -25667,7 +25539,6 @@
       "types.WindowSize": {
         "type": "string",
         "enum": [
-          "MONTH",
           "MINUTE",
           "15MIN",
           "30MIN",
@@ -25677,10 +25548,10 @@
           "12HOUR",
           "DAY",
           "WEEK",
+          "MONTH",
           "MONTH"
         ],
         "x-enum-varnames": [
-          "DefaultWindowSize",
           "WindowSizeMinute",
           "WindowSize15Min",
           "WindowSize30Min",
@@ -25690,7 +25561,8 @@
           "WindowSize12Hour",
           "WindowSizeDay",
           "WindowSizeWeek",
-          "WindowSizeMonth"
+          "WindowSizeMonth",
+          "DefaultWindowSize"
         ],
         "x-speakeasy-name-override": "WindowSize"
       },
@@ -26501,63 +26373,6 @@
           }
         }
       },
-      "types.AddonCadence": {
-        "type": "string",
-        "enum": [
-          "onetime",
-          "recurring"
-        ],
-        "x-enum-varnames": [
-          "AddonCadenceOnetime",
-          "AddonCadenceRecurring"
-        ],
-        "x-speakeasy-name-override": "AddonCadence"
-      },
-      "types.EnvironmentType": {
-        "type": "string",
-        "enum": [
-          "development",
-          "production"
-        ],
-        "x-enum-varnames": [
-          "EnvironmentDevelopment",
-          "EnvironmentProduction"
-        ],
-        "x-speakeasy-name-override": "EnvironmentType"
-      },
-      "types.ExportMetadataEntityType": {
-        "type": "string",
-        "enum": [
-          "customer",
-          "wallet"
-        ],
-        "x-enum-varnames": [
-          "ExportMetadataEntityTypeCustomer",
-          "ExportMetadataEntityTypeWallet"
-        ],
-        "x-speakeasy-name-override": "ExportMetadataEntityType"
-      },
-      "types.ExportMetadataField": {
-        "required": [
-          "entity_type",
-          "field_key"
-        ],
-        "type": "object",
-        "properties": {
-          "column_name": {
-            "type": "string",
-            "description": "CSV column header to be shown in the exported file"
-          },
-          "entity_type": {
-            "$ref": "#/components/schemas/types.ExportMetadataEntityType"
-          },
-          "field_key": {
-            "type": "string",
-            "description": "metadata key to look up"
-          }
-        },
-        "x-speakeasy-name-override": "ExportMetadataField"
-      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -26579,114 +26394,6 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
-      },
-      "types.SubscriptionLineItemFilter": {
-        "type": "object",
-        "properties": {
-          "active_filter": {
-            "type": "boolean",
-            "default": true
-          },
-          "addon_association_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "billing_periods": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "currencies": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "current_period_start": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "customer_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "end_time": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "entity_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "entity_type": {
-            "$ref": "#/components/schemas/types.SubscriptionLineItemEntityType"
-          },
-          "expand": {
-            "type": "string"
-          },
-          "filters": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.FilterCondition"
-            }
-          },
-          "limit": {
-            "maximum": 1000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "meter_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "offset": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "order": {
-            "type": "string",
-            "enum": [
-              "asc",
-              "desc"
-            ]
-          },
-          "price_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "sort": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.SortCondition"
-            }
-          },
-          "start_time": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "subscription_ids": {
-            "type": "array",
-            "description": "Specific filters",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "x-speakeasy-name-override": "SubscriptionLineItemFilter"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",

@@ -1683,6 +1683,11 @@ definitions:
         - $ref: '#/definitions/types.InvoiceType'
         description: invoice_type indicates the type of invoice (subscription, one_time,
           etc.)
+      issue_date:
+        description: |-
+          issue_date overrides the user-facing date of the invoice.
+          Defaults to created_at if not provided.
+        type: string
       line_item_coupons:
         description: Invoice Line Item Coupons
         items:
@@ -3823,6 +3828,10 @@ definitions:
         - $ref: '#/definitions/types.InvoiceType'
         description: invoice_type indicates the type of invoice - whether this is
           a subscription invoice, one-time charge, or other billing type
+      issue_date:
+        description: issue_date is the user-facing date of the invoice. Defaults to
+          created_at if not set.
+        type: string
       last_computed_at:
         description: last_computed_at is the timestamp when this invoice was last
           computed by ComputeInvoice
@@ -4120,113 +4129,6 @@ definitions:
         type: string
       updated_at:
         example: "2024-03-20T15:04:05Z"
-        type: string
-    type: object
-  MeterUsageAnalyticsRequest:
-    properties:
-      aggregation_type:
-        allOf:
-        - $ref: '#/definitions/types.AggregationType'
-        example: SUM
-      billing_anchor:
-        type: string
-      end_time:
-        example: "2024-02-01T00:00:00Z"
-        type: string
-      external_customer_id:
-        example: cust_123
-        type: string
-      meter_ids:
-        example:
-        - mtr_abc
-        - mtr_def
-        items:
-          type: string
-        minItems: 1
-        type: array
-      start_time:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      window_size:
-        allOf:
-        - $ref: '#/definitions/types.WindowSize'
-        example: DAY
-    required:
-    - aggregation_type
-    - end_time
-    - external_customer_id
-    - meter_ids
-    - start_time
-    type: object
-  MeterUsageAnalyticsResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/MeterUsageQueryResponse'
-        type: array
-    type: object
-  MeterUsagePoint:
-    properties:
-      event_count:
-        example: 10
-        type: integer
-      timestamp:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      value:
-        example: "100.0000"
-        type: string
-    type: object
-  MeterUsageQueryRequest:
-    properties:
-      aggregation_type:
-        allOf:
-        - $ref: '#/definitions/types.AggregationType'
-        example: SUM
-      billing_anchor:
-        example: "2024-01-15T00:00:00Z"
-        type: string
-      end_time:
-        example: "2024-02-01T00:00:00Z"
-        type: string
-      external_customer_id:
-        example: cust_123
-        type: string
-      meter_id:
-        example: mtr_abc
-        type: string
-      start_time:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      window_size:
-        allOf:
-        - $ref: '#/definitions/types.WindowSize'
-        example: DAY
-    required:
-    - aggregation_type
-    - end_time
-    - external_customer_id
-    - meter_id
-    - start_time
-    type: object
-  MeterUsageQueryResponse:
-    properties:
-      aggregation_type:
-        allOf:
-        - $ref: '#/definitions/types.AggregationType'
-        example: SUM
-      event_count:
-        example: 42
-        type: integer
-      meter_id:
-        example: mtr_abc
-        type: string
-      points:
-        items:
-          $ref: '#/definitions/MeterUsagePoint'
-        type: array
-      total_value:
-        example: "1234.5678"
         type: string
     type: object
   OverrideEntitlementRequest:
@@ -6852,6 +6754,34 @@ definitions:
       workflow_type:
         type: string
     type: object
+  errors.ErrorCode:
+    enum:
+    - http_client_error
+    - system_error
+    - internal_error
+    - not_found
+    - already_exists
+    - version_conflict
+    - validation_error
+    - invalid_operation
+    - permission_denied
+    - database_error
+    - service_unavailable
+    - too_many_requests
+    type: string
+    x-enum-varnames:
+    - ErrCodeHTTPClient
+    - ErrCodeSystemError
+    - ErrCodeInternalError
+    - ErrCodeNotFound
+    - ErrCodeAlreadyExists
+    - ErrCodeVersionConflict
+    - ErrCodeValidation
+    - ErrCodeInvalidOperation
+    - ErrCodePermissionDenied
+    - ErrCodeDatabase
+    - ErrCodeServiceUnavailable
+    - ErrCodeTooManyRequests
   Addon:
     properties:
       created_at:
@@ -7060,22 +6990,7 @@ definitions:
   errors.ErrorResponse:
     properties:
       code:
-        enum:
-        - not_found
-        - already_exists
-        - version_conflict
-        - validation_error
-        - invalid_operation
-        - permission_denied
-        - http_client_error
-        - database_error
-        - system_error
-        - internal_error
-        - service_unavailable
-        type: string
-      details:
-        additionalProperties: {}
-        type: object
+        $ref: '#/definitions/errors.ErrorCode'
       http_status_code:
         type: integer
       message:
@@ -7091,6 +7006,14 @@ definitions:
     - AddonAssociationEntityTypeSubscription
     - AddonAssociationEntityTypePlan
     - AddonAssociationEntityTypeAddon
+  types.AddonCadence:
+    enum:
+    - onetime
+    - recurring
+    type: string
+    x-enum-varnames:
+    - AddonCadenceOnetime
+    - AddonCadenceRecurring
   types.AddonFilter:
     properties:
       addon_ids:
@@ -7722,6 +7645,14 @@ definitions:
     - EntityTypePrices
     - EntityTypeCustomers
     - EntityTypeFeatures
+  types.EnvironmentType:
+    enum:
+    - development
+    - production
+    type: string
+    x-enum-varnames:
+    - EnvironmentDevelopment
+    - EnvironmentProduction
   types.EventProcessingStatusType:
     enum:
     - processed
@@ -7732,6 +7663,30 @@ definitions:
     - EventProcessingStatusTypeProcessed
     - EventProcessingStatusTypeProcessing
     - EventProcessingStatusTypeFailed
+  types.ExportMetadataEntityType:
+    enum:
+    - customer
+    - wallet
+    type: string
+    x-enum-varnames:
+    - ExportMetadataEntityTypeCustomer
+    - ExportMetadataEntityTypeWallet
+  types.ExportMetadataField:
+    properties:
+      column_name:
+        description: CSV column header to be shown in the exported file
+        type: string
+      entity_type:
+        allOf:
+        - $ref: '#/definitions/types.ExportMetadataEntityType'
+        description: which entity's metadata to read from
+      field_key:
+        description: metadata key to look up
+        type: string
+    required:
+    - entity_type
+    - field_key
+    type: object
   types.FailurePoint:
     properties:
       error:
@@ -8548,6 +8503,8 @@ definitions:
     - moyasar
     - paddle
     type: string
+    x-enum-comments:
+      SecretProviderS3: supports multiple connections per environment
     x-enum-varnames:
     - SecretProviderFlexPrice
     - SecretProviderStripe
@@ -8711,6 +8668,77 @@ definitions:
     - SubscriptionLineItemEntityTypePlan
     - SubscriptionLineItemEntityTypeAddon
     - SubscriptionLineItemEntityTypeSubscription
+  types.SubscriptionLineItemFilter:
+    properties:
+      active_filter:
+        default: true
+        type: boolean
+      addon_association_ids:
+        items:
+          type: string
+        type: array
+      billing_periods:
+        items:
+          type: string
+        type: array
+      currencies:
+        items:
+          type: string
+        type: array
+      current_period_start:
+        type: string
+      customer_ids:
+        items:
+          type: string
+        type: array
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
+      expand:
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      meter_ids:
+        items:
+          type: string
+        type: array
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      price_ids:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_ids:
+        description: Specific filters
+        items:
+          type: string
+        type: array
+    type: object
   types.SubscriptionScheduleChangeType:
     enum:
     - plan_change
@@ -9149,7 +9177,6 @@ definitions:
     - WebhookEventCreditNoteUpdated
   types.WindowSize:
     enum:
-    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -9160,9 +9187,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
+    - MONTH
     type: string
     x-enum-varnames:
-    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -9173,6 +9200,7 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
+    - DefaultWindowSize
   types.WorkflowExecutionFilter:
     properties:
       end_time:
@@ -9778,46 +9806,6 @@ definitions:
       updated_by:
         type: string
     type: object
-  types.AddonCadence:
-    enum:
-    - onetime
-    - recurring
-    type: string
-    x-enum-varnames:
-    - AddonCadenceOnetime
-    - AddonCadenceRecurring
-  types.EnvironmentType:
-    enum:
-    - development
-    - production
-    type: string
-    x-enum-varnames:
-    - EnvironmentDevelopment
-    - EnvironmentProduction
-  types.ExportMetadataEntityType:
-    enum:
-    - customer
-    - wallet
-    type: string
-    x-enum-varnames:
-    - ExportMetadataEntityTypeCustomer
-    - ExportMetadataEntityTypeWallet
-  types.ExportMetadataField:
-    properties:
-      column_name:
-        description: CSV column header to be shown in the exported file
-        type: string
-      entity_type:
-        allOf:
-        - $ref: '#/definitions/types.ExportMetadataEntityType'
-        description: which entity's metadata to read from
-      field_key:
-        description: metadata key to look up
-        type: string
-    required:
-    - entity_type
-    - field_key
-    type: object
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -9830,77 +9818,6 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
-    type: object
-  types.SubscriptionLineItemFilter:
-    properties:
-      active_filter:
-        default: true
-        type: boolean
-      addon_association_ids:
-        items:
-          type: string
-        type: array
-      billing_periods:
-        items:
-          type: string
-        type: array
-      currencies:
-        items:
-          type: string
-        type: array
-      current_period_start:
-        type: string
-      customer_ids:
-        items:
-          type: string
-        type: array
-      end_time:
-        type: string
-      entity_ids:
-        items:
-          type: string
-        type: array
-      entity_type:
-        $ref: '#/definitions/types.SubscriptionLineItemEntityType'
-      expand:
-        type: string
-      filters:
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      meter_ids:
-        items:
-          type: string
-        type: array
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      price_ids:
-        items:
-          type: string
-        type: array
-      sort:
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      subscription_ids:
-        description: Specific filters
-        items:
-          type: string
-        type: array
     type: object
   webhookDto.AlertWebhookPayload:
     properties:
@@ -12869,40 +12786,6 @@ paths:
       summary: Void invoice
       tags:
       - Invoices
-  /invoices/meter-usage-preview:
-    post:
-      consumes:
-      - application/json
-      description: Preview invoice using the meter_usage table for usage data instead
-        of feature_usage.
-      operationId: getMeterUsagePreviewInvoice
-      parameters:
-      - description: Preview Invoice Request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/GetPreviewInvoiceRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/InvoiceResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get invoice preview using meter_usage data
-      tags:
-      - Invoices
   /invoices/preview:
     post:
       consumes:
@@ -12972,73 +12855,6 @@ paths:
       summary: Query invoices
       tags:
       - Invoices
-  /meter-usage/analytics:
-    post:
-      consumes:
-      - application/json
-      description: Query aggregated usage from meter_usage table for multiple meters
-      operationId: getMeterUsageAnalytics
-      parameters:
-      - description: Analytics parameters
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/MeterUsageAnalyticsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/MeterUsageAnalyticsResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get meter usage analytics
-      tags:
-      - MeterUsage
-  /meter-usage/query:
-    post:
-      consumes:
-      - application/json
-      description: Query aggregated usage from meter_usage table for a single meter
-        with optional time-window bucketing
-      operationId: queryMeterUsage
-      parameters:
-      - description: Query parameters
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/MeterUsageQueryRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/MeterUsageQueryResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Query meter usage
-      tags:
-      - MeterUsage
   /payments:
     get:
       consumes:
