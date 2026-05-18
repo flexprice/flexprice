@@ -16,6 +16,7 @@ import (
 type TenantService interface {
 	CreateTenant(ctx context.Context, req dto.CreateTenantRequest) (*dto.TenantResponse, error)
 	GetTenantByID(ctx context.Context, id string) (*dto.TenantResponse, error)
+	GetTenantInternalStatus(ctx context.Context, id string) (types.TenantInternalStatus, error)
 	AssignTenantToUser(ctx context.Context, req dto.AssignTenantRequest) error
 	GetAllTenants(ctx context.Context) ([]*dto.TenantResponse, error)
 	UpdateTenant(ctx context.Context, id string, req dto.UpdateTenantRequest) (*dto.TenantResponse, error)
@@ -167,6 +168,15 @@ func (s *tenantService) GetTenantByID(ctx context.Context, id string) (*dto.Tena
 	}
 
 	return dto.NewTenantResponse(t), nil
+}
+
+func (s *tenantService) GetTenantInternalStatus(ctx context.Context, id string) (types.TenantInternalStatus, error) {
+	t, err := s.TenantRepo.GetByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+
+	return t.InternalStatus, nil
 }
 
 func (s *tenantService) AssignTenantToUser(ctx context.Context, req dto.AssignTenantRequest) error {

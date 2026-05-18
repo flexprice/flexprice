@@ -62965,6 +62965,7 @@ type TenantMutation struct {
 	id              *string
 	name            *string
 	status          *string
+	internal_status *string
 	created_at      *time.Time
 	updated_at      *time.Time
 	billing_details *schema.TenantBillingDetails
@@ -63149,6 +63150,42 @@ func (m *TenantMutation) OldStatus(ctx context.Context) (v string, err error) {
 // ResetStatus resets all changes to the "status" field.
 func (m *TenantMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetInternalStatus sets the "internal_status" field.
+func (m *TenantMutation) SetInternalStatus(s string) {
+	m.internal_status = &s
+}
+
+// InternalStatus returns the value of the "internal_status" field in the mutation.
+func (m *TenantMutation) InternalStatus() (r string, exists bool) {
+	v := m.internal_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInternalStatus returns the old "internal_status" field's value of the Tenant entity.
+// If the Tenant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TenantMutation) OldInternalStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInternalStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInternalStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInternalStatus: %w", err)
+	}
+	return oldValue.InternalStatus, nil
+}
+
+// ResetInternalStatus resets all changes to the "internal_status" field.
+func (m *TenantMutation) ResetInternalStatus() {
+	m.internal_status = nil
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -63355,12 +63392,15 @@ func (m *TenantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TenantMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m.name != nil {
 		fields = append(fields, tenant.FieldName)
 	}
 	if m.status != nil {
 		fields = append(fields, tenant.FieldStatus)
+	}
+	if m.internal_status != nil {
+		fields = append(fields, tenant.FieldInternalStatus)
 	}
 	if m.created_at != nil {
 		fields = append(fields, tenant.FieldCreatedAt)
@@ -63386,6 +63426,8 @@ func (m *TenantMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case tenant.FieldStatus:
 		return m.Status()
+	case tenant.FieldInternalStatus:
+		return m.InternalStatus()
 	case tenant.FieldCreatedAt:
 		return m.CreatedAt()
 	case tenant.FieldUpdatedAt:
@@ -63407,6 +63449,8 @@ func (m *TenantMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldName(ctx)
 	case tenant.FieldStatus:
 		return m.OldStatus(ctx)
+	case tenant.FieldInternalStatus:
+		return m.OldInternalStatus(ctx)
 	case tenant.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case tenant.FieldUpdatedAt:
@@ -63437,6 +63481,13 @@ func (m *TenantMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case tenant.FieldInternalStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInternalStatus(v)
 		return nil
 	case tenant.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -63535,6 +63586,9 @@ func (m *TenantMutation) ResetField(name string) error {
 		return nil
 	case tenant.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case tenant.FieldInternalStatus:
+		m.ResetInternalStatus()
 		return nil
 	case tenant.FieldCreatedAt:
 		m.ResetCreatedAt()
