@@ -3065,7 +3065,7 @@ func (s *invoiceService) reconcileLineItems(
 			toInsert = append(toInsert, newItem)
 			continue
 		}
-		if old, ok := existingBySubLineItemID[*newItem.SubLineItemID]; ok {
+		if old, ok := existingBySubLineItemID[lo.FromPtr(newItem.SubLineItemID)]; ok {
 			// Replace the entire computed payload, then restore immutable identity/audit fields.
 			// This ensures every field produced by ToInvoiceLineItem is refreshed (PriceID,
 			// MeterID, PriceType, PeriodStart/End, display names, etc.) without requiring
