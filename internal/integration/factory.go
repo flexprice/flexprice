@@ -417,9 +417,6 @@ func (f *Factory) GetQuickBooksIntegration(ctx context.Context) (*QuickBooksInte
 
 // GetPaddleIntegration returns a complete Paddle integration setup
 func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration, error) {
-	// Verify a Paddle connection exists for this environment before building the integration.
-	// This allows callers (e.g. Temporal activities) to detect ErrNotFound early and stop
-	// retrying a permanent configuration problem.
 	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderPaddle)
 	if err != nil {
 		return nil, err
@@ -430,24 +427,15 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 			Mark(ierr.ErrNotFound)
 	}
 
-	paddleClient := paddle.NewClient(
-		f.connectionRepo,
-		f.encryptionService,
-		f.logger,
-	)
+	paddleClient := paddle.NewClient(f.connectionRepo, f.encryptionService, f.logger)
 
-	customerSvc := paddle.NewCustomerService(
+	syncSvc := paddle.NewPaddleSyncService(
 		paddleClient,
 		f.customerRepo,
-		f.entityIntegrationMappingRepo,
-		f.logger,
-	)
-
-	invoiceSyncSvc := paddle.NewInvoiceSyncService(
-		paddleClient,
-		customerSvc,
 		f.invoiceRepo,
+		f.subscriptionRepo,
 		f.entityIntegrationMappingRepo,
+		f.connectionRepo,
 		f.logger,
 		f.config.Auth.Secret,
 	)
@@ -456,15 +444,14 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 
 	webhookHandler := paddlewebhook.NewHandler(
 		paymentSvc,
-		customerSvc,
+		syncSvc,
 		f.entityIntegrationMappingRepo,
 		f.logger,
 	)
 
 	return &PaddleIntegration{
 		Client:         paddleClient,
-		CustomerSvc:    customerSvc,
-		InvoiceSyncSvc: invoiceSyncSvc,
+		SyncSvc:        syncSvc,
 		WebhookHandler: webhookHandler,
 	}, nil
 }
@@ -729,8 +716,7 @@ type QuickBooksIntegration struct {
 // PaddleIntegration contains all Paddle integration services
 type PaddleIntegration struct {
 	Client         paddle.PaddleClient
-	CustomerSvc    paddle.PaddleCustomerService
-	InvoiceSyncSvc *paddle.InvoiceSyncService
+	SyncSvc        *paddle.PaddleSyncService
 	WebhookHandler *paddlewebhook.Handler
 }
 

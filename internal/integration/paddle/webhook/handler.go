@@ -20,7 +20,7 @@ import (
 // Handler handles Paddle webhook events
 type Handler struct {
 	paymentSvc                   *paddle.PaymentService
-	customerSvc                  paddle.PaddleCustomerService
+	syncSvc                      *paddle.PaddleSyncService
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	logger                       *logger.Logger
 }
@@ -28,13 +28,13 @@ type Handler struct {
 // NewHandler creates a new Paddle webhook handler
 func NewHandler(
 	paymentSvc *paddle.PaymentService,
-	customerSvc paddle.PaddleCustomerService,
+	syncSvc *paddle.PaddleSyncService,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
 ) *Handler {
 	return &Handler{
 		paymentSvc:                   paymentSvc,
-		customerSvc:                  customerSvc,
+		syncSvc:                      syncSvc,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		logger:                       logger,
 	}
@@ -131,7 +131,7 @@ func (h *Handler) handleCustomerCreated(ctx context.Context, payload []byte, ser
 		"paddle_customer_id", event.Data.ID,
 		"customer_email", event.Data.Email)
 
-	err := h.customerSvc.CreateCustomerFromPaddle(ctx, &event.Data, services.CustomerService)
+	err := h.syncSvc.CreateCustomerFromPaddle(ctx, &event.Data, services.CustomerService)
 	if err != nil {
 		h.logger.Errorw("failed to create customer from Paddle webhook",
 			"error", err,
@@ -201,7 +201,7 @@ func (h *Handler) handleAddressCreated(ctx context.Context, payload []byte, serv
 	if existingMapping.Metadata == nil {
 		existingMapping.Metadata = make(map[string]interface{})
 	}
-	existingMapping.Metadata["paddle_address_id"] = event.Data.ID
+	existingMapping.Metadata[paddle.MetaKeyPaddleAddressID] = event.Data.ID
 	existingMapping.UpdatedAt = time.Now().UTC()
 	if err := h.entityIntegrationMappingRepo.Update(ctx, existingMapping); err != nil {
 		h.logger.Errorw("failed to update customer mapping with paddle_address_id",
