@@ -6,17 +6,118 @@ import (
 	"time"
 
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
+	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// inMemoryMappingService wraps entityintegrationmapping.Repository to implement
+// interfaces.EntityIntegrationMappingService for testing.
+type inMemoryMappingService struct {
+	repo entityintegrationmapping.Repository
+}
+
+func newTestMappingService(repo entityintegrationmapping.Repository) interfaces.EntityIntegrationMappingService {
+	return &inMemoryMappingService{repo: repo}
+}
+
+func (s *inMemoryMappingService) CreateEntityIntegrationMapping(ctx context.Context, req apidto.CreateEntityIntegrationMappingRequest) (*apidto.EntityIntegrationMappingResponse, error) {
+	m := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         req.EntityID,
+		EntityType:       req.EntityType,
+		ProviderType:     req.ProviderType,
+		ProviderEntityID: req.ProviderEntityID,
+		Metadata:         req.Metadata,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	if err := s.repo.Create(ctx, m); err != nil {
+		return nil, err
+	}
+	return toTestMappingResponse(m), nil
+}
+
+func (s *inMemoryMappingService) GetEntityIntegrationMapping(ctx context.Context, id string) (*apidto.EntityIntegrationMappingResponse, error) {
+	m, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toTestMappingResponse(m), nil
+}
+
+func (s *inMemoryMappingService) GetEntityIntegrationMappings(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (*apidto.ListEntityIntegrationMappingsResponse, error) {
+	if filter == nil {
+		filter = &types.EntityIntegrationMappingFilter{QueryFilter: types.NewDefaultQueryFilter()}
+	}
+	mappings, err := s.repo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	total, err := s.repo.Count(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*apidto.EntityIntegrationMappingResponse, 0, len(mappings))
+	for _, m := range mappings {
+		items = append(items, toTestMappingResponse(m))
+	}
+	return &apidto.ListEntityIntegrationMappingsResponse{
+		Items:      items,
+		Pagination: types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset()),
+	}, nil
+}
+
+func (s *inMemoryMappingService) UpdateEntityIntegrationMapping(ctx context.Context, id string, req apidto.UpdateEntityIntegrationMappingRequest) (*apidto.EntityIntegrationMappingResponse, error) {
+	m, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if req.ProviderEntityID != nil {
+		m.ProviderEntityID = *req.ProviderEntityID
+	}
+	if req.Metadata != nil {
+		m.Metadata = req.Metadata
+	}
+	if err := s.repo.Update(ctx, m); err != nil {
+		return nil, err
+	}
+	return toTestMappingResponse(m), nil
+}
+
+func (s *inMemoryMappingService) DeleteEntityIntegrationMapping(ctx context.Context, id string) error {
+	m, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(ctx, m)
+}
+
+func (s *inMemoryMappingService) LinkIntegrationMapping(ctx context.Context, req apidto.LinkIntegrationMappingRequest) (*apidto.LinkIntegrationMappingResponse, error) {
+	return nil, nil
+}
+
+func toTestMappingResponse(m *entityintegrationmapping.EntityIntegrationMapping) *apidto.EntityIntegrationMappingResponse {
+	return &apidto.EntityIntegrationMappingResponse{
+		ID:               m.ID,
+		EntityID:         m.EntityID,
+		EntityType:       m.EntityType,
+		ProviderType:     m.ProviderType,
+		ProviderEntityID: m.ProviderEntityID,
+		Metadata:         m.Metadata,
+		EnvironmentID:    m.EnvironmentID,
+		TenantID:         m.TenantID,
+	}
+}
 
 // mockPaddleClient implements paddle.PaddleClient for testing.
 // Each method has a function-field override; unset fields return safe zero values.
@@ -181,8 +282,7 @@ func buildTestSyncService(
 		client,
 		customerRepo,
 		invoiceRepo,
-		nil, // subscriptionRepo — not needed for idempotency tests
-		mappingRepo,
+		newTestMappingService(mappingRepo),
 		connectionRepo,
 		buildTestLogger(),
 		"test-auth-secret",
