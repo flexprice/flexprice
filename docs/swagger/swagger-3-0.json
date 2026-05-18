@@ -4485,65 +4485,6 @@
         "x-codegen-request-body-name": "invoice"
       }
     },
-    "/invoices/meter-usage-preview": {
-      "post": {
-        "tags": [
-          "Invoices"
-        ],
-        "summary": "Get invoice preview using meter_usage data",
-        "description": "Preview invoice using the meter_usage table for usage data instead of feature_usage.",
-        "operationId": "getMeterUsagePreviewInvoice",
-        "requestBody": {
-          "description": "Preview Invoice Request",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetPreviewInvoiceRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvoiceResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/errors.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "ApiKeyAuth": []
-          }
-        ],
-        "x-codegen-request-body-name": "request"
-      }
-    },
     "/invoices/preview": {
       "post": {
         "tags": [
@@ -25598,7 +25539,6 @@
       "types.WindowSize": {
         "type": "string",
         "enum": [
-          "MONTH",
           "MINUTE",
           "15MIN",
           "30MIN",
@@ -25608,10 +25548,10 @@
           "12HOUR",
           "DAY",
           "WEEK",
+          "MONTH",
           "MONTH"
         ],
         "x-enum-varnames": [
-          "DefaultWindowSize",
           "WindowSizeMinute",
           "WindowSize15Min",
           "WindowSize30Min",
@@ -25621,7 +25561,8 @@
           "WindowSize12Hour",
           "WindowSizeDay",
           "WindowSizeWeek",
-          "WindowSizeMonth"
+          "WindowSizeMonth",
+          "DefaultWindowSize"
         ],
         "x-speakeasy-name-override": "WindowSize"
       },

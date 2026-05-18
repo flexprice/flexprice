@@ -9177,7 +9177,6 @@ definitions:
     - WebhookEventCreditNoteUpdated
   types.WindowSize:
     enum:
-    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -9188,9 +9187,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
+    - MONTH
     type: string
     x-enum-varnames:
-    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -9201,6 +9200,7 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
+    - DefaultWindowSize
   types.WorkflowExecutionFilter:
     properties:
       end_time:
@@ -12784,40 +12784,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Void invoice
-      tags:
-      - Invoices
-  /invoices/meter-usage-preview:
-    post:
-      consumes:
-      - application/json
-      description: Preview invoice using the meter_usage table for usage data instead
-        of feature_usage.
-      operationId: getMeterUsagePreviewInvoice
-      parameters:
-      - description: Preview Invoice Request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/GetPreviewInvoiceRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/InvoiceResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get invoice preview using meter_usage data
       tags:
       - Invoices
   /invoices/preview:
