@@ -142,6 +142,13 @@ func (r *environmentRepository) List(ctx context.Context, filter types.Filter) (
 		Limit(filter.Limit).
 		Offset(filter.Offset)
 
+	if filter.Type != "" {
+		query = query.Where(entEnvironment.Type(string(filter.Type)))
+	}
+	if filter.Status != "" {
+		query = query.Where(entEnvironment.Status(string(filter.Status)))
+	}
+
 	environments, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)

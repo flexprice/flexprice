@@ -1773,13 +1773,12 @@ func (s *subscriptionService) CancelSubscription(
 		return nil, err
 	}
 
+	// Idempotent: already-cancelled is success so batch/retry flows can safely retry.
 	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled {
-		return nil, ierr.NewError("subscription is already cancelled").
-			WithHint("The subscription is already cancelled").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-			}).
-			Mark(ierr.ErrValidation)
+		return &dto.CancelSubscriptionResponse{
+			SubscriptionID: subscription.ID,
+			Message:        "Subscription is already cancelled",
+		}, nil
 	}
 
 	if subscription.SubscriptionType == types.SubscriptionTypeInherited {
@@ -1858,11 +1857,16 @@ func (s *subscriptionService) CancelSubscription(
 			invoiceService := NewInvoiceService(s.ServiceParams)
 			paymentParams := dto.NewPaymentParametersFromSubscription(subscription.CollectionMethod, subscription.PaymentBehavior, subscription.GatewayPaymentMethodID)
 			paymentParams = paymentParams.NormalizePaymentParameters()
+			cancelInvoiceMeta := types.Metadata{}
+			if req.Reason != "" {
+				cancelInvoiceMeta["cancellation_reason"] = req.Reason
+			}
 			inv, _, err := invoiceService.CreateSubscriptionInvoice(ctx, &dto.CreateSubscriptionInvoiceRequest{
 				SubscriptionID: subscription.ID,
 				PeriodStart:    subscription.CurrentPeriodStart,
 				PeriodEnd:      effectiveDate,
 				ReferencePoint: types.ReferencePointCancel,
+				Metadata:       cancelInvoiceMeta,
 			}, paymentParams, types.InvoiceFlowCancel, false)
 			if err != nil {
 				return err
@@ -1925,9 +1929,18 @@ func (s *subscriptionService) CancelSubscription(
 		// Step 8: Void future credit grants
 		// Step 8: Set credit grant end dates to effective cancellation date, then archive grants
 		creditGrantService := NewCreditGrantService(s.ServiceParams)
+		// For immediate cancellations there is no pinned effective date — grants should end
+		// now (DeleteCreditGrant defaults to time.Now() when EffectiveDate is nil), and
+		// passing nil skips the 1-minute tolerance validation in Validate().
+		// For end-of-period / scheduled-date we pass the specific future date so grants
+		// are wound down at the right time.
+		var grantEffectiveDate *time.Time
+		if req.CancellationType != types.CancellationTypeImmediate {
+			grantEffectiveDate = &effectiveDate
+		}
 		err = creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
 			SubscriptionID: subscription.ID,
-			EffectiveDate:  &effectiveDate,
+			EffectiveDate:  grantEffectiveDate,
 		})
 		if err != nil {
 			return err

@@ -132,8 +132,10 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 
 	subscriptionService := service.NewSubscriptionService(params)
+	settingsService := service.NewSettingsService(params)
 
 	scheduleBillingActivities := subscriptionActivities.NewSubscriptionActivities(subscriptionService)
+	sandboxCleanupActivities := subscriptionActivities.NewSandboxSubscriptionCleanupActivities(subscriptionService, settingsService, params)
 	billingActivities := subscriptionActivities.NewBillingActivities(
 		subscriptionService,
 		params,
@@ -244,7 +246,6 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	creditGrantService := service.NewCreditGrantService(params)
 	tenantService := service.NewTenantService(params)
 	envAccessService := service.NewEnvAccessService(params.Config)
-	settingsService := service.NewSettingsService(params)
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
 	cronBundle := &cronActivityBundle{
 		creditGrant:          cronActivities.NewCreditGrantActivities(creditGrantService),
@@ -255,7 +256,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities, envActivities, cronBundle)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, customerActivities, scheduleBillingActivities, sandboxCleanupActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities, envActivities, cronBundle)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -294,6 +295,7 @@ func buildWorkerConfig(
 	zohoInvoiceSyncActivities *zohoActivities.InvoiceSyncActivities,
 	customerActivities *customerActivities.CustomerActivities,
 	scheduleBillingActivities *subscriptionActivities.SubscriptionActivities,
+	sandboxCleanupActivities *subscriptionActivities.SandboxSubscriptionCleanupActivities,
 	billingActivities *subscriptionActivities.BillingActivities,
 	invoiceActs *invoiceActivities.InvoiceActivities,
 	reprocessEventsActivities *eventsActivities.ReprocessEventsActivities,
@@ -383,12 +385,16 @@ func buildWorkerConfig(
 		workflowsList = append(
 			workflowsList,
 			subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
+			subscriptionWorkflows.SandboxSubscriptionCleanupWorkflow,
 			subscriptionWorkflows.ProcessSubscriptionBillingWorkflow,
 			invoiceWorkflows.RecalculateInvoiceWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			// Schedule billing activities
 			scheduleBillingActivities.ScheduleBillingActivity,
+			// Sandbox subscription cleanup (build list + terminate batches)
+			sandboxCleanupActivities.BuildSandboxCleanupListActivity,
+			sandboxCleanupActivities.TerminateSandboxSubscriptionsBatchActivity,
 			// Subscription billing period activities
 			billingActivities.CheckDraftSubscriptionActivity,
 			billingActivities.CalculatePeriodsActivity,

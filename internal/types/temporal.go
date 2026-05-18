@@ -98,6 +98,7 @@ const (
 	TemporalSubscriptionChangeWorkflow                 TemporalWorkflowType = "SubscriptionChangeWorkflow"
 	TemporalSubscriptionCreationWorkflow               TemporalWorkflowType = "SubscriptionCreationWorkflow"
 	TemporalTaskProcessingWorkflow                     TemporalWorkflowType = "TaskProcessingWorkflow"
+	TemporalSandboxSubscriptionCleanupWorkflow         TemporalWorkflowType = "SandboxSubscriptionCleanupWorkflow"
 )
 
 // temporalCronWorkflowTypes is the single list of schedule/worker cron workflows (keeps
@@ -114,6 +115,7 @@ var temporalCronWorkflowTypes = []TemporalWorkflowType{
 
 var workflowTypesExcludedFromTrackingCore = []TemporalWorkflowType{
 	TemporalScheduleSubscriptionBillingWorkflow,
+	TemporalSandboxSubscriptionCleanupWorkflow,
 	TemporalProcessSubscriptionBillingWorkflow,
 	TemporalProcessInvoiceWorkflow,
 	TemporalScheduleDraftFinalizationWorkflow,
@@ -179,6 +181,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalSubscriptionChangeWorkflow,
 		TemporalSubscriptionCreationWorkflow,
 		TemporalTaskProcessingWorkflow,
+		TemporalSandboxSubscriptionCleanupWorkflow,
 	}...)
 	if lo.Contains(allowedWorkflows, w) {
 		return nil
@@ -201,7 +204,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueuePrice
 	case TemporalExecuteExportWorkflow:
 		return TemporalTaskQueueExport
-	case TemporalScheduleSubscriptionBillingWorkflow:
+	case TemporalScheduleSubscriptionBillingWorkflow, TemporalSandboxSubscriptionCleanupWorkflow:
 		return TemporalTaskQueueSubscription
 	case TemporalProcessSubscriptionBillingWorkflow:
 		return TemporalTaskQueueSubscription
@@ -267,6 +270,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 	case TemporalTaskQueueSubscription:
 		return []TemporalWorkflowType{
 			TemporalScheduleSubscriptionBillingWorkflow,
+			TemporalSandboxSubscriptionCleanupWorkflow,
 			TemporalProcessSubscriptionBillingWorkflow,
 			TemporalRecalculateInvoiceWorkflow,
 		}

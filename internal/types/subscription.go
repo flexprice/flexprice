@@ -304,6 +304,8 @@ type SubscriptionFilter struct {
 	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	// EnvironmentIDs filters by environment IDs (e.g. for sandbox/development env listing)
+	EnvironmentIDs []string `json:"environment_ids,omitempty" form:"environment_ids"`
 	// CustomerID filters by customer ID
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
 

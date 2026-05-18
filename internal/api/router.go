@@ -308,6 +308,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 			subscription.POST("/temporal/schedule-update-billing-period", handlers.ScheduledTask.ScheduleUpdateBillingPeriod)
 			subscription.POST("/temporal/schedule-draft-finalization", handlers.ScheduledTask.ScheduleDraftFinalization)
+			subscription.POST("/temporal/schedule-sandbox-subscriptions-cleanup", handlers.ScheduledTask.ScheduleSandboxSubscriptionsCleanup)
 
 			// Trigger subscription billing workflow
 			subscription.POST("/temporal/:subscription_id/trigger-workflow", handlers.Subscription.TriggerSubscriptionWorkflow)

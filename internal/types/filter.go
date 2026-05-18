@@ -9,12 +9,13 @@ import (
 
 // TODO : deprecate
 type Filter struct {
-	Limit  int    `form:"limit,default=50"`
-	Offset int    `form:"offset,default=0"`
-	Status Status `form:"status,default=published"`
-	Sort   string `form:"sort,default=created_at"`
-	Order  string `form:"order,default=desc"`
-	Expand string `form:"expand"`
+	Limit  int             `form:"limit,default=50"`
+	Offset int             `form:"offset,default=0"`
+	Status Status          `form:"status,default=published"`
+	Sort   string          `form:"sort,default=created_at"`
+	Order  string          `form:"order,default=desc"`
+	Expand string          `form:"expand"`
+	Type   EnvironmentType `form:"type"` // optional: filter by environment type (e.g. development)
 }
 
 const (
