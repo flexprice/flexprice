@@ -748,6 +748,16 @@ type CreateInvoiceLineItemRequest struct {
 
 	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
 	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty" swaggertype:"string"`
+
+	// sub_line_item_id links this line item to the subscription_line_item that generated it.
+	SubLineItemID *string `json:"sub_line_item_id,omitempty"`
+
+	// subscription_id overrides the invoice's subscription_id for this specific line item.
+	// Used for grouped invoicing where child line items belong to child subscriptions.
+	SubscriptionID *string `json:"subscription_id,omitempty"`
+
+	// adjusted_from_entitlement_quantity is the entitlement-covered units deducted from raw usage.
+	AdjustedFromEntitlementQuantity *decimal.Decimal `json:"adjusted_from_entitlement_quantity,omitempty" swaggertype:"string"`
 }
 
 func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) error {
@@ -826,8 +836,13 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
 		InvoiceID:             inv.ID,
 		CustomerID:            inv.CustomerID,
-		SubscriptionID:        inv.SubscriptionID,
-		PriceID:               r.PriceID,
+		SubscriptionID: func() *string {
+			if r.SubscriptionID != nil {
+				return r.SubscriptionID
+			}
+			return inv.SubscriptionID
+		}(),
+		PriceID: r.PriceID,
 		EntityID:              r.EntityID,
 		EntityType:            r.EntityType,
 		PlanDisplayName:       r.PlanDisplayName,
@@ -846,9 +861,11 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		EnvironmentID:         types.GetEnvironmentID(ctx),
 		BaseModel:             types.GetDefaultBaseModel(ctx),
 		CommitmentInfo:        r.CommitmentInfo,
-		PrepaidCreditsApplied: lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
-		LineItemDiscount:      lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
-		InvoiceLevelDiscount:  lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
+		PrepaidCreditsApplied:           lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
+		LineItemDiscount:                lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount:            lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
+		SubLineItemID:                   r.SubLineItemID,
+		AdjustedFromEntitlementQuantity: r.AdjustedFromEntitlementQuantity,
 	}
 }
 

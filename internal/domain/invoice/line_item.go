@@ -45,6 +45,13 @@ type InvoiceLineItem struct {
 	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
 	InvoiceLevelDiscount decimal.Decimal `json:"invoice_level_discount" swaggertype:"string"`
 
+	// adjusted_from_entitlement_quantity is the entitlement-covered portion deducted from raw usage.
+	// Nil when no entitlement was applied. Raw usage = Quantity + AdjustedFromEntitlementQuantity.
+	AdjustedFromEntitlementQuantity *decimal.Decimal `json:"adjusted_from_entitlement_quantity,omitempty" swaggertype:"string"`
+
+	// sub_line_item_id links this invoice line item to the subscription_line_item that generated it.
+	SubLineItemID *string `json:"sub_line_item_id,omitempty"`
+
 	types.BaseModel
 }
 
@@ -78,9 +85,11 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		Metadata:              e.Metadata,
 		CommitmentInfo:        e.CommitmentInfo,
 		EnvironmentID:         e.EnvironmentID,
-		PrepaidCreditsApplied: lo.FromPtrOr(e.PrepaidCreditsApplied, decimal.Zero),
-		LineItemDiscount:      lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
-		InvoiceLevelDiscount:  lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
+		PrepaidCreditsApplied:           lo.FromPtrOr(e.PrepaidCreditsApplied, decimal.Zero),
+		LineItemDiscount:                lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount:            lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
+		AdjustedFromEntitlementQuantity: e.AdjustedFromEntitlementQuantity,
+		SubLineItemID:                   e.SubLineItemID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
