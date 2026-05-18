@@ -219,9 +219,9 @@ func SubLineItemID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldSubLineItemID, v))
 }
 
-// AdjustedFromEntitlementQuantity applies equality check predicate on the "adjusted_from_entitlement_quantity" field. It's identical to AdjustedFromEntitlementQuantityEQ.
-func AdjustedFromEntitlementQuantity(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldEQ(FieldAdjustedFromEntitlementQuantity, v))
+// AdjustedEntitlementQuantity applies equality check predicate on the "adjusted_entitlement_quantity" field. It's identical to AdjustedEntitlementQuantityEQ.
+func AdjustedEntitlementQuantity(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldAdjustedEntitlementQuantity, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -2192,54 +2192,54 @@ func SubLineItemIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldSubLineItemID, v))
 }
 
-// AdjustedFromEntitlementQuantityEQ applies the EQ predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityEQ(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldEQ(FieldAdjustedFromEntitlementQuantity, v))
+// AdjustedEntitlementQuantityEQ applies the EQ predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldAdjustedEntitlementQuantity, v))
 }
 
-// AdjustedFromEntitlementQuantityNEQ applies the NEQ predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityNEQ(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldAdjustedFromEntitlementQuantity, v))
+// AdjustedEntitlementQuantityNEQ applies the NEQ predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityNEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldAdjustedEntitlementQuantity, v))
 }
 
-// AdjustedFromEntitlementQuantityIn applies the In predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldIn(FieldAdjustedFromEntitlementQuantity, vs...))
+// AdjustedEntitlementQuantityIn applies the In predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldAdjustedEntitlementQuantity, vs...))
 }
 
-// AdjustedFromEntitlementQuantityNotIn applies the NotIn predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityNotIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldAdjustedFromEntitlementQuantity, vs...))
+// AdjustedEntitlementQuantityNotIn applies the NotIn predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityNotIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldAdjustedEntitlementQuantity, vs...))
 }
 
-// AdjustedFromEntitlementQuantityGT applies the GT predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityGT(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldGT(FieldAdjustedFromEntitlementQuantity, v))
+// AdjustedEntitlementQuantityGT applies the GT predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityGT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldAdjustedEntitlementQuantity, v))
 }
 
-// AdjustedFromEntitlementQuantityGTE applies the GTE predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityGTE(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldGTE(FieldAdjustedFromEntitlementQuantity, v))
+// AdjustedEntitlementQuantityGTE applies the GTE predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityGTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldAdjustedEntitlementQuantity, v))
 }
 
-// AdjustedFromEntitlementQuantityLT applies the LT predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityLT(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldLT(FieldAdjustedFromEntitlementQuantity, v))
+// AdjustedEntitlementQuantityLT applies the LT predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityLT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldAdjustedEntitlementQuantity, v))
 }
 
-// AdjustedFromEntitlementQuantityLTE applies the LTE predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityLTE(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldLTE(FieldAdjustedFromEntitlementQuantity, v))
+// AdjustedEntitlementQuantityLTE applies the LTE predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityLTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldAdjustedEntitlementQuantity, v))
 }
 
-// AdjustedFromEntitlementQuantityIsNil applies the IsNil predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityIsNil() predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldAdjustedFromEntitlementQuantity))
+// AdjustedEntitlementQuantityIsNil applies the IsNil predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldAdjustedEntitlementQuantity))
 }
 
-// AdjustedFromEntitlementQuantityNotNil applies the NotNil predicate on the "adjusted_from_entitlement_quantity" field.
-func AdjustedFromEntitlementQuantityNotNil() predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldAdjustedFromEntitlementQuantity))
+// AdjustedEntitlementQuantityNotNil applies the NotNil predicate on the "adjusted_entitlement_quantity" field.
+func AdjustedEntitlementQuantityNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldAdjustedEntitlementQuantity))
 }
 
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.

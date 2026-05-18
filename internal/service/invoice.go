@@ -3069,7 +3069,7 @@ func (s *invoiceService) reconcileLineItems(
 			// Apply new computed values to the existing record (preserves ID)
 			old.Amount = newItem.Amount
 			old.Quantity = newItem.Quantity
-			old.AdjustedFromEntitlementQuantity = newItem.AdjustedFromEntitlementQuantity
+			old.AdjustedEntitlementQuantity = newItem.AdjustedEntitlementQuantity
 			old.PrepaidCreditsApplied = decimal.Zero // reset; reapplied by applyCreditsAndCouponsToInvoice
 			old.LineItemDiscount = decimal.Zero
 			old.InvoiceLevelDiscount = decimal.Zero

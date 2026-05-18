@@ -192,7 +192,7 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Immutable().
 			Comment("ID of the subscription_line_item that generated this invoice line item"),
 
-		field.Other("adjusted_from_entitlement_quantity", decimal.Decimal{}).
+		field.Other("adjusted_entitlement_quantity", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).

@@ -123,7 +123,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetEnvironmentID(item.EnvironmentID).
 		SetCommitmentInfo(item.CommitmentInfo).
 		SetNillableSubLineItemID(item.SubLineItemID).
-		SetNillableAdjustedFromEntitlementQuantity(item.AdjustedFromEntitlementQuantity).
+		SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -209,7 +209,7 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetEnvironmentID(item.EnvironmentID).
 				SetCommitmentInfo(item.CommitmentInfo).
 				SetNillableSubLineItemID(item.SubLineItemID).
-				SetNillableAdjustedFromEntitlementQuantity(item.AdjustedFromEntitlementQuantity).
+				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
 				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -323,10 +323,10 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
-	if item.AdjustedFromEntitlementQuantity != nil {
-		q = q.SetAdjustedFromEntitlementQuantity(*item.AdjustedFromEntitlementQuantity)
+	if item.AdjustedEntitlementQuantity != nil {
+		q = q.SetAdjustedEntitlementQuantity(*item.AdjustedEntitlementQuantity)
 	} else {
-		q = q.ClearAdjustedFromEntitlementQuantity()
+		q = q.ClearAdjustedEntitlementQuantity()
 	}
 
 	_, err := q.Save(ctx)

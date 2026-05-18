@@ -86,7 +86,7 @@ type InvoiceLineItem struct {
 	// ID of the subscription_line_item that generated this invoice line item
 	SubLineItemID *string `json:"sub_line_item_id,omitempty"`
 	// Entitlement-covered units deducted from raw usage. Nil when no entitlement applied
-	AdjustedFromEntitlementQuantity *decimal.Decimal `json:"adjusted_from_entitlement_quantity,omitempty"`
+	AdjustedEntitlementQuantity *decimal.Decimal `json:"adjusted_entitlement_quantity,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceLineItemQuery when eager-loading is set.
 	Edges        InvoiceLineItemEdges `json:"edges"`
@@ -129,7 +129,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldPrepaidCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount, invoicelineitem.FieldAdjustedFromEntitlementQuantity:
+		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldPrepaidCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount, invoicelineitem.FieldAdjustedEntitlementQuantity:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo:
 			values[i] = new([]byte)
@@ -374,12 +374,12 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 				ili.SubLineItemID = new(string)
 				*ili.SubLineItemID = value.String
 			}
-		case invoicelineitem.FieldAdjustedFromEntitlementQuantity:
+		case invoicelineitem.FieldAdjustedEntitlementQuantity:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field adjusted_from_entitlement_quantity", values[i])
+				return fmt.Errorf("unexpected type %T for field adjusted_entitlement_quantity", values[i])
 			} else if value.Valid {
-				ili.AdjustedFromEntitlementQuantity = new(decimal.Decimal)
-				*ili.AdjustedFromEntitlementQuantity = *value.S.(*decimal.Decimal)
+				ili.AdjustedEntitlementQuantity = new(decimal.Decimal)
+				*ili.AdjustedEntitlementQuantity = *value.S.(*decimal.Decimal)
 			}
 		default:
 			ili.selectValues.Set(columns[i], values[i])
@@ -559,8 +559,8 @@ func (ili *InvoiceLineItem) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	if v := ili.AdjustedFromEntitlementQuantity; v != nil {
-		builder.WriteString("adjusted_from_entitlement_quantity=")
+	if v := ili.AdjustedEntitlementQuantity; v != nil {
+		builder.WriteString("adjusted_entitlement_quantity=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteByte(')')

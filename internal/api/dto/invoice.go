@@ -756,8 +756,8 @@ type CreateInvoiceLineItemRequest struct {
 	// Used for grouped invoicing where child line items belong to child subscriptions.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
 
-	// adjusted_from_entitlement_quantity is the entitlement-covered units deducted from raw usage.
-	AdjustedFromEntitlementQuantity *decimal.Decimal `json:"adjusted_from_entitlement_quantity,omitempty" swaggertype:"string"`
+	// adjusted_entitlement_quantity is the entitlement-covered units deducted from raw usage.
+	AdjustedEntitlementQuantity *decimal.Decimal `json:"adjusted_entitlement_quantity,omitempty" swaggertype:"string"`
 }
 
 func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) error {
@@ -864,7 +864,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		LineItemDiscount:                lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
 		InvoiceLevelDiscount:            lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
 		SubLineItemID:                   r.SubLineItemID,
-		AdjustedFromEntitlementQuantity: r.AdjustedFromEntitlementQuantity,
+		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
 }
 

@@ -29346,50 +29346,50 @@ func (m *InvoiceMutation) ResetEdge(name string) error {
 // InvoiceLineItemMutation represents an operation that mutates the InvoiceLineItem nodes in the graph.
 type InvoiceLineItemMutation struct {
 	config
-	op                                 Op
-	typ                                string
-	id                                 *string
-	tenant_id                          *string
-	status                             *string
-	created_at                         *time.Time
-	updated_at                         *time.Time
-	created_by                         *string
-	updated_by                         *string
-	environment_id                     *string
-	customer_id                        *string
-	subscription_id                    *string
-	entity_id                          *string
-	entity_type                        *types.InvoiceLineItemEntityType
-	plan_display_name                  *string
-	price_id                           *string
-	price_type                         *types.PriceType
-	meter_id                           *string
-	meter_display_name                 *string
-	price_unit_id                      *string
-	price_unit                         *string
-	price_unit_amount                  *decimal.Decimal
-	display_name                       *string
-	amount                             *decimal.Decimal
-	quantity                           *decimal.Decimal
-	currency                           *string
-	period_start                       *time.Time
-	period_end                         *time.Time
-	metadata                           *map[string]string
-	commitment_info                    **types.CommitmentInfo
-	prepaid_credits_applied            *decimal.Decimal
-	line_item_discount                 *decimal.Decimal
-	invoice_level_discount             *decimal.Decimal
-	sub_line_item_id                   *string
-	adjusted_from_entitlement_quantity *decimal.Decimal
-	clearedFields                      map[string]struct{}
-	invoice                            *string
-	clearedinvoice                     bool
-	coupon_applications                map[string]struct{}
-	removedcoupon_applications         map[string]struct{}
-	clearedcoupon_applications         bool
-	done                               bool
-	oldValue                           func(context.Context) (*InvoiceLineItem, error)
-	predicates                         []predicate.InvoiceLineItem
+	op                            Op
+	typ                           string
+	id                            *string
+	tenant_id                     *string
+	status                        *string
+	created_at                    *time.Time
+	updated_at                    *time.Time
+	created_by                    *string
+	updated_by                    *string
+	environment_id                *string
+	customer_id                   *string
+	subscription_id               *string
+	entity_id                     *string
+	entity_type                   *types.InvoiceLineItemEntityType
+	plan_display_name             *string
+	price_id                      *string
+	price_type                    *types.PriceType
+	meter_id                      *string
+	meter_display_name            *string
+	price_unit_id                 *string
+	price_unit                    *string
+	price_unit_amount             *decimal.Decimal
+	display_name                  *string
+	amount                        *decimal.Decimal
+	quantity                      *decimal.Decimal
+	currency                      *string
+	period_start                  *time.Time
+	period_end                    *time.Time
+	metadata                      *map[string]string
+	commitment_info               **types.CommitmentInfo
+	prepaid_credits_applied       *decimal.Decimal
+	line_item_discount            *decimal.Decimal
+	invoice_level_discount        *decimal.Decimal
+	sub_line_item_id              *string
+	adjusted_entitlement_quantity *decimal.Decimal
+	clearedFields                 map[string]struct{}
+	invoice                       *string
+	clearedinvoice                bool
+	coupon_applications           map[string]struct{}
+	removedcoupon_applications    map[string]struct{}
+	clearedcoupon_applications    bool
+	done                          bool
+	oldValue                      func(context.Context) (*InvoiceLineItem, error)
+	predicates                    []predicate.InvoiceLineItem
 }
 
 var _ ent.Mutation = (*InvoiceLineItemMutation)(nil)
@@ -30947,53 +30947,53 @@ func (m *InvoiceLineItemMutation) ResetSubLineItemID() {
 	delete(m.clearedFields, invoicelineitem.FieldSubLineItemID)
 }
 
-// SetAdjustedFromEntitlementQuantity sets the "adjusted_from_entitlement_quantity" field.
-func (m *InvoiceLineItemMutation) SetAdjustedFromEntitlementQuantity(d decimal.Decimal) {
-	m.adjusted_from_entitlement_quantity = &d
+// SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
+func (m *InvoiceLineItemMutation) SetAdjustedEntitlementQuantity(d decimal.Decimal) {
+	m.adjusted_entitlement_quantity = &d
 }
 
-// AdjustedFromEntitlementQuantity returns the value of the "adjusted_from_entitlement_quantity" field in the mutation.
-func (m *InvoiceLineItemMutation) AdjustedFromEntitlementQuantity() (r decimal.Decimal, exists bool) {
-	v := m.adjusted_from_entitlement_quantity
+// AdjustedEntitlementQuantity returns the value of the "adjusted_entitlement_quantity" field in the mutation.
+func (m *InvoiceLineItemMutation) AdjustedEntitlementQuantity() (r decimal.Decimal, exists bool) {
+	v := m.adjusted_entitlement_quantity
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAdjustedFromEntitlementQuantity returns the old "adjusted_from_entitlement_quantity" field's value of the InvoiceLineItem entity.
+// OldAdjustedEntitlementQuantity returns the old "adjusted_entitlement_quantity" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldAdjustedFromEntitlementQuantity(ctx context.Context) (v *decimal.Decimal, err error) {
+func (m *InvoiceLineItemMutation) OldAdjustedEntitlementQuantity(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAdjustedFromEntitlementQuantity is only allowed on UpdateOne operations")
+		return v, errors.New("OldAdjustedEntitlementQuantity is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAdjustedFromEntitlementQuantity requires an ID field in the mutation")
+		return v, errors.New("OldAdjustedEntitlementQuantity requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAdjustedFromEntitlementQuantity: %w", err)
+		return v, fmt.Errorf("querying old value for OldAdjustedEntitlementQuantity: %w", err)
 	}
-	return oldValue.AdjustedFromEntitlementQuantity, nil
+	return oldValue.AdjustedEntitlementQuantity, nil
 }
 
-// ClearAdjustedFromEntitlementQuantity clears the value of the "adjusted_from_entitlement_quantity" field.
-func (m *InvoiceLineItemMutation) ClearAdjustedFromEntitlementQuantity() {
-	m.adjusted_from_entitlement_quantity = nil
-	m.clearedFields[invoicelineitem.FieldAdjustedFromEntitlementQuantity] = struct{}{}
+// ClearAdjustedEntitlementQuantity clears the value of the "adjusted_entitlement_quantity" field.
+func (m *InvoiceLineItemMutation) ClearAdjustedEntitlementQuantity() {
+	m.adjusted_entitlement_quantity = nil
+	m.clearedFields[invoicelineitem.FieldAdjustedEntitlementQuantity] = struct{}{}
 }
 
-// AdjustedFromEntitlementQuantityCleared returns if the "adjusted_from_entitlement_quantity" field was cleared in this mutation.
-func (m *InvoiceLineItemMutation) AdjustedFromEntitlementQuantityCleared() bool {
-	_, ok := m.clearedFields[invoicelineitem.FieldAdjustedFromEntitlementQuantity]
+// AdjustedEntitlementQuantityCleared returns if the "adjusted_entitlement_quantity" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) AdjustedEntitlementQuantityCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldAdjustedEntitlementQuantity]
 	return ok
 }
 
-// ResetAdjustedFromEntitlementQuantity resets all changes to the "adjusted_from_entitlement_quantity" field.
-func (m *InvoiceLineItemMutation) ResetAdjustedFromEntitlementQuantity() {
-	m.adjusted_from_entitlement_quantity = nil
-	delete(m.clearedFields, invoicelineitem.FieldAdjustedFromEntitlementQuantity)
+// ResetAdjustedEntitlementQuantity resets all changes to the "adjusted_entitlement_quantity" field.
+func (m *InvoiceLineItemMutation) ResetAdjustedEntitlementQuantity() {
+	m.adjusted_entitlement_quantity = nil
+	delete(m.clearedFields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 }
 
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
@@ -31208,8 +31208,8 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.sub_line_item_id != nil {
 		fields = append(fields, invoicelineitem.FieldSubLineItemID)
 	}
-	if m.adjusted_from_entitlement_quantity != nil {
-		fields = append(fields, invoicelineitem.FieldAdjustedFromEntitlementQuantity)
+	if m.adjusted_entitlement_quantity != nil {
+		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 	}
 	return fields
 }
@@ -31283,8 +31283,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoiceLevelDiscount()
 	case invoicelineitem.FieldSubLineItemID:
 		return m.SubLineItemID()
-	case invoicelineitem.FieldAdjustedFromEntitlementQuantity:
-		return m.AdjustedFromEntitlementQuantity()
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		return m.AdjustedEntitlementQuantity()
 	}
 	return nil, false
 }
@@ -31358,8 +31358,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldInvoiceLevelDiscount(ctx)
 	case invoicelineitem.FieldSubLineItemID:
 		return m.OldSubLineItemID(ctx)
-	case invoicelineitem.FieldAdjustedFromEntitlementQuantity:
-		return m.OldAdjustedFromEntitlementQuantity(ctx)
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		return m.OldAdjustedEntitlementQuantity(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -31593,12 +31593,12 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSubLineItemID(v)
 		return nil
-	case invoicelineitem.FieldAdjustedFromEntitlementQuantity:
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetAdjustedFromEntitlementQuantity(v)
+		m.SetAdjustedEntitlementQuantity(v)
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
@@ -31699,8 +31699,8 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldSubLineItemID) {
 		fields = append(fields, invoicelineitem.FieldSubLineItemID)
 	}
-	if m.FieldCleared(invoicelineitem.FieldAdjustedFromEntitlementQuantity) {
-		fields = append(fields, invoicelineitem.FieldAdjustedFromEntitlementQuantity)
+	if m.FieldCleared(invoicelineitem.FieldAdjustedEntitlementQuantity) {
+		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
 	}
 	return fields
 }
@@ -31785,8 +31785,8 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 	case invoicelineitem.FieldSubLineItemID:
 		m.ClearSubLineItemID()
 		return nil
-	case invoicelineitem.FieldAdjustedFromEntitlementQuantity:
-		m.ClearAdjustedFromEntitlementQuantity()
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		m.ClearAdjustedEntitlementQuantity()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem nullable field %s", name)
@@ -31892,8 +31892,8 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 	case invoicelineitem.FieldSubLineItemID:
 		m.ResetSubLineItemID()
 		return nil
-	case invoicelineitem.FieldAdjustedFromEntitlementQuantity:
-		m.ResetAdjustedFromEntitlementQuantity()
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		m.ResetAdjustedEntitlementQuantity()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)

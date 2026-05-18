@@ -223,23 +223,23 @@ func (iliu *InvoiceLineItemUpdate) ClearInvoiceLevelDiscount() *InvoiceLineItemU
 	return iliu
 }
 
-// SetAdjustedFromEntitlementQuantity sets the "adjusted_from_entitlement_quantity" field.
-func (iliu *InvoiceLineItemUpdate) SetAdjustedFromEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetAdjustedFromEntitlementQuantity(d)
+// SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
+func (iliu *InvoiceLineItemUpdate) SetAdjustedEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemUpdate {
+	iliu.mutation.SetAdjustedEntitlementQuantity(d)
 	return iliu
 }
 
-// SetNillableAdjustedFromEntitlementQuantity sets the "adjusted_from_entitlement_quantity" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableAdjustedFromEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemUpdate {
+// SetNillableAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field if the given value is not nil.
+func (iliu *InvoiceLineItemUpdate) SetNillableAdjustedEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemUpdate {
 	if d != nil {
-		iliu.SetAdjustedFromEntitlementQuantity(*d)
+		iliu.SetAdjustedEntitlementQuantity(*d)
 	}
 	return iliu
 }
 
-// ClearAdjustedFromEntitlementQuantity clears the value of the "adjusted_from_entitlement_quantity" field.
-func (iliu *InvoiceLineItemUpdate) ClearAdjustedFromEntitlementQuantity() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearAdjustedFromEntitlementQuantity()
+// ClearAdjustedEntitlementQuantity clears the value of the "adjusted_entitlement_quantity" field.
+func (iliu *InvoiceLineItemUpdate) ClearAdjustedEntitlementQuantity() *InvoiceLineItemUpdate {
+	iliu.mutation.ClearAdjustedEntitlementQuantity()
 	return iliu
 }
 
@@ -445,11 +445,11 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.SubLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubLineItemID, field.TypeString)
 	}
-	if value, ok := iliu.mutation.AdjustedFromEntitlementQuantity(); ok {
-		_spec.SetField(invoicelineitem.FieldAdjustedFromEntitlementQuantity, field.TypeOther, value)
+	if value, ok := iliu.mutation.AdjustedEntitlementQuantity(); ok {
+		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
 	}
-	if iliu.mutation.AdjustedFromEntitlementQuantityCleared() {
-		_spec.ClearField(invoicelineitem.FieldAdjustedFromEntitlementQuantity, field.TypeOther)
+	if iliu.mutation.AdjustedEntitlementQuantityCleared() {
+		_spec.ClearField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther)
 	}
 	if iliu.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -708,23 +708,23 @@ func (iliuo *InvoiceLineItemUpdateOne) ClearInvoiceLevelDiscount() *InvoiceLineI
 	return iliuo
 }
 
-// SetAdjustedFromEntitlementQuantity sets the "adjusted_from_entitlement_quantity" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetAdjustedFromEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetAdjustedFromEntitlementQuantity(d)
+// SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetAdjustedEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetAdjustedEntitlementQuantity(d)
 	return iliuo
 }
 
-// SetNillableAdjustedFromEntitlementQuantity sets the "adjusted_from_entitlement_quantity" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableAdjustedFromEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
+// SetNillableAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field if the given value is not nil.
+func (iliuo *InvoiceLineItemUpdateOne) SetNillableAdjustedEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
 	if d != nil {
-		iliuo.SetAdjustedFromEntitlementQuantity(*d)
+		iliuo.SetAdjustedEntitlementQuantity(*d)
 	}
 	return iliuo
 }
 
-// ClearAdjustedFromEntitlementQuantity clears the value of the "adjusted_from_entitlement_quantity" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearAdjustedFromEntitlementQuantity() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearAdjustedFromEntitlementQuantity()
+// ClearAdjustedEntitlementQuantity clears the value of the "adjusted_entitlement_quantity" field.
+func (iliuo *InvoiceLineItemUpdateOne) ClearAdjustedEntitlementQuantity() *InvoiceLineItemUpdateOne {
+	iliuo.mutation.ClearAdjustedEntitlementQuantity()
 	return iliuo
 }
 
@@ -960,11 +960,11 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	if iliuo.mutation.SubLineItemIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldSubLineItemID, field.TypeString)
 	}
-	if value, ok := iliuo.mutation.AdjustedFromEntitlementQuantity(); ok {
-		_spec.SetField(invoicelineitem.FieldAdjustedFromEntitlementQuantity, field.TypeOther, value)
+	if value, ok := iliuo.mutation.AdjustedEntitlementQuantity(); ok {
+		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
 	}
-	if iliuo.mutation.AdjustedFromEntitlementQuantityCleared() {
-		_spec.ClearField(invoicelineitem.FieldAdjustedFromEntitlementQuantity, field.TypeOther)
+	if iliuo.mutation.AdjustedEntitlementQuantityCleared() {
+		_spec.ClearField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther)
 	}
 	if iliuo.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

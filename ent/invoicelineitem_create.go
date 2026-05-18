@@ -424,16 +424,16 @@ func (ilic *InvoiceLineItemCreate) SetNillableSubLineItemID(s *string) *InvoiceL
 	return ilic
 }
 
-// SetAdjustedFromEntitlementQuantity sets the "adjusted_from_entitlement_quantity" field.
-func (ilic *InvoiceLineItemCreate) SetAdjustedFromEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetAdjustedFromEntitlementQuantity(d)
+// SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
+func (ilic *InvoiceLineItemCreate) SetAdjustedEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetAdjustedEntitlementQuantity(d)
 	return ilic
 }
 
-// SetNillableAdjustedFromEntitlementQuantity sets the "adjusted_from_entitlement_quantity" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableAdjustedFromEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemCreate {
+// SetNillableAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableAdjustedEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemCreate {
 	if d != nil {
-		ilic.SetAdjustedFromEntitlementQuantity(*d)
+		ilic.SetAdjustedEntitlementQuantity(*d)
 	}
 	return ilic
 }
@@ -753,9 +753,9 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 		_spec.SetField(invoicelineitem.FieldSubLineItemID, field.TypeString, value)
 		_node.SubLineItemID = &value
 	}
-	if value, ok := ilic.mutation.AdjustedFromEntitlementQuantity(); ok {
-		_spec.SetField(invoicelineitem.FieldAdjustedFromEntitlementQuantity, field.TypeOther, value)
-		_node.AdjustedFromEntitlementQuantity = &value
+	if value, ok := ilic.mutation.AdjustedEntitlementQuantity(); ok {
+		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
+		_node.AdjustedEntitlementQuantity = &value
 	}
 	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

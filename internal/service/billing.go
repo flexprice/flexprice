@@ -915,7 +915,7 @@ func (s *billingService) CalculateUsageCharges(
 				SubLineItemID:                   lo.ToPtr(item.ID),
 				Metadata:                        metadata,
 				CommitmentInfo:                  commitmentInfo,
-				AdjustedFromEntitlementQuantity: entitlementAdjustedQty,
+				AdjustedEntitlementQuantity: entitlementAdjustedQty,
 			})
 		}
 	}
@@ -1747,7 +1747,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				SubLineItemID:                   lo.ToPtr(item.ID),
 				Metadata:                        metadata,
 				CommitmentInfo:                  commitmentInfo,
-				AdjustedFromEntitlementQuantity: entitlementAdjustedQty,
+				AdjustedEntitlementQuantity: entitlementAdjustedQty,
 			})
 		}
 	}
@@ -1794,7 +1794,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				PeriodEnd:                       lo.ToPtr(bc.item.GetPeriodEnd(periodEnd)),
 				SubLineItemID:                   lo.ToPtr(bc.item.ID),
 				Metadata:                        bc.metadata,
-				AdjustedFromEntitlementQuantity: bc.entitlementAdjustedQty,
+				AdjustedEntitlementQuantity: bc.entitlementAdjustedQty,
 			})
 			totalUsageCost = totalUsageCost.Add(roundedAmount)
 		}

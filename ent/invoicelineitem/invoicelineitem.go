@@ -79,8 +79,8 @@ const (
 	FieldInvoiceLevelDiscount = "invoice_level_discount"
 	// FieldSubLineItemID holds the string denoting the sub_line_item_id field in the database.
 	FieldSubLineItemID = "sub_line_item_id"
-	// FieldAdjustedFromEntitlementQuantity holds the string denoting the adjusted_from_entitlement_quantity field in the database.
-	FieldAdjustedFromEntitlementQuantity = "adjusted_from_entitlement_quantity"
+	// FieldAdjustedEntitlementQuantity holds the string denoting the adjusted_entitlement_quantity field in the database.
+	FieldAdjustedEntitlementQuantity = "adjusted_entitlement_quantity"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -138,7 +138,7 @@ var Columns = []string{
 	FieldLineItemDiscount,
 	FieldInvoiceLevelDiscount,
 	FieldSubLineItemID,
-	FieldAdjustedFromEntitlementQuantity,
+	FieldAdjustedEntitlementQuantity,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -340,9 +340,9 @@ func BySubLineItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubLineItemID, opts...).ToFunc()
 }
 
-// ByAdjustedFromEntitlementQuantity orders the results by the adjusted_from_entitlement_quantity field.
-func ByAdjustedFromEntitlementQuantity(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAdjustedFromEntitlementQuantity, opts...).ToFunc()
+// ByAdjustedEntitlementQuantity orders the results by the adjusted_entitlement_quantity field.
+func ByAdjustedEntitlementQuantity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAdjustedEntitlementQuantity, opts...).ToFunc()
 }
 
 // ByInvoiceField orders the results by invoice field.
