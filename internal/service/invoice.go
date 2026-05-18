@@ -3066,17 +3066,21 @@ func (s *invoiceService) reconcileLineItems(
 			continue
 		}
 		if old, ok := existingBySubLineItemID[*newItem.SubLineItemID]; ok {
-			// Apply new computed values to the existing record (preserves ID)
-			old.Amount = newItem.Amount
-			old.Quantity = newItem.Quantity
-			old.AdjustedEntitlementQuantity = newItem.AdjustedEntitlementQuantity
-			old.PrepaidCreditsApplied = decimal.Zero // reset; reapplied by applyCreditsAndCouponsToInvoice
-			old.LineItemDiscount = decimal.Zero
-			old.InvoiceLevelDiscount = decimal.Zero
-			old.Metadata = newItem.Metadata
-			old.CommitmentInfo = newItem.CommitmentInfo
-			toUpdate = append(toUpdate, old)
-			delete(existingBySubLineItemID, *newItem.SubLineItemID)
+			// Replace the entire computed payload, then restore immutable identity/audit fields.
+			// This ensures every field produced by ToInvoiceLineItem is refreshed (PriceID,
+			// MeterID, PriceType, PeriodStart/End, display names, etc.) without requiring
+			// this call-site to enumerate each mutable field individually.
+			newItem.ID = old.ID
+			newItem.BaseModel.TenantID = old.BaseModel.TenantID
+			newItem.BaseModel.Status = old.BaseModel.Status
+			newItem.BaseModel.CreatedAt = old.BaseModel.CreatedAt
+			newItem.BaseModel.CreatedBy = old.BaseModel.CreatedBy
+			// Reset credit/discount fields — reapplied by applyCreditsAndCouponsToInvoice
+			newItem.PrepaidCreditsApplied = decimal.Zero
+			newItem.LineItemDiscount = decimal.Zero
+			newItem.InvoiceLevelDiscount = decimal.Zero
+			toUpdate = append(toUpdate, newItem)
+			delete(existingBySubLineItemID, lo.FromPtr(newItem.SubLineItemID))
 		} else {
 			toInsert = append(toInsert, newItem)
 		}
