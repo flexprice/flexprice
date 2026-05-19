@@ -406,7 +406,7 @@ func (s *FixedChargeBillingSuite) TestPackage_Arrear_Monthly() {
 		PeriodEnd:    periodEnd,
 	})
 	s.NoError(err)
-	s.Require().Len(result.LineItems, 1)
+	s.Require().Len(result.LineItems, 1, "expected 1 arrear package line item")
 	s.True(result.LineItems[0].Amount.Equal(decimal.NewFromInt(150)),
 		"expected $150 for arrear package, got %s", result.LineItems[0].Amount)
 	s.True(result.TotalAmount.Equal(decimal.NewFromInt(150)))
