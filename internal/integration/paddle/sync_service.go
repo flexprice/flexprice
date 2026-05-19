@@ -202,6 +202,7 @@ func (s *PaddleSyncService) EnsureBulkProductSynced(ctx context.Context, req Ens
 		EntityIDs:     priceIDs,
 		EntityType:    types.IntegrationEntityTypePrice,
 		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+		QueryFilter:   types.NewDefaultQueryFilter(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fetching existing product mappings: %w", err)
@@ -585,12 +586,6 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		return nil, fmt.Errorf("fetching subscription: %w", err)
 	}
 
-	// Step 3: Ensure customer synced.
-	_, err = s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: flexInvoice.CustomerID})
-	if err != nil {
-		return nil, fmt.Errorf("ensuring customer synced: %w", err)
-	}
-
 	// Step 4: Ensure products synced.
 	productItems := make([]EnsureBulkProductSyncedItem, 0, len(flexInvoice.LineItems))
 	for _, li := range flexInvoice.LineItems {
@@ -620,7 +615,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	// Step 6: Build charge items — qty=1, full amount in cents, currency from line item.
 	chargeItems := make([]paddlesdk.CreateSubscriptionChargeItems, 0, len(flexInvoice.LineItems))
 	for _, li := range flexInvoice.LineItems {
-		if li == nil {
+		if li == nil || lo.FromPtr(li.PriceID) == "" {
 			continue
 		}
 		priceID := lo.FromPtr(li.PriceID)
@@ -638,7 +633,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 				Quantity: 1,
 				Price: paddlesdk.SubscriptionChargeCreateWithPrice{
 					ProductID:   paddleProductID,
-					Description: "Flexrice Charge",
+					Description: "FlexPrice Charge",
 					Name:        paddlesdk.PtrTo(displayName),
 					TaxMode:     paddlesdk.TaxModeAccountSetting,
 					UnitPrice: paddlesdk.Money{
@@ -665,6 +660,8 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	}
 
 	// Step 8: Fetch the charge transaction.
+	// Brief wait to allow Paddle to index the newly-created charge transaction.
+	time.Sleep(2 * time.Second)
 	// Filter by origin=subscription_charge to skip the $0 bootstrap transaction (origin=api)
 	// and always retrieve the actual invoice charge regardless of creation order.
 	orderBy := "created_at[DESC]"

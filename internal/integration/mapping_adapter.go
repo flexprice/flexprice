@@ -81,7 +81,12 @@ func (a *entityIntegrationMappingAdapter) UpdateEntityIntegrationMapping(ctx con
 		mapping.ProviderEntityID = *req.ProviderEntityID
 	}
 	if req.Metadata != nil {
-		mapping.Metadata = req.Metadata
+		if mapping.Metadata == nil {
+			mapping.Metadata = make(map[string]interface{})
+		}
+		for k, v := range req.Metadata {
+			mapping.Metadata[k] = v
+		}
 	}
 
 	if err := a.repo.Update(ctx, mapping); err != nil {
