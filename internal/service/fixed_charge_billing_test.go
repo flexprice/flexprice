@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -123,4 +124,73 @@ func fixedPeriod() (time.Time, time.Time) {
 	start := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2025, time.February, 1, 0, 0, 0, 0, time.UTC)
 	return start, end
+}
+
+func (s *FixedChargeBillingSuite) TestFlatFee_Advance_Monthly() {
+	ctx := s.GetContext()
+	s.BaseServiceTestSuite.ClearStores()
+	periodStart, periodEnd := fixedPeriod()
+
+	_, pl := s.seedCustomerAndPlan("cust_ff_adv", "plan_ff_adv")
+
+	p := s.seedPrice(&price.Price{
+		ID:                 "price_ff_adv",
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	})
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_ff_adv",
+		PlanID:             pl.ID,
+		CustomerID:         "cust_ff_adv",
+		StartDate:          periodStart,
+		BillingAnchor:      periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	li := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PriceID:            p.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Flat Fee",
+		Quantity:           decimal.NewFromInt(3),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          periodStart,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.seedSubscriptionWithLineItem(sub, li)
+
+	result, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: sub,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Len(result.LineItems, 1, "expected 1 line item for flat fee advance")
+	s.True(result.LineItems[0].Amount.Equal(decimal.NewFromInt(300)),
+		"expected $100 × 3 = $300, got %s", result.LineItems[0].Amount)
+	s.True(result.TotalAmount.Equal(decimal.NewFromInt(300)))
 }
