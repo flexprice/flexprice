@@ -556,9 +556,9 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		if li == nil || lo.FromPtr(li.PriceID) == "" {
 			continue
 		}
-		name := lo.FromPtrOr(li.DisplayName, *li.PriceID)
+		name := lo.FromPtrOr(li.DisplayName, lo.FromPtr(li.PriceID))
 		productItems = append(productItems, EnsureBulkProductSyncedItem{
-			PriceID: *li.PriceID,
+			PriceID: lo.FromPtr(li.PriceID),
 			Name:    name,
 		})
 	}
@@ -594,6 +594,12 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 			amountCents = 0
 		}
 		name := lo.FromPtrOr(li.DisplayName, priceID)
+		if name == "" {
+			name = priceID
+		}
+		if name == "" {
+			name = paddleProductID
+		}
 		chargeItems = append(chargeItems, *paddlesdk.NewCreateSubscriptionChargeItemsSubscriptionChargeItemCreateWithPrice(
 			&paddlesdk.SubscriptionChargeItemCreateWithPrice{
 				Quantity: 1,
@@ -601,6 +607,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 					ProductID:   paddleProductID,
 					Description: name,
 					Name:        paddlesdk.PtrTo(name),
+					TaxMode:     paddlesdk.TaxModeAccountSetting,
 					UnitPrice: paddlesdk.Money{
 						Amount:       fmt.Sprintf("%d", amountCents),
 						CurrencyCode: paddlesdk.CurrencyCode(strings.ToUpper(li.Currency)),
