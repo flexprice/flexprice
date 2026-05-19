@@ -120,7 +120,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 
 	gatewayType := types.PaymentGatewayTypePaddle
 	metadata := types.Metadata{
-		"payment_source":           MetaKeyPaddlePaymentSource,
+		MetaKeyPaddlePaymentSource: "paddle_external",
 		MetaKeyPaddleTransactionID: paddleTransactionID,
 		"external_payment":         "true",
 	}

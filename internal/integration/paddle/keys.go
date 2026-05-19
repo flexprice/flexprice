@@ -27,7 +27,7 @@ const (
 	MetaKeyPaddlePaymentAttemptID  = "paddle_payment_attempt_id"
 	MetaKeyPaddleCardLast4         = "paddle_card_last4"
 	MetaKeyPaddlePaymentMethodType = "paddle_payment_method_type"
-	MetaKeyPaddlePaymentSource     = "paddle_external"
+	MetaKeyPaddlePaymentSource     = "payment_source"
 
 	// Shared mapping metadata keys
 	MetaKeyCreatedVia = "created_via"

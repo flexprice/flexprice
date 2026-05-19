@@ -11,7 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	subdomain "github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -143,6 +143,7 @@ type mockPaddleClient struct {
 	createCustomerCalled           bool
 	createTransactionCalled        bool
 	createSubscriptionChargeCalled bool
+	createProductCalled            bool
 }
 
 func (m *mockPaddleClient) GetPaddleConfig(ctx context.Context) (*paddle.PaddleConfig, error) {
@@ -234,6 +235,7 @@ func (m *mockPaddleClient) VerifyWebhookSignature(ctx context.Context, payload [
 }
 
 func (m *mockPaddleClient) CreateProduct(ctx context.Context, req *paddlesdk.CreateProductRequest) (*paddlesdk.Product, error) {
+	m.createProductCalled = true
 	if m.createProductFn != nil {
 		return m.createProductFn(ctx, req)
 	}
@@ -277,7 +279,7 @@ func buildTestSyncService(
 	mappingRepo entityintegrationmapping.Repository,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
-	subscriptionRepo subdomain.Repository,
+	subscriptionRepo subscription.Repository,
 	connectionRepo connection.Repository,
 ) *paddle.PaddleSyncService {
 	return paddle.NewPaddleSyncService(
@@ -393,7 +395,7 @@ func TestEnsureSubscriptionSynced_AlreadyMapped(t *testing.T) {
 	svc := buildTestSyncService(mockClient, mappingStore, customerStore, nil, testutil.NewInMemorySubscriptionStore(), connectionStore)
 
 	resp, err := svc.EnsureSubscriptionSynced(ctx, paddle.EnsureSubscriptionSyncedRequest{
-		Subscription: &subdomain.Subscription{
+		Subscription: &subscription.Subscription{
 			ID:         subscriptionID,
 			CustomerID: "cust_test",
 		},
@@ -478,4 +480,7 @@ func TestEnsureBulkProductSynced_AlreadyMapped(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "pro_already_exists", resp.PriceIDToPaddleProductID[priceID])
+
+	// The critical assertion: CreateProduct must NOT be called when mapping already exists.
+	assert.False(t, mockClient.createProductCalled, "CreateProduct must NOT be called when mapping already exists")
 }
