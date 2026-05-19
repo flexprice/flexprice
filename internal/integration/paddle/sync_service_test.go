@@ -133,6 +133,7 @@ type mockPaddleClient struct {
 	createPriceFn              func(ctx context.Context, req *paddlesdk.CreatePriceRequest) (*paddlesdk.Price, error)
 	createSubscriptionChargeFn func(ctx context.Context, req *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error)
 	listTransactionsFn         func(ctx context.Context, req *paddlesdk.ListTransactionsRequest) (*paddlesdk.Collection[*paddlesdk.Transaction], error)
+	getTransactionFn           func(ctx context.Context, transactionID string) (*paddlesdk.Transaction, error)
 	listSubscriptionsFn        func(ctx context.Context, req *paddlesdk.ListSubscriptionsRequest) (*paddlesdk.Collection[*paddlesdk.Subscription], error)
 	getPaddleConfigFn          func(ctx context.Context) (*paddle.PaddleConfig, error)
 	getDecryptedPaddleConfigFn func(conn *connection.Connection) (*paddle.PaddleConfig, error)
@@ -263,6 +264,13 @@ func (m *mockPaddleClient) ListTransactions(ctx context.Context, req *paddlesdk.
 		return m.listTransactionsFn(ctx, req)
 	}
 	return nil, nil
+}
+
+func (m *mockPaddleClient) GetTransaction(ctx context.Context, transactionID string) (*paddlesdk.Transaction, error) {
+	if m.getTransactionFn != nil {
+		return m.getTransactionFn(ctx, transactionID)
+	}
+	return &paddlesdk.Transaction{ID: transactionID}, nil
 }
 
 func (m *mockPaddleClient) ListCustomers(ctx context.Context, req *paddlesdk.ListCustomersRequest) (*paddlesdk.Collection[*paddlesdk.Customer], error) {

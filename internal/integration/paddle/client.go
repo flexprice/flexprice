@@ -38,6 +38,7 @@ type PaddleClient interface {
 	CreatePrice(ctx context.Context, req *paddle.CreatePriceRequest) (*paddle.Price, error)
 	CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error)
 	ListTransactions(ctx context.Context, req *paddle.ListTransactionsRequest) (*paddle.Collection[*paddle.Transaction], error)
+	GetTransaction(ctx context.Context, transactionID string) (*paddle.Transaction, error)
 	ListSubscriptions(ctx context.Context, req *paddle.ListSubscriptionsRequest) (*paddle.Collection[*paddle.Subscription], error)
 }
 
@@ -428,6 +429,23 @@ func (c *Client) ListTransactions(ctx context.Context, req *paddle.ListTransacti
 	}
 	c.logger.Infow("successfully listed transactions in Paddle", "count", result.EstimatedTotal())
 	return result, nil
+}
+
+// GetTransaction fetches a single transaction by ID from Paddle
+func (c *Client) GetTransaction(ctx context.Context, transactionID string) (*paddle.Transaction, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	txn, err := client.GetTransaction(ctx, &paddle.GetTransactionRequest{TransactionID: transactionID})
+	if err != nil {
+		c.logger.Errorw("failed to get transaction from Paddle", "transaction_id", transactionID, "error", err)
+		return nil, ierr.NewError("failed to get transaction from Paddle").
+			WithReportableDetails(map[string]interface{}{"transaction_id": transactionID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Debugw("fetched transaction from Paddle", "transaction_id", txn.ID)
+	return txn, nil
 }
 
 // ListSubscriptions lists subscriptions in Paddle

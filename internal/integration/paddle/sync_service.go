@@ -679,16 +679,24 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	if err != nil {
 		return nil, fmt.Errorf("listing transactions after charge: %w", err)
 	}
-	var txn *paddlesdk.Transaction
+	var txnID string
 	if txnCollection != nil {
 		if res := txnCollection.Next(ctx); res != nil && res.Ok() {
-			txn = res.Value()
+			if v := res.Value(); v != nil {
+				txnID = v.ID
+			}
 		}
 	}
-	if txn == nil {
+	if txnID == "" {
 		return nil, ierr.NewError("no subscription_charge transaction found after charge").
 			WithReportableDetails(map[string]interface{}{"paddle_subscription_id": subResp.PaddleSubscriptionID}).
 			Mark(ierr.ErrInternal)
+	}
+
+	// Fetch the full transaction — ListTransactions omits Checkout.URL in its payload.
+	txn, err := s.client.GetTransaction(ctx, txnID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching charge transaction: %w", err)
 	}
 
 	checkoutURL := ""
