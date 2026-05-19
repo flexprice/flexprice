@@ -4,9 +4,7 @@ package paddle
 // Always use these constants instead of raw string literals to prevent typos.
 const (
 	// Connection metadata keys (stored on the Paddle connection record)
-	ConnKeyRedirectURL         = "redirect_url"
-	ConnKeyZeroDollarProductID = "paddle_zero_dollar_product_id"
-	ConnKeyZeroDollarPriceID   = "paddle_zero_dollar_price_id"
+	ConnKeyRedirectURL = "redirect_url"
 
 	// Customer / address mapping metadata keys
 	MetaKeyPaddleCustomerID    = "paddle_customer_id"
