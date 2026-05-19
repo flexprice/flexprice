@@ -253,47 +253,23 @@ func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping
 	})
 	defer FinishSpan(span)
 
-	tenantID := types.GetTenantID(ctx)
-	environmentID := types.GetEnvironmentID(ctx)
-
-	// Get the existing mapping
-	existingMapping, err := client.EntityIntegrationMapping.Query().
+	// Update the mapping
+	updateQuery := client.EntityIntegrationMapping.Update().
 		Where(
 			entityintegrationmapping.ID(mapping.ID),
-			entityintegrationmapping.TenantID(tenantID),
-			entityintegrationmapping.EnvironmentID(environmentID),
+			entityintegrationmapping.TenantID(types.GetTenantID(ctx)),
+			entityintegrationmapping.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		Only(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-
-		if ent.IsNotFound(err) {
-			return ierr.NewError("entity integration mapping not found").
-				WithHint("The specified entity integration mapping does not exist").
-				WithReportableDetails(map[string]any{
-					"mapping_id": mapping.ID,
-				}).
-				Mark(ierr.ErrNotFound)
-		}
-
-		return ierr.WithError(err).
-			WithHint("Failed to retrieve entity integration mapping for update").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Update the mapping
-	updateQuery := client.EntityIntegrationMapping.UpdateOne(existingMapping).
 		SetEntityID(mapping.EntityID).
 		SetEntityType(string(mapping.EntityType)).
 		SetProviderType(mapping.ProviderType).
 		SetProviderEntityID(mapping.ProviderEntityID).
 		SetMetadata(mapping.Metadata).
 		SetStatus(string(mapping.Status)).
-		SetUpdatedAt(mapping.UpdatedAt).
-		SetUpdatedBy(mapping.UpdatedBy)
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx))
 
-	updatedMapping, err := updateQuery.Save(ctx)
+	_, err := updateQuery.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 
@@ -326,12 +302,6 @@ func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping
 			WithHint("Failed to update entity integration mapping").
 			Mark(ierr.ErrInternal)
 	}
-
-	// Update the domain object with the updated entity
-	*mapping = *domainEntityIntegrationMapping.FromEnt(updatedMapping)
-
-	// Update cache
-	r.SetCache(ctx, mapping)
 
 	return nil
 }
