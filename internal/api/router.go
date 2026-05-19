@@ -45,6 +45,7 @@ type Handlers struct {
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	Integration              *v1.IntegrationHandler
+	Paddle                   *v1.PaddleHandler
 	Settings                 *v1.SettingsHandler
 	SetupIntent              *v1.SetupIntentHandler
 	Group                    *v1.GroupHandler
@@ -511,6 +512,10 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			integrations.POST("/link", handlers.Integration.Link)
 			integrations.POST("/sync", handlers.Integration.Sync)
+			paddleGroup := integrations.Group("/paddle")
+			{
+				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
+			}
 		}
 
 		// Coupon routes
