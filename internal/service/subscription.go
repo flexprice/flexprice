@@ -1905,7 +1905,7 @@ func (s *subscriptionService) CancelSubscription(
 
 		// Step 7b: Terminate plan and subscription-scoped line items (set EndDate = effectiveDate).
 		// Addon line items are already terminated by cancelAddonsForSubscription above.
-		if err := s.cancelNonAddonLineItemsForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
+		if err := s.cancelAllLineItemsForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
 			return err
 		}
 
@@ -6933,18 +6933,17 @@ func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx con
 	}, nil
 }
 
-// cancelNonAddonLineItemsForSubscription sets EndDate on plan and subscription-scoped line
+// cancelAllLineItemsForSubscription sets EndDate on plan and subscription-scoped line
 // items for the subscription up to effectiveDate. Items that have not yet started
 // (StartDate > effectiveDate) are skipped because they never became active; the
-// subscription-level EndDate already protects billing. Addon line items are skipped because
-// they are terminated by cancelAddonsForSubscription via DeleteSubscriptionLineItem.
+// subscription-level EndDate already protects billing.
 // Uses direct repository update (not DeleteSubscriptionLineItem) to avoid the effectiveFrom
 // validation in that service function.
 //
 // Setting EndDate on subscription-scoped line items is required so that meter usage queries
 // (see GetSubscriptionMeterUsage) clip the ClickHouse query window at the cancellation date —
 // without it, usage events after cancellation would still be picked up.
-func (s *subscriptionService) cancelNonAddonLineItemsForSubscription(
+func (s *subscriptionService) cancelAllLineItemsForSubscription(
 	ctx context.Context,
 	subscriptionID string,
 	effectiveDate time.Time,
@@ -6967,11 +6966,6 @@ func (s *subscriptionService) cancelNonAddonLineItemsForSubscription(
 
 	terminated := 0
 	for _, item := range lineItems {
-		// Addon line items are handled by cancelAddonsForSubscription
-		if item.EntityType == types.SubscriptionLineItemEntityTypeAddon {
-			continue
-		}
-
 		// Skip items that haven't started yet — they never became active
 		if item.StartDate.After(effectiveDate) {
 			logger.Debugw("skipping line item not yet started",
