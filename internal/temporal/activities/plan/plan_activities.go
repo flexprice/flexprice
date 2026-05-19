@@ -80,6 +80,43 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 	return result, nil
 }
 
+// SyncPlanPricesV2 is the V2 (sequence-driven) plan-price sync activity. It
+// reuses the same input shape, lock-release semantics, and response shape as
+// SyncPlanPrices so the workflow code stays minimal — the algorithmic
+// difference lives in planService.SyncPlanPricesV2.
+func (a *PlanActivities) SyncPlanPricesV2(ctx context.Context, input SyncPlanPricesInput) (*dto.SyncPlanPricesResponse, error) {
+	if input.PlanID == "" {
+		return nil, ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if input.TenantID == "" || input.EnvironmentID == "" {
+		return nil, ierr.NewError("tenant ID and environment ID are required").
+			WithHint("Tenant ID and environment ID are required").
+			Mark(ierr.ErrValidation)
+	}
+
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+	ctx = types.SetUserID(ctx, input.UserID)
+
+	lockKey := cache.PrefixPriceSyncLock + input.PlanID
+	log := logger.GetLogger()
+	defer func() {
+		redisCache := cache.GetRedisCache()
+		if redisCache == nil {
+			log.Warnw("price_sync_lock_release_skipped", "plan_id", input.PlanID, "lock_key", lockKey, "reason", "redis_cache_nil")
+			return
+		}
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		redisCache.Delete(releaseCtx, lockKey)
+		log.Infow("price_sync_lock_released", "plan_id", input.PlanID, "lock_key", lockKey, "version", "v2")
+	}()
+
+	return a.planService.SyncPlanPricesV2(ctx, input.PlanID)
+}
+
 // ReprocessEventsForPlanInput is the activity input (same shape as workflow input).
 type ReprocessEventsForPlanInput = eventsModels.ReprocessEventsForPlanWorkflowInput
 

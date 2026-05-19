@@ -80,4 +80,58 @@ type Repository interface {
 		ctx context.Context,
 		p ListPlanLineItemsToCreateParams,
 	) (lastSubID *string, err error)
+
+	// CurrentPlanSequence returns max(prices.sequence) for the plan's
+	// published, non-fixed prices. Used as the target sequence subscriptions
+	// are stamped to after a successful sync pass. Returns 0 if the plan
+	// has no qualifying prices.
+	CurrentPlanSequence(ctx context.Context, planID string) (int64, error)
+
+	// ListPlanLineItemsToCreateV2 returns missing (subscription_id, price_id)
+	// pairs for a plan, narrowed to prices that changed since each
+	// subscription's synced_price_sequence. Also returns the full set of
+	// stale sub IDs in this page (so stamp can be scoped exactly to the
+	// discovery window even when no pairs were produced). The page
+	// advances implicitly via stamping — stamped subs fall out of the
+	// `synced_price_sequence < TargetSeq` filter on the next call.
+	ListPlanLineItemsToCreateV2(
+		ctx context.Context,
+		p ListPlanLineItemsToCreateV2Params,
+	) (items []PlanLineItemCreationDelta, staleSubIDs []string, err error)
+
+	// TerminatePlanPricesLineItemsV2 sets end_date on live plan-derived line
+	// items belonging to the given subs whose price has been ended. Scoping
+	// to a sub set bounds the UPDATE per page (no plan-wide locks). The
+	// `li.end_date IS NULL` guard makes this idempotent — re-runs are no-ops.
+	// Returns rows affected.
+	TerminatePlanPricesLineItemsV2(
+		ctx context.Context,
+		p TerminatePlanPricesLineItemsV2Params,
+	) (int, error)
+
+	// StampSubsAsSynced sets synced_price_sequence on the given subs.
+	// Always uses target as a forward-only update (idempotent).
+	StampSubsAsSynced(
+		ctx context.Context,
+		p StampSubsAsSyncedParams,
+	) (int, error)
+}
+
+// ListPlanLineItemsToCreateV2Params drives the V2 discovery query.
+type ListPlanLineItemsToCreateV2Params struct {
+	PlanID    string
+	TargetSeq int64 // subs stale relative to this value are in scope
+	Limit     int   // page size (defaults to implementation-defined)
+}
+
+// TerminatePlanPricesLineItemsV2Params drives the V2 termination UPDATE.
+type TerminatePlanPricesLineItemsV2Params struct {
+	PlanID string
+	SubIDs []string
+}
+
+// StampSubsAsSyncedParams sets synced_price_sequence on a set of subs.
+type StampSubsAsSyncedParams struct {
+	TargetSeq int64
+	SubIDs    []string
 }
