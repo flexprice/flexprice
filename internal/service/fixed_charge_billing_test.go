@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -410,4 +411,352 @@ func (s *FixedChargeBillingSuite) TestPackage_Arrear_Monthly() {
 	s.True(result.LineItems[0].Amount.Equal(decimal.NewFromInt(150)),
 		"expected $150 for arrear package, got %s", result.LineItems[0].Amount)
 	s.True(result.TotalAmount.Equal(decimal.NewFromInt(150)))
+}
+
+func (s *FixedChargeBillingSuite) TestTieredSlab_Advance_Monthly() {
+	ctx := s.GetContext()
+	periodStart, periodEnd := fixedPeriod()
+
+	_, pl := s.seedCustomerAndPlan("cust_slab_adv", "plan_slab_adv")
+
+	upTo10 := uint64(10)
+	upTo50 := uint64(50)
+	// Tiers: 0–10 @ $5/unit, 11–50 @ $3/unit; quantity=20
+	// SLAB: (10×$5) + (10×$3) = $50 + $30 = $80
+	p := s.seedPrice(&price.Price{
+		ID:                 "price_slab_adv",
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_SLAB,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Tiers: price.JSONBTiers{
+			{UpTo: &upTo10, UnitAmount: decimal.NewFromInt(5)},
+			{UpTo: &upTo50, UnitAmount: decimal.NewFromInt(3)},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	})
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_slab_adv",
+		PlanID:             pl.ID,
+		CustomerID:         "cust_slab_adv",
+		StartDate:          periodStart,
+		BillingAnchor:      periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	li := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PriceID:            p.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Tiered Slab Fee",
+		Quantity:           decimal.NewFromInt(20),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          periodStart,
+		EndDate:            periodEnd,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.seedSubscriptionWithLineItem(sub, li)
+
+	result, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: sub,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Len(result.LineItems, 1, "expected 1 tiered slab line item")
+	// (10×$5) + (10×$3) = $80
+	s.True(result.LineItems[0].Amount.Equal(decimal.NewFromInt(80)),
+		"expected SLAB (10×$5)+(10×$3)=$80, got %s", result.LineItems[0].Amount)
+	s.True(result.TotalAmount.Equal(decimal.NewFromInt(80)))
+}
+
+func (s *FixedChargeBillingSuite) TestTieredVolume_Advance_Monthly() {
+	ctx := s.GetContext()
+	periodStart, periodEnd := fixedPeriod()
+
+	_, pl := s.seedCustomerAndPlan("cust_vol_adv", "plan_vol_adv")
+
+	upTo10 := uint64(10)
+	upTo50 := uint64(50)
+	// VOLUME: all 20 units priced at matching tier → tier 2 ($3) → 20×$3 = $60
+	p := s.seedPrice(&price.Price{
+		ID:                 "price_vol_adv",
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_VOLUME,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Tiers: price.JSONBTiers{
+			{UpTo: &upTo10, UnitAmount: decimal.NewFromInt(5)},
+			{UpTo: &upTo50, UnitAmount: decimal.NewFromInt(3)},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	})
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_vol_adv",
+		PlanID:             pl.ID,
+		CustomerID:         "cust_vol_adv",
+		StartDate:          periodStart,
+		BillingAnchor:      periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	li := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PriceID:            p.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Tiered Volume Fee",
+		Quantity:           decimal.NewFromInt(20),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          periodStart,
+		EndDate:            periodEnd,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.seedSubscriptionWithLineItem(sub, li)
+
+	result, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: sub,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Len(result.LineItems, 1, "expected 1 tiered volume line item")
+	// VOLUME: all 20 units at tier-2 rate $3 → $60
+	s.True(result.LineItems[0].Amount.Equal(decimal.NewFromInt(60)),
+		"expected VOLUME 20×$3=$60, got %s", result.LineItems[0].Amount)
+	s.True(result.TotalAmount.Equal(decimal.NewFromInt(60)))
+}
+
+func (s *FixedChargeBillingSuite) TestFlatFee_Annual_Advance() {
+	ctx := s.GetContext()
+	periodStart := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	_, pl := s.seedCustomerAndPlan("cust_ann_adv", "plan_ann_adv")
+
+	p := s.seedPrice(&price.Price{
+		ID:                 "price_ann_adv",
+		Amount:             decimal.NewFromInt(1200),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	})
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_ann_adv",
+		PlanID:             pl.ID,
+		CustomerID:         "cust_ann_adv",
+		StartDate:          periodStart,
+		BillingAnchor:      periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	li := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PriceID:            p.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Annual Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          periodStart,
+		EndDate:            periodEnd,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.seedSubscriptionWithLineItem(sub, li)
+
+	result, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: sub,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Len(result.LineItems, 1, "expected 1 annual line item")
+	s.True(result.LineItems[0].Amount.Equal(decimal.NewFromInt(1200)),
+		"expected full annual amount $1200, got %s", result.LineItems[0].Amount)
+	s.True(result.TotalAmount.Equal(decimal.NewFromInt(1200)))
+}
+
+func (s *FixedChargeBillingSuite) TestMixedPlan_FlatFeeAndTieredSlab_Advance() {
+	ctx := s.GetContext()
+	periodStart, periodEnd := fixedPeriod()
+
+	_, pl := s.seedCustomerAndPlan("cust_mix", "plan_mix")
+
+	// Price 1: FLAT_FEE $100 × 1 = $100
+	pFlat := s.seedPrice(&price.Price{
+		ID:                 "price_mix_flat",
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	})
+
+	upTo10 := uint64(10)
+	upTo50 := uint64(50)
+	// Price 2: TIERED SLAB, quantity=20 → (10×$5)+(10×$3) = $80
+	pTiered := s.seedPrice(&price.Price{
+		ID:                 "price_mix_tiered",
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_SLAB,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Tiers: price.JSONBTiers{
+			{UpTo: &upTo10, UnitAmount: decimal.NewFromInt(5)},
+			{UpTo: &upTo50, UnitAmount: decimal.NewFromInt(3)},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	})
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_mix",
+		PlanID:             pl.ID,
+		CustomerID:         "cust_mix",
+		StartDate:          periodStart,
+		BillingAnchor:      periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	liFlat := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PriceID:            pFlat.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Flat Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          periodStart,
+		EndDate:            periodEnd,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	liTiered := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PriceID:            pTiered.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Tiered Fee",
+		Quantity:           decimal.NewFromInt(20),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          periodStart,
+		EndDate:            periodEnd,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.seedSubscriptionWithLineItems(sub, []*subscription.SubscriptionLineItem{liFlat, liTiered})
+
+	result, err := s.service.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+		Subscription: sub,
+		PeriodStart:  periodStart,
+		PeriodEnd:    periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Len(result.LineItems, 2, "expected 2 line items for mixed plan")
+
+	var flatAmt, tieredAmt decimal.Decimal
+	for _, item := range result.LineItems {
+		switch lo.FromPtr(item.PriceID) {
+		case pFlat.ID:
+			flatAmt = item.Amount
+		case pTiered.ID:
+			tieredAmt = item.Amount
+		}
+	}
+	s.True(flatAmt.Equal(decimal.NewFromInt(100)), "flat fee line item should be $100, got %s", flatAmt)
+	s.True(tieredAmt.Equal(decimal.NewFromInt(80)), "tiered slab line item should be $80, got %s", tieredAmt)
+	s.True(result.TotalAmount.Equal(decimal.NewFromInt(180)), "total should be $180, got %s", result.TotalAmount)
 }
