@@ -108,11 +108,12 @@ func (f EntityIntegrationMappingFilter) Validate() error {
 			"paypal":     true,
 			"quickbooks": true,
 			"zoho_books": true,
+			"paddle":     true,
 		}
 		for _, pt := range f.ProviderTypes {
 			if !validProviderTypes[pt] {
 				return ierr.NewError("invalid provider_type").
-					WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks, zoho_books").
+					WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks, zoho_books, paddle").
 					Mark(ierr.ErrValidation)
 			}
 		}
