@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	subdomain "github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -276,12 +277,14 @@ func buildTestSyncService(
 	mappingRepo entityintegrationmapping.Repository,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
+	subscriptionRepo subdomain.Repository,
 	connectionRepo connection.Repository,
 ) *paddle.PaddleSyncService {
 	return paddle.NewPaddleSyncService(
 		client,
 		customerRepo,
 		invoiceRepo,
+		subscriptionRepo,
 		newTestMappingService(mappingRepo),
 		connectionRepo,
 		buildTestLogger(),
@@ -358,7 +361,7 @@ func TestEnsureCustomerSynced_AlreadyMapped(t *testing.T) {
 		paddle.MetaKeyPaddleAddressID: paddleAddressID,
 	})
 
-	svc := buildTestSyncService(mockClient, mappingStore, customerStore, nil, connectionStore)
+	svc := buildTestSyncService(mockClient, mappingStore, customerStore, nil, testutil.NewInMemorySubscriptionStore(), connectionStore)
 
 	resp, err := svc.EnsureCustomerSynced(ctx, paddle.EnsureCustomerSyncedRequest{CustomerID: customerID})
 	require.NoError(t, err)
@@ -387,11 +390,14 @@ func TestEnsureSubscriptionSynced_AlreadyMapped(t *testing.T) {
 	// Seed an existing subscription mapping.
 	seedMapping(ctx, t, mappingStore, subscriptionID, types.IntegrationEntityTypeSubscription, paddleSubID, nil)
 
-	svc := buildTestSyncService(mockClient, mappingStore, customerStore, nil, connectionStore)
+	svc := buildTestSyncService(mockClient, mappingStore, customerStore, nil, testutil.NewInMemorySubscriptionStore(), connectionStore)
 
 	resp, err := svc.EnsureSubscriptionSynced(ctx, paddle.EnsureSubscriptionSyncedRequest{
-		SubscriptionID: subscriptionID,
-		CustomerID:     "cust_test",
+		Subscription: &subdomain.Subscription{
+			ID:         subscriptionID,
+			CustomerID: "cust_test",
+		},
+		PriceIDToProductID: map[string]string{},
 	})
 	require.NoError(t, err)
 
@@ -435,7 +441,7 @@ func TestSyncInvoice_AlreadySynced(t *testing.T) {
 		paddle.MetaKeyPaddleCheckoutURL: checkoutURL,
 	})
 
-	svc := buildTestSyncService(mockClient, mappingStore, customerStore, invoiceStore, connectionStore)
+	svc := buildTestSyncService(mockClient, mappingStore, customerStore, invoiceStore, testutil.NewInMemorySubscriptionStore(), connectionStore)
 
 	resp, err := svc.SyncInvoice(ctx, paddle.SyncInvoiceRequest{InvoiceID: invoiceID})
 	require.NoError(t, err)
@@ -446,4 +452,30 @@ func TestSyncInvoice_AlreadySynced(t *testing.T) {
 
 	// The critical assertion: CreateSubscriptionCharge must NOT have been called.
 	assert.False(t, mockClient.createSubscriptionChargeCalled, "CreateSubscriptionCharge must NOT be called when invoice is already mapped")
+}
+
+// TestEnsureBulkProductSynced_AlreadyMapped verifies that when a price→Paddle product mapping
+// already exists in entity_integration_mapping, CreateProduct is NOT called on Paddle.
+func TestEnsureBulkProductSynced_AlreadyMapped(t *testing.T) {
+	ctx := buildTestContext()
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	mockClient := &mockPaddleClient{}
+
+	svc := buildTestSyncService(
+		mockClient,
+		mappingStore,
+		testutil.NewInMemoryCustomerStore(),
+		testutil.NewInMemoryInvoiceStore(),
+		testutil.NewInMemorySubscriptionStore(),
+		testutil.NewInMemoryConnectionStore(),
+	)
+
+	priceID := "pri_existing"
+	seedMapping(ctx, t, mappingStore, priceID, types.IntegrationEntityTypePrice, "pro_already_exists", nil)
+
+	resp, err := svc.EnsureBulkProductSynced(ctx, paddle.EnsureBulkProductSyncedRequest{
+		Items: []paddle.EnsureBulkProductSyncedItem{{PriceID: priceID, Name: "My Product"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "pro_already_exists", resp.PriceIDToPaddleProductID[priceID])
 }
