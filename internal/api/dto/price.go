@@ -332,6 +332,14 @@ func (r *CreatePriceRequest) Validate() error {
 					WithHint("Amount is required to set up flat fee pricing with fiat pricing units").
 					Mark(ierr.ErrValidation)
 			}
+			if r.Amount.LessThanOrEqual(decimal.Zero) {
+				return ierr.NewError("amount must be greater than 0 when billing model is FLAT_FEE").
+					WithHint("Amount must be greater than 0 for flat fee pricing").
+					WithReportableDetails(map[string]interface{}{
+						"amount": r.Amount.String(),
+					}).
+					Mark(ierr.ErrValidation)
+			}
 		}
 
 	}
