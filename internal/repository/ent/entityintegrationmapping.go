@@ -303,6 +303,7 @@ func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping
 			Mark(ierr.ErrInternal)
 	}
 
+	r.SetCache(ctx, mapping)
 	return nil
 }
 

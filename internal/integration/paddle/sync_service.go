@@ -397,14 +397,6 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	return &EnsureSubscriptionSyncedResponse{PaddleSubscriptionID: paddleSubID, Created: true}, nil
 }
 
-// paddleCollectionMode maps a FlexPrice CollectionMethod to a Paddle CollectionMode.
-func paddleCollectionMode(m types.CollectionMethod) paddlesdk.CollectionMode {
-	if m == types.CollectionMethodSendInvoice {
-		return paddlesdk.CollectionModeManual
-	}
-	return paddlesdk.CollectionModeAutomatic
-}
-
 // paddleBillingCycle maps a FlexPrice BillingPeriod + count to a Paddle Duration.
 func paddleBillingCycle(period types.BillingPeriod, count int) *paddlesdk.Duration {
 	if count <= 0 {
