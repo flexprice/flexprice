@@ -329,6 +329,9 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		AddressID:      paddlesdk.PtrTo(customerResp.PaddleAddressID),
 		CollectionMode: paddlesdk.PtrTo(paddlesdk.CollectionModeManual),
 		Status:         &billedStatus,
+		BillingDetails: &paddlesdk.BillingDetails{
+			PaymentTerms: paddlesdk.Duration{Interval: paddlesdk.IntervalDay, Frequency: 1},
+		},
 		Items:          items,
 		CustomData: map[string]interface{}{
 			"flexprice_subscription_id": sub.ID,
