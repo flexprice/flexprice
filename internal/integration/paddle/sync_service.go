@@ -289,27 +289,36 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	billingCycle := paddleBillingCycle(sub.BillingPeriod, sub.BillingPeriodCount)
 	currency := strings.ToUpper(sub.Currency)
 
-	// Sort product IDs for deterministic ordering.
-	type pricePair struct{ priceID, productID string }
-	pairs := make([]pricePair, 0, len(req.PriceIDToProductID))
+	// Create $0 Paddle catalog prices (with billing_cycle) for each product.
+	// Using catalog prices (pri_xxx) in the bootstrap transaction is required for Paddle to
+	// recognise the transaction as recurring and create a subscription_id in the response.
+	// Inline prices (TransactionPriceCreateWithProductID) are treated as one-time charges
+	// and never produce a subscription.
+	type bootstrapPair struct{ priceID, paddlePriceID string }
+	pairs := make([]bootstrapPair, 0, len(req.PriceIDToProductID))
 	for priceID, productID := range req.PriceIDToProductID {
-		pairs = append(pairs, pricePair{priceID, productID})
+		catalogPrice, priceErr := s.client.CreatePrice(ctx, &paddlesdk.CreatePriceRequest{
+			ProductID:    productID,
+			Description:  "FlexPrice bootstrap price",
+			UnitPrice:    paddlesdk.Money{Amount: "0", CurrencyCode: paddlesdk.CurrencyCode(currency)},
+			BillingCycle: billingCycle,
+			TaxMode:      paddlesdk.PtrTo(paddlesdk.TaxModeAccountSetting),
+			Quantity:     &paddlesdk.PriceQuantity{Minimum: 1, Maximum: 1},
+		})
+		if priceErr != nil {
+			return nil, fmt.Errorf("creating bootstrap catalog price for product %s: %w", productID, priceErr)
+		}
+		pairs = append(pairs, bootstrapPair{priceID, catalogPrice.ID})
 	}
-	sort.Slice(pairs, func(i, j int) bool { return pairs[i].productID < pairs[j].productID })
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].paddlePriceID < pairs[j].paddlePriceID })
 
+	// Build transaction items referencing catalog prices so Paddle creates a subscription.
 	items := make([]paddlesdk.CreateTransactionItems, 0, len(pairs))
 	for _, p := range pairs {
-		items = append(items, *paddlesdk.NewCreateTransactionItemsTransactionItemCreateWithPrice(
-			&paddlesdk.TransactionItemCreateWithPrice{
+		items = append(items, *paddlesdk.NewCreateTransactionItemsTransactionItemFromCatalog(
+			&paddlesdk.TransactionItemFromCatalog{
+				PriceID:  p.paddlePriceID,
 				Quantity: 1,
-				Price: paddlesdk.TransactionPriceCreateWithProductID{
-					ProductID:    p.productID,
-					Description:  "FlexPrice Price",
-					TaxMode:      paddlesdk.TaxModeAccountSetting,
-					UnitPrice:    paddlesdk.Money{Amount: "0", CurrencyCode: paddlesdk.CurrencyCode(currency)},
-					BillingCycle: billingCycle,
-					Quantity:     paddlesdk.PriceQuantity{Minimum: 1, Maximum: 1},
-				},
 			},
 		))
 	}
@@ -317,22 +326,13 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		return nil, ierr.NewError("no products to bootstrap subscription with").Mark(ierr.ErrValidation)
 	}
 
-	// Use manual collection + status:billed for the $0 bootstrap transaction.
-	// This tells Paddle the invoice is already paid, so it creates the subscription
-	// immediately and returns subscription_id in the response.
-	// Automatic collection keeps the transaction in "ready" state (awaiting payment
-	// processing), which never produces a subscription_id synchronously.
-	// The FlexPrice subscription's collection mode is applied per-charge via CreateSubscriptionCharge.
-	billedStatus := paddlesdk.TransactionStatusBilled
+	// $0 + automatic collection → Paddle auto-completes the transaction (no payment needed)
+	// and creates the subscription immediately, returning subscription_id in the response.
 	txn, err := s.client.CreateTransaction(ctx, &paddlesdk.CreateTransactionRequest{
 		CustomerID:     paddlesdk.PtrTo(customerResp.PaddleCustomerID),
 		AddressID:      paddlesdk.PtrTo(customerResp.PaddleAddressID),
-		CollectionMode: paddlesdk.PtrTo(paddlesdk.CollectionModeManual),
-		Status:         &billedStatus,
-		BillingDetails: &paddlesdk.BillingDetails{
-			PaymentTerms: paddlesdk.Duration{Interval: paddlesdk.IntervalDay, Frequency: 1},
-		},
-		Items: items,
+		CollectionMode: paddlesdk.PtrTo(paddlesdk.CollectionModeAutomatic),
+		Items:          items,
 		CustomData: map[string]interface{}{
 			"flexprice_subscription_id": sub.ID,
 			"environment_id":            types.GetEnvironmentID(ctx),
@@ -341,12 +341,14 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	if err != nil {
 		return nil, fmt.Errorf("creating bootstrap transaction: %w", err)
 	}
-	// Paddle may not include subscription_id in the transaction response when collection_mode=manual.
-	// Fall back to listing subscriptions for the customer to find the one just created.
+
+	// subscription_id should be present immediately since we used catalog prices with billing_cycle.
+	// If Paddle processes asynchronously, fall back to listing subscriptions after a brief wait.
 	var paddleSubID string
 	if txn.SubscriptionID != nil && *txn.SubscriptionID != "" {
 		paddleSubID = *txn.SubscriptionID
 	} else {
+		time.Sleep(5 * time.Second)
 		perPage := 5
 		subCollection, listErr := s.client.ListSubscriptions(ctx, &paddlesdk.ListSubscriptionsRequest{
 			CustomerID: []string{customerResp.PaddleCustomerID},
@@ -370,7 +372,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		}
 		if paddleSubID == "" {
 			return nil, ierr.NewError("Paddle transaction did not produce a subscription_id").
-				WithHint("Ensure items have billing_cycle set so Paddle creates a subscription").
+				WithHint("Ensure catalog prices have billing_cycle set so Paddle creates a subscription").
 				WithReportableDetails(map[string]interface{}{"paddle_transaction_id": txn.ID}).
 				Mark(ierr.ErrInternal)
 		}
