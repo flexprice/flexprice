@@ -14,10 +14,6 @@ const (
 	// Invoice / transaction mapping metadata keys
 	MetaKeyPaddleTransactionID = "paddle_transaction_id"
 	MetaKeyPaddleCheckoutURL   = "paddle_checkout_url"
-	MetaKeyPaddleSubtotal      = "paddle_subtotal"
-	MetaKeyPaddleTaxAmount     = "paddle_tax_amount"
-	MetaKeyPaddleTaxRate       = "paddle_tax_rate"
-	MetaKeyPaddleGrandTotal    = "paddle_grand_total"
 	MetaKeyInvoiceNumber       = "invoice_number"
 
 	// Subscription mapping metadata keys

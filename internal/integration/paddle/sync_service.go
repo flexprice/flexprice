@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -259,8 +260,16 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 
 	billingCycle := paddleBillingCycle(sub.BillingPeriod, sub.BillingPeriodCount)
 	currency := strings.ToUpper(sub.Currency)
-	items := make([]paddlesdk.CreateTransactionItems, 0, len(req.PriceIDToProductID))
+
+	// Sort product IDs for deterministic ordering.
+	productIDs := make([]string, 0, len(req.PriceIDToProductID))
 	for _, productID := range req.PriceIDToProductID {
+		productIDs = append(productIDs, productID)
+	}
+	sort.Strings(productIDs)
+
+	items := make([]paddlesdk.CreateTransactionItems, 0, len(productIDs))
+	for _, productID := range productIDs {
 		items = append(items, *paddlesdk.NewCreateTransactionItemsTransactionItemCreateWithPrice(
 			&paddlesdk.TransactionItemCreateWithPrice{
 				Quantity: 1,
@@ -890,17 +899,4 @@ func mapToUpdateCustomerAddressRequest(addr *paddlenotification.AddressNotificat
 		req.AddressCountry = lo.ToPtr(strings.ToUpper(string(addr.CountryCode)))
 	}
 	return req
-}
-
-// parsePaddleCents converts a Paddle amount string (cents) to a decimal in the major currency unit.
-// Paddle returns all monetary values as strings in the lowest denomination (e.g. "160" = $1.60).
-func parsePaddleCents(s string) decimal.Decimal {
-	if s == "" {
-		return decimal.Zero
-	}
-	v, err := decimal.NewFromString(s)
-	if err != nil {
-		return decimal.Zero
-	}
-	return v.Div(decimal.NewFromInt(100))
 }
