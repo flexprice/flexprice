@@ -289,7 +289,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	billingCycle := paddleBillingCycle(sub.BillingPeriod, sub.BillingPeriodCount)
 	currency := strings.ToUpper(sub.Currency)
 
-	// Sort by productID for deterministic ordering; keep priceID for description.
+	// Sort product IDs for deterministic ordering.
 	type pricePair struct{ priceID, productID string }
 	pairs := make([]pricePair, 0, len(req.PriceIDToProductID))
 	for priceID, productID := range req.PriceIDToProductID {
@@ -299,16 +299,12 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 
 	items := make([]paddlesdk.CreateTransactionItems, 0, len(pairs))
 	for _, p := range pairs {
-		desc := p.priceID
-		if desc == "" {
-			desc = p.productID
-		}
 		items = append(items, *paddlesdk.NewCreateTransactionItemsTransactionItemCreateWithPrice(
 			&paddlesdk.TransactionItemCreateWithPrice{
 				Quantity: 1,
 				Price: paddlesdk.TransactionPriceCreateWithProductID{
 					ProductID:    p.productID,
-					Description:  desc,
+					Description:  "FlexPrice Price",
 					TaxMode:      paddlesdk.TaxModeAccountSetting,
 					UnitPrice:    paddlesdk.Money{Amount: "0", CurrencyCode: paddlesdk.CurrencyCode(currency)},
 					BillingCycle: billingCycle,
@@ -596,20 +592,17 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 				Mark(ierr.ErrValidation)
 		}
 		amountSmallest := types.ToSmallestUnit(li.Amount, li.Currency)
-		name := lo.FromPtrOr(li.DisplayName, priceID)
-		if name == "" {
-			name = priceID
-		}
-		if name == "" {
-			name = paddleProductID
+		displayName := lo.FromPtrOr(li.DisplayName, priceID)
+		if displayName == "" {
+			displayName = paddleProductID
 		}
 		chargeItems = append(chargeItems, *paddlesdk.NewCreateSubscriptionChargeItemsSubscriptionChargeItemCreateWithPrice(
 			&paddlesdk.SubscriptionChargeItemCreateWithPrice{
 				Quantity: 1,
 				Price: paddlesdk.SubscriptionChargeCreateWithPrice{
 					ProductID:   paddleProductID,
-					Description: name,
-					Name:        paddlesdk.PtrTo(name),
+					Description: "Flexrice Charge",
+					Name:        paddlesdk.PtrTo(displayName),
 					TaxMode:     paddlesdk.TaxModeAccountSetting,
 					UnitPrice: paddlesdk.Money{
 						Amount:       fmt.Sprintf("%d", amountSmallest),
