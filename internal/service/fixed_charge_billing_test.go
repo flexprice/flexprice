@@ -16,8 +16,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// Ensure decimal is used to avoid unused import errors; later test methods will use it directly.
-var _ = decimal.Zero
 
 type FixedChargeBillingSuite struct {
 	testutil.BaseServiceTestSuite
@@ -754,6 +752,8 @@ func (s *FixedChargeBillingSuite) TestMixedPlan_FlatFeeAndTieredSlab_Advance() {
 			flatAmt = item.Amount
 		case pTiered.ID:
 			tieredAmt = item.Amount
+		default:
+			s.Fail("unexpected PriceID in line items: %s", lo.FromPtr(item.PriceID))
 		}
 	}
 	s.True(flatAmt.Equal(decimal.NewFromInt(100)), "flat fee line item should be $100, got %s", flatAmt)
