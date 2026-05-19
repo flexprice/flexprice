@@ -14,16 +14,16 @@ import (
 // implements interfaces.EntityIntegrationMappingService.
 // It is used by the integration factory so that sub-packages (e.g. Paddle) can call the
 // service interface instead of the raw repository.
-type entityIntegrationMappingServiceAdapter struct {
+type entityIntegrationMappingAdapter struct {
 	repo entityintegrationmapping.Repository
 }
 
-// newEntityIntegrationMappingServiceAdapter creates the adapter.
-func newEntityIntegrationMappingServiceAdapter(repo entityintegrationmapping.Repository) interfaces.EntityIntegrationMappingService {
-	return &entityIntegrationMappingServiceAdapter{repo: repo}
+// NewEntityIntegrationMappingAdapter creates the adapter.
+func NewEntityIntegrationMappingAdapter(repo entityintegrationmapping.Repository) interfaces.EntityIntegrationMappingService {
+	return &entityIntegrationMappingAdapter{repo: repo}
 }
 
-func (a *entityIntegrationMappingServiceAdapter) CreateEntityIntegrationMapping(ctx context.Context, req apidto.CreateEntityIntegrationMappingRequest) (*apidto.EntityIntegrationMappingResponse, error) {
+func (a *entityIntegrationMappingAdapter) CreateEntityIntegrationMapping(ctx context.Context, req apidto.CreateEntityIntegrationMappingRequest) (*apidto.EntityIntegrationMappingResponse, error) {
 	mapping := req.ToEntityIntegrationMapping(ctx)
 	if err := entityintegrationmapping.Validate(mapping); err != nil {
 		return nil, ierr.WithError(err).WithHint("Invalid entity integration mapping data").Mark(ierr.ErrValidation)
@@ -34,7 +34,7 @@ func (a *entityIntegrationMappingServiceAdapter) CreateEntityIntegrationMapping(
 	return toMappingResponse(mapping), nil
 }
 
-func (a *entityIntegrationMappingServiceAdapter) GetEntityIntegrationMapping(ctx context.Context, id string) (*apidto.EntityIntegrationMappingResponse, error) {
+func (a *entityIntegrationMappingAdapter) GetEntityIntegrationMapping(ctx context.Context, id string) (*apidto.EntityIntegrationMappingResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("entity integration mapping ID is required").Mark(ierr.ErrValidation)
 	}
@@ -45,7 +45,7 @@ func (a *entityIntegrationMappingServiceAdapter) GetEntityIntegrationMapping(ctx
 	return toMappingResponse(mapping), nil
 }
 
-func (a *entityIntegrationMappingServiceAdapter) GetEntityIntegrationMappings(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (*apidto.ListEntityIntegrationMappingsResponse, error) {
+func (a *entityIntegrationMappingAdapter) GetEntityIntegrationMappings(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (*apidto.ListEntityIntegrationMappingsResponse, error) {
 	if filter == nil {
 		filter = &types.EntityIntegrationMappingFilter{
 			QueryFilter: types.NewDefaultQueryFilter(),
@@ -69,7 +69,7 @@ func (a *entityIntegrationMappingServiceAdapter) GetEntityIntegrationMappings(ct
 	}, nil
 }
 
-func (a *entityIntegrationMappingServiceAdapter) UpdateEntityIntegrationMapping(ctx context.Context, id string, req apidto.UpdateEntityIntegrationMappingRequest) (*apidto.EntityIntegrationMappingResponse, error) {
+func (a *entityIntegrationMappingAdapter) UpdateEntityIntegrationMapping(ctx context.Context, id string, req apidto.UpdateEntityIntegrationMappingRequest) (*apidto.EntityIntegrationMappingResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("entity integration mapping ID is required").Mark(ierr.ErrValidation)
 	}
@@ -90,7 +90,7 @@ func (a *entityIntegrationMappingServiceAdapter) UpdateEntityIntegrationMapping(
 	return toMappingResponse(mapping), nil
 }
 
-func (a *entityIntegrationMappingServiceAdapter) DeleteEntityIntegrationMapping(ctx context.Context, id string) error {
+func (a *entityIntegrationMappingAdapter) DeleteEntityIntegrationMapping(ctx context.Context, id string) error {
 	if id == "" {
 		return ierr.NewError("entity integration mapping ID is required").Mark(ierr.ErrValidation)
 	}
@@ -101,7 +101,7 @@ func (a *entityIntegrationMappingServiceAdapter) DeleteEntityIntegrationMapping(
 	return a.repo.Delete(ctx, mapping)
 }
 
-func (a *entityIntegrationMappingServiceAdapter) LinkIntegrationMapping(ctx context.Context, req apidto.LinkIntegrationMappingRequest) (*apidto.LinkIntegrationMappingResponse, error) {
+func (a *entityIntegrationMappingAdapter) LinkIntegrationMapping(ctx context.Context, req apidto.LinkIntegrationMappingRequest) (*apidto.LinkIntegrationMappingResponse, error) {
 	return nil, ierr.NewError("LinkIntegrationMapping not supported via integration factory adapter").
 		WithHint("Use the service layer directly for this operation").
 		Mark(ierr.ErrValidation)

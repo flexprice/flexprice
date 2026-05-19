@@ -83,7 +83,7 @@ func NewFactory(
 		paymentRepo:                  paymentRepo,
 		priceRepo:                    priceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
-		entityIntegrationMappingSvc:  newEntityIntegrationMappingServiceAdapter(entityIntegrationMappingRepo),
+		entityIntegrationMappingSvc:  NewEntityIntegrationMappingAdapter(entityIntegrationMappingRepo),
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
