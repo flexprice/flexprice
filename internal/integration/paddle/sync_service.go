@@ -317,14 +317,18 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		return nil, ierr.NewError("no products to bootstrap subscription with").Mark(ierr.ErrValidation)
 	}
 
-	// Always use automatic collection for the $0 bootstrap transaction so Paddle
-	// auto-completes it immediately and returns a subscription_id. Manual mode would
-	// leave the transaction as "ready" (awaiting payment) and never produce a subscription.
-	// The actual collection mode is applied per-charge in CreateSubscriptionCharge.
+	// Use manual collection + status:billed for the $0 bootstrap transaction.
+	// This tells Paddle the invoice is already paid, so it creates the subscription
+	// immediately and returns subscription_id in the response.
+	// Automatic collection keeps the transaction in "ready" state (awaiting payment
+	// processing), which never produces a subscription_id synchronously.
+	// The FlexPrice subscription's collection mode is applied per-charge via CreateSubscriptionCharge.
+	billedStatus := paddlesdk.TransactionStatusBilled
 	txn, err := s.client.CreateTransaction(ctx, &paddlesdk.CreateTransactionRequest{
 		CustomerID:     paddlesdk.PtrTo(customerResp.PaddleCustomerID),
 		AddressID:      paddlesdk.PtrTo(customerResp.PaddleAddressID),
-		CollectionMode: paddlesdk.PtrTo(paddlesdk.CollectionModeAutomatic),
+		CollectionMode: paddlesdk.PtrTo(paddlesdk.CollectionModeManual),
+		Status:         &billedStatus,
 		Items:          items,
 		CustomData: map[string]interface{}{
 			"flexprice_subscription_id": sub.ID,
