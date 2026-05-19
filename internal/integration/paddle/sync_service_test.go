@@ -264,6 +264,10 @@ func (m *mockPaddleClient) ListTransactions(ctx context.Context, req *paddlesdk.
 	return nil, nil
 }
 
+func (m *mockPaddleClient) ListCustomers(ctx context.Context, req *paddlesdk.ListCustomersRequest) (*paddlesdk.Collection[*paddlesdk.Customer], error) {
+	return nil, nil
+}
+
 // --- Test helpers ---
 
 func buildTestContext() context.Context {

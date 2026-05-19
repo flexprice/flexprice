@@ -102,22 +102,31 @@ func (s *PaddleSyncService) EnsureCustomerSynced(ctx context.Context, req Ensure
 		}, nil
 	}
 
-	// Create customer in Paddle.
-	createReq := &paddlesdk.CreateCustomerRequest{
-		Email: flexCustomer.Email,
-		CustomData: map[string]interface{}{
-			"flexprice_customer_id": flexCustomer.ID,
-			"environment_id":        types.GetEnvironmentID(ctx),
-		},
-	}
-	if flexCustomer.Name != "" {
-		createReq.Name = paddlesdk.PtrTo(flexCustomer.Name)
-	}
-	paddleCustomer, err := s.client.CreateCustomer(ctx, createReq)
+	// Check if a Paddle customer with the same email already exists before attempting to create.
+	// Paddle rejects CreateCustomer with customer_already_exists when the email is taken.
+	paddleCustomerID, err := s.lookupPaddleCustomerByEmail(ctx, flexCustomer.Email)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to create customer in Paddle").Mark(ierr.ErrInternal)
+		return nil, err
 	}
-	paddleCustomerID := paddleCustomer.ID
+
+	if paddleCustomerID == "" {
+		// Create customer in Paddle.
+		createReq := &paddlesdk.CreateCustomerRequest{
+			Email: flexCustomer.Email,
+			CustomData: map[string]interface{}{
+				"flexprice_customer_id": flexCustomer.ID,
+				"environment_id":        types.GetEnvironmentID(ctx),
+			},
+		}
+		if flexCustomer.Name != "" {
+			createReq.Name = paddlesdk.PtrTo(flexCustomer.Name)
+		}
+		paddleCustomer, createErr := s.client.CreateCustomer(ctx, createReq)
+		if createErr != nil {
+			return nil, ierr.WithError(createErr).WithHint("Failed to create customer in Paddle").Mark(ierr.ErrInternal)
+		}
+		paddleCustomerID = paddleCustomer.ID
+	}
 
 	var paddleAddressID string
 	if flexCustomer.AddressCountry != "" {
@@ -154,6 +163,26 @@ func (s *PaddleSyncService) EnsureCustomerSynced(ctx context.Context, req Ensure
 		PaddleAddressID:  paddleAddressID,
 		Created:          true,
 	}, nil
+}
+
+// lookupPaddleCustomerByEmail returns the Paddle customer ID for the given email, or "" if none exists.
+func (s *PaddleSyncService) lookupPaddleCustomerByEmail(ctx context.Context, email string) (string, error) {
+	result, err := s.client.ListCustomers(ctx, &paddlesdk.ListCustomersRequest{
+		Email: []string{email},
+	})
+	if err != nil {
+		return "", fmt.Errorf("looking up Paddle customer by email: %w", err)
+	}
+	if result == nil {
+		return "", nil
+	}
+	first := result.Next(ctx)
+	if first == nil || !first.Ok() {
+		return "", nil
+	}
+	customer := first.Value()
+	s.logger.Infow("found existing Paddle customer by email", "paddle_customer_id", customer.ID, "email", email)
+	return customer.ID, nil
 }
 
 // EnsureBulkProductSynced ensures Paddle catalog products exist for all given FlexPrice prices.

@@ -28,6 +28,7 @@ type PaddleClient interface {
 	GetConnection(ctx context.Context) (*connection.Connection, error)
 	GetSDKClient(ctx context.Context) (*paddle.SDK, *PaddleConfig, error)
 	CreateCustomer(ctx context.Context, req *paddle.CreateCustomerRequest) (*paddle.Customer, error)
+	ListCustomers(ctx context.Context, req *paddle.ListCustomersRequest) (*paddle.Collection[*paddle.Customer], error)
 	CreateAddress(ctx context.Context, customerID string, req *paddle.CreateAddressRequest) (*paddle.Address, error)
 	UpdateAddress(ctx context.Context, customerID string, addressID string, req *paddle.UpdateAddressRequest) (*paddle.Address, error)
 	CreateTransaction(ctx context.Context, req *paddle.CreateTransactionRequest) (*paddle.Transaction, error)
@@ -226,6 +227,21 @@ func (c *Client) CreateCustomer(ctx context.Context, req *paddle.CreateCustomerR
 
 	c.logger.Infow("successfully created customer in Paddle", "customer_id", customer.ID)
 	return customer, nil
+}
+
+// ListCustomers lists customers in Paddle, optionally filtered by email.
+func (c *Client) ListCustomers(ctx context.Context, req *paddle.ListCustomersRequest) (*paddle.Collection[*paddle.Customer], error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.ListCustomers(ctx, req)
+	if err != nil {
+		return nil, ierr.NewError("failed to list customers in Paddle").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return result, nil
 }
 
 // CreateAddress creates an address for a customer in Paddle
