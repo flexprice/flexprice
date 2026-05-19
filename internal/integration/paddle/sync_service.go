@@ -593,9 +593,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		}
 		amountSmallest := types.ToSmallestUnit(li.Amount, li.Currency)
 		displayName := lo.FromPtrOr(li.DisplayName, priceID)
-		if displayName == "" {
-			displayName = paddleProductID
-		}
+
 		chargeItems = append(chargeItems, *paddlesdk.NewCreateSubscriptionChargeItemsSubscriptionChargeItemCreateWithPrice(
 			&paddlesdk.SubscriptionChargeItemCreateWithPrice{
 				Quantity: 1,
