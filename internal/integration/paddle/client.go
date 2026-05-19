@@ -38,6 +38,7 @@ type PaddleClient interface {
 	CreatePrice(ctx context.Context, req *paddle.CreatePriceRequest) (*paddle.Price, error)
 	CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error)
 	ListTransactions(ctx context.Context, req *paddle.ListTransactionsRequest) (*paddle.Collection[*paddle.Transaction], error)
+	ListSubscriptions(ctx context.Context, req *paddle.ListSubscriptionsRequest) (*paddle.Collection[*paddle.Subscription], error)
 }
 
 // PaddleConfig holds decrypted Paddle connection configuration
@@ -426,6 +427,23 @@ func (c *Client) ListTransactions(ctx context.Context, req *paddle.ListTransacti
 			Mark(ierr.ErrInternal)
 	}
 	c.logger.Infow("successfully listed transactions in Paddle", "count", result.EstimatedTotal())
+	return result, nil
+}
+
+// ListSubscriptions lists subscriptions in Paddle
+func (c *Client) ListSubscriptions(ctx context.Context, req *paddle.ListSubscriptionsRequest) (*paddle.Collection[*paddle.Subscription], error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.ListSubscriptions(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to list subscriptions in Paddle", "error", err)
+		return nil, ierr.NewError("failed to list subscriptions in Paddle").
+			WithHint("Unable to list subscriptions in Paddle").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
 	return result, nil
 }
 

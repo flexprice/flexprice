@@ -332,7 +332,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		BillingDetails: &paddlesdk.BillingDetails{
 			PaymentTerms: paddlesdk.Duration{Interval: paddlesdk.IntervalDay, Frequency: 1},
 		},
-		Items:          items,
+		Items: items,
 		CustomData: map[string]interface{}{
 			"flexprice_subscription_id": sub.ID,
 			"environment_id":            types.GetEnvironmentID(ctx),
@@ -341,13 +341,40 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	if err != nil {
 		return nil, fmt.Errorf("creating bootstrap transaction: %w", err)
 	}
-	if txn.SubscriptionID == nil || *txn.SubscriptionID == "" {
-		return nil, ierr.NewError("Paddle transaction did not produce a subscription_id").
-			WithHint("Ensure items have billing_cycle set so Paddle creates a subscription").
-			WithReportableDetails(map[string]interface{}{"paddle_transaction_id": txn.ID}).
-			Mark(ierr.ErrInternal)
+	// Paddle may not include subscription_id in the transaction response when collection_mode=manual.
+	// Fall back to listing subscriptions for the customer to find the one just created.
+	var paddleSubID string
+	if txn.SubscriptionID != nil && *txn.SubscriptionID != "" {
+		paddleSubID = *txn.SubscriptionID
+	} else {
+		perPage := 5
+		subCollection, listErr := s.client.ListSubscriptions(ctx, &paddlesdk.ListSubscriptionsRequest{
+			CustomerID: []string{customerResp.PaddleCustomerID},
+			PerPage:    &perPage,
+		})
+		if listErr != nil {
+			return nil, fmt.Errorf("listing subscriptions after bootstrap transaction: %w", listErr)
+		}
+		if subCollection != nil {
+			for {
+				item := subCollection.Next(ctx)
+				if item == nil || !item.Ok() {
+					break
+				}
+				paddleSub := item.Value()
+				if paddleSub != nil && paddleSub.ID != "" {
+					paddleSubID = paddleSub.ID
+					break
+				}
+			}
+		}
+		if paddleSubID == "" {
+			return nil, ierr.NewError("Paddle transaction did not produce a subscription_id").
+				WithHint("Ensure items have billing_cycle set so Paddle creates a subscription").
+				WithReportableDetails(map[string]interface{}{"paddle_transaction_id": txn.ID}).
+				Mark(ierr.ErrInternal)
+		}
 	}
-	paddleSubID := *txn.SubscriptionID
 
 	_, err = s.mappingService.CreateEntityIntegrationMapping(ctx, apidto.CreateEntityIntegrationMappingRequest{
 		EntityID:         sub.ID,
