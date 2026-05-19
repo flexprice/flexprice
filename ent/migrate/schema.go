@@ -1103,6 +1103,8 @@ var (
 		{Name: "prepaid_credits_applied", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "line_item_discount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "invoice_level_discount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "subscription_line_item_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "adjusted_entitlement_quantity", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// InvoiceLineItemsTable holds the schema information for the "invoice_line_items" table.
@@ -1113,7 +1115,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "invoice_line_items_invoices_line_items",
-				Columns:    []*schema.Column{InvoiceLineItemsColumns[31]},
+				Columns:    []*schema.Column{InvoiceLineItemsColumns[33]},
 				RefColumns: []*schema.Column{InvoicesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1122,7 +1124,7 @@ var (
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_invoice_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[31], InvoiceLineItemsColumns[2]},
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[33], InvoiceLineItemsColumns[2]},
 			},
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_customer_id_status",
@@ -1394,6 +1396,7 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "group_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "sequence", Type: field.TypeInt64, Default: schema.Expr("nextval('prices_sequence_seq')")},
 		{Name: "price_unit_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// PricesTable holds the schema information for the "prices" table.
@@ -1404,7 +1407,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "prices_price_units_price_unit_edge",
-				Columns:    []*schema.Column{PricesColumns[40]},
+				Columns:    []*schema.Column{PricesColumns[41]},
 				RefColumns: []*schema.Column{PriceUnitsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1432,6 +1435,14 @@ var (
 				Name:    "price_tenant_id_environment_id_group_id",
 				Unique:  false,
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[39]},
+			},
+			{
+				Name:    "price_tenant_id_environment_id_entity_id_entity_type_sequence",
+				Unique:  false,
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[35], PricesColumns[34], PricesColumns[40]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 		},
 	}
@@ -1629,6 +1640,7 @@ var (
 		{Name: "payment_terms", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "subscription_type", Type: field.TypeString, Default: "standalone", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "auto_invoice_threshold", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
+		{Name: "synced_price_sequence", Type: field.TypeInt64, Default: "0"},
 		{Name: "invoicing_customer_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
@@ -1639,7 +1651,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscriptions_customers_invoicing_customer",
-				Columns:    []*schema.Column{SubscriptionsColumns[44]},
+				Columns:    []*schema.Column{SubscriptionsColumns[45]},
 				RefColumns: []*schema.Column{CustomersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1667,6 +1679,14 @@ var (
 				Name:    "subscription_tenant_id_environment_id_current_period_end_subscription_status_status",
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[17], SubscriptionsColumns[11], SubscriptionsColumns[2]},
+			},
+			{
+				Name:    "subscription_tenant_id_environment_id_plan_id_synced_price_sequence",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[44]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 		},
 	}

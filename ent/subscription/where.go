@@ -293,6 +293,11 @@ func AutoInvoiceThreshold(v decimal.Decimal) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldAutoInvoiceThreshold, v))
 }
 
+// SyncedPriceSequence applies equality check predicate on the "synced_price_sequence" field. It's identical to SyncedPriceSequenceEQ.
+func SyncedPriceSequence(v int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldSyncedPriceSequence, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldTenantID, v))
@@ -2975,6 +2980,46 @@ func AutoInvoiceThresholdIsNil() predicate.Subscription {
 // AutoInvoiceThresholdNotNil applies the NotNil predicate on the "auto_invoice_threshold" field.
 func AutoInvoiceThresholdNotNil() predicate.Subscription {
 	return predicate.Subscription(sql.FieldNotNull(FieldAutoInvoiceThreshold))
+}
+
+// SyncedPriceSequenceEQ applies the EQ predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceEQ(v int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceNEQ applies the NEQ predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceNEQ(v int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNEQ(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceIn applies the In predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceIn(vs ...int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldIn(FieldSyncedPriceSequence, vs...))
+}
+
+// SyncedPriceSequenceNotIn applies the NotIn predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceNotIn(vs ...int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNotIn(FieldSyncedPriceSequence, vs...))
+}
+
+// SyncedPriceSequenceGT applies the GT predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceGT(v int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGT(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceGTE applies the GTE predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceGTE(v int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldGTE(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceLT applies the LT predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceLT(v int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLT(FieldSyncedPriceSequence, v))
+}
+
+// SyncedPriceSequenceLTE applies the LTE predicate on the "synced_price_sequence" field.
+func SyncedPriceSequenceLTE(v int64) predicate.Subscription {
+	return predicate.Subscription(sql.FieldLTE(FieldSyncedPriceSequence, v))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

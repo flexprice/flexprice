@@ -105,6 +105,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		CustomerID: zohoCustomerID,
 		LineItems:  lineItems,
 		Notes:      "Synced from FlexPrice",
+		Adjustment: flexInvoice.TotalPrepaidCreditsApplied.Mul(decimal.NewFromInt(-1)),
 	}
 	if flexInvoice.FinalizedAt != nil {
 		reqPayload.Date = flexInvoice.FinalizedAt.Format("2006-01-02")
@@ -209,23 +210,54 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		priceToItemID = mapped
 	}
 
+	settings, err := s.getInvoiceSyncSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make([]InvoiceLineItem, 0, len(inputs))
 	for _, li := range flexInvoice.LineItems {
 		if li == nil || li.Amount.IsZero() {
 			continue
 		}
+		qty, rate := s.normalizeRateAndQuantity(li, settings, flexInvoice.BillingPeriod)
 		name := lo.FromPtrOr(li.DisplayName, "Charge")
 		out = append(out, InvoiceLineItem{
 			Name:           name,
 			Description:    formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
-			Quantity:       decimal.NewFromInt(1),
-			Rate:           li.Amount,
+			Quantity:       qty,
+			Rate:           rate,
 			ItemID:         priceToItemID[lo.FromPtr(li.PriceID)],
 			TaxID:          taxRes.TaxID,
 			TaxExemptionID: taxRes.TaxExemptionID,
 		})
 	}
 	return out, nil
+}
+
+func (s *InvoiceService) getInvoiceSyncSettings(ctx context.Context) (*types.InvoiceSyncSettings, error) {
+	syncConfig, err := s.client.GetZohoBooksSyncConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if syncConfig != nil && syncConfig.InvoiceSyncSettings != nil {
+		return syncConfig.InvoiceSyncSettings, nil
+	}
+	return nil, nil
+}
+
+func (s *InvoiceService) normalizeRateAndQuantity(li *invoice.InvoiceLineItem, settings *types.InvoiceSyncSettings, billingPeriod *string) (qty decimal.Decimal, rate decimal.Decimal) {
+	priceType := lo.FromPtr(li.PriceType)
+
+	if priceType == string(types.PRICE_TYPE_FIXED) && settings != nil {
+		if n := settings.NormalizedFixedQuantity(billingPeriod); n > 0 {
+			dQty := decimal.NewFromInt(int64(n))
+			return dQty, li.Amount.Div(dQty)
+		}
+	}
+
+	return decimal.NewFromInt(1), li.Amount
+
 }
 
 func formatPeriodDescription(fallback string, start, end *time.Time) string {

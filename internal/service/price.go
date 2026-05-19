@@ -833,6 +833,9 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		}
 
 		if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+			// bumpSequence when end date is changed
+			bumpSequence := existingPrice.EndDate == nil || !terminationEndDate.Equal(*existingPrice.EndDate)
+
 			// Terminate the existing price
 			existingPrice.EndDate = &terminationEndDate
 
@@ -847,7 +850,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 				}
 			}
 
-			if err := s.PriceRepo.Update(ctx, existingPrice); err != nil {
+			if err := s.PriceRepo.Update(ctx, existingPrice, bumpSequence); err != nil {
 				return err
 			}
 
@@ -888,6 +891,8 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 	} else {
 		// No critical fields - simple update
 
+		bumpSequence := false
+
 		// Update non-critical fields
 		if req.LookupKey != "" {
 			existingPrice.LookupKey = req.LookupKey
@@ -903,6 +908,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		}
 		if req.EffectiveFrom != nil {
 			existingPrice.EndDate = req.EffectiveFrom
+			bumpSequence = true
 		}
 
 		// Handle group update: nil = don't change, "" = clear, "group-id" = set and validate
@@ -916,8 +922,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			}
 		}
 
-		// Update the price in database
-		if err := s.PriceRepo.Update(ctx, existingPrice); err != nil {
+		if err := s.PriceRepo.Update(ctx, existingPrice, bumpSequence); err != nil {
 			return nil, err
 		}
 
@@ -970,7 +975,8 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 
 	price.EndDate = &endDate
 
-	if err := s.PriceRepo.Update(ctx, price); err != nil {
+	// bumpSequence=true: DeletePrice is a termination event (end_date being set).
+	if err := s.PriceRepo.Update(ctx, price, true); err != nil {
 		return err
 	}
 

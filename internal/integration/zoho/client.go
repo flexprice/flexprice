@@ -34,6 +34,8 @@ type ZohoClient interface {
 	CreateTaxExemption(ctx context.Context, req *CreateTaxExemptionRequest) (*TaxExemption, error)
 	// ListTaxExemptions returns all tax exemptions configured in Zoho Books (US edition).
 	ListTaxExemptions(ctx context.Context) ([]TaxExemption, error)
+	// GetZohoBooksSyncConfig loads the published connection and returns the
+	GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig, error)
 }
 
 type Client struct {
@@ -405,4 +407,17 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 		return "", err
 	}
 	return tokenResp.AccessToken, nil
+}
+
+func (c *Client) GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig, error) {
+	conn, err := c.connectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil || conn.Status != types.StatusPublished {
+		return nil, ierr.NewError("Connection with provider zoho_books is not configured in this environment").
+			WithHint("Zoho Books connection must be configured and published before use").
+			Mark(ierr.ErrNotFound)
+	}
+	return conn.GetSyncConfig(), nil
 }

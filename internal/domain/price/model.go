@@ -129,6 +129,12 @@ type Price struct {
 	// EndDate is the end date of the price
 	EndDate *time.Time `db:"end_date" json:"end_date,omitempty"`
 
+	// Sequence is the monotonic stamp bumped on every state change that
+	// subscription line items need to react to. Read by the plan-price sync;
+	// set by the database (DEFAULT nextval) on create and by the price
+	// repository on termination / compatibility-affecting edits.
+	Sequence int64 `db:"sequence" json:"sequence,omitempty"`
+
 	types.BaseModel
 }
 
@@ -505,6 +511,7 @@ func FromEnt(e *ent.Price) *Price {
 		GroupID:                lo.FromPtr(e.GroupID),
 		StartDate:              e.StartDate,
 		EndDate:                e.EndDate,
+		Sequence:               e.Sequence,
 		MinQuantity:            e.MinQuantity,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,

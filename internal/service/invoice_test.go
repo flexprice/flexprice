@@ -390,10 +390,10 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 
 				// Update the prices to have arrear invoice cadence
 				s.testData.prices.apiCalls.InvoiceCadence = types.InvoiceCadenceArrear
-				s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.apiCalls))
+				s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.apiCalls, false))
 
 				s.testData.prices.storage.InvoiceCadence = types.InvoiceCadenceArrear
-				s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.storage))
+				s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.storage, false))
 
 				// Create some usage events for the current period
 				for i := 0; i < 100; i++ {
