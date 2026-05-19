@@ -21,7 +21,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // PaddleSyncService orchestrates syncing FlexPrice entities to Paddle.
@@ -589,10 +588,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 				WithHint("Ensure all invoice line item prices are synced to Paddle").
 				Mark(ierr.ErrValidation)
 		}
-		amountCents := li.Amount.Mul(decimal.NewFromInt(100)).IntPart()
-		if amountCents < 0 {
-			amountCents = 0
-		}
+		amountSmallest := types.ToSmallestUnit(li.Amount, li.Currency)
 		name := lo.FromPtrOr(li.DisplayName, priceID)
 		if name == "" {
 			name = priceID
@@ -609,7 +605,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 					Name:        paddlesdk.PtrTo(name),
 					TaxMode:     paddlesdk.TaxModeAccountSetting,
 					UnitPrice: paddlesdk.Money{
-						Amount:       fmt.Sprintf("%d", amountCents),
+						Amount:       fmt.Sprintf("%d", amountSmallest),
 						CurrencyCode: paddlesdk.CurrencyCode(strings.ToUpper(li.Currency)),
 					},
 					Quantity: paddlesdk.PriceQuantity{Minimum: 1, Maximum: 100000},
