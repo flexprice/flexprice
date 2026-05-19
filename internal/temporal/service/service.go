@@ -594,7 +594,7 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 
 	// Handle different workflow types
 	switch workflowType {
-	case types.TemporalPriceSyncWorkflow:
+	case types.TemporalPriceSyncWorkflow, types.TemporalPriceSyncV2Workflow:
 		return s.buildPriceSyncInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalQuickBooksPriceSyncWorkflow:
 		return s.buildQuickBooksPriceSyncInput(ctx, tenantID, environmentID, userID, params)

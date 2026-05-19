@@ -44,7 +44,7 @@ type Handlers struct {
 	Coupon                   *v1.CouponHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
-	IntegrationMappingLink   *v1.IntegrationMappingLinkHandler
+	Integration              *v1.IntegrationHandler
 	Settings                 *v1.SettingsHandler
 	SetupIntent              *v1.SetupIntentHandler
 	Group                    *v1.GroupHandler
@@ -509,7 +509,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		// Integration routes
 		integrations := v1Private.Group("/integrations")
 		{
-			integrations.POST("/link", handlers.IntegrationMappingLink.Link)
+			integrations.POST("/link", handlers.Integration.Link)
+			integrations.POST("/sync", handlers.Integration.Sync)
 		}
 
 		// Coupon routes

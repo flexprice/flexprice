@@ -33,11 +33,11 @@ type MeterUsageQueryParams struct {
 	ExternalCustomerIDs []string
 	MeterID             string
 	MeterIDs            []string
-	StartTime          time.Time
-	EndTime            time.Time
-	AggregationType    types.AggregationType
-	WindowSize         types.WindowSize
-	BillingAnchor      *time.Time
+	StartTime           time.Time
+	EndTime             time.Time
+	AggregationType     types.AggregationType
+	WindowSize          types.WindowSize
+	BillingAnchor       *time.Time
 	// GroupByProperty is the JSON property key for group-by aggregation (e.g. for bucketed MAX meters)
 	GroupByProperty string
 	// UseFinal enables FINAL for ReplacingMergeTree deduplication (use for billing queries)

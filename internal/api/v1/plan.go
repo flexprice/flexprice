@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -20,6 +21,7 @@ type PlanHandler struct {
 	entitlementService service.EntitlementService
 	creditGrantService service.CreditGrantService
 	temporalService    temporalservice.TemporalService
+	cfg                *config.Configuration
 	log                *logger.Logger
 }
 
@@ -28,6 +30,7 @@ func NewPlanHandler(
 	entitlementService service.EntitlementService,
 	creditGrantService service.CreditGrantService,
 	temporalService temporalservice.TemporalService,
+	cfg *config.Configuration,
 	log *logger.Logger,
 ) *PlanHandler {
 	return &PlanHandler{
@@ -35,6 +38,7 @@ func NewPlanHandler(
 		entitlementService: entitlementService,
 		creditGrantService: creditGrantService,
 		temporalService:    temporalService,
+		cfg:                cfg,
 		log:                log,
 	}
 }
@@ -311,6 +315,7 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		return
 	}
 	h.log.Infow("price_sync_lock_acquired", "plan_id", id, "lock_key", lockKey)
+
 	// Start the price sync workflow (activity will release lock when done)
 	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, id)
 	if err != nil {
@@ -407,6 +412,14 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 			Mark(ierr.ErrValidation))
 		return
 	}
+
+	// Verify that the plan exists
+	_, err := h.service.GetPlan(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
 	// Acquire plan-level lock (Redis SetNX, 2h TTL)
 	redisCache := cache.GetRedisCache()
 	if redisCache == nil {
@@ -432,13 +445,17 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 		return
 	}
 	h.log.Infow("price_sync_lock_acquired", "plan_id", id, "lock_key", lockKey)
-	defer redisCache.Delete(c.Request.Context(), lockKey)
 
-	resp, err := h.service.SyncPlanPrices(c.Request.Context(), id)
+	// Start the price sync workflow (activity will release lock when done)
+	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncV2Workflow, id)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, models.TemporalWorkflowResult{
+		Message:    "price sync v2 workflow started",
+		WorkflowID: workflowRun.GetID(),
+		RunID:      workflowRun.GetRunID(),
+	})
 }

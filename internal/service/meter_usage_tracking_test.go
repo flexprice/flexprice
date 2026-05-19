@@ -70,8 +70,7 @@ func (s *MeterUsageTrackingSuite) TestGenerateUniqueHash_NonCountUnique() {
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "duration"}}
 
 	hash := s.svc.generateUniqueHash(event, m)
-	assert.NotEmpty(s.T(), hash)
-	assert.Len(s.T(), hash, 64) // SHA256 hex
+	assert.Empty(s.T(), hash)
 
 	// Same input produces same hash
 	hash2 := s.svc.generateUniqueHash(event, m)
@@ -340,6 +339,6 @@ func (s *MeterUsageTrackingSuite) TestProcessEvent_MatchesMeters() {
 
 	// Verify unique hash is event-based for SUM
 	hash1 := s.svc.generateUniqueHash(event, m1)
-	assert.NotEmpty(s.T(), hash1)
+	assert.Empty(s.T(), hash1)
 	assert.NotEqual(s.T(), hash1, hash2)
 }

@@ -24,6 +24,7 @@ type ZohoClient interface {
 	CreateContact(ctx context.Context, req *ContactCreateRequest) (*ContactResponse, error)
 	CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error)
 	CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error)
+	SearchItemByName(ctx context.Context, name string) (*ItemResponse, error)
 	// ResolveInvoiceCurrency returns currency_code and exchange_rate for Zoho create-invoice (base-currency conversion per Zoho Books).
 	ResolveInvoiceCurrency(ctx context.Context, invoiceCurrency string) (currencyCode string, exchangeRate float64, err error)
 	// GetZohoBooksWebhookConfig loads the published connection and returns the decrypted webhook signing secret (empty if unset).
@@ -130,6 +131,17 @@ func (c *Client) CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemR
 		return nil, err
 	}
 	return resp.Item, nil
+}
+
+func (c *Client) SearchItemByName(ctx context.Context, name string) (*ItemResponse, error) {
+	var resp SearchItemsResponse
+	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/items", map[string]string{"name": name}, nil, &resp); err != nil {
+		return nil, err
+	}
+	if len(resp.Items) == 0 {
+		return nil, nil
+	}
+	return &resp.Items[0], nil
 }
 
 func (c *Client) ListTaxes(ctx context.Context, page, perPage int) (*ListTaxesResponse, error) {
@@ -308,7 +320,14 @@ func (c *Client) doBooksRequest(
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return ierr.NewError("Zoho API request failed").
+		var zohoErrResp ZohoErrorResponse
+		_ = json.Unmarshal(bodyBytes, &zohoErrResp)
+
+		return ierr.WithError(&ZohoAPIError{
+			Code:       zohoErrResp.Code,
+			Message:    zohoErrResp.Message,
+			HTTPStatus: resp.StatusCode,
+		}).
 			WithHintf("Zoho API returned status %d", resp.StatusCode).
 			WithReportableDetails(map[string]interface{}{"response_body": string(bodyBytes)}).
 			Mark(ierr.ErrHTTPClient)

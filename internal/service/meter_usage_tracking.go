@@ -354,14 +354,14 @@ func (s *meterUsageTrackingService) checkMeterFilters(event *events.Event, filte
 func (s *meterUsageTrackingService) generateUniqueHash(event *events.Event, m *meter.Meter) string {
 	var hashStr string
 
-	if m.Aggregation.Type == types.AggregationCountUnique && m.Aggregation.Field != "" {
+	if m.Aggregation.Type == types.AggregationCountUnique {
 		if fieldValue, ok := event.Properties[m.Aggregation.Field]; ok {
 			hashStr = fmt.Sprintf("%s:%s:%v", event.EventName, m.Aggregation.Field, fieldValue)
 		}
 	}
 
 	if hashStr == "" {
-		hashStr = event.EventName + ":" + event.ID
+		return ""
 	}
 
 	hash := sha256.Sum256([]byte(hashStr))

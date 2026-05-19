@@ -5,6 +5,18 @@ import (
 	"github.com/flexprice/flexprice/internal/validator"
 )
 
+type IntegrationSyncRequest struct {
+	EntityType types.IntegrationEntityType `json:"entity_type" validate:"required"`
+	EntityID   string                      `json:"entity_id" validate:"required"`
+}
+
+func (r *IntegrationSyncRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return r.EntityType.Validate()
+}
+
 type LinkIntegrationMappingRequest struct {
 	EntityType       types.IntegrationEntityType `json:"entity_type" validate:"required"`
 	EntityID         string                      `json:"entity_id" validate:"required,max=255"`

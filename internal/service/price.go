@@ -834,7 +834,12 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 
 		if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 			// bumpSequence when end date is changed
-			bumpSequence := existingPrice.EndDate == nil || !terminationEndDate.Equal(*existingPrice.EndDate)
+			var bumpSequence bool
+			if existingPrice.EndDate == nil && !terminationEndDate.IsZero() {
+				bumpSequence = true
+			} else if existingPrice.EndDate != nil && !terminationEndDate.Equal(*existingPrice.EndDate) {
+				bumpSequence = true
+			}
 
 			// Terminate the existing price
 			existingPrice.EndDate = &terminationEndDate

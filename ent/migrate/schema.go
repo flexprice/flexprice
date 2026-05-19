@@ -1685,7 +1685,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[44]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
+					Where: "status = 'published' AND subscription_type IN ('standalone','delegated_invoicing','parent','grouped_invoicing')",
 				},
 			},
 		},
