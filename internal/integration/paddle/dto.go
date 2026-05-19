@@ -13,7 +13,8 @@ type EnsureCustomerSyncedRequest struct {
 type EnsureCustomerSyncedResponse struct {
 	PaddleCustomerID string
 	PaddleAddressID  string
-	Created          bool
+	// Created is true when the Paddle customer was newly created (false = already existed).
+	Created bool
 }
 
 // EnsureBulkProductSyncedRequest is the bulk input to PaddleSyncService.EnsureBulkProductSynced.
@@ -46,7 +47,8 @@ type EnsureSubscriptionSyncedRequest struct {
 // EnsureSubscriptionSyncedResponse is returned by PaddleSyncService.EnsureSubscriptionSynced.
 type EnsureSubscriptionSyncedResponse struct {
 	PaddleSubscriptionID string
-	Created              bool
+	// Created is true when the Paddle subscription was newly created.
+	Created bool
 }
 
 // SyncInvoiceRequest is the input to PaddleSyncService.SyncInvoice.
@@ -58,5 +60,6 @@ type SyncInvoiceRequest struct {
 type SyncInvoiceResponse struct {
 	PaddleTransactionID string
 	CheckoutURL         string
-	AlreadySynced       bool
+	// AlreadySynced is true when the invoice was already synced (no-op path taken).
+	AlreadySynced bool
 }
