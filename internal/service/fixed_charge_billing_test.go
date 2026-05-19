@@ -128,7 +128,6 @@ func fixedPeriod() (time.Time, time.Time) {
 
 func (s *FixedChargeBillingSuite) TestFlatFee_Advance_Monthly() {
 	ctx := s.GetContext()
-	s.BaseServiceTestSuite.ClearStores()
 	periodStart, periodEnd := fixedPeriod()
 
 	_, pl := s.seedCustomerAndPlan("cust_ff_adv", "plan_ff_adv")
@@ -179,6 +178,7 @@ func (s *FixedChargeBillingSuite) TestFlatFee_Advance_Monthly() {
 		BillingPeriodCount: 1,
 		InvoiceCadence:     types.InvoiceCadenceAdvance,
 		StartDate:          periodStart,
+		EndDate:            periodEnd,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 	s.seedSubscriptionWithLineItem(sub, li)
