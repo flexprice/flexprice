@@ -99,7 +99,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 			  AND environment_id = $2
 			  AND status = '%s'
 			  AND plan_id = $3
-			  AND subscription_status IN ('%s','%s')
+			  AND subscription_status IN ('%s','%s', '%s', '%s')
 			  AND subscription_type IN (%s)
 			  AND synced_price_sequence < $4
 			ORDER BY id
@@ -149,6 +149,8 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreateV2(
 		string(types.StatusPublished),
 		string(types.SubscriptionStatusActive),
 		string(types.SubscriptionStatusTrialing),
+		string(types.SubscriptionStatusDraft),
+		string(types.SubscriptionStatusIncomplete),
 		// Sub types that own plan line items. Inherited is excluded by design
 		strings.Join(lo.Map(types.SubscriptionTypesWithLineItems, func(t types.SubscriptionType, _ int) string { return fmt.Sprintf("'%s'", string(t)) }), ","),
 		string(types.StatusPublished),

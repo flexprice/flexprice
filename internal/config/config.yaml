@@ -269,12 +269,6 @@ gemini:
   api_key: ""
   model: "gemini-2.5-flash-lite"
 
-# Plan-price sync V2 rollout. V2 is the sequence-driven SQL-only sync; V1 is
-# the legacy multi-query workflow. Default is V1 for everyone.
-plan_price_sync:
-  v2_enabled: false       # Flip to true to use V2 for every plan.
-  v2_plan_ids: []         # Per-plan allowlist that always uses V2 (canary).
-
 email:
   enabled: false # Set to true to enable email sending (override with FLEXPRICE_EMAIL_ENABLED=true)
   resend_api_key: "" # Resend API key (set via FLEXPRICE_EMAIL_RESEND_API_KEY environment variable)
