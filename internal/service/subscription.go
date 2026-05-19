@@ -6953,46 +6953,12 @@ func (s *subscriptionService) cancelAllLineItemsForSubscription(
 		zap.Time("effective_date", effectiveDate),
 	)
 
-	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
-	lineItemFilter.SubscriptionIDs = []string{subscriptionID}
-
-	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	terminated, err := s.SubscriptionLineItemRepo.BulkTerminate(ctx, subscriptionID, effectiveDate)
 	if err != nil {
-		logger.Errorw("failed to list line items for cancellation", "error", err)
+		logger.Errorw("failed to terminate line items for subscription", "error", err)
 		return ierr.WithError(err).
-			WithHint("Failed to list line items for cancellation").
+			WithHint("Failed to terminate line items for subscription").
 			Mark(ierr.ErrDatabase)
-	}
-
-	terminated := 0
-	for _, item := range lineItems {
-		// Skip items that haven't started yet — they never became active
-		if item.StartDate.After(effectiveDate) {
-			logger.Debugw("skipping line item not yet started",
-				"line_item_id", item.ID,
-				"entity_type", item.EntityType,
-				"start_date", item.StartDate)
-			continue
-		}
-		// Skip items already terminated at or before effectiveDate
-		if !item.EndDate.IsZero() && !item.EndDate.After(effectiveDate) {
-			logger.Debugw("skipping line item already terminated",
-				"line_item_id", item.ID,
-				"entity_type", item.EntityType,
-				"end_date", item.EndDate)
-			continue
-		}
-		item.EndDate = effectiveDate
-		if err := s.SubscriptionLineItemRepo.Update(ctx, item); err != nil {
-			logger.Errorw("failed to update line item end date",
-				"line_item_id", item.ID,
-				"entity_type", item.EntityType,
-				"error", err)
-			return ierr.WithError(err).
-				WithHintf("Failed to set EndDate on line item %s", item.ID).
-				Mark(ierr.ErrDatabase)
-		}
-		terminated++
 	}
 
 	logger.Infow("terminated line items for subscription", "line_items_terminated", terminated)

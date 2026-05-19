@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -193,6 +194,35 @@ func (s *InMemorySubscriptionLineItemStore) Update(ctx context.Context, item *su
 			Mark(ierr.ErrDatabase)
 	}
 	return nil
+}
+
+// BulkTerminate terminates all subscription line items for a subscription up to a given date
+func (s *InMemorySubscriptionLineItemStore) BulkTerminate(ctx context.Context, subscriptionID string, effectiveDate time.Time) (int, error) {
+	items, err := s.ListBySubscription(ctx, &subscription.Subscription{ID: subscriptionID})
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to list subscription line items").
+			Mark(ierr.ErrDatabase)
+	}
+
+	affected := 0
+	for _, item := range items {
+		if !item.EndDate.IsZero() && item.EndDate.Before(effectiveDate) {
+			continue
+		}
+
+		affected++
+		item.EndDate = effectiveDate
+		if err := s.Update(ctx, item); err != nil {
+			return 0, ierr.WithError(err).
+				WithHint("Failed to update subscription line item").
+				WithReportableDetails(map[string]interface{}{
+					"line_item_id": item.ID,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	}
+	return affected, nil
 }
 
 // Delete deletes a subscription line item
