@@ -162,7 +162,12 @@ func (s *entityIntegrationMappingService) UpdateEntityIntegrationMapping(ctx con
 	}
 
 	if req.Metadata != nil {
-		mapping.Metadata = req.Metadata
+		if mapping.Metadata == nil {
+			mapping.Metadata = make(map[string]interface{})
+		}
+		for k, v := range req.Metadata {
+			mapping.Metadata[k] = v
+		}
 	}
 
 	// Update timestamps

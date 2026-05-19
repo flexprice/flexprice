@@ -675,17 +675,14 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	if err != nil {
 		return nil, fmt.Errorf("listing transactions after charge: %w", err)
 	}
-	if txnCollection == nil || txnCollection.EstimatedTotal() == 0 {
-		return nil, ierr.NewError("no transactions found for subscription after charge").
-			WithReportableDetails(map[string]interface{}{"paddle_subscription_id": subResp.PaddleSubscriptionID}).
-			Mark(ierr.ErrInternal)
-	}
 	var txn *paddlesdk.Transaction
-	if res := txnCollection.Next(ctx); res != nil && res.Ok() {
-		txn = res.Value()
+	if txnCollection != nil {
+		if res := txnCollection.Next(ctx); res != nil && res.Ok() {
+			txn = res.Value()
+		}
 	}
 	if txn == nil {
-		return nil, ierr.NewError("failed to read transaction from Paddle collection after charge").
+		return nil, ierr.NewError("no transaction found for subscription after charge").
 			WithReportableDetails(map[string]interface{}{"paddle_subscription_id": subResp.PaddleSubscriptionID}).
 			Mark(ierr.ErrInternal)
 	}
