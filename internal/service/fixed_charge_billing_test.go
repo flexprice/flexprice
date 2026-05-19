@@ -64,6 +64,10 @@ func (s *FixedChargeBillingSuite) SetupTest() {
 	})
 }
 
+func (s *FixedChargeBillingSuite) TearDownTest() {
+	s.BaseServiceTestSuite.TearDownTest()
+}
+
 // seedCustomerAndPlan creates an Aruba customer and a plan, returns both.
 func (s *FixedChargeBillingSuite) seedCustomerAndPlan(custID, planID string) (*customer.Customer, *plan.Plan) {
 	ctx := s.GetContext()
