@@ -289,20 +289,27 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	billingCycle := paddleBillingCycle(sub.BillingPeriod, sub.BillingPeriodCount)
 	currency := strings.ToUpper(sub.Currency)
 
-	// Sort product IDs for deterministic ordering.
-	productIDs := make([]string, 0, len(req.PriceIDToProductID))
-	for _, productID := range req.PriceIDToProductID {
-		productIDs = append(productIDs, productID)
+	// Sort by productID for deterministic ordering; keep priceID for description.
+	type pricePair struct{ priceID, productID string }
+	pairs := make([]pricePair, 0, len(req.PriceIDToProductID))
+	for priceID, productID := range req.PriceIDToProductID {
+		pairs = append(pairs, pricePair{priceID, productID})
 	}
-	sort.Strings(productIDs)
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].productID < pairs[j].productID })
 
-	items := make([]paddlesdk.CreateTransactionItems, 0, len(productIDs))
-	for _, productID := range productIDs {
+	items := make([]paddlesdk.CreateTransactionItems, 0, len(pairs))
+	for _, p := range pairs {
+		desc := p.priceID
+		if desc == "" {
+			desc = p.productID
+		}
 		items = append(items, *paddlesdk.NewCreateTransactionItemsTransactionItemCreateWithPrice(
 			&paddlesdk.TransactionItemCreateWithPrice{
 				Quantity: 1,
 				Price: paddlesdk.TransactionPriceCreateWithProductID{
-					ProductID:    productID,
+					ProductID:    p.productID,
+					Description:  desc,
+					TaxMode:      paddlesdk.TaxModeAccountSetting,
 					UnitPrice:    paddlesdk.Money{Amount: "0", CurrencyCode: paddlesdk.CurrencyCode(currency)},
 					BillingCycle: billingCycle,
 					Quantity:     paddlesdk.PriceQuantity{Minimum: 1, Maximum: 1},
