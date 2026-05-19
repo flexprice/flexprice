@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"time"
 
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -84,8 +83,7 @@ func (a *entityIntegrationMappingServiceAdapter) UpdateEntityIntegrationMapping(
 	if req.Metadata != nil {
 		mapping.Metadata = req.Metadata
 	}
-	mapping.UpdatedAt = time.Now().UTC()
-	mapping.UpdatedBy = types.GetUserID(ctx)
+
 	if err := a.repo.Update(ctx, mapping); err != nil {
 		return nil, err
 	}
