@@ -87,7 +87,12 @@ func (s *inMemoryMappingService) UpdateEntityIntegrationMapping(ctx context.Cont
 		m.ProviderEntityID = *req.ProviderEntityID
 	}
 	if req.Metadata != nil {
-		m.Metadata = req.Metadata
+		if m.Metadata == nil {
+			m.Metadata = make(map[string]interface{})
+		}
+		for k, v := range req.Metadata {
+			m.Metadata[k] = v
+		}
 	}
 	if err := s.repo.Update(ctx, m); err != nil {
 		return nil, err
