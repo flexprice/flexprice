@@ -664,11 +664,15 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		return nil, fmt.Errorf("creating subscription charge: %w", err)
 	}
 
-	// Step 8: Fetch the created transaction (SDK returns Subscription, not Transaction).
+	// Step 8: Fetch the charge transaction.
+	// Filter by origin=subscription_charge to skip the $0 bootstrap transaction (origin=api)
+	// and always retrieve the actual invoice charge regardless of creation order.
 	orderBy := "created_at[DESC]"
 	perPage := 1
+	originFilter := string(paddlesdk.TransactionOriginSubscriptionCharge)
 	txnCollection, err := s.client.ListTransactions(ctx, &paddlesdk.ListTransactionsRequest{
 		SubscriptionID: []string{subResp.PaddleSubscriptionID},
+		Origin:         []string{originFilter},
 		OrderBy:        &orderBy,
 		PerPage:        &perPage,
 	})
@@ -682,7 +686,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		}
 	}
 	if txn == nil {
-		return nil, ierr.NewError("no transaction found for subscription after charge").
+		return nil, ierr.NewError("no subscription_charge transaction found after charge").
 			WithReportableDetails(map[string]interface{}{"paddle_subscription_id": subResp.PaddleSubscriptionID}).
 			Mark(ierr.ErrInternal)
 	}
