@@ -494,10 +494,12 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	}
 	if existingMapping != nil {
 		checkoutURL, _ := existingMapping.Metadata[MetaKeyPaddleCheckoutURL].(string)
+		paddleSubID, _ := existingMapping.Metadata[MetaKeyPaddleSubscriptionID].(string)
 		return &SyncInvoiceResponse{
-			PaddleTransactionID: existingMapping.ProviderEntityID,
-			CheckoutURL:         s.appendCheckoutToken(ctx, checkoutURL),
-			AlreadySynced:       true,
+			PaddleTransactionID:  existingMapping.ProviderEntityID,
+			PaddleSubscriptionID: paddleSubID,
+			CheckoutURL:          s.appendCheckoutToken(ctx, checkoutURL),
+			AlreadySynced:        true,
 		}, nil
 	}
 
@@ -638,8 +640,9 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	}
 
 	invoiceMeta := map[string]interface{}{
-		MetaKeyPaddleTransactionID: txn.ID,
-		MetaKeySyncedAt:            time.Now().UTC().Format(time.RFC3339),
+		MetaKeyPaddleTransactionID:  txn.ID,
+		MetaKeyPaddleSubscriptionID: subResp.PaddleSubscriptionID,
+		MetaKeySyncedAt:             time.Now().UTC().Format(time.RFC3339),
 	}
 	if checkoutURL != "" {
 		invoiceMeta[MetaKeyPaddleCheckoutURL] = checkoutURL
@@ -660,9 +663,10 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 
 	// Step 10: Return.
 	return &SyncInvoiceResponse{
-		PaddleTransactionID: txn.ID,
-		CheckoutURL:         checkoutURL,
-		AlreadySynced:       false,
+		PaddleTransactionID:  txn.ID,
+		PaddleSubscriptionID: subResp.PaddleSubscriptionID,
+		CheckoutURL:          checkoutURL,
+		AlreadySynced:        false,
 	}, nil
 }
 
