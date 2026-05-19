@@ -115,13 +115,39 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 
 	itemResp, err := s.Client.CreateItem(ctx, createReq)
 	if err != nil {
-		return "", ierr.WithError(err).
-			WithHint("Failed to create item in Zoho Books").
-			WithReportableDetails(map[string]interface{}{
-				"price_id":  in.PriceID,
-				"item_name": in.Name,
-			}).
-			Mark(ierr.ErrInternal)
+		if !IsZohoErrorCode(err, 1001) {
+			return "", ierr.WithError(err).
+				WithHint("Failed to create item in Zoho Books").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":  in.PriceID,
+					"item_name": in.Name,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+
+		s.Logger.Infow("item already exists in Zoho Books, searching by name",
+			"price_id", in.PriceID,
+			"item_name", in.Name)
+
+		existing, searchErr := s.Client.SearchItemByName(ctx, in.Name)
+		if searchErr != nil {
+			return "", ierr.WithError(searchErr).
+				WithHint("Failed to search existing item in Zoho Books").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":  in.PriceID,
+					"item_name": in.Name,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+		if existing == nil {
+			return "", ierr.NewError("item reported as existing but search returned no results").
+				WithReportableDetails(map[string]interface{}{
+					"price_id":  in.PriceID,
+					"item_name": in.Name,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+		itemResp = existing
 	}
 	if itemResp == nil {
 		return "", ierr.NewError("Zoho CreateItem returned nil response").
@@ -133,7 +159,7 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Infow("created item in Zoho Books",
+	s.Logger.Infow("resolved item in Zoho Books",
 		"price_id", in.PriceID,
 		"zoho_item_id", itemResp.ItemID,
 		"item_name", itemResp.Name)
