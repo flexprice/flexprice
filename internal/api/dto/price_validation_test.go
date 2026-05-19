@@ -7,6 +7,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // validFlatFeeRequest returns a minimal valid CreatePriceRequest for FLAT_FEE billing model.
@@ -49,15 +51,19 @@ func TestCreatePriceRequest_Validate_RejectsTieredWithNoTiers(t *testing.T) {
 	}
 }
 
-func TestCreatePriceRequest_Validate_RejectsFlatFeeWithZeroAmount(t *testing.T) {
+func TestCreatePriceRequest_Validate_AcceptsFlatFeeWithZeroAmount(t *testing.T) {
 	req := validFlatFeeRequest()
 	zero := decimal.Zero
 	req.Amount = &zero
-
 	err := req.Validate()
-	if err == nil {
-		t.Fatal("expected error for FLAT_FEE with zero amount, got nil")
-	}
+	assert.NoError(t, err, "FLAT_FEE with amount=0 should be valid (e.g. free tier)")
+}
+
+func TestCreatePriceRequest_Validate_RejectsFlatFeeWithNilAmount(t *testing.T) {
+	req := validFlatFeeRequest()
+	req.Amount = nil
+	err := req.Validate()
+	require.Error(t, err, "FLAT_FEE with nil amount should fail validation")
 }
 
 // --- Acceptance cases ---
