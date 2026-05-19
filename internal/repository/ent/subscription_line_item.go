@@ -296,6 +296,8 @@ func (r *subscriptionLineItemRepository) BulkTerminate(ctx context.Context, subs
 		SetNillableEndDate(types.ToNillableTime(effectiveDate)).
 		SetStatus(string(types.StatusPublished)).
 		Where(
+			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 			subscriptionlineitem.SubscriptionID(subscriptionID),
 			subscriptionlineitem.Or(
 				subscriptionlineitem.EndDateIsNil(),
