@@ -189,7 +189,6 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		inputs = append(inputs, ItemSyncInput{
 			PriceID: lo.FromPtr(li.PriceID),
 			Name:    lo.FromPtrOr(li.DisplayName, "Charge"),
-			Rate:    li.Amount,
 		})
 	}
 
