@@ -4,7 +4,8 @@ package paddle
 // Always use these constants instead of raw string literals to prevent typos.
 const (
 	// Connection metadata keys (stored on the Paddle connection record)
-	ConnKeyRedirectURL = "redirect_url"
+	ConnKeyRedirectURL    = "redirect_url"
+	ConnKeyCheckoutURL    = "checkout_url" // base URL matching the Paddle default payment link, e.g. https://example.com/checkout
 
 	// Customer / address mapping metadata keys
 	MetaKeyPaddleCustomerID    = "paddle_customer_id"

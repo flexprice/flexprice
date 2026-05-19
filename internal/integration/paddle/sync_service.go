@@ -703,6 +703,23 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	if txn.Checkout != nil {
 		checkoutURL = lo.FromPtrOr(txn.Checkout.URL, "")
 	}
+	s.logger.Debugw("paddle transaction checkout",
+		"transaction_id", txn.ID,
+		"checkout_nil", txn.Checkout == nil,
+		"checkout_url_from_paddle", checkoutURL,
+		"collection_mode", txn.CollectionMode,
+		"status", txn.Status,
+	)
+	// If Paddle did not return a checkout URL (e.g. subscription was bootstrapped with
+	// manual collection mode), build it from the connection's configured checkout_url.
+	if checkoutURL == "" {
+		if conn, connErr := s.client.GetConnection(ctx); connErr == nil && conn != nil && conn.Metadata != nil {
+			if base, ok := conn.Metadata[ConnKeyCheckoutURL].(string); ok && base != "" {
+				checkoutURL = base + "?_ptxn=" + txn.ID
+				s.logger.Debugw("built checkout url from connection config", "checkout_url", checkoutURL)
+			}
+		}
+	}
 	checkoutURL = s.appendCheckoutToken(ctx, checkoutURL)
 
 	// Step 9: Persist invoice metadata + mapping.
