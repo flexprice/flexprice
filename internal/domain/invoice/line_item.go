@@ -50,7 +50,7 @@ type InvoiceLineItem struct {
 	AdjustedEntitlementQuantity *decimal.Decimal `json:"adjusted_entitlement_quantity,omitempty" swaggertype:"string"`
 
 	// sub_line_item_id links this invoice line item to the subscription_line_item that generated it.
-	SubLineItemID *string `json:"sub_line_item_id,omitempty"`
+	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
 	types.BaseModel
 }
@@ -89,7 +89,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		LineItemDiscount:            lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
 		InvoiceLevelDiscount:        lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
 		AdjustedEntitlementQuantity: e.AdjustedEntitlementQuantity,
-		SubLineItemID:               e.SubLineItemID,
+		SubscriptionLineItemID:      e.SubscriptionLineItemID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

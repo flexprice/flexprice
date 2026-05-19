@@ -442,8 +442,8 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.InvoiceLevelDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther)
 	}
-	if iliu.mutation.SubLineItemIDCleared() {
-		_spec.ClearField(invoicelineitem.FieldSubLineItemID, field.TypeString)
+	if iliu.mutation.SubscriptionLineItemIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString)
 	}
 	if value, ok := iliu.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
@@ -957,8 +957,8 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	if iliuo.mutation.InvoiceLevelDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther)
 	}
-	if iliuo.mutation.SubLineItemIDCleared() {
-		_spec.ClearField(invoicelineitem.FieldSubLineItemID, field.TypeString)
+	if iliuo.mutation.SubscriptionLineItemIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString)
 	}
 	if value, ok := iliuo.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)

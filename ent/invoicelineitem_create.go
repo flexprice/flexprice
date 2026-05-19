@@ -410,16 +410,16 @@ func (ilic *InvoiceLineItemCreate) SetNillableInvoiceLevelDiscount(d *decimal.De
 	return ilic
 }
 
-// SetSubLineItemID sets the "sub_line_item_id" field.
-func (ilic *InvoiceLineItemCreate) SetSubLineItemID(s string) *InvoiceLineItemCreate {
-	ilic.mutation.SetSubLineItemID(s)
+// SetSubscriptionLineItemID sets the "subscription_line_item_id" field.
+func (ilic *InvoiceLineItemCreate) SetSubscriptionLineItemID(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetSubscriptionLineItemID(s)
 	return ilic
 }
 
-// SetNillableSubLineItemID sets the "sub_line_item_id" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableSubLineItemID(s *string) *InvoiceLineItemCreate {
+// SetNillableSubscriptionLineItemID sets the "subscription_line_item_id" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableSubscriptionLineItemID(s *string) *InvoiceLineItemCreate {
 	if s != nil {
-		ilic.SetSubLineItemID(*s)
+		ilic.SetSubscriptionLineItemID(*s)
 	}
 	return ilic
 }
@@ -749,9 +749,9 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
 		_node.InvoiceLevelDiscount = &value
 	}
-	if value, ok := ilic.mutation.SubLineItemID(); ok {
-		_spec.SetField(invoicelineitem.FieldSubLineItemID, field.TypeString, value)
-		_node.SubLineItemID = &value
+	if value, ok := ilic.mutation.SubscriptionLineItemID(); ok {
+		_spec.SetField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString, value)
+		_node.SubscriptionLineItemID = &value
 	}
 	if value, ok := ilic.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)

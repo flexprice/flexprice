@@ -31,24 +31,24 @@ import (
 //  4. RecalculateInvoiceV2 with a mixed invoice (some items with sub_line_item_id, some without)
 type EntitlementQuantityTestSuite struct {
 	testutil.BaseServiceTestSuite
-	subService     SubscriptionService
-	invoiceSvc     InvoiceService
-	eventRepo      *testutil.InMemoryEventStore
-	invoiceRepo    *testutil.InMemoryInvoiceStore
-	testData       entitlementQtyTestData
+	subService  SubscriptionService
+	invoiceSvc  InvoiceService
+	eventRepo   *testutil.InMemoryEventStore
+	invoiceRepo *testutil.InMemoryInvoiceStore
+	testData    entitlementQtyTestData
 }
 
 type entitlementQtyTestData struct {
-	customer       *customer.Customer
-	plan           *plan.Plan
-	meter          *meter.Meter
-	usagePrice     *price.Price
-	feature        *feature.Feature
-	subscription   *subscription.Subscription
+	customer         *customer.Customer
+	plan             *plan.Plan
+	meter            *meter.Meter
+	usagePrice       *price.Price
+	feature          *feature.Feature
+	subscription     *subscription.Subscription
 	usageSubLineItem *subscription.SubscriptionLineItem
-	periodStart    time.Time
-	periodEnd      time.Time
-	now            time.Time
+	periodStart      time.Time
+	periodEnd        time.Time
+	now              time.Time
 }
 
 func TestEntitlementQuantity(t *testing.T) {
@@ -193,11 +193,11 @@ func (s *EntitlementQuantityTestSuite) setupTestData() {
 
 	// Feature linked to the meter
 	s.testData.feature = &feature.Feature{
-		ID:          "feat_eq_test",
-		Name:        "API Calls Feature EQ",
-		Type:        types.FeatureTypeMetered,
-		MeterID:     s.testData.meter.ID,
-		BaseModel:   types.GetDefaultBaseModel(ctx),
+		ID:        "feat_eq_test",
+		Name:      "API Calls Feature EQ",
+		Type:      types.FeatureTypeMetered,
+		MeterID:   s.testData.meter.ID,
+		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
 	s.NoError(s.GetStores().FeatureRepo.Create(ctx, s.testData.feature))
 
@@ -411,35 +411,35 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_NilSubLineItemIDs_SetsA
 	// Amount is wrong ($0) to prove the field is not merely preserved.
 	staleLineItemID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)
 	draftInv := &invoicedomain.Invoice{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
-		CustomerID:     s.testData.customer.ID,
-		SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-		InvoiceType:    types.InvoiceTypeSubscription,
-		InvoiceStatus:  types.InvoiceStatusDraft,
-		PaymentStatus:  types.PaymentStatusPending,
-		Currency:       "usd",
-		Subtotal:       decimal.Zero,
-		Total:          decimal.Zero,
-		AmountDue:      decimal.Zero,
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(s.testData.subscription.ID),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		Subtotal:        decimal.Zero,
+		Total:           decimal.Zero,
+		AmountDue:       decimal.Zero,
 		AmountRemaining: decimal.Zero,
-		BillingPeriod:  &bp,
-		PeriodStart:    &periodStart,
-		PeriodEnd:      &periodEnd,
-		BaseModel:      types.GetDefaultBaseModel(ctx),
+		BillingPeriod:   &bp,
+		PeriodStart:     &periodStart,
+		PeriodEnd:       &periodEnd,
+		BaseModel:       types.GetDefaultBaseModel(ctx),
 		LineItems: []*invoicedomain.InvoiceLineItem{
 			{
-				ID:          staleLineItemID,
-				InvoiceID:   "", // filled by repo
-				CustomerID:  s.testData.customer.ID,
-				MeterID:     lo.ToPtr(s.testData.meter.ID),
-				PriceID:     lo.ToPtr(s.testData.usagePrice.ID),
-				DisplayName: lo.ToPtr("STALE - nil sub_line_item_id"),
-				Amount:      decimal.Zero,        // deliberately wrong
-				Quantity:    decimal.NewFromInt(1), // deliberately wrong
-				Currency:    "usd",
-				EnvironmentID: types.GetEnvironmentID(ctx),
-				SubLineItemID: nil, // triggers fallback delete+create path
-				BaseModel:   types.GetDefaultBaseModel(ctx),
+				ID:                     staleLineItemID,
+				InvoiceID:              "", // filled by repo
+				CustomerID:             s.testData.customer.ID,
+				MeterID:                lo.ToPtr(s.testData.meter.ID),
+				PriceID:                lo.ToPtr(s.testData.usagePrice.ID),
+				DisplayName:            lo.ToPtr("STALE - nil sub_line_item_id"),
+				Amount:                 decimal.Zero,          // deliberately wrong
+				Quantity:               decimal.NewFromInt(1), // deliberately wrong
+				Currency:               "usd",
+				EnvironmentID:          types.GetEnvironmentID(ctx),
+				SubscriptionLineItemID: nil, // triggers fallback delete+create path
+				BaseModel:              types.GetDefaultBaseModel(ctx),
 			},
 		},
 	}
@@ -485,21 +485,21 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_WithSubLineItemIDs_Over
 	// the full payload is overwritten, not just the numeric fields.
 	existingRowID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)
 	draftInv := &invoicedomain.Invoice{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
-		CustomerID:     s.testData.customer.ID,
-		SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-		InvoiceType:    types.InvoiceTypeSubscription,
-		InvoiceStatus:  types.InvoiceStatusDraft,
-		PaymentStatus:  types.PaymentStatusPending,
-		Currency:       "usd",
-		Subtotal:       decimal.NewFromFloat(999.99),
-		Total:          decimal.NewFromFloat(999.99),
-		AmountDue:      decimal.NewFromFloat(999.99),
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(s.testData.subscription.ID),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		Subtotal:        decimal.NewFromFloat(999.99),
+		Total:           decimal.NewFromFloat(999.99),
+		AmountDue:       decimal.NewFromFloat(999.99),
 		AmountRemaining: decimal.NewFromFloat(999.99),
-		BillingPeriod:  &bp,
-		PeriodStart:    &periodStart,
-		PeriodEnd:      &periodEnd,
-		BaseModel:      types.GetDefaultBaseModel(ctx),
+		BillingPeriod:   &bp,
+		PeriodStart:     &periodStart,
+		PeriodEnd:       &periodEnd,
+		BaseModel:       types.GetDefaultBaseModel(ctx),
 		LineItems: []*invoicedomain.InvoiceLineItem{
 			{
 				ID:                          existingRowID,
@@ -508,11 +508,11 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_WithSubLineItemIDs_Over
 				PriceID:                     lo.ToPtr(s.testData.usagePrice.ID),
 				DisplayName:                 lo.ToPtr("STALE DISPLAY NAME - must be overwritten"),
 				Amount:                      decimal.NewFromFloat(999.99), // stale — must be replaced
-				Quantity:                    decimal.NewFromInt(1),         // stale — must be replaced
-				AdjustedEntitlementQuantity: nil,                           // stale — must be set
+				Quantity:                    decimal.NewFromInt(1),        // stale — must be replaced
+				AdjustedEntitlementQuantity: nil,                          // stale — must be set
 				Currency:                    "usd",
 				EnvironmentID:               types.GetEnvironmentID(ctx),
-				SubLineItemID:               lo.ToPtr(s.testData.usageSubLineItem.ID), // triggers update-in-place
+				SubscriptionLineItemID:      lo.ToPtr(s.testData.usageSubLineItem.ID), // triggers update-in-place
 				BaseModel:                   types.GetDefaultBaseModel(ctx),
 			},
 		},
@@ -551,7 +551,7 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_WithSubLineItemIDs_Over
 // two existing line items:
 //   - Item A: SubLineItemID set to the real subscription line item → matched, updated in-place
 //   - Item B: SubLineItemID = nil → not matched (nil keys are not indexed); since at least
-//             one item (A) has a SubLineItemID the fallback delete+create is NOT triggered.
+//     one item (A) has a SubLineItemID the fallback delete+create is NOT triggered.
 //
 // Assertions:
 //   - Item A is updated in-place (its row ID is preserved).
@@ -570,21 +570,21 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_Mixed_UpdatesMatchedIte
 	unmatchedRowID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM)
 
 	draftInv := &invoicedomain.Invoice{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
-		CustomerID:     s.testData.customer.ID,
-		SubscriptionID: lo.ToPtr(s.testData.subscription.ID),
-		InvoiceType:    types.InvoiceTypeSubscription,
-		InvoiceStatus:  types.InvoiceStatusDraft,
-		PaymentStatus:  types.PaymentStatusPending,
-		Currency:       "usd",
-		Subtotal:       decimal.NewFromFloat(999.99),
-		Total:          decimal.NewFromFloat(999.99),
-		AmountDue:      decimal.NewFromFloat(999.99),
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr(s.testData.subscription.ID),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		Subtotal:        decimal.NewFromFloat(999.99),
+		Total:           decimal.NewFromFloat(999.99),
+		AmountDue:       decimal.NewFromFloat(999.99),
 		AmountRemaining: decimal.NewFromFloat(999.99),
-		BillingPeriod:  &bp,
-		PeriodStart:    &periodStart,
-		PeriodEnd:      &periodEnd,
-		BaseModel:      types.GetDefaultBaseModel(ctx),
+		BillingPeriod:   &bp,
+		PeriodStart:     &periodStart,
+		PeriodEnd:       &periodEnd,
+		BaseModel:       types.GetDefaultBaseModel(ctx),
 		LineItems: []*invoicedomain.InvoiceLineItem{
 			{
 				// Item A — has a matching SubLineItemID → update-in-place
@@ -598,22 +598,22 @@ func (s *EntitlementQuantityTestSuite) TestRecalculateV2_Mixed_UpdatesMatchedIte
 				AdjustedEntitlementQuantity: nil, // stale
 				Currency:                    "usd",
 				EnvironmentID:               types.GetEnvironmentID(ctx),
-				SubLineItemID:               lo.ToPtr(s.testData.usageSubLineItem.ID),
+				SubscriptionLineItemID:      lo.ToPtr(s.testData.usageSubLineItem.ID),
 				BaseModel:                   types.GetDefaultBaseModel(ctx),
 			},
 			{
 				// Item B — nil SubLineItemID; since item A has one, the fallback is not triggered.
 				// This item is not in the existingBySubLineItemID index and so is neither matched
 				// nor explicitly archived by the reconciler.
-				ID:          unmatchedRowID,
-				CustomerID:  s.testData.customer.ID,
-				DisplayName: lo.ToPtr("PHANTOM - nil sub_line_item_id"),
-				Amount:      decimal.NewFromFloat(50),
-				Quantity:    decimal.NewFromInt(1),
-				Currency:    "usd",
-				EnvironmentID: types.GetEnvironmentID(ctx),
-				SubLineItemID: nil,
-				BaseModel:   types.GetDefaultBaseModel(ctx),
+				ID:                     unmatchedRowID,
+				CustomerID:             s.testData.customer.ID,
+				DisplayName:            lo.ToPtr("PHANTOM - nil sub_line_item_id"),
+				Amount:                 decimal.NewFromFloat(50),
+				Quantity:               decimal.NewFromInt(1),
+				Currency:               "usd",
+				EnvironmentID:          types.GetEnvironmentID(ctx),
+				SubscriptionLineItemID: nil,
+				BaseModel:              types.GetDefaultBaseModel(ctx),
 			},
 		},
 	}

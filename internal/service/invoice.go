@@ -3019,7 +3019,7 @@ func (s *invoiceService) reconcileLineItems(
 	// Determine whether any existing item has sub_line_item_id (update-in-place eligible)
 	hasSubLineItemID := false
 	for _, item := range existing {
-		if item.SubLineItemID != nil {
+		if item.SubscriptionLineItemID != nil {
 			hasSubLineItemID = true
 			break
 		}
@@ -3051,8 +3051,8 @@ func (s *invoiceService) reconcileLineItems(
 	// Update-in-place path
 	existingBySubLineItemID := make(map[string]*invoice.InvoiceLineItem, len(existing))
 	for _, item := range existing {
-		if item.SubLineItemID != nil {
-			existingBySubLineItemID[lo.FromPtr(item.SubLineItemID)] = item
+		if item.SubscriptionLineItemID != nil {
+			existingBySubLineItemID[lo.FromPtr(item.SubscriptionLineItemID)] = item
 		}
 	}
 
@@ -3061,11 +3061,11 @@ func (s *invoiceService) reconcileLineItems(
 
 	for _, req := range newLineItemReqs {
 		newItem := req.ToInvoiceLineItem(ctx, inv)
-		if lo.IsNil(newItem.SubLineItemID) {
+		if lo.IsNil(newItem.SubscriptionLineItemID) {
 			toInsert = append(toInsert, newItem)
 			continue
 		}
-		if old, ok := existingBySubLineItemID[lo.FromPtr(newItem.SubLineItemID)]; ok {
+		if old, ok := existingBySubLineItemID[lo.FromPtr(newItem.SubscriptionLineItemID)]; ok {
 			// Replace the entire computed payload, then restore immutable identity/audit fields.
 			// This ensures every field produced by ToInvoiceLineItem is refreshed (PriceID,
 			// MeterID, PriceType, PeriodStart/End, display names, etc.) without requiring
@@ -3080,7 +3080,7 @@ func (s *invoiceService) reconcileLineItems(
 			newItem.LineItemDiscount = decimal.Zero
 			newItem.InvoiceLevelDiscount = decimal.Zero
 			toUpdate = append(toUpdate, newItem)
-			delete(existingBySubLineItemID, lo.FromPtr(newItem.SubLineItemID))
+			delete(existingBySubLineItemID, lo.FromPtr(newItem.SubscriptionLineItemID))
 		} else {
 			toInsert = append(toInsert, newItem)
 		}

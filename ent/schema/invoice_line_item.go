@@ -183,7 +183,7 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Default(decimal.Zero).
 			Comment("Discount amount in invoice currency applied to all line items on the invoice"),
 
-		field.String("sub_line_item_id").
+		field.String("subscription_line_item_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).

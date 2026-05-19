@@ -750,7 +750,7 @@ type CreateInvoiceLineItemRequest struct {
 	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty" swaggertype:"string"`
 
 	// sub_line_item_id links this line item to the subscription_line_item that generated it.
-	SubLineItemID *string `json:"sub_line_item_id,omitempty"`
+	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
 	// subscription_id overrides the invoice's subscription_id for this specific line item.
 	// Used for grouped invoicing where child line items belong to child subscriptions.
@@ -846,33 +846,33 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		subscriptionID = r.SubscriptionID
 	}
 	return &invoice.InvoiceLineItem{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-		InvoiceID:      inv.ID,
-		CustomerID:     inv.CustomerID,
-		SubscriptionID: subscriptionID,
-		PriceID:        r.PriceID,
-		EntityID:              r.EntityID,
-		EntityType:            r.EntityType,
-		PlanDisplayName:       r.PlanDisplayName,
-		PriceType:             r.PriceType,
-		MeterID:               r.MeterID,
-		MeterDisplayName:      r.MeterDisplayName,
-		PriceUnit:             r.PriceUnit,
-		PriceUnitAmount:       r.PriceUnitAmount,
-		DisplayName:           r.DisplayName,
-		Amount:                types.RoundToCurrencyPrecision(r.Amount, inv.Currency),
-		Quantity:              r.Quantity,
-		Currency:              inv.Currency,
-		PeriodStart:           r.PeriodStart,
-		PeriodEnd:             r.PeriodEnd,
-		Metadata:              r.Metadata,
-		EnvironmentID:         types.GetEnvironmentID(ctx),
-		BaseModel:             types.GetDefaultBaseModel(ctx),
-		CommitmentInfo:        r.CommitmentInfo,
-		PrepaidCreditsApplied:           lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
-		LineItemDiscount:                lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
-		InvoiceLevelDiscount:            lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
-		SubLineItemID:                   r.SubLineItemID,
+		ID:                          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:                   inv.ID,
+		CustomerID:                  inv.CustomerID,
+		SubscriptionID:              subscriptionID,
+		PriceID:                     r.PriceID,
+		EntityID:                    r.EntityID,
+		EntityType:                  r.EntityType,
+		PlanDisplayName:             r.PlanDisplayName,
+		PriceType:                   r.PriceType,
+		MeterID:                     r.MeterID,
+		MeterDisplayName:            r.MeterDisplayName,
+		PriceUnit:                   r.PriceUnit,
+		PriceUnitAmount:             r.PriceUnitAmount,
+		DisplayName:                 r.DisplayName,
+		Amount:                      types.RoundToCurrencyPrecision(r.Amount, inv.Currency),
+		Quantity:                    r.Quantity,
+		Currency:                    inv.Currency,
+		PeriodStart:                 r.PeriodStart,
+		PeriodEnd:                   r.PeriodEnd,
+		Metadata:                    r.Metadata,
+		EnvironmentID:               types.GetEnvironmentID(ctx),
+		BaseModel:                   types.GetDefaultBaseModel(ctx),
+		CommitmentInfo:              r.CommitmentInfo,
+		PrepaidCreditsApplied:       lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
+		LineItemDiscount:            lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount:        lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
+		SubscriptionLineItemID:      r.SubscriptionLineItemID,
 		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
 }

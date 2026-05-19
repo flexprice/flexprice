@@ -69,7 +69,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			LineItemDiscount:            item.LineItemDiscount,
 			InvoiceLevelDiscount:        item.InvoiceLevelDiscount,
 			AdjustedEntitlementQuantity: item.AdjustedEntitlementQuantity,
-			SubLineItemID:               item.SubLineItemID,
+			SubscriptionLineItemID:      item.SubscriptionLineItemID,
 			EnvironmentID:               item.EnvironmentID,
 			BaseModel:                   item.BaseModel,
 		})

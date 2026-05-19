@@ -29379,7 +29379,7 @@ type InvoiceLineItemMutation struct {
 	prepaid_credits_applied       *decimal.Decimal
 	line_item_discount            *decimal.Decimal
 	invoice_level_discount        *decimal.Decimal
-	sub_line_item_id              *string
+	subscription_line_item_id     *string
 	adjusted_entitlement_quantity *decimal.Decimal
 	clearedFields                 map[string]struct{}
 	invoice                       *string
@@ -30898,53 +30898,53 @@ func (m *InvoiceLineItemMutation) ResetInvoiceLevelDiscount() {
 	delete(m.clearedFields, invoicelineitem.FieldInvoiceLevelDiscount)
 }
 
-// SetSubLineItemID sets the "sub_line_item_id" field.
-func (m *InvoiceLineItemMutation) SetSubLineItemID(s string) {
-	m.sub_line_item_id = &s
+// SetSubscriptionLineItemID sets the "subscription_line_item_id" field.
+func (m *InvoiceLineItemMutation) SetSubscriptionLineItemID(s string) {
+	m.subscription_line_item_id = &s
 }
 
-// SubLineItemID returns the value of the "sub_line_item_id" field in the mutation.
-func (m *InvoiceLineItemMutation) SubLineItemID() (r string, exists bool) {
-	v := m.sub_line_item_id
+// SubscriptionLineItemID returns the value of the "subscription_line_item_id" field in the mutation.
+func (m *InvoiceLineItemMutation) SubscriptionLineItemID() (r string, exists bool) {
+	v := m.subscription_line_item_id
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldSubLineItemID returns the old "sub_line_item_id" field's value of the InvoiceLineItem entity.
+// OldSubscriptionLineItemID returns the old "subscription_line_item_id" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldSubLineItemID(ctx context.Context) (v *string, err error) {
+func (m *InvoiceLineItemMutation) OldSubscriptionLineItemID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldSubLineItemID is only allowed on UpdateOne operations")
+		return v, errors.New("OldSubscriptionLineItemID is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldSubLineItemID requires an ID field in the mutation")
+		return v, errors.New("OldSubscriptionLineItemID requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldSubLineItemID: %w", err)
+		return v, fmt.Errorf("querying old value for OldSubscriptionLineItemID: %w", err)
 	}
-	return oldValue.SubLineItemID, nil
+	return oldValue.SubscriptionLineItemID, nil
 }
 
-// ClearSubLineItemID clears the value of the "sub_line_item_id" field.
-func (m *InvoiceLineItemMutation) ClearSubLineItemID() {
-	m.sub_line_item_id = nil
-	m.clearedFields[invoicelineitem.FieldSubLineItemID] = struct{}{}
+// ClearSubscriptionLineItemID clears the value of the "subscription_line_item_id" field.
+func (m *InvoiceLineItemMutation) ClearSubscriptionLineItemID() {
+	m.subscription_line_item_id = nil
+	m.clearedFields[invoicelineitem.FieldSubscriptionLineItemID] = struct{}{}
 }
 
-// SubLineItemIDCleared returns if the "sub_line_item_id" field was cleared in this mutation.
-func (m *InvoiceLineItemMutation) SubLineItemIDCleared() bool {
-	_, ok := m.clearedFields[invoicelineitem.FieldSubLineItemID]
+// SubscriptionLineItemIDCleared returns if the "subscription_line_item_id" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) SubscriptionLineItemIDCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldSubscriptionLineItemID]
 	return ok
 }
 
-// ResetSubLineItemID resets all changes to the "sub_line_item_id" field.
-func (m *InvoiceLineItemMutation) ResetSubLineItemID() {
-	m.sub_line_item_id = nil
-	delete(m.clearedFields, invoicelineitem.FieldSubLineItemID)
+// ResetSubscriptionLineItemID resets all changes to the "subscription_line_item_id" field.
+func (m *InvoiceLineItemMutation) ResetSubscriptionLineItemID() {
+	m.subscription_line_item_id = nil
+	delete(m.clearedFields, invoicelineitem.FieldSubscriptionLineItemID)
 }
 
 // SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
@@ -31205,8 +31205,8 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.invoice_level_discount != nil {
 		fields = append(fields, invoicelineitem.FieldInvoiceLevelDiscount)
 	}
-	if m.sub_line_item_id != nil {
-		fields = append(fields, invoicelineitem.FieldSubLineItemID)
+	if m.subscription_line_item_id != nil {
+		fields = append(fields, invoicelineitem.FieldSubscriptionLineItemID)
 	}
 	if m.adjusted_entitlement_quantity != nil {
 		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
@@ -31281,8 +31281,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.LineItemDiscount()
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		return m.InvoiceLevelDiscount()
-	case invoicelineitem.FieldSubLineItemID:
-		return m.SubLineItemID()
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		return m.SubscriptionLineItemID()
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		return m.AdjustedEntitlementQuantity()
 	}
@@ -31356,8 +31356,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldLineItemDiscount(ctx)
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		return m.OldInvoiceLevelDiscount(ctx)
-	case invoicelineitem.FieldSubLineItemID:
-		return m.OldSubLineItemID(ctx)
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		return m.OldSubscriptionLineItemID(ctx)
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		return m.OldAdjustedEntitlementQuantity(ctx)
 	}
@@ -31586,12 +31586,12 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetInvoiceLevelDiscount(v)
 		return nil
-	case invoicelineitem.FieldSubLineItemID:
+	case invoicelineitem.FieldSubscriptionLineItemID:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetSubLineItemID(v)
+		m.SetSubscriptionLineItemID(v)
 		return nil
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		v, ok := value.(decimal.Decimal)
@@ -31696,8 +31696,8 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldInvoiceLevelDiscount) {
 		fields = append(fields, invoicelineitem.FieldInvoiceLevelDiscount)
 	}
-	if m.FieldCleared(invoicelineitem.FieldSubLineItemID) {
-		fields = append(fields, invoicelineitem.FieldSubLineItemID)
+	if m.FieldCleared(invoicelineitem.FieldSubscriptionLineItemID) {
+		fields = append(fields, invoicelineitem.FieldSubscriptionLineItemID)
 	}
 	if m.FieldCleared(invoicelineitem.FieldAdjustedEntitlementQuantity) {
 		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
@@ -31782,8 +31782,8 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		m.ClearInvoiceLevelDiscount()
 		return nil
-	case invoicelineitem.FieldSubLineItemID:
-		m.ClearSubLineItemID()
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		m.ClearSubscriptionLineItemID()
 		return nil
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		m.ClearAdjustedEntitlementQuantity()
@@ -31889,8 +31889,8 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		m.ResetInvoiceLevelDiscount()
 		return nil
-	case invoicelineitem.FieldSubLineItemID:
-		m.ResetSubLineItemID()
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		m.ResetSubscriptionLineItemID()
 		return nil
 	case invoicelineitem.FieldAdjustedEntitlementQuantity:
 		m.ResetAdjustedEntitlementQuantity()
