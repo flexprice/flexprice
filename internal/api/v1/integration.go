@@ -34,6 +34,10 @@ func (h *IntegrationHandler) Sync(c *gin.Context) {
 		c.Error(ierr.WithError(err).WithHint("Invalid request body").Mark(ierr.ErrValidation))
 		return
 	}
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
 
 	if err := h.syncService.SyncEntity(c.Request.Context(), req); err != nil {
 		h.logger.Errorw("failed to trigger integration sync",
@@ -64,6 +68,10 @@ func (h *IntegrationHandler) Link(c *gin.Context) {
 	var req dto.LinkIntegrationMappingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).WithHint("Invalid request body").Mark(ierr.ErrValidation))
+		return
+	}
+	if err := req.Validate(); err != nil {
+		c.Error(err)
 		return
 	}
 	resp, err := h.mappingService.LinkIntegrationMapping(c.Request.Context(), req)
