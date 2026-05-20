@@ -484,7 +484,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, sub.ID)
 	} else {
 		s.triggerHubSpotDealSyncWorkflow(ctx, sub.ID, customer.ID)
-		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
+		s.publishSubscriptionCreatedEvent(ctx, sub)
 	}
 	return response, nil
 }
@@ -3986,6 +3986,41 @@ func (s *subscriptionService) calculateBillingImpact(
 	}
 
 	return impact, nil
+}
+
+// publishSubscriptionCreatedEvent publishes the subscription.created event with enriched fields
+// (CustomerID, PaymentBehavior, CollectionMethod) needed for integration dispatch filtering.
+func (s *subscriptionService) publishSubscriptionCreatedEvent(ctx context.Context, sub *subscription.Subscription) {
+	eventPayload := webhookDto.InternalSubscriptionEvent{
+		EventType:        types.WebhookEventSubscriptionCreated,
+		SubscriptionID:   sub.ID,
+		CustomerID:       sub.CustomerID,
+		PaymentBehavior:  sub.PaymentBehavior,
+		CollectionMethod: sub.CollectionMethod,
+		TenantID:         types.GetTenantID(ctx),
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+	}
+
+	webhookPayload, err := json.Marshal(eventPayload)
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     types.WebhookEventSubscriptionCreated,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeSubscription,
+		EntityID:      sub.ID,
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+	}
 }
 
 func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, subscriptionID string) {
