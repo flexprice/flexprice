@@ -515,6 +515,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			paddleGroup := integrations.Group("/paddle")
 			{
 				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
+				// TEST-ONLY: simulate a Paddle webhook without signature verification
+				paddleGroup.POST("/webhooks/simulate", handlers.Webhook.SimulatePaddleWebhook)
 			}
 		}
 

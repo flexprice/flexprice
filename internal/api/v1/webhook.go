@@ -1192,3 +1192,81 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 			"event_type", payload.EventType)
 	}
 }
+
+// SimulatePaddleWebhook is a TEST-ONLY endpoint that accepts a raw Paddle webhook JSON
+// body and processes it exactly as the real webhook handler would, but skips signature
+// verification. Useful for testing subscription.activated and other webhook logic locally
+// without needing a public URL or Paddle signature.
+//
+// POST /v1/integrations/paddle/webhooks/simulate
+//
+// Body: raw Paddle webhook JSON (same format Paddle sends to /v1/webhooks/paddle/:tenant_id/:environment_id)
+// Example for subscription.activated:
+//
+//	{
+//	  "event_type": "subscription.activated",
+//	  "data": {
+//	    "id": "sub_xxx",
+//	    "custom_data": { "flexprice_subscription_id": "sub_fp_xxx" },
+//	    ...
+//	  }
+//	}
+func (h *WebhookHandler) SimulatePaddleWebhook(c *gin.Context) {
+	ctx := c.Request.Context()
+	environmentID := types.GetEnvironmentID(ctx)
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
+		return
+	}
+
+	var payload paddleWebhookPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+
+	if payload.EventType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "event_type is required in payload"})
+		return
+	}
+
+	paddleIntegration, err := h.integrationFactory.GetPaddleIntegration(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get Paddle integration: " + err.Error()})
+		return
+	}
+
+	h.logger.Infow("simulating Paddle webhook event (signature check skipped)",
+		"event_type", payload.EventType,
+		"environment_id", environmentID,
+	)
+
+	serviceDeps := &paddlewebhook.ServiceDependencies{
+		CustomerService:                 h.customerService,
+		PaymentService:                  h.paymentService,
+		InvoiceService:                  h.invoiceService,
+		PlanService:                     h.planService,
+		SubscriptionService:             h.subscriptionService,
+		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		DB:                              h.db,
+	}
+
+	if err := paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.EventType, body, environmentID, serviceDeps); err != nil {
+		h.logger.Errorw("simulated Paddle webhook event failed",
+			"error", err,
+			"event_type", payload.EventType,
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"event_type": payload.EventType,
+			"error":      err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"event_type": payload.EventType,
+		"message":    "webhook processed successfully",
+	})
+}
