@@ -1138,26 +1138,8 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		return
 	}
 
-	// Get connection and decrypted webhook secret
-	conn, err := paddleIntegration.Client.GetConnection(ctx)
-	if err != nil {
-		h.logger.Errorw("failed to get Paddle connection", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Paddle not configured"})
-		handled = true
-		return
-	}
-
-	config, err := paddleIntegration.Client.GetDecryptedPaddleConfig(conn)
-	if err != nil {
-		h.logger.Errorw("failed to get decrypted Paddle config", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid configuration"})
-		handled = true
-		return
-	}
-
-	// Verify signature
 	signature := c.GetHeader("Paddle-Signature")
-	if err := paddleIntegration.Client.VerifyWebhookSignature(ctx, body, signature, config.WebhookSecret); err != nil {
+	if err := paddleIntegration.Client.VerifyWebhookSignature(ctx, body, signature); err != nil {
 		h.logger.Errorw("Paddle webhook signature verification failed",
 			"error", err,
 			"tenant_id", tenantID,
@@ -1193,4 +1175,3 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 			"event_type", payload.EventType)
 	}
 }
-
