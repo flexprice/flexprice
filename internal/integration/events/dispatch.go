@@ -288,6 +288,7 @@ func DispatchSubscriptionVendorSync(
 	return triggerPaddleSubscriptionSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, subscriptionVendorSyncInput{
 		TenantID:       event.TenantID,
 		EnvironmentID:  event.EnvironmentID,
+		UserID:         event.UserID,
 		SubscriptionID: pl.SubscriptionID,
 		CustomerID:     pl.CustomerID,
 	})
@@ -296,6 +297,7 @@ func DispatchSubscriptionVendorSync(
 type subscriptionVendorSyncInput struct {
 	TenantID       string
 	EnvironmentID  string
+	UserID         string
 	SubscriptionID string
 	CustomerID     string
 }
