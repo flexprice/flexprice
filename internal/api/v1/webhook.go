@@ -1090,9 +1090,9 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 }
 
 // paddleWebhookPayload is a minimal struct to extract the event type from a Paddle webhook.
-// Real Paddle webhooks always send the outer envelope in camelCase ("eventType").
+// Paddle sends the outer envelope in snake_case ("event_type") — matches the SDK's paddlenotification.Notification.
 type paddleWebhookPayload struct {
-	EventType string `json:"eventType"`
+	EventType string `json:"event_type"`
 }
 
 func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
