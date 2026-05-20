@@ -62,6 +62,23 @@ func NewPaddleSyncService(
 // and that a corresponding EntityIntegrationMapping row is present.
 // It is idempotent: if the customer is already synced it returns the existing
 // Paddle IDs and Created=false.
+// upsertCustomerPaddleMetadata merges paddle_customer_id into the FlexPrice customer's
+// metadata so downstream services can read the Paddle ID without querying the mapping table.
+// Errors are logged and swallowed — the sync itself succeeded; metadata update is best-effort.
+func (s *PaddleSyncService) upsertCustomerPaddleMetadata(ctx context.Context, c *customer.Customer, paddleCustomerID string) {
+	if c.Metadata == nil {
+		c.Metadata = make(types.Metadata)
+	}
+	if c.Metadata[MetaKeyPaddleCustomerID] == paddleCustomerID {
+		return // already up-to-date, skip the write
+	}
+	c.Metadata[MetaKeyPaddleCustomerID] = paddleCustomerID
+	if err := s.customerRepo.Update(ctx, c); err != nil {
+		s.logger.Warnw("failed to update customer metadata with paddle_customer_id",
+			"customer_id", c.ID, "paddle_customer_id", paddleCustomerID, "error", err)
+	}
+}
+
 func (s *PaddleSyncService) EnsureCustomerSynced(ctx context.Context, req EnsureCustomerSyncedRequest) (*EnsureCustomerSyncedResponse, error) {
 	flexCustomer, err := s.customerRepo.Get(ctx, req.CustomerID)
 	if err != nil {
@@ -94,6 +111,7 @@ func (s *PaddleSyncService) EnsureCustomerSynced(ctx context.Context, req Ensure
 		if err != nil {
 			return nil, err
 		}
+		s.upsertCustomerPaddleMetadata(ctx, flexCustomer, paddleCustomerID)
 		return &EnsureCustomerSyncedResponse{
 			PaddleCustomerID: paddleCustomerID,
 			PaddleAddressID:  paddleAddressID,
@@ -156,6 +174,8 @@ func (s *PaddleSyncService) EnsureCustomerSynced(ctx context.Context, req Ensure
 	if createErr != nil {
 		return nil, createErr
 	}
+
+	s.upsertCustomerPaddleMetadata(ctx, flexCustomer, paddleCustomerID)
 
 	return &EnsureCustomerSyncedResponse{
 		PaddleCustomerID: paddleCustomerID,
