@@ -46,8 +46,11 @@ type EnsureSubscriptionSyncedRequest struct {
 
 // EnsureSubscriptionSyncedResponse is returned by PaddleSyncService.EnsureSubscriptionSynced.
 type EnsureSubscriptionSyncedResponse struct {
+	// PaddleSubscriptionID is non-empty only after the subscription.activated webhook fires.
 	PaddleSubscriptionID string `json:"paddle_subscription_id"`
-	// Created is true when the Paddle subscription was newly created.
+	// CheckoutURL is the Paddle checkout URL for card capture. Present when sync is in-progress or newly initiated.
+	CheckoutURL string `json:"checkout_url"`
+	// Created is true when the bootstrap transaction was newly created in this call.
 	Created bool `json:"created"`
 }
 

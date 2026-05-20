@@ -49,6 +49,8 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, eventType string, payl
 		return h.handleCustomerCreated(ctx, payload, services)
 	case string(EventAddressCreated):
 		return h.handleAddressCreated(ctx, payload, services)
+	case string(EventSubscriptionActivated):
+		return h.handleSubscriptionActivated(ctx, payload, services)
 	default:
 		h.logger.Debugw("ignoring unhandled Paddle event", "type", eventType)
 		return nil
@@ -85,6 +87,25 @@ func (h *Handler) handleCustomerCreated(ctx context.Context, payload []byte, ser
 	if err != nil {
 		h.logger.Errorw("failed to process customer.created webhook",
 			"error", err, "paddle_customer_id", event.Data.ID)
+	}
+	return nil
+}
+
+func (h *Handler) handleSubscriptionActivated(ctx context.Context, payload []byte, services *ServiceDependencies) error {
+	if services == nil || services.SubscriptionService == nil {
+		h.logger.Errorw("subscription service not available for subscription.activated webhook")
+		return nil
+	}
+	var event paddlenotification.SubscriptionActivated
+	if err := json.Unmarshal(payload, &event); err != nil {
+		h.logger.Errorw("failed to parse subscription.activated payload",
+			"error", err, "event_type", EventSubscriptionActivated)
+		return nil
+	}
+	err := h.syncSvc.ProcessSubscriptionActivatedWebhook(ctx, &event.Data, services.SubscriptionService)
+	if err != nil {
+		h.logger.Errorw("failed to process subscription.activated webhook",
+			"error", err, "paddle_sub_id", event.Data.ID)
 	}
 	return nil
 }
