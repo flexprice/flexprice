@@ -745,6 +745,29 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	}, nil
 }
 
+// GetSubscriptionMappingStatus returns true if a Paddle entity_integration_mapping exists for the subscription.
+func (s *PaddleSyncService) GetSubscriptionMappingStatus(ctx context.Context, subscriptionID string) (bool, error) {
+	resp, err := s.mappingService.GetEntityIntegrationMappings(ctx, &types.EntityIntegrationMappingFilter{
+		EntityID:      subscriptionID,
+		EntityType:    types.IntegrationEntityTypeSubscription,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	})
+	if err != nil {
+		return false, fmt.Errorf("checking subscription mapping: %w", err)
+	}
+	return len(resp.Items) > 0, nil
+}
+
+// GetSubscriptionWithLineItems fetches a subscription and its line items.
+func (s *PaddleSyncService) GetSubscriptionWithLineItems(ctx context.Context, subscriptionID string) (*subscription.Subscription, []*subscription.SubscriptionLineItem, error) {
+	return s.subscriptionRepo.GetWithLineItems(ctx, subscriptionID)
+}
+
+// GetInvoiceByID fetches a FlexPrice invoice by ID.
+func (s *PaddleSyncService) GetInvoiceByID(ctx context.Context, invoiceID string) (*invoice.Invoice, error) {
+	return s.invoiceRepo.Get(ctx, invoiceID)
+}
+
 // GetFlexPriceInvoiceIDByTransaction looks up the FlexPrice invoice ID for a Paddle transaction ID.
 // Used by the webhook handler to find the invoice associated with a completed payment.
 func (s *PaddleSyncService) GetFlexPriceInvoiceIDByTransaction(ctx context.Context, paddleTransactionID string) (string, error) {
