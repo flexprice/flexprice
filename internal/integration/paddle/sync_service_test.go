@@ -436,6 +436,139 @@ func TestEnsureSubscriptionSynced_AlreadyMapped(t *testing.T) {
 	assert.False(t, mockClient.createTransactionCalled, "CreateTransaction must NOT be called when subscription is already mapped")
 }
 
+// TestEnsureSubscriptionSynced_TxnInMetadata verifies Guard 2: when no mapping exists but
+// the subscription metadata already has a paddle_transaction_id, EnsureSubscriptionSynced
+// returns the stored checkout URL without calling CreateTransaction.
+func TestEnsureSubscriptionSynced_TxnInMetadata(t *testing.T) {
+	ctx := buildTestContext()
+
+	mockClient := &mockPaddleClient{}
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	customerStore := testutil.NewInMemoryCustomerStore()
+	subStore := testutil.NewInMemorySubscriptionStore()
+	connectionStore := testutil.NewInMemoryConnectionStore()
+
+	const subscriptionID = "sub_txn_in_meta"
+	const storedTxnID = "txn_bootstrap_001"
+	const storedCheckoutURL = "https://checkout.paddle.com/checkout/custom/abc"
+
+	// Seed the subscription with paddle_transaction_id already in metadata.
+	sub := &subscription.Subscription{
+		ID:            subscriptionID,
+		CustomerID:    "cust_test",
+		Currency:      "usd",
+		BillingPeriod: "month",
+		Metadata: types.Metadata{
+			paddle.MetaKeyPaddleTransactionID: storedTxnID,
+			paddle.MetaKeyPaddleCheckoutURL:   storedCheckoutURL,
+		},
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(t, subStore.Create(ctx, sub))
+
+	// No mapping seeded — only metadata is present.
+
+	svc := buildTestSyncService(mockClient, mappingStore, customerStore, nil, subStore, connectionStore)
+
+	resp, err := svc.EnsureSubscriptionSynced(ctx, paddle.EnsureSubscriptionSyncedRequest{
+		Subscription:       sub,
+		PriceIDToProductID: map[string]string{"pri_123": "pro_456"},
+	})
+	require.NoError(t, err)
+
+	// PaddleSubscriptionID must be empty — not yet activated.
+	assert.Empty(t, resp.PaddleSubscriptionID, "should not have a Paddle sub ID when checkout is still pending")
+	assert.NotEmpty(t, resp.CheckoutURL, "should return a checkout URL from stored metadata")
+	assert.False(t, resp.Created, "should not be marked as created when checkout was previously initiated")
+
+	// The critical assertion: CreateTransaction must NOT have been called again.
+	assert.False(t, mockClient.createTransactionCalled, "CreateTransaction must NOT be called when txn_id is already in subscription metadata")
+}
+
+// TestEnsureSubscriptionSynced_CreatesTransaction verifies Guard 3: when neither a mapping
+// nor a paddle_transaction_id in metadata exists, a new bootstrap transaction is created,
+// the subscription metadata is updated, and Created=true is returned.
+func TestEnsureSubscriptionSynced_CreatesTransaction(t *testing.T) {
+	ctx := buildTestContext()
+
+	const subscriptionID = "sub_needs_bootstrap"
+	const customerID = "cust_bootstrap"
+	const paddleCustomerID = "ctm_new"
+	const paddleAddressID = "add_new"
+	const newTxnID = "txn_created_001"
+	const newCheckoutURL = "https://checkout.paddle.com/checkout/custom/xyz"
+
+	// Mock CreateTransaction to return a transaction with a checkout URL.
+	mockClient := &mockPaddleClient{
+		createCustomerFn: func(ctx context.Context, req *paddlesdk.CreateCustomerRequest) (*paddlesdk.Customer, error) {
+			return &paddlesdk.Customer{ID: paddleCustomerID}, nil
+		},
+		createAddressFn: func(ctx context.Context, cID string, req *paddlesdk.CreateAddressRequest) (*paddlesdk.Address, error) {
+			return &paddlesdk.Address{ID: paddleAddressID}, nil
+		},
+		createPriceFn: func(ctx context.Context, req *paddlesdk.CreatePriceRequest) (*paddlesdk.Price, error) {
+			return &paddlesdk.Price{ID: "pri_bootstrap_paddle"}, nil
+		},
+		createTransactionFn: func(ctx context.Context, req *paddlesdk.CreateTransactionRequest) (*paddlesdk.Transaction, error) {
+			checkURL := newCheckoutURL
+			return &paddlesdk.Transaction{
+				ID:       newTxnID,
+				Checkout: &paddlesdk.TransactionCheckout{URL: &checkURL},
+			}, nil
+		},
+	}
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	customerStore := testutil.NewInMemoryCustomerStore()
+	subStore := testutil.NewInMemorySubscriptionStore()
+	connectionStore := testutil.NewInMemoryConnectionStore()
+
+	// Seed the customer so EnsureCustomerSynced can look it up.
+	seedCustomer(ctx, t, customerStore, customerID)
+
+	// Seed a customer→Paddle mapping so EnsureCustomerSynced skips creation.
+	seedMapping(ctx, t, mappingStore, customerID, types.IntegrationEntityTypeCustomer, paddleCustomerID, map[string]interface{}{
+		paddle.MetaKeyPaddleAddressID: paddleAddressID,
+	})
+
+	// Subscription has NO metadata — the clean state.
+	sub := &subscription.Subscription{
+		ID:                 subscriptionID,
+		CustomerID:         customerID,
+		Currency:           "usd",
+		BillingPeriod:      "month",
+		BillingPeriodCount: 1,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(t, subStore.Create(ctx, sub))
+
+	svc := buildTestSyncService(mockClient, mappingStore, customerStore, nil, subStore, connectionStore)
+
+	resp, err := svc.EnsureSubscriptionSynced(ctx, paddle.EnsureSubscriptionSyncedRequest{
+		Subscription:       sub,
+		PriceIDToProductID: map[string]string{"pri_fp_123": "pro_paddle_456"},
+	})
+	require.NoError(t, err)
+
+	// Created=true since we just initiated the bootstrap.
+	assert.True(t, resp.Created, "Created must be true for a newly bootstrapped subscription")
+	// PaddleSubscriptionID is empty — mapping is created by the webhook, not here.
+	assert.Empty(t, resp.PaddleSubscriptionID, "PaddleSubscriptionID must be empty before webhook fires")
+	// CheckoutURL must be populated.
+	assert.NotEmpty(t, resp.CheckoutURL, "CheckoutURL must be returned so the customer can complete checkout")
+
+	// CreateTransaction must have been called.
+	assert.True(t, mockClient.createTransactionCalled, "CreateTransaction must be called for a new bootstrap")
+
+	// Subscription metadata must be updated with the txn ID.
+	updatedSub, getErr := subStore.Get(ctx, subscriptionID)
+	require.NoError(t, getErr)
+	assert.Equal(t, newTxnID, updatedSub.Metadata[paddle.MetaKeyPaddleTransactionID],
+		"subscription metadata must contain the new paddle_transaction_id")
+}
+
 // TestSyncInvoice_AlreadySynced verifies that when an invoice→Paddle mapping already exists
 // in entity_integration_mapping, CreateSubscriptionCharge is NOT called on Paddle.
 func TestSyncInvoice_AlreadySynced(t *testing.T) {

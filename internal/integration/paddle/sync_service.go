@@ -251,50 +251,56 @@ func (s *PaddleSyncService) EnsureBulkProductSynced(ctx context.Context, req Ens
 	return &EnsureBulkProductSyncedResponse{PriceIDToPaddleProductID: result}, nil
 }
 
-// EnsureSubscriptionSynced ensures a Paddle subscription exists for the given FlexPrice subscription.
-// The Paddle subscription is bootstrapped via a $0 transaction using real mapped products with billing cycles.
-// Returns immediately if already mapped — this is the primary guard against duplicate subscriptions.
+// EnsureSubscriptionSynced bootstraps a Paddle subscription for a FlexPrice subscription.
+//
+// State machine:
+//   - Mapping exists → already activated (return sub ID, no-op)
+//   - Metadata has paddle_transaction_id → checkout in-progress (return stored checkout URL, no-op)
+//   - Neither → create $0 bootstrap transaction, store txn ID + checkout URL in metadata
+//
+// The entity_integration_mapping is NOT created here; it is created by the subscription.activated webhook.
 func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req EnsureSubscriptionSyncedRequest) (*EnsureSubscriptionSyncedResponse, error) {
 	sub := req.Subscription
 	if sub == nil || sub.ID == "" {
 		return nil, ierr.NewError("subscription is required").Mark(ierr.ErrValidation)
 	}
 
+	// Guard 1: fully activated — mapping exists.
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityID:      sub.ID,
 		EntityType:    types.IntegrationEntityTypeSubscription,
 		ProviderTypes: []string{string(types.SecretProviderPaddle)},
 	}
-	resp, err := s.mappingService.GetEntityIntegrationMappings(ctx, filter)
+	mappingResp, err := s.mappingService.GetEntityIntegrationMappings(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("checking subscription mapping: %w", err)
 	}
-	if len(resp.Items) > 0 {
+	if len(mappingResp.Items) > 0 {
 		return &EnsureSubscriptionSyncedResponse{
-			PaddleSubscriptionID: resp.Items[0].ProviderEntityID,
-			Created:              false,
+			PaddleSubscriptionID: mappingResp.Items[0].ProviderEntityID,
 		}, nil
 	}
 
+	// Guard 2: bootstrap transaction already created — customer has not completed checkout yet.
+	if txnID := sub.Metadata[MetaKeyPaddleTransactionID]; txnID != "" {
+		return &EnsureSubscriptionSyncedResponse{
+			CheckoutURL: s.appendCheckoutToken(ctx, sub.Metadata[MetaKeyPaddleCheckoutURL]),
+		}, nil
+	}
+
+	if len(req.PriceIDToProductID) == 0 {
+		return nil, ierr.NewError("no products to bootstrap subscription with").Mark(ierr.ErrValidation)
+	}
+
+	// EnsureCustomerSynced guarantees customer_id and address_id are present.
 	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: sub.CustomerID})
 	if err != nil {
 		return nil, fmt.Errorf("ensuring customer synced: %w", err)
 	}
-	if customerResp.PaddleAddressID == "" {
-		return nil, ierr.NewError("Paddle address ID not found after customer sync").
-			WithHint("Customer must have an address (country required) for Paddle subscription creation").
-			WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
-			Mark(ierr.ErrValidation)
-	}
 
+	// Create $0 catalog prices with billing_cycle so Paddle recognises this as a recurring subscription.
 	billingCycle := paddleBillingCycle(sub.BillingPeriod, sub.BillingPeriodCount)
 	currency := strings.ToUpper(sub.Currency)
-
-	// Create $0 Paddle catalog prices (with billing_cycle) for each product.
-	// Using catalog prices (pri_xxx) in the bootstrap transaction is required for Paddle to
-	// recognise the transaction as recurring and create a subscription_id in the response.
-	// Inline prices (TransactionPriceCreateWithProductID) are treated as one-time charges
-	// and never produce a subscription.
 	type bootstrapPair struct{ priceID, paddlePriceID string }
 	pairs := make([]bootstrapPair, 0, len(req.PriceIDToProductID))
 	for priceID, productID := range req.PriceIDToProductID {
@@ -313,22 +319,13 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	}
 	sort.Slice(pairs, func(i, j int) bool { return pairs[i].paddlePriceID < pairs[j].paddlePriceID })
 
-	// Build transaction items referencing catalog prices so Paddle creates a subscription.
 	items := make([]paddlesdk.CreateTransactionItems, 0, len(pairs))
 	for _, p := range pairs {
 		items = append(items, *paddlesdk.NewCreateTransactionItemsTransactionItemFromCatalog(
-			&paddlesdk.TransactionItemFromCatalog{
-				PriceID:  p.paddlePriceID,
-				Quantity: 1,
-			},
+			&paddlesdk.TransactionItemFromCatalog{PriceID: p.paddlePriceID, Quantity: 1},
 		))
 	}
-	if len(items) == 0 {
-		return nil, ierr.NewError("no products to bootstrap subscription with").Mark(ierr.ErrValidation)
-	}
 
-	// $0 + automatic collection → Paddle auto-completes the transaction (no payment needed)
-	// and creates the subscription immediately, returning subscription_id in the response.
 	txn, err := s.client.CreateTransaction(ctx, &paddlesdk.CreateTransactionRequest{
 		CustomerID:     paddlesdk.PtrTo(customerResp.PaddleCustomerID),
 		AddressID:      paddlesdk.PtrTo(customerResp.PaddleAddressID),
@@ -343,58 +340,26 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		return nil, fmt.Errorf("creating bootstrap transaction: %w", err)
 	}
 
-	// subscription_id should be present immediately since we used catalog prices with billing_cycle.
-	// If Paddle processes asynchronously, fall back to listing subscriptions after a brief wait.
-	var paddleSubID string
-	if txn.SubscriptionID != nil && *txn.SubscriptionID != "" {
-		paddleSubID = *txn.SubscriptionID
-	} else {
-		time.Sleep(5 * time.Second)
-		perPage := 5
-		subCollection, listErr := s.client.ListSubscriptions(ctx, &paddlesdk.ListSubscriptionsRequest{
-			CustomerID: []string{customerResp.PaddleCustomerID},
-			PerPage:    &perPage,
-		})
-		if listErr != nil {
-			return nil, fmt.Errorf("listing subscriptions after bootstrap transaction: %w", listErr)
-		}
-		if subCollection != nil {
-			for {
-				item := subCollection.Next(ctx)
-				if item == nil || !item.Ok() {
-					break
-				}
-				paddleSub := item.Value()
-				if paddleSub != nil && paddleSub.ID != "" {
-					paddleSubID = paddleSub.ID
-					break
-				}
-			}
-		}
-		if paddleSubID == "" {
-			return nil, ierr.NewError("Paddle transaction did not produce a subscription_id").
-				WithHint("Ensure catalog prices have billing_cycle set so Paddle creates a subscription").
-				WithReportableDetails(map[string]interface{}{"paddle_transaction_id": txn.ID}).
-				Mark(ierr.ErrInternal)
-		}
+	// Extract checkout URL from transaction response;
+	checkoutURL := ""
+	if txn.Checkout != nil && txn.Checkout.URL != nil {
+		checkoutURL = lo.FromPtr(txn.Checkout.URL)
 	}
 
-	_, err = s.mappingService.CreateEntityIntegrationMapping(ctx, apidto.CreateEntityIntegrationMappingRequest{
-		EntityID:         sub.ID,
-		EntityType:       types.IntegrationEntityTypeSubscription,
-		ProviderType:     string(types.SecretProviderPaddle),
-		ProviderEntityID: paddleSubID,
-		Metadata: map[string]interface{}{
-			MetaKeyCreatedVia:          CreatedViaFlexpriceToProvider,
-			MetaKeyPaddleTransactionID: txn.ID,
-			MetaKeySyncedAt:            time.Now().UTC().Format(time.RFC3339),
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("persisting subscription mapping: %w", err)
+	// Persist txn ID + checkout URL in subscription metadata so future calls hit Guard 2.
+	if sub.Metadata == nil {
+		sub.Metadata = make(types.Metadata)
+	}
+	sub.Metadata[MetaKeyPaddleTransactionID] = txn.ID
+	sub.Metadata[MetaKeyPaddleCheckoutURL] = checkoutURL
+	if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
+		return nil, fmt.Errorf("updating subscription metadata after bootstrap: %w", err)
 	}
 
-	return &EnsureSubscriptionSyncedResponse{PaddleSubscriptionID: paddleSubID, Created: true}, nil
+	return &EnsureSubscriptionSyncedResponse{
+		CheckoutURL: s.appendCheckoutToken(ctx, checkoutURL),
+		Created:     true,
+	}, nil
 }
 
 // paddleBillingCycle maps a FlexPrice BillingPeriod + count to a Paddle Duration.
@@ -579,16 +544,14 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	}
 
 	// Step 4: Ensure products synced.
-	productItems := make([]EnsureBulkProductSyncedItem, 0, len(flexInvoice.LineItems))
-	for _, li := range flexInvoice.LineItems {
-		if li == nil || lo.FromPtr(li.PriceID) == "" {
-			continue
+	syncable := syncableInvoiceLineItems(flexInvoice.LineItems)
+	productItems := make([]EnsureBulkProductSyncedItem, len(syncable))
+	for i, li := range syncable {
+		priceID := lo.FromPtr(li.PriceID)
+		productItems[i] = EnsureBulkProductSyncedItem{
+			PriceID: priceID,
+			Name:    lo.FromPtrOr(li.DisplayName, priceID),
 		}
-		name := lo.FromPtrOr(li.DisplayName, lo.FromPtr(li.PriceID))
-		productItems = append(productItems, EnsureBulkProductSyncedItem{
-			PriceID: lo.FromPtr(li.PriceID),
-			Name:    name,
-		})
 	}
 	productsResp, err := s.EnsureBulkProductSynced(ctx, EnsureBulkProductSyncedRequest{Items: productItems})
 	if err != nil {
@@ -596,6 +559,8 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	}
 
 	// Step 5: Ensure subscription synced.
+	// By the time we reach here (via PaddleInvoiceSyncWorkflow step 2.5), the subscription
+	// must already be activated — EnsureSubscriptionSynced hits Guard 1 and returns the sub ID.
 	subResp, err := s.EnsureSubscriptionSynced(ctx, EnsureSubscriptionSyncedRequest{
 		Subscription:       flexSub,
 		PriceIDToProductID: productsResp.PriceIDToPaddleProductID,
@@ -603,13 +568,20 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	if err != nil {
 		return nil, fmt.Errorf("ensuring subscription synced: %w", err)
 	}
+	if subResp.PaddleSubscriptionID == "" {
+		return nil, ierr.NewError("Paddle subscription not yet activated; customer must complete checkout first").
+			WithHint("Re-run invoice sync after the customer completes the Paddle checkout flow").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": flexSub.ID,
+				"checkout_url":    subResp.CheckoutURL,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
-	// Step 6: Build charge items — qty=1, full amount in cents, currency from line item.
-	chargeItems := make([]paddlesdk.CreateSubscriptionChargeItems, 0, len(flexInvoice.LineItems))
-	for _, li := range flexInvoice.LineItems {
-		if li == nil || lo.FromPtr(li.PriceID) == "" {
-			continue
-		}
+	// Step 6: Build charge items — create an ephemeral one-time catalog price per line item,
+	// then reference it by ID so Paddle treats this as a catalog-price charge.
+	chargeItems := make([]paddlesdk.CreateSubscriptionChargeItems, 0, len(syncable))
+	for _, li := range syncable {
 		priceID := lo.FromPtr(li.PriceID)
 		paddleProductID := productsResp.PriceIDToPaddleProductID[priceID]
 		if paddleProductID == "" {
@@ -620,20 +592,26 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		amountSmallest := types.ToSmallestUnit(li.Amount, li.Currency)
 		displayName := lo.FromPtrOr(li.DisplayName, priceID)
 
-		chargeItems = append(chargeItems, *paddlesdk.NewCreateSubscriptionChargeItemsSubscriptionChargeItemCreateWithPrice(
-			&paddlesdk.SubscriptionChargeItemCreateWithPrice{
+		catalogPrice, priceErr := s.client.CreatePrice(ctx, &paddlesdk.CreatePriceRequest{
+			ProductID:   paddleProductID,
+			Description: displayName,
+			Name:        paddlesdk.PtrTo(displayName),
+			UnitPrice: paddlesdk.Money{
+				Amount:       fmt.Sprintf("%d", amountSmallest),
+				CurrencyCode: paddlesdk.CurrencyCode(strings.ToUpper(li.Currency)),
+			},
+			TaxMode:  paddlesdk.PtrTo(paddlesdk.TaxModeAccountSetting),
+			Quantity: &paddlesdk.PriceQuantity{Minimum: 1, Maximum: 100000},
+			// No BillingCycle = one-time price.
+		})
+		if priceErr != nil {
+			return nil, fmt.Errorf("creating catalog price for line item %s: %w", priceID, priceErr)
+		}
+
+		chargeItems = append(chargeItems, *paddlesdk.NewCreateSubscriptionChargeItemsSubscriptionChargeItemFromCatalog(
+			&paddlesdk.SubscriptionChargeItemFromCatalog{
+				PriceID:  catalogPrice.ID,
 				Quantity: 1,
-				Price: paddlesdk.SubscriptionChargeCreateWithPrice{
-					ProductID:   paddleProductID,
-					Description: "FlexPrice Charge",
-					Name:        paddlesdk.PtrTo(displayName),
-					TaxMode:     paddlesdk.TaxModeAccountSetting,
-					UnitPrice: paddlesdk.Money{
-						Amount:       fmt.Sprintf("%d", amountSmallest),
-						CurrencyCode: paddlesdk.CurrencyCode(strings.ToUpper(li.Currency)),
-					},
-					Quantity: paddlesdk.PriceQuantity{Minimum: 1, Maximum: 100000},
-				},
 			},
 		))
 	}
@@ -699,16 +677,6 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		"collection_mode", txn.CollectionMode,
 		"status", txn.Status,
 	)
-	// If Paddle did not return a checkout URL (e.g. subscription was bootstrapped with
-	// manual collection mode), build it from the connection's configured checkout_url.
-	if checkoutURL == "" {
-		if conn, connErr := s.client.GetConnection(ctx); connErr == nil && conn != nil && conn.Metadata != nil {
-			if base, ok := conn.Metadata[ConnKeyCheckoutURL].(string); ok && base != "" {
-				checkoutURL = base + "?_ptxn=" + txn.ID
-				s.logger.Debugw("built checkout url from connection config", "checkout_url", checkoutURL)
-			}
-		}
-	}
 	checkoutURL = s.appendCheckoutToken(ctx, checkoutURL)
 
 	// Step 9: Persist invoice metadata + mapping.
@@ -962,6 +930,16 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	// Process the payment (idempotent — checks if payment already exists).
 	paymentSvc := NewPaymentService(s.logger)
 	return paymentSvc.ProcessExternalPaddleTransaction(ctx, txn, flexpriceInvoiceID, paymentService, invoiceService)
+}
+
+func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.InvoiceLineItem {
+	out := make([]*invoice.InvoiceLineItem, 0, len(items))
+	for _, li := range items {
+		if li != nil && lo.FromPtr(li.PriceID) != "" {
+			out = append(out, li)
+		}
+	}
+	return out
 }
 
 // mapToUpdateCustomerAddressRequest maps Paddle AddressNotification to Flexprice UpdateCustomerRequest.
