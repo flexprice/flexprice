@@ -978,38 +978,15 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	return paymentSvc.ProcessExternalPaddleTransaction(ctx, txn, flexpriceInvoiceID, paymentService, invoiceService)
 }
 
-// resolveFlexSubIDFromTransactions lists transactions for a Paddle subscription and
-// returns the first flexprice_subscription_id found in any transaction's custom_data.
-// Used as a fallback when Paddle does not carry custom_data from the bootstrap transaction
-// to the subscription object in the subscription.activated webhook payload.
-func (s *PaddleSyncService) resolveFlexSubIDFromTransactions(ctx context.Context, paddleSubID string) string {
-	perPage := 10
-	txns, err := s.client.ListTransactions(ctx, &paddlesdk.ListTransactionsRequest{
-		SubscriptionID: []string{paddleSubID},
-		PerPage:        &perPage,
-	})
-	if err != nil {
-		s.logger.Warnw("subscription.activated: failed to list transactions for flex sub ID fallback",
-			"paddle_sub_id", paddleSubID, "error", err)
-		return ""
+// extractFlexSubIDFromCustomData reads flexprice_subscription_id from a Paddle custom_data map.
+// Checks both snake_case ("flexprice_subscription_id") and camelCase ("flexpriceSubscriptionId")
+// because Paddle may preserve or convert key casing depending on the API version / context.
+func extractFlexSubIDFromCustomData(customData map[string]any) string {
+	if id, ok := customData["flexprice_subscription_id"].(string); ok && id != "" {
+		return id
 	}
-	if txns == nil {
-		return ""
-	}
-	for {
-		res := txns.Next(ctx)
-		if res == nil || !res.Ok() {
-			break
-		}
-		txn := res.Value()
-		if txn == nil {
-			continue
-		}
-		if id, ok := txn.CustomData["flexprice_subscription_id"].(string); ok && id != "" {
-			s.logger.Infow("subscription.activated: resolved flexprice_subscription_id from transaction custom_data",
-				"paddle_sub_id", paddleSubID, "flex_sub_id", id, "txn_id", txn.ID)
-			return id
-		}
+	if id, ok := customData["flexpriceSubscriptionId"].(string); ok && id != "" {
+		return id
 	}
 	return ""
 }
@@ -1024,15 +1001,9 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 ) error {
 	paddleSubID := data.ID
 
-	flexSubID, _ := data.CustomData["flexprice_subscription_id"].(string)
-	if flexSubID == "" && paddleSubID != "" {
-		// Paddle does not always carry custom_data from the originating transaction to the
-		// subscription object. Fall back: list transactions for this subscription and check
-		// each transaction's custom_data for flexprice_subscription_id.
-		flexSubID = s.resolveFlexSubIDFromTransactions(ctx, paddleSubID)
-	}
+	flexSubID := extractFlexSubIDFromCustomData(data.CustomData)
 	if flexSubID == "" {
-		s.logger.Warnw("subscription.activated: could not resolve flexprice_subscription_id — skipping",
+		s.logger.Warnw("subscription.activated: no flexprice_subscription_id in custom_data — skipping",
 			"paddle_sub_id", paddleSubID)
 		return nil
 	}
