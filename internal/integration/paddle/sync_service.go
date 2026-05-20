@@ -372,7 +372,9 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		sub.Metadata = make(types.Metadata)
 	}
 	sub.Metadata[MetaKeyPaddleTransactionID] = txn.ID
-	sub.Metadata[MetaKeyPaddleCheckoutURL] = checkoutURL
+	if checkoutURL != "" {
+		sub.Metadata[MetaKeyPaddleCheckoutURL] = checkoutURL
+	}
 	if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
 		return nil, fmt.Errorf("updating subscription metadata after bootstrap: %w", err)
 	}

@@ -655,6 +655,8 @@ func TestSyncInvoice_UseCatalogPrices(t *testing.T) {
 			if req.Name != nil {
 				capturedPriceReqName = *req.Name
 			}
+			assert.Equal(t, "10000", req.UnitPrice.Amount) // 100 USD in cents (types.ToSmallestUnit)
+			assert.Nil(t, req.BillingCycle)                // no billing cycle = one-time price
 			return &paddlesdk.Price{ID: catalogPriceID}, nil
 		},
 		createSubscriptionChargeFn: func(_ context.Context, req *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error) {
