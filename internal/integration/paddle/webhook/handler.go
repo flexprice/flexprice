@@ -96,16 +96,30 @@ func (h *Handler) handleSubscriptionActivated(ctx context.Context, payload []byt
 		h.logger.Errorw("subscription service not available for subscription.activated webhook")
 		return nil
 	}
-	var event paddlenotification.SubscriptionActivated
-	if err := json.Unmarshal(payload, &event); err != nil {
+
+	// Paddle sends camelCase in real webhooks (customData, customerId, etc.) while the
+	// Go SDK struct uses snake_case tags. Parse the fields we need with a custom struct
+	// that accepts both, then hand off to ProcessSubscriptionActivatedWebhook.
+	var wrapper struct {
+		Data struct {
+			ID         string         `json:"id"`
+			CustomData map[string]any `json:"customData"` // camelCase — real Paddle webhook
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &wrapper); err != nil {
 		h.logger.Errorw("failed to parse subscription.activated payload",
 			"error", err, "event_type", EventSubscriptionActivated)
 		return nil
 	}
-	err := h.syncSvc.ProcessSubscriptionActivatedWebhook(ctx, &event.Data, services.SubscriptionService)
+
+	notification := &paddlenotification.SubscriptionNotification{
+		ID:         wrapper.Data.ID,
+		CustomData: wrapper.Data.CustomData,
+	}
+	err := h.syncSvc.ProcessSubscriptionActivatedWebhook(ctx, notification, services.SubscriptionService)
 	if err != nil {
 		h.logger.Errorw("failed to process subscription.activated webhook",
-			"error", err, "paddle_sub_id", event.Data.ID)
+			"error", err, "paddle_sub_id", wrapper.Data.ID)
 	}
 	return nil
 }

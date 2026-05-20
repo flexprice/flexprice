@@ -1089,9 +1089,20 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Webhook processed successfully"})
 }
 
-// paddleWebhookPayload is a minimal struct to parse event_type from the webhook payload
+// paddleWebhookPayload is a minimal struct to parse the event type from a Paddle webhook.
+// Paddle sends camelCase ("eventType") in real webhooks; the SDK uses snake_case ("event_type").
+// We handle both so the same code works for real webhooks and the simulate endpoint.
 type paddleWebhookPayload struct {
-	EventType string `json:"event_type"`
+	EventType      string `json:"event_type"` // SDK / simulate format
+	EventTypeCamel string `json:"eventType"`  // real Paddle webhook format
+}
+
+// getEventType returns the event type regardless of which casing Paddle used.
+func (p paddleWebhookPayload) getEventType() string {
+	if p.EventType != "" {
+		return p.EventType
+	}
+	return p.EventTypeCamel
 }
 
 func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
@@ -1173,7 +1184,7 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("processing Paddle webhook", "event_type", payload.EventType)
+	h.logger.Infow("processing Paddle webhook", "event_type", payload.getEventType())
 
 	serviceDeps := &paddlewebhook.ServiceDependencies{
 		CustomerService:                 h.customerService,
@@ -1185,11 +1196,11 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		DB:                              h.db,
 	}
 
-	err = paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.EventType, body, environmentID, serviceDeps)
+	err = paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.getEventType(), body, environmentID, serviceDeps)
 	if err != nil {
 		h.logger.Errorw("failed to handle Paddle webhook event",
 			"error", err,
-			"event_type", payload.EventType)
+			"event_type", payload.getEventType())
 	}
 }
 
@@ -1227,7 +1238,7 @@ func (h *WebhookHandler) SimulatePaddleWebhook(c *gin.Context) {
 		return
 	}
 
-	if payload.EventType == "" {
+	if payload.getEventType() == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "event_type is required in payload"})
 		return
 	}
@@ -1239,7 +1250,7 @@ func (h *WebhookHandler) SimulatePaddleWebhook(c *gin.Context) {
 	}
 
 	h.logger.Infow("simulating Paddle webhook event (signature check skipped)",
-		"event_type", payload.EventType,
+		"event_type", payload.getEventType(),
 		"environment_id", environmentID,
 	)
 
@@ -1253,20 +1264,20 @@ func (h *WebhookHandler) SimulatePaddleWebhook(c *gin.Context) {
 		DB:                              h.db,
 	}
 
-	if err := paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.EventType, body, environmentID, serviceDeps); err != nil {
+	if err := paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.getEventType(), body, environmentID, serviceDeps); err != nil {
 		h.logger.Errorw("simulated Paddle webhook event failed",
 			"error", err,
-			"event_type", payload.EventType,
+			"event_type", payload.getEventType(),
 		)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"event_type": payload.EventType,
+			"event_type": payload.getEventType(),
 			"error":      err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"event_type": payload.EventType,
+		"event_type": payload.getEventType(),
 		"message":    "webhook processed successfully",
 	})
 }
