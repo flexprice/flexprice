@@ -1144,7 +1144,7 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 			"error", err,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid signature"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid signature", "error_message": err.Error()})
 		handled = true
 		return
 	}
