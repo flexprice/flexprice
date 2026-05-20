@@ -1091,19 +1091,15 @@ func (s *temporalService) buildPaddleCustomerSyncInput(_ context.Context, tenant
 }
 
 func (s *temporalService) buildPaddleSubscriptionSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
-	if input, ok := params.(*models.PaddleSubscriptionSyncWorkflowInput); ok {
-		input.TenantID = tenantID
-		input.EnvironmentID = environmentID
-		return *input, nil
+	input, ok := params.(models.PaddleSubscriptionSyncWorkflowInput)
+	if !ok {
+		return nil, errors.NewError("invalid input for Paddle subscription sync workflow").
+			WithHint("Provide PaddleSubscriptionSyncWorkflowInput with subscription_id").
+			Mark(errors.ErrValidation)
 	}
-	if input, ok := params.(models.PaddleSubscriptionSyncWorkflowInput); ok {
-		input.TenantID = tenantID
-		input.EnvironmentID = environmentID
-		return input, nil
-	}
-	return nil, errors.NewError("invalid input for Paddle subscription sync workflow").
-		WithHint("Provide PaddleSubscriptionSyncWorkflowInput with subscription_id").
-		Mark(errors.ErrValidation)
+	input.TenantID = tenantID
+	input.EnvironmentID = environmentID
+	return input, nil
 }
 
 // buildProcessInvoiceInput builds input for process invoice workflow

@@ -324,7 +324,7 @@ func triggerPaddleSubscriptionSyncIfEnabled(
 		return nil
 	}
 
-	input := &temporalmodels.PaddleSubscriptionSyncWorkflowInput{
+	input := temporalmodels.PaddleSubscriptionSyncWorkflowInput{
 		SubscriptionID: in.SubscriptionID,
 		CustomerID:     in.CustomerID,
 		TenantID:       in.TenantID,
