@@ -104,7 +104,6 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	reqPayload := &InvoiceCreateRequest{
 		CustomerID: zohoCustomerID,
 		LineItems:  lineItems,
-		Notes:      "Synced from FlexPrice",
 		Adjustment: flexInvoice.TotalPrepaidCreditsApplied.Mul(decimal.NewFromInt(-1)),
 	}
 	if flexInvoice.FinalizedAt != nil {
