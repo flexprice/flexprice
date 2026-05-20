@@ -978,6 +978,86 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	return paymentSvc.ProcessExternalPaddleTransaction(ctx, txn, flexpriceInvoiceID, paymentService, invoiceService)
 }
 
+// ProcessSubscriptionActivatedWebhook handles the Paddle subscription.activated event.
+// It creates the entity_integration_mapping with the real Paddle subscription ID and
+// transitions the FlexPrice subscription from incomplete to active (or trialing).
+func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
+	ctx context.Context,
+	data *paddlenotification.SubscriptionNotification,
+	subscriptionService interfaces.SubscriptionService,
+) error {
+	paddleSubID := data.ID
+
+	flexSubID, _ := data.CustomData["flexprice_subscription_id"].(string)
+	if flexSubID == "" {
+		s.logger.Warnw("subscription.activated: no flexprice_subscription_id in custom_data — skipping",
+			"paddle_sub_id", paddleSubID)
+		return nil
+	}
+
+	// Idempotent: create mapping only if one does not already exist.
+	activated, err := s.GetSubscriptionMappingStatus(ctx, flexSubID)
+	if err != nil {
+		return fmt.Errorf("checking existing subscription mapping: %w", err)
+	}
+	if !activated {
+		_, err = s.mappingService.CreateEntityIntegrationMapping(ctx, apidto.CreateEntityIntegrationMappingRequest{
+			EntityID:         flexSubID,
+			EntityType:       types.IntegrationEntityTypeSubscription,
+			ProviderType:     string(types.SecretProviderPaddle),
+			ProviderEntityID: paddleSubID,
+			Metadata: map[string]interface{}{
+				MetaKeyPaddleSubscriptionID: paddleSubID,
+				MetaKeySyncedAt:             time.Now().UTC().Format(time.RFC3339),
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("creating subscription mapping: %w", err)
+		}
+	}
+
+	// Persist paddle_subscription_id in subscription metadata.
+	sub, err := s.subscriptionRepo.Get(ctx, flexSubID)
+	if err != nil {
+		return fmt.Errorf("fetching subscription: %w", err)
+	}
+	if sub.Metadata == nil {
+		sub.Metadata = make(types.Metadata)
+	}
+	sub.Metadata[MetaKeyPaddleSubscriptionID] = paddleSubID
+	if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
+		s.logger.Warnw("failed to update sub metadata with paddle_subscription_id",
+			"sub_id", flexSubID, "error", err)
+	}
+
+	// Activate the FlexPrice subscription.
+	switch sub.SubscriptionStatus {
+	case types.SubscriptionStatusIncomplete:
+		if sub.TrialEnd != nil && sub.TrialEnd.After(time.Now()) {
+			sub.SubscriptionStatus = types.SubscriptionStatusTrialing
+			if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
+				return fmt.Errorf("setting subscription to trialing: %w", err)
+			}
+			s.logger.Infow("subscription.activated: set incomplete→trialing",
+				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
+		} else {
+			if subscriptionService == nil {
+				return ierr.NewError("subscriptionService is required to activate subscription").Mark(ierr.ErrInternal)
+			}
+			if err := subscriptionService.ActivateIncompleteSubscription(ctx, flexSubID); err != nil {
+				return fmt.Errorf("activating incomplete subscription: %w", err)
+			}
+			s.logger.Infow("subscription.activated: set incomplete→active",
+				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
+		}
+	default:
+		s.logger.Infow("subscription.activated: subscription not in incomplete state — no-op",
+			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
+	}
+
+	return nil
+}
+
 func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.InvoiceLineItem {
 	out := make([]*invoice.InvoiceLineItem, 0, len(items))
 	for _, li := range items {

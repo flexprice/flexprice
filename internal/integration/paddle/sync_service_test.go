@@ -7,10 +7,13 @@ import (
 	"time"
 
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
+	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	invoice_domain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
@@ -765,4 +768,372 @@ func TestEnsureBulkProductSynced_AlreadyMapped(t *testing.T) {
 
 	// The critical assertion: CreateProduct must NOT be called when mapping already exists.
 	assert.False(t, mockClient.createProductCalled, "CreateProduct must NOT be called when mapping already exists")
+}
+
+// --- mockSubscriptionService ---
+
+// mockSubscriptionService is a minimal implementation of interfaces.SubscriptionService for testing.
+type mockSubscriptionService struct {
+	activateIncompleteSubscriptionFn func(ctx context.Context, subscriptionID string) error
+	activateCalled                   bool
+}
+
+func (m *mockSubscriptionService) ActivateIncompleteSubscription(ctx context.Context, subscriptionID string) error {
+	m.activateCalled = true
+	if m.activateIncompleteSubscriptionFn != nil {
+		return m.activateIncompleteSubscriptionFn(ctx, subscriptionID)
+	}
+	return nil
+}
+
+func (m *mockSubscriptionService) CreateSubscription(ctx context.Context, req apidto.CreateSubscriptionRequest) (*apidto.SubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetSubscription(ctx context.Context, id string) (*apidto.SubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetSubscriptionV2(ctx context.Context, id string, expand types.Expand) (*apidto.SubscriptionResponseV2, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) UpdateSubscription(ctx context.Context, subscriptionID string, req apidto.UpdateSubscriptionRequest) (*apidto.SubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) CancelSubscription(ctx context.Context, subscriptionID string, req *apidto.CancelSubscriptionRequest) (*apidto.CancelSubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) HandleSubscriptionActivatingInvoicePaid(ctx context.Context, inv *invoice_domain.Invoice) error {
+	return nil
+}
+func (m *mockSubscriptionService) ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*apidto.ListSubscriptionsResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetUsageBySubscription(ctx context.Context, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) UpdateBillingPeriods(ctx context.Context) (*apidto.SubscriptionUpdatePeriodResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ProcessTrialEndDue(ctx context.Context) (*apidto.SubscriptionUpdatePeriodResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) PauseSubscription(ctx context.Context, subscriptionID string, req *apidto.PauseSubscriptionRequest) (*apidto.PauseSubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ResumeSubscription(ctx context.Context, subscriptionID string, req *apidto.ResumeSubscriptionRequest) (*apidto.ResumeSubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetPause(ctx context.Context, pauseID string) (*subscription.SubscriptionPause, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ListPauses(ctx context.Context, subscriptionID string) (*apidto.ListSubscriptionPausesResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) CalculatePauseImpact(ctx context.Context, subscriptionID string, req *apidto.PauseSubscriptionRequest) (*types.BillingImpactDetails, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) CalculateResumeImpact(ctx context.Context, subscriptionID string, req *apidto.ResumeSubscriptionRequest) (*types.BillingImpactDetails, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, sub *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*apidto.PriceResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) AddAddonToSubscription(ctx context.Context, subscriptionID string, req *apidto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) RemoveAddonFromSubscription(ctx context.Context, req *apidto.RemoveAddonRequest) error {
+	return nil
+}
+func (m *mockSubscriptionService) AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req apidto.CreateSubscriptionLineItemRequest) (*apidto.SubscriptionLineItemResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req apidto.DeleteSubscriptionLineItemRequest) (*apidto.SubscriptionLineItemResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req apidto.UpdateSubscriptionLineItemRequest) (*apidto.SubscriptionLineItemResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ListSubscriptionLineItems(ctx context.Context, filter *types.SubscriptionLineItemFilter) (*apidto.ListSubscriptionLineItemsResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
+	return nil
+}
+func (m *mockSubscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
+	return nil
+}
+func (m *mockSubscriptionService) ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*apidto.AutoInvoiceThresholdBillingResult, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetFeatureUsageBySubscription(ctx context.Context, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetMeterUsageBySubscription(ctx context.Context, req *apidto.GetUsageBySubscriptionRequest) (*apidto.GetUsageBySubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*apidto.EntitlementResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *apidto.GetSubscriptionEntitlementsRequest) (*apidto.SubscriptionEntitlementsResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) (*apidto.ListSubscriptionsResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetUpcomingCreditGrantApplications(ctx context.Context, req *apidto.GetUpcomingCreditGrantApplicationsRequest) (*apidto.ListCreditGrantApplicationsResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ListByCustomerID(ctx context.Context, customerID string) ([]*subscription.Subscription, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ActivateDraftSubscription(ctx context.Context, subID string, req apidto.ActivateDraftSubscriptionRequest) (*apidto.SubscriptionResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetActiveAddonAssociations(ctx context.Context, subscriptionID string) (*apidto.ListAddonAssociationsResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, subscriptionID string) (*apidto.TriggerSubscriptionWorkflowResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx context.Context, subscriptionID string) (*apidto.TriggerSubscriptionWorkflowResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) CalculateBillingPeriods(ctx context.Context, subscriptionID string) ([]apidto.Period, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period apidto.Period) (*apidto.InvoiceResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) MarkCancellationScheduleAsExecuted(ctx context.Context, subscriptionID string) error {
+	return nil
+}
+func (m *mockSubscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error {
+	return nil
+}
+func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+	return nil, nil
+}
+
+// --- ProcessSubscriptionActivatedWebhook tests ---
+
+// TestProcessSubscriptionActivatedWebhook_IncompleteToActive verifies that an incomplete subscription
+// (with no trial) is activated via ActivateIncompleteSubscription and that the mapping is created.
+func TestProcessSubscriptionActivatedWebhook_IncompleteToActive(t *testing.T) {
+	ctx := buildTestContext()
+
+	const flexSubID = "sub_incomplete_to_active"
+	const paddleSubID = "sub_paddle_activated"
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	subStore := testutil.NewInMemorySubscriptionStore()
+
+	// Seed an incomplete subscription with no trial end.
+	sub := &subscription.Subscription{
+		ID:                 flexSubID,
+		CustomerID:         "cust_test",
+		Currency:           "usd",
+		BillingPeriod:      "month",
+		SubscriptionStatus: types.SubscriptionStatusIncomplete,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(t, subStore.Create(ctx, sub))
+
+	mockSubSvc := &mockSubscriptionService{}
+	svc := buildTestSyncService(
+		&mockPaddleClient{},
+		mappingStore,
+		testutil.NewInMemoryCustomerStore(),
+		testutil.NewInMemoryInvoiceStore(),
+		subStore,
+		testutil.NewInMemoryConnectionStore(),
+	)
+
+	// Build a SubscriptionNotification directly.
+	paddlenotification_data := &paddlenotification.SubscriptionNotification{
+		ID:         paddleSubID,
+		CustomData: paddlenotification.CustomData{"flexprice_subscription_id": flexSubID},
+	}
+
+	err := svc.ProcessSubscriptionActivatedWebhook(ctx, paddlenotification_data, mockSubSvc)
+	require.NoError(t, err)
+
+	// ActivateIncompleteSubscription must have been called.
+	assert.True(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must be called for incomplete sub without trial")
+
+	// Mapping must have been created.
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityID:      flexSubID,
+		EntityType:    types.IntegrationEntityTypeSubscription,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	}
+	resp, err := newTestMappingService(mappingStore).GetEntityIntegrationMappings(ctx, filter)
+	require.NoError(t, err)
+	require.Len(t, resp.Items, 1)
+	assert.Equal(t, paddleSubID, resp.Items[0].ProviderEntityID)
+
+	// Subscription metadata must contain the paddle_subscription_id.
+	updatedSub, err := subStore.Get(ctx, flexSubID)
+	require.NoError(t, err)
+	assert.Equal(t, paddleSubID, updatedSub.Metadata[paddle.MetaKeyPaddleSubscriptionID])
+}
+
+// TestProcessSubscriptionActivatedWebhook_IncompleteToTrialing verifies that an incomplete subscription
+// with a future TrialEnd is transitioned to trialing without calling ActivateIncompleteSubscription.
+func TestProcessSubscriptionActivatedWebhook_IncompleteToTrialing(t *testing.T) {
+	ctx := buildTestContext()
+
+	const flexSubID = "sub_incomplete_to_trialing"
+	const paddleSubID = "sub_paddle_trialing"
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	subStore := testutil.NewInMemorySubscriptionStore()
+
+	trialEnd := time.Now().Add(7 * 24 * time.Hour)
+	sub := &subscription.Subscription{
+		ID:                 flexSubID,
+		CustomerID:         "cust_test",
+		Currency:           "usd",
+		BillingPeriod:      "month",
+		SubscriptionStatus: types.SubscriptionStatusIncomplete,
+		TrialEnd:           &trialEnd,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(t, subStore.Create(ctx, sub))
+
+	mockSubSvc := &mockSubscriptionService{}
+	svc := buildTestSyncService(
+		&mockPaddleClient{},
+		mappingStore,
+		testutil.NewInMemoryCustomerStore(),
+		testutil.NewInMemoryInvoiceStore(),
+		subStore,
+		testutil.NewInMemoryConnectionStore(),
+	)
+
+	data := &paddlenotification.SubscriptionNotification{
+		ID:         paddleSubID,
+		CustomData: paddlenotification.CustomData{"flexprice_subscription_id": flexSubID},
+	}
+
+	err := svc.ProcessSubscriptionActivatedWebhook(ctx, data, mockSubSvc)
+	require.NoError(t, err)
+
+	// ActivateIncompleteSubscription must NOT have been called — we only set trialing directly.
+	assert.False(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must NOT be called when trial end is in the future")
+
+	// Subscription must now be trialing.
+	updatedSub, err := subStore.Get(ctx, flexSubID)
+	require.NoError(t, err)
+	assert.Equal(t, types.SubscriptionStatusTrialing, updatedSub.SubscriptionStatus)
+
+	// Mapping must have been created.
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityID:      flexSubID,
+		EntityType:    types.IntegrationEntityTypeSubscription,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	}
+	resp, err := newTestMappingService(mappingStore).GetEntityIntegrationMappings(ctx, filter)
+	require.NoError(t, err)
+	require.Len(t, resp.Items, 1)
+	assert.Equal(t, paddleSubID, resp.Items[0].ProviderEntityID)
+}
+
+// TestProcessSubscriptionActivatedWebhook_MissingCustomData verifies that when
+// flexprice_subscription_id is absent from custom_data, the handler is a no-op.
+func TestProcessSubscriptionActivatedWebhook_MissingCustomData(t *testing.T) {
+	ctx := buildTestContext()
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	mockSubSvc := &mockSubscriptionService{}
+	svc := buildTestSyncService(
+		&mockPaddleClient{},
+		mappingStore,
+		testutil.NewInMemoryCustomerStore(),
+		testutil.NewInMemoryInvoiceStore(),
+		testutil.NewInMemorySubscriptionStore(),
+		testutil.NewInMemoryConnectionStore(),
+	)
+
+	// No flexprice_subscription_id in custom_data.
+	data := &paddlenotification.SubscriptionNotification{
+		ID:         "sub_paddle_no_meta",
+		CustomData: paddlenotification.CustomData{},
+	}
+
+	err := svc.ProcessSubscriptionActivatedWebhook(ctx, data, mockSubSvc)
+	require.NoError(t, err, "missing custom_data must result in a no-op, not an error")
+
+	// No mapping should have been created.
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityType:    types.IntegrationEntityTypeSubscription,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	}
+	resp, err := newTestMappingService(mappingStore).GetEntityIntegrationMappings(ctx, filter)
+	require.NoError(t, err)
+	assert.Empty(t, resp.Items, "no mapping should be created when flexprice_subscription_id is missing")
+
+	// ActivateIncompleteSubscription must NOT have been called.
+	assert.False(t, mockSubSvc.activateCalled)
+}
+
+// TestProcessSubscriptionActivatedWebhook_TrialingSubNoOp verifies that a subscription already
+// in trialing status gets a mapping created but no status change or activation call.
+func TestProcessSubscriptionActivatedWebhook_TrialingSubNoOp(t *testing.T) {
+	ctx := buildTestContext()
+
+	const flexSubID = "sub_trialing_no_op"
+	const paddleSubID = "sub_paddle_trialing_noop"
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	subStore := testutil.NewInMemorySubscriptionStore()
+
+	// Subscription is already trialing — not incomplete.
+	sub := &subscription.Subscription{
+		ID:                 flexSubID,
+		CustomerID:         "cust_test",
+		Currency:           "usd",
+		BillingPeriod:      "month",
+		SubscriptionStatus: types.SubscriptionStatusTrialing,
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(t, subStore.Create(ctx, sub))
+
+	mockSubSvc := &mockSubscriptionService{}
+	svc := buildTestSyncService(
+		&mockPaddleClient{},
+		mappingStore,
+		testutil.NewInMemoryCustomerStore(),
+		testutil.NewInMemoryInvoiceStore(),
+		subStore,
+		testutil.NewInMemoryConnectionStore(),
+	)
+
+	data := &paddlenotification.SubscriptionNotification{
+		ID:         paddleSubID,
+		CustomData: paddlenotification.CustomData{"flexprice_subscription_id": flexSubID},
+	}
+
+	err := svc.ProcessSubscriptionActivatedWebhook(ctx, data, mockSubSvc)
+	require.NoError(t, err)
+
+	// ActivateIncompleteSubscription must NOT have been called.
+	assert.False(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must NOT be called when sub is already trialing")
+
+	// Status must remain trialing.
+	updatedSub, err := subStore.Get(ctx, flexSubID)
+	require.NoError(t, err)
+	assert.Equal(t, types.SubscriptionStatusTrialing, updatedSub.SubscriptionStatus)
+
+	// Mapping MUST have been created.
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityID:      flexSubID,
+		EntityType:    types.IntegrationEntityTypeSubscription,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	}
+	resp, err := newTestMappingService(mappingStore).GetEntityIntegrationMappings(ctx, filter)
+	require.NoError(t, err)
+	require.Len(t, resp.Items, 1, "mapping must be created even for non-incomplete subscriptions")
+	assert.Equal(t, paddleSubID, resp.Items[0].ProviderEntityID)
 }
