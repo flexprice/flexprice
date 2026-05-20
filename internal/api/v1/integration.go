@@ -39,13 +39,20 @@ func (h *IntegrationHandler) Sync(c *gin.Context) {
 		return
 	}
 
-	if err := h.syncService.SyncEntity(c.Request.Context(), req); err != nil {
+	outcome, err := h.syncService.SyncEntity(c.Request.Context(), req)
+	if err != nil {
 		h.logger.Errorw("failed to trigger integration sync",
 			"error", err,
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
+			"provider_type", req.ProviderType,
 		)
 		c.Error(err)
+		return
+	}
+
+	if outcome != nil && outcome.PaddleInvoice != nil {
+		c.JSON(http.StatusOK, outcome.PaddleInvoice)
 		return
 	}
 

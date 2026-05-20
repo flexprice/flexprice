@@ -7,12 +7,18 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
+	"github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
+// IntegrationSyncOutcome holds optional synchronous sync payloads for HTTP responses.
+type IntegrationSyncOutcome struct {
+	PaddleInvoice *paddle.SyncInvoiceResponse `json:"-"`
+}
+
 type IntegrationSyncService interface {
-	SyncEntity(ctx context.Context, req dto.IntegrationSyncRequest) error
+	SyncEntity(ctx context.Context, req dto.IntegrationSyncRequest) (*IntegrationSyncOutcome, error)
 }
 
 type integrationSyncService struct {
@@ -23,22 +29,32 @@ func NewIntegrationSyncService(params ServiceParams) IntegrationSyncService {
 	return &integrationSyncService{ServiceParams: params}
 }
 
-func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.IntegrationSyncRequest) error {
+func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.IntegrationSyncRequest) (*IntegrationSyncOutcome, error) {
 	if err := req.Validate(); err != nil {
-		return err
+		return nil, err
+	}
+
+	if req.ProviderType != "" && types.SecretProvider(req.ProviderType) == types.SecretProviderPaddle {
+		return s.syncInvoiceToPaddle(ctx, req.EntityID)
 	}
 
 	switch req.EntityType {
 	case types.IntegrationEntityTypeInvoice:
-		return s.syncInvoice(ctx, req.EntityID)
+		if err := s.syncInvoice(ctx, req.EntityID); err != nil {
+			return nil, err
+		}
+		return &IntegrationSyncOutcome{}, nil
 	case types.IntegrationEntityTypeCustomer:
-		return s.syncCustomer(ctx, req.EntityID)
+		if err := s.syncCustomer(ctx, req.EntityID); err != nil {
+			return nil, err
+		}
+		return &IntegrationSyncOutcome{}, nil
 	default:
-		return ierr.NewError("unsupported entity_type").Mark(ierr.ErrValidation)
+		return nil, ierr.NewError("unsupported entity_type").Mark(ierr.ErrValidation)
 	}
 }
 
-func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID string) error {
+func (s *integrationSyncService) ensureInvoiceVendorSyncable(ctx context.Context, invoiceID string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, invoiceID)
 	if err != nil {
 		return err
@@ -47,6 +63,32 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 		return ierr.NewError("cannot sync a skipped invoice").
 			WithHint("Skipped invoices (zero-dollar) cannot be synced to external vendors").
 			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (s *integrationSyncService) syncInvoiceToPaddle(ctx context.Context, invoiceID string) (*IntegrationSyncOutcome, error) {
+	if err := s.ensureInvoiceVendorSyncable(ctx, invoiceID); err != nil {
+		return nil, err
+	}
+	if s.IntegrationFactory == nil {
+		return nil, ierr.NewError("integration factory not configured").
+			Mark(ierr.ErrInternal)
+	}
+	paddleIntegration, err := s.IntegrationFactory.GetPaddleIntegration(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := paddleIntegration.SyncSvc.SyncInvoice(ctx, paddle.SyncInvoiceRequest{InvoiceID: invoiceID})
+	if err != nil {
+		return nil, err
+	}
+	return &IntegrationSyncOutcome{PaddleInvoice: resp}, nil
+}
+
+func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID string) error {
+	if err := s.ensureInvoiceVendorSyncable(ctx, invoiceID); err != nil {
+		return err
 	}
 
 	payload, err := json.Marshal(map[string]string{"invoice_id": invoiceID})
