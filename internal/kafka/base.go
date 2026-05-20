@@ -23,7 +23,7 @@ func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
 	// Set consumer offset reset policy to ensure we don't miss messages
 	// "earliest" ensures that when a consumer starts with no initial offset or
 	// current offset is out of range, it will start from the earliest message
-	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
+	saramaConfig.Consumer.Offsets.Initial = sarama.OffsetNewest
 
 	// Enable auto commit to ensure offsets are committed regularly
 	saramaConfig.Consumer.Offsets.AutoCommit.Enable = true

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"sync"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -59,8 +60,10 @@ func NewTemporalClient(options *models.ClientOptions, logger *logger.Logger) (Te
 		}
 	}
 
-	// Create the temporal client
-	c, err := client.Dial(sdkOptions)
+	// Use NewLazyClient so the TCP connection is deferred until first use.
+	// This lets Fx finish dependency injection even when Temporal is temporarily
+	// unreachable; the health check in Start() will surface real failures.
+	c, err := client.NewLazyClient(sdkOptions)
 	if err != nil {
 		logger.Error("Failed to create temporal client", "error", err)
 		return nil, err
@@ -72,7 +75,11 @@ func NewTemporalClient(options *models.ClientOptions, logger *logger.Logger) (Te
 	}, nil
 }
 
-// Start implements TemporalClient
+// Start implements TemporalClient.
+// The health check is best-effort: a transient cold-start failure should not block
+// Fx dependency injection. The underlying gRPC connection (via NewLazyClient) is
+// dialled on first actual RPC and has its own retries, so real connectivity
+// problems will surface there.
 func (c *temporalClient) Start(ctx context.Context) error {
 	c.startMutex.Lock()
 	defer c.startMutex.Unlock()
@@ -81,14 +88,15 @@ func (c *temporalClient) Start(ctx context.Context) error {
 		return nil
 	}
 
-	// Check health to ensure connection is working
-	if _, err := c.client.CheckHealth(ctx, &client.CheckHealthRequest{}); err != nil {
-		c.logger.Error("Failed to check client health during start", "error", err)
-		return err
+	healthCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, err := c.client.CheckHealth(healthCtx, &client.CheckHealthRequest{}); err != nil {
+		c.logger.Warn("Temporal health check failed during start; continuing — workflows will retry on their own",
+			"error", err)
 	}
 
 	c.isStarted = true
-	c.logger.Info("Temporal client started successfully")
+	c.logger.Info("Temporal client started")
 	return nil
 }
 

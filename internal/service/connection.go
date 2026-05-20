@@ -332,6 +332,27 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			encryptedMetadata.Paddle.ClientSideToken = encryptedClientSideToken
 		}
 
+	case types.SecretProviderWhop:
+		if encryptedSecretData.Whop == nil {
+			s.Logger.Warnw("Whop metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("Whop metadata is required").
+				WithHint("Whop connection requires encrypted_secret_data with api_key and company_id").
+				Mark(ierr.ErrValidation)
+		}
+		encryptedAPIKey, err := s.encryptionService.Encrypt(encryptedSecretData.Whop.APIKey)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedCompanyID, err := s.encryptionService.Encrypt(encryptedSecretData.Whop.CompanyID)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedMetadata.Whop = &types.WhopConnectionMetadata{
+			APIKey:    encryptedAPIKey,
+			CompanyID: encryptedCompanyID,
+			ProductID: encryptedSecretData.Whop.ProductID, // not sensitive, stored plain
+		}
+
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks == nil {
 			s.Logger.Warnw("Zoho Books metadata is nil, cannot encrypt", "provider_type", providerType)

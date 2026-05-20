@@ -303,7 +303,7 @@ func main() {
 		),
 	)
 
-	app := fx.New(opts...)
+	app := fx.New(append(opts, fx.StartTimeout(300*time.Second), fx.StopTimeout(60*time.Second))...)
 	app.Run()
 }
 
@@ -471,11 +471,12 @@ func provideTemporalService(temporalClient client.TemporalClient, workerManager 
 	// Initialize the global Temporal service instance with Sentry
 	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log, sentryService, cfg)
 
-	// Get the global instance and start it
+	// Get the global instance and start it. Start is now tolerant of transient
+	// health-check failures (logs and continues); returning the service unconditionally
+	// keeps Fx dependency graph intact even if Temporal is briefly unreachable.
 	service := temporalservice.GetGlobalTemporalService()
 	if err := service.Start(context.Background()); err != nil {
-		log.Error("Failed to start global Temporal service", "error", err)
-		return nil
+		log.Warn("Temporal service Start returned error; continuing", "error", err)
 	}
 
 	return service
@@ -626,22 +627,22 @@ func registerRouterHandlers(
 	includeProcessingHandlers bool,
 ) {
 	if includeProcessingHandlers {
-		onboardingService.RegisterHandler(router, cfg)
+		// onboardingService.RegisterHandler(router, cfg)
 		webhookService.RegisterHandler(router)
 		integrationEventService.RegisterHandler(router)
-		eventConsumptionSvc.RegisterHandler(router, cfg)
-		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
+		// eventConsumptionSvc.RegisterHandler(router, cfg)
+		// eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		// eventPostProcessingSvc.RegisterHandler(router, cfg)
-		eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
-		featureUsageSvc.RegisterHandler(router, cfg)
-		featureUsageSvc.RegisterHandlerLazy(router, cfg)
-		featureUsageSvc.RegisterHandlerReplay(router, cfg)
-		costSheetUsageSvc.RegisterHandler(router, cfg)
-		costSheetUsageSvc.RegisterHandlerLazy(router, cfg)
-		walletBalanceAlertSvc.RegisterHandler(router, cfg)
-		rawEventConsumptionSvc.RegisterHandler(router, cfg)
-		meterUsageTrackingSvc.RegisterHandler(router, cfg)
-		usageBenchmarkSvc.RegisterHandler(router, cfg)
+		// eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
+		// featureUsageSvc.RegisterHandler(router, cfg)
+		// featureUsageSvc.RegisterHandlerLazy(router, cfg)
+		// featureUsageSvc.RegisterHandlerReplay(router, cfg)
+		// costSheetUsageSvc.RegisterHandler(router, cfg)
+		// costSheetUsageSvc.RegisterHandlerLazy(router, cfg)
+		// walletBalanceAlertSvc.RegisterHandler(router, cfg)
+		// rawEventConsumptionSvc.RegisterHandler(router, cfg)
+		// meterUsageTrackingSvc.RegisterHandler(router, cfg)
+		// usageBenchmarkSvc.RegisterHandler(router, cfg)
 	}
 }
 

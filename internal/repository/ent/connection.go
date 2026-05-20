@@ -346,6 +346,17 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			}
 			return data
 		}
+	case types.SecretProviderWhop:
+		if encryptedSecretData.Whop != nil {
+			data := map[string]interface{}{
+				"api_key":    encryptedSecretData.Whop.APIKey,
+				"company_id": encryptedSecretData.Whop.CompanyID,
+			}
+			if encryptedSecretData.Whop.ProductID != "" {
+				data["product_id"] = encryptedSecretData.Whop.ProductID
+			}
+			return data
+		}
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks != nil {
 			result := map[string]interface{}{
