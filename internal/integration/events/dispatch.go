@@ -314,7 +314,8 @@ func triggerPaddleSubscriptionSyncIfEnabled(
 	if err != nil {
 		return err
 	}
-	if conn == nil || !conn.IsSubscriptionOutboundEnabled() {
+
+	if conn == nil {
 		return nil
 	}
 	if subscriptionAlreadySynced(ctx, eimRepo, in.SubscriptionID, types.SecretProviderPaddle) {
