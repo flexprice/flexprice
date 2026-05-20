@@ -126,6 +126,11 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
+	if validationErr := input.Validate(); validationErr != nil {
+		return nil, temporal.NewNonRetryableApplicationError(
+			validationErr.Error(), "ValidationError", validationErr)
+	}
+
 	paddleIntegration, err := a.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
