@@ -2,6 +2,7 @@ package paddle_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -612,6 +614,126 @@ func TestSyncInvoice_AlreadySynced(t *testing.T) {
 
 	// The critical assertion: CreateSubscriptionCharge must NOT have been called.
 	assert.False(t, mockClient.createSubscriptionChargeCalled, "CreateSubscriptionCharge must NOT be called when invoice is already mapped")
+}
+
+// TestSyncInvoice_UseCatalogPrices verifies that SyncInvoice creates a catalog price whose Name
+// matches the line item's DisplayName, and that CreateSubscriptionCharge receives a
+// SubscriptionChargeItemFromCatalog referencing that catalog price ID.
+func TestSyncInvoice_UseCatalogPrices(t *testing.T) {
+	ctx := buildTestContext()
+
+	const invoiceID = "inv_catalog_price_test"
+	const subID = "sub_catalog_price_test"
+	const customerID = "cust_catalog_price_test"
+	const priceID = "pri_fp_abc"
+	const paddleProductID = "pro_paddle_abc"
+	const paddleSubID = "sub_paddle_abc"
+	const catalogPriceID = "pri_catalog_001"
+	const displayName = "Acme Pro Seat"
+	const chargeTxnID = "txn_charge_001"
+
+	var capturedPriceReqName string
+	var capturedChargeItems []paddlesdk.CreateSubscriptionChargeItems
+
+	// Build a collection with one charge transaction for the ListTransactions call.
+	listTxnJSON := []byte(`{
+		"data": [{"id": "` + chargeTxnID + `", "origin": "subscription_charge"}],
+		"meta": {
+			"pagination": {
+				"next_url": "",
+				"per_page": 1,
+				"has_more": false,
+				"estimated_total": 1
+			}
+		}
+	}`)
+	txnCollection := &paddlesdk.Collection[*paddlesdk.Transaction]{}
+	require.NoError(t, txnCollection.UnmarshalJSON(listTxnJSON))
+
+	mockClient := &mockPaddleClient{
+		createPriceFn: func(_ context.Context, req *paddlesdk.CreatePriceRequest) (*paddlesdk.Price, error) {
+			if req.Name != nil {
+				capturedPriceReqName = *req.Name
+			}
+			return &paddlesdk.Price{ID: catalogPriceID}, nil
+		},
+		createSubscriptionChargeFn: func(_ context.Context, req *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error) {
+			capturedChargeItems = req.Items
+			return &paddlesdk.Subscription{ID: paddleSubID}, nil
+		},
+		listTransactionsFn: func(_ context.Context, _ *paddlesdk.ListTransactionsRequest) (*paddlesdk.Collection[*paddlesdk.Transaction], error) {
+			return txnCollection, nil
+		},
+		getTransactionFn: func(_ context.Context, txnID string) (*paddlesdk.Transaction, error) {
+			return &paddlesdk.Transaction{ID: txnID}, nil
+		},
+	}
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	customerStore := testutil.NewInMemoryCustomerStore()
+	invoiceStore := testutil.NewInMemoryInvoiceStore()
+	subStore := testutil.NewInMemorySubscriptionStore()
+	connectionStore := testutil.NewInMemoryConnectionStore()
+
+	// Seed the invoice with one line item.
+	fpPriceID := priceID
+	fpDisplayName := displayName
+	inv := &invoice.Invoice{
+		ID:             invoiceID,
+		CustomerID:     customerID,
+		SubscriptionID: func() *string { s := subID; return &s }(),
+		Currency:       "USD",
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				PriceID:     &fpPriceID,
+				DisplayName: &fpDisplayName,
+				Amount:      decimal.NewFromInt(100),
+				Currency:    "USD",
+			},
+		},
+	}
+	require.NoError(t, invoiceStore.Create(ctx, inv))
+
+	// Seed the subscription so subscriptionRepo.Get() succeeds.
+	sub := &subscription.Subscription{
+		ID:            subID,
+		CustomerID:    customerID,
+		Currency:      "usd",
+		BillingPeriod: "month",
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(t, subStore.Create(ctx, sub))
+
+	// Seed price→product mapping so EnsureBulkProductSynced returns without calling CreateProduct.
+	seedMapping(ctx, t, mappingStore, priceID, types.IntegrationEntityTypePrice, paddleProductID, nil)
+
+	// Seed subscription→Paddle mapping so EnsureSubscriptionSynced hits Guard 1.
+	seedMapping(ctx, t, mappingStore, subID, types.IntegrationEntityTypeSubscription, paddleSubID, nil)
+
+	svc := buildTestSyncService(mockClient, mappingStore, customerStore, invoiceStore, subStore, connectionStore)
+
+	resp, err := svc.SyncInvoice(ctx, paddle.SyncInvoiceRequest{InvoiceID: invoiceID})
+	require.NoError(t, err)
+
+	// Verify the charge transaction ID was returned.
+	assert.Equal(t, chargeTxnID, resp.PaddleTransactionID)
+	assert.False(t, resp.AlreadySynced)
+
+	// CreatePrice must have been called with the line item's display name.
+	assert.Equal(t, displayName, capturedPriceReqName,
+		"CreatePrice Name must match the invoice line item DisplayName")
+
+	// CreateSubscriptionCharge must have been called with a catalog-price item referencing the returned price ID.
+	require.NotEmpty(t, capturedChargeItems, "CreateSubscriptionCharge must receive at least one item")
+	// The item should be a SubscriptionChargeItemFromCatalog — unwrap and check the price ID.
+	// paddlesdk encodes the type in the value field; we check via JSON marshaling.
+	itemJSON, marshalErr := json.Marshal(capturedChargeItems[0])
+	require.NoError(t, marshalErr)
+	assert.Contains(t, string(itemJSON), catalogPriceID,
+		"CreateSubscriptionCharge item must reference the catalog price ID returned by CreatePrice")
 }
 
 // TestEnsureBulkProductSynced_AlreadyMapped verifies that when a price→Paddle product mapping

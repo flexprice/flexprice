@@ -297,16 +297,30 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	if err != nil {
 		return nil, fmt.Errorf("ensuring customer synced: %w", err)
 	}
+	if customerResp.PaddleAddressID == "" {
+		return nil, ierr.NewError("Paddle address ID not found after customer sync").
+			WithHint("Customer must have an address (country required) for Paddle subscription creation").
+			WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
+			Mark(ierr.ErrValidation)
+	}
 
 	// Create $0 catalog prices with billing_cycle so Paddle recognises this as a recurring subscription.
 	billingCycle := paddleBillingCycle(sub.BillingPeriod, sub.BillingPeriodCount)
 	currency := strings.ToUpper(sub.Currency)
-	type bootstrapPair struct{ priceID, paddlePriceID string }
+	type bootstrapPair struct{ paddlePriceID string }
 	pairs := make([]bootstrapPair, 0, len(req.PriceIDToProductID))
 	for priceID, productID := range req.PriceIDToProductID {
+		name := priceID
+		for _, li := range sub.LineItems {
+			if li != nil && li.PriceID == priceID && li.DisplayName != "" {
+				name = li.DisplayName
+				break
+			}
+		}
 		catalogPrice, priceErr := s.client.CreatePrice(ctx, &paddlesdk.CreatePriceRequest{
 			ProductID:    productID,
-			Description:  "FlexPrice bootstrap price",
+			Description:  name,
+			Name:         paddlesdk.PtrTo(name),
 			UnitPrice:    paddlesdk.Money{Amount: "0", CurrencyCode: paddlesdk.CurrencyCode(currency)},
 			BillingCycle: billingCycle,
 			TaxMode:      paddlesdk.PtrTo(paddlesdk.TaxModeAccountSetting),
@@ -315,7 +329,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		if priceErr != nil {
 			return nil, fmt.Errorf("creating bootstrap catalog price for product %s: %w", productID, priceErr)
 		}
-		pairs = append(pairs, bootstrapPair{priceID, catalogPrice.ID})
+		pairs = append(pairs, bootstrapPair{catalogPrice.ID})
 	}
 	sort.Slice(pairs, func(i, j int) bool { return pairs[i].paddlePriceID < pairs[j].paddlePriceID })
 
@@ -344,6 +358,13 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	checkoutURL := ""
 	if txn.Checkout != nil && txn.Checkout.URL != nil {
 		checkoutURL = lo.FromPtr(txn.Checkout.URL)
+	}
+	if checkoutURL == "" {
+		if conn, connErr := s.client.GetConnection(ctx); connErr == nil && conn != nil && conn.Metadata != nil {
+			if base, ok := conn.Metadata[ConnKeyCheckoutURL].(string); ok && base != "" {
+				checkoutURL = base + "?_ptxn=" + txn.ID
+			}
+		}
 	}
 
 	// Persist txn ID + checkout URL in subscription metadata so future calls hit Guard 2.
