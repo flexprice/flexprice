@@ -544,7 +544,6 @@ func TestEnsureSubscriptionSynced_CreatesTransaction(t *testing.T) {
 		Currency:           "usd",
 		BillingPeriod:      "month",
 		BillingPeriodCount: 1,
-		SubscriptionStatus: types.SubscriptionStatusIncomplete,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}

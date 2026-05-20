@@ -288,15 +288,6 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		}, nil
 	}
 
-	// Guard 3: only bootstrap subscriptions that are waiting for card capture (incomplete).
-	// If the subscription is already active, trialing, or in any other non-incomplete state,
-	// there is nothing to bootstrap — return a no-op response.
-	if sub.SubscriptionStatus != types.SubscriptionStatusIncomplete {
-		s.logger.Infow("EnsureSubscriptionSynced: subscription is not incomplete, skipping bootstrap",
-			"sub_id", sub.ID, "status", sub.SubscriptionStatus)
-		return &EnsureSubscriptionSyncedResponse{}, nil
-	}
-
 	if len(req.PriceIDToProductID) == 0 {
 		return nil, ierr.NewError("no products to bootstrap subscription with").Mark(ierr.ErrValidation)
 	}
