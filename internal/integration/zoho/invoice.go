@@ -112,9 +112,9 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	} else {
 		reqPayload.Date = time.Now().UTC().Format("2006-01-02")
 	}
-	if flexInvoice.DueDate != nil {
-		reqPayload.DueDate = flexInvoice.DueDate.Format("2006-01-02")
-	}
+	//if flexInvoice.DueDate != nil {
+	//	reqPayload.DueDate = flexInvoice.DueDate.Format("2006-01-02")
+	//}
 	if flexInvoice.InvoiceNumber != nil {
 		reqPayload.ReferenceNumber = *flexInvoice.InvoiceNumber
 	}
@@ -222,13 +222,13 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		qty, rate := s.normalizeRateAndQuantity(li, settings, flexInvoice.BillingPeriod)
 		name := lo.FromPtrOr(li.DisplayName, "Charge")
 		out = append(out, InvoiceLineItem{
-			Name:           name,
-			Description:    formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
-			Quantity:       qty,
-			Rate:           rate,
-			ItemID:         priceToItemID[lo.FromPtr(li.PriceID)],
-			TaxID:          taxRes.TaxID,
-			TaxExemptionID: taxRes.TaxExemptionID,
+			Name:        name,
+			Description: formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
+			Quantity:    qty,
+			Rate:        rate,
+			ItemID:      priceToItemID[lo.FromPtr(li.PriceID)],
+			//TaxID:          taxRes.TaxID,
+			//TaxExemptionID: taxRes.TaxExemptionID,
 		})
 	}
 	return out, nil
