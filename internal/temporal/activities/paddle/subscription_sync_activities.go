@@ -65,15 +65,14 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 	}
 
 	// Load the full subscription with line items.
-	sub, lineItems, fetchErr := paddleIntegration.SyncSvc.GetSubscriptionWithLineItems(ctx, input.SubscriptionID)
+	sub, _, fetchErr := paddleIntegration.SyncSvc.GetSubscriptionWithLineItems(ctx, input.SubscriptionID)
 	if fetchErr != nil {
 		return fmt.Errorf("fetching subscription: %w", fetchErr)
 	}
-	sub.LineItems = lineItems
 
 	// Sync all line item prices to Paddle products.
-	productItems := make([]paddleint.EnsureBulkProductSyncedItem, 0, len(lineItems))
-	for _, li := range lineItems {
+	productItems := make([]paddleint.EnsureBulkProductSyncedItem, 0, len(sub.LineItems))
+	for _, li := range sub.LineItems {
 		if li == nil || li.PriceID == "" {
 			continue
 		}

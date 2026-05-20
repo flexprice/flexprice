@@ -323,3 +323,44 @@ func TestCheckSubscriptionSyncStatus_NoSubscriptionID_FallbackToInvoice(t *testi
 	require.NoError(t, err)
 	assert.Equal(t, "activated", status, "invoice-resolved subscription with mapping should return activated")
 }
+
+// TestCheckSubscriptionSyncStatus_InvoiceWithNoSubscription verifies that when an invoice
+// exists but has no subscription_id, the status returned is "activated" (no sub sync needed).
+func TestCheckSubscriptionSyncStatus_InvoiceWithNoSubscription(t *testing.T) {
+	ctx := buildActivityTestContext()
+
+	connectionStore := testutil.NewInMemoryConnectionStore()
+	seedPaddleConnection(ctx, t, connectionStore)
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	const invoiceID = "inv_no_subscription"
+
+	// Seed an invoice with no subscription_id (SubscriptionID is nil).
+	invoiceStore := testutil.NewInMemoryInvoiceStore()
+	inv := &invoice.Invoice{
+		ID:             invoiceID,
+		CustomerID:     "cust_001",
+		SubscriptionID: nil, // No subscription linked
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	seedTestInvoice(ctx, t, invoiceStore, inv)
+
+	subStore := testutil.NewInMemorySubscriptionStore()
+
+	factory := buildActivityFactory(connectionStore, mappingStore, invoiceStore, subStore)
+	act := paddleactivities.NewSubscriptionSyncActivities(factory, buildTestActivityLogger())
+
+	// No SubscriptionID in input — activity will look up invoice and find no subscription_id.
+	input := models.PaddleInvoiceSyncWorkflowInput{
+		InvoiceID:     invoiceID,
+		CustomerID:    "cust_001",
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		// SubscriptionID intentionally empty.
+	}
+
+	status, err := act.CheckSubscriptionSyncStatus(ctx, input)
+	require.NoError(t, err)
+	assert.Equal(t, "activated", status, "invoice with no subscription_id should return activated")
+}
