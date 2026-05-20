@@ -147,7 +147,6 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 }
 
 // MarkInvoicePaidInWhop marks the corresponding Whop invoice as paid.
-// No-op if: connection missing, no Whop mapping, or Flexprice invoice is not in succeeded state.
 func (s *InvoiceSyncService) MarkInvoicePaidInWhop(ctx context.Context, flexpriceInvoiceID string) error {
 	if !s.client.HasWhopConnection(ctx) {
 		return ierr.NewError("Whop connection not available").

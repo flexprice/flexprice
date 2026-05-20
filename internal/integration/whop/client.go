@@ -59,6 +59,12 @@ func (c *Client) GetWhopConfig(ctx context.Context) (*WhopConfig, error) {
 			Mark(ierr.ErrNotFound)
 	}
 
+	if conn == nil {
+		return nil, ierr.NewError("Whop connection not found").
+			WithHint("Whop connection not configured for this environment").
+			Mark(ierr.ErrNotFound)
+	}
+
 	whopConfig, err := c.GetDecryptedWhopConfig(conn)
 	if err != nil {
 		return nil, ierr.NewError("failed to get Whop configuration").

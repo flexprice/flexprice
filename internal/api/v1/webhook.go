@@ -19,7 +19,7 @@ import (
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
-zohowebhook "github.com/flexprice/flexprice/internal/integration/zoho/webhook"
+	zohowebhook "github.com/flexprice/flexprice/internal/integration/zoho/webhook"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -1193,4 +1193,3 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 			"event_type", payload.EventType)
 	}
 }
-
