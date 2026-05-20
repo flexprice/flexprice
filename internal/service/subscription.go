@@ -1903,8 +1903,9 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
-		// Step 7b: Terminate plan line items (set EndDate = effectiveDate)
-		if err := s.cancelPlanLineItemsForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
+		// Step 7b: Terminate plan and subscription-scoped line items (set EndDate = effectiveDate).
+		// Addon line items are already terminated by cancelAddonsForSubscription above.
+		if err := s.cancelAllLineItemsForSubscription(ctx, subscription.ID, effectiveDate); err != nil {
 			return err
 		}
 
@@ -6054,7 +6055,6 @@ func (s *subscriptionService) GetMeterUsageBySubscription(ctx context.Context, r
 	return response, nil
 }
 
-
 // GetSubscriptionEntitlements retrieves all entitlements associated with a subscription
 // This includes entitlements from:
 // 1. The subscription's plan
@@ -6933,12 +6933,17 @@ func (s *subscriptionService) TriggerSubscriptionDraftAndComputeWorkflow(ctx con
 	}, nil
 }
 
-// cancelPlanLineItemsForSubscription sets EndDate on all plan line items for the subscription
-// up to effectiveDate. Items that have not yet started (StartDate > effectiveDate) are skipped
-// because they never became active; the subscription-level EndDate already protects billing.
+// cancelAllLineItemsForSubscription sets EndDate on plan and subscription-scoped line
+// items for the subscription up to effectiveDate. Items that have not yet started
+// (StartDate > effectiveDate) are skipped because they never became active; the
+// subscription-level EndDate already protects billing.
 // Uses direct repository update (not DeleteSubscriptionLineItem) to avoid the effectiveFrom
 // validation in that service function.
-func (s *subscriptionService) cancelPlanLineItemsForSubscription(
+//
+// Setting EndDate on subscription-scoped line items is required so that meter usage queries
+// (see GetSubscriptionMeterUsage) clip the ClickHouse query window at the cancellation date —
+// without it, usage events after cancellation would still be picked up.
+func (s *subscriptionService) cancelAllLineItemsForSubscription(
 	ctx context.Context,
 	subscriptionID string,
 	effectiveDate time.Time,
@@ -6948,48 +6953,15 @@ func (s *subscriptionService) cancelPlanLineItemsForSubscription(
 		zap.Time("effective_date", effectiveDate),
 	)
 
-	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
-	lineItemFilter.SubscriptionIDs = []string{subscriptionID}
-	lineItemFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypePlan)
-
-	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	terminated, err := s.SubscriptionLineItemRepo.BulkTerminate(ctx, subscriptionID, effectiveDate)
 	if err != nil {
-		logger.Errorw("failed to list plan line items for cancellation", "error", err)
+		logger.Errorw("failed to terminate line items for subscription", "error", err)
 		return ierr.WithError(err).
-			WithHint("Failed to list plan line items for cancellation").
+			WithHint("Failed to terminate line items for subscription").
 			Mark(ierr.ErrDatabase)
 	}
 
-	terminated := 0
-	for _, item := range lineItems {
-		// Skip items that haven't started yet — they never became active
-		if item.StartDate.After(effectiveDate) {
-			logger.Debugw("skipping plan line item not yet started",
-				"line_item_id", item.ID,
-				"start_date", item.StartDate)
-			continue
-		}
-		// Skip items already terminated at or before effectiveDate
-		if !item.EndDate.IsZero() && !item.EndDate.After(effectiveDate) {
-			logger.Debugw("skipping plan line item already terminated",
-				"line_item_id", item.ID,
-				"end_date", item.EndDate)
-			continue
-		}
-		item.EndDate = effectiveDate
-		if err := s.SubscriptionLineItemRepo.Update(ctx, item); err != nil {
-			logger.Errorw("failed to update plan line item end date",
-				"line_item_id", item.ID,
-				"error", err)
-			return ierr.WithError(err).
-				WithHintf("Failed to set EndDate on plan line item %s", item.ID).
-				Mark(ierr.ErrDatabase)
-		}
-		terminated++
-	}
-
-	logger.Infow("terminated plan line items for subscription",
-		"line_items_terminated", terminated)
+	logger.Infow("terminated line items for subscription", "line_items_terminated", terminated)
 	return nil
 }
 
