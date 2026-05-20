@@ -302,9 +302,10 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	}
 
 	// Guard 2: bootstrap transaction already created — customer has not completed checkout yet.
+	// The stored URL already includes the auth token (appended at creation time).
 	if txnID := sub.Metadata[MetaKeyPaddleTransactionID]; txnID != "" {
 		return &EnsureSubscriptionSyncedResponse{
-			CheckoutURL: s.appendCheckoutToken(ctx, sub.Metadata[MetaKeyPaddleCheckoutURL]),
+			CheckoutURL: sub.Metadata[MetaKeyPaddleCheckoutURL],
 		}, nil
 	}
 
@@ -387,20 +388,24 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		}
 	}
 
-	// Persist txn ID + checkout URL in subscription metadata so future calls hit Guard 2.
+	// Append the auth token before persisting so any downstream reader of the metadata
+	// gets the fully-formed URL without needing to call appendCheckoutToken separately.
+	checkoutURLWithToken := s.appendCheckoutToken(ctx, checkoutURL)
+
+	// Persist txn ID + checkout URL (with token) in subscription metadata so future calls hit Guard 2.
 	if sub.Metadata == nil {
 		sub.Metadata = make(types.Metadata)
 	}
 	sub.Metadata[MetaKeyPaddleTransactionID] = txn.ID
-	if checkoutURL != "" {
-		sub.Metadata[MetaKeyPaddleCheckoutURL] = checkoutURL
+	if checkoutURLWithToken != "" {
+		sub.Metadata[MetaKeyPaddleCheckoutURL] = checkoutURLWithToken
 	}
 	if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
 		return nil, fmt.Errorf("updating subscription metadata after bootstrap: %w", err)
 	}
 
 	return &EnsureSubscriptionSyncedResponse{
-		CheckoutURL: s.appendCheckoutToken(ctx, checkoutURL),
+		CheckoutURL: checkoutURLWithToken,
 		Created:     true,
 	}, nil
 }
