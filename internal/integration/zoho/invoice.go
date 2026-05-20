@@ -222,13 +222,13 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		qty, rate := s.normalizeRateAndQuantity(li, settings, flexInvoice.BillingPeriod)
 		name := lo.FromPtrOr(li.DisplayName, "Charge")
 		out = append(out, InvoiceLineItem{
-			Name:           name,
-			Description:    formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
-			Quantity:       qty,
-			Rate:           rate,
-			ItemID:         priceToItemID[lo.FromPtr(li.PriceID)],
-			TaxID:          taxRes.TaxID,
-			TaxExemptionID: taxRes.TaxExemptionID,
+			Name:        name,
+			Description: formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
+			Quantity:    qty,
+			Rate:        rate,
+			ItemID:      priceToItemID[lo.FromPtr(li.PriceID)],
+			//TaxID:          taxRes.TaxID,
+			//TaxExemptionID: taxRes.TaxExemptionID,
 		})
 	}
 	return out, nil

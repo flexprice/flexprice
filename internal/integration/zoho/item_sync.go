@@ -93,24 +93,14 @@ func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSy
 }
 
 func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInput, taxRes *ItemTaxResolution) (string, error) {
+	isTaxable := true
 	createReq := &ItemCreateRequest{
 		Name:        in.Name,
 		Rate:        in.Rate.InexactFloat64(),
 		Description: in.PriceID,
 		ProductType: "service",
 		SKU:         in.PriceID,
-	}
-
-	if taxRes != nil {
-		if taxRes.IsTaxable {
-			t := true
-			createReq.TaxID = taxRes.TaxID
-			createReq.IsTaxable = &t
-		} else {
-			f := false
-			createReq.IsTaxable = &f
-			createReq.TaxExemptionID = taxRes.TaxExemptionID
-		}
+		IsTaxable:   &isTaxable,
 	}
 
 	itemResp, err := s.Client.CreateItem(ctx, createReq)
