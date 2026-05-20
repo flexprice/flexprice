@@ -501,6 +501,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.PaddleCustomerSyncWorkflowInput); ok {
 			return input.CustomerID
 		}
+	case types.TemporalPaddleSubscriptionSyncWorkflow:
+		if input, ok := params.(models.PaddleSubscriptionSyncWorkflowInput); ok {
+			return input.SubscriptionID
+		}
 	case types.TemporalRecalculateInvoiceWorkflow:
 		// Extract invoice ID from RecalculateInvoiceWorkflowInput
 		if input, ok := params.(invoiceModels.RecalculateInvoiceWorkflowInput); ok {
@@ -638,6 +642,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildNomodCustomerSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalPaddleCustomerSyncWorkflow:
 		return s.buildPaddleCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalPaddleSubscriptionSyncWorkflow:
+		return s.buildPaddleSubscriptionSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalCustomerOnboardingWorkflow:
 		return s.buildCustomerOnboardingInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalPrepareProcessedEventsWorkflow:
@@ -1081,6 +1087,22 @@ func (s *temporalService) buildPaddleCustomerSyncInput(_ context.Context, tenant
 	}
 	return nil, errors.NewError("invalid input for Paddle customer sync workflow").
 		WithHint("Provide PaddleCustomerSyncWorkflowInput with customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildPaddleSubscriptionSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.PaddleSubscriptionSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.PaddleSubscriptionSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Paddle subscription sync workflow").
+		WithHint("Provide PaddleSubscriptionSyncWorkflowInput with subscription_id").
 		Mark(errors.ErrValidation)
 }
 

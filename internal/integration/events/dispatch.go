@@ -61,6 +61,20 @@ func customerAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping
 	return err == nil && count > 0
 }
 
+// subscriptionAlreadySynced returns true when the entity mapping table already has a record for
+// (subscriptionID, subscription, provider). Same idempotency guarantee as invoiceAlreadySynced.
+func subscriptionAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping.Repository, subscriptionID string, provider types.SecretProvider) bool {
+	if eimRepo == nil {
+		return false
+	}
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityID = subscriptionID
+	filter.EntityType = types.IntegrationEntityTypeSubscription
+	filter.ProviderTypes = []string{string(provider)}
+	count, err := eimRepo.Count(ctx, filter)
+	return err == nil && count > 0
+}
+
 // invoiceVendorSyncInput holds the minimal data needed to dispatch a provider trigger.
 // Invoice and subscription details are fetched inside the Temporal activity after a
 // short sleep, avoiding races where the event arrives before the DB transaction commits.
@@ -228,6 +242,100 @@ func DispatchCustomerVendorSync(
 		return fmt.Errorf("integration_events: one or more provider dispatches failed for customer %s: %w", in.CustomerID, errors.Join(dispatchErrs...))
 	}
 
+	return nil
+}
+
+// DispatchSubscriptionVendorSync starts PaddleSubscriptionSyncWorkflow for subscriptions
+// with allow_incomplete payment behaviour.
+func DispatchSubscriptionVendorSync(
+	ctx context.Context,
+	cfg *config.Configuration,
+	connRepo connection.Repository,
+	eimRepo entityintegrationmapping.Repository,
+	log *logger.Logger,
+	event *types.WebhookEvent,
+	msgUUID string,
+) error {
+	if cfg != nil && !cfg.IntegrationEvents.Enabled {
+		return nil
+	}
+
+	var pl struct {
+		SubscriptionID   string `json:"subscription_id"`
+		CustomerID       string `json:"customer_id"`
+		PaymentBehavior  string `json:"payment_behavior"`
+		CollectionMethod string `json:"collection_method"`
+	}
+	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.SubscriptionID == "" {
+		log.Warnw("integration_events: invalid subscription.created payload, skipping",
+			"message_uuid", msgUUID, "error", err)
+		return nil
+	}
+
+	// Only trigger for allow_incomplete + charge_automatically subscriptions.
+	if pl.PaymentBehavior != string(types.PaymentBehaviorAllowIncomplete) {
+		return nil
+	}
+	if pl.CollectionMethod != string(types.CollectionMethodChargeAutomatically) {
+		return nil
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return errTemporalUnavailable
+	}
+
+	return triggerPaddleSubscriptionSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, subscriptionVendorSyncInput{
+		TenantID:       event.TenantID,
+		EnvironmentID:  event.EnvironmentID,
+		SubscriptionID: pl.SubscriptionID,
+		CustomerID:     pl.CustomerID,
+	})
+}
+
+type subscriptionVendorSyncInput struct {
+	TenantID       string
+	EnvironmentID  string
+	SubscriptionID string
+	CustomerID     string
+}
+
+func triggerPaddleSubscriptionSyncIfEnabled(
+	ctx context.Context,
+	connRepo connection.Repository,
+	eimRepo entityintegrationmapping.Repository,
+	temporalSvc temporalservice.TemporalService,
+	log *logger.Logger,
+	in subscriptionVendorSyncInput,
+) error {
+	conn, err := getConnectionIfExists(ctx, connRepo, types.SecretProviderPaddle)
+	if err != nil {
+		return err
+	}
+	if conn == nil || !conn.IsSubscriptionOutboundEnabled() {
+		return nil
+	}
+	if subscriptionAlreadySynced(ctx, eimRepo, in.SubscriptionID, types.SecretProviderPaddle) {
+		log.Infow("integration_events: subscription already synced to Paddle, skipping",
+			"subscription_id", in.SubscriptionID)
+		return nil
+	}
+
+	input := &temporalmodels.PaddleSubscriptionSyncWorkflowInput{
+		SubscriptionID: in.SubscriptionID,
+		CustomerID:     in.CustomerID,
+		TenantID:       in.TenantID,
+		EnvironmentID:  in.EnvironmentID,
+	}
+	workflowRun, wfErr := temporalSvc.ExecuteWorkflow(ctx, types.TemporalPaddleSubscriptionSyncWorkflow, input)
+	if wfErr != nil {
+		log.Errorw("integration_events: failed to start PaddleSubscriptionSyncWorkflow",
+			"subscription_id", in.SubscriptionID, "error", wfErr)
+		return fmt.Errorf("paddle subscription sync workflow start failed: %w", wfErr)
+	}
+	log.Infow("integration_events: PaddleSubscriptionSyncWorkflow started",
+		"subscription_id", in.SubscriptionID,
+		"workflow_id", workflowRun.GetID())
 	return nil
 }
 
