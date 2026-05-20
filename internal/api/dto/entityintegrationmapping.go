@@ -30,6 +30,7 @@ type EntityIntegrationMappingResponse struct {
 	EnvironmentID    string                      `json:"environment_id"`
 	TenantID         string                      `json:"tenant_id"`
 	Status           types.Status                `json:"status"`
+	Metadata         map[string]interface{}      `json:"metadata,omitempty"`
 	CreatedAt        string                      `json:"created_at"`
 	UpdatedAt        string                      `json:"updated_at"`
 	CreatedBy        string                      `json:"created_by"`

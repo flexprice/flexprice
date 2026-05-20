@@ -29,9 +29,9 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 	}
 
 	switch req.EntityType {
-	case "invoice":
+	case types.IntegrationEntityTypeInvoice:
 		return s.syncInvoice(ctx, req.EntityID)
-	case "customer":
+	case types.IntegrationEntityTypeCustomer:
 		return s.syncCustomer(ctx, req.EntityID)
 	default:
 		return ierr.NewError("unsupported entity_type").Mark(ierr.ErrValidation)

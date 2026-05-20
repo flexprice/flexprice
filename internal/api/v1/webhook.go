@@ -1089,9 +1089,10 @@ func (h *WebhookHandler) HandleZohoBooksWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Webhook processed successfully"})
 }
 
-// paddleWebhookPayload is a minimal struct to parse event_type from the webhook payload
+// paddleWebhookPayload is a minimal struct to extract the event type from a Paddle webhook.
+// Real Paddle webhooks always send the outer envelope in camelCase ("eventType").
 type paddleWebhookPayload struct {
-	EventType string `json:"event_type"`
+	EventType string `json:"eventType"`
 }
 
 func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {

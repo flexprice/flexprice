@@ -28,11 +28,18 @@ type PaddleClient interface {
 	GetConnection(ctx context.Context) (*connection.Connection, error)
 	GetSDKClient(ctx context.Context) (*paddle.SDK, *PaddleConfig, error)
 	CreateCustomer(ctx context.Context, req *paddle.CreateCustomerRequest) (*paddle.Customer, error)
+	ListCustomers(ctx context.Context, req *paddle.ListCustomersRequest) (*paddle.Collection[*paddle.Customer], error)
 	CreateAddress(ctx context.Context, customerID string, req *paddle.CreateAddressRequest) (*paddle.Address, error)
 	UpdateAddress(ctx context.Context, customerID string, addressID string, req *paddle.UpdateAddressRequest) (*paddle.Address, error)
 	CreateTransaction(ctx context.Context, req *paddle.CreateTransactionRequest) (*paddle.Transaction, error)
 	PreviewTransaction(ctx context.Context, req *paddle.PreviewTransactionCreateRequest) (*paddle.TransactionPreview, error)
 	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string, webhookSecret string) error
+	CreateProduct(ctx context.Context, req *paddle.CreateProductRequest) (*paddle.Product, error)
+	CreatePrice(ctx context.Context, req *paddle.CreatePriceRequest) (*paddle.Price, error)
+	CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error)
+	ListTransactions(ctx context.Context, req *paddle.ListTransactionsRequest) (*paddle.Collection[*paddle.Transaction], error)
+	GetTransaction(ctx context.Context, transactionID string) (*paddle.Transaction, error)
+	ListSubscriptions(ctx context.Context, req *paddle.ListSubscriptionsRequest) (*paddle.Collection[*paddle.Subscription], error)
 }
 
 // PaddleConfig holds decrypted Paddle connection configuration
@@ -224,6 +231,21 @@ func (c *Client) CreateCustomer(ctx context.Context, req *paddle.CreateCustomerR
 	return customer, nil
 }
 
+// ListCustomers lists customers in Paddle, optionally filtered by email.
+func (c *Client) ListCustomers(ctx context.Context, req *paddle.ListCustomersRequest) (*paddle.Collection[*paddle.Customer], error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.ListCustomers(ctx, req)
+	if err != nil {
+		return nil, ierr.NewError("failed to list customers in Paddle").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return result, nil
+}
+
 // CreateAddress creates an address for a customer in Paddle
 func (c *Client) CreateAddress(ctx context.Context, customerID string, req *paddle.CreateAddressRequest) (*paddle.Address, error) {
 	client, _, err := c.GetSDKClient(ctx)
@@ -331,6 +353,116 @@ func (c *Client) PreviewTransaction(ctx context.Context, req *paddle.PreviewTran
 
 	c.logger.Infow("successfully previewed transaction in Paddle")
 	return preview, nil
+}
+
+// CreateProduct creates a product in Paddle
+func (c *Client) CreateProduct(ctx context.Context, req *paddle.CreateProductRequest) (*paddle.Product, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	product, err := client.CreateProduct(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to create product in Paddle", "error", err)
+		return nil, ierr.NewError("failed to create product in Paddle").
+			WithHint("Unable to create product in Paddle").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Infow("successfully created product in Paddle", "product_id", product.ID)
+	return product, nil
+}
+
+// CreatePrice creates a price in Paddle
+func (c *Client) CreatePrice(ctx context.Context, req *paddle.CreatePriceRequest) (*paddle.Price, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	price, err := client.CreatePrice(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to create price in Paddle", "error", err)
+		return nil, ierr.NewError("failed to create price in Paddle").
+			WithHint("Unable to create price in Paddle").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Infow("successfully created price in Paddle", "price_id", price.ID)
+	return price, nil
+}
+
+// CreateSubscriptionCharge creates a one-time charge on an existing Paddle subscription
+func (c *Client) CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := client.CreateSubscriptionCharge(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to create subscription charge in Paddle",
+			"subscription_id", req.SubscriptionID, "error", err)
+		return nil, ierr.NewError("failed to create subscription charge in Paddle").
+			WithHint("Unable to create subscription charge in Paddle").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": req.SubscriptionID,
+				"error":           err.Error(),
+			}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Infow("successfully created subscription charge in Paddle", "subscription_id", sub.ID)
+	return sub, nil
+}
+
+// ListTransactions lists transactions in Paddle
+func (c *Client) ListTransactions(ctx context.Context, req *paddle.ListTransactionsRequest) (*paddle.Collection[*paddle.Transaction], error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.ListTransactions(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to list transactions in Paddle", "error", err)
+		return nil, ierr.NewError("failed to list transactions in Paddle").
+			WithHint("Unable to list transactions in Paddle").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Infow("successfully listed transactions in Paddle", "count", result.EstimatedTotal())
+	return result, nil
+}
+
+// GetTransaction fetches a single transaction by ID from Paddle
+func (c *Client) GetTransaction(ctx context.Context, transactionID string) (*paddle.Transaction, error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	txn, err := client.GetTransaction(ctx, &paddle.GetTransactionRequest{TransactionID: transactionID})
+	if err != nil {
+		c.logger.Errorw("failed to get transaction from Paddle", "transaction_id", transactionID, "error", err)
+		return nil, ierr.NewError("failed to get transaction from Paddle").
+			WithReportableDetails(map[string]interface{}{"transaction_id": transactionID, "error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	c.logger.Debugw("fetched transaction from Paddle", "transaction_id", txn.ID)
+	return txn, nil
+}
+
+// ListSubscriptions lists subscriptions in Paddle
+func (c *Client) ListSubscriptions(ctx context.Context, req *paddle.ListSubscriptionsRequest) (*paddle.Collection[*paddle.Subscription], error) {
+	client, _, err := c.GetSDKClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := client.ListSubscriptions(ctx, req)
+	if err != nil {
+		c.logger.Errorw("failed to list subscriptions in Paddle", "error", err)
+		return nil, ierr.NewError("failed to list subscriptions in Paddle").
+			WithHint("Unable to list subscriptions in Paddle").
+			WithReportableDetails(map[string]interface{}{"error": err.Error()}).
+			Mark(ierr.ErrInternal)
+	}
+	return result, nil
 }
 
 // toCountryCode converts a string to Paddle CountryCode (uppercase ISO 3166-1 alpha-2)

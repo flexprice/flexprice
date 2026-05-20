@@ -1,6 +1,30 @@
 package zoho
 
-import "github.com/shopspring/decimal"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/shopspring/decimal"
+)
+
+// ZohoAPIError represents a structured error returned by the Zoho Books API.
+type ZohoAPIError struct {
+	Code       int    `json:"code"`
+	Message    string `json:"message"`
+	HTTPStatus int    `json:"-"`
+}
+
+func (e *ZohoAPIError) Error() string {
+	return fmt.Sprintf("zoho api error (code=%d, http=%d): %s", e.Code, e.HTTPStatus, e.Message)
+}
+
+func IsZohoErrorCode(err error, code int) bool {
+	var zohoErr *ZohoAPIError
+	if errors.As(err, &zohoErr) {
+		return zohoErr.Code == code
+	}
+	return false
+}
 
 type ContactPerson struct {
 	FirstName        string `json:"first_name,omitempty"`
@@ -55,6 +79,15 @@ type ItemResponse struct {
 
 type CreateItemResponse struct {
 	Item *ItemResponse `json:"item"`
+}
+
+type SearchItemsResponse struct {
+	Items []ItemResponse `json:"items"`
+}
+
+type ZohoErrorResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 type InvoiceLineItem struct {

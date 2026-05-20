@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -83,6 +84,45 @@ func PaddleInvoiceSyncWorkflow(ctx workflow.Context, input models.PaddleInvoiceS
 	}
 
 	logger.Info("Customer pre-check passed, proceeding to invoice sync", "invoice_id", input.InvoiceID)
+
+	// Step 2.5: Check if the subscription is synced to Paddle.
+	// If the subscription mapping does not exist yet, fire-and-forget PaddleSubscriptionSyncWorkflow
+	// and return a non-retryable error. The operator must re-trigger this workflow after the
+	// customer completes the Paddle checkout flow.
+	logger.Info("Step 2.5: Checking subscription Paddle sync status", "invoice_id", input.InvoiceID)
+
+	var subSyncStatus string
+	if err := workflow.ExecuteActivity(ctx, ActivityCheckSubscriptionSyncStatus, input).Get(ctx, &subSyncStatus); err != nil {
+		logger.Error("Failed to check subscription sync status",
+			"error", err, "invoice_id", input.InvoiceID)
+		return err
+	}
+
+	if subSyncStatus == "not_synced" {
+		logger.Info("Subscription not synced to Paddle — firing PaddleSubscriptionSyncWorkflow",
+			"invoice_id", input.InvoiceID, "subscription_id", input.SubscriptionID)
+
+		childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+			WorkflowID:        WorkflowPaddleSubscriptionSync + "-" + input.InvoiceID,
+			ParentClosePolicy: enumspb.PARENT_CLOSE_POLICY_ABANDON,
+		})
+		// Fire-and-forget: do NOT call .Get() — the child runs independently.
+		workflow.ExecuteChildWorkflow(childCtx, PaddleSubscriptionSyncWorkflow, models.PaddleSubscriptionSyncWorkflowInput{
+			SubscriptionID: input.SubscriptionID,
+			CustomerID:     input.CustomerID,
+			TenantID:       input.TenantID,
+			EnvironmentID:  input.EnvironmentID,
+		})
+
+		return temporal.NewNonRetryableApplicationError(
+			"paddle subscription sync triggered; re-run invoice sync after customer completes checkout",
+			"SubscriptionNotSynced",
+			nil,
+		)
+	}
+
+	logger.Info("Step 2.5: Subscription is activated, proceeding to invoice sync",
+		"invoice_id", input.InvoiceID)
 
 	// Step 3: Sync invoice to Paddle.
 	logger.Info("Step 3: Syncing invoice to Paddle", "invoice_id", input.InvoiceID)

@@ -51,6 +51,7 @@ func (s *entityIntegrationMappingService) CreateEntityIntegrationMapping(ctx con
 		EnvironmentID:    mapping.EnvironmentID,
 		TenantID:         mapping.TenantID,
 		Status:           mapping.Status,
+		Metadata:         mapping.Metadata,
 		CreatedAt:        mapping.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        mapping.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		CreatedBy:        mapping.CreatedBy,
@@ -80,6 +81,7 @@ func (s *entityIntegrationMappingService) GetEntityIntegrationMapping(ctx contex
 		EnvironmentID:    mapping.EnvironmentID,
 		TenantID:         mapping.TenantID,
 		Status:           mapping.Status,
+		Metadata:         mapping.Metadata,
 		CreatedAt:        mapping.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        mapping.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		CreatedBy:        mapping.CreatedBy,
@@ -123,6 +125,7 @@ func (s *entityIntegrationMappingService) GetEntityIntegrationMappings(ctx conte
 			EnvironmentID:    m.EnvironmentID,
 			TenantID:         m.TenantID,
 			Status:           m.Status,
+			Metadata:         m.Metadata,
 			CreatedAt:        m.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			UpdatedAt:        m.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			CreatedBy:        m.CreatedBy,
@@ -159,7 +162,12 @@ func (s *entityIntegrationMappingService) UpdateEntityIntegrationMapping(ctx con
 	}
 
 	if req.Metadata != nil {
-		mapping.Metadata = req.Metadata
+		if mapping.Metadata == nil {
+			mapping.Metadata = make(map[string]interface{})
+		}
+		for k, v := range req.Metadata {
+			mapping.Metadata[k] = v
+		}
 	}
 
 	// Update timestamps
@@ -186,6 +194,7 @@ func (s *entityIntegrationMappingService) UpdateEntityIntegrationMapping(ctx con
 		EnvironmentID:    mapping.EnvironmentID,
 		TenantID:         mapping.TenantID,
 		Status:           mapping.Status,
+		Metadata:         mapping.Metadata,
 		CreatedAt:        mapping.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        mapping.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		CreatedBy:        mapping.CreatedBy,
@@ -237,6 +246,7 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 			EnvironmentID:    mapping.EnvironmentID,
 			TenantID:         mapping.TenantID,
 			Status:           mapping.Status,
+			Metadata:         mapping.Metadata,
 			CreatedAt:        mapping.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			UpdatedAt:        mapping.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			CreatedBy:        mapping.CreatedBy,
