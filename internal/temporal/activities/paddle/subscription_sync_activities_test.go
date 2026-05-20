@@ -191,9 +191,10 @@ func TestCheckSubscriptionSyncStatus_NoPaddleConnection(t *testing.T) {
 		EnvironmentID: types.GetEnvironmentID(ctx),
 	}
 
-	status, err := act.CheckSubscriptionSyncStatus(ctx, input)
+	result, err := act.CheckSubscriptionSyncStatus(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, "activated", status, "no Paddle connection should be treated as activated")
+	require.NotNil(t, result)
+	assert.Equal(t, "activated", result.Status, "no Paddle connection should be treated as activated")
 }
 
 // TestCheckSubscriptionSyncStatus_NoMapping verifies that when Paddle connection exists but
@@ -237,9 +238,12 @@ func TestCheckSubscriptionSyncStatus_NoMapping(t *testing.T) {
 		EnvironmentID:  types.GetEnvironmentID(ctx),
 	}
 
-	status, err := act.CheckSubscriptionSyncStatus(ctx, input)
+	result, err := act.CheckSubscriptionSyncStatus(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, "not_synced", status, "no mapping should return not_synced")
+	require.NotNil(t, result)
+	assert.Equal(t, "not_synced", result.Status, "no mapping should return not_synced")
+	assert.Equal(t, subscriptionID, result.SubscriptionID, "resolved subscription_id should match")
+	assert.Equal(t, "cust_001", result.CustomerID, "resolved customer_id should match")
 }
 
 // TestCheckSubscriptionSyncStatus_MappingExists verifies that when a Paddle mapping exists for
@@ -272,9 +276,11 @@ func TestCheckSubscriptionSyncStatus_MappingExists(t *testing.T) {
 		EnvironmentID:  types.GetEnvironmentID(ctx),
 	}
 
-	status, err := act.CheckSubscriptionSyncStatus(ctx, input)
+	result, err := act.CheckSubscriptionSyncStatus(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, "activated", status, "existing mapping should return activated")
+	require.NotNil(t, result)
+	assert.Equal(t, "activated", result.Status, "existing mapping should return activated")
+	assert.Equal(t, subscriptionID, result.SubscriptionID, "resolved subscription_id should match")
 }
 
 // TestCheckSubscriptionSyncStatus_NoSubscriptionID_FallbackToInvoice verifies that when
@@ -319,9 +325,12 @@ func TestCheckSubscriptionSyncStatus_NoSubscriptionID_FallbackToInvoice(t *testi
 		// SubscriptionID intentionally empty.
 	}
 
-	status, err := act.CheckSubscriptionSyncStatus(ctx, input)
+	result, err := act.CheckSubscriptionSyncStatus(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, "activated", status, "invoice-resolved subscription with mapping should return activated")
+	require.NotNil(t, result)
+	assert.Equal(t, "activated", result.Status, "invoice-resolved subscription with mapping should return activated")
+	assert.Equal(t, subscriptionID, result.SubscriptionID, "resolved subscription_id should match")
+	assert.Equal(t, "cust_001", result.CustomerID, "resolved customer_id should match")
 }
 
 // TestCheckSubscriptionSyncStatus_InvoiceWithNoSubscription verifies that when an invoice
@@ -360,7 +369,8 @@ func TestCheckSubscriptionSyncStatus_InvoiceWithNoSubscription(t *testing.T) {
 		// SubscriptionID intentionally empty.
 	}
 
-	status, err := act.CheckSubscriptionSyncStatus(ctx, input)
+	result, err := act.CheckSubscriptionSyncStatus(ctx, input)
 	require.NoError(t, err)
-	assert.Equal(t, "activated", status, "invoice with no subscription_id should return activated")
+	require.NotNil(t, result)
+	assert.Equal(t, "activated", result.Status, "invoice with no subscription_id should return activated")
 }
