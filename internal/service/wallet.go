@@ -1034,6 +1034,12 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 		)
 	}
 
+	// Re-trigger wallet balance alert so triggerAutoTopup can fire a new invoice if
+	// the balance is still below threshold after payment. The previous invoice is now
+	// SUCCEEDED so the guard in triggerAutoTopup will allow a fresh one.
+	// This is async (Kafka) and non-fatal.
+	s.PublishWalletBalanceAlertEvent(ctx, tx.CustomerID, true, tx.WalletID)
+
 	return nil
 }
 
