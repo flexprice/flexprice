@@ -6,10 +6,11 @@ import (
 
 // PaddleInvoiceSyncWorkflowInput contains the input for the Paddle invoice sync workflow
 type PaddleInvoiceSyncWorkflowInput struct {
-	InvoiceID     string `json:"invoice_id"`
-	CustomerID    string `json:"customer_id"`
-	TenantID      string `json:"tenant_id"`
-	EnvironmentID string `json:"environment_id"`
+	InvoiceID      string `json:"invoice_id"`
+	CustomerID     string `json:"customer_id"`
+	TenantID       string `json:"tenant_id"`
+	EnvironmentID  string `json:"environment_id"`
+	SubscriptionID string `json:"subscription_id,omitempty"` // optional; activity falls back to invoice lookup
 }
 
 // Validate validates the workflow input

@@ -190,6 +190,7 @@ func SetupDummyBillingCustomer() error {
 		meterRepo,
 		featureRepo,
 		encService,
+		nil, // TemporalService — not available in script context
 	)
 
 	typstCompiler := typst.DefaultCompiler(appLogger)
