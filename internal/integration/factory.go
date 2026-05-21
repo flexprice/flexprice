@@ -32,6 +32,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	"github.com/flexprice/flexprice/internal/integration/whop"
+	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -575,9 +576,15 @@ func (f *Factory) GetWhopIntegration(ctx context.Context) (*WhopIntegration, err
 		f.logger,
 	)
 
+	webhookHandler := whopwebhook.NewHandler(
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
 	return &WhopIntegration{
 		Client:         whopClient,
 		InvoiceSyncSvc: invoiceSyncSvc,
+		WebhookHandler: webhookHandler,
 	}, nil
 }
 
@@ -769,6 +776,7 @@ type MoyasarIntegration struct {
 type WhopIntegration struct {
 	Client         whop.WhopClient
 	InvoiceSyncSvc *whop.InvoiceSyncService
+	WebhookHandler *whopwebhook.Handler
 }
 
 // ZohoBooksIntegration contains all Zoho Books integration services

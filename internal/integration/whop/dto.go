@@ -4,6 +4,7 @@ package whop
 const (
 	// WhopBaseURL is the Whop API base URL. Sandbox for now; swap to api.whop.com for prod.
 	WhopBaseURL = "https://api.whop.com"
+	// WhopBaseURL = "https://sandbox-api.whop.com" // for sandbox whop testing
 
 	DefaultProductTitle       = "Flexprice Subscription"
 	DefaultProductDescription = "Flexprice invoice sync product"
