@@ -2361,28 +2361,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		if err != nil {
 			return nil, err
 		}
-
-		// Batch-fetch all child customers at once instead of one-by-one in the loop
-		childCustomerNameMap := make(map[string]string, len(children))
-		if len(children) > 0 {
-			childCustomerIDs := make([]string, 0, len(children))
-			for _, child := range children {
-				childCustomerIDs = append(childCustomerIDs, child.CustomerID)
-			}
-			custFilter := types.NewNoLimitCustomerFilter()
-			custFilter.CustomerIDs = childCustomerIDs
-			customers, custErr := s.CustomerRepo.List(ctx, custFilter)
-			if custErr != nil {
-				s.Logger.Warnw("failed to batch-fetch child subscription customers for grouped invoicing",
-					"error", custErr,
-					"parent_subscription_id", sub.ID)
-			} else {
-				for _, c := range customers {
-					childCustomerNameMap[c.ID] = c.Name
-				}
-			}
-		}
-
 		for _, child := range children {
 			// NOTE: ExcludeInvoiceID and OpeningInvoiceAdjustmentAmount from the parent params
 			// are intentionally not forwarded here.
@@ -2399,16 +2377,13 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			if err != nil {
 				return nil, err
 			}
-
-			childCustomerName := childCustomerNameMap[child.CustomerID]
-
 			for i := range childReq.LineItems {
 				childReq.LineItems[i].SubscriptionID = lo.ToPtr(child.ID)
-				if childCustomerName != "" {
+				if child.CustomerID != "" {
 					if childReq.LineItems[i].Metadata == nil {
 						childReq.LineItems[i].Metadata = types.Metadata{}
 					}
-					childReq.LineItems[i].Metadata[types.InvoiceLineItemMetadataKeyChildName] = childCustomerName
+					childReq.LineItems[i].Metadata[types.InvoiceLineItemMetadataKeyChildCustomerID] = child.CustomerID
 				}
 			}
 			invReq.LineItems = append(invReq.LineItems, childReq.LineItems...)

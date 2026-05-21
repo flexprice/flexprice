@@ -23,9 +23,9 @@ const (
 type InvoiceLineItemMetadataKey = string
 
 const (
-	// InvoiceLineItemMetadataKeyChildName is the customer name of the child subscription
+	// InvoiceLineItemMetadataKeyChildCustomerID is the customer name of the child subscription
 	// in a grouped-invoicing scenario.
-	InvoiceLineItemMetadataKeyChildName InvoiceLineItemMetadataKey = "child_name"
+	InvoiceLineItemMetadataKeyChildCustomerID InvoiceLineItemMetadataKey = "child_customer_id"
 )
 
 // InvoiceCadence defines when an invoice is generated relative to the billing period
