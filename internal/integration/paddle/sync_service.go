@@ -1120,6 +1120,8 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 	}
 
 	if len(invoices) == 0 {
+		s.logger.Infow("no pending invoices to resync after subscription.activated",
+			"subscription_id", subscriptionID)
 		return
 	}
 
