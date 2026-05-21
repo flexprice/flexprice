@@ -31,8 +31,9 @@ type ProductResponse struct {
 
 // InvoicePlan represents the plan section of a Whop invoice create request
 type InvoicePlan struct {
-	InitialPrice float64 `json:"initial_price"`
-	PlanType     string  `json:"plan_type"`
+	InitialPrice  float64 `json:"initial_price"`
+	PlanType      string  `json:"plan_type"`
+	InternalNotes string  `json:"internal_notes,omitempty"`
 }
 
 // CreateInvoiceRequest is the request body for POST /v1/invoices
@@ -57,11 +58,13 @@ type InvoiceResponse struct {
 
 // PlanResponse is the response from GET /v1/plans/:id
 type PlanResponse struct {
-	ID          string `json:"id"`
-	PlanType    string `json:"plan_type"`
-	PurchaseURL string `json:"purchase_url"`
-	Currency    string `json:"currency"`
-	Product     struct {
+	ID            string                 `json:"id"`
+	PlanType      string                 `json:"plan_type"`
+	PurchaseURL   string                 `json:"purchase_url"`
+	Currency      string                 `json:"currency"`
+	InternalNotes string                 `json:"internal_notes"`
+	Metadata      map[string]interface{} `json:"metadata"`
+	Product       struct {
 		ID    string `json:"id"`
 		Title string `json:"title"`
 	} `json:"product"`

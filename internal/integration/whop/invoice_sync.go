@@ -100,8 +100,9 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 		CompanyID: cfg.CompanyID,
 		ProductID: productID,
 		Plan: InvoicePlan{
-			InitialPrice: totalFloat,
-			PlanType:     "one_time",
+			InitialPrice:  totalFloat,
+			PlanType:      "one_time",
+			InternalNotes: req.InvoiceID, // flexprice invoice id for reference
 		},
 		CollectionMethod: "send_invoice",
 		DueDate:          dueDate,
