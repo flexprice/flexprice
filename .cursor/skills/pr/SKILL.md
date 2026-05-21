@@ -1,12 +1,11 @@
 ---
-name: pr-self-review
+name: pr
 description: >-
-  Structured self-review before opening or finalizing a FlexPrice PR — layering, secrets,
-  generated code, migrations, API surface, and tests. Use before gh pr create, when the user
-  asks for a pre-PR checklist, ship review, or PR readiness.
+  FlexPrice PR self-review checklist — security, layering, migrations, tests. Trigger:
+  pr check, ship review, pre-PR.
 ---
 
-# PR self-review (FlexPrice)
+# **`pr`** — pre-merge checklist
 
 Run mentally or out loud through this list; fix gaps before requesting review.
 

@@ -1,12 +1,13 @@
 ---
-name: docker-dev-infra
+name: compose
 description: >-
-  Local infrastructure for FlexPrice via Docker Compose and Makefile — Postgres, Kafka,
-  ClickHouse, Temporal, optional profiles. Use when starting dev environment, debugging
-  connection errors, or the user says docker compose, dev-setup, bring up infra.
+  FlexPrice Docker/Makefile shortcuts — dev-setup, compose services, Kafka UI profile, logs.
+  Deep env wizard is devenv. Trigger: compose, docker dev, dev-setup.
 ---
 
-# Docker dev infrastructure (FlexPrice)
+# **`compose`** — Docker dev shortcuts
+
+For **modes**, **`.env*`**, Kafka topic quirks, migrations: use **[`devenv`](devenv/SKILL.md)**.
 
 ## First-time / full setup
 
@@ -50,3 +51,7 @@ docker compose logs -f flexprice-worker
 
 - Match **`FLEXPRICE_*`** env vars or `.env` to compose services when troubleshooting connection refused errors.
 - Do not commit secrets inside compose overrides meant for production.
+
+## Related skills
+
+- [`devenv`](devenv/SKILL.md)

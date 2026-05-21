@@ -1,12 +1,11 @@
 ---
-name: flexprice-openapi-sdk
+name: openapi
 description: >-
-  Regenerates Swagger/OpenAPI and downstream SDKs (Go, TS, Python, MCP) for FlexPrice.
-  Use when handlers or Swagger annotations change, before publishing SDKs, or when the user
-  says swagger, OpenAPI, speakeasy, sdk-all, or MCP tools.
+  Swagger + Speakeasy SDK/MCP pipeline (make swagger, sdk-all), api/custom merge.
+  Trigger: openapi, swagger, sdk-all, MCP.
 ---
 
-# FlexPrice OpenAPI & SDK generation
+# **`openapi`** — OpenAPI & SDKs
 
 ## Source of truth
 

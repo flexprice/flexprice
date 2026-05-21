@@ -1,22 +1,24 @@
 ---
-name: architect
-description: Analyze FlexPrice repository architecture, dependency directions, flows, hotspots, and how to evolve systems safely without eroding layering.
+name: arch
+description: >-
+  FlexPrice repo architecture — docs/ layering, deps, hotspots, flows, Graphify. Say arch,
+  repo architecture, FLEXPRICE structure, onboarding codebase.
 ---
 
-# FlexPrice Repository Architect Skill
+# **`arch`** — repository architecture
 
-Use this skill when navigating or changing large swaths of the Go backend (`cmd/`, `internal/`, `ent/`), especially billing, metering, Temporal, Kafka, or integrations.
+Use when navigating **`cmd/`**, **`internal/`**, **`ent/`** (billing, metering, Temporal, Kafka, integrations).
 
-**Other repositories:** Load the portable skill **`repo-architecture-intelligence`** (`~/.cursor/skills/repo-architecture-intelligence/SKILL.md`), which applies the census + markdown memory + **`graphify update .`** loop to any codebase.
+**Other repos:** **`repo-architecture-intelligence`** (`~/.cursor/skills/repo-architecture-intelligence/SKILL.md`).
 
-**All project skills:** see [README](../README.md) (`go-dev-loop`, `docker-dev-infra`, OpenAPI/SDK, PR review, `gh-workflow`, etc.).
+**Sibling skills:** [README](../README.md) (**`apitest`**, **`devenv`**, **`godev`**, **`openapi`**, **`pr`**, **`gh`**, **`compose`**).
 
 ## Canonical documentation map
 
 | Doc | Purpose |
 | --- | ------- |
 | `docs/REPO_MAP.md` | Directory census, deployment modes, major systems |
-| `docs/ARCHITECTURE.md` | Principles, infra choices, layering, conventions |w
+| `docs/ARCHITECTURE.md` | Principles, infra choices, layering, conventions |
 | `docs/DEPENDENCY_GRAPH.md` | Fan-in/out, messaging DAG, coupling notes |
 | `docs/HOTSPOTS.md` | Large files & structural risks |
 | `docs/FLOWS/*.md` | End-to-end narratives for critical paths |

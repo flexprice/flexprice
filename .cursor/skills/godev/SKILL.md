@@ -1,12 +1,10 @@
 ---
-name: go-dev-loop
+name: godev
 description: >-
-  Standard FlexPrice Go developer loop — format, vet, targeted tests with race detector,
-  and Makefile shortcuts. Use when implementing features, before pushing, fixing CI, or when
-  the user asks to run tests, verify changes, go dev loop, or pre-push checks.
+  FlexPrice Go fmt, vet, race tests, make test. Trigger: godev, run tests, go vet.
 ---
 
-# Go dev loop (FlexPrice)
+# **`godev`** — Go dev loop
 
 ## Defaults
 
@@ -51,7 +49,7 @@ Other useful Makefile targets from project docs:
 - Claiming tests pass without running them (`verification-before-completion` discipline).
 - `go test` without `-race` on concurrency-sensitive packages (`internal/kafka`, `internal/pubsub`, services with goroutines).
 
-## Related
+## Related skills
 
-- **API/OpenAPI**: [`flexprice-openapi-sdk`](../flexprice-openapi-sdk/SKILL.md)
-- **Architecture docs**: [`architect`](../architect/SKILL.md)
+- [`openapi`](../openapi/SKILL.md)
+- [`arch`](../arch/SKILL.md)

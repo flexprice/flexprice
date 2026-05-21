@@ -1,12 +1,10 @@
 ---
-name: gh-workflow
+name: gh
 description: >-
-  Uses GitHub CLI (gh) for PRs, checks, and issues in FlexPrice repos. Use when opening or
-  updating PRs, triaging failing checks, reading issue context, or when the user mentions gh,
-  GitHub Actions, pull request workflow.
+  gh CLI for FlexPrice repos — PRs, checks, issues. Trigger: gh, github pr.
 ---
 
-# GitHub CLI workflow (FlexPrice)
+# **`gh`** — GitHub CLI
 
 ## Prerequisites
 
@@ -60,4 +58,4 @@ gh pr view <n>
 
 ## Related
 
-- **Pre-PR quality**: [`pr-self-review`](../pr-self-review/SKILL.md)
+- **Pre-PR quality**: [`pr`](../pr/SKILL.md)
