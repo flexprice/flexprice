@@ -7488,6 +7488,9 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 // so the caller's response pointer automatically reflects paddle_checkout_url and
 // paddle_transaction_id with no extra work.
 func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub *subscription.Subscription) {
+	if s.IntegrationFactory == nil {
+		return
+	}
 	paddleInt, err := s.IntegrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
@@ -7532,5 +7535,5 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 
 	s.Logger.InfowCtx(ctx, "paddle subscription synced synchronously",
 		"subscription_id", sub.ID,
-		"checkout_url_present", sub.Metadata["paddle_checkout_url"] != "")
+		"checkout_url_present", sub.Metadata[paddleint.MetaKeyPaddleCheckoutURL] != "")
 }
