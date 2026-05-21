@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	paddleint "github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceTemporalModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
@@ -484,6 +485,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, sub.ID)
 	} else {
 		s.triggerHubSpotDealSyncWorkflow(ctx, sub.ID, customer.ID)
+		s.runPaddleSubscriptionSync(ctx, sub)
 		s.publishSubscriptionCreatedEvent(ctx, sub)
 	}
 	return response, nil
@@ -7475,4 +7477,84 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 		item.InvoiceID = inv.ID
 	}
 	return nil
+}
+
+// runPaddleSubscriptionSync synchronously bootstraps a Paddle subscription for the given
+// subscription. It is called inline from CreateSubscription so the checkout URL is available
+// in the response without a round-trip through Temporal. All errors are soft-fail: the
+// subscription has already been persisted, so we only log and continue.
+//
+// On success, EnsureSubscriptionSynced persists paddle checkout metadata; it is copied back
+// onto the caller's sub so the create response includes paddle_checkout_url and
+// paddle_transaction_id.
+func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub *subscription.Subscription) {
+	if s.IntegrationFactory == nil {
+		return
+	}
+	paddleInt, err := s.IntegrationFactory.GetPaddleIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return // Paddle not configured for this environment — skip silently
+		}
+		s.Logger.WarnwCtx(ctx, "failed to get Paddle integration for inline sync, subscription created without checkout URL",
+			"subscription_id", sub.ID, "error", err)
+		return
+	}
+
+	reloadedSub, lineItems, err := s.SubRepo.GetWithLineItems(ctx, sub.ID)
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "failed to reload subscription for paddle inline sync",
+			"subscription_id", sub.ID, "error", err)
+		return
+	}
+	reloadedSub.LineItems = lineItems
+
+	productItems := make([]paddleint.EnsureBulkProductSyncedItem, 0, len(reloadedSub.LineItems))
+	for _, li := range reloadedSub.LineItems {
+		if li == nil || li.PriceID == "" {
+			continue
+		}
+		name := li.PriceID
+		if li.DisplayName != "" {
+			name = li.DisplayName
+		}
+		productItems = append(productItems, paddleint.EnsureBulkProductSyncedItem{
+			PriceID: li.PriceID,
+			Name:    name,
+		})
+	}
+
+	productsResp, err := paddleInt.SyncSvc.EnsureBulkProductSynced(ctx, paddleint.EnsureBulkProductSyncedRequest{Items: productItems})
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "paddle product sync failed during inline subscription sync",
+			"subscription_id", sub.ID, "error", err)
+		return
+	}
+
+	_, err = paddleInt.SyncSvc.EnsureSubscriptionSynced(ctx, paddleint.EnsureSubscriptionSyncedRequest{
+		Subscription:       reloadedSub,
+		PriceIDToProductID: productsResp.PriceIDToPaddleProductID,
+	})
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "paddle subscription sync failed during inline subscription sync",
+			"subscription_id", sub.ID, "error", err)
+		return
+	}
+
+	// EnsureSubscriptionSynced mutates metadata on reloadedSub; copy to caller sub for response.
+	if reloadedSub.Metadata != nil {
+		if sub.Metadata == nil {
+			sub.Metadata = make(types.Metadata)
+		}
+		if v := reloadedSub.Metadata[paddleint.MetaKeyPaddleTransactionID]; v != "" {
+			sub.Metadata[paddleint.MetaKeyPaddleTransactionID] = v
+		}
+		if v := reloadedSub.Metadata[paddleint.MetaKeyPaddleCheckoutURL]; v != "" {
+			sub.Metadata[paddleint.MetaKeyPaddleCheckoutURL] = v
+		}
+	}
+
+	s.Logger.InfowCtx(ctx, "paddle subscription synced synchronously",
+		"subscription_id", sub.ID,
+		"checkout_url_present", sub.Metadata[paddleint.MetaKeyPaddleCheckoutURL] != "")
 }

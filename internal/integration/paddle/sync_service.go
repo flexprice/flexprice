@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // PaddleSyncService orchestrates syncing FlexPrice entities to Paddle.
@@ -1093,7 +1094,56 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
 	}
 
+	s.resyncPendingInvoicesForSubscription(ctx, flexSubID)
 	return nil
+}
+
+// resyncPendingInvoicesForSubscription attempts to sync all finalized+pending invoices
+// for the given subscription. Called after subscription.activated is processed so that invoices
+// created before the Paddle mapping existed can be synced and auto-charged.
+// All errors are soft-fail: each invoice is tried independently; failures are logged.
+func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = subscriptionID
+	filter.InvoiceStatus = []types.InvoiceStatus{
+		types.InvoiceStatusFinalized,
+	}
+	filter.PaymentStatus = []types.PaymentStatus{
+		types.PaymentStatusPending,
+	}
+	filter.AmountRemainingGt = lo.ToPtr(decimal.NewFromInt(0))
+	filter.SkipLineItems = true
+
+	invoices, err := s.invoiceRepo.List(ctx, filter)
+	if err != nil {
+		s.logger.Warnw("failed to list invoices for post-activation resync",
+			"subscription_id", subscriptionID, "error", err)
+		return
+	}
+
+	if len(invoices) == 0 {
+		return
+	}
+
+	s.logger.Infow("resyncing pending invoices after subscription.activated",
+		"subscription_id", subscriptionID, "count", len(invoices))
+
+	succeeded := 0
+	for _, inv := range invoices {
+		_, syncErr := s.SyncInvoice(ctx, SyncInvoiceRequest{InvoiceID: inv.ID})
+		if syncErr != nil {
+			s.logger.Warnw("failed to resync invoice after subscription.activated",
+				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", syncErr)
+			continue
+		}
+		succeeded++
+	}
+
+	s.logger.Infow("completed post-activation invoice resync",
+		"subscription_id", subscriptionID,
+		"attempted", len(invoices),
+		"succeeded", succeeded,
+		"failed", len(invoices)-succeeded)
 }
 
 func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.InvoiceLineItem {
