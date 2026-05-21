@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
+	paddleintg "github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -46,7 +47,9 @@ func (a *CustomerSyncActivities) SyncCustomerToPaddle(ctx context.Context, input
 		return err
 	}
 
-	_, err = paddleIntegration.CustomerSvc.EnsureCustomerSyncedToPaddle(ctx, input.CustomerID, a.customerService)
+	_, err = paddleIntegration.SyncSvc.EnsureCustomerSynced(ctx, paddleintg.EnsureCustomerSyncedRequest{
+		CustomerID: input.CustomerID,
+	})
 	return err
 }
 
@@ -127,7 +130,9 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 		return err
 	}
 
-	_, err = paddleIntegration.CustomerSvc.EnsureCustomerSyncedToPaddle(ctx, customerID, a.customerService)
+	_, err = paddleIntegration.SyncSvc.EnsureCustomerSynced(ctx, paddleintg.EnsureCustomerSyncedRequest{
+		CustomerID: customerID,
+	})
 	if err != nil {
 		if ierr.IsValidation(err) {
 			a.logger.Warnw("customer cannot be synced to Paddle: validation error (non-retryable)",

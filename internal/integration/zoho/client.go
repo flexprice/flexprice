@@ -23,10 +23,20 @@ type ZohoClient interface {
 	QueryContactByEmail(ctx context.Context, email string) (*ContactResponse, error)
 	CreateContact(ctx context.Context, req *ContactCreateRequest) (*ContactResponse, error)
 	CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (*InvoiceResponse, error)
+	CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error)
+	SearchItemByName(ctx context.Context, name string) (*ItemResponse, error)
 	// ResolveInvoiceCurrency returns currency_code and exchange_rate for Zoho create-invoice (base-currency conversion per Zoho Books).
 	ResolveInvoiceCurrency(ctx context.Context, invoiceCurrency string) (currencyCode string, exchangeRate float64, err error)
 	// GetZohoBooksWebhookConfig loads the published connection and returns the decrypted webhook signing secret (empty if unset).
 	GetZohoBooksWebhookConfig(ctx context.Context) (*connection.Connection, string, error)
+	// ListTaxes returns a paginated list of taxes from Zoho Books settings.
+	ListTaxes(ctx context.Context, page, perPage int) (*ListTaxesResponse, error)
+	// CreateTaxExemption creates a new tax exemption in Zoho Books (US edition).
+	CreateTaxExemption(ctx context.Context, req *CreateTaxExemptionRequest) (*TaxExemption, error)
+	// ListTaxExemptions returns all tax exemptions configured in Zoho Books (US edition).
+	ListTaxExemptions(ctx context.Context) ([]TaxExemption, error)
+	// GetZohoBooksSyncConfig loads the published connection and returns the
+	GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig, error)
 }
 
 type Client struct {
@@ -113,6 +123,56 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 		return nil, err
 	}
 	return &resp.Invoice, nil
+}
+
+func (c *Client) CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error) {
+	var resp CreateItemResponse
+	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/items", nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Item, nil
+}
+
+func (c *Client) SearchItemByName(ctx context.Context, name string) (*ItemResponse, error) {
+	var resp SearchItemsResponse
+	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/items", map[string]string{"name": name}, nil, &resp); err != nil {
+		return nil, err
+	}
+	if len(resp.Items) == 0 {
+		return nil, nil
+	}
+	return &resp.Items[0], nil
+}
+
+func (c *Client) ListTaxes(ctx context.Context, page, perPage int) (*ListTaxesResponse, error) {
+	query := map[string]string{}
+	if page > 0 {
+		query["page"] = fmt.Sprintf("%d", page)
+	}
+	if perPage > 0 {
+		query["per_page"] = fmt.Sprintf("%d", perPage)
+	}
+	var resp ListTaxesResponse
+	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/settings/taxes", query, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) CreateTaxExemption(ctx context.Context, req *CreateTaxExemptionRequest) (*TaxExemption, error) {
+	var resp TaxExemptionResponse
+	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/settings/taxexemptions", nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.TaxExemption, nil
+}
+
+func (c *Client) ListTaxExemptions(ctx context.Context) ([]TaxExemption, error) {
+	var resp ListTaxExemptionsResponse
+	if err := c.doBooksRequest(ctx, http.MethodGet, "/books/v3/settings/taxexemptions", nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.TaxExemptions, nil
 }
 
 // ResolveInvoiceCurrency maps a FlexPrice invoice currency to Zoho Books invoice fields.
@@ -260,7 +320,14 @@ func (c *Client) doBooksRequest(
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return ierr.NewError("Zoho API request failed").
+		var zohoErrResp ZohoErrorResponse
+		_ = json.Unmarshal(bodyBytes, &zohoErrResp)
+
+		return ierr.WithError(&ZohoAPIError{
+			Code:       zohoErrResp.Code,
+			Message:    zohoErrResp.Message,
+			HTTPStatus: resp.StatusCode,
+		}).
 			WithHintf("Zoho API returned status %d", resp.StatusCode).
 			WithReportableDetails(map[string]interface{}{"response_body": string(bodyBytes)}).
 			Mark(ierr.ErrHTTPClient)
@@ -359,4 +426,17 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 		return "", err
 	}
 	return tokenResp.AccessToken, nil
+}
+
+func (c *Client) GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig, error) {
+	conn, err := c.connectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil || conn.Status != types.StatusPublished {
+		return nil, ierr.NewError("Connection with provider zoho_books is not configured in this environment").
+			WithHint("Zoho Books connection must be configured and published before use").
+			Mark(ierr.ErrNotFound)
+	}
+	return conn.GetSyncConfig(), nil
 }

@@ -24,19 +24,6 @@ func NewMeterUsageHandler(meterUsageService service.MeterUsageService, log *logg
 	}
 }
 
-// QueryUsage queries aggregated usage for a single meter
-// @Summary Query meter usage
-// @ID queryMeterUsage
-// @Description Query aggregated usage from meter_usage table for a single meter with optional time-window bucketing
-// @Tags MeterUsage
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param request body dto.MeterUsageQueryRequest true "Query parameters"
-// @Success 200 {object} dto.MeterUsageQueryResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /meter-usage/query [post]
 func (h *MeterUsageHandler) QueryUsage(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -70,19 +57,6 @@ func (h *MeterUsageHandler) QueryUsage(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ToMeterUsageQueryResponse(result))
 }
 
-// GetAnalytics queries aggregated usage for multiple meters
-// @Summary Get meter usage analytics
-// @ID getMeterUsageAnalytics
-// @Description Query aggregated usage from meter_usage table for multiple meters
-// @Tags MeterUsage
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param request body dto.MeterUsageAnalyticsRequest true "Analytics parameters"
-// @Success 200 {object} dto.MeterUsageAnalyticsResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /meter-usage/analytics [post]
 func (h *MeterUsageHandler) GetAnalytics(c *gin.Context) {
 	ctx := c.Request.Context()
 

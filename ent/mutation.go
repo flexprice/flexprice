@@ -26031,6 +26031,7 @@ type InvoiceMutation struct {
 	paid_at                       *time.Time
 	voided_at                     *time.Time
 	finalized_at                  *time.Time
+	issue_date                    *time.Time
 	last_computed_at              *time.Time
 	billing_period                *types.BillingPeriod
 	period_start                  *time.Time
@@ -27378,6 +27379,55 @@ func (m *InvoiceMutation) ResetFinalizedAt() {
 	delete(m.clearedFields, invoice.FieldFinalizedAt)
 }
 
+// SetIssueDate sets the "issue_date" field.
+func (m *InvoiceMutation) SetIssueDate(t time.Time) {
+	m.issue_date = &t
+}
+
+// IssueDate returns the value of the "issue_date" field in the mutation.
+func (m *InvoiceMutation) IssueDate() (r time.Time, exists bool) {
+	v := m.issue_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIssueDate returns the old "issue_date" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldIssueDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIssueDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIssueDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIssueDate: %w", err)
+	}
+	return oldValue.IssueDate, nil
+}
+
+// ClearIssueDate clears the value of the "issue_date" field.
+func (m *InvoiceMutation) ClearIssueDate() {
+	m.issue_date = nil
+	m.clearedFields[invoice.FieldIssueDate] = struct{}{}
+}
+
+// IssueDateCleared returns if the "issue_date" field was cleared in this mutation.
+func (m *InvoiceMutation) IssueDateCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldIssueDate]
+	return ok
+}
+
+// ResetIssueDate resets all changes to the "issue_date" field.
+func (m *InvoiceMutation) ResetIssueDate() {
+	m.issue_date = nil
+	delete(m.clearedFields, invoice.FieldIssueDate)
+}
+
 // SetLastComputedAt sets the "last_computed_at" field.
 func (m *InvoiceMutation) SetLastComputedAt(t time.Time) {
 	m.last_computed_at = &t
@@ -28185,7 +28235,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 41)
+	fields := make([]string, 0, 42)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -28269,6 +28319,9 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.finalized_at != nil {
 		fields = append(fields, invoice.FieldFinalizedAt)
+	}
+	if m.issue_date != nil {
+		fields = append(fields, invoice.FieldIssueDate)
 	}
 	if m.last_computed_at != nil {
 		fields = append(fields, invoice.FieldLastComputedAt)
@@ -28373,6 +28426,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.VoidedAt()
 	case invoice.FieldFinalizedAt:
 		return m.FinalizedAt()
+	case invoice.FieldIssueDate:
+		return m.IssueDate()
 	case invoice.FieldLastComputedAt:
 		return m.LastComputedAt()
 	case invoice.FieldBillingPeriod:
@@ -28464,6 +28519,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldVoidedAt(ctx)
 	case invoice.FieldFinalizedAt:
 		return m.OldFinalizedAt(ctx)
+	case invoice.FieldIssueDate:
+		return m.OldIssueDate(ctx)
 	case invoice.FieldLastComputedAt:
 		return m.OldLastComputedAt(ctx)
 	case invoice.FieldBillingPeriod:
@@ -28695,6 +28752,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetFinalizedAt(v)
 		return nil
+	case invoice.FieldIssueDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIssueDate(v)
+		return nil
 	case invoice.FieldLastComputedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -28891,6 +28955,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldFinalizedAt) {
 		fields = append(fields, invoice.FieldFinalizedAt)
 	}
+	if m.FieldCleared(invoice.FieldIssueDate) {
+		fields = append(fields, invoice.FieldIssueDate)
+	}
 	if m.FieldCleared(invoice.FieldLastComputedAt) {
 		fields = append(fields, invoice.FieldLastComputedAt)
 	}
@@ -28988,6 +29055,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldFinalizedAt:
 		m.ClearFinalizedAt()
+		return nil
+	case invoice.FieldIssueDate:
+		m.ClearIssueDate()
 		return nil
 	case invoice.FieldLastComputedAt:
 		m.ClearLastComputedAt()
@@ -29116,6 +29186,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldFinalizedAt:
 		m.ResetFinalizedAt()
+		return nil
+	case invoice.FieldIssueDate:
+		m.ResetIssueDate()
 		return nil
 	case invoice.FieldLastComputedAt:
 		m.ResetLastComputedAt()
@@ -29273,48 +29346,50 @@ func (m *InvoiceMutation) ResetEdge(name string) error {
 // InvoiceLineItemMutation represents an operation that mutates the InvoiceLineItem nodes in the graph.
 type InvoiceLineItemMutation struct {
 	config
-	op                         Op
-	typ                        string
-	id                         *string
-	tenant_id                  *string
-	status                     *string
-	created_at                 *time.Time
-	updated_at                 *time.Time
-	created_by                 *string
-	updated_by                 *string
-	environment_id             *string
-	customer_id                *string
-	subscription_id            *string
-	entity_id                  *string
-	entity_type                *types.InvoiceLineItemEntityType
-	plan_display_name          *string
-	price_id                   *string
-	price_type                 *types.PriceType
-	meter_id                   *string
-	meter_display_name         *string
-	price_unit_id              *string
-	price_unit                 *string
-	price_unit_amount          *decimal.Decimal
-	display_name               *string
-	amount                     *decimal.Decimal
-	quantity                   *decimal.Decimal
-	currency                   *string
-	period_start               *time.Time
-	period_end                 *time.Time
-	metadata                   *map[string]string
-	commitment_info            **types.CommitmentInfo
-	prepaid_credits_applied    *decimal.Decimal
-	line_item_discount         *decimal.Decimal
-	invoice_level_discount     *decimal.Decimal
-	clearedFields              map[string]struct{}
-	invoice                    *string
-	clearedinvoice             bool
-	coupon_applications        map[string]struct{}
-	removedcoupon_applications map[string]struct{}
-	clearedcoupon_applications bool
-	done                       bool
-	oldValue                   func(context.Context) (*InvoiceLineItem, error)
-	predicates                 []predicate.InvoiceLineItem
+	op                            Op
+	typ                           string
+	id                            *string
+	tenant_id                     *string
+	status                        *string
+	created_at                    *time.Time
+	updated_at                    *time.Time
+	created_by                    *string
+	updated_by                    *string
+	environment_id                *string
+	customer_id                   *string
+	subscription_id               *string
+	entity_id                     *string
+	entity_type                   *types.InvoiceLineItemEntityType
+	plan_display_name             *string
+	price_id                      *string
+	price_type                    *types.PriceType
+	meter_id                      *string
+	meter_display_name            *string
+	price_unit_id                 *string
+	price_unit                    *string
+	price_unit_amount             *decimal.Decimal
+	display_name                  *string
+	amount                        *decimal.Decimal
+	quantity                      *decimal.Decimal
+	currency                      *string
+	period_start                  *time.Time
+	period_end                    *time.Time
+	metadata                      *map[string]string
+	commitment_info               **types.CommitmentInfo
+	prepaid_credits_applied       *decimal.Decimal
+	line_item_discount            *decimal.Decimal
+	invoice_level_discount        *decimal.Decimal
+	subscription_line_item_id     *string
+	adjusted_entitlement_quantity *decimal.Decimal
+	clearedFields                 map[string]struct{}
+	invoice                       *string
+	clearedinvoice                bool
+	coupon_applications           map[string]struct{}
+	removedcoupon_applications    map[string]struct{}
+	clearedcoupon_applications    bool
+	done                          bool
+	oldValue                      func(context.Context) (*InvoiceLineItem, error)
+	predicates                    []predicate.InvoiceLineItem
 }
 
 var _ ent.Mutation = (*InvoiceLineItemMutation)(nil)
@@ -30823,6 +30898,104 @@ func (m *InvoiceLineItemMutation) ResetInvoiceLevelDiscount() {
 	delete(m.clearedFields, invoicelineitem.FieldInvoiceLevelDiscount)
 }
 
+// SetSubscriptionLineItemID sets the "subscription_line_item_id" field.
+func (m *InvoiceLineItemMutation) SetSubscriptionLineItemID(s string) {
+	m.subscription_line_item_id = &s
+}
+
+// SubscriptionLineItemID returns the value of the "subscription_line_item_id" field in the mutation.
+func (m *InvoiceLineItemMutation) SubscriptionLineItemID() (r string, exists bool) {
+	v := m.subscription_line_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionLineItemID returns the old "subscription_line_item_id" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldSubscriptionLineItemID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionLineItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionLineItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionLineItemID: %w", err)
+	}
+	return oldValue.SubscriptionLineItemID, nil
+}
+
+// ClearSubscriptionLineItemID clears the value of the "subscription_line_item_id" field.
+func (m *InvoiceLineItemMutation) ClearSubscriptionLineItemID() {
+	m.subscription_line_item_id = nil
+	m.clearedFields[invoicelineitem.FieldSubscriptionLineItemID] = struct{}{}
+}
+
+// SubscriptionLineItemIDCleared returns if the "subscription_line_item_id" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) SubscriptionLineItemIDCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldSubscriptionLineItemID]
+	return ok
+}
+
+// ResetSubscriptionLineItemID resets all changes to the "subscription_line_item_id" field.
+func (m *InvoiceLineItemMutation) ResetSubscriptionLineItemID() {
+	m.subscription_line_item_id = nil
+	delete(m.clearedFields, invoicelineitem.FieldSubscriptionLineItemID)
+}
+
+// SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
+func (m *InvoiceLineItemMutation) SetAdjustedEntitlementQuantity(d decimal.Decimal) {
+	m.adjusted_entitlement_quantity = &d
+}
+
+// AdjustedEntitlementQuantity returns the value of the "adjusted_entitlement_quantity" field in the mutation.
+func (m *InvoiceLineItemMutation) AdjustedEntitlementQuantity() (r decimal.Decimal, exists bool) {
+	v := m.adjusted_entitlement_quantity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAdjustedEntitlementQuantity returns the old "adjusted_entitlement_quantity" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldAdjustedEntitlementQuantity(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAdjustedEntitlementQuantity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAdjustedEntitlementQuantity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAdjustedEntitlementQuantity: %w", err)
+	}
+	return oldValue.AdjustedEntitlementQuantity, nil
+}
+
+// ClearAdjustedEntitlementQuantity clears the value of the "adjusted_entitlement_quantity" field.
+func (m *InvoiceLineItemMutation) ClearAdjustedEntitlementQuantity() {
+	m.adjusted_entitlement_quantity = nil
+	m.clearedFields[invoicelineitem.FieldAdjustedEntitlementQuantity] = struct{}{}
+}
+
+// AdjustedEntitlementQuantityCleared returns if the "adjusted_entitlement_quantity" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) AdjustedEntitlementQuantityCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldAdjustedEntitlementQuantity]
+	return ok
+}
+
+// ResetAdjustedEntitlementQuantity resets all changes to the "adjusted_entitlement_quantity" field.
+func (m *InvoiceLineItemMutation) ResetAdjustedEntitlementQuantity() {
+	m.adjusted_entitlement_quantity = nil
+	delete(m.clearedFields, invoicelineitem.FieldAdjustedEntitlementQuantity)
+}
+
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
 func (m *InvoiceLineItemMutation) ClearInvoice() {
 	m.clearedinvoice = true
@@ -30938,7 +31111,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 31)
+	fields := make([]string, 0, 33)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -31032,6 +31205,12 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.invoice_level_discount != nil {
 		fields = append(fields, invoicelineitem.FieldInvoiceLevelDiscount)
 	}
+	if m.subscription_line_item_id != nil {
+		fields = append(fields, invoicelineitem.FieldSubscriptionLineItemID)
+	}
+	if m.adjusted_entitlement_quantity != nil {
+		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
+	}
 	return fields
 }
 
@@ -31102,6 +31281,10 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.LineItemDiscount()
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		return m.InvoiceLevelDiscount()
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		return m.SubscriptionLineItemID()
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		return m.AdjustedEntitlementQuantity()
 	}
 	return nil, false
 }
@@ -31173,6 +31356,10 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldLineItemDiscount(ctx)
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		return m.OldInvoiceLevelDiscount(ctx)
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		return m.OldSubscriptionLineItemID(ctx)
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		return m.OldAdjustedEntitlementQuantity(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -31399,6 +31586,20 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetInvoiceLevelDiscount(v)
 		return nil
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionLineItemID(v)
+		return nil
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAdjustedEntitlementQuantity(v)
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -31495,6 +31696,12 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldInvoiceLevelDiscount) {
 		fields = append(fields, invoicelineitem.FieldInvoiceLevelDiscount)
 	}
+	if m.FieldCleared(invoicelineitem.FieldSubscriptionLineItemID) {
+		fields = append(fields, invoicelineitem.FieldSubscriptionLineItemID)
+	}
+	if m.FieldCleared(invoicelineitem.FieldAdjustedEntitlementQuantity) {
+		fields = append(fields, invoicelineitem.FieldAdjustedEntitlementQuantity)
+	}
 	return fields
 }
 
@@ -31574,6 +31781,12 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		m.ClearInvoiceLevelDiscount()
+		return nil
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		m.ClearSubscriptionLineItemID()
+		return nil
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		m.ClearAdjustedEntitlementQuantity()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem nullable field %s", name)
@@ -31675,6 +31888,12 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		m.ResetInvoiceLevelDiscount()
+		return nil
+	case invoicelineitem.FieldSubscriptionLineItemID:
+		m.ResetSubscriptionLineItemID()
+		return nil
+	case invoicelineitem.FieldAdjustedEntitlementQuantity:
+		m.ResetAdjustedEntitlementQuantity()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
@@ -37890,6 +38109,8 @@ type PriceMutation struct {
 	start_date                *time.Time
 	end_date                  *time.Time
 	group_id                  *string
+	sequence                  *int64
+	addsequence               *int64
 	clearedFields             map[string]struct{}
 	costsheet                 map[string]struct{}
 	removedcostsheet          map[string]struct{}
@@ -39842,6 +40063,62 @@ func (m *PriceMutation) ResetGroupID() {
 	delete(m.clearedFields, price.FieldGroupID)
 }
 
+// SetSequence sets the "sequence" field.
+func (m *PriceMutation) SetSequence(i int64) {
+	m.sequence = &i
+	m.addsequence = nil
+}
+
+// Sequence returns the value of the "sequence" field in the mutation.
+func (m *PriceMutation) Sequence() (r int64, exists bool) {
+	v := m.sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSequence returns the old "sequence" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldSequence(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSequence: %w", err)
+	}
+	return oldValue.Sequence, nil
+}
+
+// AddSequence adds i to the "sequence" field.
+func (m *PriceMutation) AddSequence(i int64) {
+	if m.addsequence != nil {
+		*m.addsequence += i
+	} else {
+		m.addsequence = &i
+	}
+}
+
+// AddedSequence returns the value that was added to the "sequence" field in this mutation.
+func (m *PriceMutation) AddedSequence() (r int64, exists bool) {
+	v := m.addsequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSequence resets all changes to the "sequence" field.
+func (m *PriceMutation) ResetSequence() {
+	m.sequence = nil
+	m.addsequence = nil
+}
+
 // AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by ids.
 func (m *PriceMutation) AddCostsheetIDs(ids ...string) {
 	if m.costsheet == nil {
@@ -39970,7 +40247,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 40)
+	fields := make([]string, 0, 41)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -40091,6 +40368,9 @@ func (m *PriceMutation) Fields() []string {
 	if m.group_id != nil {
 		fields = append(fields, price.FieldGroupID)
 	}
+	if m.sequence != nil {
+		fields = append(fields, price.FieldSequence)
+	}
 	return fields
 }
 
@@ -40179,6 +40459,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.EndDate()
 	case price.FieldGroupID:
 		return m.GroupID()
+	case price.FieldSequence:
+		return m.Sequence()
 	}
 	return nil, false
 }
@@ -40268,6 +40550,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldEndDate(ctx)
 	case price.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case price.FieldSequence:
+		return m.OldSequence(ctx)
 	}
 	return nil, fmt.Errorf("unknown Price field %s", name)
 }
@@ -40557,6 +40841,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetGroupID(v)
 		return nil
+	case price.FieldSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSequence(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Price field %s", name)
 }
@@ -40571,6 +40862,9 @@ func (m *PriceMutation) AddedFields() []string {
 	if m.addtrial_period_days != nil {
 		fields = append(fields, price.FieldTrialPeriodDays)
 	}
+	if m.addsequence != nil {
+		fields = append(fields, price.FieldSequence)
+	}
 	return fields
 }
 
@@ -40583,6 +40877,8 @@ func (m *PriceMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBillingPeriodCount()
 	case price.FieldTrialPeriodDays:
 		return m.AddedTrialPeriodDays()
+	case price.FieldSequence:
+		return m.AddedSequence()
 	}
 	return nil, false
 }
@@ -40605,6 +40901,13 @@ func (m *PriceMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddTrialPeriodDays(v)
+		return nil
+	case price.FieldSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSequence(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Price numeric field %s", name)
@@ -40905,6 +41208,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case price.FieldSequence:
+		m.ResetSequence()
 		return nil
 	}
 	return fmt.Errorf("unknown Price field %s", name)
@@ -45542,6 +45848,8 @@ type SubscriptionMutation struct {
 	payment_terms              *types.PaymentTerms
 	subscription_type          *types.SubscriptionType
 	auto_invoice_threshold     *decimal.Decimal
+	synced_price_sequence      *int64
+	addsynced_price_sequence   *int64
 	clearedFields              map[string]struct{}
 	line_items                 map[string]struct{}
 	removedline_items          map[string]struct{}
@@ -47546,6 +47854,62 @@ func (m *SubscriptionMutation) ResetAutoInvoiceThreshold() {
 	delete(m.clearedFields, subscription.FieldAutoInvoiceThreshold)
 }
 
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (m *SubscriptionMutation) SetSyncedPriceSequence(i int64) {
+	m.synced_price_sequence = &i
+	m.addsynced_price_sequence = nil
+}
+
+// SyncedPriceSequence returns the value of the "synced_price_sequence" field in the mutation.
+func (m *SubscriptionMutation) SyncedPriceSequence() (r int64, exists bool) {
+	v := m.synced_price_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSyncedPriceSequence returns the old "synced_price_sequence" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldSyncedPriceSequence(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSyncedPriceSequence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSyncedPriceSequence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSyncedPriceSequence: %w", err)
+	}
+	return oldValue.SyncedPriceSequence, nil
+}
+
+// AddSyncedPriceSequence adds i to the "synced_price_sequence" field.
+func (m *SubscriptionMutation) AddSyncedPriceSequence(i int64) {
+	if m.addsynced_price_sequence != nil {
+		*m.addsynced_price_sequence += i
+	} else {
+		m.addsynced_price_sequence = &i
+	}
+}
+
+// AddedSyncedPriceSequence returns the value that was added to the "synced_price_sequence" field in this mutation.
+func (m *SubscriptionMutation) AddedSyncedPriceSequence() (r int64, exists bool) {
+	v := m.addsynced_price_sequence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSyncedPriceSequence resets all changes to the "synced_price_sequence" field.
+func (m *SubscriptionMutation) ResetSyncedPriceSequence() {
+	m.synced_price_sequence = nil
+	m.addsynced_price_sequence = nil
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
 func (m *SubscriptionMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -47985,7 +48349,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 44)
+	fields := make([]string, 0, 45)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -48118,6 +48482,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.auto_invoice_threshold != nil {
 		fields = append(fields, subscription.FieldAutoInvoiceThreshold)
 	}
+	if m.synced_price_sequence != nil {
+		fields = append(fields, subscription.FieldSyncedPriceSequence)
+	}
 	return fields
 }
 
@@ -48214,6 +48581,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionType()
 	case subscription.FieldAutoInvoiceThreshold:
 		return m.AutoInvoiceThreshold()
+	case subscription.FieldSyncedPriceSequence:
+		return m.SyncedPriceSequence()
 	}
 	return nil, false
 }
@@ -48311,6 +48680,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldSubscriptionType(ctx)
 	case subscription.FieldAutoInvoiceThreshold:
 		return m.OldAutoInvoiceThreshold(ctx)
+	case subscription.FieldSyncedPriceSequence:
+		return m.OldSyncedPriceSequence(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -48628,6 +48999,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAutoInvoiceThreshold(v)
 		return nil
+	case subscription.FieldSyncedPriceSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSyncedPriceSequence(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -48642,6 +49020,9 @@ func (m *SubscriptionMutation) AddedFields() []string {
 	if m.addversion != nil {
 		fields = append(fields, subscription.FieldVersion)
 	}
+	if m.addsynced_price_sequence != nil {
+		fields = append(fields, subscription.FieldSyncedPriceSequence)
+	}
 	return fields
 }
 
@@ -48654,6 +49035,8 @@ func (m *SubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBillingPeriodCount()
 	case subscription.FieldVersion:
 		return m.AddedVersion()
+	case subscription.FieldSyncedPriceSequence:
+		return m.AddedSyncedPriceSequence()
 	}
 	return nil, false
 }
@@ -48676,6 +49059,13 @@ func (m *SubscriptionMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddVersion(v)
+		return nil
+	case subscription.FieldSyncedPriceSequence:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSyncedPriceSequence(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription numeric field %s", name)
@@ -48952,6 +49342,9 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldAutoInvoiceThreshold:
 		m.ResetAutoInvoiceThreshold()
+		return nil
+	case subscription.FieldSyncedPriceSequence:
+		m.ResetSyncedPriceSequence()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)

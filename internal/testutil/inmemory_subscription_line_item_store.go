@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -195,6 +196,35 @@ func (s *InMemorySubscriptionLineItemStore) Update(ctx context.Context, item *su
 	return nil
 }
 
+// BulkTerminate terminates all subscription line items for a subscription up to a given date
+func (s *InMemorySubscriptionLineItemStore) BulkTerminate(ctx context.Context, subscriptionID string, effectiveDate time.Time) (int, error) {
+	items, err := s.ListBySubscription(ctx, &subscription.Subscription{ID: subscriptionID})
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to list subscription line items").
+			Mark(ierr.ErrDatabase)
+	}
+
+	affected := 0
+	for _, item := range items {
+		if !item.EndDate.IsZero() && item.EndDate.Before(effectiveDate) {
+			continue
+		}
+
+		affected++
+		item.EndDate = effectiveDate
+		if err := s.Update(ctx, item); err != nil {
+			return 0, ierr.WithError(err).
+				WithHint("Failed to update subscription line item").
+				WithReportableDetails(map[string]interface{}{
+					"line_item_id": item.ID,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	}
+	return affected, nil
+}
+
 // Delete deletes a subscription line item
 func (s *InMemorySubscriptionLineItemStore) Delete(ctx context.Context, id string) error {
 	err := s.InMemoryStore.Delete(ctx, id)
@@ -253,6 +283,35 @@ func (s *InMemorySubscriptionLineItemStore) List(ctx context.Context, filter *ty
 			Mark(ierr.ErrDatabase)
 	}
 	return items, nil
+}
+
+// GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
+// line items where commitment_true_up_enabled is true.
+func (s *InMemorySubscriptionLineItemStore) GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error) {
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.ActiveFilter = false
+	if filter.QueryFilter != nil {
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	}
+
+	items, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{})
+	var customerIDs []string
+	for _, item := range items {
+		if !item.CommitmentTrueUpEnabled {
+			continue
+		}
+		if _, ok := seen[item.CustomerID]; ok {
+			continue
+		}
+		seen[item.CustomerID] = struct{}{}
+		customerIDs = append(customerIDs, item.CustomerID)
+	}
+	return customerIDs, nil
 }
 
 // Count counts subscription line items based on filter

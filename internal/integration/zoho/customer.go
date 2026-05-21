@@ -16,10 +16,10 @@ type ZohoCustomerService interface {
 }
 
 type CustomerService struct {
-	client      ZohoClient
+	client       ZohoClient
 	customerRepo customerDomain.Repository
-	mappingRepo entityintegrationmapping.Repository
-	logger      *logger.Logger
+	mappingRepo  entityintegrationmapping.Repository
+	logger       *logger.Logger
 }
 
 func NewCustomerService(client ZohoClient, customerRepo customerDomain.Repository, mappingRepo entityintegrationmapping.Repository, logger *logger.Logger) ZohoCustomerService {

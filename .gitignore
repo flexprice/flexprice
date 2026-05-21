@@ -122,3 +122,7 @@ vendor/
 
 # claude superpowers
 docs/superpowers/*
+
+# Postman
+postman/
+.postman/

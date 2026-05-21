@@ -15,7 +15,11 @@ type Repository interface {
 	List(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
 	Count(ctx context.Context, filter *types.PriceFilter) (int, error)
 	ListAll(ctx context.Context, filter *types.PriceFilter) ([]*Price, error)
-	Update(ctx context.Context, price *Price) error
+	// Update writes the mutable fields of a price. Set bumpSequence to true
+	// only when the caller is changing a sync-relevant field (today: end_date).
+	// Cosmetic edits (display_name, description, metadata, lookup_key, group_id)
+	// should pass false so the plan-price sync isn't woken up unnecessarily.
+	Update(ctx context.Context, price *Price, bumpSequence bool) error
 	Delete(ctx context.Context, id string) error
 
 	// Bulk operations

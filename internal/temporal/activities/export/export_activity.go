@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -28,8 +29,9 @@ type ExportActivity struct {
 	connectionRepo       connection.Repository
 	integrationFactory   *integration.Factory
 	logger               *logger.Logger
-	usageAnalyticsGetter syncExport.UsageAnalyticsGetter
-	eventRepo            events.Repository
+	usageAnalyticsGetter     syncExport.UsageAnalyticsGetter
+	eventRepo                events.Repository
+	subscriptionLineItemRepo subscription.LineItemRepository
 }
 
 // NewExportActivity creates a new export activity
@@ -45,19 +47,21 @@ func NewExportActivity(
 	logger *logger.Logger,
 	usageAnalyticsGetter syncExport.UsageAnalyticsGetter,
 	eventRepo events.Repository,
+	subscriptionLineItemRepo subscription.LineItemRepository,
 ) *ExportActivity {
 	return &ExportActivity{
-		featureUsageRepo:     featureUsageRepo,
-		priceRepo:            priceRepo,
-		invoiceRepo:          invoiceRepo,
-		walletRepo:           walletRepo,
-		walletBalanceGetter:  walletBalanceGetter,
-		customerRepo:         customerRepo,
-		connectionRepo:       connectionRepo,
-		integrationFactory:   integrationFactory,
-		logger:               logger,
-		usageAnalyticsGetter: usageAnalyticsGetter,
-		eventRepo:            eventRepo,
+		featureUsageRepo:         featureUsageRepo,
+		priceRepo:                priceRepo,
+		invoiceRepo:              invoiceRepo,
+		walletRepo:               walletRepo,
+		walletBalanceGetter:      walletBalanceGetter,
+		customerRepo:             customerRepo,
+		connectionRepo:           connectionRepo,
+		integrationFactory:       integrationFactory,
+		logger:                   logger,
+		usageAnalyticsGetter:     usageAnalyticsGetter,
+		eventRepo:                eventRepo,
+		subscriptionLineItemRepo: subscriptionLineItemRepo,
 	}
 }
 
@@ -104,7 +108,7 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 	}
 
 	// Use the ExportService which handles routing to the correct exporter
-	exportService := syncExport.NewExportServiceWithWallet(a.featureUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.logger, a.usageAnalyticsGetter, a.eventRepo)
+	exportService := syncExport.NewExportServiceWithWallet(a.featureUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo)
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Errorw("export failed", "error", err, "entity_type", input.EntityType)

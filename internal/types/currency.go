@@ -98,6 +98,18 @@ func ValidateCurrencyCode(currency string) error {
 	return nil
 }
 
+// ToSmallestUnit converts a decimal amount to the currency's smallest unit (e.g. cents for USD,
+// fils for KWD, yen for JPY) as an integer. Uses the currency's precision: multiplier = 10^precision.
+func ToSmallestUnit(amount decimal.Decimal, currency string) int64 {
+	precision := GetCurrencyPrecision(currency)
+	multiplier := decimal.New(1, precision) // 10^precision
+	result := amount.Mul(multiplier).IntPart()
+	if result < 0 {
+		return 0
+	}
+	return result
+}
+
 // RoundToCurrencyPrecision rounds a decimal amount to the appropriate currency precision.
 //
 // This function ensures monetary amounts are displayed and processed with the correct

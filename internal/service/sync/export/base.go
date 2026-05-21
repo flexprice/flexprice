@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -34,11 +35,12 @@ type ExportService struct {
 	walletRepo           wallet.Repository
 	walletBalanceGetter  WalletBalanceGetter
 	customerRepo         customer.Repository
-	usageAnalyticsGetter UsageAnalyticsGetter
-	connectionRepo       connection.Repository
-	integrationFactory   *integration.Factory
-	logger               *logger.Logger
-	eventRepo            events.Repository
+	usageAnalyticsGetter     UsageAnalyticsGetter
+	connectionRepo           connection.Repository
+	integrationFactory       *integration.Factory
+	logger                   *logger.Logger
+	eventRepo                events.Repository
+	subscriptionLineItemRepo subscription.LineItemRepository
 }
 
 // NewExportService creates a new export service
@@ -76,19 +78,21 @@ func NewExportServiceWithWallet(
 	logger *logger.Logger,
 	usageAnalyticsGetter UsageAnalyticsGetter,
 	eventRepo events.Repository,
+	subscriptionLineItemRepo subscription.LineItemRepository,
 ) *ExportService {
 	return &ExportService{
-		featureUsageRepo:     featureUsageRepo,
-		priceRepo:            priceRepo,
-		invoiceRepo:          invoiceRepo,
-		walletRepo:           walletRepo,
-		walletBalanceGetter:  walletBalanceGetter,
-		customerRepo:         customerRepo,
-		connectionRepo:       connectionRepo,
-		integrationFactory:   integrationFactory,
-		logger:               logger,
-		usageAnalyticsGetter: usageAnalyticsGetter,
-		eventRepo:            eventRepo,
+		featureUsageRepo:         featureUsageRepo,
+		priceRepo:                priceRepo,
+		invoiceRepo:              invoiceRepo,
+		walletRepo:               walletRepo,
+		walletBalanceGetter:      walletBalanceGetter,
+		customerRepo:             customerRepo,
+		connectionRepo:           connectionRepo,
+		integrationFactory:       integrationFactory,
+		logger:                   logger,
+		usageAnalyticsGetter:     usageAnalyticsGetter,
+		eventRepo:                eventRepo,
+		subscriptionLineItemRepo: subscriptionLineItemRepo,
 	}
 }
 
@@ -239,11 +243,13 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 		}
 		return NewCreditUsageExporter(s.walletRepo, s.customerRepo, s.walletBalanceGetter, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeUsageAnalytics:
-		if s.customerRepo == nil {
-			s.logger.Errorw("customer repository not configured for usage analytics export")
+		if s.customerRepo == nil || s.subscriptionLineItemRepo == nil {
+			s.logger.Errorw("customer or subscription line item repository not configured for usage analytics export",
+				"customer_repo_nil", s.customerRepo == nil,
+				"subscription_line_item_repo_nil", s.subscriptionLineItemRepo == nil)
 			return nil
 		}
-		return NewUsageAnalyticsExporter(s.customerRepo, s.eventRepo, s.usageAnalyticsGetter, s.logger)
+		return NewUsageAnalyticsExporter(s.customerRepo, s.eventRepo, s.subscriptionLineItemRepo, s.usageAnalyticsGetter, s.logger)
 	default:
 		return nil
 	}

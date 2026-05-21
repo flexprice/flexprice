@@ -20,13 +20,14 @@ import (
 // meterUsageBaseChargeInfo holds per-line-item data collected during the main loop
 // for deferred processing by the cumulative commitment path.
 type meterUsageBaseChargeInfo struct {
-	item                   *subscription.SubscriptionLineItem
-	matchingCharge         *dto.SubscriptionUsageByMetersResponse
-	baseAmount             decimal.Decimal
-	quantityForCalculation decimal.Decimal
-	priceUnitAmount        decimal.Decimal
-	displayName            *string
-	metadata               types.Metadata
+	item                        *subscription.SubscriptionLineItem
+	matchingCharge              *dto.SubscriptionUsageByMetersResponse
+	baseAmount                  decimal.Decimal
+	quantityForCalculation      decimal.Decimal
+	priceUnitAmount             decimal.Decimal
+	displayName                 *string
+	metadata                    types.Metadata
+	adjustedEntitlementQuantity *decimal.Decimal
 }
 
 // CalculateMeterUsageCharges computes usage-based invoice line items from the meter_usage table.
@@ -163,6 +164,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 
 		// 2. Entitlement adjustment — reads windowed usage from meter_usage (not raw events)
+		rawQtyBeforeEntitlement := quantityForCalculation
+		var entitlementAdjustedQty *decimal.Decimal
 		entitlement := entitlementsByMeterID[item.MeterID]
 		if !matchingCharge.IsOverage && entitlement != nil && entitlement.IsEnabled {
 			quantityForCalculation, err = s.adjustMeterUsageEntitlement(
@@ -172,6 +175,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 			if err != nil {
 				return nil, decimal.Zero, err
 			}
+			adj := rawQtyBeforeEntitlement.Sub(quantityForCalculation)
+			entitlementAdjustedQty = lo.ToPtr(decimal.Max(adj, decimal.Zero))
 		} else if !matchingCharge.IsOverage && !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() && matchingCharge.Price != nil {
 			// No entitlement — recalculate cost for non-bucketed meters
 			adjustedAmount := priceService.CalculateCost(ctx, matchingCharge.Price, quantityForCalculation)
@@ -205,6 +210,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 				item: item, matchingCharge: matchingCharge, baseAmount: baseAmount,
 				quantityForCalculation: quantityForCalculation, priceUnitAmount: priceUnitAmount,
 				displayName: displayName, metadata: metadata,
+				adjustedEntitlementQuantity: entitlementAdjustedQty,
 			})
 			continue
 		}
@@ -248,22 +254,23 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 
 		usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-			EntityID:         lo.ToPtr(item.EntityID),
-			EntityType:       lo.ToPtr(string(item.EntityType)),
-			PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
-			PriceType:        lo.ToPtr(string(item.PriceType)),
-			PriceID:          lo.ToPtr(item.PriceID),
-			MeterID:          lo.ToPtr(item.MeterID),
-			MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-			PriceUnit:        item.PriceUnit,
-			PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
-			DisplayName:      displayName,
-			Amount:           lineItemAmount,
-			Quantity:         quantityForCalculation,
-			PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
-			PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
-			Metadata:         metadata,
-			CommitmentInfo:   commitmentInfo,
+			EntityID:                    lo.ToPtr(item.EntityID),
+			EntityType:                  lo.ToPtr(string(item.EntityType)),
+			PlanDisplayName:             lo.ToPtr(item.PlanDisplayName),
+			PriceType:                   lo.ToPtr(string(item.PriceType)),
+			PriceID:                     lo.ToPtr(item.PriceID),
+			MeterID:                     lo.ToPtr(item.MeterID),
+			MeterDisplayName:            lo.ToPtr(item.MeterDisplayName),
+			PriceUnit:                   item.PriceUnit,
+			PriceUnitAmount:             lo.ToPtr(priceUnitAmount),
+			DisplayName:                 displayName,
+			Amount:                      lineItemAmount,
+			Quantity:                    quantityForCalculation,
+			AdjustedEntitlementQuantity: entitlementAdjustedQty,
+			PeriodStart:                 lo.ToPtr(item.GetPeriodStart(periodStart)),
+			PeriodEnd:                   lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+			Metadata:                    metadata,
+			CommitmentInfo:              commitmentInfo,
 		})
 	}
 
@@ -614,21 +621,22 @@ func (s *billingService) buildCumulativeCommitmentCharges(
 		}
 		displayQty = types.RoundToCurrencyPrecision(displayQty, sub.Currency)
 		charges = append(charges, dto.CreateInvoiceLineItemRequest{
-			EntityID:         lo.ToPtr(bc.item.EntityID),
-			EntityType:       lo.ToPtr(string(bc.item.EntityType)),
-			PlanDisplayName:  lo.ToPtr(bc.item.PlanDisplayName),
-			PriceType:        lo.ToPtr(string(bc.item.PriceType)),
-			PriceID:          lo.ToPtr(bc.item.PriceID),
-			MeterID:          lo.ToPtr(bc.item.MeterID),
-			MeterDisplayName: lo.ToPtr(bc.item.MeterDisplayName),
-			PriceUnit:        bc.item.PriceUnit,
-			PriceUnitAmount:  lo.ToPtr(bc.priceUnitAmount),
-			DisplayName:      bc.displayName,
-			Amount:           rounded,
-			Quantity:         displayQty,
-			PeriodStart:      lo.ToPtr(bc.item.GetPeriodStart(periodStart)),
-			PeriodEnd:        lo.ToPtr(bc.item.GetPeriodEnd(periodEnd)),
-			Metadata:         bc.metadata,
+			EntityID:                    lo.ToPtr(bc.item.EntityID),
+			EntityType:                  lo.ToPtr(string(bc.item.EntityType)),
+			PlanDisplayName:             lo.ToPtr(bc.item.PlanDisplayName),
+			PriceType:                   lo.ToPtr(string(bc.item.PriceType)),
+			PriceID:                     lo.ToPtr(bc.item.PriceID),
+			MeterID:                     lo.ToPtr(bc.item.MeterID),
+			MeterDisplayName:            lo.ToPtr(bc.item.MeterDisplayName),
+			PriceUnit:                   bc.item.PriceUnit,
+			PriceUnitAmount:             lo.ToPtr(bc.priceUnitAmount),
+			DisplayName:                 bc.displayName,
+			Amount:                      rounded,
+			Quantity:                    displayQty,
+			AdjustedEntitlementQuantity: bc.adjustedEntitlementQuantity,
+			PeriodStart:                 lo.ToPtr(bc.item.GetPeriodStart(periodStart)),
+			PeriodEnd:                   lo.ToPtr(bc.item.GetPeriodEnd(periodEnd)),
+			Metadata:                    bc.metadata,
 		})
 		totalCost = totalCost.Add(rounded)
 	}

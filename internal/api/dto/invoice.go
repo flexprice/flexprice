@@ -114,6 +114,10 @@ type CreateInvoiceRequest struct {
 
 	// invoice_pdf_url is the URL where customers can download the PDF version of this invoice
 	InvoicePDFURL *string `json:"invoice_pdf_url,omitempty"`
+
+	// issue_date overrides the user-facing date of the invoice.
+	// Defaults to created_at if not provided.
+	IssueDate *time.Time `json:"issue_date,omitempty"`
 }
 
 // ToDraftRequest converts a CreateInvoiceRequest to a CreateDraftInvoiceRequest,
@@ -133,6 +137,7 @@ func (r *CreateInvoiceRequest) ToDraftRequest() CreateDraftInvoiceRequest {
 		Metadata:       r.Metadata,
 		IdempotencyKey: r.IdempotencyKey,
 		InvoicePDFURL:  r.InvoicePDFURL,
+		IssueDate:      r.IssueDate,
 	}
 }
 
@@ -188,6 +193,7 @@ type CreateDraftInvoiceRequest struct {
 	Metadata               types.Metadata             `json:"metadata,omitempty"`
 	IdempotencyKey         *string                    `json:"idempotency_key,omitempty"`
 	InvoicePDFURL          *string                    `json:"invoice_pdf_url,omitempty"`
+	IssueDate              *time.Time                 `json:"issue_date,omitempty"`
 }
 
 // Validate validates the draft invoice creation request.
@@ -235,6 +241,13 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		return nil, err
 	}
 
+	baseModel := types.GetDefaultBaseModel(ctx)
+
+	issueDate := r.IssueDate
+	if issueDate == nil {
+		issueDate = &baseModel.CreatedAt
+	}
+
 	return &invoice.Invoice{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
 		CustomerID:             r.CustomerID,
@@ -259,7 +272,8 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 		InvoicePDFURL:          r.InvoicePDFURL,
 		InvoiceStatus:          types.InvoiceStatusDraft,
 		PaymentStatus:          types.PaymentStatusPending,
-		BaseModel:              types.GetDefaultBaseModel(ctx),
+		IssueDate:              issueDate,
+		BaseModel:              baseModel,
 	}, nil
 }
 
@@ -734,6 +748,16 @@ type CreateInvoiceLineItemRequest struct {
 
 	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
 	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty" swaggertype:"string"`
+
+	// sub_line_item_id links this line item to the subscription_line_item that generated it.
+	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
+
+	// subscription_id overrides the invoice's subscription_id for this specific line item.
+	// Used for grouped invoicing where child line items belong to child subscriptions.
+	SubscriptionID *string `json:"subscription_id,omitempty"`
+
+	// adjusted_entitlement_quantity is the entitlement-covered units deducted from raw usage.
+	AdjustedEntitlementQuantity *decimal.Decimal `json:"adjusted_entitlement_quantity,omitempty" swaggertype:"string"`
 }
 
 func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) error {
@@ -804,37 +828,52 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 			Mark(ierr.ErrValidation)
 	}
 
+	if r.AdjustedEntitlementQuantity != nil && r.AdjustedEntitlementQuantity.IsNegative() {
+		return ierr.NewError("adjusted_entitlement_quantity must be non-negative").
+			WithHint("adjusted_entitlement_quantity cannot be negative").
+			WithReportableDetails(map[string]any{
+				"adjusted_entitlement_quantity": r.AdjustedEntitlementQuantity.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
 func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, inv *invoice.Invoice) *invoice.InvoiceLineItem {
+	subscriptionID := inv.SubscriptionID
+	if r.SubscriptionID != nil {
+		subscriptionID = r.SubscriptionID
+	}
 	return &invoice.InvoiceLineItem{
-		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-		InvoiceID:             inv.ID,
-		CustomerID:            inv.CustomerID,
-		SubscriptionID:        inv.SubscriptionID,
-		PriceID:               r.PriceID,
-		EntityID:              r.EntityID,
-		EntityType:            r.EntityType,
-		PlanDisplayName:       r.PlanDisplayName,
-		PriceType:             r.PriceType,
-		MeterID:               r.MeterID,
-		MeterDisplayName:      r.MeterDisplayName,
-		PriceUnit:             r.PriceUnit,
-		PriceUnitAmount:       r.PriceUnitAmount,
-		DisplayName:           r.DisplayName,
-		Amount:                types.RoundToCurrencyPrecision(r.Amount, inv.Currency),
-		Quantity:              r.Quantity,
-		Currency:              inv.Currency,
-		PeriodStart:           r.PeriodStart,
-		PeriodEnd:             r.PeriodEnd,
-		Metadata:              r.Metadata,
-		EnvironmentID:         types.GetEnvironmentID(ctx),
-		BaseModel:             types.GetDefaultBaseModel(ctx),
-		CommitmentInfo:        r.CommitmentInfo,
-		PrepaidCreditsApplied: lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
-		LineItemDiscount:      lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
-		InvoiceLevelDiscount:  lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
+		ID:                          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:                   inv.ID,
+		CustomerID:                  inv.CustomerID,
+		SubscriptionID:              subscriptionID,
+		PriceID:                     r.PriceID,
+		EntityID:                    r.EntityID,
+		EntityType:                  r.EntityType,
+		PlanDisplayName:             r.PlanDisplayName,
+		PriceType:                   r.PriceType,
+		MeterID:                     r.MeterID,
+		MeterDisplayName:            r.MeterDisplayName,
+		PriceUnit:                   r.PriceUnit,
+		PriceUnitAmount:             r.PriceUnitAmount,
+		DisplayName:                 r.DisplayName,
+		Amount:                      types.RoundToCurrencyPrecision(r.Amount, inv.Currency),
+		Quantity:                    r.Quantity,
+		Currency:                    inv.Currency,
+		PeriodStart:                 r.PeriodStart,
+		PeriodEnd:                   r.PeriodEnd,
+		Metadata:                    r.Metadata,
+		EnvironmentID:               types.GetEnvironmentID(ctx),
+		BaseModel:                   types.GetDefaultBaseModel(ctx),
+		CommitmentInfo:              r.CommitmentInfo,
+		PrepaidCreditsApplied:       lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
+		LineItemDiscount:            lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount:        lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
+		SubscriptionLineItemID:      r.SubscriptionLineItemID,
+		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
 }
 

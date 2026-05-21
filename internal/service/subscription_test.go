@@ -4337,10 +4337,10 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// Now let's test a successful scenario by setting up proper line items with arrear invoice cadence
 	// Update the prices to have arrear invoice cadence
 	s.testData.prices.apiCalls.InvoiceCadence = types.InvoiceCadenceArrear
-	s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.apiCalls))
+	s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.apiCalls, false))
 
 	s.testData.prices.storage.InvoiceCadence = types.InvoiceCadenceArrear
-	s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.storage))
+	s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.storage, false))
 
 	// Create some usage events for the current period
 	for i := 0; i < 100; i++ {
@@ -5906,7 +5906,7 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriodWithInvoicingCus
 
 	// Update prices to have arrear invoice cadence
 	s.testData.prices.apiCalls.InvoiceCadence = types.InvoiceCadenceArrear
-	s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.apiCalls))
+	s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.apiCalls, false))
 
 	// Create usage events (tracked by subscription customer)
 	for i := 0; i < 100; i++ {
@@ -6126,7 +6126,7 @@ func (s *SubscriptionServiceSuite) TestUpdateBillingPeriodsWithInvoicingCustomer
 
 	// Update prices to have arrear invoice cadence
 	s.testData.prices.apiCalls.InvoiceCadence = types.InvoiceCadenceArrear
-	s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.apiCalls))
+	s.NoError(s.GetStores().PriceRepo.Update(s.GetContext(), s.testData.prices.apiCalls, false))
 
 	// Create usage events
 	for i := 0; i < 50; i++ {

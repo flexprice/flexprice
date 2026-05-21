@@ -32,6 +32,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
@@ -48,6 +49,7 @@ type Factory struct {
 	paymentRepo                  payment.Repository
 	priceRepo                    price.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
+	entityIntegrationMappingSvc  interfaces.EntityIntegrationMappingService
 	meterRepo                    meter.Repository
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
@@ -81,6 +83,7 @@ func NewFactory(
 		paymentRepo:                  paymentRepo,
 		priceRepo:                    priceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		entityIntegrationMappingSvc:  NewEntityIntegrationMappingAdapter(entityIntegrationMappingRepo),
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
@@ -417,9 +420,6 @@ func (f *Factory) GetQuickBooksIntegration(ctx context.Context) (*QuickBooksInte
 
 // GetPaddleIntegration returns a complete Paddle integration setup
 func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration, error) {
-	// Verify a Paddle connection exists for this environment before building the integration.
-	// This allows callers (e.g. Temporal activities) to detect ErrNotFound early and stop
-	// retrying a permanent configuration problem.
 	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderPaddle)
 	if err != nil {
 		return nil, err
@@ -430,24 +430,15 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 			Mark(ierr.ErrNotFound)
 	}
 
-	paddleClient := paddle.NewClient(
-		f.connectionRepo,
-		f.encryptionService,
-		f.logger,
-	)
+	paddleClient := paddle.NewClient(f.connectionRepo, f.encryptionService, f.logger)
 
-	customerSvc := paddle.NewCustomerService(
+	syncSvc := paddle.NewPaddleSyncService(
 		paddleClient,
 		f.customerRepo,
-		f.entityIntegrationMappingRepo,
-		f.logger,
-	)
-
-	invoiceSyncSvc := paddle.NewInvoiceSyncService(
-		paddleClient,
-		customerSvc,
 		f.invoiceRepo,
-		f.entityIntegrationMappingRepo,
+		f.subscriptionRepo,
+		f.entityIntegrationMappingSvc,
+		f.connectionRepo,
 		f.logger,
 		f.config.Auth.Secret,
 	)
@@ -456,15 +447,13 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 
 	webhookHandler := paddlewebhook.NewHandler(
 		paymentSvc,
-		customerSvc,
-		f.entityIntegrationMappingRepo,
+		syncSvc,
 		f.logger,
 	)
 
 	return &PaddleIntegration{
 		Client:         paddleClient,
-		CustomerSvc:    customerSvc,
-		InvoiceSyncSvc: invoiceSyncSvc,
+		SyncSvc:        syncSvc,
 		WebhookHandler: webhookHandler,
 	}, nil
 }
@@ -593,9 +582,17 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.entityIntegrationMappingRepo,
 		f.logger,
 	)
+	taxSvc := zoho.NewTaxService(zohoClient, f.logger)
+	itemSyncSvc := zoho.NewItemSyncService(zoho.ItemSyncServiceParams{
+		Client:      zohoClient,
+		MappingRepo: f.entityIntegrationMappingRepo,
+		Logger:      f.logger,
+	})
 	invoiceSvc := zoho.NewInvoiceService(
 		zohoClient,
 		customerSvc,
+		itemSyncSvc,
+		taxSvc,
 		f.customerRepo,
 		f.invoiceRepo,
 		f.entityIntegrationMappingRepo,
@@ -603,9 +600,11 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 	)
 
 	return &ZohoBooksIntegration{
-		Client:     zohoClient,
+		Client:      zohoClient,
 		CustomerSvc: customerSvc,
-		InvoiceSvc: invoiceSvc,
+		InvoiceSvc:  invoiceSvc,
+		ItemSyncSvc: itemSyncSvc,
+		TaxSvc:      taxSvc,
 	}, nil
 }
 
@@ -719,8 +718,7 @@ type QuickBooksIntegration struct {
 // PaddleIntegration contains all Paddle integration services
 type PaddleIntegration struct {
 	Client         paddle.PaddleClient
-	CustomerSvc    paddle.PaddleCustomerService
-	InvoiceSyncSvc *paddle.InvoiceSyncService
+	SyncSvc        *paddle.PaddleSyncService
 	WebhookHandler *paddlewebhook.Handler
 }
 
@@ -747,6 +745,8 @@ type ZohoBooksIntegration struct {
 	Client      zoho.ZohoClient
 	CustomerSvc zoho.ZohoCustomerService
 	InvoiceSvc  zoho.ZohoInvoiceService
+	ItemSyncSvc zoho.ZohoItemSyncService
+	TaxSvc      zoho.ZohoTaxService
 }
 
 // IntegrationProvider defines the interface for all integration providers

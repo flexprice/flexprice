@@ -72,6 +72,8 @@ const (
 	FieldVoidedAt = "voided_at"
 	// FieldFinalizedAt holds the string denoting the finalized_at field in the database.
 	FieldFinalizedAt = "finalized_at"
+	// FieldIssueDate holds the string denoting the issue_date field in the database.
+	FieldIssueDate = "issue_date"
 	// FieldLastComputedAt holds the string denoting the last_computed_at field in the database.
 	FieldLastComputedAt = "last_computed_at"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
@@ -151,6 +153,7 @@ var Columns = []string{
 	FieldPaidAt,
 	FieldVoidedAt,
 	FieldFinalizedAt,
+	FieldIssueDate,
 	FieldLastComputedAt,
 	FieldBillingPeriod,
 	FieldPeriodStart,
@@ -369,6 +372,11 @@ func ByVoidedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByFinalizedAt orders the results by the finalized_at field.
 func ByFinalizedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFinalizedAt, opts...).ToFunc()
+}
+
+// ByIssueDate orders the results by the issue_date field.
+func ByIssueDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIssueDate, opts...).ToFunc()
 }
 
 // ByLastComputedAt orders the results by the last_computed_at field.

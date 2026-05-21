@@ -997,11 +997,11 @@ func init() {
 	// invoice.DefaultTotal holds the default value on creation for the total field.
 	invoice.DefaultTotal = invoiceDescTotal.Default.(decimal.Decimal)
 	// invoiceDescVersion is the schema descriptor for version field.
-	invoiceDescVersion := invoiceFields[29].Descriptor()
+	invoiceDescVersion := invoiceFields[30].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
 	// invoiceDescTotalPrepaidCreditsApplied is the schema descriptor for total_prepaid_credits_applied field.
-	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[32].Descriptor()
+	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[33].Descriptor()
 	// invoice.DefaultTotalPrepaidCreditsApplied holds the default value on creation for the total_prepaid_credits_applied field.
 	invoice.DefaultTotalPrepaidCreditsApplied = invoiceDescTotalPrepaidCreditsApplied.Default.(decimal.Decimal)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()
@@ -1673,6 +1673,10 @@ func init() {
 	subscriptionDescSubscriptionType := subscriptionFields[36].Descriptor()
 	// subscription.DefaultSubscriptionType holds the default value on creation for the subscription_type field.
 	subscription.DefaultSubscriptionType = types.SubscriptionType(subscriptionDescSubscriptionType.Default.(string))
+	// subscriptionDescSyncedPriceSequence is the schema descriptor for synced_price_sequence field.
+	subscriptionDescSyncedPriceSequence := subscriptionFields[38].Descriptor()
+	// subscription.DefaultSyncedPriceSequence holds the default value on creation for the synced_price_sequence field.
+	subscription.DefaultSyncedPriceSequence = subscriptionDescSyncedPriceSequence.Default.(int64)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0

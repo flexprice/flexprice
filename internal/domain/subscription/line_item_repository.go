@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -20,6 +21,9 @@ type LineItemRepository interface {
 	// Update updates an existing subscription line item
 	Update(ctx context.Context, lineItem *SubscriptionLineItem) error
 
+	// BulkTerminate terminates all subscription line items for a subscription up to a given date
+	BulkTerminate(ctx context.Context, subscriptionID string, effectiveDate time.Time) (int, error)
+
 	// Delete deletes a subscription line item by ID
 	Delete(ctx context.Context, id string) error
 
@@ -31,4 +35,8 @@ type LineItemRepository interface {
 
 	// Count counts subscription line items matching the filter (same predicates as List).
 	Count(ctx context.Context, filter *types.SubscriptionLineItemFilter) (int, error)
+
+	// GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
+	// line items where commitment_true_up_enabled is true.
+	GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error)
 }

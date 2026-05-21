@@ -40,6 +40,13 @@ var SubscriptionTypeValues = []SubscriptionType{
 	SubscriptionTypeGroupedInvoicing,
 }
 
+var SubscriptionTypesWithLineItems = []SubscriptionType{
+	SubscriptionTypeStandalone,
+	SubscriptionTypeDelegatedInvoicing,
+	SubscriptionTypeParent,
+	SubscriptionTypeGroupedInvoicing,
+}
+
 func (t SubscriptionType) String() string {
 	return string(t)
 }

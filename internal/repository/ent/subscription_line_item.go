@@ -283,6 +283,44 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 	return nil
 }
 
+// BulkTerminate terminates all subscription line items for a subscription up to a given date
+func (r *subscriptionLineItemRepository) BulkTerminate(ctx context.Context, subscriptionID string, effectiveDate time.Time) (int, error) {
+	span := StartRepositorySpan(ctx, "subscription_line_item", "bulk_terminate", map[string]interface{}{
+		"subscription_id": subscriptionID,
+		"effective_date":  effectiveDate,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	affected, err := client.SubscriptionLineItem.Update().
+		SetNillableEndDate(types.ToNillableTime(effectiveDate)).
+		SetStatus(string(types.StatusPublished)).
+		Where(
+			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+			subscriptionlineitem.SubscriptionID(subscriptionID),
+			subscriptionlineitem.Or(
+				subscriptionlineitem.EndDateIsNil(),
+				subscriptionlineitem.EndDateGT(effectiveDate),
+			),
+		).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return 0, ierr.NewError("no subscription line items terminated").
+				WithHint("No subscription line items were terminated").
+				Mark(ierr.ErrNotFound)
+		}
+		return 0, ierr.WithError(err).
+			WithHint("Failed to terminate subscription line items").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return affected, nil
+}
+
 // Delete deletes a subscription line item
 func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) error {
 	// Start a span for this repository operation
@@ -541,6 +579,58 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 
 	SetSpanSuccess(span)
 	return count, nil
+}
+
+// GetDistinctCustomerIDsWithCommitmentTrueUp returns distinct customer IDs from published
+// subscription line items with commitment true-up enabled.
+func (r *subscriptionLineItemRepository) GetDistinctCustomerIDsWithCommitmentTrueUp(ctx context.Context) ([]string, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "subscription_line_item", "get_distinct_customer_ids_commitment_true_up", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": envID,
+	})
+	defer FinishSpan(span)
+
+	const query = `
+		SELECT DISTINCT customer_id
+		FROM subscription_line_items
+		WHERE tenant_id = $1
+			AND environment_id = $2
+			AND status = $3
+			AND commitment_true_up_enabled = true
+	`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, tenantID, envID, string(types.StatusPublished))
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get distinct customer ids with commitment true-up").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var customerIDs []string
+	for rows.Next() {
+		var customerID string
+		if err := rows.Scan(&customerID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan customer id").
+				Mark(ierr.ErrDatabase)
+		}
+		customerIDs = append(customerIDs, customerID)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate customer ids").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return customerIDs, nil
 }
 
 // SubscriptionLineItemQuery type alias for better readability

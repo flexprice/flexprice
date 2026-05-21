@@ -122,6 +122,8 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 		SetMetadata(item.Metadata).
 		SetEnvironmentID(item.EnvironmentID).
 		SetCommitmentInfo(item.CommitmentInfo).
+		SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+		SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -206,6 +208,8 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 				SetMetadata(item.Metadata).
 				SetEnvironmentID(item.EnvironmentID).
 				SetCommitmentInfo(item.CommitmentInfo).
+				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
+				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
 				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
@@ -303,19 +307,29 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 
 	r.log.Debugw("updating invoice line item", "line_item_id", item.ID)
 
-	_, err := r.client.Writer(ctx).InvoiceLineItem.UpdateOneID(item.ID).
+	q := r.client.Writer(ctx).InvoiceLineItem.UpdateOneID(item.ID).
 		Where(
 			invoicelineitem.TenantID(types.GetTenantID(ctx)),
 			invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
+		SetAmount(item.Amount).
+		SetQuantity(item.Quantity).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 		SetMetadata(item.Metadata).
+		SetCommitmentInfo(item.CommitmentInfo).
 		SetStatus(string(item.Status)).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	if item.AdjustedEntitlementQuantity != nil {
+		q = q.SetAdjustedEntitlementQuantity(*item.AdjustedEntitlementQuantity)
+	} else {
+		q = q.ClearAdjustedEntitlementQuantity()
+	}
+
+	_, err := q.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

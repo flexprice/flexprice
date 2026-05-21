@@ -410,6 +410,34 @@ func (ilic *InvoiceLineItemCreate) SetNillableInvoiceLevelDiscount(d *decimal.De
 	return ilic
 }
 
+// SetSubscriptionLineItemID sets the "subscription_line_item_id" field.
+func (ilic *InvoiceLineItemCreate) SetSubscriptionLineItemID(s string) *InvoiceLineItemCreate {
+	ilic.mutation.SetSubscriptionLineItemID(s)
+	return ilic
+}
+
+// SetNillableSubscriptionLineItemID sets the "subscription_line_item_id" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableSubscriptionLineItemID(s *string) *InvoiceLineItemCreate {
+	if s != nil {
+		ilic.SetSubscriptionLineItemID(*s)
+	}
+	return ilic
+}
+
+// SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
+func (ilic *InvoiceLineItemCreate) SetAdjustedEntitlementQuantity(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetAdjustedEntitlementQuantity(d)
+	return ilic
+}
+
+// SetNillableAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableAdjustedEntitlementQuantity(d *decimal.Decimal) *InvoiceLineItemCreate {
+	if d != nil {
+		ilic.SetAdjustedEntitlementQuantity(*d)
+	}
+	return ilic
+}
+
 // SetID sets the "id" field.
 func (ilic *InvoiceLineItemCreate) SetID(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetID(s)
@@ -720,6 +748,14 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.InvoiceLevelDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
 		_node.InvoiceLevelDiscount = &value
+	}
+	if value, ok := ilic.mutation.SubscriptionLineItemID(); ok {
+		_spec.SetField(invoicelineitem.FieldSubscriptionLineItemID, field.TypeString, value)
+		_node.SubscriptionLineItemID = &value
+	}
+	if value, ok := ilic.mutation.AdjustedEntitlementQuantity(); ok {
+		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)
+		_node.AdjustedEntitlementQuantity = &value
 	}
 	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

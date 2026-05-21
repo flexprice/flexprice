@@ -97,6 +97,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetAdjustmentAmount(inv.AdjustmentAmount).
 		SetRefundedAmount(inv.RefundedAmount).
 		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
+		SetNillableIssueDate(inv.IssueDate).
 		Save(ctx)
 
 	if err != nil {
@@ -202,6 +203,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillablePeriodEnd(inv.PeriodEnd).
 			SetEnvironmentID(inv.EnvironmentID).
 			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
+			SetNillableIssueDate(inv.IssueDate).
 			Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
@@ -262,6 +264,8 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetNillableDisplayName(item.DisplayName).
 					SetAmount(item.Amount).
 					SetQuantity(item.Quantity).
+					SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
+					SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 					SetCurrency(item.Currency).
 					SetNillablePeriodStart(item.PeriodStart).
 					SetNillablePeriodEnd(item.PeriodEnd).
@@ -337,6 +341,8 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetAmount(item.Amount).
 				SetQuantity(item.Quantity).
 				SetCurrency(item.Currency).
+				SetNillableAdjustedEntitlementQuantity(item.AdjustedEntitlementQuantity).
+				SetNillableSubscriptionLineItemID(item.SubscriptionLineItemID).
 				SetNillablePeriodStart(item.PeriodStart).
 				SetNillablePeriodEnd(item.PeriodEnd).
 				SetMetadata(item.Metadata).

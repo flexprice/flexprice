@@ -579,6 +579,27 @@ func (su *SubscriptionUpdate) ClearAutoInvoiceThreshold() *SubscriptionUpdate {
 	return su
 }
 
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (su *SubscriptionUpdate) SetSyncedPriceSequence(i int64) *SubscriptionUpdate {
+	su.mutation.ResetSyncedPriceSequence()
+	su.mutation.SetSyncedPriceSequence(i)
+	return su
+}
+
+// SetNillableSyncedPriceSequence sets the "synced_price_sequence" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableSyncedPriceSequence(i *int64) *SubscriptionUpdate {
+	if i != nil {
+		su.SetSyncedPriceSequence(*i)
+	}
+	return su
+}
+
+// AddSyncedPriceSequence adds i to the "synced_price_sequence" field.
+func (su *SubscriptionUpdate) AddSyncedPriceSequence(i int64) *SubscriptionUpdate {
+	su.mutation.AddSyncedPriceSequence(i)
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -1041,6 +1062,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.AutoInvoiceThresholdCleared() {
 		_spec.ClearField(subscription.FieldAutoInvoiceThreshold, field.TypeOther)
+	}
+	if value, ok := su.mutation.SyncedPriceSequence(); ok {
+		_spec.SetField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
+	}
+	if value, ok := su.mutation.AddedSyncedPriceSequence(); ok {
+		_spec.AddField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1947,6 +1974,27 @@ func (suo *SubscriptionUpdateOne) ClearAutoInvoiceThreshold() *SubscriptionUpdat
 	return suo
 }
 
+// SetSyncedPriceSequence sets the "synced_price_sequence" field.
+func (suo *SubscriptionUpdateOne) SetSyncedPriceSequence(i int64) *SubscriptionUpdateOne {
+	suo.mutation.ResetSyncedPriceSequence()
+	suo.mutation.SetSyncedPriceSequence(i)
+	return suo
+}
+
+// SetNillableSyncedPriceSequence sets the "synced_price_sequence" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableSyncedPriceSequence(i *int64) *SubscriptionUpdateOne {
+	if i != nil {
+		suo.SetSyncedPriceSequence(*i)
+	}
+	return suo
+}
+
+// AddSyncedPriceSequence adds i to the "synced_price_sequence" field.
+func (suo *SubscriptionUpdateOne) AddSyncedPriceSequence(i int64) *SubscriptionUpdateOne {
+	suo.mutation.AddSyncedPriceSequence(i)
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -2439,6 +2487,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if suo.mutation.AutoInvoiceThresholdCleared() {
 		_spec.ClearField(subscription.FieldAutoInvoiceThreshold, field.TypeOther)
+	}
+	if value, ok := suo.mutation.SyncedPriceSequence(); ok {
+		_spec.SetField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
+	}
+	if value, ok := suo.mutation.AddedSyncedPriceSequence(); ok {
+		_spec.AddField(subscription.FieldSyncedPriceSequence, field.TypeInt64, value)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

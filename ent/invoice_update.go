@@ -382,6 +382,26 @@ func (iu *InvoiceUpdate) ClearFinalizedAt() *InvoiceUpdate {
 	return iu
 }
 
+// SetIssueDate sets the "issue_date" field.
+func (iu *InvoiceUpdate) SetIssueDate(t time.Time) *InvoiceUpdate {
+	iu.mutation.SetIssueDate(t)
+	return iu
+}
+
+// SetNillableIssueDate sets the "issue_date" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableIssueDate(t *time.Time) *InvoiceUpdate {
+	if t != nil {
+		iu.SetIssueDate(*t)
+	}
+	return iu
+}
+
+// ClearIssueDate clears the value of the "issue_date" field.
+func (iu *InvoiceUpdate) ClearIssueDate() *InvoiceUpdate {
+	iu.mutation.ClearIssueDate()
+	return iu
+}
+
 // SetLastComputedAt sets the "last_computed_at" field.
 func (iu *InvoiceUpdate) SetLastComputedAt(t time.Time) *InvoiceUpdate {
 	iu.mutation.SetLastComputedAt(t)
@@ -811,6 +831,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if iu.mutation.FinalizedAtCleared() {
 		_spec.ClearField(invoice.FieldFinalizedAt, field.TypeTime)
+	}
+	if value, ok := iu.mutation.IssueDate(); ok {
+		_spec.SetField(invoice.FieldIssueDate, field.TypeTime, value)
+	}
+	if iu.mutation.IssueDateCleared() {
+		_spec.ClearField(invoice.FieldIssueDate, field.TypeTime)
 	}
 	if value, ok := iu.mutation.LastComputedAt(); ok {
 		_spec.SetField(invoice.FieldLastComputedAt, field.TypeTime, value)
@@ -1344,6 +1370,26 @@ func (iuo *InvoiceUpdateOne) ClearFinalizedAt() *InvoiceUpdateOne {
 	return iuo
 }
 
+// SetIssueDate sets the "issue_date" field.
+func (iuo *InvoiceUpdateOne) SetIssueDate(t time.Time) *InvoiceUpdateOne {
+	iuo.mutation.SetIssueDate(t)
+	return iuo
+}
+
+// SetNillableIssueDate sets the "issue_date" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableIssueDate(t *time.Time) *InvoiceUpdateOne {
+	if t != nil {
+		iuo.SetIssueDate(*t)
+	}
+	return iuo
+}
+
+// ClearIssueDate clears the value of the "issue_date" field.
+func (iuo *InvoiceUpdateOne) ClearIssueDate() *InvoiceUpdateOne {
+	iuo.mutation.ClearIssueDate()
+	return iuo
+}
+
 // SetLastComputedAt sets the "last_computed_at" field.
 func (iuo *InvoiceUpdateOne) SetLastComputedAt(t time.Time) *InvoiceUpdateOne {
 	iuo.mutation.SetLastComputedAt(t)
@@ -1803,6 +1849,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.FinalizedAtCleared() {
 		_spec.ClearField(invoice.FieldFinalizedAt, field.TypeTime)
+	}
+	if value, ok := iuo.mutation.IssueDate(); ok {
+		_spec.SetField(invoice.FieldIssueDate, field.TypeTime, value)
+	}
+	if iuo.mutation.IssueDateCleared() {
+		_spec.ClearField(invoice.FieldIssueDate, field.TypeTime)
 	}
 	if value, ok := iuo.mutation.LastComputedAt(); ok {
 		_spec.SetField(invoice.FieldLastComputedAt, field.TypeTime, value)

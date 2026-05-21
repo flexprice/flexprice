@@ -77,6 +77,10 @@ const (
 	FieldLineItemDiscount = "line_item_discount"
 	// FieldInvoiceLevelDiscount holds the string denoting the invoice_level_discount field in the database.
 	FieldInvoiceLevelDiscount = "invoice_level_discount"
+	// FieldSubscriptionLineItemID holds the string denoting the subscription_line_item_id field in the database.
+	FieldSubscriptionLineItemID = "subscription_line_item_id"
+	// FieldAdjustedEntitlementQuantity holds the string denoting the adjusted_entitlement_quantity field in the database.
+	FieldAdjustedEntitlementQuantity = "adjusted_entitlement_quantity"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -133,6 +137,8 @@ var Columns = []string{
 	FieldPrepaidCreditsApplied,
 	FieldLineItemDiscount,
 	FieldInvoiceLevelDiscount,
+	FieldSubscriptionLineItemID,
+	FieldAdjustedEntitlementQuantity,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -327,6 +333,16 @@ func ByLineItemDiscount(opts ...sql.OrderTermOption) OrderOption {
 // ByInvoiceLevelDiscount orders the results by the invoice_level_discount field.
 func ByInvoiceLevelDiscount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoiceLevelDiscount, opts...).ToFunc()
+}
+
+// BySubscriptionLineItemID orders the results by the subscription_line_item_id field.
+func BySubscriptionLineItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionLineItemID, opts...).ToFunc()
+}
+
+// ByAdjustedEntitlementQuantity orders the results by the adjusted_entitlement_quantity field.
+func ByAdjustedEntitlementQuantity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAdjustedEntitlementQuantity, opts...).ToFunc()
 }
 
 // ByInvoiceField orders the results by invoice field.

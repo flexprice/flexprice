@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -20,6 +21,8 @@ type ZohoInvoiceService interface {
 type InvoiceService struct {
 	client       ZohoClient
 	customerSvc  ZohoCustomerService
+	itemSyncSvc  ZohoItemSyncService
+	taxSvc       ZohoTaxService
 	customerRepo customer.Repository
 	invoiceRepo  invoice.Repository
 	mappingRepo  entityintegrationmapping.Repository
@@ -29,6 +32,8 @@ type InvoiceService struct {
 func NewInvoiceService(
 	client ZohoClient,
 	customerSvc ZohoCustomerService,
+	itemSyncSvc ZohoItemSyncService,
+	taxSvc ZohoTaxService,
 	customerRepo customer.Repository,
 	invoiceRepo invoice.Repository,
 	mappingRepo entityintegrationmapping.Repository,
@@ -37,6 +42,8 @@ func NewInvoiceService(
 	return &InvoiceService{
 		client:       client,
 		customerSvc:  customerSvc,
+		itemSyncSvc:  itemSyncSvc,
+		taxSvc:       taxSvc,
 		customerRepo: customerRepo,
 		invoiceRepo:  invoiceRepo,
 		mappingRepo:  mappingRepo,
@@ -86,7 +93,10 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		return nil, err
 	}
 
-	lineItems := flexLineItemsToZoho(flexInvoice.LineItems)
+	lineItems, err := s.buildLineItems(ctx, flexInvoice)
+	if err != nil {
+		return nil, err
+	}
 	if len(lineItems) == 0 {
 		return nil, ierr.NewError("invoice has no syncable line items").Mark(ierr.ErrValidation)
 	}
@@ -95,15 +105,16 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 		CustomerID: zohoCustomerID,
 		LineItems:  lineItems,
 		Notes:      "Synced from FlexPrice",
+		Adjustment: flexInvoice.TotalPrepaidCreditsApplied.Mul(decimal.NewFromInt(-1)),
 	}
 	if flexInvoice.FinalizedAt != nil {
 		reqPayload.Date = flexInvoice.FinalizedAt.Format("2006-01-02")
 	} else {
 		reqPayload.Date = time.Now().UTC().Format("2006-01-02")
 	}
-	if flexInvoice.DueDate != nil {
-		reqPayload.DueDate = flexInvoice.DueDate.Format("2006-01-02")
-	}
+	//if flexInvoice.DueDate != nil {
+	//	reqPayload.DueDate = flexInvoice.DueDate.Format("2006-01-02")
+	//}
 	if flexInvoice.InvoiceNumber != nil {
 		reqPayload.ReferenceNumber = *flexInvoice.InvoiceNumber
 	}
@@ -166,25 +177,91 @@ func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *inv
 	return s.invoiceRepo.Update(ctx, flex)
 }
 
-// flexLineItemsToZoho maps FlexPrice invoice lines to Zoho line_items.
-// Like Stripe (amount-only invoice items) and Razorpay (quantity 1 + line total), we send
-// quantity 1 and rate = full line Amount so tiered usage and FlexPrice rounding stay exact.
-func flexLineItemsToZoho(items []*invoice.InvoiceLineItem) []InvoiceLineItem {
-	out := make([]InvoiceLineItem, 0, len(items))
-	for _, li := range items {
+// buildLineItems converts FlexPrice invoice line items to Zoho line items.
+// It bulk-queries Zoho item mappings for all price IDs and creates missing items.
+// If item creation fails for any price, that line item is still sent using name+rate.
+func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoice.Invoice) ([]InvoiceLineItem, error) {
+	inputs := make([]ItemSyncInput, 0, len(flexInvoice.LineItems))
+	for _, li := range flexInvoice.LineItems {
 		if li == nil || li.Amount.IsZero() {
 			continue
 		}
-		name := "Charge"
-		if li.DisplayName != nil && *li.DisplayName != "" {
-			name = *li.DisplayName
-		}
-		out = append(out, InvoiceLineItem{
-			Name:        name,
-			Description: name,
-			Quantity:    decimal.NewFromInt(1),
-			Rate:        li.Amount,
+		inputs = append(inputs, ItemSyncInput{
+			PriceID: lo.FromPtr(li.PriceID),
+			Name:    lo.FromPtrOr(li.DisplayName, "Charge"),
 		})
 	}
-	return out
+
+	taxRes, err := s.taxSvc.ResolveItemTax(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("failed to resolve tax for invoice").Mark(ierr.ErrInternal)
+	}
+
+	priceToItemID := map[string]string{}
+	if len(inputs) > 0 {
+		mapped, err := s.itemSyncSvc.EnsureItemsMapped(ctx, inputs, taxRes)
+		if err != nil {
+			s.logger.Warnw("failed to ensure Zoho item mappings, sending line items without item_id",
+				"invoice_id", flexInvoice.ID,
+				"error", err)
+			return nil, err
+		}
+		priceToItemID = mapped
+	}
+
+	settings, err := s.getInvoiceSyncSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]InvoiceLineItem, 0, len(inputs))
+	for _, li := range flexInvoice.LineItems {
+		if li == nil || li.Amount.IsZero() {
+			continue
+		}
+		qty, rate := s.normalizeRateAndQuantity(li, settings, flexInvoice.BillingPeriod)
+		name := lo.FromPtrOr(li.DisplayName, "Charge")
+		out = append(out, InvoiceLineItem{
+			Name:        name,
+			Description: formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
+			Quantity:    qty,
+			Rate:        rate,
+			ItemID:      priceToItemID[lo.FromPtr(li.PriceID)],
+			//TaxID:          taxRes.TaxID,
+			//TaxExemptionID: taxRes.TaxExemptionID,
+		})
+	}
+	return out, nil
+}
+
+func (s *InvoiceService) getInvoiceSyncSettings(ctx context.Context) (*types.InvoiceSyncSettings, error) {
+	syncConfig, err := s.client.GetZohoBooksSyncConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if syncConfig != nil && syncConfig.InvoiceSyncSettings != nil {
+		return syncConfig.InvoiceSyncSettings, nil
+	}
+	return nil, nil
+}
+
+func (s *InvoiceService) normalizeRateAndQuantity(li *invoice.InvoiceLineItem, settings *types.InvoiceSyncSettings, billingPeriod *string) (qty decimal.Decimal, rate decimal.Decimal) {
+	priceType := lo.FromPtr(li.PriceType)
+
+	if priceType == string(types.PRICE_TYPE_FIXED) && settings != nil {
+		if n := settings.NormalizedFixedQuantity(billingPeriod); n > 0 {
+			dQty := decimal.NewFromInt(int64(n))
+			return dQty, li.Amount.Div(dQty)
+		}
+	}
+
+	return decimal.NewFromInt(1), li.Amount
+
+}
+
+func formatPeriodDescription(fallback string, start, end *time.Time) string {
+	if start == nil || end == nil {
+		return fallback
+	}
+	return start.Format("2006-01-02") + " - " + end.Add(-time.Nanosecond).Format("2006-01-02")
 }
