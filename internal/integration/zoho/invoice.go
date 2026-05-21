@@ -201,14 +201,13 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 	if len(childCustomerIDs) > 0 {
 		custFilter := types.NewNoLimitCustomerFilter()
 		custFilter.CustomerIDs = childCustomerIDs
+		custFilter.Status = lo.ToPtr(types.StatusPublished)
 		customers, custErr := s.customerRepo.List(ctx, custFilter)
 		if custErr != nil {
 			return nil, custErr
 		}
 		for _, c := range customers {
-			if c != nil {
-				childCustomerIDToName[c.ID] = c.Name
-			}
+			childCustomerIDToName[c.ID] = c.Name
 		}
 	}
 	taxRes, err := s.taxSvc.ResolveItemTax(ctx)
