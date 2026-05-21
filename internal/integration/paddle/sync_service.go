@@ -21,7 +21,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // PaddleSyncService orchestrates syncing FlexPrice entities to Paddle.
@@ -1111,7 +1110,6 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 	filter.PaymentStatus = []types.PaymentStatus{
 		types.PaymentStatusPending,
 	}
-	filter.AmountRemainingGt = lo.ToPtr(decimal.NewFromInt(0))
 	filter.SkipLineItems = true
 
 	invoices, err := s.invoiceRepo.List(ctx, filter)
