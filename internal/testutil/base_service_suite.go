@@ -156,7 +156,8 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.T().Fatalf("failed to create encryption service: %v", err)
 	}
 
-	// Initialize integration factory
+	// Initialize integration factory (nil TemporalService is fine for tests — Paddle resync
+	// guards against it and skips gracefully).
 	s.integrationFactory = integration.NewFactory(
 		s.config,
 		s.logger,
@@ -170,6 +171,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.stores.MeterRepo,
 		s.stores.FeatureRepo,
 		encryptionService,
+		nil, // TemporalService — not needed in unit tests
 	)
 }
 

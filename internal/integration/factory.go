@@ -35,6 +35,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -56,6 +57,8 @@ type Factory struct {
 
 	// Storage clients (cached for reuse)
 	s3Client *s3.Client
+
+	temporalSvc temporalservice.TemporalService
 }
 
 // NewFactory creates a new integration factory
@@ -72,6 +75,7 @@ func NewFactory(
 	meterRepo meter.Repository,
 	featureRepo feature.Repository,
 	encryptionService security.EncryptionService,
+	temporalSvc temporalservice.TemporalService,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -87,6 +91,7 @@ func NewFactory(
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
+		temporalSvc:                  temporalSvc,
 	}
 }
 
@@ -441,6 +446,7 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 		f.connectionRepo,
 		f.logger,
 		f.config.Auth.Secret,
+		f.temporalSvc,
 	)
 
 	paymentSvc := paddle.NewPaymentService(f.logger)

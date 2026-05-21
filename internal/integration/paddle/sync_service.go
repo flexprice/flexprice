@@ -18,6 +18,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/samber/lo"
@@ -33,6 +35,7 @@ type PaddleSyncService struct {
 	connectionRepo   connection.Repository
 	logger           *logger.Logger
 	authSecret       string
+	temporalSvc      temporalservice.TemporalService
 }
 
 // NewPaddleSyncService creates a new PaddleSyncService.
@@ -45,6 +48,7 @@ func NewPaddleSyncService(
 	connectionRepo connection.Repository,
 	log *logger.Logger,
 	authSecret string,
+	temporalSvc temporalservice.TemporalService,
 ) *PaddleSyncService {
 	return &PaddleSyncService{
 		client:           client,
@@ -55,6 +59,7 @@ func NewPaddleSyncService(
 		connectionRepo:   connectionRepo,
 		logger:           log,
 		authSecret:       authSecret,
+		temporalSvc:      temporalSvc,
 	}
 }
 
@@ -1097,17 +1102,21 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 	return nil
 }
 
-// resyncPendingInvoicesForSubscription lists all finalized+pending invoices for the given
-// subscription and schedules each for resync in a background goroutine with a short delay.
+// resyncPendingInvoicesForSubscription re-triggers the PaddleInvoiceSyncWorkflow for every
+// finalized+pending invoice that belongs to the given subscription.
 //
-// The delay is necessary because this is called from ProcessSubscriptionActivatedWebhook —
-// Paddle's subscription may not be fully settled on their side yet, causing
-// CreateSubscriptionCharge to fail if attempted immediately. Running in the background also
-// avoids blocking the webhook HTTP response.
+// Called from ProcessSubscriptionActivatedWebhook after the subscription mapping is confirmed.
+// Invoices created during subscription setup failed their original sync because the mapping
+// didn't exist yet; now that it does, we schedule a fresh workflow run for each one.
 //
-// A detached context carrying only tenant/environment is used so the goroutine survives after
-// the HTTP request context is cancelled.
+// Each workflow is delayed 30 seconds so Paddle has time to fully settle the subscription
+// before the charge is attempted. The workflow's own retry policy handles transient failures.
+// If TemporalService is nil (e.g. in unit-test environments), the method returns silently.
 func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
+	if s.temporalSvc == nil {
+		return
+	}
+
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
 	filter.InvoiceStatus = []types.InvoiceStatus{
@@ -1131,42 +1140,35 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 		return
 	}
 
-	// Collect IDs before launching goroutine (avoid capturing loop variable / invoice slice).
-	invoiceIDs := make([]string, len(invoices))
-	for i, inv := range invoices {
-		invoiceIDs[i] = inv.ID
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	s.logger.Infow("triggering post-activation invoice resync workflows",
+		"subscription_id", subscriptionID, "count", len(invoices))
+
+	triggered := 0
+	for _, inv := range invoices {
+		input := temporalmodels.PaddleInvoiceSyncWorkflowInput{
+			InvoiceID:      inv.ID,
+			CustomerID:     inv.CustomerID,
+			SubscriptionID: subscriptionID,
+			TenantID:       tenantID,
+			EnvironmentID:  environmentID,
+		}
+		_, wErr := s.temporalSvc.ExecuteWorkflowWithDelay(ctx, types.TemporalPaddleInvoiceSyncWorkflow, input, 30)
+		if wErr != nil {
+			s.logger.Warnw("failed to trigger invoice resync workflow after subscription.activated",
+				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", wErr)
+			continue
+		}
+		triggered++
 	}
 
-	s.logger.Infow("scheduling post-activation invoice resync in background",
-		"subscription_id", subscriptionID, "count", len(invoiceIDs))
-
-	// Detach from the HTTP request context: preserve only tenant/environment so the goroutine
-	// is not cancelled when the webhook handler returns.
-	bgCtx := context.Background()
-	bgCtx = types.SetTenantID(bgCtx, types.GetTenantID(ctx))
-	bgCtx = types.SetEnvironmentID(bgCtx, types.GetEnvironmentID(ctx))
-
-	go func() {
-		// Give Paddle time to fully settle the subscription before charging.
-		time.Sleep(30 * time.Second)
-
-		succeeded := 0
-		for _, invoiceID := range invoiceIDs {
-			_, syncErr := s.SyncInvoice(bgCtx, SyncInvoiceRequest{InvoiceID: invoiceID})
-			if syncErr != nil {
-				s.logger.Warnw("failed to resync invoice after subscription.activated",
-					"subscription_id", subscriptionID, "invoice_id", invoiceID, "error", syncErr)
-				continue
-			}
-			succeeded++
-		}
-
-		s.logger.Infow("completed post-activation invoice resync",
-			"subscription_id", subscriptionID,
-			"attempted", len(invoiceIDs),
-			"succeeded", succeeded,
-			"failed", len(invoiceIDs)-succeeded)
-	}()
+	s.logger.Infow("completed post-activation invoice resync workflow dispatch",
+		"subscription_id", subscriptionID,
+		"attempted", len(invoices),
+		"triggered", triggered,
+		"failed", len(invoices)-triggered)
 }
 
 func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.InvoiceLineItem {

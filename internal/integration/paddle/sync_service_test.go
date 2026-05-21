@@ -321,6 +321,7 @@ func buildTestSyncService(
 		connectionRepo,
 		buildTestLogger(),
 		"test-auth-secret",
+		nil, // TemporalService — not needed in unit tests
 	)
 }
 
