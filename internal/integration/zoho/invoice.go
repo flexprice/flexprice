@@ -2,6 +2,7 @@ package zoho
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -222,7 +223,7 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		name := lo.FromPtrOr(li.DisplayName, "Charge")
 		out = append(out, InvoiceLineItem{
 			Name:        name,
-			Description: formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
+			Description: li.Metadata[types.InvoiceLineItemMetadataKeyChildName],
 			Quantity:    qty,
 			Rate:        rate,
 			ItemID:      priceToItemID[lo.FromPtr(li.PriceID)],
@@ -262,5 +263,8 @@ func formatPeriodDescription(fallback string, start, end *time.Time) string {
 	if start == nil || end == nil {
 		return fallback
 	}
-	return start.Format("2006-01-02") + " - " + end.Add(-time.Nanosecond).Format("2006-01-02")
+	if fallback != "" {
+		return fmt.Sprintf("%s\n(%s - %s)", fallback, start.Format("2006-01-02"), end.Add(-time.Nanosecond).Format("2006-01-02"))
+	}
+	return fmt.Sprintf("(%s - %s)", start.Format("2006-01-02"), end.Add(-time.Nanosecond).Format("2006-01-02"))
 }
