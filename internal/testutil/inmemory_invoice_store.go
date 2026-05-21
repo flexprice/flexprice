@@ -431,6 +431,11 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		return false
 	}
 
+	// Filter by billing reason
+	if f.BillingReason != "" && inv.BillingReason != string(f.BillingReason) {
+		return false
+	}
+
 	// Filter by due amount
 	if f.AmountDueGt != nil && inv.AmountDue.LessThanOrEqual(*f.AmountDueGt) {
 		return false
