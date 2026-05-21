@@ -1,18 +1,110 @@
 ---
 name: devenv
 description: >-
-  Local dev environment wizard — compose, grep/fix .env*, api/consumer/temporal_worker/local modes,
-  consumer groups, verify loop with curl. Trigger: devenv, local dev setup, docker env, run-local.
+  Dev environment wizard — hybrid by default: .env/.env.local creds for RDS, managed Kafka, etc.;
+  Docker only for components the user says are local; idempotent Compose checks when applicable;
+  Kafka: prompt before default-topic creation (**`make init-kafka`**).
+  Modes api/consumer/temporal_worker/local. Trigger: devenv, local dev, run-local.
 disable-model-invocation: false
 ---
 
-# **`devenv`** — local environment (wizard)
+# **`devenv`** — environment wizard (often **hybrid**, not “all-local”)
 
-Use as a **wizard**: prefer **incremental steps**, **bounded verify loops**, and **safe `.env` handling**.
+Use as a **wizard**: confirm **what runs where**, then align **`.env` / `.env.local`** and **Compose** accordingly.
+
+### What “devenv” usually means here
+
+- **`devenv` ≠ “everything in Docker Compose.”** Many setups use **real or shared backends** via **`.env` only**: e.g. **RDS** (Postgres), **managed Kafka**, **hosted ClickHouse**, **Temporal Cloud**.
+- **`devenv` = “run the FlexPrice binaries / processes you care about locally”** while **credentials and endpoints live in `.env` / `.env.local`** (`FLEXPRICE_POSTGRES_*`, `FLEXPRICE_KAFKA_BROKERS`, etc.). Treat those files as **the source of truth** for hosts, ports, SSL, IAM-style wiring the app understands.
+- **Only spin up Docker (or localhost services) for pieces the user names as local.** Example: Postgres on **RDS** + **only** Kafka + Temporal in Compose → **`docker compose up -d kafka temporal temporal-ui`** (and anything else they list); **do not** insist on **`postgres`** containers or **§E1** blindly.
+- **`§C` “127.0.0.1 + Compose defaults” is one recipe** — the **RDS / cloud** variant is: **omit or comment conflicting lines**, set **`FLEXPRICE_POSTGRES_HOST`** (and reader, SSL mode, passwords) to the **managed** endpoints from **`.env`**, and verify connectivity with **their** toolchain (`psql`, VPN, bastion docs) rather than **`docker compose exec postgres`**.
+
+If the user hasn’t said what’s local vs remote, **ask once**: *Which deps are localhost/Compose vs RDS or other hosted?*
+
+---
+
+## 0. Idempotent Docker preflight (when **Compose** is in play)
+
+Goals: avoid useless failures, redundant pulls, or duplicate work when infra is already fine. **Skip heavy Compose paths** when the stack is **fully remote** except app processes on the laptop.
+
+### 0.1 Docker daemon
+
+```bash
+docker info >/dev/null 2>&1 && echo OK || echo NO_DOCKER
+```
+
+- If **`NO_DOCKER`**: **stop** — instruct the human to **start Docker Desktop**, **OrbStack**, **Colima**, **Rancher Desktop**, etc. (their platform). Optionally: `colima status` / `docker context ls` hints. Do **not** loop forever; wait for confirmation.
+
+### 0.2 What is already running? (reuse healthy stack)
+
+Repo root (`docker-compose.yml` present):
+
+```bash
+docker compose ps -a --format json
+# Human-readable shorthand:
+docker compose ps
+```
+
+- Check **only services the user relies on locally** — e.g. if DB is **RDS**, ignore **`postgres`** in Compose for “ready” semantics (still fine if an old **`postgres`** container exists unused).
+- If **each Compose-backed dependency they use** (**`kafka`**, **`clickhouse`**, **`temporal`**, etc.) already **running** (+ **healthy**/ready per compose): **skip** duplicate **`docker compose up -d`** unless they asked for **recreate** / compose changed materially.
+- **Idempotent converge:** **`docker compose up -d …`** for **that subset** remains safe — prefer **checking first** to reduce chat noise.
+
+### 0.3 App images (`flexprice-api` stack)
+
+Before **`make build-image`** / **`make dev-setup`**:
+
+```bash
+docker images flexprice-app:local --format '{{.Repository}}:{{.Tag}}'
+```
+
+- Missing image:** expected before first build — OK to **`docker compose build flexprice-build`** or **`make build-image`** once daemon is UP.
+- **Caches:** rebuild **only** if Dockerfile / deps / user requests **–no-cache** — avoid needless full rebuild declarations.
+
+### 0.4 When user wants “reset” vs “soft start”
+
+| Intent | Typical action |
+|--------|----------------|
+| **Soft idempotent** | `docker compose up -d …` reconcile only |
+| **Nuclear** | **`make clean-docker`** / **`down -v`** — **destructive**, warn first |
+
+---
+
+## 0.K Kafka broker choice (Compose default vs lighter alternatives)
+
+### Supported default (this repo)
+
+- **`docker-compose.yml`** wires **Confluent `cp-kafka`** with **EXTERNAL listener `localhost:29092`** and **`make init-kafka`**/`docker compose exec kafka …` **kafka-topics** CLIs assumed.
+- **`FLEXPRICE_KAFKA_BROKERS`** for hybrid host binaries:** **`localhost:29092`** (matches advertised listener).
+
+### “Can I use Redpanda / Kafka KRaft / other lightweight Kafka-compatible broker?”
+
+- **Prefer real Kafka-compat + same listener story** until you validated **Sarama/Watermill** against the substitute.
+- **Redpanda** (or embedded KRaft): **possible** locally **only if**:
+  - Network & listener reach **`localhost:29092`** (or you change **`.env.local`** brokers consistently everywhere).
+  - **Topic/partition tooling** equivalents exist — **`make init-kafka`** is **kafka-specific CLI** paths; swapping broker ⇒ **adapt or run topic creation manually** against the new tooling.
+  - **Auto-create OFF** replicated — topics must still exist (**`kafka.auto.create.topics.enable: false`** pattern).
+- Agent stance:** **Recommend stock Compose Kafka** unless user explicitly commits to maintaining alternate compose.** Document lightweight swap as **advanced / unsupported upstream** parity.
+
+### Default Kafka topics (**ask**, then maybe create)
+
+When **bringing Kafka online** or finishing a Compose Kafka setup (**not assumed**):
+
+1. **Ask explicitly:** “Create the repo’s **default FlexPrice topics** (same names as **`make init-kafka`**)?” **Yes / no** — never run topic creation silently against shared clusters.
+2. **If Compose `kafka`** and **yes** → from repo root, after Kafka responds to **`kafka-topics --list`**:
+
+```bash
+make init-kafka
+```
+
+3. **If managed / non-Compose broker** | **yes** → **`make init-kafka` will not run** (`docker compose exec kafka …`). Recreate **the same topic names** with their toolchain (MSK console, **`kafka-topics` against SASL/SSL bootstrap**, IaC). Mirror **`Makefile`**’s **`init-kafka`** list: **`events`**, **`events_lazy`**, **`events_dlq`**, **`events_backfill`**, **`events_post_processing`**, **`events_post_processing_backfill`**, **`system_events`**, **`wallet_alert`**, **`onboarding_events`**, **`staging_benchmarking`**, **`prod_events_v4`**, **`staging_events_backfill`**, **`staging_events`** (partitions/replication/placement policy per **their** policy, not blindly `1`/local).
+4. **If no** → skip; user may rely on IaC / existing topics. Warn if app logs complain **unknown topic** / **UNKNOWN_TOPIC_OR_PARTITION**.
+5. **Webhook naming:** **`config.yaml`** may expect **`flexprice_system_events`** while **`make init-kafka`** creates **`system_events`** — align topic name with config or extend creation list (**§G**).
 
 ---
 
 ## A. Natural language → intent (maps user chatter to actions)
+
+**First clarify stack shape** when they mention RDS, staging DB, “only Kafka local”, etc.: map each dependency to **`.env` vars** vs **Compose service name**.
 
 Interpret phrases like:
 
@@ -25,7 +117,9 @@ Interpret phrases like:
 | *full Docker / dev-setup* | **`make dev-setup`** |
 | *change consumer group for local testing* | Edit **`.env.local`** — §D (pick the right **`FLEXPRICE_*`** key) |
 
-If unclear, confirm: **binary on host vs Docker**, and whether **infra** is already running.
+When **Kafka** is part of setup, follow **§0.K “Default Kafka topics”** — **prompt** before **`make init-kafka`** unless the user already said yes to creating default topics in the same turn.
+
+If unclear, confirm: **binary on host vs Docker**, **which backends are Compose vs RDS/managed**, and whether **infra** is already reachable (VPN, SSO, IP allowlists).
 
 ---
 
@@ -57,7 +151,15 @@ Never commit **`.env` / `.env.local`** secrets; `.gitignore` usually excludes th
 
 ## C. Hybrid host binaries — `.env.local` correctness
 
-### C1 Lines to **enable** when Go runs **on macOS** and infra is **Compose on localhost**
+Use **`rg`** §B **before** editing. **`Makefile` `run-local-*`** sources **`.env` then `.env.local`** — **`set -a`**; **later wins**.
+
+### C0 RDS / managed Postgres (no local `postgres` container)
+
+- Set **`FLEXPRICE_POSTGRES_HOST`** / **`FLEXPRICE_POSTGRES_READER_*`** / **`FLEXPRICE_POSTGRES_SSLMODE`** (often **`require`**) / password from **`.env` or `.env.local`** per your org’s RDS doc — **never paste secrets into chat**.
+- **Comment out** Compose-only aliases (**`postgres`**) in `.env` if they hijack **`run-local-*`** precedence.
+- **Do not** require **`docker compose exec postgres`** for “green” — use app startup, **`psql`** to **their** endpoint, or DBA-approved checks.
+
+### C1 Lines to **enable** when Go runs **on macOS** and **Postgres/Kafka/ClickHouse/Temporal** are **Compose on localhost**
 
 ```bash
 FLEXPRICE_POSTGRES_HOST=127.0.0.1
@@ -87,8 +189,6 @@ Typical killers:
 # FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
 # FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
 ```
-
-Makefile loads **`.env` then `.env.local`** — **`set -a`** (see `Makefile`); **later file wins**. Keep overrides in **`.env.local`** to avoid battling `.env`.
 
 ### C3 **Don’t confuse** **`make run-server`**
 
@@ -132,14 +232,18 @@ Practical discipline:
 
 ## E. **Recipes** — Docker infra (minimal practical)
 
-Compose **Temporal** **`depends_on: postgres`** — cannot drop Postgres if using bundled Temporal.
+**Run §0 first** (daemon + `docker compose ps`) **only when** the user wants **some** Compose services. **RDS for Postgres:** use **`C0`** + start **Kafka/ClickHouse/Temporal** subsets as needed; repo **Temporal often still wants Postgres somewhere** — if entirely off Compose, confirm **Temporal + visibility DB** story (managed Temporal Cloud vs local Temporal + remote DB vs full Compose).
+
+Compose **Temporal** **`depends_on: postgres`** — cannot drop Postgres **from this Compose file** if using **bundled Temporal** unless you intentionally run Postgres elsewhere compatible with that compose Temporal config.
 
 ### E1 Hybrid infra (`postgres kafka clickhouse temporal temporal-ui`)
 
 ```bash
 docker compose up -d postgres kafka clickhouse temporal temporal-ui
-make migrate-postgres migrate-clickhouse generate-ent migrate-ent seed-db init-kafka
+make migrate-postgres migrate-clickhouse generate-ent migrate-ent seed-db
 ```
+
+**Kafka topics:** **`make init-kafka`** is **optional** — **§0.K** (ask first). If yes: **`make init-kafka`** once Kafka is reachable from Compose.
 
 ### E2 Fully Docker apps
 
@@ -157,37 +261,44 @@ Kafka UI (`--profile dev`): `docker compose --profile dev up -d kafka-ui` → **
 
 Pick **`MAX_ROUNDS`** (default **8**) and **`SLEEP_SECONDS`** (default **4** unless hot path).
 
-Each **round**:
+Build a **minimal checklist from the user’s stack** (RDS → skip Compose postgres checks; managed Kafka → skip **`docker compose exec kafka`** unless they still use Compose broker).
 
-1. **Compose status:** `docker compose ps` → **critical services Running** (**postgres kafka clickhouse temporal** at minimum).
+Each **round** (round 1 cheaply reuses §0 daemon check if Compose is in play and prior step failed):
 
-2. **Postgres:**
+1. **Compose status** (if any local Compose deps): **`docker compose ps`** → listed services **Running** where used.
+
+2. **Postgres**  
+   - **Compose Postgres:**  
 
 ```bash
 docker compose exec -T postgres pg_isready -U flexprice -d flexprice
 ```
+   - **RDS / remote:** probe with **their** method (VPN up, **`psql "$DATABASE_URL"`** locally with **values from `.env`** — redact when discussing; or migration smoke via **`make migrate-postgres`** if wired to same DSN).
 
-3. **Kafka (inside cluster):**
+3. **Kafka**  
+   - **Compose Kafka:**
 
 ```bash
 docker compose exec -T kafka kafka-topics --bootstrap-server kafka:9092 --list
 ```
+   - **Managed / host-only brokers:** **`FLEXPRICE_KAFKA_BROKERS`** from **`.env`**, CLI or **consumer startup logs**; **`make init-kafka`** assumptions may not apply.
 
-4. **ClickHouse:**
+4. **ClickHouse** — if local HTTP listener expected:
 
 ```bash
 curl -sf http://127.0.0.1:8123/ping >/dev/null && echo OK
 ```
+   If ClickHouse is **hosted**, substitute **their** ping or query path.
 
 5. **Mode-specific:**
    - **`api`** or **`local`** (listening on `:8080` from host defaults): **`curl -sf -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/health`** expect **`200`**.
-   - **`consumer`**: HTTP ping **optional** — confirm **broker** reachable from host (`localhost:29092`), process **startup logs**, no fatal on consumer init.
+   - **`consumer`**: HTTP ping **optional** — confirm **broker** reachable from host (**`FLEXPRICE_KAFKA_BROKERS`** / `localhost:29092` when using Compose Kafka), process **startup logs**, no fatal on consumer init.
    - **`temporal_worker`**: `:8080` may **absent**. Ping **Temporal UI** proxy instead: **`curl -sf http://127.0.0.1:8088 >/dev/null`** **and/or** Temporal container **`7233`** path per ops habits; alternatively ask user **do they see worker registration logs**.
 
 **On failure:**
 
-- Inspect **grep output** §B — uncommented **`postgres`/`kafka:9092`** bindings?
-- Retry **`docker compose up -d`**.
+- Inspect **grep output** §B — stray **`postgres`/`kafka:9092`** overrides when RDS / managed Kafka is intended?
+- **`docker compose up -d`** only for **Compose-backed** services they use — not a universal fix when the failure is VPC / RDS security group / IAM.
 - **`sleep`** then next round.
 
 **Escalate** after **`MAX_ROUNDS`**: summarize last errors; **do not infinite loop**.
@@ -211,6 +322,7 @@ Webhook topic mismatch risk: **`config.yaml`** **`webhook.topic`** (**`flexprice
 - Paste full **`.env`** into transcripts (secrets).
 - Use **`kafka:9092`** from **macOS Go binary**.
 - **`make swagger-3-0`** without network (**converter.swagger.io**).
+- Insist on **§E1 full infra** when the user already said **Postgres/Kafka/etc. lives in RDS or managed** (`devenv` = **their** `.env` truth + **minimal** Compose).
 
 ---
 

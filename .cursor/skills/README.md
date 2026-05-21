@@ -8,7 +8,7 @@ Skills load from **`.cursor/skills/<folder>/SKILL.md`**. Cursor matches the YAML
 | ------------ | ------ | ------- |
 | **`arch`** | [`arch`](arch/SKILL.md) | Layering, `docs/*`, hotspots, flows, Graphify; global skill `repo-architecture-intelligence` |
 | **`godev`** | [`godev`](godev/SKILL.md) | fmt, vet, `go test` / `make test` |
-| **`devenv`** | [`devenv`](devenv/SKILL.md) | Interactive local env: compose, `.env*`, modes, consumer groups, verify loop |
+| **`devenv`** | [`devenv`](devenv/SKILL.md) | Hybrid env wizard: `.env*` for RDS/managed backends; Compose only what’s local; modes, consumer groups, verify loop |
 | **`compose`** | [`compose`](compose/SKILL.md) | Docker / `make dev-setup` shorthand; deep ⇒ **`devenv`** |
 | **`openapi`** | [`openapi`](openapi/SKILL.md) | `make swagger`, SDK/MCP, `api/custom/` |
 | **`apitest`** | [`apitest`](apitest/SKILL.md) | Master HTTP QA: **`devenv`** + interactive creds + real **`curl`**, shard workers |
