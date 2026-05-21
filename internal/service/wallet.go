@@ -830,6 +830,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			},
 			PaymentStatus: lo.ToPtr(paymentStatus),
 			Metadata:      invoiceMetadata,
+			BillingReason: req.BillingReason,
 		}
 		// Use CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
 		inv, err := invoiceService.CreateInvoice(ctx, invReq)
