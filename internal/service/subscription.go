@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	paddleint "github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceTemporalModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
@@ -484,6 +485,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, sub.ID)
 	} else {
 		s.triggerHubSpotDealSyncWorkflow(ctx, sub.ID, customer.ID)
+		s.runPaddleSubscriptionSync(ctx, sub)
 		s.publishSubscriptionCreatedEvent(ctx, sub)
 	}
 	return response, nil
@@ -7475,4 +7477,60 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 		item.InvoiceID = inv.ID
 	}
 	return nil
+}
+
+// runPaddleSubscriptionSync synchronously bootstraps a Paddle subscription for the given
+// subscription. It is called inline from CreateSubscription so the checkout URL is available
+// in the response without a round-trip through Temporal. All errors are soft-fail: the
+// subscription has already been persisted, so we only log and continue.
+//
+// On success, EnsureSubscriptionSynced mutates sub.Metadata in place and persists the change,
+// so the caller's response pointer automatically reflects paddle_checkout_url and
+// paddle_transaction_id with no extra work.
+func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub *subscription.Subscription) {
+	paddleInt, err := s.IntegrationFactory.GetPaddleIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return // Paddle not configured for this environment — skip silently
+		}
+		s.Logger.WarnwCtx(ctx, "failed to get Paddle integration for inline sync, subscription created without checkout URL",
+			"subscription_id", sub.ID, "error", err)
+		return
+	}
+
+	productItems := make([]paddleint.EnsureBulkProductSyncedItem, 0, len(sub.LineItems))
+	for _, li := range sub.LineItems {
+		if li == nil || li.PriceID == "" {
+			continue
+		}
+		name := li.PriceID
+		if li.DisplayName != "" {
+			name = li.DisplayName
+		}
+		productItems = append(productItems, paddleint.EnsureBulkProductSyncedItem{
+			PriceID: li.PriceID,
+			Name:    name,
+		})
+	}
+
+	productsResp, err := paddleInt.SyncSvc.EnsureBulkProductSynced(ctx, paddleint.EnsureBulkProductSyncedRequest{Items: productItems})
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "paddle product sync failed during inline subscription sync",
+			"subscription_id", sub.ID, "error", err)
+		return
+	}
+
+	_, err = paddleInt.SyncSvc.EnsureSubscriptionSynced(ctx, paddleint.EnsureSubscriptionSyncedRequest{
+		Subscription:       sub,
+		PriceIDToProductID: productsResp.PriceIDToPaddleProductID,
+	})
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "paddle subscription sync failed during inline subscription sync",
+			"subscription_id", sub.ID, "error", err)
+		return
+	}
+
+	s.Logger.InfowCtx(ctx, "paddle subscription synced synchronously",
+		"subscription_id", sub.ID,
+		"checkout_url_present", sub.Metadata["paddle_checkout_url"] != "")
 }
