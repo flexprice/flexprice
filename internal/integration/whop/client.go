@@ -24,6 +24,7 @@ type WhopClient interface {
 	GetProduct(ctx context.Context, productID string) (*ProductResponse, error)
 	CreateProduct(ctx context.Context, req CreateProductRequest) (*ProductResponse, error)
 	GetPlan(ctx context.Context, planID string) (*PlanResponse, error)
+	GetInvoice(ctx context.Context, whopInvoiceID string) (*InvoiceResponse, error)
 	CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*InvoiceResponse, error)
 	MarkInvoicePaid(ctx context.Context, whopInvoiceID string) error
 }
@@ -266,6 +267,15 @@ func (c *Client) GetPlan(ctx context.Context, planID string) (*PlanResponse, err
 	return &response, nil
 }
 
+// GetInvoice fetches a Whop invoice by ID
+func (c *Client) GetInvoice(ctx context.Context, whopInvoiceID string) (*InvoiceResponse, error) {
+	var response InvoiceResponse
+	if err := c.makeRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/invoices/%s", whopInvoiceID), nil, &response); err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
 // CreateInvoice creates a one-time invoice in Whop with send_invoice collection method
 func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*InvoiceResponse, error) {
 	c.logger.Infow("creating invoice in Whop",
@@ -285,6 +295,15 @@ func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*
 // MarkInvoicePaid marks a Whop invoice as paid via POST /v1/invoices/:id/mark_paid
 func (c *Client) MarkInvoicePaid(ctx context.Context, whopInvoiceID string) error {
 	c.logger.Infow("marking invoice as paid in Whop", "whop_invoice_id", whopInvoiceID)
+
+	inv, err := c.GetInvoice(ctx, whopInvoiceID)
+	if err != nil {
+		return err
+	}
+	if inv.Status == "paid" {
+		c.logger.Infow("Whop invoice already paid, skipping mark_paid", "whop_invoice_id", whopInvoiceID)
+		return nil
+	}
 
 	if err := c.makeRequest(ctx, http.MethodPost, fmt.Sprintf("/v1/invoices/%s/mark_paid", whopInvoiceID), nil, nil); err != nil {
 		return err

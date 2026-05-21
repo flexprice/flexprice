@@ -6,8 +6,7 @@ const (
 	WhopBaseURL = "https://api.whop.com"
 	// WhopBaseURL = "https://sandbox-api.whop.com" // for sandbox whop testing
 
-	DefaultProductTitle       = "Flexprice Subscription"
-	DefaultProductDescription = "Flexprice invoice sync product"
+	DefaultProductTitle = "Flexprice Billing Product"
 )
 
 // WhopConfig holds decrypted Whop configuration
@@ -19,10 +18,9 @@ type WhopConfig struct {
 
 // CreateProductRequest is the request body for POST /v1/products
 type CreateProductRequest struct {
-	CompanyID   string                 `json:"company_id"`
-	Title       string                 `json:"title"`
-	Description string                 `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	CompanyID  string `json:"company_id"`
+	Title      string `json:"title"`
+	Visibility string `json:"visibility,omitempty"`
 }
 
 // ProductResponse is the response from POST /v1/products and GET /v1/products/:id

@@ -208,10 +208,9 @@ func (s *InvoiceSyncService) ensureProduct(ctx context.Context) (string, error) 
 	}
 
 	product, err := s.client.CreateProduct(ctx, CreateProductRequest{
-		CompanyID:   cfg.CompanyID,
-		Title:       DefaultProductTitle,
-		Description: DefaultProductDescription,
-		Metadata:    map[string]interface{}{},
+		CompanyID:  cfg.CompanyID,
+		Title:      DefaultProductTitle,
+		Visibility: "quick_link",
 	})
 	if err != nil {
 		return "", ierr.WithError(err).
