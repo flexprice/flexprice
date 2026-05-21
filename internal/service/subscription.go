@@ -7484,9 +7484,9 @@ func (s *subscriptionService) processAutoInvoiceThresholdSubscription(
 // in the response without a round-trip through Temporal. All errors are soft-fail: the
 // subscription has already been persisted, so we only log and continue.
 //
-// On success, EnsureSubscriptionSynced mutates sub.Metadata in place and persists the change,
-// so the caller's response pointer automatically reflects paddle_checkout_url and
-// paddle_transaction_id with no extra work.
+// On success, EnsureSubscriptionSynced persists paddle checkout metadata; it is copied back
+// onto the caller's sub so the create response includes paddle_checkout_url and
+// paddle_transaction_id.
 func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub *subscription.Subscription) {
 	if s.IntegrationFactory == nil {
 		return
@@ -7501,8 +7501,16 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 		return
 	}
 
-	productItems := make([]paddleint.EnsureBulkProductSyncedItem, 0, len(sub.LineItems))
-	for _, li := range sub.LineItems {
+	reloadedSub, lineItems, err := s.SubRepo.GetWithLineItems(ctx, sub.ID)
+	if err != nil {
+		s.Logger.WarnwCtx(ctx, "failed to reload subscription for paddle inline sync",
+			"subscription_id", sub.ID, "error", err)
+		return
+	}
+	reloadedSub.LineItems = lineItems
+
+	productItems := make([]paddleint.EnsureBulkProductSyncedItem, 0, len(reloadedSub.LineItems))
+	for _, li := range reloadedSub.LineItems {
 		if li == nil || li.PriceID == "" {
 			continue
 		}
@@ -7524,13 +7532,26 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 	}
 
 	_, err = paddleInt.SyncSvc.EnsureSubscriptionSynced(ctx, paddleint.EnsureSubscriptionSyncedRequest{
-		Subscription:       sub,
+		Subscription:       reloadedSub,
 		PriceIDToProductID: productsResp.PriceIDToPaddleProductID,
 	})
 	if err != nil {
 		s.Logger.WarnwCtx(ctx, "paddle subscription sync failed during inline subscription sync",
 			"subscription_id", sub.ID, "error", err)
 		return
+	}
+
+	// EnsureSubscriptionSynced mutates metadata on reloadedSub; copy to caller sub for response.
+	if reloadedSub.Metadata != nil {
+		if sub.Metadata == nil {
+			sub.Metadata = make(types.Metadata)
+		}
+		if v := reloadedSub.Metadata[paddleint.MetaKeyPaddleTransactionID]; v != "" {
+			sub.Metadata[paddleint.MetaKeyPaddleTransactionID] = v
+		}
+		if v := reloadedSub.Metadata[paddleint.MetaKeyPaddleCheckoutURL]; v != "" {
+			sub.Metadata[paddleint.MetaKeyPaddleCheckoutURL] = v
+		}
 	}
 
 	s.Logger.InfowCtx(ctx, "paddle subscription synced synchronously",
