@@ -245,6 +245,10 @@ const (
 	// Zero-dollar: marked SKIPPED; current_period_start still advances to avoid re-checking.
 	// Side-effect: advances current_period_start to the invoice's period_end after finalization.
 	InvoiceBillingReasonAutoInvoiceThreshold InvoiceBillingReason = "AUTO_INVOICE_THRESHOLD"
+
+	// InvoiceBillingReasonWalletAutoTopup is generated when a wallet balance drops
+	// below the auto-topup threshold and invoiced top-up is enabled.
+	InvoiceBillingReasonWalletAutoTopup InvoiceBillingReason = "WALLET_AUTO_TOPUP"
 )
 
 func (r InvoiceBillingReason) String() string {
@@ -261,6 +265,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
 		InvoiceBillingReasonAutoInvoiceThreshold,
+		InvoiceBillingReasonWalletAutoTopup,
 	}
 
 	if r != "" && !lo.Contains(allowed, r) {
@@ -436,6 +441,9 @@ type InvoiceFilter struct {
 	// payment_status filters by the payment state of invoices
 	// Multiple statuses can be specified to include invoices with any of the listed payment states
 	PaymentStatus []PaymentStatus `json:"payment_status,omitempty" form:"payment_status"`
+
+	// BillingReason filters invoices by why they were generated
+	BillingReason InvoiceBillingReason `json:"billing_reason,omitempty" form:"billing_reason"`
 
 	// amount_due_gt filters invoices with a total amount due greater than the specified value
 	// Useful for finding invoices above a certain threshold or identifying high-value invoices
