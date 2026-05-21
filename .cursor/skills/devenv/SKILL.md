@@ -3,6 +3,9 @@ name: devenv
 description: >-
   Dev environment wizard — hybrid by default: .env/.env.local creds for RDS, managed Kafka, etc.;
   Docker only for components the user says are local; idempotent Compose checks when applicable;
+  **Local Compose:** always use localhost creds (**§C1** in `.env.local`) before migrations, seeds, `go run`/run-local-*;
+  **Effort → model (**§M**):** classify S/M/L, use fast models for checklist work, escalate to **Claude Sonnet 4.x (e.g. 4.7 when offered)** / strongest reasoning tier for hybrid/RDS churn;
+  **Parallelism (**§N**):** spawn **Cursor Task subagents** for independent probes or read-only investigate paths when it speeds **§F** convergence.
   Kafka: prompt before default-topic creation (**`make init-kafka`**).
   Modes api/consumer/temporal_worker/local. Trigger: devenv, local dev, run-local.
 disable-model-invocation: false
@@ -20,6 +23,97 @@ Use as a **wizard**: confirm **what runs where**, then align **`.env` / `.env.lo
 - **`§C` “127.0.0.1 + Compose defaults” is one recipe** — the **RDS / cloud** variant is: **omit or comment conflicting lines**, set **`FLEXPRICE_POSTGRES_HOST`** (and reader, SSL mode, passwords) to the **managed** endpoints from **`.env`**, and verify connectivity with **their** toolchain (`psql`, VPN, bastion docs) rather than **`docker compose exec postgres`**.
 
 If the user hasn’t said what’s local vs remote, **ask once**: *Which deps are localhost/Compose vs RDS or other hosted?*
+
+---
+
+## **`§L`** — **Local-first creds** for migrations, seeds, `make migrate-*`, and local processes
+
+Unless the human **explicitly** said Postgres/ClickHouse/Temporal are **remote** (RDS, hosted CH, Temporal Cloud):
+
+1. **Treat `.env.local` as the safety rail** for anything that runs **Go on the host** (API, worker, **`make run-local-*`**, **`go run cmd/migrate/main.go`** / **`migrate-ent`**, codegen that opens DB if applicable). Base `.env` often repeats **staging or shared URLs** from onboarding. **`migrate-ent` reads `FLEXPRICE_*` like the server** — before running it against **Compose** Postgres, ensure **§C1** is in **`.env.local`** (later wins after sourcing `.env` then `.env.local` with **`set -a`**) **or** override in the invoking shell. Hosts must be **`127.0.0.1`**, Kafka **`localhost:29092`**, **`SSLMODE=disable`** — **never** Compose DNS names (**`postgres`**, **`kafka:9092`**, **`clickhouse:9000`**) from macOS/Linux host processes.
+
+2. **`Makefile` targets that only `docker compose exec` into Postgres/ClickHouse/Kafka** (this repo typically includes **`migrate-postgres`**, **`migrate-clickhouse`**, **`seed-db`**, **`init-kafka`**) execute **inside** Compose with the **Compose image defaults** (**`flexprice` / `flexprice123`**, exec via service names). Those are **implicitly local** as long as the stack is **`docker compose up`** — they **ignore** stray **`FLEXPRICE_POSTGRES_*`** in `.env` for the **`psql` / `clickhouse-client`** invocation (still harmless to keep **§C1** in `.env.local`).
+
+3. **Before `migrate-ent` or `run-local-*`**, run **`rg`** probes from **`§B`**. If **`FLEXPRICE_POSTGRES_HOST`** resolves to **`postgres`** (Docker-only hostname) **or any non-local host** while intending **Compose-backed local DB**, **fix `.env.local` first (**§C1**)** — do not rely on `.env` alone.**
+
+4. **Pattern for shell one-liners when any step uses host Go + env files:**
+
+   ```bash
+   set -a && [ -f .env ] && . ./.env; [ -f .env.local ] && . ./.env.local; set +a && make migrate-ent
+   ```
+
+   (Use **`migrate-postgres`** / **`migrate-clickhouse`** / **`seed-db`** as written in the **`Makefile`**; those targets use Compose exec against the container. Add **§C1** overrides in **`.env.local`** whenever you combine with **`migrate-ent`** or app servers in the same session.)
+
+5. **When Postgres/ClickHouse/Temporal are intentionally RDS/managed (`§C0`)**, **`§L` does not apply** — migrations and binaries must target **those** **`FLEXPRICE_*`** values and **never** **`§C1`** unless explicitly requested.
+
+---
+
+## **`§M`** — Effort gauge & Cursor model tier (dynamic)
+
+Before (and **while**) running **`devenv`**, **estimate effort** so the session uses the lightest sensible model—and **rescales upward** when evidence shows deeper work.
+
+### Workload tiers (snap once, revise after failures)
+
+| Tier | Signal | Typical devenv examples |
+|------|--------|-------------------------|
+| **S · light** | Single known-good path, cookbook steps, shallow logs | `docker info`, `docker compose ps`, `pg_isready`, one-shot `curl` health, **`rg`** **`§B`** read-only probes, confirm **`§C1`** snippets exist |
+| **M · medium** | Few services in dependency order; `.env`/Compose nuance (**`§L`**, **`migrate-ent`** vs Compose-exec **`migrate-*`**) | **§E1** converge + migrations + **`seed-db`**, topic prompt (**§0.K**), consumer-group tweaks (**§D**), **`run-local-*`** sanity |
+| **L · heavy** | Ambiguous topology (RDS + Compose + Temporal split), flaky cross-network (VPN/IP allowlists), obscure migration/offset/topic interplay, **`§F`** loops without convergence across several rounds | Debugging “host vs container DNS”, wrong-cluster risk, Temporal visibility DB vs app Postgres divergence, **`§C0`** stacks |
+
+Escalate **S → M → L** as soon as a step fails unexpectedly or stakes rise (anything that might touch **production-adjacent** creds ⇒ treat as **≥ M**, often **L**).
+
+### Matching **Cursor Agent / Composer** models (names drift by product UI)
+
+Treat “model” labels as **capability tiers**, not exact marketing strings (`Settings` → **`Models`** in Cursor picks the SKU).
+
+| Tier goal | Typical pick | Reserve for |
+|-----------|---------------|-------------|
+| **Fast / economical** | **Composer** (Fast) — or your **default fast** slot | **`S`** checklists only |
+| **Balanced** | **Composer**, **GPT-5-class**, or baseline **Sonnet** | **`M`** most sessions |
+| **Strongest reasoning (ceiling)** | **Claude Sonnet 4.x** — **`Sonnet 4.7`** (or newer in the **4.x** line) **when Cursor lists it as the strongest Sonnet tier**; **Opus** / **thinking** variants **if heavier than Sonnet per UI** | **`L`** only — multi-hypothesis infra, RDS/staging bleed, Temporal + Kafka + env correlation |
+
+Rules:
+
+1. **Start at `S` staffing** (`fast`) if user said “bring stack up” and shape is Compose-only + **§L** locked.
+2. **Jump to balanced immediately** whenever editing **`.env.local`**, interpreting **`migrate-ent`** errors, or coordinating **Kafka + Temporal + Postgres**.
+3. **Tier `L` (strongest reasoning):** Prefer **Claude Sonnet 4.x** capped at **`Sonnet 4.7`** when that is the strongest Sonnet in **Cursor Settings → Models**; switch to **Opus** / **thinking-heavy** tiers only if UI marks them heavier than Sonnet. Use **`L`** for hybrid RDS/managed, security-group/VPN uncertainty, contradictory signals after **`§B`** probes, or explicit risk review before commands.
+4. **Subagents & parallelism:** follow **`§N`** — fork **Cursor Task** subagents when workloads are independent; keep **cheap** tiers on scripted subagents and **tier `L`** on parent for integration / contradictions (**§N**).
+5. **Never burn top tier** on rote **`docker compose ps`** without a blocker—**rescope down** once green.
+
+Tell the human when **tier bump** pays off (“open a new Composer with **Sonnet 4.7** for RDS + Temporal triage”). If the Cursor UI exposes **automatic** routing, brief them on **tier target** (**S/M/L**) so presets align.
+
+---
+
+## **`§N`** — Subagents (Task tool) & safe parallelism
+
+Use **Cursor subagents** (the **Task** tool: **`generalPurpose`**, **`explore`**, **`shell`**, etc.) when **work splits cleanly** — better wall-clock latency and sharper focus **if** prompts are complete (subagents do **not** see prior chat turns).
+
+### When to deploy subagents (**do** parallelize here)
+
+Launch **multiple subagents in one message** (same round) **only when** branches are **orthogonal**:
+
+| Parallel tracks | Typical prompt shape |
+|-----------------|----------------------|
+| **§F probes** split | One agent: Postgres **`pg_isready`** + Compose **`postgres`** logs tail hint; another: **`kafka-topics --list`**; another: **`curl` ClickHouse `:8123/ping`** / HTTP; fourth: Temporal UI / **`7233`** reachability (**read-only** probes). Merge in parent → single green/red matrix |
+| **Read-only codebase + ops** | **`explore`**: **`grep`/find** how **`migrate-ent`** or **`FLEXPRICE_*`** bind in **`cmd/migrate`** + **`internal/config`**; sibling **`explore`** or **`shell`**: `docker compose ps` + image pull progress (if **heavy**, **`shell`** + **`run_in_background: true`** for long pulls |
+| **`L`‑tier investigations** | Parent stays **Sonnet ceiling** (**§M**); children run **cheap** **`explore`/`shell`** for evidence gathering (**no** rewriting **`.env.local`** concurrently from two writers — serialize edits) |
+
+**Background long jobs:** **`docker compose up`**, image pulls, **`make migrate-*`** waits → **`shell`** **`run_in_background: true`**; parent continues planning or launches **other** probes that do not contend on Docker lock.
+
+### When **not** to parallelize (serialization required)
+
+- **Stateful env:** one owner edits **`.env` / `.env.local`** (**§L**); subagents report **recommended lines**, parent applies **once**.
+- **Order-sensitive DB:** **`migrate-postgres`** / **`migrate-clickhouse`** **`→`** **`migrate-ent`** **`→`** **`seed-db`** (**§L**, **§E1**) unless Makefile explicitly proves independence — assume **pipeline order**.
+- **Single Docker daemon storms:** avoid **four** simultaneous **`docker compose build --no-cache`**; cap concurrent heavy Compose mutations.
+- **Kafka topic creation (**§0.K**):** one decision-maker — **never** duplicate **`make init-kafka`** against shared clusters.
+
+### Prompt hygiene for Task subagents
+
+Each subagent **`prompt`** must embed: **repo path**, **intent** (“read‑only probe” vs “run X if safe”), **exit criteria** (“return stdout + last exit code”), **forbidden actions** (**no secrets in reply**, **no `init-kafka` without YES**). Use **`readonly: true`** for **`explore`** when edits are out of scope.
+
+### Parent-agent merge checklist
+
+After parallel returns: reconcile **contradictions** (**Postgres UP** but **`migrate-ent`** DSN mismatch ⇒ **`§L`/`§B`**), bump **`§M`** tier (`L`) if triage spikes, avoid **double-counting** success from duplicate probes.
 
 ---
 
@@ -151,6 +245,8 @@ Never commit **`.env` / `.env.local`** secrets; `.gitignore` usually excludes th
 
 ## C. Hybrid host binaries — `.env.local` correctness
 
+**Local-first migrations & services:** **`§L`** (**host Go → always §C1 in `.env.local`** when Postgres is Compose on localhost).
+
 Use **`rg`** §B **before** editing. **`Makefile` `run-local-*`** sources **`.env` then `.env.local`** — **`set -a`**; **later wins**.
 
 ### C0 RDS / managed Postgres (no local `postgres` container)
@@ -238,6 +334,8 @@ Compose **Temporal** **`depends_on: postgres`** — cannot drop Postgres **from 
 
 ### E1 Hybrid infra (`postgres kafka clickhouse temporal temporal-ui`)
 
+**Prerequisite (**`§L`**): `.env.local` must provide **Compose-on-host** Postgres/ClickHouse (and Temporal if needed for commands) **`§C1`** so **`make migrate-*` / `seed-db`** hit **local** containers, **not** any staging/RDS values left in `.env`.
+
 ```bash
 docker compose up -d postgres kafka clickhouse temporal temporal-ui
 make migrate-postgres migrate-clickhouse generate-ent migrate-ent seed-db
@@ -262,6 +360,8 @@ Kafka UI (`--profile dev`): `docker compose --profile dev up -d kafka-ui` → **
 Pick **`MAX_ROUNDS`** (default **8**) and **`SLEEP_SECONDS`** (default **4** unless hot path).
 
 Build a **minimal checklist from the user’s stack** (RDS → skip Compose postgres checks; managed Kafka → skip **`docker compose exec kafka`** unless they still use Compose broker).
+
+**Parallel probing:** In **`§M`** tiers **`M`/`L`**, when checklist branches are independent, fan out **`§F`** probes through **`§N`** (multiple read‑only **`shell`** / **`explore`** subagents)—merge outcomes in parent **before** **`docker compose`**, migrations, or **`.env.local`** edits mutate state.
 
 Each **round** (round 1 cheaply reuses §0 daemon check if Compose is in play and prior step failed):
 
@@ -301,7 +401,7 @@ curl -sf http://127.0.0.1:8123/ping >/dev/null && echo OK
 - **`docker compose up -d`** only for **Compose-backed** services they use — not a universal fix when the failure is VPC / RDS security group / IAM.
 - **`sleep`** then next round.
 
-**Escalate** after **`MAX_ROUNDS`**: summarize last errors; **do not infinite loop**.
+**Escalate** after **`MAX_ROUNDS`**: summarize last errors; **do not infinite loop**. If probes keep failing with mixed signals ⇒ bump **`§M`** tier (**strongest Sonnet 4.x / `Sonnet 4.7` when available**) and reassess stack assumptions (**RDS vs Compose vs `.env`**).
 
 ---
 
@@ -320,6 +420,7 @@ Webhook topic mismatch risk: **`config.yaml`** **`webhook.topic`** (**`flexprice
 ## H. Anti-actions
 
 - Paste full **`.env`** into transcripts (secrets).
+- Run **`migrate-postgres`**, **`migrate-clickhouse`**, **`migrate-ent`**, **`seed-db`**, or **`run-local-*`** assuming `.env` is local—**enforce `§L` + `.env.local` (`§C1`)** whenever Compose Postgres/CH is meant to receive changes.
 - Use **`kafka:9092`** from **macOS Go binary**.
 - **`make swagger-3-0`** without network (**converter.swagger.io**).
 - Insist on **§E1 full infra** when the user already said **Postgres/Kafka/etc. lives in RDS or managed** (`devenv` = **their** `.env` truth + **minimal** Compose).
@@ -330,4 +431,5 @@ Webhook topic mismatch risk: **`config.yaml`** **`webhook.topic`** (**`flexprice
 
 - [`compose`](compose/SKILL.md) — short Docker/Makefile cheat sheet  
 - [`godev`](godev/SKILL.md) — `go test` after server lives  
-- [`apitest`](apitest/SKILL.md) — master **`curl`** QA after infra GREEN
+- [`apitest`](apitest/SKILL.md) — master **`curl`** QA after infra GREEN  
+- **Superpowers** **`dispatching-parallel-agents`** — general parallel agent patterns; aligns with **`§N`** when spawning multiple Task subagents
