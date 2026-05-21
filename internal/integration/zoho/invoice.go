@@ -2,6 +2,7 @@ package zoho
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -181,6 +182,8 @@ func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *inv
 // If item creation fails for any price, that line item is still sent using name+rate.
 func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoice.Invoice) ([]InvoiceLineItem, error) {
 	inputs := make([]ItemSyncInput, 0, len(flexInvoice.LineItems))
+	childCustomerIDs := make([]string, 0)
+	lineItemIDToChildCustomer := make(map[string]string)
 	for _, li := range flexInvoice.LineItems {
 		if li == nil || li.Amount.IsZero() {
 			continue
@@ -189,8 +192,24 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 			PriceID: lo.FromPtr(li.PriceID),
 			Name:    lo.FromPtrOr(li.DisplayName, "Charge"),
 		})
+		if customerID, ok := li.Metadata[types.InvoiceLineItemMetadataKeyChildCustomerID]; ok {
+			lineItemIDToChildCustomer[li.ID] = customerID
+			childCustomerIDs = append(childCustomerIDs, customerID)
+		}
 	}
-
+	childCustomerIDToName := make(map[string]string)
+	if len(childCustomerIDs) > 0 {
+		custFilter := types.NewNoLimitCustomerFilter()
+		custFilter.CustomerIDs = childCustomerIDs
+		custFilter.Status = lo.ToPtr(types.StatusPublished)
+		customers, custErr := s.customerRepo.List(ctx, custFilter)
+		if custErr != nil {
+			return nil, custErr
+		}
+		for _, c := range customers {
+			childCustomerIDToName[c.ID] = c.Name
+		}
+	}
 	taxRes, err := s.taxSvc.ResolveItemTax(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).WithHint("failed to resolve tax for invoice").Mark(ierr.ErrInternal)
@@ -220,9 +239,10 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		}
 		qty, rate := s.normalizeRateAndQuantity(li, settings, flexInvoice.BillingPeriod)
 		name := lo.FromPtrOr(li.DisplayName, "Charge")
+		childName := childCustomerIDToName[lineItemIDToChildCustomer[li.ID]]
 		out = append(out, InvoiceLineItem{
 			Name:        name,
-			Description: formatPeriodDescription(name, li.PeriodStart, li.PeriodEnd),
+			Description: formatPeriodDescription(childName, li.PeriodStart, li.PeriodEnd),
 			Quantity:    qty,
 			Rate:        rate,
 			ItemID:      priceToItemID[lo.FromPtr(li.PriceID)],
@@ -262,5 +282,8 @@ func formatPeriodDescription(fallback string, start, end *time.Time) string {
 	if start == nil || end == nil {
 		return fallback
 	}
-	return start.Format("2006-01-02") + " - " + end.Add(-time.Nanosecond).Format("2006-01-02")
+	if fallback != "" {
+		return fmt.Sprintf("%s\n(%s - %s)", fallback, start.Format("2006-01-02"), end.Add(-time.Nanosecond).Format("2006-01-02"))
+	}
+	return fmt.Sprintf("(%s - %s)", start.Format("2006-01-02"), end.Add(-time.Nanosecond).Format("2006-01-02"))
 }

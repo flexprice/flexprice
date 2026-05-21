@@ -19,6 +19,15 @@ const (
 	InvoiceLineItemEntityTypeSubscription InvoiceLineItemEntityType = "subscription"
 )
 
+// InvoiceLineItemMetadataKey represents well-known metadata keys on invoice line items.
+type InvoiceLineItemMetadataKey = string
+
+const (
+	// InvoiceLineItemMetadataKeyChildCustomerID is the customer name of the child subscription
+	// in a grouped-invoicing scenario.
+	InvoiceLineItemMetadataKeyChildCustomerID InvoiceLineItemMetadataKey = "child_customer_id"
+)
+
 // InvoiceCadence defines when an invoice is generated relative to the billing period
 // ARREAR: Invoice generated at the end of the billing period (after service delivery)
 // ADVANCE: Invoice generated at the beginning of the billing period (before service delivery)
