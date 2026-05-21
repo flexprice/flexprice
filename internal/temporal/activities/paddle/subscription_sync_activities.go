@@ -115,13 +115,21 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 }
 
 // CheckSubscriptionSyncStatus checks whether the subscription linked to the given invoice
-// has an activated Paddle mapping. Returns "activated" or "not_synced".
+// has an activated Paddle mapping.
+// It returns a SubscriptionSyncStatusResult with Status "activated" or "not_synced",
+// plus the resolved SubscriptionID and CustomerID so the parent workflow can pass them
+// directly to the child PaddleSubscriptionSyncWorkflow.
 func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 	ctx context.Context,
 	input models.PaddleInvoiceSyncWorkflowInput,
-) (string, error) {
+) (*models.SubscriptionSyncStatusResult, error) {
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	if validationErr := input.Validate(); validationErr != nil {
+		return nil, temporal.NewNonRetryableApplicationError(
+			validationErr.Error(), "ValidationError", validationErr)
+	}
 
 	paddleIntegration, err := a.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
@@ -129,39 +137,56 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 			// No Paddle connection — treat as activated (no sub sync needed).
 			a.logger.Warnw("Paddle connection not configured, treating subscription as activated",
 				"invoice_id", input.InvoiceID)
-			return "activated", nil
+			return &models.SubscriptionSyncStatusResult{Status: "activated"}, nil
 		}
-		return "", err
+		return nil, err
 	}
 
-	// Resolve subscription_id: prefer input field, fall back to invoice lookup.
+	// Resolve subscription_id and customer_id: prefer input fields, fall back to invoice lookup.
 	subID := input.SubscriptionID
-	if subID == "" {
+	customerID := input.CustomerID
+	if subID == "" || customerID == "" {
 		inv, invErr := paddleIntegration.SyncSvc.GetInvoiceByID(ctx, input.InvoiceID)
 		if invErr != nil {
-			return "", fmt.Errorf("fetching invoice to resolve subscription_id: %w", invErr)
+			return nil, fmt.Errorf("fetching invoice to resolve subscription_id: %w", invErr)
 		}
-		if inv.SubscriptionID == nil || *inv.SubscriptionID == "" {
-			// Invoice not linked to a subscription — no sub sync needed.
-			a.logger.Infow("invoice has no subscription_id, treating as activated",
-				"invoice_id", input.InvoiceID)
-			return "activated", nil
+		if subID == "" {
+			if inv.SubscriptionID == nil || *inv.SubscriptionID == "" {
+				// Invoice not linked to a subscription — no sub sync needed.
+				a.logger.Infow("invoice has no subscription_id, treating as activated",
+					"invoice_id", input.InvoiceID)
+				return &models.SubscriptionSyncStatusResult{
+					Status:     "activated",
+					CustomerID: inv.CustomerID,
+				}, nil
+			}
+			subID = *inv.SubscriptionID
 		}
-		subID = *inv.SubscriptionID
+		if customerID == "" {
+			customerID = inv.CustomerID
+		}
 	}
 
 	activated, err := paddleIntegration.SyncSvc.GetSubscriptionMappingStatus(ctx, subID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if activated {
 		a.logger.Infow("Paddle subscription mapping exists, status: activated",
 			"subscription_id", subID,
 			"invoice_id", input.InvoiceID)
-		return "activated", nil
+		return &models.SubscriptionSyncStatusResult{
+			Status:         "activated",
+			SubscriptionID: subID,
+			CustomerID:     customerID,
+		}, nil
 	}
 	a.logger.Infow("no Paddle subscription mapping found, status: not_synced",
 		"subscription_id", subID,
 		"invoice_id", input.InvoiceID)
-	return "not_synced", nil
+	return &models.SubscriptionSyncStatusResult{
+		Status:         "not_synced",
+		SubscriptionID: subID,
+		CustomerID:     customerID,
+	}, nil
 }

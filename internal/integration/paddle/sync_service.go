@@ -302,9 +302,10 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	}
 
 	// Guard 2: bootstrap transaction already created — customer has not completed checkout yet.
+	// The stored URL already includes the auth token (appended at creation time).
 	if txnID := sub.Metadata[MetaKeyPaddleTransactionID]; txnID != "" {
 		return &EnsureSubscriptionSyncedResponse{
-			CheckoutURL: s.appendCheckoutToken(ctx, sub.Metadata[MetaKeyPaddleCheckoutURL]),
+			CheckoutURL: sub.Metadata[MetaKeyPaddleCheckoutURL],
 		}, nil
 	}
 
@@ -387,20 +388,24 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 		}
 	}
 
-	// Persist txn ID + checkout URL in subscription metadata so future calls hit Guard 2.
+	// Append the auth token before persisting so any downstream reader of the metadata
+	// gets the fully-formed URL without needing to call appendCheckoutToken separately.
+	checkoutURLWithToken := s.appendCheckoutToken(ctx, checkoutURL)
+
+	// Persist txn ID + checkout URL (with token) in subscription metadata so future calls hit Guard 2.
 	if sub.Metadata == nil {
 		sub.Metadata = make(types.Metadata)
 	}
 	sub.Metadata[MetaKeyPaddleTransactionID] = txn.ID
-	if checkoutURL != "" {
-		sub.Metadata[MetaKeyPaddleCheckoutURL] = checkoutURL
+	if checkoutURLWithToken != "" {
+		sub.Metadata[MetaKeyPaddleCheckoutURL] = checkoutURLWithToken
 	}
 	if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
 		return nil, fmt.Errorf("updating subscription metadata after bootstrap: %w", err)
 	}
 
 	return &EnsureSubscriptionSyncedResponse{
-		CheckoutURL: s.appendCheckoutToken(ctx, checkoutURL),
+		CheckoutURL: checkoutURLWithToken,
 		Created:     true,
 	}, nil
 }
@@ -1088,7 +1093,55 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
 	}
 
+	s.resyncPendingInvoicesForSubscription(ctx, flexSubID)
 	return nil
+}
+
+// resyncPendingInvoicesForSubscription attempts to sync all finalized+pending invoices
+// for the given subscription. Called after subscription.activated is processed so that invoices
+// created before the Paddle mapping existed can be synced and auto-charged.
+// All errors are soft-fail: each invoice is tried independently; failures are logged.
+func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = subscriptionID
+	filter.InvoiceStatus = []types.InvoiceStatus{
+		types.InvoiceStatusFinalized,
+	}
+	filter.PaymentStatus = []types.PaymentStatus{
+		types.PaymentStatusPending,
+	}
+	filter.SkipLineItems = true
+
+	invoices, err := s.invoiceRepo.List(ctx, filter)
+	if err != nil {
+		s.logger.Warnw("failed to list invoices for post-activation resync",
+			"subscription_id", subscriptionID, "error", err)
+		return
+	}
+
+	if len(invoices) == 0 {
+		return
+	}
+
+	s.logger.Infow("resyncing pending invoices after subscription.activated",
+		"subscription_id", subscriptionID, "count", len(invoices))
+
+	succeeded := 0
+	for _, inv := range invoices {
+		_, syncErr := s.SyncInvoice(ctx, SyncInvoiceRequest{InvoiceID: inv.ID})
+		if syncErr != nil {
+			s.logger.Warnw("failed to resync invoice after subscription.activated",
+				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", syncErr)
+			continue
+		}
+		succeeded++
+	}
+
+	s.logger.Infow("completed post-activation invoice resync",
+		"subscription_id", subscriptionID,
+		"attempted", len(invoices),
+		"succeeded", succeeded,
+		"failed", len(invoices)-succeeded)
 }
 
 func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.InvoiceLineItem {

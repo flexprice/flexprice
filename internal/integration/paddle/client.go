@@ -33,7 +33,7 @@ type PaddleClient interface {
 	UpdateAddress(ctx context.Context, customerID string, addressID string, req *paddle.UpdateAddressRequest) (*paddle.Address, error)
 	CreateTransaction(ctx context.Context, req *paddle.CreateTransactionRequest) (*paddle.Transaction, error)
 	PreviewTransaction(ctx context.Context, req *paddle.PreviewTransactionCreateRequest) (*paddle.TransactionPreview, error)
-	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string, webhookSecret string) error
+	VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error
 	CreateProduct(ctx context.Context, req *paddle.CreateProductRequest) (*paddle.Product, error)
 	CreatePrice(ctx context.Context, req *paddle.CreatePriceRequest) (*paddle.Price, error)
 	CreateSubscriptionCharge(ctx context.Context, req *paddle.CreateSubscriptionChargeRequest) (*paddle.Subscription, error)
@@ -470,21 +470,30 @@ func toCountryCode(s string) paddle.CountryCode {
 	return paddle.CountryCode(strings.ToUpper(strings.TrimSpace(s)))
 }
 
-// VerifyWebhookSignature verifies the Paddle-Signature header against the raw payload using the webhook secret.
-// Uses HMAC-SHA256 of ts:body as per Paddle docs. Rejects if signature is missing, invalid, or replay attack.
-func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string, webhookSecret string) error {
-	if webhookSecret == "" {
-		return ierr.NewError("webhook secret is required for signature verification").
-			WithHint("Configure webhook_secret in Paddle connection").
-			Mark(ierr.ErrValidation)
-	}
+// VerifyWebhookSignature verifies the Paddle-Signature header against the raw payload.
+// Fetches the webhook_secret from the Paddle connection config internally (same pattern as Razorpay, Stripe).
+// Uses HMAC-SHA256 of ts:body as per Paddle docs.
+func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error {
 	if signature == "" {
 		return ierr.NewError("missing Paddle-Signature header").
 			WithHint("Paddle webhooks must include Paddle-Signature header").
 			Mark(ierr.ErrValidation)
 	}
 
-	verifier := paddle.NewWebhookVerifier(webhookSecret)
+	config, err := c.GetPaddleConfig(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to load Paddle config for webhook verification").
+			Mark(ierr.ErrInternal)
+	}
+
+	if config.WebhookSecret == "" {
+		return ierr.NewError("webhook_secret not configured in Paddle connection").
+			WithHint("Set webhook_secret in the Paddle connection encrypted_secret_data").
+			Mark(ierr.ErrValidation)
+	}
+
+	verifier := paddle.NewWebhookVerifier(config.WebhookSecret)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "", bytes.NewReader(payload))
 	if err != nil {
 		return ierr.WithError(err).Mark(ierr.ErrInternal)
@@ -499,7 +508,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	}
 	if !ok {
 		return ierr.NewError("webhook signature mismatch").
-			WithHint("Request may have been tampered with").
+			WithHint("Request may have been tampered with or webhook_secret is incorrect").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

@@ -138,7 +138,7 @@ type mockPaddleClient struct {
 	updateAddressFn            func(ctx context.Context, customerID string, addressID string, req *paddlesdk.UpdateAddressRequest) (*paddlesdk.Address, error)
 	createTransactionFn        func(ctx context.Context, req *paddlesdk.CreateTransactionRequest) (*paddlesdk.Transaction, error)
 	previewTransactionFn       func(ctx context.Context, req *paddlesdk.PreviewTransactionCreateRequest) (*paddlesdk.TransactionPreview, error)
-	verifyWebhookSignatureFn   func(ctx context.Context, payload []byte, signature string, webhookSecret string) error
+	verifyWebhookSignatureFn   func(ctx context.Context, payload []byte, signature string) error
 	createProductFn            func(ctx context.Context, req *paddlesdk.CreateProductRequest) (*paddlesdk.Product, error)
 	createPriceFn              func(ctx context.Context, req *paddlesdk.CreatePriceRequest) (*paddlesdk.Price, error)
 	createSubscriptionChargeFn func(ctx context.Context, req *paddlesdk.CreateSubscriptionChargeRequest) (*paddlesdk.Subscription, error)
@@ -239,9 +239,9 @@ func (m *mockPaddleClient) PreviewTransaction(ctx context.Context, req *paddlesd
 	return &paddlesdk.TransactionPreview{}, nil
 }
 
-func (m *mockPaddleClient) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string, webhookSecret string) error {
+func (m *mockPaddleClient) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error {
 	if m.verifyWebhookSignatureFn != nil {
-		return m.verifyWebhookSignatureFn(ctx, payload, signature, webhookSecret)
+		return m.verifyWebhookSignatureFn(ctx, payload, signature)
 	}
 	return nil
 }

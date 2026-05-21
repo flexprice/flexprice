@@ -246,8 +246,7 @@ func DispatchCustomerVendorSync(
 	return nil
 }
 
-// DispatchSubscriptionVendorSync starts PaddleSubscriptionSyncWorkflow for subscriptions
-// with allow_incomplete payment behaviour.
+// DispatchSubscriptionVendorSync starts PaddleSubscriptionSyncWorkflow for every new subscription.
 func DispatchSubscriptionVendorSync(
 	ctx context.Context,
 	cfg *config.Configuration,
@@ -262,22 +261,12 @@ func DispatchSubscriptionVendorSync(
 	}
 
 	var pl struct {
-		SubscriptionID   string `json:"subscription_id"`
-		CustomerID       string `json:"customer_id"`
-		PaymentBehavior  string `json:"payment_behavior"`
-		CollectionMethod string `json:"collection_method"`
+		SubscriptionID string `json:"subscription_id"`
+		CustomerID     string `json:"customer_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.SubscriptionID == "" {
 		log.Warnw("integration_events: invalid subscription.created payload, skipping",
 			"message_uuid", msgUUID, "error", err)
-		return nil
-	}
-
-	// Only trigger for allow_incomplete + charge_automatically subscriptions.
-	if pl.PaymentBehavior != string(types.PaymentBehaviorAllowIncomplete) {
-		return nil
-	}
-	if pl.CollectionMethod != string(types.CollectionMethodChargeAutomatically) {
 		return nil
 	}
 

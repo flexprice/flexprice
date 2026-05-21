@@ -91,28 +91,35 @@ func PaddleInvoiceSyncWorkflow(ctx workflow.Context, input models.PaddleInvoiceS
 	// customer completes the Paddle checkout flow.
 	logger.Info("Step 2.5: Checking subscription Paddle sync status", "invoice_id", input.InvoiceID)
 
-	var subSyncStatus string
-	if err := workflow.ExecuteActivity(ctx, ActivityCheckSubscriptionSyncStatus, input).Get(ctx, &subSyncStatus); err != nil {
+	var subSyncResult models.SubscriptionSyncStatusResult
+	if err := workflow.ExecuteActivity(ctx, ActivityCheckSubscriptionSyncStatus, input).Get(ctx, &subSyncResult); err != nil {
 		logger.Error("Failed to check subscription sync status",
 			"error", err, "invoice_id", input.InvoiceID)
 		return err
 	}
 
-	if subSyncStatus == "not_synced" {
+	if subSyncResult.Status == "not_synced" {
 		logger.Info("Subscription not synced to Paddle — firing PaddleSubscriptionSyncWorkflow",
-			"invoice_id", input.InvoiceID, "subscription_id", input.SubscriptionID)
+			"invoice_id", input.InvoiceID, "subscription_id", subSyncResult.SubscriptionID)
 
 		childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-			WorkflowID:        WorkflowPaddleSubscriptionSync + "-" + input.InvoiceID,
+			// Key by subscription_id (not invoice_id) so concurrent invoice syncs for the
+			// same subscription don't spawn duplicate subscription-sync workflows.
+			WorkflowID:        WorkflowPaddleSubscriptionSync + "-" + subSyncResult.SubscriptionID,
 			ParentClosePolicy: enumspb.PARENT_CLOSE_POLICY_ABANDON,
 		})
-		// Fire-and-forget: do NOT call .Get() — the child runs independently.
-		workflow.ExecuteChildWorkflow(childCtx, PaddleSubscriptionSyncWorkflow, models.PaddleSubscriptionSyncWorkflowInput{
-			SubscriptionID: input.SubscriptionID,
-			CustomerID:     input.CustomerID,
+		childFuture := workflow.ExecuteChildWorkflow(childCtx, PaddleSubscriptionSyncWorkflow, models.PaddleSubscriptionSyncWorkflowInput{
+			SubscriptionID: subSyncResult.SubscriptionID,
+			CustomerID:     subSyncResult.CustomerID,
 			TenantID:       input.TenantID,
 			EnvironmentID:  input.EnvironmentID,
 		})
+		// Wait for child start only (ParentClosePolicy ABANDON lets it run after parent exits).
+		if err := childFuture.GetChildWorkflowExecution().Get(childCtx, nil); err != nil {
+			logger.Error("Failed to start Paddle subscription sync child workflow",
+				"error", err, "invoice_id", input.InvoiceID, "subscription_id", subSyncResult.SubscriptionID)
+			return err
+		}
 
 		return temporal.NewNonRetryableApplicationError(
 			"paddle subscription sync triggered; re-run invoice sync after customer completes checkout",
