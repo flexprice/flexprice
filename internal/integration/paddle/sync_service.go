@@ -1097,10 +1097,16 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 	return nil
 }
 
-// resyncPendingInvoicesForSubscription attempts to sync all finalized+pending invoices
-// for the given subscription. Called after subscription.activated is processed so that invoices
-// created before the Paddle mapping existed can be synced and auto-charged.
-// All errors are soft-fail: each invoice is tried independently; failures are logged.
+// resyncPendingInvoicesForSubscription lists all finalized+pending invoices for the given
+// subscription and schedules each for resync in a background goroutine with a short delay.
+//
+// The delay is necessary because this is called from ProcessSubscriptionActivatedWebhook —
+// Paddle's subscription may not be fully settled on their side yet, causing
+// CreateSubscriptionCharge to fail if attempted immediately. Running in the background also
+// avoids blocking the webhook HTTP response.
+//
+// A detached context carrying only tenant/environment is used so the goroutine survives after
+// the HTTP request context is cancelled.
 func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
@@ -1125,25 +1131,42 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 		return
 	}
 
-	s.logger.Infow("resyncing pending invoices after subscription.activated",
-		"subscription_id", subscriptionID, "count", len(invoices))
-
-	succeeded := 0
-	for _, inv := range invoices {
-		_, syncErr := s.SyncInvoice(ctx, SyncInvoiceRequest{InvoiceID: inv.ID})
-		if syncErr != nil {
-			s.logger.Warnw("failed to resync invoice after subscription.activated",
-				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", syncErr)
-			continue
-		}
-		succeeded++
+	// Collect IDs before launching goroutine (avoid capturing loop variable / invoice slice).
+	invoiceIDs := make([]string, len(invoices))
+	for i, inv := range invoices {
+		invoiceIDs[i] = inv.ID
 	}
 
-	s.logger.Infow("completed post-activation invoice resync",
-		"subscription_id", subscriptionID,
-		"attempted", len(invoices),
-		"succeeded", succeeded,
-		"failed", len(invoices)-succeeded)
+	s.logger.Infow("scheduling post-activation invoice resync in background",
+		"subscription_id", subscriptionID, "count", len(invoiceIDs))
+
+	// Detach from the HTTP request context: preserve only tenant/environment so the goroutine
+	// is not cancelled when the webhook handler returns.
+	bgCtx := context.Background()
+	bgCtx = types.SetTenantID(bgCtx, types.GetTenantID(ctx))
+	bgCtx = types.SetEnvironmentID(bgCtx, types.GetEnvironmentID(ctx))
+
+	go func() {
+		// Give Paddle time to fully settle the subscription before charging.
+		time.Sleep(30 * time.Second)
+
+		succeeded := 0
+		for _, invoiceID := range invoiceIDs {
+			_, syncErr := s.SyncInvoice(bgCtx, SyncInvoiceRequest{InvoiceID: invoiceID})
+			if syncErr != nil {
+				s.logger.Warnw("failed to resync invoice after subscription.activated",
+					"subscription_id", subscriptionID, "invoice_id", invoiceID, "error", syncErr)
+				continue
+			}
+			succeeded++
+		}
+
+		s.logger.Infow("completed post-activation invoice resync",
+			"subscription_id", subscriptionID,
+			"attempted", len(invoiceIDs),
+			"succeeded", succeeded,
+			"failed", len(invoiceIDs)-succeeded)
+	}()
 }
 
 func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.InvoiceLineItem {
