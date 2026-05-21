@@ -208,15 +208,13 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 		c.logger.Errorw("whop API returned error",
 			"status_code", resp.StatusCode,
 			"method", method,
-			"endpoint", endpoint,
-			"response_body", string(resp.Body))
+			"endpoint", endpoint)
 		return ierr.NewError("Whop API returned error").
 			WithHint(fmt.Sprintf("Whop API returned status %d", resp.StatusCode)).
 			WithReportableDetails(map[string]interface{}{
-				"status_code":   resp.StatusCode,
-				"method":        method,
-				"endpoint":      endpoint,
-				"response_body": string(resp.Body),
+				"status_code": resp.StatusCode,
+				"method":      method,
+				"endpoint":    endpoint,
 			}).
 			Mark(ierr.ErrHTTPClient)
 	}

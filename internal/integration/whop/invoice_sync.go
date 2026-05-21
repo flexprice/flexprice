@@ -89,7 +89,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 		return nil, err
 	}
 
-	totalFloat, _ := flexInvoice.AmountDue.Float64()
+	totalFloat, _ := flexInvoice.AmountDue.Round(2).Float64()
 
 	dueDate := time.Now().AddDate(0, 0, 30).UTC().Format(time.RFC3339)
 	if flexInvoice.DueDate != nil && !flexInvoice.DueDate.IsZero() {
@@ -115,6 +115,10 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 			WithHint("Failed to create invoice in Whop").
 			Mark(ierr.ErrHTTPClient)
 	}
+	s.logger.Infow("revised float total amount", totalFloat,
+		"flexprice invoice amount due", flexInvoice.AmountDue.String(),
+		"flexprice invoice id", flexInvoice.ID,
+		"whop invoice id", whopInvoice.ID)
 
 	// Fetch the plan to get the purchase_url (checkout link), then store it on the invoice.
 	if whopInvoice.CurrentPlan.ID != "" {
