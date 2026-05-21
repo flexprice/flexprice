@@ -190,17 +190,21 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 
 	resp, err := c.httpClient.Send(ctx, httpReq)
 	if err != nil {
+		whopBody := ""
+		if httpErr, ok := httpclient.IsHTTPError(err); ok {
+			whopBody = string(httpErr.Response)
+		}
 		c.logger.Errorw("whop API request failed",
 			"error", err,
 			"method", method,
 			"endpoint", endpoint,
-			"url", fullURL)
+			"url", fullURL,
+			"whop_response", whopBody)
 		return ierr.NewError("failed to make request to Whop API").
 			WithHint("Unable to connect to Whop").
 			WithReportableDetails(map[string]interface{}{
 				"method":   method,
 				"endpoint": endpoint,
-				"error":    err.Error(),
 			}).
 			Mark(ierr.ErrHTTPClient)
 	}

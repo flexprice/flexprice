@@ -91,10 +91,12 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 
 	totalFloat, _ := flexInvoice.AmountDue.Round(2).Float64()
 
-	dueDate := time.Now().AddDate(0, 0, 30).UTC().Format(time.RFC3339)
-	if flexInvoice.DueDate != nil && !flexInvoice.DueDate.IsZero() {
-		dueDate = flexInvoice.DueDate.UTC().Format(time.RFC3339)
+	defaultDueDate := time.Now().AddDate(0, 0, 30).UTC()
+	dueDate := defaultDueDate
+	if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(time.Now()) {
+		dueDate = flexInvoice.DueDate.UTC()
 	}
+	dueDateStr := dueDate.Format(time.RFC3339)
 
 	createReq := CreateInvoiceRequest{
 		CompanyID: cfg.CompanyID,
@@ -105,7 +107,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 			InternalNotes: req.InvoiceID, // flexprice invoice id for reference
 		},
 		CollectionMethod: "send_invoice",
-		DueDate:          dueDate,
+		DueDate:          dueDateStr,
 		CustomerName:     customerName,
 		EmailAddress:     customerEmail,
 	}
