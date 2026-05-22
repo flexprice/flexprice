@@ -1568,6 +1568,21 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 		Subscription: sub,
 	}
 
+	// Compare sub.SyncedPriceSequence against the plan's current max
+	// prices.sequence — when the sub is behind, plan-price changes have not
+	// yet been reconciled into this sub's line items.
+	if sub.PlanID != "" {
+		currentPlanSeq, seqErr := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, sub.PlanID)
+		if seqErr != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to fetch current plan sequence for out-of-sync flag",
+				"subscription_id", id,
+				"plan_id", sub.PlanID,
+				"error", seqErr)
+		} else {
+			response.PlanPricesOutOfSync = sub.SyncedPriceSequence < currentPlanSeq
+		}
+	}
+
 	// Expand pauses if subscription has pause status
 	if sub.PauseStatus != types.PauseStatusNone {
 		pauses, err := s.SubRepo.ListPauses(ctx, id)
