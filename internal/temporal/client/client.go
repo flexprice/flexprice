@@ -88,7 +88,7 @@ func (c *temporalClient) Start(ctx context.Context) error {
 	}
 
 	c.isStarted = true
-	c.logger.Info("Temporal client started successfully")
+	c.logger.Info("Temporal client started")
 	return nil
 }
 

@@ -302,7 +302,6 @@ func main() {
 			startServer,
 		),
 	)
-
 	app := fx.New(opts...)
 	app.Run()
 }

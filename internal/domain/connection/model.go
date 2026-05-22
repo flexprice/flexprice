@@ -223,6 +223,20 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			Paddle: paddleMetadata,
 		}
+	case types.SecretProviderWhop:
+		whopMetadata := &types.WhopConnectionMetadata{}
+		if apiKey, ok := metadata["api_key"].(string); ok {
+			whopMetadata.APIKey = apiKey
+		}
+		if companyID, ok := metadata["company_id"].(string); ok {
+			whopMetadata.CompanyID = companyID
+		}
+		if productID, ok := metadata["product_id"].(string); ok {
+			whopMetadata.ProductID = productID
+		}
+		return types.ConnectionMetadata{
+			Whop: whopMetadata,
+		}
 	case types.SecretProviderZohoBooks:
 		zohoMetadata := &types.ZohoBooksConnectionMetadata{}
 		if clientID, ok := metadata["client_id"].(string); ok {

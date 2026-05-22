@@ -31,6 +31,8 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
+	"github.com/flexprice/flexprice/internal/integration/whop"
+	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -565,6 +567,34 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 	}, nil
 }
 
+// GetWhopIntegration returns a complete Whop integration setup
+func (f *Factory) GetWhopIntegration(ctx context.Context) (*WhopIntegration, error) {
+	whopClient := whop.NewClient(
+		f.connectionRepo,
+		f.encryptionService,
+		f.logger,
+		f.config,
+	)
+
+	invoiceSyncSvc := whop.NewInvoiceSyncService(
+		whopClient,
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	webhookHandler := whopwebhook.NewHandler(
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	return &WhopIntegration{
+		Client:         whopClient,
+		InvoiceSyncSvc: invoiceSyncSvc,
+		WebhookHandler: webhookHandler,
+	}, nil
+}
+
 // GetZohoBooksIntegration returns a complete Zoho Books integration setup
 func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegration, error) {
 	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
@@ -635,6 +665,8 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetMoyasarIntegration(ctx)
 	case types.SecretProviderZohoBooks:
 		return f.GetZohoBooksIntegration(ctx)
+	case types.SecretProviderWhop:
+		return f.GetWhopIntegration(ctx)
 	default:
 		return nil, ierr.NewError("unsupported integration provider").
 			WithHint("Provider type is not supported").
@@ -657,6 +689,7 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 		types.SecretProviderPaddle,
 		types.SecretProviderMoyasar,
 		types.SecretProviderZohoBooks,
+		types.SecretProviderWhop,
 	}
 }
 
@@ -744,6 +777,13 @@ type MoyasarIntegration struct {
 	PaymentSvc     *moyasar.PaymentService
 	InvoiceSyncSvc *moyasar.InvoiceSyncService
 	WebhookHandler *moyasarwebhook.Handler
+}
+
+// WhopIntegration contains all Whop integration services
+type WhopIntegration struct {
+	Client         whop.WhopClient
+	InvoiceSyncSvc *whop.InvoiceSyncService
+	WebhookHandler *whopwebhook.Handler
 }
 
 // ZohoBooksIntegration contains all Zoho Books integration services
@@ -933,7 +973,31 @@ func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvi
 		}
 	}
 
+	// Check Whop
+	whopIntegration, err := f.GetWhopIntegration(ctx)
+	if err == nil {
+		whopProvider := &WhopProvider{integration: whopIntegration}
+		if whopProvider.IsAvailable(ctx) {
+			providers = append(providers, whopProvider)
+		}
+	}
+
 	return providers, nil
+}
+
+// WhopProvider implements IntegrationProvider for Whop
+type WhopProvider struct {
+	integration *WhopIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *WhopProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderWhop
+}
+
+// IsAvailable checks if Whop integration is available
+func (p *WhopProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasWhopConnection(ctx)
 }
 
 // GetStorageProvider returns an S3 storage client for the given connection

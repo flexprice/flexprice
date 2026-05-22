@@ -2287,3 +2287,232 @@ func (s *WalletServiceSuite) TestGetCreditsAvailableBreakdown() {
 	s.True(breakdown.Free.Equal(decimal.NewFromInt(100)),
 		"Expected free credits to be 100, got %s", breakdown.Free)
 }
+
+// ---------------------------------------------------------------------------
+// WalletAutoTopupInvoiceSuite
+// ---------------------------------------------------------------------------
+
+// WalletAutoTopupInvoiceSuite exercises the deduplication guard implemented in
+// hasPendingAutoTopupInvoice and triggerAutoTopup.
+type WalletAutoTopupInvoiceSuite struct {
+	testutil.BaseServiceTestSuite
+	service  WalletService
+	customer *customer.Customer
+	wallet   *wallet.Wallet
+}
+
+func TestWalletAutoTopupInvoice(t *testing.T) {
+	suite.Run(t, new(WalletAutoTopupInvoiceSuite))
+}
+
+func (s *WalletAutoTopupInvoiceSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	s.setupService()
+	s.setupTestData()
+}
+
+// GetContext overrides the base context to include an environment ID so the
+// in-memory invoice filter functions correctly (mirrors WalletServiceSuite).
+func (s *WalletAutoTopupInvoiceSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
+func (s *WalletAutoTopupInvoiceSuite) TearDownTest() {
+	s.BaseServiceTestSuite.TearDownTest()
+	s.BaseServiceTestSuite.ClearStores()
+}
+
+func (s *WalletAutoTopupInvoiceSuite) setupService() {
+	stores := s.GetStores()
+	pubsub := testutil.NewInMemoryPubSub()
+	s.service = NewWalletService(ServiceParams{
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               stores.WalletRepo,
+		SubRepo:                  stores.SubscriptionRepo,
+		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
+		PlanRepo:                 stores.PlanRepo,
+		PriceRepo:                stores.PriceRepo,
+		EventRepo:                stores.EventRepo,
+		MeterRepo:                stores.MeterRepo,
+		CustomerRepo:             stores.CustomerRepo,
+		InvoiceRepo:              stores.InvoiceRepo,
+		EntitlementRepo:          stores.EntitlementRepo,
+		FeatureRepo:              stores.FeatureRepo,
+		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		SettingsRepo:             stores.SettingsRepo,
+		AlertLogsRepo:            stores.AlertLogsRepo,
+		FeatureUsageRepo:         stores.FeatureUsageRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
+	})
+}
+
+func (s *WalletAutoTopupInvoiceSuite) setupTestData() {
+	ctx := s.GetContext()
+
+	// Create a customer.
+	s.customer = &customer.Customer{
+		ID:         "cust_autotopup",
+		ExternalID: "ext_cust_autotopup",
+		Name:       "AutoTopup Customer",
+		Email:      "autotopup@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, s.customer))
+
+	// Create a wallet with auto-topup enabled (invoicing mode),
+	// threshold=5 and amount=10. Initial balance is 3 (below threshold).
+	threshold := decimal.NewFromInt(5)
+	amount := decimal.NewFromInt(10)
+	enabled := true
+	invoicing := true
+
+	s.wallet = &wallet.Wallet{
+		ID:          "wallet_autotopup",
+		CustomerID:  s.customer.ID,
+		Currency:    "usd",
+		WalletType:  types.WalletTypePrePaid,
+		WalletStatus: types.WalletStatusActive,
+		Balance:     decimal.NewFromInt(3), // 3 credits * conversion_rate 1.0 = $3
+		CreditBalance: decimal.NewFromInt(3),
+		ConversionRate:      decimal.NewFromFloat(1.0),
+		TopupConversionRate: decimal.NewFromFloat(1.0),
+		AutoTopup: &types.AutoTopup{
+			Enabled:   &enabled,
+			Threshold: &threshold,
+			Amount:    &amount,
+			Invoicing: &invoicing,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(ctx, s.wallet))
+}
+
+// svc casts the WalletService interface to the concrete *walletService so we
+// can call unexported helpers directly (tests are in the same package).
+func (s *WalletAutoTopupInvoiceSuite) svc() *walletService {
+	return s.service.(*walletService)
+}
+
+// helper to count WALLET_AUTO_TOPUP invoices in the store for our customer.
+func (s *WalletAutoTopupInvoiceSuite) countAutoTopupInvoices() int {
+	ctx := s.GetContext()
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.CustomerID = s.customer.ID
+	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.NoError(err)
+	return len(invoices)
+}
+
+// ---------------------------------------------------------------------------
+// Test 1 – no invoices exist → hasPendingAutoTopupInvoice returns false.
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestHasPendingAutoTopupInvoice_NoneExist() {
+	ctx := s.GetContext()
+	has, err := s.svc().hasPendingAutoTopupInvoice(ctx, s.customer.ID)
+	s.NoError(err)
+	s.False(has, "expected no pending auto-topup invoice when none exist")
+}
+
+// ---------------------------------------------------------------------------
+// Test 2 – a FINALIZED / PENDING invoice exists → returns true.
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestHasPendingAutoTopupInvoice_PendingExists() {
+	ctx := s.GetContext()
+
+	inv := &invoice.Invoice{
+		ID:            "inv_pending_001",
+		CustomerID:    s.customer.ID,
+		InvoiceStatus: types.InvoiceStatusFinalized,
+		PaymentStatus: types.PaymentStatusPending,
+		BillingReason: string(types.InvoiceBillingReasonWalletAutoTopup),
+		Currency:      "usd",
+		InvoiceType:   types.InvoiceTypeOneOff,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+
+	has, err := s.svc().hasPendingAutoTopupInvoice(ctx, s.customer.ID)
+	s.NoError(err)
+	s.True(has, "expected pending auto-topup invoice to be detected")
+}
+
+// ---------------------------------------------------------------------------
+// Test 3 – a PAID invoice exists → should NOT block (returns false).
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestHasPendingAutoTopupInvoice_PaidDoesNotBlock() {
+	ctx := s.GetContext()
+
+	inv := &invoice.Invoice{
+		ID:            "inv_paid_001",
+		CustomerID:    s.customer.ID,
+		InvoiceStatus: types.InvoiceStatusFinalized,
+		PaymentStatus: types.PaymentStatusSucceeded,
+		BillingReason: string(types.InvoiceBillingReasonWalletAutoTopup),
+		Currency:      "usd",
+		InvoiceType:   types.InvoiceTypeOneOff,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+
+	has, err := s.svc().hasPendingAutoTopupInvoice(ctx, s.customer.ID)
+	s.NoError(err)
+	s.False(has, "a paid auto-topup invoice must NOT block a new top-up")
+}
+
+// ---------------------------------------------------------------------------
+// Test 4 – calling triggerAutoTopup twice creates only ONE invoice.
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_GuardPreventsSecondInvoice() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3) // below threshold of 5
+
+	// First call – should create one invoice.
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	s.NoError(err)
+	s.Equal(1, s.countAutoTopupInvoices(), "expected 1 auto-topup invoice after first trigger")
+
+	// Second call – guard must detect the pending invoice and skip.
+	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	s.NoError(err)
+	s.Equal(1, s.countAutoTopupInvoices(), "expected still 1 auto-topup invoice after second trigger (guard blocked it)")
+}
+
+// ---------------------------------------------------------------------------
+// Test 5 – after the invoice is paid, a new call creates a second invoice.
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_AllowsNewInvoiceAfterPayment() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3) // below threshold of 5
+
+	// First trigger – creates one pending invoice.
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	s.NoError(err)
+	s.Equal(1, s.countAutoTopupInvoices(), "expected 1 auto-topup invoice after first trigger")
+
+	// Fetch the invoice and mark it as paid.
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.CustomerID = s.customer.ID
+	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(invoices, 1, "expected exactly one auto-topup invoice before payment")
+
+	invoices[0].PaymentStatus = types.PaymentStatusSucceeded
+	s.NoError(s.GetStores().InvoiceRepo.Update(ctx, invoices[0]))
+
+	// Second trigger – guard no longer blocks because invoice is paid.
+	// Re-read wallet to get fresh state (balance still low since no actual credit was added).
+	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	s.NoError(err)
+	s.Equal(2, s.countAutoTopupInvoices(), "expected 2 auto-topup invoices after payment cleared the guard")
+}

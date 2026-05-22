@@ -1096,6 +1096,9 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if len(f.PaymentStatus) > 0 {
 		query = query.Where(invoice.PaymentStatusIn(f.PaymentStatus...))
 	}
+	if f.BillingReason != "" {
+		query = query.Where(invoice.BillingReasonEQ(string(f.BillingReason)))
+	}
 	if f.AmountDueGt != nil {
 		query = query.Where(invoice.AmountDueGT(*f.AmountDueGt))
 	}
