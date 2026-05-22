@@ -830,6 +830,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			},
 			PaymentStatus: lo.ToPtr(paymentStatus),
 			Metadata:      invoiceMetadata,
+			BillingReason: req.BillingReason,
 		}
 		// Use CreateInvoice which handles draft-first flow: create draft, compute, finalize, webhook
 		inv, err := invoiceService.CreateInvoice(ctx, invReq)
@@ -1032,6 +1033,12 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 			"wallet_id", w.ID,
 		)
 	}
+
+	// Re-trigger wallet balance alert so triggerAutoTopup can fire a new invoice if
+	// the balance is still below threshold after payment. The previous invoice is now
+	// SUCCEEDED so the guard in triggerAutoTopup will allow a fresh one.
+	// This is async (Kafka) and non-fatal.
+	s.PublishWalletBalanceAlertEvent(ctx, tx.CustomerID, true, tx.WalletID)
 
 	return nil
 }
@@ -3093,6 +3100,25 @@ func (s *walletService) PublishWalletBalanceAlertEvent(ctx context.Context, cust
 	}
 }
 
+// hasPendingAutoTopupInvoice returns true if there is already a FINALIZED, unpaid
+// auto-topup invoice for this customer. Used to prevent duplicate invoices while
+// waiting for the customer to pay.
+func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customerID string) (bool, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.CustomerID = customerID
+	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
+	filter.PaymentStatus = []types.PaymentStatus{types.PaymentStatusPending}
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized}
+	filter.SkipLineItems = true
+	filter.Limit = lo.ToPtr(1)
+
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+	return len(invoices) > 0, nil
+}
+
 // triggerAutoTopup checks if auto top-up is enabled and triggers it if needed
 func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
 
@@ -3105,11 +3131,45 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 
 	// Check if ongoing balance is below threshold
 	if ongoingBalance.LessThanOrEqual(*w.AutoTopup.Threshold) {
-		// Top up wallet
+
+		isInvoiced := w.AutoTopup.Invoicing != nil && *w.AutoTopup.Invoicing
+
+		// Guard: for invoiced mode, skip if there is already a pending auto-topup invoice.
+		// This prevents flooding the customer with invoices while they wait to pay.
+		if isInvoiced {
+			hasPending, err := s.hasPendingAutoTopupInvoice(ctx, w.CustomerID)
+			if err != nil {
+				s.Logger.ErrorwCtx(ctx, "failed to check for pending auto-topup invoice",
+					"error", err,
+					"wallet_id", w.ID,
+					"customer_id", w.CustomerID,
+				)
+				return err
+			}
+			if hasPending {
+				s.Logger.InfowCtx(ctx, "pending auto-topup invoice exists, skipping",
+					"wallet_id", w.ID,
+					"customer_id", w.CustomerID,
+					"auto_topup_threshold", *w.AutoTopup.Threshold,
+				)
+				return nil
+			}
+		}
+
+		transactionReason := lo.Ternary(isInvoiced,
+			types.TransactionReasonPurchasedCreditInvoiced,
+			types.TransactionReasonPurchasedCreditDirect,
+		)
+		billingReason := lo.Ternary(isInvoiced,
+			types.InvoiceBillingReasonWalletAutoTopup,
+			types.InvoiceBillingReason(""),
+		)
+
 		_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
-			CreditsToAdd:      *w.AutoTopup.Amount, // treat auto-topup amount as credits
+			CreditsToAdd:      *w.AutoTopup.Amount,
 			Amount:            *w.AutoTopup.Amount,
-			TransactionReason: lo.Ternary(w.AutoTopup.Invoicing != nil && *w.AutoTopup.Invoicing, types.TransactionReasonPurchasedCreditInvoiced, types.TransactionReasonPurchasedCreditDirect),
+			TransactionReason: transactionReason,
+			BillingReason:     billingReason,
 			IdempotencyKey:    lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION)),
 			Description:       "Auto top-up triggered for low ongoing balance",
 			Metadata:          types.Metadata{"auto_topup": "true"},
@@ -3121,18 +3181,20 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 				"auto_topup_threshold", *w.AutoTopup.Threshold,
 				"auto_topup_amount", *w.AutoTopup.Amount,
 			)
+			return err
 		}
 		s.Logger.DebugwCtx(ctx, "auto top-up triggered",
 			"wallet_id", w.ID,
 			"auto_topup_threshold", *w.AutoTopup.Threshold,
 			"auto_topup_amount", *w.AutoTopup.Amount,
+			"invoiced", isInvoiced,
 		)
 	}
 
-	s.Logger.InfowCtx(ctx, "auto top-up completed",
+	s.Logger.InfowCtx(ctx, "auto top-up check completed",
 		"wallet_id", w.ID,
+		"ongoing_balance", ongoingBalance,
 		"auto_topup_threshold", *w.AutoTopup.Threshold,
-		"auto_topup_amount", *w.AutoTopup.Amount,
 	)
 
 	return nil
