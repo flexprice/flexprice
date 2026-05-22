@@ -257,6 +257,16 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 	syncTrialingStateFromCreateRequest(&req, sub)
 
+	// Stamp the sub with the plan's current max prices.sequence so new subscriptions are considered already-synced.
+	currentPlanSeq, seqErr := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, plan.ID)
+	if seqErr != nil {
+		return nil, ierr.WithError(seqErr).
+			WithHint("Failed to read current plan price sequence").
+			WithReportableDetails(map[string]any{"plan_id": plan.ID}).
+			Mark(ierr.ErrDatabase)
+	}
+	sub.SyncedPriceSequence = currentPlanSeq
+
 	s.Logger.InfowCtx(ctx, "creating subscription",
 		"customer_id", sub.CustomerID, "plan_id", sub.PlanID, "start_date", sub.StartDate,
 		"billing_anchor", sub.BillingAnchor, "current_period_start", sub.CurrentPeriodStart,
