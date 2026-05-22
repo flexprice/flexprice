@@ -478,6 +478,12 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.otel_auth_value", "FLEXPRICE_LOGGING_OTEL_AUTH_VALUE")
 	_ = v.BindEnv("logging.otel_debug", "FLEXPRICE_LOGGING_OTEL_DEBUG")
 
+	// Explicitly bind Temporal env vars — AutomaticEnv + Unmarshal misses these
+	// because the yaml ships non-empty defaults (api_key: "strong api key"), so
+	// Unmarshal returns the yaml value instead of consulting AutomaticEnv.
+	_ = v.BindEnv("temporal.api_key", "FLEXPRICE_TEMPORAL_API_KEY")
+	_ = v.BindEnv("temporal.api_key_name", "FLEXPRICE_TEMPORAL_API_KEY_NAME")
+
 	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
 	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
