@@ -7249,6 +7249,7 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 		SubscriptionType:       types.SubscriptionTypeInherited,
 		PaymentTerms:           parent.PaymentTerms,
 		EnableTrueUp:           parent.EnableTrueUp,
+		SyncedPriceSequence:    parent.SyncedPriceSequence,
 		BaseModel:              types.GetDefaultBaseModel(ctx),
 	}
 

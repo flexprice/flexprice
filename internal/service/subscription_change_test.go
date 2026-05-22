@@ -85,6 +85,7 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		WebhookPublisher:             s.GetWebhookPublisher(),
 		ProrationCalculator:          s.GetCalculator(),
 		IntegrationFactory:           s.GetIntegrationFactory(),
+		PlanPriceSyncRepo:            s.GetStores().PlanPriceSyncRepo,
 	}
 
 	s.subscriptionChangeService = NewSubscriptionChangeService(serviceParams).(*subscriptionChangeService)
