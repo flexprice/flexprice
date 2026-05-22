@@ -1,0 +1,32 @@
+---
+description: Repository architecture literacy — read docs before large edits and preserve layering
+globs:
+  - "**/*.go"
+  - "ent/schema/**/*.go"
+  - "docs/**/*.md"
+  - ".cursor/skills/**/*"
+alwaysApply: true
+---
+
+# FlexPrice architecture rule
+
+Before substantive work (new features, refactors, integrations, Temporal changes, Kafka topics, migrations):
+
+1. **Read orientation docs** under `docs/` in this order when scope is ambiguous:
+   - `docs/REPO_MAP.md` — census and boundaries  
+   - `docs/ARCHITECTURE.md` — principles and conventions  
+   - `docs/DEPENDENCY_GRAPH.md` — coupling and hotspots context  
+   - `docs/HOTSPOTS.md` — avoid enlarging risky areas blindly  
+   - `docs/FLOWS/*.md` — when touching authentication, metering, billing, invoices, subscriptions, webhooks, or retries  
+
+2. **Trace dependencies before editing** — follow constructor wiring from `cmd/server/main.go`, service interfaces in `internal/service`, and domain contracts in `internal/domain`. Prefer explicit injection over widening hidden globals.
+
+3. **Preserve layering** — domain packages do not import repositories or HTTP layers. Handlers delegate to services. Do not bypass services for transactional rules.
+
+4. **Minimize coupling and blast radius** — prefer localized diffs in the bounded context already owning the behavior. Avoid “drive-by” refactors unrelated to the ticket.
+
+5. **No silent architecture changes** — if you materially change pipelines (Kafka topics/groups), deployment modes, Temporal schedules, tenancy/RBAC semantics, or data stores, update the matching `docs/*` sections in the same change when practical.
+
+6. **Generated code discipline** — do not hand-edit Ent outputs under `repository/ent` or generated SDK trees; edit schema/spec + run documented `make` targets.
+
+7. **Graphify** — When `graphify-out/graph.json` exists, prefer `graphify query` / `path` / `explain` before undirected codebase search. After structural code changes, run `graphify update .` so the graph matches the tree (`docs/ARCHITECTURE.md` Graphify section).
