@@ -298,7 +298,7 @@ type TopUpWalletRequest struct {
 	Metadata types.Metadata `json:"metadata,omitempty"`
 	// BillingReason indicates why this top-up was triggered (e.g. WALLET_AUTO_TOPUP).
 	// When set, it is stamped on the invoice created for PURCHASED_CREDIT_INVOICED transactions.
-	BillingReason types.InvoiceBillingReason `json:"billing_reason,omitempty"`
+	BillingReason types.InvoiceBillingReason `json:"-"`
 }
 
 func (r *TopUpWalletRequest) Validate() error {
