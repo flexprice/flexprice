@@ -334,9 +334,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				BillingAnchor:       req.BillingAnchor,
 				UseFinal:            req.UseFinal,
 			}
-			if len(meterIDs) > 1 {
-				detailedParams.GroupBy = []string{"meter_id"}
-			}
+			// Always group by meter_id so each result row carries its meter_id back,
+			// even when there's only a single meter in this group. Without this, the
+			// repo query drops meter_id from SELECT, result.MeterID comes back as "",
+			// and the resultByMeter lookup below misses every line item — yielding
+			// zero usage and an empty analytics response.
+			detailedParams.GroupBy = []string{"meter_id"}
 
 			detailedResults, err := s.repo.GetDetailedAnalytics(ctx, detailedParams)
 			if err != nil {
@@ -971,15 +974,21 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 // ---------------------------------------------------------------------------
 
 // getUsageValueFromDetailedResult extracts the correct scalar usage from a
-// MeterUsageDetailedResult based on aggregation type.
+// MeterUsageDetailedResult based on aggregation type. Each agg maps to a
+// specific column emitted by buildConditionalAggregationColumns:
+//
+//	SUM           → TotalUsage
+//	MAX           → MaxUsage
+//	LATEST        → LatestUsage
+//	COUNT_UNIQUE  → CountUniqueUsage
+//	COUNT         → EventCount (event_count is emitted unconditionally)
 func getUsageValueFromDetailedResult(r *events.MeterUsageDetailedResult, aggType types.AggregationType) decimal.Decimal {
 	switch aggType {
+	case types.AggregationCount:
+		return decimal.NewFromInt(int64(r.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(r.CountUniqueUsage))
 	case types.AggregationMax:
-		if !r.TotalUsage.IsZero() {
-			return r.TotalUsage
-		}
 		return r.MaxUsage
 	case types.AggregationLatest:
 		return r.LatestUsage
@@ -1701,6 +1710,8 @@ func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnaly
 // getCorrectUsageValue returns the correct usage value based on the meter's aggregation type.
 func (s *meterUsageService) getCorrectUsageValue(item *events.DetailedUsageAnalytic, aggregationType types.AggregationType) decimal.Decimal {
 	switch aggregationType {
+	case types.AggregationCount:
+		return decimal.NewFromInt(int64(item.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(item.CountUniqueUsage))
 	case types.AggregationMax:
@@ -1717,6 +1728,8 @@ func (s *meterUsageService) getCorrectUsageValue(item *events.DetailedUsageAnaly
 // getCorrectUsageValueForPoint returns the correct usage value for a time series point based on aggregation type.
 func (s *meterUsageService) getCorrectUsageValueForPoint(point events.UsageAnalyticPoint, aggregationType types.AggregationType) decimal.Decimal {
 	switch aggregationType {
+	case types.AggregationCount:
+		return decimal.NewFromInt(int64(point.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(point.CountUniqueUsage))
 	case types.AggregationMax:
