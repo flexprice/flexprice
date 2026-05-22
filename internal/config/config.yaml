@@ -269,6 +269,10 @@ gemini:
   api_key: ""
   model: "gemini-2.5-flash-lite"
 
+whop:
+  base_url: "" # "https://sandbox-api.whop.com" - for sandbox whop testing
+
+
 email:
   enabled: false # Set to true to enable email sending (override with FLEXPRICE_EMAIL_ENABLED=true)
   resend_api_key: "" # Resend API key (set via FLEXPRICE_EMAIL_RESEND_API_KEY environment variable)

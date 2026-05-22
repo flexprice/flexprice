@@ -77,6 +77,17 @@ func NewHandler(deps Deps) Handler {
 				msg.UUID,
 			)
 		},
+		types.WebhookEventInvoiceUpdatePayment: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			return DispatchInvoicePaidVendorSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.EIMRepo,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+			)
+		},
 	}
 	return h
 }
