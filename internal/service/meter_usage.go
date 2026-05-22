@@ -1335,21 +1335,15 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 // ---------------------------------------------------------------------------
 
 // getUsageValueFromDetailedResult extracts the correct scalar usage from a
-// MeterUsageDetailedResult based on aggregation type. Each agg maps to a
-// specific column emitted by buildConditionalAggregationColumns:
-//
-//	SUM           → TotalUsage
-//	MAX           → MaxUsage
-//	LATEST        → LatestUsage
-//	COUNT_UNIQUE  → CountUniqueUsage
-//	COUNT         → EventCount (event_count is emitted unconditionally)
+// MeterUsageDetailedResult based on aggregation type.
 func getUsageValueFromDetailedResult(r *events.MeterUsageDetailedResult, aggType types.AggregationType) decimal.Decimal {
 	switch aggType {
-	case types.AggregationCount:
-		return decimal.NewFromInt(int64(r.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(r.CountUniqueUsage))
 	case types.AggregationMax:
+		if !r.TotalUsage.IsZero() {
+			return r.TotalUsage
+		}
 		return r.MaxUsage
 	case types.AggregationLatest:
 		return r.LatestUsage
@@ -2071,8 +2065,6 @@ func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnaly
 // getCorrectUsageValue returns the correct usage value based on the meter's aggregation type.
 func (s *meterUsageService) getCorrectUsageValue(item *events.DetailedUsageAnalytic, aggregationType types.AggregationType) decimal.Decimal {
 	switch aggregationType {
-	case types.AggregationCount:
-		return decimal.NewFromInt(int64(item.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(item.CountUniqueUsage))
 	case types.AggregationMax:
@@ -2089,8 +2081,6 @@ func (s *meterUsageService) getCorrectUsageValue(item *events.DetailedUsageAnaly
 // getCorrectUsageValueForPoint returns the correct usage value for a time series point based on aggregation type.
 func (s *meterUsageService) getCorrectUsageValueForPoint(point events.UsageAnalyticPoint, aggregationType types.AggregationType) decimal.Decimal {
 	switch aggregationType {
-	case types.AggregationCount:
-		return decimal.NewFromInt(int64(point.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(point.CountUniqueUsage))
 	case types.AggregationMax:
