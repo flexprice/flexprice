@@ -334,9 +334,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				BillingAnchor:       req.BillingAnchor,
 				UseFinal:            req.UseFinal,
 			}
-			if len(meterIDs) > 1 {
-				detailedParams.GroupBy = []string{"meter_id"}
-			}
+			// Always group by meter_id so each result row carries its meter_id back,
+			// even when there's only a single meter in this group. Without this, the
+			// repo query drops meter_id from SELECT, result.MeterID comes back as "",
+			// and the resultByMeter lookup below misses every line item — yielding
+			// zero usage and an empty analytics response.
+			detailedParams.GroupBy = []string{"meter_id"}
 
 			detailedResults, err := s.repo.GetDetailedAnalytics(ctx, detailedParams)
 			if err != nil {
