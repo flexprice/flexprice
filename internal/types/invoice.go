@@ -491,6 +491,13 @@ func (f *InvoiceFilter) Validate() error {
 			return ierr.WithError(err).WithHint("invalid time range").Mark(ierr.ErrValidation)
 		}
 	}
+
+	if f.BillingReason != "" {
+		if err := f.BillingReason.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
