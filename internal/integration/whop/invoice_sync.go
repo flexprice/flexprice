@@ -57,7 +57,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 
 	flexInvoice, err := s.invoiceRepo.Get(ctx, req.InvoiceID)
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to get Flexprice invoice").Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
 	existingMapping, err := s.getExistingWhopMapping(ctx, req.InvoiceID)
@@ -70,7 +70,6 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 			"whop_invoice_id", existingMapping.ProviderEntityID)
 		return &WhopInvoiceSyncResponse{
 			WhopInvoiceID: existingMapping.ProviderEntityID,
-			Status:        "already_synced",
 		}, nil
 	}
 
@@ -89,25 +88,22 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 		return nil, err
 	}
 
-	totalFloat, _ := flexInvoice.AmountDue.Round(2).Float64()
-
-	defaultDueDate := time.Now().AddDate(0, 0, 30).UTC()
+	defaultDueDate := time.Now().AddDate(0, 0, DefaultInvoiceDueDays).UTC()
 	dueDate := defaultDueDate
 	if flexInvoice.DueDate != nil && flexInvoice.DueDate.After(time.Now()) {
 		dueDate = flexInvoice.DueDate.UTC()
 	}
-	dueDateStr := dueDate.Format(time.RFC3339)
 
 	createReq := CreateInvoiceRequest{
 		CompanyID: cfg.CompanyID,
 		ProductID: productID,
-		Plan: InvoicePlan{
-			InitialPrice:  totalFloat,
-			PlanType:      "one_time",
-			InternalNotes: req.InvoiceID, // flexprice invoice id for reference
+		Plan: CreateInvoicePlan{
+			InitialPrice:  flexInvoice.AmountDue.Round(2).InexactFloat64(),
+			PlanType:      WhopPlanTypeOneTime,
+			InternalNotes: req.InvoiceID,
 		},
-		CollectionMethod: "send_invoice",
-		DueDate:          dueDateStr,
+		CollectionMethod: WhopCollectionMethodSendInvoice,
+		DueDate:          dueDate.Format(time.RFC3339),
 		CustomerName:     customerName,
 		EmailAddress:     customerEmail,
 	}
@@ -118,20 +114,23 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 			WithHint("Failed to create invoice in Whop").
 			Mark(ierr.ErrHTTPClient)
 	}
-	s.logger.Infow("revised float total amount", totalFloat,
-		"flexprice invoice amount due", flexInvoice.AmountDue.String(),
-		"flexprice invoice id", flexInvoice.ID,
-		"whop invoice id", whopInvoice.ID)
+	s.logger.Infow("created Whop invoice",
+		"amount_due", flexInvoice.AmountDue.String(),
+		"flexprice_invoice_id", flexInvoice.ID,
+		"whop_invoice_id", whopInvoice.ID)
 
-	// Fetch the plan to get the purchase_url (checkout link), then store it on the invoice.
 	if whopInvoice.CurrentPlan.ID != "" {
 		plan, planErr := s.client.GetPlan(ctx, whopInvoice.CurrentPlan.ID)
 		if planErr != nil {
 			s.logger.Warnw("failed to fetch Whop plan for purchase_url",
 				"plan_id", whopInvoice.CurrentPlan.ID, "error", planErr)
 		} else if plan.PurchaseURL != "" {
-			if updateErr := s.storeCheckoutURL(ctx, req.InvoiceID, plan.PurchaseURL); updateErr != nil {
-				s.logger.Warnw("failed to store Whop purchase_url on invoice",
+			if flexInvoice.Metadata == nil {
+				flexInvoice.Metadata = make(types.Metadata)
+			}
+			flexInvoice.Metadata["whop_checkout_url"] = plan.PurchaseURL
+			if updateErr := s.invoiceRepo.Update(ctx, flexInvoice); updateErr != nil {
+				s.logger.Warnw("failed to store whop_checkout_url on invoice",
 					"invoice_id", req.InvoiceID, "error", updateErr)
 			}
 		}
@@ -163,7 +162,7 @@ func (s *InvoiceSyncService) MarkInvoicePaidInWhop(ctx context.Context, flexpric
 
 	flexInvoice, err := s.invoiceRepo.Get(ctx, flexpriceInvoiceID)
 	if err != nil {
-		return ierr.WithError(err).WithHint("Failed to get Flexprice invoice").Mark(ierr.ErrDatabase)
+		return err
 	}
 	if flexInvoice.PaymentStatus != types.PaymentStatusSucceeded {
 		s.logger.Infow("invoice not in succeeded payment state, skipping Whop mark_paid",
@@ -173,12 +172,12 @@ func (s *InvoiceSyncService) MarkInvoicePaidInWhop(ctx context.Context, flexpric
 	}
 
 	mapping, err := s.getExistingWhopMapping(ctx, flexpriceInvoiceID)
+	if ierr.IsNotFound(err) {
+		s.logger.Infow("no Whop mapping for invoice, skipping mark_paid",
+			"invoice_id", flexpriceInvoiceID)
+		return nil
+	}
 	if err != nil {
-		if ierr.IsNotFound(err) {
-			s.logger.Infow("no Whop mapping for invoice, skipping mark_paid",
-				"invoice_id", flexpriceInvoiceID)
-			return nil
-		}
 		return err
 	}
 
@@ -212,7 +211,7 @@ func (s *InvoiceSyncService) ensureProduct(ctx context.Context) (string, error) 
 	product, err := s.client.CreateProduct(ctx, CreateProductRequest{
 		CompanyID:  cfg.CompanyID,
 		Title:      DefaultProductTitle,
-		Visibility: "quick_link",
+		Visibility: WhopVisibilityQuickLink,
 	})
 	if err != nil {
 		return "", ierr.WithError(err).
@@ -259,18 +258,6 @@ func (s *InvoiceSyncService) resolveCustomer(
 	}
 	email = cust.Email
 	return name, email, nil
-}
-
-func (s *InvoiceSyncService) storeCheckoutURL(ctx context.Context, invoiceID, purchaseURL string) error {
-	inv, err := s.invoiceRepo.Get(ctx, invoiceID)
-	if err != nil {
-		return err
-	}
-	if inv.Metadata == nil {
-		inv.Metadata = make(types.Metadata)
-	}
-	inv.Metadata["whop_checkout_url"] = purchaseURL
-	return s.invoiceRepo.Update(ctx, inv)
 }
 
 func (s *InvoiceSyncService) getExistingWhopMapping(ctx context.Context, invoiceID string) (*entityintegrationmapping.EntityIntegrationMapping, error) {

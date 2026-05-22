@@ -567,6 +567,7 @@ func (f *Factory) GetWhopIntegration(ctx context.Context) (*WhopIntegration, err
 		f.connectionRepo,
 		f.encryptionService,
 		f.logger,
+		f.config,
 	)
 
 	invoiceSyncSvc := whop.NewInvoiceSyncService(

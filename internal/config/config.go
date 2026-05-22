@@ -61,6 +61,14 @@ type Configuration struct {
 	OnboardingEvents           OnboardingEventsConfig           `mapstructure:"onboarding_events" validate:"omitempty"`
 	WebhookRetryJob            WebhookRetryJobConfig            `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                     GeminiConfig                     `mapstructure:"gemini" validate:"omitempty"`
+	Whop                       WhopConfig                       `mapstructure:"whop" validate:"omitempty"`
+}
+
+// WhopConfig holds Whop integration settings (non-secret, static config)
+type WhopConfig struct {
+	// BaseURL overrides the default Whop API URL. Leave empty for production.
+	// Set to "https://sandbox-api.whop.com" to use the Whop sandbox environment.
+	BaseURL string `mapstructure:"base_url" validate:"omitempty"`
 }
 
 // GeminiConfig holds Google Gemini API settings for server-side AI pricing parse (portal).

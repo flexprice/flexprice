@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	whop "github.com/flexprice/flexprice/internal/integration/whop"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -52,7 +53,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *WhopWebhookEven
 		"msg_id", event.ID)
 
 	switch event.Type {
-	case "invoice.paid":
+	case whop.WhopEventInvoicePaid:
 		return h.handleInvoicePaid(ctx, &event.Data, services)
 	default:
 		h.logger.Infow("unhandled Whop webhook type, skipping", "type", event.Type)

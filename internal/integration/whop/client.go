@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
@@ -35,6 +36,7 @@ type Client struct {
 	encryptionService security.EncryptionService
 	httpClient        httpclient.Client
 	logger            *logger.Logger
+	cfg               *config.Configuration
 }
 
 // NewClient creates a new Whop client
@@ -42,12 +44,14 @@ func NewClient(
 	connectionRepo connection.Repository,
 	encryptionService security.EncryptionService,
 	logger *logger.Logger,
+	cfg *config.Configuration,
 ) WhopClient {
 	return &Client{
 		connectionRepo:    connectionRepo,
 		encryptionService: encryptionService,
 		httpClient:        httpclient.NewDefaultClient(),
 		logger:            logger,
+		cfg:               cfg,
 	}
 }
 
@@ -164,7 +168,11 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 		return err
 	}
 
-	fullURL := fmt.Sprintf("%s%s", WhopBaseURL, endpoint)
+	baseURL := WhopBaseURL
+	if c.cfg != nil && c.cfg.Whop.BaseURL != "" {
+		baseURL = c.cfg.Whop.BaseURL
+	}
+	fullURL := fmt.Sprintf("%s%s", baseURL, endpoint)
 
 	var jsonBody []byte
 	if body != nil {
@@ -304,7 +312,7 @@ func (c *Client) MarkInvoicePaid(ctx context.Context, whopInvoiceID string) erro
 	if err != nil {
 		return err
 	}
-	if inv.Status == "paid" {
+	if inv.Status == WhopInvoiceStatusPaid {
 		c.logger.Infow("Whop invoice already paid, skipping mark_paid", "whop_invoice_id", whopInvoiceID)
 		return nil
 	}

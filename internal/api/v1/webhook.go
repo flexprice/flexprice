@@ -1178,8 +1178,11 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 }
 func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	// Always return 200 OK to Whop to prevent retries
+	// We log errors internally but don't expose them to Whop
 	defer func() {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Webhook received",
+		})
 	}()
 
 	tenantID := c.Param("tenant_id")
