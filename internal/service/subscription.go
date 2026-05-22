@@ -257,6 +257,16 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 	syncTrialingStateFromCreateRequest(&req, sub)
 
+	// Stamp the sub with the plan's current max prices.sequence so new subscriptions are considered already-synced.
+	currentPlanSeq, seqErr := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, plan.ID)
+	if seqErr != nil {
+		return nil, ierr.WithError(seqErr).
+			WithHint("Failed to read current plan price sequence").
+			WithReportableDetails(map[string]any{"plan_id": plan.ID}).
+			Mark(ierr.ErrDatabase)
+	}
+	sub.SyncedPriceSequence = currentPlanSeq
+
 	s.Logger.InfowCtx(ctx, "creating subscription",
 		"customer_id", sub.CustomerID, "plan_id", sub.PlanID, "start_date", sub.StartDate,
 		"billing_anchor", sub.BillingAnchor, "current_period_start", sub.CurrentPeriodStart,
@@ -1566,6 +1576,21 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 
 	response := &dto.SubscriptionResponseV2{
 		Subscription: sub,
+	}
+
+	// Compare sub.SyncedPriceSequence against the plan's current max
+	// prices.sequence — when the sub is behind, plan-price changes have not
+	// yet been reconciled into this sub's line items.
+	if sub.PlanID != "" {
+		currentPlanSeq, seqErr := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, sub.PlanID)
+		if seqErr != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to fetch current plan sequence for out-of-sync flag",
+				"subscription_id", id,
+				"plan_id", sub.PlanID,
+				"error", seqErr)
+		} else {
+			response.PlanPricesOutOfSync = sub.SyncedPriceSequence < currentPlanSeq
+		}
 	}
 
 	// Expand pauses if subscription has pause status
@@ -7224,6 +7249,7 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 		SubscriptionType:       types.SubscriptionTypeInherited,
 		PaymentTerms:           parent.PaymentTerms,
 		EnableTrueUp:           parent.EnableTrueUp,
+		SyncedPriceSequence:    parent.SyncedPriceSequence,
 		BaseModel:              types.GetDefaultBaseModel(ctx),
 	}
 
