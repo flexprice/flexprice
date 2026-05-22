@@ -3114,12 +3114,7 @@ func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customer
 
 	invoices, err := s.InvoiceRepo.List(ctx, filter)
 	if err != nil {
-		return false, ierr.WithError(err).
-			WithHint("Failed to check for pending auto-topup invoices").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": customerID,
-			}).
-			Mark(ierr.ErrDatabase)
+		return false, err
 	}
 	return len(invoices) > 0, nil
 }
