@@ -13,6 +13,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
+	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
@@ -738,6 +740,11 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			"error", err)
 	}
 
+	// Invoice is fully paid — dispatch Whop mark-paid directly if a mapping exists.
+	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
+		p.dispatchWhopMarkPaid(ctx, invoice.ID)
+	}
+
 	return nil
 }
 
@@ -768,6 +775,23 @@ func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *pay
 	}
 
 	return attempt, nil
+}
+
+func (p *paymentProcessor) dispatchWhopMarkPaid(ctx context.Context, invoiceID string) {
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		p.Logger.WarnwCtx(ctx, "temporal service unavailable, skipping Whop mark-paid", "invoice_id", invoiceID)
+		return
+	}
+
+	input := temporalmodels.WhopInvoiceMarkPaidWorkflowInput{
+		InvoiceID:     invoiceID,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+	}
+	if _, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalWhopInvoiceMarkPaidWorkflow, input); err != nil {
+		p.Logger.ErrorwCtx(ctx, "failed to start Whop mark-paid workflow", "error", err, "invoice_id", invoiceID)
+	}
 }
 
 func (p *paymentProcessor) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
