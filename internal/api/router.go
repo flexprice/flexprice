@@ -511,6 +511,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			integrations.POST("/link", handlers.Integration.Link)
 			integrations.POST("/sync", handlers.Integration.Sync)
+			integrations.GET("/mappings", handlers.Integration.GetMappings)
+			integrations.GET("/config", handlers.Integration.GetConfig)
 		}
 
 		// Coupon routes

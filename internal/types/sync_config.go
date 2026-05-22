@@ -121,3 +121,102 @@ func (s *SyncConfig) Validate() error {
 
 	return nil
 }
+
+func ProviderBaseSyncConfig(provider SecretProvider) *SyncConfig {
+	off := &EntitySyncConfig{Inbound: false, Outbound: false}
+
+	switch provider {
+	case SecretProviderStripe:
+		return &SyncConfig{
+			Customer:     &EntitySyncConfig{Inbound: true, Outbound: true},
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	case SecretProviderHubSpot:
+		return &SyncConfig{
+			Customer:     &EntitySyncConfig{Inbound: true, Outbound: false},
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	case SecretProviderRazorpay:
+		return &SyncConfig{
+			Customer:     &EntitySyncConfig{Inbound: false, Outbound: true},
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	case SecretProviderChargebee:
+		return &SyncConfig{
+			Customer:     &EntitySyncConfig{Inbound: false, Outbound: true},
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	case SecretProviderQuickBooks:
+		return &SyncConfig{
+			Customer:     &EntitySyncConfig{Inbound: false, Outbound: true},
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	case SecretProviderZohoBooks:
+		return &SyncConfig{
+			Customer:     &EntitySyncConfig{Inbound: false, Outbound: false},
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	case SecretProviderPaddle:
+		return &SyncConfig{
+			Customer:     &EntitySyncConfig{Inbound: true, Outbound: true},
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	case SecretProviderNomod:
+		return &SyncConfig{
+			Customer:     &EntitySyncConfig{Inbound: false, Outbound: true},
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	case SecretProviderMoyasar:
+		return &SyncConfig{
+			Customer:     off,
+			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Payment:      off,
+			Plan:         off,
+			Subscription: off,
+			Deal:         off,
+			Quote:        off,
+		}
+	default:
+		return nil
+	}
+}
