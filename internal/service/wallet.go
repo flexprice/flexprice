@@ -3107,7 +3107,12 @@ func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customer
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.CustomerID = customerID
 	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
-	filter.PaymentStatus = []types.PaymentStatus{types.PaymentStatusPending}
+	filter.PaymentStatus = []types.PaymentStatus{
+		types.PaymentStatusPending,
+		types.PaymentStatusFailed,
+		types.PaymentStatusFailed,
+		types.PaymentStatusInitiated,
+	}
 	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized}
 	filter.SkipLineItems = true
 	filter.Limit = lo.ToPtr(1)
