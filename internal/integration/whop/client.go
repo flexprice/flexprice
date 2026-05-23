@@ -28,6 +28,7 @@ type WhopClient interface {
 	GetInvoice(ctx context.Context, whopInvoiceID string) (*InvoiceResponse, error)
 	CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*InvoiceResponse, error)
 	MarkInvoicePaid(ctx context.Context, whopInvoiceID string) error
+	GetPaymentMethods(ctx context.Context, memberID string) (*PaymentMethodsResponse, error)
 }
 
 // Client handles Whop API client setup and configuration
@@ -289,7 +290,7 @@ func (c *Client) GetInvoice(ctx context.Context, whopInvoiceID string) (*Invoice
 	return &response, nil
 }
 
-// CreateInvoice creates a one-time invoice in Whop with send_invoice collection method
+// CreateInvoice creates a one-time invoice in Whop
 func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*InvoiceResponse, error) {
 	c.logger.Infow("creating invoice in Whop",
 		"company_id", req.CompanyID,
@@ -302,6 +303,17 @@ func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*
 	}
 
 	c.logger.Infow("successfully created invoice in Whop", "invoice_id", response.ID, "status", response.Status)
+	return &response, nil
+}
+
+// GetPaymentMethods fetches saved payment methods for a Whop member via GET /v1/payment_methods?member_id=xxx
+func (c *Client) GetPaymentMethods(ctx context.Context, memberID string) (*PaymentMethodsResponse, error) {
+	c.logger.Debugw("fetching payment methods from Whop")
+
+	var response PaymentMethodsResponse
+	if err := c.makeRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/payment_methods?member_id=%s", memberID), nil, &response); err != nil {
+		return nil, err
+	}
 	return &response, nil
 }
 

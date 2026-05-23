@@ -94,15 +94,30 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 		dueDate = flexInvoice.DueDate.UTC()
 	}
 
+	// Determine collection method based on whether we have a saved member mapping.
+	// TODO: configurable collection method
+	collectionMethod := WhopCollectionMethodSendInvoice
+	paymentMethodID := ""
+	if flexInvoice.CustomerID != "" {
+		if savedPaymentMethodID, err := s.resolvePaymentMethod(ctx, flexInvoice.CustomerID); err != nil {
+			s.logger.Infow("could not resolve Whop payment method, falling back to send_invoice",
+				"customer_id", flexInvoice.CustomerID, "error", err)
+		} else if savedPaymentMethodID != "" {
+			collectionMethod = WhopCollectionMethodChargeAutomatically
+			paymentMethodID = savedPaymentMethodID
+		}
+	}
+
 	createReq := CreateInvoiceRequest{
 		CompanyID: cfg.CompanyID,
 		ProductID: productID,
 		Plan: CreateInvoicePlan{
 			InitialPrice:  flexInvoice.AmountDue.Round(2).InexactFloat64(),
 			PlanType:      WhopPlanTypeOneTime,
-			InternalNotes: req.InvoiceID,
+			InternalNotes: flexInvoice.CustomerID, // always store customer_id so payment.succeeded can resolve it
 		},
-		CollectionMethod: WhopCollectionMethodSendInvoice,
+		CollectionMethod: collectionMethod,
+		PaymentMethodID:  paymentMethodID,
 		DueDate:          dueDate.Format(time.RFC3339),
 		CustomerName:     customerName,
 		EmailAddress:     customerEmail,
@@ -274,6 +289,67 @@ func (s *InvoiceSyncService) getExistingWhopMapping(ctx context.Context, invoice
 		return nil, ierr.NewError("no Whop mapping found").Mark(ierr.ErrNotFound)
 	}
 	return mappings[0], nil
+}
+
+// resolvePaymentMethod looks up the customer→whop member mapping and fetches their first payment method.
+// Returns (paymentMethodID, nil) if found, ("", nil) if no mapping exists, or ("", err) on API failure.
+func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerID string) (string, error) {
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityIDs:     []string{customerID},
+		EntityType:    types.IntegrationEntityTypeCustomer,
+		ProviderTypes: []string{string(types.SecretProviderWhop)},
+	}
+	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		return "", err
+	}
+	if len(mappings) == 0 {
+		return "", nil // no mapping — caller falls back to send_invoice
+	}
+
+	memberID := mappings[0].ProviderEntityID
+	paymentMethods, err := s.client.GetPaymentMethods(ctx, memberID)
+	if err != nil {
+		return "", err
+	}
+	if len(paymentMethods.Data) == 0 {
+		s.logger.Infow("no payment methods on Whop member, falling back to send_invoice",
+			"customer_id", customerID)
+		return "", nil
+	}
+
+	// Currently uses first payment method from the fetched list
+	// TODO: allow users to select their default payment method
+	paymentMethodID := paymentMethods.Data[0].ID
+	s.logger.Infow("resolved Whop payment method for customer", "customer_id", customerID)
+	return paymentMethodID, nil
+}
+
+// CreateCustomerMapping creates an entity_integration_mapping for customer→Whop member.
+// Called from the webhook handler when a payment.succeeded event is received.
+// Treats ErrAlreadyExists as success — concurrent webhook deliveries of the same event are safe.
+func (s *InvoiceSyncService) CreateCustomerMapping(ctx context.Context, customerID, memberID string) error {
+	mapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
+		EntityID:         customerID,
+		EntityType:       types.IntegrationEntityTypeCustomer,
+		ProviderType:     string(types.SecretProviderWhop),
+		ProviderEntityID: memberID,
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+		Metadata: map[string]interface{}{
+			"synced_via": "whop_payment_succeeded_webhook",
+		},
+	}
+	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
+		if ierr.IsAlreadyExists(err) {
+			s.logger.Infow("customer→Whop mapping already exists, skipping",
+				"customer_id", customerID)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, flexpriceInvoiceID, whopInvoiceID string) error {

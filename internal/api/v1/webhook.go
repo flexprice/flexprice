@@ -1209,7 +1209,6 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 
 	h.logger.Infow("received Whop webhook",
 		"type", event.Type,
-		"whop_invoice_id", event.Data.ID,
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
 
@@ -1232,7 +1231,6 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	if err := whopIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, serviceDeps); err != nil {
 		h.logger.Errorw("failed to handle Whop webhook event",
 			"error", err,
-			"type", event.Type,
-			"whop_invoice_id", event.Data.ID)
+			"type", event.Type)
 	}
 }
