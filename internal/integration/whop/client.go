@@ -308,7 +308,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*
 
 // GetPaymentMethods fetches saved payment methods for a Whop member via GET /v1/payment_methods?member_id=xxx
 func (c *Client) GetPaymentMethods(ctx context.Context, memberID string) (*PaymentMethodsResponse, error) {
-	c.logger.Infow("fetching payment methods from Whop", "member_id", memberID)
+	c.logger.Debugw("fetching payment methods from Whop")
 
 	var response PaymentMethodsResponse
 	if err := c.makeRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/payment_methods?member_id=%s", memberID), nil, &response); err != nil {

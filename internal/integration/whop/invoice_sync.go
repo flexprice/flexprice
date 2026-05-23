@@ -329,6 +329,7 @@ func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerI
 
 // CreateCustomerMapping creates an entity_integration_mapping for customer→Whop member.
 // Called from the webhook handler when a payment.succeeded event is received.
+// Treats ErrAlreadyExists as success — concurrent webhook deliveries of the same event are safe.
 func (s *InvoiceSyncService) CreateCustomerMapping(ctx context.Context, customerID, memberID string) error {
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
@@ -342,7 +343,15 @@ func (s *InvoiceSyncService) CreateCustomerMapping(ctx context.Context, customer
 			"synced_via": "whop_payment_succeeded_webhook",
 		},
 	}
-	return s.entityIntegrationMappingRepo.Create(ctx, mapping)
+	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
+		if ierr.IsAlreadyExists(err) {
+			s.logger.Infow("customer→Whop mapping already exists, skipping",
+				"customer_id", customerID)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, flexpriceInvoiceID, whopInvoiceID string) error {
