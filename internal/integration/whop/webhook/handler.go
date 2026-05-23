@@ -162,8 +162,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, 
 func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucceededEventData, _ *ServiceDependencies) error {
 	h.logger.Infow("handling Whop payment.succeeded",
 		"payment_id", data.ID,
-		"plan_id", data.Plan.ID,
-		"member_id", data.Member.ID)
+		"plan_id", data.Plan.ID)
 
 	if data.Plan.ID == "" {
 		h.logger.Warnw("payment.succeeded has no plan id, cannot resolve customer", "payment_id", data.ID)
@@ -211,11 +210,11 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 	// Create mapping: entity_type=customer, provider_entity_id=member_id (used to fetch payment methods)
 	if err := h.invoiceSyncService.CreateCustomerMapping(ctx, customerID, data.Member.ID); err != nil {
 		h.logger.Errorw("failed to create customer→Whop mapping",
-			"error", err, "customer_id", customerID, "member_id", data.Member.ID)
+			"error", err, "customer_id", customerID)
 		return nil
 	}
 
 	h.logger.Infow("created customer→Whop member mapping from payment.succeeded",
-		"customer_id", customerID, "member_id", data.Member.ID)
+		"customer_id", customerID)
 	return nil
 }

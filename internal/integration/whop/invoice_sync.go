@@ -314,15 +314,14 @@ func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerI
 	}
 	if len(paymentMethods.Data) == 0 {
 		s.logger.Infow("no payment methods on Whop member, falling back to send_invoice",
-			"customer_id", customerID, "member_id", memberID)
+			"customer_id", customerID)
 		return "", nil
 	}
 
-	// first payment method from the fetched list is returned
+	// Currently uses first payment method from the fetched list
 	// TODO: allow users to select their default payment method
 	paymentMethodID := paymentMethods.Data[0].ID
-	s.logger.Infow("resolved Whop payment method for customer",
-		"customer_id", customerID, "member_id", memberID, "payment_method_id", paymentMethodID)
+	s.logger.Infow("resolved Whop payment method for customer", "customer_id", customerID)
 	return paymentMethodID, nil
 }
 
