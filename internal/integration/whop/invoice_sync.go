@@ -99,13 +99,12 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 	collectionMethod := WhopCollectionMethodSendInvoice
 	paymentMethodID := ""
 	if flexInvoice.CustomerID != "" {
-		pmID, pmErr := s.resolvePaymentMethod(ctx, flexInvoice.CustomerID)
-		if pmErr != nil {
+		if savedPaymentMethodID, err := s.resolvePaymentMethod(ctx, flexInvoice.CustomerID); err != nil {
 			s.logger.Infow("could not resolve Whop payment method, falling back to send_invoice",
-				"customer_id", flexInvoice.CustomerID, "error", pmErr)
-		} else if pmID != "" {
+				"customer_id", flexInvoice.CustomerID, "error", err)
+		} else if savedPaymentMethodID != "" {
 			collectionMethod = WhopCollectionMethodChargeAutomatically
-			paymentMethodID = pmID
+			paymentMethodID = savedPaymentMethodID
 		}
 	}
 
@@ -309,11 +308,11 @@ func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerI
 	}
 
 	memberID := mappings[0].ProviderEntityID
-	pmResp, err := s.client.GetPaymentMethods(ctx, memberID)
+	paymentMethods, err := s.client.GetPaymentMethods(ctx, memberID)
 	if err != nil {
 		return "", err
 	}
-	if len(pmResp.Data) == 0 {
+	if len(paymentMethods.Data) == 0 {
 		s.logger.Infow("no payment methods on Whop member, falling back to send_invoice",
 			"customer_id", customerID, "member_id", memberID)
 		return "", nil
@@ -321,7 +320,7 @@ func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerI
 
 	// first payment method from the fetched list is returned
 	// TODO: allow users to select their default payment method
-	paymentMethodID := pmResp.Data[0].ID
+	paymentMethodID := paymentMethods.Data[0].ID
 	s.logger.Infow("resolved Whop payment method for customer",
 		"customer_id", customerID, "member_id", memberID, "payment_method_id", paymentMethodID)
 	return paymentMethodID, nil

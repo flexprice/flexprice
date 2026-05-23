@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // WhopWebhookEvent is the top-level Whop webhook payload.
@@ -189,6 +190,10 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 
 	// Idempotency: skip if mapping already exists
 	existingFilter := &types.EntityIntegrationMappingFilter{
+		QueryFilter: &types.QueryFilter{
+			Limit:  lo.ToPtr(1),
+			Status: lo.ToPtr(types.StatusPublished),
+		},
 		EntityIDs:     []string{customerID},
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderWhop)},
@@ -199,8 +204,7 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 		return nil
 	}
 	if len(existing) > 0 {
-		h.logger.Infow("customer→Whop member mapping already exists, skipping",
-			"customer_id", customerID, "member_id", existing[0].ProviderEntityID)
+		h.logger.Infow("customer→Whop member mapping already exists, skipping", "customer_id", customerID)
 		return nil
 	}
 
