@@ -18,7 +18,8 @@ const (
 
 // Webhook event types
 const (
-	WhopEventInvoicePaid = "invoice.paid"
+	WhopEventInvoicePaid      = "invoice.paid"
+	WhopEventPaymentSucceeded = "payment.succeeded"
 )
 
 // WhopConfig holds decrypted Whop credentials from the connection
@@ -73,10 +74,11 @@ type PlanResponse struct {
 // CreateInvoicePlan is the plan ref within a CreateInvoiceRequest.
 // InitialPrice is float64 — decimal.Decimal marshals to a quoted string by default,
 // but Whop expects a bare JSON number. Round to 2 dp before setting.
+// InternalNotes is the customer_id of the Flexprice customer
 type CreateInvoicePlan struct {
 	InitialPrice  float64 `json:"initial_price"`
 	PlanType      string  `json:"plan_type"`
-	InternalNotes string  `json:"internal_notes,omitempty"`
+	InternalNotes string  `json:"internal_notes"`
 }
 
 // CreateInvoiceRequest is the request body for POST /v1/invoices
@@ -85,6 +87,7 @@ type CreateInvoiceRequest struct {
 	ProductID        string            `json:"product_id"`
 	Plan             CreateInvoicePlan `json:"plan"`
 	CollectionMethod string            `json:"collection_method"`
+	PaymentMethodID  string            `json:"payment_method_id,omitempty"`
 	DueDate          string            `json:"due_date"`
 	CustomerName     string            `json:"customer_name"`
 	EmailAddress     string            `json:"email_address"`
@@ -113,4 +116,16 @@ type WhopInvoiceSyncRequest struct {
 type WhopInvoiceSyncResponse struct {
 	WhopInvoiceID string
 	Status        string
+}
+
+// --- Payment Methods ---
+
+// PaymentMethod represents a Whop payment method — only the ID is needed for charge_automatically
+type PaymentMethod struct {
+	ID string `json:"id"`
+}
+
+// PaymentMethodsResponse is the response from GET /v1/payment_methods
+type PaymentMethodsResponse struct {
+	Data []PaymentMethod `json:"data"`
 }

@@ -585,6 +585,8 @@ func (f *Factory) GetWhopIntegration(ctx context.Context) (*WhopIntegration, err
 
 	webhookHandler := whopwebhook.NewHandler(
 		f.entityIntegrationMappingRepo,
+		invoiceSyncSvc,
+		whopClient,
 		f.logger,
 	)
 
