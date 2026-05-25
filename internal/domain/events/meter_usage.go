@@ -68,6 +68,9 @@ type MeterUsageDetailedAnalyticsParams struct {
 	ExternalCustomerID  string
 	ExternalCustomerIDs []string
 	MeterIDs            []string
+	// FeatureIDs are resolved to MeterIDs by the service before querying.
+	// Takes effect only when MeterIDs is empty.
+	FeatureIDs          []string
 	StartTime           time.Time
 	EndTime             time.Time
 	GroupBy             []string            // "source", "meter_id", "properties.<field>"

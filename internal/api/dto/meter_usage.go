@@ -125,15 +125,16 @@ func ToMeterUsageAnalyticsResponse(results []*events.MeterUsageAggregationResult
 
 // MeterUsageDetailedAnalyticsRequest is the request for POST /v1/meter-usage/detailed-analytics
 type MeterUsageDetailedAnalyticsRequest struct {
-	ExternalCustomerID string              `json:"external_customer_id" validate:"required" binding:"required" example:"cust_123"`
-	MeterIDs           []string            `json:"meter_ids,omitempty" example:"mtr_abc,mtr_def"`
-	StartTime          time.Time           `json:"start_time,omitempty" example:"2024-01-01T00:00:00Z"`
-	EndTime            time.Time           `json:"end_time,omitempty" example:"2024-02-01T00:00:00Z"`
-	GroupBy            []string            `json:"group_by,omitempty" example:"meter_id,source"`
-	PropertyFilters    map[string][]string `json:"property_filters,omitempty"`
-	Sources            []string            `json:"sources,omitempty"`
-	WindowSize         types.WindowSize    `json:"window_size,omitempty" example:"DAY"`
-	BillingAnchor      *time.Time          `json:"billing_anchor,omitempty"`
+	ExternalCustomerID string                  `json:"external_customer_id" validate:"required" binding:"required" example:"cust_123"`
+	MeterIDs           []string                `json:"meter_ids,omitempty" example:"mtr_abc,mtr_def"`
+	StartTime          time.Time               `json:"start_time,omitempty" example:"2024-01-01T00:00:00Z"`
+	EndTime            time.Time               `json:"end_time,omitempty" example:"2024-02-01T00:00:00Z"`
+	GroupBy            []string                `json:"group_by,omitempty" example:"meter_id,source"`
+	PropertyFilters    map[string][]string     `json:"property_filters,omitempty"`
+	Sources            []string                `json:"sources,omitempty"`
+	AggregationTypes   []types.AggregationType `json:"aggregation_types,omitempty" example:"SUM,MAX"`
+	WindowSize         types.WindowSize        `json:"window_size,omitempty" example:"DAY"`
+	BillingAnchor      *time.Time              `json:"billing_anchor,omitempty"`
 }
 
 func (r *MeterUsageDetailedAnalyticsRequest) Validate() error {
@@ -152,6 +153,7 @@ func (r *MeterUsageDetailedAnalyticsRequest) ToParams(tenantID, environmentID st
 		GroupBy:            r.GroupBy,
 		PropertyFilters:    r.PropertyFilters,
 		Sources:            r.Sources,
+		AggregationTypes:   r.AggregationTypes,
 		WindowSize:         r.WindowSize,
 		BillingAnchor:      r.BillingAnchor,
 	}

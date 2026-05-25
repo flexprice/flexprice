@@ -103,6 +103,14 @@ type GetSubscriptionMeterUsageRequest struct {
 	BillingAnchor   *time.Time
 	UseFinal        bool // true for invoice creation
 	IncludeFeatures bool // true for analytics (resolve meter → feature)
+
+	// Analytics-only filters. These are forwarded to the windowed
+	// GetDetailedAnalytics call inside GetSubscriptionMeterUsage. They have no
+	// effect on the scalar GetUsageMultiMeter path used by billing.
+	MeterIDs        []string            // when non-empty, only these meters are queried
+	GroupBy         []string            // appended after "meter_id"; "meter_id" is always present
+	PropertyFilters map[string][]string // e.g. {"model": ["gpt-4"]}
+	Sources         []string            // event source filter
 }
 
 // dateRangeGroup is the key used to batch standard-meter queries that share
@@ -286,6 +294,16 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 	}
 
+	// Filter meterToLineItems to the caller-requested subset (pushes filtering to ClickHouse)
+	if len(req.MeterIDs) > 0 {
+		meterIDSet := lo.SliceToMap(req.MeterIDs, func(id string) (string, struct{}) { return id, struct{}{} })
+		for meterID := range meterToLineItems {
+			if _, ok := meterIDSet[meterID]; !ok {
+				delete(meterToLineItems, meterID)
+			}
+		}
+	}
+
 	// 9. Split bucketed vs standard meters
 	bucketedMeterIDs := make(map[string]bool)
 	for meterID, m := range result.MeterMap {
@@ -333,13 +351,21 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				WindowSize:          req.WindowSize,
 				BillingAnchor:       req.BillingAnchor,
 				UseFinal:            req.UseFinal,
+				PropertyFilters:     req.PropertyFilters,
+				Sources:             req.Sources,
 			}
 			// Always group by meter_id so each result row carries its meter_id back,
 			// even when there's only a single meter in this group. Without this, the
 			// repo query drops meter_id from SELECT, result.MeterID comes back as "",
 			// and the resultByMeter lookup below misses every line item — yielding
 			// zero usage and an empty analytics response.
-			detailedParams.GroupBy = []string{"meter_id"}
+			groupBy := []string{"meter_id"}
+			for _, g := range req.GroupBy {
+				if g != "" && g != "meter_id" {
+					groupBy = append(groupBy, g)
+				}
+			}
+			detailedParams.GroupBy = groupBy
 
 			detailedResults, err := s.repo.GetDetailedAnalytics(ctx, detailedParams)
 			if err != nil {
@@ -547,6 +573,23 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
 	}
 
+	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified)
+	if len(params.FeatureIDs) > 0 && len(params.MeterIDs) == 0 {
+		features, err := s.FeatureRepo.ListByIDs(ctx, params.FeatureIDs)
+		if err != nil {
+			s.logger.Warnw("failed to resolve feature IDs to meter IDs, proceeding without filter",
+				"error", err,
+				"feature_ids", params.FeatureIDs,
+			)
+		} else {
+			for _, f := range features {
+				if f.MeterID != "" {
+					params.MeterIDs = append(params.MeterIDs, f.MeterID)
+				}
+			}
+		}
+	}
+
 	// Resolve customer → subscriptions
 	cust, subscriptions, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
 	if err != nil || len(subscriptions) == 0 {
@@ -569,6 +612,10 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			BillingAnchor:   billingAnchor,
 			UseFinal:        params.UseFinal,
 			IncludeFeatures: true,
+			MeterIDs:        params.MeterIDs,
+			GroupBy:         params.GroupBy,
+			PropertyFilters: params.PropertyFilters,
+			Sources:         params.Sources,
 		})
 		if err != nil {
 			s.logger.Warnw("failed to get subscription meter usage, skipping",
@@ -622,13 +669,17 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		Plans:                 make(map[string]*plan.Plan),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0),
 		Params: &events.UsageAnalyticsParams{
-			TenantID:        params.TenantID,
-			EnvironmentID:   params.EnvironmentID,
-			StartTime:       params.StartTime,
-			EndTime:         params.EndTime,
-			GroupBy:         params.GroupBy,
-			WindowSize:      params.WindowSize,
-			PropertyFilters: params.PropertyFilters,
+			TenantID:           params.TenantID,
+			EnvironmentID:      params.EnvironmentID,
+			ExternalCustomerID: params.ExternalCustomerID,
+			StartTime:          params.StartTime,
+			EndTime:            params.EndTime,
+			GroupBy:            params.GroupBy,
+			WindowSize:         params.WindowSize,
+			PropertyFilters:    params.PropertyFilters,
+			Sources:            params.Sources,
+			AggregationTypes:   params.AggregationTypes,
+			BillingAnchor:      params.BillingAnchor,
 		},
 	}
 
@@ -814,13 +865,17 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		Plans:                 make(map[string]*plan.Plan),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0, len(allResults)),
 		Params: &events.UsageAnalyticsParams{
-			TenantID:        params.TenantID,
-			EnvironmentID:   params.EnvironmentID,
-			StartTime:       params.StartTime,
-			EndTime:         params.EndTime,
-			GroupBy:         params.GroupBy,
-			WindowSize:      params.WindowSize,
-			PropertyFilters: params.PropertyFilters,
+			TenantID:           params.TenantID,
+			EnvironmentID:      params.EnvironmentID,
+			ExternalCustomerID: params.ExternalCustomerID,
+			StartTime:          params.StartTime,
+			EndTime:            params.EndTime,
+			GroupBy:            params.GroupBy,
+			WindowSize:         params.WindowSize,
+			PropertyFilters:    params.PropertyFilters,
+			Sources:            params.Sources,
+			AggregationTypes:   params.AggregationTypes,
+			BillingAnchor:      params.BillingAnchor,
 		},
 	}
 
