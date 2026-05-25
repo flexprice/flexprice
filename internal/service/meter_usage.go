@@ -335,9 +335,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 	}
 
-	// lineItemResults maps line_item_id → usage result for standard meters
-	lineItemResults := make(map[string]*events.MeterUsageAggregationResult)
-
 	for group, lineItemsInGroup := range standardGroups {
 		meterIDs := make([]string, 0, len(lineItemsInGroup))
 		for _, liw := range lineItemsInGroup {
@@ -390,9 +387,9 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				resultsByMeter[dr.MeterID] = append(resultsByMeter[dr.MeterID], dr)
 			}
 
-			// Build one LineItemMeterUsage per (line item × group row).
-			// When GroupBy has no extra dims, resultsByMeter[id] has exactly one entry
-			// and behaviour is identical to the old single-result path.
+			// Build one LineItemMeterUsage per line item, aggregating all group rows.
+			// Commitment minimums are applied per-line-item in calculateCosts; creating
+			// one entry per group row would enforce the minimum N times on partial usage.
 			for _, liw := range lineItemsInGroup {
 				drs := resultsByMeter[liw.MeterID]
 				if len(drs) == 0 {
@@ -408,25 +405,35 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 					continue
 				}
 
+				// Aggregate across all group rows into a single total.
+				var totalUsage decimal.Decimal
+				var totalEventCount uint64
+				var allPoints []events.MeterUsageDetailedPoint
+				var firstResult *events.MeterUsageDetailedResult
 				for _, dr := range drs {
 					if dr == nil {
 						continue
 					}
-
-					usage := &LineItemMeterUsage{
-						LineItem:        liw.Item,
-						MeterID:         liw.MeterID,
-						Meter:           result.MeterMap[liw.MeterID],
-						Price:           result.PriceMap[liw.Item.PriceID],
-						PeriodStart:     group.Start,
-						PeriodEnd:       group.End,
-						Usage:           getUsageValueFromDetailedResult(dr, group.AggType),
-						EventCount:      dr.EventCount,
-						Points:          dr.Points,
-						AnalyticsResult: dr,
+					if firstResult == nil {
+						firstResult = dr
 					}
-					result.LineItemUsages = append(result.LineItemUsages, usage)
+					totalUsage = totalUsage.Add(getUsageValueFromDetailedResult(dr, group.AggType))
+					totalEventCount += dr.EventCount
+					allPoints = append(allPoints, dr.Points...)
 				}
+
+				result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+					LineItem:        liw.Item,
+					MeterID:         liw.MeterID,
+					Meter:           result.MeterMap[liw.MeterID],
+					Price:           result.PriceMap[liw.Item.PriceID],
+					PeriodStart:     group.Start,
+					PeriodEnd:       group.End,
+					Usage:           totalUsage,
+					EventCount:      totalEventCount,
+					Points:          allPoints,
+					AnalyticsResult: firstResult,
+				})
 			}
 		} else {
 			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
@@ -451,7 +458,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			resultByMeter := make(map[string]*events.MeterUsageAggregationResult, len(results))
 			for _, r := range results {
 				resultByMeter[r.MeterID] = r
-				lineItemResults[r.MeterID] = r // also store for zero-usage check
 			}
 
 			for _, liw := range lineItemsInGroup {
