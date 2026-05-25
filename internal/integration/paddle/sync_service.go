@@ -319,7 +319,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	}
 
 	// EnsureCustomerSynced guarantees customer_id and address_id are present.
-	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: sub.CustomerID})
+	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: sub.GetInvoicingCustomerID()})
 	if err != nil {
 		return nil, fmt.Errorf("ensuring customer synced: %w", err)
 	}
