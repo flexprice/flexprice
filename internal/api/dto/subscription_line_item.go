@@ -97,13 +97,14 @@ type CreateSubscriptionLineItemRequest struct {
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal       `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal       `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType   `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                   `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      bool                   `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
+	CommitmentTimeBuckets   types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -136,13 +137,14 @@ type UpdateSubscriptionLineItemRequest struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled *bool                `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal       `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal       `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType   `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled *bool                  `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      *bool                  `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
+	CommitmentTimeBuckets   types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -570,6 +572,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	if r.CommitmentDuration != nil {
 		lineItem.CommitmentDuration = r.CommitmentDuration
 	}
+	if len(r.CommitmentTimeBuckets) > 0 {
+		lineItem.CommitmentTimeBuckets = r.CommitmentTimeBuckets
+	}
 
 	return lineItem
 }
@@ -619,7 +624,8 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 		r.CommitmentOverageFactor != nil ||
 		r.CommitmentTrueUpEnabled != nil ||
 		r.CommitmentWindowed != nil ||
-		r.CommitmentDuration != nil
+		r.CommitmentDuration != nil ||
+		len(r.CommitmentTimeBuckets) > 0
 }
 
 // ToSubscriptionLineItem converts the update request to a domain subscription line item
@@ -694,6 +700,12 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		newLineItem.CommitmentDuration = r.CommitmentDuration
 	} else {
 		newLineItem.CommitmentDuration = existingLineItem.CommitmentDuration
+	}
+
+	if len(r.CommitmentTimeBuckets) > 0 {
+		newLineItem.CommitmentTimeBuckets = r.CommitmentTimeBuckets
+	} else {
+		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets
 	}
 
 	return newLineItem

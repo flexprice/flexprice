@@ -118,6 +118,26 @@ func (qb *MeterUsageQueryBuilder) BuildWhereClause(params *events.MeterUsageQuer
 		args = append(args, addArgs...)
 	}
 
+	// Commitment time-of-day buckets: restrict to events within configured hour ranges.
+	// Uses ClickHouse toHour(timestamp) which returns 0-23 based on UTC.
+	// Multiple buckets are OR'd; literals are used (not bind params) since toHour returns int.
+	if len(params.CommitmentTimeBuckets) > 0 {
+		parts := make([]string, 0, len(params.CommitmentTimeBuckets))
+		for _, b := range params.CommitmentTimeBuckets {
+			if b.StartHour < b.EndHour {
+				parts = append(parts, fmt.Sprintf(
+					"(toHour(timestamp) >= %d AND toHour(timestamp) < %d)",
+					b.StartHour, b.EndHour))
+			} else {
+				// Midnight-wrapping bucket: e.g. {22, 6}
+				parts = append(parts, fmt.Sprintf(
+					"(toHour(timestamp) >= %d OR toHour(timestamp) < %d)",
+					b.StartHour, b.EndHour))
+			}
+		}
+		conditions = append(conditions, "("+strings.Join(parts, " OR ")+")")
+	}
+
 	return strings.Join(conditions, " AND "), args
 }
 

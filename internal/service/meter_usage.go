@@ -121,11 +121,12 @@ type GetSubscriptionMeterUsageRequest struct {
 }
 
 // dateRangeGroup is the key used to batch standard-meter queries that share
-// the same effective time range and aggregation type.
+// the same effective time range, aggregation type, and commitment time buckets.
 type dateRangeGroup struct {
-	Start   time.Time
-	End     time.Time
-	AggType types.AggregationType
+	Start          time.Time
+	End            time.Time
+	AggType        types.AggregationType
+	TimeBucketsKey string // Fingerprint() of CommitmentTimeBuckets; "" = no restriction
 }
 
 // lineItemWithMeter pairs a line item with its meter ID for grouping.
@@ -332,7 +333,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		for _, item := range items {
 			start := item.GetPeriodStart(usageStartTime)
 			end := item.GetPeriodEnd(usageEndTime)
-			key := dateRangeGroup{Start: start, End: end, AggType: meterAggType[meterID]}
+			key := dateRangeGroup{
+				Start:          start,
+				End:            end,
+				AggType:        meterAggType[meterID],
+				TimeBucketsKey: item.CommitmentTimeBuckets.ToString(),
+			}
 			standardGroups[key] = append(standardGroups[key], &lineItemWithMeter{Item: item, MeterID: meterID})
 		}
 	}
@@ -389,15 +395,24 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
 			// Analytics-only filters (PropertyFilters, Sources, GroupBy) are never
 			// set by billing callers, so nothing is lost here.
+			// All items in a group share the same TimeBucketsKey, so pull buckets from the first.
+			var groupTimeBuckets types.TimeOfDayBuckets
+			for _, liw := range lineItemsInGroup {
+				if liw.Item.HasCommitmentTimeBuckets() {
+					groupTimeBuckets = liw.Item.CommitmentTimeBuckets
+					break
+				}
+			}
 			queryParams := &events.MeterUsageQueryParams{
-				TenantID:            types.GetTenantID(ctx),
-				EnvironmentID:       types.GetEnvironmentID(ctx),
-				ExternalCustomerIDs: externalCustomerIDs,
-				MeterIDs:            meterIDs,
-				StartTime:           group.Start,
-				EndTime:             group.End,
-				AggregationType:     group.AggType,
-				UseFinal:            req.UseFinal,
+				TenantID:              types.GetTenantID(ctx),
+				EnvironmentID:         types.GetEnvironmentID(ctx),
+				ExternalCustomerIDs:   externalCustomerIDs,
+				MeterIDs:              meterIDs,
+				StartTime:             group.Start,
+				EndTime:               group.End,
+				AggregationType:       group.AggType,
+				UseFinal:              req.UseFinal,
+				CommitmentTimeBuckets: groupTimeBuckets,
 			}
 
 			results, err := s.repo.GetUsageMultiMeter(ctx, queryParams)
@@ -444,6 +459,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				ctx, m, externalCustomerIDs,
 				itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
 				req.PropertyFilters, req.Sources,
+				item.CommitmentTimeBuckets,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
@@ -630,6 +646,7 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	useFinal bool,
 	propertyFilters map[string][]string,
 	sources []string,
+	timeBuckets types.TimeOfDayBuckets,
 ) (*events.AggregationResult, error) {
 	aggType := m.Aggregation.Type
 	groupBy := m.Aggregation.GroupBy
@@ -638,19 +655,20 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 		groupBy = ""
 	}
 	return s.repo.GetUsageForBucketedMeters(ctx, &events.MeterUsageQueryParams{
-		TenantID:            types.GetTenantID(ctx),
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs: externalCustomerIDs,
-		MeterID:             m.ID,
-		StartTime:           periodStart,
-		EndTime:             periodEnd,
-		AggregationType:     aggType,
-		WindowSize:          m.Aggregation.BucketSize,
-		BillingAnchor:       billingAnchor,
-		GroupByProperty:     groupBy,
-		UseFinal:            useFinal,
-		PropertyFilters:     propertyFilters,
-		Sources:             sources,
+		TenantID:              types.GetTenantID(ctx),
+		EnvironmentID:         types.GetEnvironmentID(ctx),
+		ExternalCustomerIDs:   externalCustomerIDs,
+		MeterID:               m.ID,
+		StartTime:             periodStart,
+		EndTime:               periodEnd,
+		AggregationType:       aggType,
+		WindowSize:            m.Aggregation.BucketSize,
+		BillingAnchor:         billingAnchor,
+		GroupByProperty:       groupBy,
+		UseFinal:              useFinal,
+		PropertyFilters:       propertyFilters,
+		Sources:               sources,
+		CommitmentTimeBuckets: timeBuckets,
 	})
 }
 
@@ -1848,12 +1866,29 @@ func (s *meterUsageService) calculatePointCosts(p *meterUsageBucketedCostParams,
 	}
 }
 
+// generateInBucketStarts returns bucket start times filtered to those within the configured
+// time-of-day buckets. When timeBuckets is empty, all starts are returned unchanged.
+// This is used for windowed true-up so phantom charges are not applied to out-of-bucket windows.
+func generateInBucketStarts(start, end time.Time, bucketSize types.WindowSize, billingAnchor *time.Time, timeBuckets types.TimeOfDayBuckets) []time.Time {
+	all := generateBucketStarts(start, end, bucketSize, billingAnchor)
+	if len(timeBuckets) == 0 {
+		return all
+	}
+	filtered := make([]time.Time, 0, len(all))
+	for _, t := range all {
+		if timeBuckets.ContainsHour(t.UTC().Hour()) {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
+}
+
 // fillMissingWindowsAndRecalculate fills gaps in bucket windows and recalculates total cost.
 func (s *meterUsageService) fillMissingWindowsAndRecalculate(p *meterUsageBucketedCostParams, lineItem *subscription.SubscriptionLineItem) decimal.Decimal {
 	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
 	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
 	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
-	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
+	expectedStarts := generateInBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor, lineItem.CommitmentTimeBuckets)
 
 	pointsByBucket := make(map[time.Time]events.UsageAnalyticPoint, len(p.item.Points))
 	for _, pt := range p.item.Points {
@@ -1886,7 +1921,7 @@ func (s *meterUsageService) fillZeroUsageWindows(p *meterUsageBucketedCostParams
 	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
 	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
 	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
-	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
+	expectedStarts := generateInBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor, lineItem.CommitmentTimeBuckets)
 
 	filled := make([]decimal.Decimal, len(expectedStarts))
 	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)

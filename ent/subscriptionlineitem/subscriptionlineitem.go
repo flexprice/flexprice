@@ -88,6 +88,8 @@ const (
 	FieldCommitmentWindowed = "commitment_windowed"
 	// FieldCommitmentDuration holds the string denoting the commitment_duration field in the database.
 	FieldCommitmentDuration = "commitment_duration"
+	// FieldCommitmentTimeBuckets holds the string denoting the commitment_time_buckets field in the database.
+	FieldCommitmentTimeBuckets = "commitment_time_buckets"
 	// EdgeSubscription holds the string denoting the subscription edge name in mutations.
 	EdgeSubscription = "subscription"
 	// EdgeCouponAssociations holds the string denoting the coupon_associations edge name in mutations.
@@ -149,6 +151,7 @@ var Columns = []string{
 	FieldCommitmentTrueUpEnabled,
 	FieldCommitmentWindowed,
 	FieldCommitmentDuration,
+	FieldCommitmentTimeBuckets,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
