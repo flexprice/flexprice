@@ -406,7 +406,6 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 			Sources:             req.Sources,
 			WindowSize:          req.WindowSize,
 			// BillingAnchor omitted: service defaults to subscription's billing anchor
-			// AggregationTypes omitted: service auto-derives from meter configs
 		}
 		response, err = h.meterUsageService.GetDetailedAnalytics(ctx, params)
 	} else if !h.config.FeatureFlag.EnableFeatureUsageForAnalytics || h.config.FeatureFlag.ForceV1ForTenant == types.GetTenantID(ctx) {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"time"
 
@@ -76,6 +77,10 @@ type LineItemMeterUsage struct {
 
 	// Time-series points (nil when WindowSize is empty)
 	Points []events.MeterUsageDetailedPoint
+
+	// AnalyticsResult is set by GetSubscriptionMeterUsage when isAnalyticsQuery is true.
+	// It carries the raw per-group row (Source, Properties, etc.) for analytics display.
+	AnalyticsResult *events.MeterUsageDetailedResult
 
 	// For bucketed meters (MAX/SUM with bucket_size); nil for standard meters
 	BucketedResult *events.AggregationResult
@@ -294,9 +299,11 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 	}
 
-	// Filter meterToLineItems to the caller-requested subset (pushes filtering to ClickHouse)
+	// Filter meterToLineItems to the caller-requested subset (pushes filtering to ClickHouse).
+	// meterIDSet is kept alive so the zero-usage fallback loop (step 12) also respects it.
+	var meterIDSet map[string]struct{}
 	if len(req.MeterIDs) > 0 {
-		meterIDSet := lo.SliceToMap(req.MeterIDs, func(id string) (string, struct{}) { return id, struct{}{} })
+		meterIDSet = lo.SliceToMap(req.MeterIDs, func(id string) (string, struct{}) { return id, struct{}{} })
 		for meterID := range meterToLineItems {
 			if _, ok := meterIDSet[meterID]; !ok {
 				delete(meterToLineItems, meterID)
@@ -338,8 +345,15 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 		meterIDs = lo.Uniq(meterIDs)
 
-		if req.WindowSize != "" {
-			// Windowed query — use GetDetailedAnalytics for time-series points
+		// Use GetDetailedAnalytics when a window size, property/source filters, or extra
+		// group-by dimensions are requested (analytics path). Fall back to the faster
+		// GetUsageMultiMeter only for plain scalar billing queries.
+		isAnalyticsQuery := req.WindowSize != "" ||
+			len(req.PropertyFilters) > 0 ||
+			len(req.Sources) > 0 ||
+			len(req.GroupBy) > 0
+
+		if isAnalyticsQuery {
 			detailedParams := &events.MeterUsageDetailedAnalyticsParams{
 				TenantID:            types.GetTenantID(ctx),
 				EnvironmentID:       types.GetEnvironmentID(ctx),
@@ -354,11 +368,9 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				PropertyFilters:     req.PropertyFilters,
 				Sources:             req.Sources,
 			}
-			// Always group by meter_id so each result row carries its meter_id back,
-			// even when there's only a single meter in this group. Without this, the
-			// repo query drops meter_id from SELECT, result.MeterID comes back as "",
-			// and the resultByMeter lookup below misses every line item — yielding
-			// zero usage and an empty analytics response.
+			// Always include meter_id in GroupBy so each result row carries its
+			// meter_id back. Without this the repo drops meter_id from SELECT,
+			// result.MeterID comes back as "", and the lookup below yields zero usage.
 			groupBy := []string{"meter_id"}
 			for _, g := range req.GroupBy {
 				if g != "" && g != "meter_id" {
@@ -369,35 +381,57 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 
 			detailedResults, err := s.repo.GetDetailedAnalytics(ctx, detailedParams)
 			if err != nil {
-				return nil, fmt.Errorf("failed to query windowed meter usage for group %v: %w", group, err)
+				return nil, fmt.Errorf("failed to query meter usage analytics for group %v: %w", group, err)
 			}
 
-			// Map results by meter_id
-			resultByMeter := make(map[string]*events.MeterUsageDetailedResult, len(detailedResults))
+			// Collect all rows per meter; extra GroupBy dims can produce N rows per meter.
+			resultsByMeter := make(map[string][]*events.MeterUsageDetailedResult, len(detailedResults))
 			for _, dr := range detailedResults {
-				resultByMeter[dr.MeterID] = dr
+				resultsByMeter[dr.MeterID] = append(resultsByMeter[dr.MeterID], dr)
 			}
 
-			// Build LineItemMeterUsage for each line item
+			// Build one LineItemMeterUsage per (line item × group row).
+			// When GroupBy has no extra dims, resultsByMeter[id] has exactly one entry
+			// and behaviour is identical to the old single-result path.
 			for _, liw := range lineItemsInGroup {
-				dr := resultByMeter[liw.MeterID]
-				usage := &LineItemMeterUsage{
-					LineItem:    liw.Item,
-					MeterID:     liw.MeterID,
-					Meter:       result.MeterMap[liw.MeterID],
-					Price:       result.PriceMap[liw.Item.PriceID],
-					PeriodStart: group.Start,
-					PeriodEnd:   group.End,
+				drs := resultsByMeter[liw.MeterID]
+				if len(drs) == 0 {
+					// No data — zero-usage entry; step 12 will handle commitment check.
+					result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+						LineItem:    liw.Item,
+						MeterID:     liw.MeterID,
+						Meter:       result.MeterMap[liw.MeterID],
+						Price:       result.PriceMap[liw.Item.PriceID],
+						PeriodStart: group.Start,
+						PeriodEnd:   group.End,
+					})
+					continue
 				}
-				if dr != nil {
-					usage.Usage = getUsageValueFromDetailedResult(dr, group.AggType)
-					usage.EventCount = dr.EventCount
-					usage.Points = dr.Points
+
+				for _, dr := range drs {
+					if dr == nil {
+						continue
+					}
+
+					usage := &LineItemMeterUsage{
+						LineItem:        liw.Item,
+						MeterID:         liw.MeterID,
+						Meter:           result.MeterMap[liw.MeterID],
+						Price:           result.PriceMap[liw.Item.PriceID],
+						PeriodStart:     group.Start,
+						PeriodEnd:       group.End,
+						Usage:           getUsageValueFromDetailedResult(dr, group.AggType),
+						EventCount:      dr.EventCount,
+						Points:          dr.Points,
+						AnalyticsResult: dr,
+					}
+					result.LineItemUsages = append(result.LineItemUsages, usage)
 				}
-				result.LineItemUsages = append(result.LineItemUsages, usage)
 			}
 		} else {
-			// Scalar query — use GetUsageMultiMeter for batch efficiency
+			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
+			// Analytics-only filters (PropertyFilters, Sources, GroupBy) are never
+			// set by billing callers, so nothing is lost here.
 			queryParams := &events.MeterUsageQueryParams{
 				TenantID:            types.GetTenantID(ctx),
 				EnvironmentID:       types.GetEnvironmentID(ctx),
@@ -509,6 +543,11 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
 			continue
 		}
+		if meterIDSet != nil {
+			if _, ok := meterIDSet[item.MeterID]; !ok {
+				continue
+			}
+		}
 		if processedLineItemIDs[item.ID] {
 			continue
 		}
@@ -573,20 +612,24 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
 	}
 
-	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified)
+	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified).
+	// Fail closed: a feature-scoped request must not silently broaden to all meters.
 	if len(params.FeatureIDs) > 0 && len(params.MeterIDs) == 0 {
 		features, err := s.FeatureRepo.ListByIDs(ctx, params.FeatureIDs)
 		if err != nil {
-			s.logger.Warnw("failed to resolve feature IDs to meter IDs, proceeding without filter",
-				"error", err,
-				"feature_ids", params.FeatureIDs,
-			)
-		} else {
-			for _, f := range features {
-				if f.MeterID != "" {
-					params.MeterIDs = append(params.MeterIDs, f.MeterID)
-				}
+			return nil, ierr.NewError("failed to resolve feature IDs to meter IDs").Mark(ierr.ErrDatabase)
+		}
+		for _, f := range features {
+			if f.MeterID != "" {
+				params.MeterIDs = append(params.MeterIDs, f.MeterID)
 			}
+		}
+		params.MeterIDs = lo.Uniq(params.MeterIDs)
+		if len(params.MeterIDs) == 0 {
+			return &dto.GetUsageAnalyticsResponse{
+				TotalCost: decimal.Zero,
+				Items:     []dto.UsageAnalyticItem{},
+			}, nil
 		}
 	}
 
@@ -699,15 +742,9 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 	// Merge all subscription usages
 	for _, su := range usages {
 		// Merge lookup maps
-		for id, m := range su.MeterMap {
-			data.Meters[id] = m
-		}
-		for id, p := range su.PriceMap {
-			data.Prices[id] = p
-		}
-		for id, f := range su.FeatureMap {
-			data.Features[id] = f
-		}
+		maps.Copy(data.Meters, su.MeterMap)
+		maps.Copy(data.Prices, su.PriceMap)
+		maps.Copy(data.Features, su.FeatureMap)
 
 		// Convert each LineItemMeterUsage → DetailedUsageAnalytic.
 		// Skip line items with zero usage to avoid noise, EXCEPT when the line item
@@ -722,6 +759,11 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 
 			analytic := &events.DetailedUsageAnalytic{
 				MeterID: lu.MeterID,
+			}
+			if lu.AnalyticsResult != nil {
+				analytic.Source = lu.AnalyticsResult.Source
+				analytic.Sources = lu.AnalyticsResult.Sources
+				analytic.Properties = lu.AnalyticsResult.Properties
 			}
 
 			// Set usage values from the line item usage
