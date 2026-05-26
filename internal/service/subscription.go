@@ -536,6 +536,17 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	sub.CurrentPeriodStart = sub.StartDate
 	sub.CurrentPeriodEnd = nextBillingDate
 
+	isTrialActivation := sub.TrialStart != nil && sub.TrialEnd != nil
+	var billingReason types.InvoiceBillingReason
+	if isTrialActivation {
+		trialDuration := sub.TrialEnd.Sub(lo.FromPtr(sub.TrialStart))
+		sub.TrialStart = lo.ToPtr(newStartDate)
+		sub.TrialEnd = lo.ToPtr(newStartDate.Add(trialDuration))
+		sub.CurrentPeriodStart = lo.FromPtr(sub.TrialStart)
+		sub.CurrentPeriodEnd = lo.FromPtr(sub.TrialEnd)
+		billingReason = types.InvoiceBillingReasonSubscriptionTrialStart
+	}
+
 	// Update line item start dates and end dates
 	for _, item := range sub.LineItems {
 		// Get price to check if it has a start date
@@ -579,6 +590,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			PeriodStart:    sub.CurrentPeriodStart,
 			PeriodEnd:      sub.CurrentPeriodEnd,
 			ReferencePoint: types.ReferencePointPeriodStart,
+			BillingReason:  billingReason,
 		}, paymentParams, types.InvoiceFlowSubscriptionCreation, true) // Pass true for draft activation
 		if err != nil {
 			return err
@@ -603,7 +615,11 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete || sub.SubscriptionStatus == types.SubscriptionStatusDraft {
 			if invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded {
 				// No invoice created or payment succeeded - activate subscription
-				targetStatus = types.SubscriptionStatusActive
+				if isTrialActivation {
+					targetStatus = types.SubscriptionStatusTrialing
+				} else {
+					targetStatus = types.SubscriptionStatusActive
+				}
 			} else {
 				// Set status based on payment_behavior
 				paymentBehavior := types.PaymentBehavior(sub.PaymentBehavior)

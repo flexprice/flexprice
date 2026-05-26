@@ -1093,6 +1093,12 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 			s.logger.Infow("subscription.activated: set incomplete→active",
 				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 		}
+	case types.SubscriptionStatusDraft:
+		if _, err := subscriptionService.ActivateDraftSubscription(ctx, flexSubID, apidto.ActivateDraftSubscriptionRequest{lo.ToPtr(time.Now())}); err != nil {
+			return fmt.Errorf("activating draft subscription: %w", err)
+		}
+		s.logger.Infow("subscription.activated",
+			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	default:
 		s.logger.Infow("subscription.activated: subscription not in incomplete state — no-op",
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
