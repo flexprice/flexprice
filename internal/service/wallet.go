@@ -2975,6 +2975,8 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"error", err,
 		)
 	}
+	// Determine if feature alerts are enabled
+	featureAlertsEnabled := len(featuresWithAlerts) > 0
 
 	alertLogsService := NewAlertLogsService(s.ServiceParams)
 	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
@@ -2988,9 +2990,8 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"event_id", req.ID,
 		)
 
-		// Resolve alert settings and determine if any alerts are enabled
+		// Resolve wallet-level alert settings
 		walletAlertsEnabled := false
-		featureAlertsEnabled := len(featuresWithAlerts) > 0
 		alertSettings, err := s.resolveWalletAlertSettings(ctx, w, settingsSvc)
 		if err != nil {
 			s.Logger.ErrorwCtx(ctx, "failed to resolve wallet alert settings, alert checks will be skipped",
