@@ -2735,7 +2735,8 @@ func (s *CheckWalletBalanceAlertSuite) TestWalletAlerts_RecoveryFromAlarm_OKLogC
 
 	s.NoError(s.service.CheckWalletBalanceAlert(ctx, s.makeEvent()))
 
-	logsAfterAlarm, _ := s.GetStores().AlertLogsRepo.ListByEntity(ctx, types.AlertEntityTypeWallet, w.ID, 10)
+	logsAfterAlarm, err := s.GetStores().AlertLogsRepo.ListByEntity(ctx, types.AlertEntityTypeWallet, w.ID, 10)
+	s.NoError(err)
 	s.Require().Len(logsAfterAlarm, 1)
 	s.Equal(types.AlertStateInAlarm, logsAfterAlarm[0].AlertStatus)
 
@@ -2747,7 +2748,8 @@ func (s *CheckWalletBalanceAlertSuite) TestWalletAlerts_RecoveryFromAlarm_OKLogC
 	// Second call: balance=100 → OK (transition from in_alarm → log created)
 	s.NoError(s.service.CheckWalletBalanceAlert(ctx, s.makeEvent()))
 
-	logsAfterRecovery, _ := s.GetStores().AlertLogsRepo.ListByEntity(ctx, types.AlertEntityTypeWallet, w.ID, 10)
+	logsAfterRecovery, err := s.GetStores().AlertLogsRepo.ListByEntity(ctx, types.AlertEntityTypeWallet, w.ID, 10)
+	s.NoError(err)
 	s.Require().Len(logsAfterRecovery, 2, "recovery must produce a second log entry")
 	s.Equal(types.AlertStateOk, logsAfterRecovery[0].AlertStatus, "most recent log should be OK")
 

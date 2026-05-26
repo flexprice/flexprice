@@ -2934,6 +2934,7 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 }
 
 func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet.WalletBalanceAlertEvent) error {
+	// Set context values from event
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, req.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxTenantID, req.TenantID)
 
@@ -2948,6 +2949,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		"get_from_cache", req.GetFromCache,
 	)
 
+	// Get active wallets for this customer
 	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, req.CustomerID)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to get wallets for customer",
@@ -2966,6 +2968,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		return nil
 	}
 
+	// Fetch features with alert settings
 	featuresWithAlerts, err := s.fetchFeaturesWithAlertSettings(ctx)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to fetch features with alert settings",
@@ -2976,6 +2979,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 	alertLogsService := NewAlertLogsService(s.ServiceParams)
 	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
 
+	// Process each wallet
 	for _, w := range wallets {
 		s.Logger.DebugwCtx(ctx, "processing wallet for alert check",
 			"wallet_id", w.ID,
@@ -2984,7 +2988,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"event_id", req.ID,
 		)
 
-		// 1. Resolve alert settings
+		// Resolve alert settings and determine if any alerts are enabled
 		walletAlertsEnabled := false
 		featureAlertsEnabled := len(featuresWithAlerts) > 0
 		alertSettings, err := s.resolveWalletAlertSettings(ctx, w, settingsSvc)
@@ -2998,9 +3002,10 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			walletAlertsEnabled = alertSettings.IsAlertEnabled()
 		}
 
-		// 2. Determine what work is needed before touching balance
+		// Determine if auto top-up is enabled
 		autoTopupEnabled := w.AutoTopup != nil && lo.FromPtr(w.AutoTopup.Enabled)
 
+		// Skip wallet if neither wallet alert, feature alert, nor auto top-up are enabled
 		if !walletAlertsEnabled && !featureAlertsEnabled && !autoTopupEnabled {
 			s.Logger.DebugwCtx(ctx, "skipping balance alert check for wallet — wallet alerts, feature alerts, and auto top-up are all disabled; no action required",
 				"wallet_id", w.ID,
@@ -3030,7 +3035,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		// RealTimeCreditBalance = (currency balance - pending charges) / conversion_rate
 		ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
 
-		// 4. Trigger auto top-up — triggerAutoTopup handles threshold check internally
+		// Trigger auto top-up if enabled; threshold check is handled internally by triggerAutoTopup
 		if autoTopupEnabled {
 			if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
 				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
@@ -3040,7 +3045,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			}
 		}
 
-		// 5. Process wallet-level balance alert
+		// Process wallet-level balance alert if enabled
 		if walletAlertsEnabled {
 			s.Logger.InfowCtx(ctx, "wallet balance details for alert check",
 				"wallet_id", w.ID,
@@ -3061,7 +3066,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			}
 		}
 
-		// 6. Process feature-level alerts
+		// Process feature-level alerts if enabled
 		if featureAlertsEnabled {
 			if err := s.processFeatureWalletBalanceAlert(ctx, w, ongoingBalance, featuresWithAlerts, alertLogsService); err != nil {
 				s.Logger.ErrorwCtx(ctx, "failed to process feature wallet balance alerts",
