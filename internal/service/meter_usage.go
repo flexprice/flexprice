@@ -387,9 +387,12 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				resultsByMeter[dr.MeterID] = append(resultsByMeter[dr.MeterID], dr)
 			}
 
-			// Build one LineItemMeterUsage per line item, aggregating all group rows.
-			// Commitment minimums are applied per-line-item in calculateCosts; creating
-			// one entry per group row would enforce the minimum N times on partial usage.
+			// Two emission modes per line item:
+			//   - Commitment line items: aggregate all group rows into ONE entry so
+			//     applyLineItemCommitment fires once on the true line-item total.
+			//     Emitting N per-group entries would trigger the minimum top-up N times.
+			//   - Non-commitment line items: emit ONE entry per group row so the
+			//     response carries the per-group breakdown (Source/Properties from dr).
 			for _, liw := range lineItemsInGroup {
 				drs := resultsByMeter[liw.MeterID]
 				if len(drs) == 0 {
@@ -405,11 +408,38 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 					continue
 				}
 
-				// Aggregate across all group rows into a single total.
+				hasCommitment := liw.Item != nil && liw.Item.HasCommitment()
+				if !hasCommitment {
+					for _, dr := range drs {
+						if dr == nil {
+							continue
+						}
+						result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+							LineItem:        liw.Item,
+							MeterID:         liw.MeterID,
+							Meter:           result.MeterMap[liw.MeterID],
+							Price:           result.PriceMap[liw.Item.PriceID],
+							PeriodStart:     group.Start,
+							PeriodEnd:       group.End,
+							Usage:           getUsageValueFromDetailedResult(dr, group.AggType),
+							EventCount:      dr.EventCount,
+							Points:          dr.Points,
+							AnalyticsResult: dr,
+						})
+					}
+					continue
+				}
+
+				// Commitment path: aggregate across all group rows into a single scalar.
+				// Reducer must match the aggregation type; summing MAX/LATEST inflates.
+				// COUNT_UNIQUE is summed as a known over-count — the result/point
+				// structs only carry the count, not the identifier set.
 				var totalUsage decimal.Decimal
 				var totalEventCount uint64
 				var allPoints []events.MeterUsageDetailedPoint
 				var firstResult *events.MeterUsageDetailedResult
+				var latestTime time.Time
+				var hasLatest bool
 				for _, dr := range drs {
 					if dr == nil {
 						continue
@@ -417,7 +447,27 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 					if firstResult == nil {
 						firstResult = dr
 					}
-					totalUsage = totalUsage.Add(getUsageValueFromDetailedResult(dr, group.AggType))
+					v := getUsageValueFromDetailedResult(dr, group.AggType)
+					switch group.AggType {
+					case types.AggregationMax:
+						if v.GreaterThan(totalUsage) {
+							totalUsage = v
+						}
+					case types.AggregationLatest:
+						var drLatest time.Time
+						for _, p := range dr.Points {
+							if p.WindowStart.After(drLatest) {
+								drLatest = p.WindowStart
+							}
+						}
+						if !hasLatest || drLatest.After(latestTime) {
+							totalUsage = v
+							latestTime = drLatest
+							hasLatest = true
+						}
+					default:
+						totalUsage = totalUsage.Add(v)
+					}
 					totalEventCount += dr.EventCount
 					allPoints = append(allPoints, dr.Points...)
 				}
