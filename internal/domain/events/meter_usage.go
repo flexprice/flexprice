@@ -80,6 +80,11 @@ type MeterUsageDetailedAnalyticsParams struct {
 	WindowSize          types.WindowSize
 	BillingAnchor       *time.Time
 	UseFinal            bool
+	// Expand mirrors dto.GetUsageAnalyticsRequest.Expand. Allowed values:
+	// "price", "meter", "feature", "subscription_line_item", "plan", "addon", "source".
+	Expand []string
+	// IncludeChildren mirrors dto.GetUsageAnalyticsRequest.IncludeChildren.
+	IncludeChildren bool
 }
 
 // MeterUsageDetailedResult holds aggregated analytics for a single group combination

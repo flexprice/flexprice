@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -740,6 +742,9 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 
+	// Enrich with Plans/Addons/Groups so the response can expand them
+	s.enrichAnalyticsDataForResponse(ctx, data)
+
 	// Convert to response DTO
 	return s.toUsageAnalyticsResponseDTO(data, data.Meters, params), nil
 }
@@ -761,6 +766,8 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		Meters:                make(map[string]*meter.Meter),
 		Prices:                make(map[string]*price.Price),
 		Plans:                 make(map[string]*plan.Plan),
+		Addons:                make(map[string]*addon.Addon),
+		Groups:                make(map[string]*group.Group),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0),
 		Params: &events.UsageAnalyticsParams{
 			TenantID:           params.TenantID,
@@ -877,6 +884,73 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 	return data
 }
 
+// enrichAnalyticsDataForResponse populates Plans, Addons, and Groups on data so
+// the response builder can fill PlanID/AddOnID/Group and expand the corresponding
+// objects. Mirrors feature_usage_tracking's fetchPlans/fetchAddons + group
+// backfill so meter-usage responses reach full parity. Errors are logged and
+// swallowed — analytics should still return without the enrichment.
+func (s *meterUsageService) enrichAnalyticsDataForResponse(ctx context.Context, data *AnalyticsData) {
+	if data == nil {
+		return
+	}
+	if data.Plans == nil {
+		data.Plans = make(map[string]*plan.Plan)
+	}
+	if data.Addons == nil {
+		data.Addons = make(map[string]*addon.Addon)
+	}
+	if data.Groups == nil {
+		data.Groups = make(map[string]*group.Group)
+	}
+
+	// Groups: walk features for GroupIDs, fetch each, then backfill Feature.Group.
+	groupIDs := make(map[string]struct{})
+	for _, f := range data.Features {
+		if f != nil && f.GroupID != "" {
+			groupIDs[f.GroupID] = struct{}{}
+		}
+	}
+	for gid := range groupIDs {
+		if _, ok := data.Groups[gid]; ok {
+			continue
+		}
+		g, err := s.GroupRepo.Get(ctx, gid)
+		if err != nil {
+			s.logger.Warnw("failed to fetch group for meter usage analytics", "group_id", gid, "error", err)
+			continue
+		}
+		data.Groups[gid] = g
+	}
+	for _, f := range data.Features {
+		if f != nil && f.GroupID != "" {
+			f.Group = data.Groups[f.GroupID]
+		}
+	}
+
+	// Plans + Addons: mirror feature_usage which fetches all in scope and
+	// indexes by ID. The response builder picks the ones referenced via
+	// price.EntityType/EntityID.
+	planFilter := types.NewNoLimitPlanFilter()
+	plans, err := s.PlanRepo.List(ctx, planFilter)
+	if err != nil {
+		s.logger.Warnw("failed to fetch plans for meter usage analytics", "error", err)
+	} else {
+		for _, p := range plans {
+			data.Plans[p.ID] = p
+		}
+	}
+
+	addonFilter := types.NewNoLimitAddonFilter()
+	addons, err := s.AddonRepo.List(ctx, addonFilter)
+	if err != nil {
+		s.logger.Warnw("failed to fetch addons for meter usage analytics", "error", err)
+	} else {
+		for _, a := range addons {
+			data.Addons[a.ID] = a
+		}
+	}
+}
+
 // getDetailedAnalyticsWithoutSubscriptionContext handles the fallback case when
 // no customer/subscriptions are available (e.g. admin analytics across all customers).
 // Uses direct repo queries without per-line-item date bounding.
@@ -956,6 +1030,8 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		Meters:                meterMap,
 		Prices:                make(map[string]*price.Price),
 		Plans:                 make(map[string]*plan.Plan),
+		Addons:                make(map[string]*addon.Addon),
+		Groups:                make(map[string]*group.Group),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0, len(allResults)),
 		Params: &events.UsageAnalyticsParams{
 			TenantID:           params.TenantID,
@@ -1036,6 +1112,9 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		data.Analytics = append(data.Analytics, analytic)
 	}
 
+	// Enrich with Plans/Addons/Groups so the response can expand them
+	s.enrichAnalyticsDataForResponse(ctx, data)
+
 	// Convert to response DTO (no cost calculation without subscription context)
 	return s.toUsageAnalyticsResponseDTO(data, meterMap, params), nil
 }
@@ -1045,6 +1124,15 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 // ---------------------------------------------------------------------------
 
 // toUsageAnalyticsResponseDTO converts the enriched analytics data to the response DTO.
+//
+// Parity with feature-usage's builder (feature_usage_tracking.go ~line 2938):
+//   - Always populates FeatureID/Name, Unit, AggregationType, TotalUsage, EventCount,
+//     Properties, CommitmentInfo, Points, WindowSize.
+//   - Populates TotalUsageDisplay+ReportingUnit from feature.ReportingUnit.
+//   - Populates Group from feature.GroupID via data.Groups.
+//   - Derives PlanID/AddOnID from price.EntityType (and parent price for subscription overrides).
+//   - Honors params.Expand to attach Price/Meter/Feature/SubscriptionLineItem/Plan/Addon
+//     objects, and treats Sources as expand-driven (expand=source).
 func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 	data *AnalyticsData,
 	meterMap map[string]*meter.Meter,
@@ -1056,8 +1144,12 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
 	}
 
-	for _, analytic := range data.Analytics {
+	expandMap := make(map[string]bool, len(params.Expand))
+	for _, e := range params.Expand {
+		expandMap[e] = true
+	}
 
+	for _, analytic := range data.Analytics {
 		item := dto.UsageAnalyticItem{
 			FeatureID:       analytic.FeatureID,
 			PriceID:         analytic.PriceID,
@@ -1067,7 +1159,6 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			FeatureName:     analytic.FeatureName,
 			EventName:       analytic.EventName,
 			Source:          analytic.Source,
-			Sources:         analytic.Sources,
 			Unit:            analytic.Unit,
 			UnitPlural:      analytic.UnitPlural,
 			AggregationType: analytic.AggregationType,
@@ -1086,11 +1177,85 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			}
 		}
 
+		// Reporting unit conversion when the feature exposes one.
+		if f, ok := data.Features[analytic.FeatureID]; ok && f != nil && f.ReportingUnit != nil {
+			if reportingUsage, err := f.ToReportingValue(analytic.TotalUsage); err == nil {
+				item.TotalUsageDisplay = reportingUsage.String()
+				item.ReportingUnit = f.ReportingUnit
+			}
+		}
+
+		// Group attached to the feature (already backfilled by enrichAnalyticsDataForResponse).
+		if f, ok := data.Features[analytic.FeatureID]; ok && f != nil && f.GroupID != "" {
+			item.Group = data.Groups[f.GroupID]
+		}
+
+		// Sources is expand-driven (mirrors feature-usage). Use the array from
+		// the analytic, which the repo populates via groupUniqArray(source).
+		if expandMap["source"] {
+			item.Sources = analytic.Sources
+		}
+
+		// Derive PlanID/AddOnID from price entity type, walking ParentPriceID for
+		// subscription-override prices.
+		if p, ok := data.Prices[analytic.PriceID]; ok && p != nil {
+			switch p.EntityType {
+			case types.PRICE_ENTITY_TYPE_PLAN:
+				item.PlanID = p.EntityID
+			case types.PRICE_ENTITY_TYPE_ADDON:
+				item.AddOnID = p.EntityID
+			case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
+				if p.ParentPriceID != "" {
+					if parent, ok := data.Prices[p.ParentPriceID]; ok && parent != nil {
+						switch parent.EntityType {
+						case types.PRICE_ENTITY_TYPE_PLAN:
+							item.PlanID = parent.EntityID
+						case types.PRICE_ENTITY_TYPE_ADDON:
+							item.AddOnID = parent.EntityID
+						}
+					}
+				}
+			}
+			if expandMap["price"] {
+				item.Price = &dto.PriceResponse{Price: p}
+			}
+		}
+
+		// Window size: bucketed meters expose their bucket size; others use the request.
 		if m, ok := meterMap[analytic.MeterID]; ok {
 			if m.HasBucketSize() {
 				item.WindowSize = m.Aggregation.BucketSize
 			} else {
 				item.WindowSize = params.WindowSize
+			}
+			if expandMap["meter"] {
+				item.Meter = m
+			}
+		} else {
+			item.WindowSize = params.WindowSize
+		}
+
+		if expandMap["feature"] && analytic.FeatureID != "" {
+			if f, ok := data.Features[analytic.FeatureID]; ok {
+				item.Feature = f
+			}
+		}
+
+		if expandMap["subscription_line_item"] && analytic.SubLineItemID != "" {
+			if li, ok := data.SubscriptionLineItems[analytic.SubLineItemID]; ok {
+				item.SubscriptionLineItem = li
+			}
+		}
+
+		if expandMap["plan"] && item.PlanID != "" {
+			if pl, ok := data.Plans[item.PlanID]; ok {
+				item.Plan = pl
+			}
+		}
+
+		if expandMap["addon"] && item.AddOnID != "" {
+			if ad, ok := data.Addons[item.AddOnID]; ok {
+				item.Addon = ad
 			}
 		}
 

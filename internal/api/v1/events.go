@@ -405,6 +405,8 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 			PropertyFilters:     req.PropertyFilters,
 			Sources:             req.Sources,
 			WindowSize:          req.WindowSize,
+			Expand:              req.Expand,
+			IncludeChildren:     req.IncludeChildren,
 			// BillingAnchor omitted: service defaults to subscription's billing anchor
 		}
 		response, err = h.meterUsageService.GetDetailedAnalytics(ctx, params)
