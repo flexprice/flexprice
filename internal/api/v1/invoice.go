@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -19,12 +20,14 @@ import (
 
 type InvoiceHandler struct {
 	invoiceService service.InvoiceService
+	config         *config.Configuration
 	logger         *logger.Logger
 }
 
-func NewInvoiceHandler(invoiceService service.InvoiceService, logger *logger.Logger) *InvoiceHandler {
+func NewInvoiceHandler(invoiceService service.InvoiceService, cfg *config.Configuration, logger *logger.Logger) *InvoiceHandler {
 	return &InvoiceHandler{
 		invoiceService: invoiceService,
+		config:         cfg,
 		logger:         logger,
 	}
 }
@@ -495,7 +498,13 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.invoiceService.GetPreviewInvoice(c.Request.Context(), req)
+	var resp *dto.InvoiceResponse
+	var err error
+	if h.config.FeatureFlag.EnableMeterUsageForPreviewInvoice {
+		resp, err = h.invoiceService.GetMeterUsagePreviewInvoice(c.Request.Context(), req)
+	} else {
+		resp, err = h.invoiceService.GetPreviewInvoice(c.Request.Context(), req)
+	}
 	if err != nil {
 		h.logger.Error("Failed to get preview invoice", "error", err)
 		c.Error(err)

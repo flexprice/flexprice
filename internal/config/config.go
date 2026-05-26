@@ -388,8 +388,10 @@ type EnvAccessConfig struct {
 }
 
 type FeatureFlagConfig struct {
-	EnableFeatureUsageForAnalytics bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
-	ForceV1ForTenant               string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
+	EnableFeatureUsageForAnalytics   bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
+	ForceV1ForTenant                 string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
+	EnableMeterUsageForPreviewInvoice bool  `mapstructure:"enable_meter_usage_for_preview_invoice" validate:"omitempty"`
+	EnableMeterUsageForAnalytics      bool  `mapstructure:"enable_meter_usage_for_analytics" validate:"omitempty"`
 }
 
 type Email struct {
@@ -448,6 +450,8 @@ func NewConfig() (*Configuration, error) {
 	// Step 2: Initialize Viper
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
+	v.AddConfigPath("../../../internal/config")
+	v.AddConfigPath("../../internal/config")
 	v.AddConfigPath("./internal/config")
 	v.AddConfigPath("./config")
 

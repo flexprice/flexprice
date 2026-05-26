@@ -366,7 +366,7 @@ func provideHandlers(
 	webhookService *webhook.WebhookService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -382,7 +382,7 @@ func provideHandlers(
 		SubscriptionSchedule:     v1.NewSubscriptionScheduleHandler(subscriptionScheduleService),
 		Wallet:                   v1.NewWalletHandler(walletService, logger),
 		Tenant:                   v1.NewTenantHandler(tenantService, logger),
-		Invoice:                  v1.NewInvoiceHandler(invoiceService, logger),
+		Invoice:                  v1.NewInvoiceHandler(invoiceService, cfg, logger),
 		Feature:                  v1.NewFeatureHandler(featureService, logger),
 		Entitlement:              v1.NewEntitlementHandler(entitlementService, logger),
 		Payment:                  v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),

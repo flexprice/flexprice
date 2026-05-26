@@ -3,13 +3,16 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -77,6 +80,10 @@ type LineItemMeterUsage struct {
 	// Time-series points (nil when WindowSize is empty)
 	Points []events.MeterUsageDetailedPoint
 
+	// AnalyticsResult is set by GetSubscriptionMeterUsage when isAnalyticsQuery is true.
+	// It carries the raw per-group row (Source, Properties, etc.) for analytics display.
+	AnalyticsResult *events.MeterUsageDetailedResult
+
 	// For bucketed meters (MAX/SUM with bucket_size); nil for standard meters
 	BucketedResult *events.AggregationResult
 }
@@ -103,6 +110,14 @@ type GetSubscriptionMeterUsageRequest struct {
 	BillingAnchor   *time.Time
 	UseFinal        bool // true for invoice creation
 	IncludeFeatures bool // true for analytics (resolve meter → feature)
+
+	// Analytics-only filters. These are forwarded to the windowed
+	// GetDetailedAnalytics call inside GetSubscriptionMeterUsage. They have no
+	// effect on the scalar GetUsageMultiMeter path used by billing.
+	MeterIDs        []string            // when non-empty, only these meters are queried
+	GroupBy         []string            // appended after "meter_id"; "meter_id" is always present
+	PropertyFilters map[string][]string // e.g. {"model": ["gpt-4"]}
+	Sources         []string            // event source filter
 }
 
 // dateRangeGroup is the key used to batch standard-meter queries that share
@@ -286,6 +301,18 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 	}
 
+	// Filter meterToLineItems to the caller-requested subset (pushes filtering to ClickHouse).
+	// meterIDSet is kept alive so the zero-usage fallback loop (step 12) also respects it.
+	var meterIDSet map[string]struct{}
+	if len(req.MeterIDs) > 0 {
+		meterIDSet = lo.SliceToMap(req.MeterIDs, func(id string) (string, struct{}) { return id, struct{}{} })
+		for meterID := range meterToLineItems {
+			if _, ok := meterIDSet[meterID]; !ok {
+				delete(meterToLineItems, meterID)
+			}
+		}
+	}
+
 	// 9. Split bucketed vs standard meters
 	bucketedMeterIDs := make(map[string]bool)
 	for meterID, m := range result.MeterMap {
@@ -310,9 +337,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 	}
 
-	// lineItemResults maps line_item_id → usage result for standard meters
-	lineItemResults := make(map[string]*events.MeterUsageAggregationResult)
-
 	for group, lineItemsInGroup := range standardGroups {
 		meterIDs := make([]string, 0, len(lineItemsInGroup))
 		for _, liw := range lineItemsInGroup {
@@ -320,58 +344,51 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 		meterIDs = lo.Uniq(meterIDs)
 
-		if req.WindowSize != "" {
-			// Windowed query — use GetDetailedAnalytics for time-series points
-			detailedParams := &events.MeterUsageDetailedAnalyticsParams{
-				TenantID:            types.GetTenantID(ctx),
-				EnvironmentID:       types.GetEnvironmentID(ctx),
-				ExternalCustomerIDs: externalCustomerIDs,
-				MeterIDs:            meterIDs,
-				StartTime:           group.Start,
-				EndTime:             group.End,
-				AggregationTypes:    []types.AggregationType{group.AggType},
-				WindowSize:          req.WindowSize,
-				BillingAnchor:       req.BillingAnchor,
-				UseFinal:            req.UseFinal,
-			}
-			// Always group by meter_id so each result row carries its meter_id back,
-			// even when there's only a single meter in this group. Without this, the
-			// repo query drops meter_id from SELECT, result.MeterID comes back as "",
-			// and the resultByMeter lookup below misses every line item — yielding
-			// zero usage and an empty analytics response.
-			detailedParams.GroupBy = []string{"meter_id"}
+		// Use GetDetailedAnalytics when a window size, property/source filters, or extra
+		// group-by dimensions are requested (analytics path). Fall back to the faster
+		// GetUsageMultiMeter only for plain scalar billing queries.
+		isAnalyticsQuery := req.WindowSize != "" ||
+			len(req.PropertyFilters) > 0 ||
+			len(req.Sources) > 0 ||
+			len(req.GroupBy) > 0
 
-			detailedResults, err := s.repo.GetDetailedAnalytics(ctx, detailedParams)
-			if err != nil {
-				return nil, fmt.Errorf("failed to query windowed meter usage for group %v: %w", group, err)
-			}
-
-			// Map results by meter_id
-			resultByMeter := make(map[string]*events.MeterUsageDetailedResult, len(detailedResults))
-			for _, dr := range detailedResults {
-				resultByMeter[dr.MeterID] = dr
-			}
-
-			// Build LineItemMeterUsage for each line item
-			for _, liw := range lineItemsInGroup {
-				dr := resultByMeter[liw.MeterID]
-				usage := &LineItemMeterUsage{
-					LineItem:    liw.Item,
-					MeterID:     liw.MeterID,
-					Meter:       result.MeterMap[liw.MeterID],
-					Price:       result.PriceMap[liw.Item.PriceID],
-					PeriodStart: group.Start,
-					PeriodEnd:   group.End,
+		if isAnalyticsQuery {
+			// Decide whether user-supplied group_by adds dimensions beyond meter_id.
+			// If yes, split the batch: commitment line items query with meter_id only
+			// (clean aggregate for applyLineItemCommitment), non-commitment items query
+			// with the full group_by (per-group breakdown in the response).
+			hasExtraGroupBy := false
+			for _, g := range req.GroupBy {
+				if g != "" && g != "meter_id" {
+					hasExtraGroupBy = true
+					break
 				}
-				if dr != nil {
-					usage.Usage = getUsageValueFromDetailedResult(dr, group.AggType)
-					usage.EventCount = dr.EventCount
-					usage.Points = dr.Points
+			}
+
+			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
+			if hasExtraGroupBy {
+				for _, liw := range lineItemsInGroup {
+					if liw.Item != nil && liw.Item.HasCommitment() {
+						commitmentLIs = append(commitmentLIs, liw)
+					} else {
+						nonCommitmentLIs = append(nonCommitmentLIs, liw)
+					}
 				}
-				result.LineItemUsages = append(result.LineItemUsages, usage)
+			} else {
+				// No extra group_by → one dr per meter for everyone, single query.
+				nonCommitmentLIs = lineItemsInGroup
+			}
+
+			if err := s.queryAndAppendAnalyticsEntries(ctx, req, group, commitmentLIs, false, externalCustomerIDs, result); err != nil {
+				return nil, err
+			}
+			if err := s.queryAndAppendAnalyticsEntries(ctx, req, group, nonCommitmentLIs, hasExtraGroupBy, externalCustomerIDs, result); err != nil {
+				return nil, err
 			}
 		} else {
-			// Scalar query — use GetUsageMultiMeter for batch efficiency
+			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
+			// Analytics-only filters (PropertyFilters, Sources, GroupBy) are never
+			// set by billing callers, so nothing is lost here.
 			queryParams := &events.MeterUsageQueryParams{
 				TenantID:            types.GetTenantID(ctx),
 				EnvironmentID:       types.GetEnvironmentID(ctx),
@@ -391,7 +408,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			resultByMeter := make(map[string]*events.MeterUsageAggregationResult, len(results))
 			for _, r := range results {
 				resultByMeter[r.MeterID] = r
-				lineItemResults[r.MeterID] = r // also store for zero-usage check
 			}
 
 			for _, liw := range lineItemsInGroup {
@@ -483,6 +499,11 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
 			continue
 		}
+		if meterIDSet != nil {
+			if _, ok := meterIDSet[item.MeterID]; !ok {
+				continue
+			}
+		}
 		if processedLineItemIDs[item.ID] {
 			continue
 		}
@@ -497,6 +518,103 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	}
 
 	return result, nil
+}
+
+// queryAndAppendAnalyticsEntries runs one GetDetailedAnalytics call for the
+// given line items and appends LineItemMeterUsage entries to result.
+//
+// useUserGroupBy=false: GroupBy is just ["meter_id"] → one dr per meter →
+// one entry per (line item, meter). Used for commitment line items so the
+// aggregated value feeds applyLineItemCommitment cleanly.
+//
+// useUserGroupBy=true: GroupBy includes user-supplied dimensions → N drs per
+// meter → N entries per (line item, meter). Used for non-commitment items so
+// the response carries per-group Source/Properties.
+func (s *meterUsageService) queryAndAppendAnalyticsEntries(
+	ctx context.Context,
+	req *GetSubscriptionMeterUsageRequest,
+	group dateRangeGroup,
+	lis []*lineItemWithMeter,
+	useUserGroupBy bool,
+	externalCustomerIDs []string,
+	result *SubscriptionMeterUsage,
+) error {
+	if len(lis) == 0 {
+		return nil
+	}
+
+	meterIDs := lo.Uniq(lo.Map(lis, func(liw *lineItemWithMeter, _ int) string { return liw.MeterID }))
+
+	// meter_id must always be in GroupBy or the repo drops it from SELECT and
+	// result.MeterID comes back as "".
+	groupBy := []string{"meter_id"}
+	if useUserGroupBy {
+		for _, g := range req.GroupBy {
+			if g != "" && g != "meter_id" {
+				groupBy = append(groupBy, g)
+			}
+		}
+	}
+
+	detailedResults, err := s.repo.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerIDs: externalCustomerIDs,
+		MeterIDs:            meterIDs,
+		StartTime:           group.Start,
+		EndTime:             group.End,
+		AggregationTypes:    []types.AggregationType{group.AggType},
+		WindowSize:          req.WindowSize,
+		BillingAnchor:       req.BillingAnchor,
+		UseFinal:            req.UseFinal,
+		PropertyFilters:     req.PropertyFilters,
+		Sources:             req.Sources,
+		GroupBy:             groupBy,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query meter usage analytics for group %v: %w", group, err)
+	}
+
+	resultsByMeter := make(map[string][]*events.MeterUsageDetailedResult, len(detailedResults))
+	for _, dr := range detailedResults {
+		resultsByMeter[dr.MeterID] = append(resultsByMeter[dr.MeterID], dr)
+	}
+
+	for _, liw := range lis {
+		drs := resultsByMeter[liw.MeterID]
+		if len(drs) == 0 {
+			// No data — zero-usage entry; step 12 commitment check uses LineItem.HasCommitment().
+			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+				LineItem:    liw.Item,
+				MeterID:     liw.MeterID,
+				Meter:       result.MeterMap[liw.MeterID],
+				Price:       result.PriceMap[liw.Item.PriceID],
+				PeriodStart: group.Start,
+				PeriodEnd:   group.End,
+			})
+			continue
+		}
+
+		for _, dr := range drs {
+			if dr == nil {
+				continue
+			}
+			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+				LineItem:        liw.Item,
+				MeterID:         liw.MeterID,
+				Meter:           result.MeterMap[liw.MeterID],
+				Price:           result.PriceMap[liw.Item.PriceID],
+				PeriodStart:     group.Start,
+				PeriodEnd:       group.End,
+				Usage:           getUsageValueFromDetailedResult(dr, group.AggType),
+				EventCount:      dr.EventCount,
+				Points:          dr.Points,
+				AnalyticsResult: dr,
+			})
+		}
+	}
+
+	return nil
 }
 
 // queryBucketedMeterUsage queries the meter_usage table for a single bucketed meter,
@@ -547,6 +665,27 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
 	}
 
+	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified).
+	// Fail closed: a feature-scoped request must not silently broaden to all meters.
+	if len(params.FeatureIDs) > 0 && len(params.MeterIDs) == 0 {
+		features, err := s.FeatureRepo.ListByIDs(ctx, params.FeatureIDs)
+		if err != nil {
+			return nil, ierr.NewError("failed to resolve feature IDs to meter IDs").Mark(ierr.ErrDatabase)
+		}
+		for _, f := range features {
+			if f.MeterID != "" {
+				params.MeterIDs = append(params.MeterIDs, f.MeterID)
+			}
+		}
+		params.MeterIDs = lo.Uniq(params.MeterIDs)
+		if len(params.MeterIDs) == 0 {
+			return &dto.GetUsageAnalyticsResponse{
+				TotalCost: decimal.Zero,
+				Items:     []dto.UsageAnalyticItem{},
+			}, nil
+		}
+	}
+
 	// Resolve customer → subscriptions
 	cust, subscriptions, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
 	if err != nil || len(subscriptions) == 0 {
@@ -569,6 +708,10 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			BillingAnchor:   billingAnchor,
 			UseFinal:        params.UseFinal,
 			IncludeFeatures: true,
+			MeterIDs:        params.MeterIDs,
+			GroupBy:         params.GroupBy,
+			PropertyFilters: params.PropertyFilters,
+			Sources:         params.Sources,
 		})
 		if err != nil {
 			s.logger.Warnw("failed to get subscription meter usage, skipping",
@@ -599,6 +742,9 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 
+	// Enrich with Plans/Addons/Groups so the response can expand them
+	s.enrichAnalyticsDataForResponse(ctx, data)
+
 	// Convert to response DTO
 	return s.toUsageAnalyticsResponseDTO(data, data.Meters, params), nil
 }
@@ -620,15 +766,21 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		Meters:                make(map[string]*meter.Meter),
 		Prices:                make(map[string]*price.Price),
 		Plans:                 make(map[string]*plan.Plan),
+		Addons:                make(map[string]*addon.Addon),
+		Groups:                make(map[string]*group.Group),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0),
 		Params: &events.UsageAnalyticsParams{
-			TenantID:        params.TenantID,
-			EnvironmentID:   params.EnvironmentID,
-			StartTime:       params.StartTime,
-			EndTime:         params.EndTime,
-			GroupBy:         params.GroupBy,
-			WindowSize:      params.WindowSize,
-			PropertyFilters: params.PropertyFilters,
+			TenantID:           params.TenantID,
+			EnvironmentID:      params.EnvironmentID,
+			ExternalCustomerID: params.ExternalCustomerID,
+			StartTime:          params.StartTime,
+			EndTime:            params.EndTime,
+			GroupBy:            params.GroupBy,
+			WindowSize:         params.WindowSize,
+			PropertyFilters:    params.PropertyFilters,
+			Sources:            params.Sources,
+			AggregationTypes:   params.AggregationTypes,
+			BillingAnchor:      params.BillingAnchor,
 		},
 	}
 
@@ -648,15 +800,9 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 	// Merge all subscription usages
 	for _, su := range usages {
 		// Merge lookup maps
-		for id, m := range su.MeterMap {
-			data.Meters[id] = m
-		}
-		for id, p := range su.PriceMap {
-			data.Prices[id] = p
-		}
-		for id, f := range su.FeatureMap {
-			data.Features[id] = f
-		}
+		maps.Copy(data.Meters, su.MeterMap)
+		maps.Copy(data.Prices, su.PriceMap)
+		maps.Copy(data.Features, su.FeatureMap)
 
 		// Convert each LineItemMeterUsage → DetailedUsageAnalytic.
 		// Skip line items with zero usage to avoid noise, EXCEPT when the line item
@@ -671,6 +817,11 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 
 			analytic := &events.DetailedUsageAnalytic{
 				MeterID: lu.MeterID,
+			}
+			if lu.AnalyticsResult != nil {
+				analytic.Source = lu.AnalyticsResult.Source
+				analytic.Sources = lu.AnalyticsResult.Sources
+				analytic.Properties = lu.AnalyticsResult.Properties
 			}
 
 			// Set usage values from the line item usage
@@ -731,6 +882,73 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 	}
 
 	return data
+}
+
+// enrichAnalyticsDataForResponse populates Plans, Addons, and Groups on data so
+// the response builder can fill PlanID/AddOnID/Group and expand the corresponding
+// objects. Mirrors feature_usage_tracking's fetchPlans/fetchAddons + group
+// backfill so meter-usage responses reach full parity. Errors are logged and
+// swallowed — analytics should still return without the enrichment.
+func (s *meterUsageService) enrichAnalyticsDataForResponse(ctx context.Context, data *AnalyticsData) {
+	if data == nil {
+		return
+	}
+	if data.Plans == nil {
+		data.Plans = make(map[string]*plan.Plan)
+	}
+	if data.Addons == nil {
+		data.Addons = make(map[string]*addon.Addon)
+	}
+	if data.Groups == nil {
+		data.Groups = make(map[string]*group.Group)
+	}
+
+	// Groups: walk features for GroupIDs, fetch each, then backfill Feature.Group.
+	groupIDs := make(map[string]struct{})
+	for _, f := range data.Features {
+		if f != nil && f.GroupID != "" {
+			groupIDs[f.GroupID] = struct{}{}
+		}
+	}
+	for gid := range groupIDs {
+		if _, ok := data.Groups[gid]; ok {
+			continue
+		}
+		g, err := s.GroupRepo.Get(ctx, gid)
+		if err != nil {
+			s.logger.Warnw("failed to fetch group for meter usage analytics", "group_id", gid, "error", err)
+			continue
+		}
+		data.Groups[gid] = g
+	}
+	for _, f := range data.Features {
+		if f != nil && f.GroupID != "" {
+			f.Group = data.Groups[f.GroupID]
+		}
+	}
+
+	// Plans + Addons: mirror feature_usage which fetches all in scope and
+	// indexes by ID. The response builder picks the ones referenced via
+	// price.EntityType/EntityID.
+	planFilter := types.NewNoLimitPlanFilter()
+	plans, err := s.PlanRepo.List(ctx, planFilter)
+	if err != nil {
+		s.logger.Warnw("failed to fetch plans for meter usage analytics", "error", err)
+	} else {
+		for _, p := range plans {
+			data.Plans[p.ID] = p
+		}
+	}
+
+	addonFilter := types.NewNoLimitAddonFilter()
+	addons, err := s.AddonRepo.List(ctx, addonFilter)
+	if err != nil {
+		s.logger.Warnw("failed to fetch addons for meter usage analytics", "error", err)
+	} else {
+		for _, a := range addons {
+			data.Addons[a.ID] = a
+		}
+	}
 }
 
 // getDetailedAnalyticsWithoutSubscriptionContext handles the fallback case when
@@ -812,15 +1030,21 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		Meters:                meterMap,
 		Prices:                make(map[string]*price.Price),
 		Plans:                 make(map[string]*plan.Plan),
+		Addons:                make(map[string]*addon.Addon),
+		Groups:                make(map[string]*group.Group),
 		Analytics:             make([]*events.DetailedUsageAnalytic, 0, len(allResults)),
 		Params: &events.UsageAnalyticsParams{
-			TenantID:        params.TenantID,
-			EnvironmentID:   params.EnvironmentID,
-			StartTime:       params.StartTime,
-			EndTime:         params.EndTime,
-			GroupBy:         params.GroupBy,
-			WindowSize:      params.WindowSize,
-			PropertyFilters: params.PropertyFilters,
+			TenantID:           params.TenantID,
+			EnvironmentID:      params.EnvironmentID,
+			ExternalCustomerID: params.ExternalCustomerID,
+			StartTime:          params.StartTime,
+			EndTime:            params.EndTime,
+			GroupBy:            params.GroupBy,
+			WindowSize:         params.WindowSize,
+			PropertyFilters:    params.PropertyFilters,
+			Sources:            params.Sources,
+			AggregationTypes:   params.AggregationTypes,
+			BillingAnchor:      params.BillingAnchor,
 		},
 	}
 
@@ -888,6 +1112,9 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		data.Analytics = append(data.Analytics, analytic)
 	}
 
+	// Enrich with Plans/Addons/Groups so the response can expand them
+	s.enrichAnalyticsDataForResponse(ctx, data)
+
 	// Convert to response DTO (no cost calculation without subscription context)
 	return s.toUsageAnalyticsResponseDTO(data, meterMap, params), nil
 }
@@ -897,6 +1124,15 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 // ---------------------------------------------------------------------------
 
 // toUsageAnalyticsResponseDTO converts the enriched analytics data to the response DTO.
+//
+// Parity with feature-usage's builder (feature_usage_tracking.go ~line 2938):
+//   - Always populates FeatureID/Name, Unit, AggregationType, TotalUsage, EventCount,
+//     Properties, CommitmentInfo, Points, WindowSize.
+//   - Populates TotalUsageDisplay+ReportingUnit from feature.ReportingUnit.
+//   - Populates Group from feature.GroupID via data.Groups.
+//   - Derives PlanID/AddOnID from price.EntityType (and parent price for subscription overrides).
+//   - Honors params.Expand to attach Price/Meter/Feature/SubscriptionLineItem/Plan/Addon
+//     objects, and treats Sources as expand-driven (expand=source).
 func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 	data *AnalyticsData,
 	meterMap map[string]*meter.Meter,
@@ -908,8 +1144,12 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
 	}
 
-	for _, analytic := range data.Analytics {
+	expandMap := make(map[string]bool, len(params.Expand))
+	for _, e := range params.Expand {
+		expandMap[e] = true
+	}
 
+	for _, analytic := range data.Analytics {
 		item := dto.UsageAnalyticItem{
 			FeatureID:       analytic.FeatureID,
 			PriceID:         analytic.PriceID,
@@ -919,7 +1159,6 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			FeatureName:     analytic.FeatureName,
 			EventName:       analytic.EventName,
 			Source:          analytic.Source,
-			Sources:         analytic.Sources,
 			Unit:            analytic.Unit,
 			UnitPlural:      analytic.UnitPlural,
 			AggregationType: analytic.AggregationType,
@@ -938,11 +1177,85 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			}
 		}
 
+		// Reporting unit conversion when the feature exposes one.
+		if f, ok := data.Features[analytic.FeatureID]; ok && f != nil && f.ReportingUnit != nil {
+			if reportingUsage, err := f.ToReportingValue(analytic.TotalUsage); err == nil {
+				item.TotalUsageDisplay = reportingUsage.String()
+				item.ReportingUnit = f.ReportingUnit
+			}
+		}
+
+		// Group attached to the feature (already backfilled by enrichAnalyticsDataForResponse).
+		if f, ok := data.Features[analytic.FeatureID]; ok && f != nil && f.GroupID != "" {
+			item.Group = data.Groups[f.GroupID]
+		}
+
+		// Sources is expand-driven (mirrors feature-usage). Use the array from
+		// the analytic, which the repo populates via groupUniqArray(source).
+		if expandMap["source"] {
+			item.Sources = analytic.Sources
+		}
+
+		// Derive PlanID/AddOnID from price entity type, walking ParentPriceID for
+		// subscription-override prices.
+		if p, ok := data.Prices[analytic.PriceID]; ok && p != nil {
+			switch p.EntityType {
+			case types.PRICE_ENTITY_TYPE_PLAN:
+				item.PlanID = p.EntityID
+			case types.PRICE_ENTITY_TYPE_ADDON:
+				item.AddOnID = p.EntityID
+			case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
+				if p.ParentPriceID != "" {
+					if parent, ok := data.Prices[p.ParentPriceID]; ok && parent != nil {
+						switch parent.EntityType {
+						case types.PRICE_ENTITY_TYPE_PLAN:
+							item.PlanID = parent.EntityID
+						case types.PRICE_ENTITY_TYPE_ADDON:
+							item.AddOnID = parent.EntityID
+						}
+					}
+				}
+			}
+			if expandMap["price"] {
+				item.Price = &dto.PriceResponse{Price: p}
+			}
+		}
+
+		// Window size: bucketed meters expose their bucket size; others use the request.
 		if m, ok := meterMap[analytic.MeterID]; ok {
 			if m.HasBucketSize() {
 				item.WindowSize = m.Aggregation.BucketSize
 			} else {
 				item.WindowSize = params.WindowSize
+			}
+			if expandMap["meter"] {
+				item.Meter = m
+			}
+		} else {
+			item.WindowSize = params.WindowSize
+		}
+
+		if expandMap["feature"] && analytic.FeatureID != "" {
+			if f, ok := data.Features[analytic.FeatureID]; ok {
+				item.Feature = f
+			}
+		}
+
+		if expandMap["subscription_line_item"] && analytic.SubLineItemID != "" {
+			if li, ok := data.SubscriptionLineItems[analytic.SubLineItemID]; ok {
+				item.SubscriptionLineItem = li
+			}
+		}
+
+		if expandMap["plan"] && item.PlanID != "" {
+			if pl, ok := data.Plans[item.PlanID]; ok {
+				item.Plan = pl
+			}
+		}
+
+		if expandMap["addon"] && item.AddOnID != "" {
+			if ad, ok := data.Addons[item.AddOnID]; ok {
+				item.Addon = ad
 			}
 		}
 

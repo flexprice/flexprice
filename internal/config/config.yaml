@@ -263,6 +263,10 @@ feature_flag:
   enable_feature_usage_for_analytics: true # TODO: cleanup by 15th October 2025
   # Tenant ID to force use v1 analytics service (empty string means no tenant is forced to v1)
   force_v1_for_tenant: ""
+  # Switch /invoices/preview to use meter-usage
+  enable_meter_usage_for_preview_invoice: false
+  # Switch /events/analytics to use meter-usage
+  enable_meter_usage_for_analytics: false
 
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:
