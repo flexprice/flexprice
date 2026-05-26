@@ -533,19 +533,18 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		return nil, err
 	}
 
-	sub.CurrentPeriodStart = sub.StartDate
-	sub.CurrentPeriodEnd = nextBillingDate
-
 	isTrialActivation := sub.TrialStart != nil && sub.TrialEnd != nil
 	var billingReason types.InvoiceBillingReason
 	if isTrialActivation {
 		trialDuration := sub.TrialEnd.Sub(lo.FromPtr(sub.TrialStart))
 		sub.TrialStart = lo.ToPtr(newStartDate)
 		sub.TrialEnd = lo.ToPtr(newStartDate.Add(trialDuration))
-		sub.CurrentPeriodStart = lo.FromPtr(sub.TrialStart)
-		sub.CurrentPeriodEnd = lo.FromPtr(sub.TrialEnd)
+		nextBillingDate = lo.FromPtr(sub.TrialEnd)
 		billingReason = types.InvoiceBillingReasonSubscriptionTrialStart
 	}
+
+	sub.CurrentPeriodStart = sub.StartDate
+	sub.CurrentPeriodEnd = nextBillingDate
 
 	// Update line item start dates and end dates
 	for _, item := range sub.LineItems {
