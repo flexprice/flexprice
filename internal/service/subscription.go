@@ -534,7 +534,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		return nil, err
 	}
 
-	isTrialActivation := sub.TrialStart != nil && sub.TrialEnd != nil
+	isTrialActivation := sub.TrialStart != nil && sub.TrialEnd != nil && newStartDate.After(*sub.TrialStart) && newStartDate.Before(*sub.TrialEnd)
 	var billingReason types.InvoiceBillingReason
 	if isTrialActivation {
 		trialDuration := sub.TrialEnd.Sub(lo.FromPtr(sub.TrialStart))
