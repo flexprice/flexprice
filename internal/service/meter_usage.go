@@ -351,139 +351,37 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			len(req.GroupBy) > 0
 
 		if isAnalyticsQuery {
-			detailedParams := &events.MeterUsageDetailedAnalyticsParams{
-				TenantID:            types.GetTenantID(ctx),
-				EnvironmentID:       types.GetEnvironmentID(ctx),
-				ExternalCustomerIDs: externalCustomerIDs,
-				MeterIDs:            meterIDs,
-				StartTime:           group.Start,
-				EndTime:             group.End,
-				AggregationTypes:    []types.AggregationType{group.AggType},
-				WindowSize:          req.WindowSize,
-				BillingAnchor:       req.BillingAnchor,
-				UseFinal:            req.UseFinal,
-				PropertyFilters:     req.PropertyFilters,
-				Sources:             req.Sources,
-			}
-			// Always include meter_id in GroupBy so each result row carries its
-			// meter_id back. Without this the repo drops meter_id from SELECT,
-			// result.MeterID comes back as "", and the lookup below yields zero usage.
-			groupBy := []string{"meter_id"}
+			// Decide whether user-supplied group_by adds dimensions beyond meter_id.
+			// If yes, split the batch: commitment line items query with meter_id only
+			// (clean aggregate for applyLineItemCommitment), non-commitment items query
+			// with the full group_by (per-group breakdown in the response).
+			hasExtraGroupBy := false
 			for _, g := range req.GroupBy {
 				if g != "" && g != "meter_id" {
-					groupBy = append(groupBy, g)
+					hasExtraGroupBy = true
+					break
 				}
 			}
-			detailedParams.GroupBy = groupBy
 
-			detailedResults, err := s.repo.GetDetailedAnalytics(ctx, detailedParams)
-			if err != nil {
-				return nil, fmt.Errorf("failed to query meter usage analytics for group %v: %w", group, err)
+			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
+			if hasExtraGroupBy {
+				for _, liw := range lineItemsInGroup {
+					if liw.Item != nil && liw.Item.HasCommitment() {
+						commitmentLIs = append(commitmentLIs, liw)
+					} else {
+						nonCommitmentLIs = append(nonCommitmentLIs, liw)
+					}
+				}
+			} else {
+				// No extra group_by → one dr per meter for everyone, single query.
+				nonCommitmentLIs = lineItemsInGroup
 			}
 
-			// Collect all rows per meter; extra GroupBy dims can produce N rows per meter.
-			resultsByMeter := make(map[string][]*events.MeterUsageDetailedResult, len(detailedResults))
-			for _, dr := range detailedResults {
-				resultsByMeter[dr.MeterID] = append(resultsByMeter[dr.MeterID], dr)
+			if err := s.queryAndAppendAnalyticsEntries(ctx, req, group, commitmentLIs, false, externalCustomerIDs, result); err != nil {
+				return nil, err
 			}
-
-			// Two emission modes per line item:
-			//   - Commitment line items: aggregate all group rows into ONE entry so
-			//     applyLineItemCommitment fires once on the true line-item total.
-			//     Emitting N per-group entries would trigger the minimum top-up N times.
-			//   - Non-commitment line items: emit ONE entry per group row so the
-			//     response carries the per-group breakdown (Source/Properties from dr).
-			for _, liw := range lineItemsInGroup {
-				drs := resultsByMeter[liw.MeterID]
-				if len(drs) == 0 {
-					// No data — zero-usage entry; step 12 will handle commitment check.
-					result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
-						LineItem:    liw.Item,
-						MeterID:     liw.MeterID,
-						Meter:       result.MeterMap[liw.MeterID],
-						Price:       result.PriceMap[liw.Item.PriceID],
-						PeriodStart: group.Start,
-						PeriodEnd:   group.End,
-					})
-					continue
-				}
-
-				hasCommitment := liw.Item != nil && liw.Item.HasCommitment()
-				if !hasCommitment {
-					for _, dr := range drs {
-						if dr == nil {
-							continue
-						}
-						result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
-							LineItem:        liw.Item,
-							MeterID:         liw.MeterID,
-							Meter:           result.MeterMap[liw.MeterID],
-							Price:           result.PriceMap[liw.Item.PriceID],
-							PeriodStart:     group.Start,
-							PeriodEnd:       group.End,
-							Usage:           getUsageValueFromDetailedResult(dr, group.AggType),
-							EventCount:      dr.EventCount,
-							Points:          dr.Points,
-							AnalyticsResult: dr,
-						})
-					}
-					continue
-				}
-
-				// Commitment path: aggregate across all group rows into a single scalar.
-				// Reducer must match the aggregation type; summing MAX/LATEST inflates.
-				// COUNT_UNIQUE is summed as a known over-count — the result/point
-				// structs only carry the count, not the identifier set.
-				var totalUsage decimal.Decimal
-				var totalEventCount uint64
-				var allPoints []events.MeterUsageDetailedPoint
-				var firstResult *events.MeterUsageDetailedResult
-				var latestTime time.Time
-				var hasLatest bool
-				for _, dr := range drs {
-					if dr == nil {
-						continue
-					}
-					if firstResult == nil {
-						firstResult = dr
-					}
-					v := getUsageValueFromDetailedResult(dr, group.AggType)
-					switch group.AggType {
-					case types.AggregationMax:
-						if v.GreaterThan(totalUsage) {
-							totalUsage = v
-						}
-					case types.AggregationLatest:
-						var drLatest time.Time
-						for _, p := range dr.Points {
-							if p.WindowStart.After(drLatest) {
-								drLatest = p.WindowStart
-							}
-						}
-						if !hasLatest || drLatest.After(latestTime) {
-							totalUsage = v
-							latestTime = drLatest
-							hasLatest = true
-						}
-					default:
-						totalUsage = totalUsage.Add(v)
-					}
-					totalEventCount += dr.EventCount
-					allPoints = append(allPoints, dr.Points...)
-				}
-
-				result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
-					LineItem:        liw.Item,
-					MeterID:         liw.MeterID,
-					Meter:           result.MeterMap[liw.MeterID],
-					Price:           result.PriceMap[liw.Item.PriceID],
-					PeriodStart:     group.Start,
-					PeriodEnd:       group.End,
-					Usage:           totalUsage,
-					EventCount:      totalEventCount,
-					Points:          allPoints,
-					AnalyticsResult: firstResult,
-				})
+			if err := s.queryAndAppendAnalyticsEntries(ctx, req, group, nonCommitmentLIs, hasExtraGroupBy, externalCustomerIDs, result); err != nil {
+				return nil, err
 			}
 		} else {
 			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
@@ -618,6 +516,103 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	}
 
 	return result, nil
+}
+
+// queryAndAppendAnalyticsEntries runs one GetDetailedAnalytics call for the
+// given line items and appends LineItemMeterUsage entries to result.
+//
+// useUserGroupBy=false: GroupBy is just ["meter_id"] → one dr per meter →
+// one entry per (line item, meter). Used for commitment line items so the
+// aggregated value feeds applyLineItemCommitment cleanly.
+//
+// useUserGroupBy=true: GroupBy includes user-supplied dimensions → N drs per
+// meter → N entries per (line item, meter). Used for non-commitment items so
+// the response carries per-group Source/Properties.
+func (s *meterUsageService) queryAndAppendAnalyticsEntries(
+	ctx context.Context,
+	req *GetSubscriptionMeterUsageRequest,
+	group dateRangeGroup,
+	lis []*lineItemWithMeter,
+	useUserGroupBy bool,
+	externalCustomerIDs []string,
+	result *SubscriptionMeterUsage,
+) error {
+	if len(lis) == 0 {
+		return nil
+	}
+
+	meterIDs := lo.Uniq(lo.Map(lis, func(liw *lineItemWithMeter, _ int) string { return liw.MeterID }))
+
+	// meter_id must always be in GroupBy or the repo drops it from SELECT and
+	// result.MeterID comes back as "".
+	groupBy := []string{"meter_id"}
+	if useUserGroupBy {
+		for _, g := range req.GroupBy {
+			if g != "" && g != "meter_id" {
+				groupBy = append(groupBy, g)
+			}
+		}
+	}
+
+	detailedResults, err := s.repo.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerIDs: externalCustomerIDs,
+		MeterIDs:            meterIDs,
+		StartTime:           group.Start,
+		EndTime:             group.End,
+		AggregationTypes:    []types.AggregationType{group.AggType},
+		WindowSize:          req.WindowSize,
+		BillingAnchor:       req.BillingAnchor,
+		UseFinal:            req.UseFinal,
+		PropertyFilters:     req.PropertyFilters,
+		Sources:             req.Sources,
+		GroupBy:             groupBy,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to query meter usage analytics for group %v: %w", group, err)
+	}
+
+	resultsByMeter := make(map[string][]*events.MeterUsageDetailedResult, len(detailedResults))
+	for _, dr := range detailedResults {
+		resultsByMeter[dr.MeterID] = append(resultsByMeter[dr.MeterID], dr)
+	}
+
+	for _, liw := range lis {
+		drs := resultsByMeter[liw.MeterID]
+		if len(drs) == 0 {
+			// No data — zero-usage entry; step 12 commitment check uses LineItem.HasCommitment().
+			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+				LineItem:    liw.Item,
+				MeterID:     liw.MeterID,
+				Meter:       result.MeterMap[liw.MeterID],
+				Price:       result.PriceMap[liw.Item.PriceID],
+				PeriodStart: group.Start,
+				PeriodEnd:   group.End,
+			})
+			continue
+		}
+
+		for _, dr := range drs {
+			if dr == nil {
+				continue
+			}
+			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+				LineItem:        liw.Item,
+				MeterID:         liw.MeterID,
+				Meter:           result.MeterMap[liw.MeterID],
+				Price:           result.PriceMap[liw.Item.PriceID],
+				PeriodStart:     group.Start,
+				PeriodEnd:       group.End,
+				Usage:           getUsageValueFromDetailedResult(dr, group.AggType),
+				EventCount:      dr.EventCount,
+				Points:          dr.Points,
+				AnalyticsResult: dr,
+			})
+		}
+	}
+
+	return nil
 }
 
 // queryBucketedMeterUsage queries the meter_usage table for a single bucketed meter,
