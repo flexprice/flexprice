@@ -101,9 +101,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			WithReportableDetails(map[string]interface{}{"plan_id": req.PlanID, "status": plan.Status}).
 			Mark(ierr.ErrValidation)
 	}
-	paddleInt, _ := s.IntegrationFactory.GetPaddleIntegration(ctx)
-	hasPaddleIntegration := paddleInt != nil
-	sub := req.ToSubscription(ctx, hasPaddleIntegration)
+	sub := req.ToSubscription(ctx)
+	s.overRideSubscriptionBasedOnIntegration(ctx, sub)
 
 	// Validate and filter prices
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, plan.ID, types.PRICE_ENTITY_TYPE_PLAN, sub, req.Workflow)
@@ -491,6 +490,19 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.publishSubscriptionCreatedEvent(ctx, sub)
 	}
 	return response, nil
+}
+
+func (s *subscriptionService) overRideSubscriptionBasedOnIntegration(ctx context.Context, sub *subscription.Subscription) {
+	paddleInt, _ := s.IntegrationFactory.GetPaddleIntegration(ctx)
+	if paddleInt != nil {
+		overRideSubscriptionBasedOnPaddleIntegration(sub)
+	}
+}
+
+func overRideSubscriptionBasedOnPaddleIntegration(sub *subscription.Subscription) {
+	if sub.PaymentBehavior == types.PaymentBehaviorAllowIncomplete.String() {
+		sub.SubscriptionStatus = types.SubscriptionStatusDraft
+	}
 }
 
 func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, subID string, req dto.ActivateDraftSubscriptionRequest) (*dto.SubscriptionResponse, error) {

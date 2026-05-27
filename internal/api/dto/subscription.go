@@ -1155,7 +1155,7 @@ func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(requ
 	return nil
 }
 
-func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context, hasPaddleIntegration bool) *subscription.Subscription {
+func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscription.Subscription {
 	// Handle legacy collection method and set defaults
 	paymentBehavior := types.PaymentBehaviorDefaultActive
 	collectionMethod := types.CollectionMethodChargeAutomatically
@@ -1186,11 +1186,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context, hasPaddl
 		initialStatus = types.SubscriptionStatusIncomplete
 	case types.PaymentBehaviorAllowIncomplete:
 		// Allow incomplete behavior - subscription starts as incomplete (will be updated based on payment result)
-		if lo.FromPtr(r.TrialPeriodDays) > 0 && hasPaddleIntegration {
-			initialStatus = types.SubscriptionStatusDraft
-		} else {
-			initialStatus = types.SubscriptionStatusIncomplete
-		}
+		initialStatus = types.SubscriptionStatusIncomplete
 	case types.PaymentBehaviorErrorIfIncomplete:
 		// Error if incomplete behavior - subscription starts as incomplete (will fail if payment fails)
 		initialStatus = types.SubscriptionStatusIncomplete
