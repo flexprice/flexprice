@@ -1186,14 +1186,14 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		initialStatus = types.SubscriptionStatusIncomplete
 	case types.PaymentBehaviorAllowIncomplete:
 		// Allow incomplete behavior - subscription starts as incomplete (will be updated based on payment result)
-		initialStatus = types.SubscriptionStatusIncomplete
-	case types.PaymentBehaviorErrorIfIncomplete:
-		// Error if incomplete behavior - subscription starts as incomplete (will fail if payment fails)
 		if lo.FromPtr(r.TrialPeriodDays) > 0 {
 			initialStatus = types.SubscriptionStatusDraft
 		} else {
 			initialStatus = types.SubscriptionStatusIncomplete
 		}
+	case types.PaymentBehaviorErrorIfIncomplete:
+		// Error if incomplete behavior - subscription starts as incomplete (will fail if payment fails)
+		initialStatus = types.SubscriptionStatusIncomplete
 	default:
 		// Fallback to active for unknown behaviors
 		initialStatus = types.SubscriptionStatusActive
