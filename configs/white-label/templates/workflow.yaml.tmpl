@@ -15,12 +15,6 @@ targets:
         target: go
         source: swagger-json
         output: ./api/go
-        codeSamples:
-            registry:
-                location: registry.speakeasyapi.dev/flexprice/prod/swagger-json-go-code-samples
-            labelOverride:
-                fixedValue: Go (SDK)
-            blocking: false
     flexprice-mcp:
         target: mcp-typescript
         source: swagger-json-mcp
@@ -35,12 +29,6 @@ targets:
         publish:
             pypi:
                 token: $pypi_token
-        codeSamples:
-            registry:
-                location: registry.speakeasyapi.dev/flexprice/prod/swagger-json-python-code-samples
-            labelOverride:
-                fixedValue: Python (SDK)
-            blocking: false
     flexprice-typescript:
         target: typescript
         source: swagger-json
@@ -48,9 +36,3 @@ targets:
         publish:
             npm:
                 token: $npm_token
-        codeSamples:
-            registry:
-                location: registry.speakeasyapi.dev/flexprice/prod/swagger-json-typescript-code-samples
-            labelOverride:
-                fixedValue: Typescript (SDK)
-            blocking: false
