@@ -218,16 +218,6 @@ jobs:
           fi
           echo "Pushed Go SDK to ${WL_GO_REPO}"
 
-      - name: Create Go SDK GitHub release
-        run: |
-          VERSION="${{ needs.matrix-setup.outputs.version }}"
-          TAG="v${VERSION}"
-          GH_TOKEN="$WL_SDK_DEPLOY_GIT_TOKEN" gh release view "$TAG" --repo "${WL_GO_REPO}" > /dev/null 2>&1 && \
-            echo "Release $TAG already exists in ${WL_GO_REPO}, skipping." || \
-            GH_TOKEN="$WL_SDK_DEPLOY_GIT_TOKEN" gh release create "$TAG" --repo "${WL_GO_REPO}" \
-              --title "Go SDK ${TAG}" \
-              --notes "Automated release for Go SDK ${TAG}."
-
       - name: Push Python SDK to client repo
         run: |
           VERSION="${{ needs.matrix-setup.outputs.version }}"
@@ -275,6 +265,16 @@ jobs:
             git push origin main && git push origin "v${VERSION}" 2>/dev/null || true
           fi
           echo "Pushed MCP to ${WL_MCP_REPO}"
+
+      - name: Create Go SDK GitHub release
+        run: |
+          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          TAG="v${VERSION}"
+          GH_TOKEN="$WL_SDK_DEPLOY_GIT_TOKEN" gh release view "$TAG" --repo "${WL_GO_REPO}" > /dev/null 2>&1 && \
+            echo "Release $TAG already exists in ${WL_GO_REPO}, skipping." || \
+            GH_TOKEN="$WL_SDK_DEPLOY_GIT_TOKEN" gh release create "$TAG" --repo "${WL_GO_REPO}" \
+              --title "Go SDK ${TAG}" \
+              --notes "Automated release for Go SDK ${TAG}."
 
       - name: Publish TypeScript SDK to npm
         if: env.WL_PUBLISH_NPM == 'true'
