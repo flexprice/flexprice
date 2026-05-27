@@ -372,6 +372,9 @@ help-sdk:
 	@echo ""
 	@echo "SDK integration tests (published SDKs, api/tests):"
 	@echo "  make test-sdk / test-sdks - Run all SDK tests (Go, Python, TypeScript) in one command"
+	@echo ""
+	@echo "White-label SDK:"
+	@echo "  make check-wl-templates  - Verify WL templates match .speakeasy/gen/*.yaml"
 
 # SDK publishing: done via GitHub Actions (.github/workflows/generate-sdks.yml). No api/publish.sh in repo.
 sdk-publish-js sdk-publish-py sdk-publish-go sdk-publish-all sdk-publish-all-with-version:
@@ -394,7 +397,28 @@ test-github-workflow:
 	 -P ubuntu-latest=catthehacker/ubuntu:act-latest \
 	 --container-architecture linux/amd64
 
-.PHONY: test-github-workflow show-custom-files help-sdk
+.PHONY: test-github-workflow show-custom-files help-sdk check-wl-templates
+
+# Check that white-label templates are in sync with .speakeasy/gen/*.yaml
+# Run this after Speakeasy CLI updates gen configs (it auto-bumps fields)
+.PHONY: check-wl-templates
+check-wl-templates:
+	@bash -c '\
+	  DRIFT=0; \
+	  for lang in go typescript python mcp; do \
+	    diff \
+	      <(sed '"'"'s/$${WL_[^}]*}/PLACEHOLDER/g; s/"PLACEHOLDER"/PLACEHOLDER/g'"'"' configs/white-label/templates/$$lang.yaml.tmpl) \
+	      <(sed \
+	          -e '"'"'s/github\.com\/flexprice[^ ]*/PLACEHOLDER/g'"'"' \
+	          -e '"'"'s/Flexprice/PLACEHOLDER/g'"'"' \
+	          -e '"'"'s/FlexPrice/PLACEHOLDER/g'"'"' \
+	          -e '"'"'s/flexprice/PLACEHOLDER/g'"'"' \
+	          -e '"'"'s/"@PLACEHOLDER\/[^"]*"/PLACEHOLDER/g'"'"' \
+	          .speakeasy/gen/$$lang.yaml) \
+	      || { echo "DRIFT DETECTED: configs/white-label/templates/$$lang.yaml.tmpl is out of sync with .speakeasy/gen/$$lang.yaml — update the template to match"; DRIFT=1; }; \
+	  done; \
+	  [ "$$DRIFT" -eq 0 ] && echo "All white-label templates are in sync." || exit 1 \
+	'
 
 # =============================================================================
 # Speakeasy SDK Generation (New Pipeline)
