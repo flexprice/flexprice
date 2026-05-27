@@ -70,12 +70,14 @@ else
   #    This prefix appears in import strings and go.mod files.
   #    WL_GO_MODULE_PATH must NOT include a /v2 suffix — the /v2 is preserved.
   FLEXPRICE_MODULE="github.com/flexprice/go-sdk"
-  while IFS= read -r f; do
+  # Escape & and \ so sed treats the replacement as a literal string
+  WL_GO_MODULE_PATH_ESC=$(printf '%s\n' "${WL_GO_MODULE_PATH}" | sed 's/[&\]/\\&/g')
+  while IFS= read -r -d '' f; do
     if grep -q "${FLEXPRICE_MODULE}" "$f" 2>/dev/null; then
-      _sed_i "s|${FLEXPRICE_MODULE}|${WL_GO_MODULE_PATH}|g" "$f"
+      _sed_i "s|${FLEXPRICE_MODULE}|${WL_GO_MODULE_PATH_ESC}|g" "$f"
       echo "  [go] module path: $f"
     fi
-  done < <(find "$GO_DIR" \( -name "*.go" -o -name "go.mod" \))
+  done < <(find "$GO_DIR" \( -name "*.go" -o -name "go.mod" \) -print0)
 
   # 4. Fix log prefix strings in async.go
   while IFS= read -r -d '' f; do
@@ -129,8 +131,10 @@ echo "--- MCP ---"
 MCP_PKG="api/mcp/package.json"
 if [ -f "$MCP_PKG" ]; then
   # fix-mcp-package-name hardcoded @flexprice/mcp-server — override with WL name.
+  trap 'rm -f "${MCP_PKG}.tmp"' ERR
   jq --arg name "${WL_MCP_PACKAGE_NAME}" '.name = $name' "$MCP_PKG" > "${MCP_PKG}.tmp"
   mv "${MCP_PKG}.tmp" "$MCP_PKG"
+  trap - ERR
   echo "  [mcp] package.json name → ${WL_MCP_PACKAGE_NAME}"
 else
   echo "  WARNING: $MCP_PKG not found"
