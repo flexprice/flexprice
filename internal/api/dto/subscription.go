@@ -681,6 +681,11 @@ type SubscriptionResponseV2 struct {
 
 	// Pauses are included when subscription has pause status
 	Pauses []*subscription.SubscriptionPause `json:"pauses,omitempty"`
+
+	// PlanPricesOutOfSync is true when the subscription's synced_price_sequence
+	// is behind the plan's current max prices.sequence — i.e. plan-price
+	// changes have not yet been reconciled into this subscription's line items.
+	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
 }
 
 func (r *CreateSubscriptionRequest) Validate() error {

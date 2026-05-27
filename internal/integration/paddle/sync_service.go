@@ -1128,6 +1128,8 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 // If TemporalService is nil (e.g. in unit-test environments), the method returns silently.
 func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
 	if s.temporalSvc == nil {
+		s.logger.Errorw("temporal service is nil, skipping resync pending invoices for subscription",
+			"subscription_id", subscriptionID)
 		return
 	}
 
@@ -1169,9 +1171,9 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 			TenantID:       tenantID,
 			EnvironmentID:  environmentID,
 		}
-		_, wErr := s.temporalSvc.ExecuteWorkflowWithDelay(ctx, types.TemporalPaddleInvoiceSyncWorkflow, input, 30)
+		_, wErr := s.temporalSvc.ExecuteWorkflow(ctx, types.TemporalPaddleInvoiceSyncWorkflow, input)
 		if wErr != nil {
-			s.logger.Warnw("failed to trigger invoice resync workflow after subscription.activated",
+			s.logger.Error("failed to trigger invoice resync workflow after subscription.activated",
 				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", wErr)
 			continue
 		}

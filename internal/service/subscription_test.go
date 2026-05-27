@@ -289,6 +289,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		ProrationCalculator:        s.GetCalculator(),
 		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		IntegrationFactory:         s.GetIntegrationFactory(),
+		PlanPriceSyncRepo:          s.GetStores().PlanPriceSyncRepo,
 	})
 }
 
