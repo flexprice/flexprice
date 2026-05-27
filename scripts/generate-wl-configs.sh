@@ -8,6 +8,8 @@ TEMPLATES="configs/white-label/templates"
 
 # Verify templates directory exists
 [ -d "$TEMPLATES" ] || { echo "ERROR: $TEMPLATES not found. Run from repo root."; exit 1; }
+[ -d ".speakeasy/gen" ] || { echo "ERROR: .speakeasy/gen not found. Run from repo root."; exit 1; }
+[ -d ".speakeasy/overlays" ] || { echo "ERROR: .speakeasy/overlays not found. Run from repo root."; exit 1; }
 
 # Verify all required env vars are present (quick check — full validation is in validate-wl-config.sh)
 : "${WL_SDK_CLASS_NAME:?WL_SDK_CLASS_NAME is required}"

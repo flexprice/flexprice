@@ -28,6 +28,7 @@ if [ -n "${WL_SDK_CLASS_NAME:-}" ] && [ "${WL_SDK_CLASS_NAME}" != "Flexprice" ];
     -e '\*Flexprice\b' \
     -e '"@flexprice/mcp-server"' \
     -e 'for the FlexPrice API' \
+    -e 'github\.com/flexprice/go-sdk' \
     api/go api/typescript api/python api/mcp 2>/dev/null || true)
   if [ -n "$RESIDUAL" ]; then
     echo "::error::Residual Flexprice branding found after apply-wl-custom-branding.sh:"
