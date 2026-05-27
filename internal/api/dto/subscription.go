@@ -1793,10 +1793,10 @@ type SubscriptionUpdatePeriodResponseItem struct {
 
 // AutoInvoiceThresholdBillingResult is the result of a single ProcessAutoInvoiceThresholdBilling run.
 type AutoInvoiceThresholdBillingResult struct {
-	TotalChecked  int                                    `json:"total_checked"`
-	TotalInvoiced int                                    `json:"total_invoiced"`
-	TotalSkipped  int                                    `json:"total_skipped"`
-	TotalFailed   int                                    `json:"total_failed"`
+	TotalChecked  int                                      `json:"total_checked"`
+	TotalInvoiced int                                      `json:"total_invoiced"`
+	TotalSkipped  int                                      `json:"total_skipped"`
+	TotalFailed   int                                      `json:"total_failed"`
 	Items         []*AutoInvoiceThresholdBillingResultItem `json:"items,omitempty"`
 }
 
