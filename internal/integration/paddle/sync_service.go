@@ -1094,7 +1094,15 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 		}
 	case types.SubscriptionStatusDraft:
-		if _, err := subscriptionService.ActivateDraftSubscription(ctx, flexSubID, apidto.ActivateDraftSubscriptionRequest{lo.ToPtr(time.Now())}); err != nil {
+		startDate := time.Now()
+		if data.StartedAt != nil {
+			if parsed, parseErr := time.Parse(time.RFC3339, *data.StartedAt); parseErr == nil {
+				startDate = parsed
+			}
+		}
+		if _, err := subscriptionService.ActivateDraftSubscription(ctx, flexSubID, apidto.ActivateDraftSubscriptionRequest{
+			StartDate: &startDate,
+		}); err != nil {
 			return fmt.Errorf("activating draft subscription: %w", err)
 		}
 		s.logger.Infow("subscription.activated",
