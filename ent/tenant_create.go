@@ -41,6 +41,20 @@ func (tc *TenantCreate) SetNillableStatus(s *string) *TenantCreate {
 	return tc
 }
 
+// SetInternalStatus sets the "internal_status" field.
+func (tc *TenantCreate) SetInternalStatus(s string) *TenantCreate {
+	tc.mutation.SetInternalStatus(s)
+	return tc
+}
+
+// SetNillableInternalStatus sets the "internal_status" field if the given value is not nil.
+func (tc *TenantCreate) SetNillableInternalStatus(s *string) *TenantCreate {
+	if s != nil {
+		tc.SetInternalStatus(*s)
+	}
+	return tc
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (tc *TenantCreate) SetCreatedAt(t time.Time) *TenantCreate {
 	tc.mutation.SetCreatedAt(t)
@@ -134,6 +148,10 @@ func (tc *TenantCreate) defaults() {
 		v := tenant.DefaultStatus
 		tc.mutation.SetStatus(v)
 	}
+	if _, ok := tc.mutation.InternalStatus(); !ok {
+		v := tenant.DefaultInternalStatus
+		tc.mutation.SetInternalStatus(v)
+	}
 	if _, ok := tc.mutation.CreatedAt(); !ok {
 		v := tenant.DefaultCreatedAt()
 		tc.mutation.SetCreatedAt(v)
@@ -160,6 +178,9 @@ func (tc *TenantCreate) check() error {
 	}
 	if _, ok := tc.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Tenant.status"`)}
+	}
+	if _, ok := tc.mutation.InternalStatus(); !ok {
+		return &ValidationError{Name: "internal_status", err: errors.New(`ent: missing required field "Tenant.internal_status"`)}
 	}
 	if _, ok := tc.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Tenant.created_at"`)}
@@ -209,6 +230,10 @@ func (tc *TenantCreate) createSpec() (*Tenant, *sqlgraph.CreateSpec) {
 	if value, ok := tc.mutation.Status(); ok {
 		_spec.SetField(tenant.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := tc.mutation.InternalStatus(); ok {
+		_spec.SetField(tenant.FieldInternalStatus, field.TypeString, value)
+		_node.InternalStatus = value
 	}
 	if value, ok := tc.mutation.CreatedAt(); ok {
 		_spec.SetField(tenant.FieldCreatedAt, field.TypeTime, value)

@@ -2745,6 +2745,194 @@ func (s *walletService) fetchFeaturesWithAlertSettings(ctx context.Context) ([]*
 	return featuresWithAlerts, nil
 }
 
+// resolveWalletAlertSettings returns the effective alert settings for a wallet.
+// Wallet-level settings take precedence over tenant-level settings.
+func (s *walletService) resolveWalletAlertSettings(ctx context.Context, w *wallet.Wallet, settingsSvc *settingsService) (*types.AlertSettings, error) {
+	if w.AlertSettings != nil {
+		return w.AlertSettings, nil
+	}
+	walletAlertSettings, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &walletAlertSettings, nil
+}
+
+// processFeatureWalletBalanceAlert checks and logs feature-level wallet balance alerts for a wallet.
+// Errors on individual features are logged and skipped; the method always returns nil.
+func (s *walletService) processFeatureWalletBalanceAlert(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal, featuresWithAlerts []*dto.FeatureResponse, alertLogsService AlertLogsService) error {
+	var customerID *string
+	if w.CustomerID != "" {
+		customerID = lo.ToPtr(w.CustomerID)
+	}
+
+	for _, feature := range featuresWithAlerts {
+		alertStatus, err := feature.AlertSettings.AlertState(ongoingBalance)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to determine feature alert status",
+				"feature_id", feature.ID,
+				"feature_name", feature.Name,
+				"wallet_id", w.ID,
+				"ongoing_balance", ongoingBalance,
+				"error", err,
+			)
+			continue
+		}
+
+		s.Logger.DebugwCtx(ctx, "feature alert status determined",
+			"feature_id", feature.ID,
+			"feature_name", feature.Name,
+			"wallet_id", w.ID,
+			"ongoing_balance", ongoingBalance,
+			"critical", feature.AlertSettings.Critical,
+			"warning", feature.AlertSettings.Warning,
+			"alert_enabled", feature.AlertSettings.AlertEnabled,
+			"alert_status", alertStatus,
+		)
+
+		err = alertLogsService.LogAlert(ctx, &LogAlertRequest{
+			EntityType:       types.AlertEntityTypeFeature,
+			EntityID:         feature.ID,
+			ParentEntityType: lo.ToPtr("wallet"),
+			ParentEntityID:   lo.ToPtr(w.ID),
+			CustomerID:       customerID,
+			AlertType:        types.AlertTypeFeatureWalletBalance,
+			AlertStatus:      alertStatus,
+			AlertInfo: types.AlertInfo{
+				AlertSettings: feature.AlertSettings,
+				ValueAtTime:   ongoingBalance,
+				Timestamp:     time.Now().UTC(),
+			},
+		})
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to log feature alert",
+				"feature_id", feature.ID,
+				"wallet_id", w.ID,
+				"alert_status", alertStatus,
+				"error", err,
+			)
+			continue
+		}
+
+		s.Logger.DebugwCtx(ctx, "feature alert check completed",
+			"feature_id", feature.ID,
+			"wallet_id", w.ID,
+			"alert_status", alertStatus,
+		)
+	}
+
+	return nil
+}
+
+// processWalletBalanceAlert checks and logs the ongoing balance alert for a wallet
+// and updates the wallet's alert state if it changed.
+func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal, alertSettings *types.AlertSettings, alertLogsService AlertLogsService, eventID string) error {
+	alertStatus, err := alertSettings.AlertState(ongoingBalance)
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to determine wallet alert status",
+			"wallet_id", w.ID,
+			"ongoing_balance", ongoingBalance,
+			"error", err,
+		)
+		return err
+	}
+
+	s.Logger.InfowCtx(ctx, "ongoing balance alert check - determined status",
+		"wallet_id", w.ID,
+		"ongoing_balance", ongoingBalance,
+		"alert_settings", alertSettings,
+		"alert_status", alertStatus,
+		"event_id", eventID,
+	)
+
+	var customerID *string
+	if w.CustomerID != "" {
+		customerID = lo.ToPtr(w.CustomerID)
+	}
+
+	err = alertLogsService.LogAlert(ctx, &LogAlertRequest{
+		EntityType:  types.AlertEntityTypeWallet,
+		EntityID:    w.ID,
+		CustomerID:  customerID,
+		AlertType:   types.AlertTypeLowOngoingBalance,
+		AlertStatus: alertStatus,
+		AlertInfo: types.AlertInfo{
+			AlertSettings: alertSettings,
+			ValueAtTime:   ongoingBalance,
+			Timestamp:     time.Now().UTC(),
+		},
+	})
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to log ongoing balance alert",
+			"error", err,
+			"wallet_id", w.ID,
+			"alert_type", types.AlertTypeLowOngoingBalance,
+			"alert_status", alertStatus,
+			"ongoing_balance", ongoingBalance,
+			"alert_settings", alertSettings,
+			"event_id", eventID,
+		)
+		return err
+	}
+
+	s.Logger.InfowCtx(ctx, "successfully logged ongoing balance alert",
+		"wallet_id", w.ID,
+		"alert_status", alertStatus,
+		"ongoing_balance", ongoingBalance,
+		"alert_settings", alertSettings,
+		"event_id", eventID,
+	)
+
+	currentWallet, err := s.WalletRepo.GetWalletByID(ctx, w.ID)
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to get wallet for alert state update",
+			"error", err,
+			"wallet_id", w.ID,
+			"event_id", eventID,
+		)
+		return err
+	}
+
+	if currentWallet.AlertState != alertStatus {
+		s.Logger.DebugwCtx(ctx, "updating wallet alert state",
+			"wallet_id", w.ID,
+			"old_state", currentWallet.AlertState,
+			"new_state", alertStatus,
+			"event_id", eventID,
+		)
+		if err := s.UpdateWalletAlertState(ctx, w.ID, alertStatus); err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to update wallet alert state",
+				"error", err,
+				"wallet_id", w.ID,
+				"old_state", currentWallet.AlertState,
+				"new_state", alertStatus,
+				"event_id", eventID,
+			)
+			return err
+		}
+		s.Logger.InfowCtx(ctx, "wallet alert state updated successfully",
+			"wallet_id", w.ID,
+			"old_state", currentWallet.AlertState,
+			"new_state", alertStatus,
+			"event_id", eventID,
+		)
+	} else {
+		s.Logger.DebugwCtx(ctx, "wallet alert state unchanged, skipping update",
+			"wallet_id", w.ID,
+			"current_state", currentWallet.AlertState,
+			"event_id", eventID,
+		)
+	}
+
+	s.Logger.InfowCtx(ctx, "wallet ongoing balance alert check completed",
+		"wallet_id", w.ID,
+		"alert_status", alertStatus,
+		"event_id", eventID,
+	)
+
+	return nil
+}
+
 func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet.WalletBalanceAlertEvent) error {
 	// Set context values from event
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, req.EnvironmentID)
@@ -2780,30 +2968,57 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		return nil
 	}
 
+	// Fetch features with alert settings
 	featuresWithAlerts, err := s.fetchFeaturesWithAlertSettings(ctx)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to fetch features with alert settings",
 			"error", err,
 		)
 	}
+	// Determine if feature alerts are enabled
+	featureAlertsEnabled := len(featuresWithAlerts) > 0
 
 	alertLogsService := NewAlertLogsService(s.ServiceParams)
-	settingsSvc := &settingsService{
-		ServiceParams: s.ServiceParams,
-	}
+	settingsSvc := &settingsService{ServiceParams: s.ServiceParams}
 
 	// Process each wallet
 	for _, w := range wallets {
 		s.Logger.DebugwCtx(ctx, "processing wallet for alert check",
 			"wallet_id", w.ID,
 			"customer_id", w.CustomerID,
-			"alert_enabled", w.IsAlertEnabled(),
 			"has_wallet_alert_settings", w.AlertSettings != nil,
 			"event_id", req.ID,
 		)
+
+		// Resolve wallet-level alert settings
+		walletAlertsEnabled := false
+		alertSettings, err := s.resolveWalletAlertSettings(ctx, w, settingsSvc)
+		if err != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to resolve wallet alert settings, alert checks will be skipped",
+				"error", err,
+				"wallet_id", w.ID,
+				"event_id", req.ID,
+			)
+		} else {
+			walletAlertsEnabled = alertSettings.IsAlertEnabled()
+		}
+
+		// Determine if auto top-up is enabled
+		autoTopupEnabled := w.AutoTopup != nil && lo.FromPtr(w.AutoTopup.Enabled)
+
+		// Skip wallet if neither wallet alert, feature alert, nor auto top-up are enabled
+		if !walletAlertsEnabled && !featureAlertsEnabled && !autoTopupEnabled {
+			s.Logger.DebugwCtx(ctx, "skipping balance alert check for wallet — wallet alerts, feature alerts, and auto top-up are all disabled; no action required",
+				"wallet_id", w.ID,
+				"customer_id", w.CustomerID,
+				"event_id", req.ID,
+			)
+			continue
+		}
+
+		// 3. Fetch balance — deferred until we know at least one action requires it
 		var balance *dto.WalletBalanceResponse
 		if req.GetFromCache {
-			// Use cached balance with a 1-minute max-live to avoid stale reads
 			maxLive := int64(60) // 1 minute in seconds
 			balance, err = s.GetWalletBalanceFromCache(ctx, w.ID, &maxLive)
 		} else {
@@ -2818,254 +3033,52 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			continue
 		}
 
-		// Determine alert settings: wallet-level settings take precedence over tenant-level settings
-		var alertSettings *types.AlertSettings
-		if w.AlertSettings != nil {
-			// Use wallet-level alert settings
-			alertSettings = w.AlertSettings
-		} else {
-			// Fall back to tenant-level settings (GetSetting handles defaults automatically)
-			walletAlertSettings, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
-			if err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to get wallet alert config from tenant settings, skipping wallet",
-					"error", err,
-					"wallet_id", w.ID,
-					"event_id", req.ID,
-				)
-				continue
-			}
+		// RealTimeCreditBalance = (currency balance - pending charges) / conversion_rate
+		ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
 
-			alertSettings = &walletAlertSettings
-		}
-
-		// Skip if alerts are disabled (check after determining settings)
-		if !alertSettings.IsAlertEnabled() {
-			s.Logger.DebugwCtx(ctx, "skipping wallet - alerts disabled",
-				"wallet_id", w.ID,
-				"has_wallet_settings", w.AlertSettings != nil,
-				"alert_enabled", alertSettings.IsAlertEnabled(),
-				"event_id", req.ID,
-			)
-			// Trigger auto top-up if enabled
-			err := s.triggerAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
-			if err != nil {
+		// Trigger auto top-up if enabled; threshold check is handled internally by triggerAutoTopup
+		if autoTopupEnabled {
+			if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
 				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
 					"error", err,
 					"wallet_id", w.ID,
 				)
 			}
-			continue
 		}
 
-		// GetWalletBalanceV2 returns:
-		// - RealTimeBalance: currency balance minus pending charges (in currency)
-		// - RealTimeCreditBalance: credit balance converted from RealTimeBalance (in credits) - THIS IS THE ONGOING BALANCE
-		// - Wallet.CreditBalance: stored credit balance (in credits)
-		// - Wallet.Balance: stored currency balance (in currency)
-		// - CurrentPeriodUsage: pending charges in currency
-
-		// For ongoing balance alert: threshold is in credits, so use RealTimeCreditBalance directly
-		// RealTimeCreditBalance is already calculated as: (currency balance - pending charges) / conversion_rate
-		ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
-
-		s.Logger.InfowCtx(ctx, "wallet balance details for alert check",
-			"wallet_id", w.ID,
-			"real_time_balance", balance.RealTimeBalance,
-			"wallet_current_balance", balance.Wallet.Balance,
-			"alert_settings", alertSettings,
-			"pending_charges_currency", balance.CurrentPeriodUsage,
-			"conversion_rate", w.ConversionRate,
-			"event_id", req.ID,
-		)
-
-		// Check feature alerts
-		for _, feature := range featuresWithAlerts {
-			// Determine alert status based on ongoing balance vs alert settings
-			alertStatus, err := feature.AlertSettings.AlertState(ongoingBalance)
-			if err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to determine alert status",
-					"feature_id", feature.ID,
-					"feature_name", feature.Name,
-					"wallet_id", w.ID,
-					"ongoing_balance", ongoingBalance,
-					"error", err,
-				)
-				continue
-			}
-
-			s.Logger.DebugwCtx(ctx, "feature alert status determined",
-				"feature_id", feature.ID,
-				"feature_name", feature.Name,
+		// Process wallet-level balance alert if enabled
+		if walletAlertsEnabled {
+			s.Logger.InfowCtx(ctx, "wallet balance details for alert check",
 				"wallet_id", w.ID,
-				"ongoing_balance", ongoingBalance,
-				"critical", feature.AlertSettings.Critical,
-				"warning", feature.AlertSettings.Warning,
-				"alert_enabled", feature.AlertSettings.AlertEnabled,
-				"alert_status", alertStatus,
-			)
-
-			// Log the alert using AlertLogsService (includes state transition logic and webhook publishing)
-			// Get customer ID from wallet if available
-			var customerID *string
-			if w.CustomerID != "" {
-				customerID = lo.ToPtr(w.CustomerID)
-			}
-
-			err = alertLogsService.LogAlert(ctx, &LogAlertRequest{
-				EntityType:       types.AlertEntityTypeFeature,
-				EntityID:         feature.ID,
-				ParentEntityType: lo.ToPtr("wallet"), // Parent entity is the wallet
-				ParentEntityID:   lo.ToPtr(w.ID),     // Wallet ID as parent entity ID
-				CustomerID:       customerID,         // Customer ID from wallet
-				AlertType:        types.AlertTypeFeatureWalletBalance,
-				AlertStatus:      alertStatus,
-				AlertInfo: types.AlertInfo{
-					AlertSettings: feature.AlertSettings, // Include full alert settings
-					ValueAtTime:   ongoingBalance,        // Ongoing balance at time of check
-					Timestamp:     time.Now().UTC(),
-				},
-			})
-			if err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to check feature alert",
-					"feature_id", feature.ID,
-					"wallet_id", w.ID,
-					"alert_status", alertStatus,
-					"error", err,
-				)
-				continue
-			}
-
-			s.Logger.DebugwCtx(ctx, "feature alert check completed",
-				"feature_id", feature.ID,
-				"wallet_id", w.ID,
-				"alert_status", alertStatus,
-			)
-		}
-
-		// Ongoing balance alert check using alert settings
-		// Determine alert status based on ongoing balance vs alert settings
-		alertStatus, err := alertSettings.AlertState(ongoingBalance)
-		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to determine wallet alert status",
-				"wallet_id", w.ID,
-				"ongoing_balance", ongoingBalance,
-				"error", err,
-			)
-			continue
-		}
-
-		s.Logger.InfowCtx(ctx, "ongoing balance alert check - determined status",
-			"wallet_id", w.ID,
-			"ongoing_balance", ongoingBalance,
-			"alert_settings", alertSettings,
-			"alert_status", alertStatus,
-			"event_id", req.ID,
-		)
-
-		// Get customer ID from wallet if available
-		var customerID *string
-		if w.CustomerID != "" {
-			customerID = lo.ToPtr(w.CustomerID)
-		}
-
-		// Prepare alert log request
-		logAlertReq := &LogAlertRequest{
-			EntityType:  types.AlertEntityTypeWallet,
-			EntityID:    w.ID,
-			CustomerID:  customerID,
-			AlertType:   types.AlertTypeLowOngoingBalance,
-			AlertStatus: alertStatus,
-			AlertInfo: types.AlertInfo{
-				AlertSettings: alertSettings,
-				ValueAtTime:   ongoingBalance,
-				Timestamp:     time.Now().UTC(),
-			},
-		}
-
-		// Log the alert (AlertLogsService handles state transitions and webhook publishing)
-		err = alertLogsService.LogAlert(ctx, logAlertReq)
-		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to log ongoing balance alert",
-				"error", err,
-				"wallet_id", w.ID,
-				"alert_type", types.AlertTypeLowOngoingBalance,
-				"alert_status", alertStatus,
-				"ongoing_balance", ongoingBalance,
+				"real_time_balance", balance.RealTimeBalance,
+				"wallet_current_balance", balance.Wallet.Balance,
 				"alert_settings", alertSettings,
-				"event_id", req.ID,
-			)
-			continue
-		}
-
-		s.Logger.InfowCtx(ctx, "successfully logged ongoing balance alert",
-			"wallet_id", w.ID,
-			"alert_status", alertStatus,
-			"ongoing_balance", ongoingBalance,
-			"alert_settings", alertSettings,
-			"event_id", req.ID,
-		)
-
-		// Update wallet alert state to match the logged status (if it changed)
-		// Need to refetch wallet to get current AlertState
-		currentWallet, err := s.WalletRepo.GetWalletByID(ctx, w.ID)
-		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to get wallet for alert state update",
-				"error", err,
-				"wallet_id", w.ID,
-				"event_id", req.ID,
-			)
-			continue
-		}
-
-		if currentWallet.AlertState != alertStatus {
-			s.Logger.DebugwCtx(ctx, "updating wallet alert state",
-				"wallet_id", w.ID,
-				"old_state", currentWallet.AlertState,
-				"new_state", alertStatus,
+				"pending_charges_currency", balance.CurrentPeriodUsage,
+				"conversion_rate", w.ConversionRate,
 				"event_id", req.ID,
 			)
 
-			if err := s.UpdateWalletAlertState(ctx, w.ID, alertStatus); err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to update wallet alert state",
+			if err := s.processWalletBalanceAlert(ctx, w, ongoingBalance, alertSettings, alertLogsService, req.ID); err != nil {
+				s.Logger.ErrorwCtx(ctx, "failed to process wallet balance alert",
 					"error", err,
 					"wallet_id", w.ID,
-					"old_state", currentWallet.AlertState,
-					"new_state", alertStatus,
 					"event_id", req.ID,
 				)
-				continue
 			}
-
-			s.Logger.InfowCtx(ctx, "wallet alert state updated successfully",
-				"wallet_id", w.ID,
-				"old_state", currentWallet.AlertState,
-				"new_state", alertStatus,
-				"event_id", req.ID,
-			)
-		} else {
-			s.Logger.DebugwCtx(ctx, "wallet alert state unchanged, skipping update",
-				"wallet_id", w.ID,
-				"current_state", currentWallet.AlertState,
-				"event_id", req.ID,
-			)
 		}
 
-		s.Logger.InfowCtx(ctx, "wallet ongoing balance alert check completed",
-			"wallet_id", w.ID,
-			"alert_status", alertStatus,
-			"event_id", req.ID,
-		)
-
-		// Trigger auto top-up if enabled
-		err = s.triggerAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
-		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
-				"error", err,
-				"wallet_id", w.ID,
-			)
-			continue
+		// Process feature-level alerts if enabled
+		if featureAlertsEnabled {
+			if err := s.processFeatureWalletBalanceAlert(ctx, w, ongoingBalance, featuresWithAlerts, alertLogsService); err != nil {
+				s.Logger.ErrorwCtx(ctx, "failed to process feature wallet balance alerts",
+					"error", err,
+					"wallet_id", w.ID,
+					"event_id", req.ID,
+				)
+			}
 		}
 	}
+
 	s.Logger.InfowCtx(ctx, "completed wallet balance alert check for customer",
 		"customer_id", req.CustomerID,
 		"wallets_processed", len(wallets),

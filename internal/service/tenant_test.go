@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/testutil"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -57,8 +58,17 @@ func (s *TenantServiceSuite) setupService() {
 	})
 }
 
+const (
+	accessTestTargetTenantID   = "tenant-target"
+	accessTestOperatorTenantID = "tenant-operator"
+)
+
 func (s *TenantServiceSuite) setupTestData() {
-	// Clear any existing data
+	_ = s.tenantRepo.Create(s.GetContext(), &tenant.Tenant{
+		ID:             accessTestTargetTenantID,
+		Name:           "Target Tenant",
+		InternalStatus: types.TenantInternalStatusTrialing,
+	})
 }
 
 func (s *TenantServiceSuite) TestCreateTenant() {

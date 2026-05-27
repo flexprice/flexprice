@@ -294,13 +294,6 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		return nil
 	}
 
-	// Clear properties for tenants not in the allowlist
-	if !s.isPropertiesEnabled(ctx) {
-		for _, rec := range records {
-			rec.Properties = nil
-		}
-	}
-
 	// Step 3: Bulk insert
 	if err := s.meterUsageRepo.BulkInsertMeterUsage(ctx, records); err != nil {
 		return fmt.Errorf("failed to bulk insert meter usage: %w", err)
@@ -312,17 +305,6 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	)
 
 	return nil
-}
-
-// isPropertiesEnabled checks if the current tenant is in the properties allowlist
-func (s *meterUsageTrackingService) isPropertiesEnabled(ctx context.Context) bool {
-	tenantID, _ := ctx.Value(types.CtxTenantID).(string)
-	for _, t := range s.Config.MeterUsageTracking.PropertiesEnabledTenants {
-		if t == tenantID {
-			return true
-		}
-	}
-	return false
 }
 
 // checkMeterFilters validates that all meter filters match the event properties

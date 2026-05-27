@@ -74,6 +74,11 @@ func Status(v string) predicate.Tenant {
 	return predicate.Tenant(sql.FieldEQ(FieldStatus, v))
 }
 
+// InternalStatus applies equality check predicate on the "internal_status" field. It's identical to InternalStatusEQ.
+func InternalStatus(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldEQ(FieldInternalStatus, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Tenant {
 	return predicate.Tenant(sql.FieldEQ(FieldCreatedAt, v))
@@ -212,6 +217,71 @@ func StatusEqualFold(v string) predicate.Tenant {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Tenant {
 	return predicate.Tenant(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// InternalStatusEQ applies the EQ predicate on the "internal_status" field.
+func InternalStatusEQ(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldEQ(FieldInternalStatus, v))
+}
+
+// InternalStatusNEQ applies the NEQ predicate on the "internal_status" field.
+func InternalStatusNEQ(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldNEQ(FieldInternalStatus, v))
+}
+
+// InternalStatusIn applies the In predicate on the "internal_status" field.
+func InternalStatusIn(vs ...string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldIn(FieldInternalStatus, vs...))
+}
+
+// InternalStatusNotIn applies the NotIn predicate on the "internal_status" field.
+func InternalStatusNotIn(vs ...string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldNotIn(FieldInternalStatus, vs...))
+}
+
+// InternalStatusGT applies the GT predicate on the "internal_status" field.
+func InternalStatusGT(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldGT(FieldInternalStatus, v))
+}
+
+// InternalStatusGTE applies the GTE predicate on the "internal_status" field.
+func InternalStatusGTE(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldGTE(FieldInternalStatus, v))
+}
+
+// InternalStatusLT applies the LT predicate on the "internal_status" field.
+func InternalStatusLT(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldLT(FieldInternalStatus, v))
+}
+
+// InternalStatusLTE applies the LTE predicate on the "internal_status" field.
+func InternalStatusLTE(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldLTE(FieldInternalStatus, v))
+}
+
+// InternalStatusContains applies the Contains predicate on the "internal_status" field.
+func InternalStatusContains(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldContains(FieldInternalStatus, v))
+}
+
+// InternalStatusHasPrefix applies the HasPrefix predicate on the "internal_status" field.
+func InternalStatusHasPrefix(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldHasPrefix(FieldInternalStatus, v))
+}
+
+// InternalStatusHasSuffix applies the HasSuffix predicate on the "internal_status" field.
+func InternalStatusHasSuffix(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldHasSuffix(FieldInternalStatus, v))
+}
+
+// InternalStatusEqualFold applies the EqualFold predicate on the "internal_status" field.
+func InternalStatusEqualFold(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldEqualFold(FieldInternalStatus, v))
+}
+
+// InternalStatusContainsFold applies the ContainsFold predicate on the "internal_status" field.
+func InternalStatusContainsFold(v string) predicate.Tenant {
+	return predicate.Tenant(sql.FieldContainsFold(FieldInternalStatus, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

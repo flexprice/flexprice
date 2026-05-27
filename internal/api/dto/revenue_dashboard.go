@@ -49,11 +49,12 @@ func (r *RevenueDashboardRequest) Validate() error {
 	return nil
 }
 
-// RevenueDashboardResponse represents the response for the revenue dashboard API
+// RevenueDashboardResponse represents the response for the revenue dashboard API.
+// Summaries are grouped by lowercase currency code; items carry their own currency.
 type RevenueDashboardResponse struct {
-	Summary RevenueDashboardSummary    `json:"summary"`
-	Items   []RevenueDashboardCustomer `json:"items"`
-	// Graph is set only when custom_analytics_config includes the revenue-per-minute rule (same gate as summary cpm / voice_minutes).
+	Summaries map[string]RevenueDashboardSummary `json:"summaries"`
+	Items     []RevenueDashboardCustomer         `json:"items"`
+	// Graph is set only when custom_analytics_config includes the revenue-per-minute rule.
 	Graph *RevenueDashboardGraph `json:"graph,omitempty"`
 }
 
@@ -77,6 +78,7 @@ type RevenueDashboardCustomer struct {
 	CustomerID         string           `json:"customer_id"`
 	CustomerName       string           `json:"customer_name"`
 	ExternalCustomerID string           `json:"external_customer_id"`
+	Currency           string           `json:"currency"`
 	TotalRevenue       decimal.Decimal  `json:"total_revenue" swaggertype:"string"`
 	TotalUsageRevenue  decimal.Decimal  `json:"total_usage_revenue" swaggertype:"string"`
 	TotalFixedRevenue  decimal.Decimal  `json:"total_fixed_revenue" swaggertype:"string"`

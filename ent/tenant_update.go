@@ -57,6 +57,20 @@ func (tu *TenantUpdate) SetNillableStatus(s *string) *TenantUpdate {
 	return tu
 }
 
+// SetInternalStatus sets the "internal_status" field.
+func (tu *TenantUpdate) SetInternalStatus(s string) *TenantUpdate {
+	tu.mutation.SetInternalStatus(s)
+	return tu
+}
+
+// SetNillableInternalStatus sets the "internal_status" field if the given value is not nil.
+func (tu *TenantUpdate) SetNillableInternalStatus(s *string) *TenantUpdate {
+	if s != nil {
+		tu.SetInternalStatus(*s)
+	}
+	return tu
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (tu *TenantUpdate) SetUpdatedAt(t time.Time) *TenantUpdate {
 	tu.mutation.SetUpdatedAt(t)
@@ -164,6 +178,9 @@ func (tu *TenantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := tu.mutation.Status(); ok {
 		_spec.SetField(tenant.FieldStatus, field.TypeString, value)
 	}
+	if value, ok := tu.mutation.InternalStatus(); ok {
+		_spec.SetField(tenant.FieldInternalStatus, field.TypeString, value)
+	}
 	if value, ok := tu.mutation.UpdatedAt(); ok {
 		_spec.SetField(tenant.FieldUpdatedAt, field.TypeTime, value)
 	}
@@ -223,6 +240,20 @@ func (tuo *TenantUpdateOne) SetStatus(s string) *TenantUpdateOne {
 func (tuo *TenantUpdateOne) SetNillableStatus(s *string) *TenantUpdateOne {
 	if s != nil {
 		tuo.SetStatus(*s)
+	}
+	return tuo
+}
+
+// SetInternalStatus sets the "internal_status" field.
+func (tuo *TenantUpdateOne) SetInternalStatus(s string) *TenantUpdateOne {
+	tuo.mutation.SetInternalStatus(s)
+	return tuo
+}
+
+// SetNillableInternalStatus sets the "internal_status" field if the given value is not nil.
+func (tuo *TenantUpdateOne) SetNillableInternalStatus(s *string) *TenantUpdateOne {
+	if s != nil {
+		tuo.SetInternalStatus(*s)
 	}
 	return tuo
 }
@@ -363,6 +394,9 @@ func (tuo *TenantUpdateOne) sqlSave(ctx context.Context) (_node *Tenant, err err
 	}
 	if value, ok := tuo.mutation.Status(); ok {
 		_spec.SetField(tenant.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := tuo.mutation.InternalStatus(); ok {
+		_spec.SetField(tenant.FieldInternalStatus, field.TypeString, value)
 	}
 	if value, ok := tuo.mutation.UpdatedAt(); ok {
 		_spec.SetField(tenant.FieldUpdatedAt, field.TypeTime, value)

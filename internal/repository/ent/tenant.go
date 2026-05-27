@@ -45,6 +45,7 @@ func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tena
 		SetID(tenant.ID).
 		SetName(tenant.Name).
 		SetStatus(string(tenant.Status)).
+		SetInternalStatus(string(tenant.InternalStatus)).
 		SetCreatedAt(tenant.CreatedAt).
 		SetUpdatedAt(tenant.UpdatedAt).
 		SetBillingDetails(tenant.BillingDetails.ToSchema()).
@@ -65,16 +66,32 @@ func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tena
 	return nil
 }
 
-// GetByID retrieves a tenant by ID
+// GetByID retrieves a tenant by ID.
+// Cache lookup order: L1 (in-memory) → L2 (Redis) → DB.
+// Both layers are populated on a DB hit; L1 is back-filled on an L2 hit.
 func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenant.Tenant, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "tenant", "get_by_id", map[string]interface{}{
 		"tenant_id": id,
 	})
 	defer FinishSpan(span)
-	// Try to get from cache first
-	if cachedTenant := r.GetCache(ctx, id); cachedTenant != nil {
-		return cachedTenant, nil
+
+	cacheKey := cache.GenerateKey(cache.PrefixTenant, id)
+
+	// L1: in-memory (always checked regardless of cache.enabled)
+	if value, found := cache.GetInMemoryCache().ForceCacheGet(ctx, cacheKey); found {
+		if t, ok := value.(*domainTenant.Tenant); ok {
+			return t, nil
+		}
+	}
+
+	// L2: Redis (respects cache.enabled)
+	if value, found := r.cache.Get(ctx, cacheKey); found {
+		if t, ok := value.(*domainTenant.Tenant); ok {
+			// Back-fill L1 so the next request doesn't hit Redis
+			cache.GetInMemoryCache().ForceCacheSet(ctx, cacheKey, t, cache.ExpiryDefaultInMemory)
+			return t, nil
+		}
 	}
 
 	client := r.client.Reader(ctx)
@@ -105,7 +122,9 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 
 	SetSpanSuccess(span)
 	tenantData := domainTenant.FromEnt(tenant)
-	r.SetCache(ctx, tenantData)
+	// Populate both layers
+	cache.GetInMemoryCache().ForceCacheSet(ctx, cacheKey, tenantData, cache.ExpiryDefaultInMemory)
+	r.cache.Set(ctx, cacheKey, tenantData, cache.ExpiryDefaultRedis)
 	return tenantData, nil
 }
 
@@ -147,6 +166,7 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 		UpdateOneID(tenant.ID).
 		SetName(tenant.Name).
 		SetStatus(string(tenant.Status)).
+		SetInternalStatus(string(tenant.InternalStatus)).
 		SetUpdatedAt(time.Now()).
 		SetMetadata(tenant.Metadata).
 		SetBillingDetails(tenant.BillingDetails.ToSchema()).
@@ -170,7 +190,8 @@ func (r *tenantRepository) SetCache(ctx context.Context, tenant *domainTenant.Te
 	})
 	defer cache.FinishSpan(span)
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, tenant.ID)
-	r.cache.Set(ctx, cacheKey, tenant, cache.ExpiryDefaultInMemory)
+	cache.GetInMemoryCache().ForceCacheSet(ctx, cacheKey, tenant, cache.ExpiryDefaultInMemory)
+	r.cache.Set(ctx, cacheKey, tenant, cache.ExpiryDefaultRedis)
 }
 
 func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTenant.Tenant {
@@ -180,8 +201,17 @@ func (r *tenantRepository) GetCache(ctx context.Context, key string) *domainTena
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
+	// L1 first
+	if value, found := cache.GetInMemoryCache().ForceCacheGet(ctx, cacheKey); found {
+		if t, ok := value.(*domainTenant.Tenant); ok {
+			return t
+		}
+	}
+	// L2 fallback
 	if value, found := r.cache.Get(ctx, cacheKey); found {
-		return value.(*domainTenant.Tenant)
+		if t, ok := value.(*domainTenant.Tenant); ok {
+			return t
+		}
 	}
 	return nil
 }
@@ -193,5 +223,6 @@ func (r *tenantRepository) DeleteCache(ctx context.Context, key string) {
 	defer cache.FinishSpan(span)
 
 	cacheKey := cache.GenerateKey(cache.PrefixTenant, key)
+	cache.GetInMemoryCache().ForceCacheDelete(ctx, cacheKey)
 	r.cache.Delete(ctx, cacheKey)
 }
