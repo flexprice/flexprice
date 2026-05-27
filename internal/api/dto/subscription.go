@@ -1194,7 +1194,11 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		initialStatus = types.SubscriptionStatusIncomplete
 	case types.PaymentBehaviorErrorIfIncomplete:
 		// Error if incomplete behavior - subscription starts as incomplete (will fail if payment fails)
-		initialStatus = types.SubscriptionStatusIncomplete
+		if lo.FromPtr(r.TrialPeriodDays) > 0 {
+			initialStatus = types.SubscriptionStatusDraft
+		} else {
+			initialStatus = types.SubscriptionStatusIncomplete
+		}
 	default:
 		// Fallback to active for unknown behaviors
 		initialStatus = types.SubscriptionStatusActive
@@ -1798,10 +1802,10 @@ type SubscriptionUpdatePeriodResponseItem struct {
 
 // AutoInvoiceThresholdBillingResult is the result of a single ProcessAutoInvoiceThresholdBilling run.
 type AutoInvoiceThresholdBillingResult struct {
-	TotalChecked  int                                    `json:"total_checked"`
-	TotalInvoiced int                                    `json:"total_invoiced"`
-	TotalSkipped  int                                    `json:"total_skipped"`
-	TotalFailed   int                                    `json:"total_failed"`
+	TotalChecked  int                                      `json:"total_checked"`
+	TotalInvoiced int                                      `json:"total_invoiced"`
+	TotalSkipped  int                                      `json:"total_skipped"`
+	TotalFailed   int                                      `json:"total_failed"`
 	Items         []*AutoInvoiceThresholdBillingResultItem `json:"items,omitempty"`
 }
 

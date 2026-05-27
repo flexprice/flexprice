@@ -492,6 +492,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	isDraft := req.SubscriptionStatus == types.SubscriptionStatusDraft
 	if isDraft {
 		s.triggerHubSpotQuoteSyncWorkflow(ctx, sub.ID, customer.ID)
+		s.runPaddleSubscriptionSync(ctx, sub)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, sub.ID)
 	} else {
 		s.triggerHubSpotDealSyncWorkflow(ctx, sub.ID, customer.ID)
@@ -543,6 +544,16 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		return nil, err
 	}
 
+	isTrialActivation := sub.TrialStart != nil && sub.TrialEnd != nil && newStartDate.After(*sub.TrialStart) && newStartDate.Before(*sub.TrialEnd)
+	var billingReason types.InvoiceBillingReason
+	if isTrialActivation {
+		trialDuration := sub.TrialEnd.Sub(lo.FromPtr(sub.TrialStart))
+		sub.TrialStart = lo.ToPtr(newStartDate)
+		sub.TrialEnd = lo.ToPtr(newStartDate.Add(trialDuration))
+		nextBillingDate = lo.FromPtr(sub.TrialEnd)
+		billingReason = types.InvoiceBillingReasonSubscriptionTrialStart
+	}
+
 	sub.CurrentPeriodStart = sub.StartDate
 	sub.CurrentPeriodEnd = nextBillingDate
 
@@ -589,6 +600,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			PeriodStart:    sub.CurrentPeriodStart,
 			PeriodEnd:      sub.CurrentPeriodEnd,
 			ReferencePoint: types.ReferencePointPeriodStart,
+			BillingReason:  billingReason,
 		}, paymentParams, types.InvoiceFlowSubscriptionCreation, true) // Pass true for draft activation
 		if err != nil {
 			return err
@@ -613,7 +625,11 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete || sub.SubscriptionStatus == types.SubscriptionStatusDraft {
 			if invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded {
 				// No invoice created or payment succeeded - activate subscription
-				targetStatus = types.SubscriptionStatusActive
+				if isTrialActivation {
+					targetStatus = types.SubscriptionStatusTrialing
+				} else {
+					targetStatus = types.SubscriptionStatusActive
+				}
 			} else {
 				// Set status based on payment_behavior
 				paymentBehavior := types.PaymentBehavior(sub.PaymentBehavior)
@@ -7324,7 +7340,7 @@ func syncTrialingStateFromCreateRequest(req *dto.CreateSubscriptionRequest, sub 
 	if sub.TrialStart == nil || sub.TrialEnd == nil {
 		return
 	}
-	if req.SubscriptionStatus == types.SubscriptionStatusDraft {
+	if req.SubscriptionStatus == types.SubscriptionStatusDraft || sub.SubscriptionStatus == types.SubscriptionStatusDraft {
 		return
 	}
 	// While trialing, "current period" is the trial, not the normal billing interval.
