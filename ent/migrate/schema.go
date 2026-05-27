@@ -1396,7 +1396,7 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "group_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "sequence", Type: field.TypeInt64, Default: schema.Expr("nextval('prices_sequence_seq')")},
+		{Name: "sequence", Type: field.TypeInt64, SchemaType: map[string]string{"postgres": "bigserial"}},
 		{Name: "price_unit_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// PricesTable holds the schema information for the "prices" table.

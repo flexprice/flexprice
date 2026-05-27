@@ -271,8 +271,16 @@ func (Price) Fields() []ent.Field {
 		// subscriptions need to react to (create, end_date set, compat edit).
 		// Used by the plan-price sync to find prices changed since each
 		// subscription's last reconciliation.
+		//
+		// Declared as `bigserial` so Atlas's introspector and the schema agree
+		// on the column being serial-backed — otherwise the diff produces a
+		// spurious DROP SEQUENCE that fails because the column still depends
+		// on it. The sequence is also pre-created by V4_prices_sequence.up.sql
+		// for first-time setups where `migrate-postgres` runs before `migrate-ent`.
 		field.Int64("sequence").
-			Annotations(entsql.DefaultExpr("nextval('prices_sequence_seq')")),
+			SchemaType(map[string]string{
+				"postgres": "bigserial",
+			}),
 	}
 }
 
