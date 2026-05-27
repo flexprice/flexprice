@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -388,8 +389,55 @@ type EnvAccessConfig struct {
 }
 
 type FeatureFlagConfig struct {
-	EnableFeatureUsageForAnalytics bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
-	ForceV1ForTenant               string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
+	EnableFeatureUsageForAnalytics    bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
+	ForceV1ForTenant                  string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
+	EnableMeterUsageForPreviewInvoice bool   `mapstructure:"enable_meter_usage_for_preview_invoice" validate:"omitempty"`
+	EnableMeterUsageForAnalytics      bool   `mapstructure:"enable_meter_usage_for_analytics" validate:"omitempty"`
+
+	// Per-tenant overrides for the meter-usage rollout. Resolution order:
+	//   1. disabled_tenants — tenant force-disabled (highest priority)
+	//   2. enabled_tenants  — tenant force-enabled
+	//   3. global flag above — applies to everyone else
+	MeterUsageForPreviewInvoiceEnabledTenants  []string `mapstructure:"meter_usage_for_preview_invoice_enabled_tenants" validate:"omitempty"`
+	MeterUsageForPreviewInvoiceDisabledTenants []string `mapstructure:"meter_usage_for_preview_invoice_disabled_tenants" validate:"omitempty"`
+	MeterUsageForAnalyticsEnabledTenants       []string `mapstructure:"meter_usage_for_analytics_enabled_tenants" validate:"omitempty"`
+	MeterUsageForAnalyticsDisabledTenants      []string `mapstructure:"meter_usage_for_analytics_disabled_tenants" validate:"omitempty"`
+}
+
+// IsMeterUsageEnabledForPreviewInvoice resolves the meter-usage rollout for the
+// preview-invoice endpoint for a specific tenant. See FeatureFlagConfig for the
+// resolution order.
+func (c *FeatureFlagConfig) IsMeterUsageEnabledForPreviewInvoice(tenantID string) bool {
+	return resolveTenantRollout(
+		tenantID,
+		c.EnableMeterUsageForPreviewInvoice,
+		c.MeterUsageForPreviewInvoiceEnabledTenants,
+		c.MeterUsageForPreviewInvoiceDisabledTenants,
+	)
+}
+
+// IsMeterUsageEnabledForAnalytics resolves the meter-usage rollout for the
+// analytics endpoint for a specific tenant. See FeatureFlagConfig for the
+// resolution order.
+func (c *FeatureFlagConfig) IsMeterUsageEnabledForAnalytics(tenantID string) bool {
+	return resolveTenantRollout(
+		tenantID,
+		c.EnableMeterUsageForAnalytics,
+		c.MeterUsageForAnalyticsEnabledTenants,
+		c.MeterUsageForAnalyticsDisabledTenants,
+	)
+}
+
+func resolveTenantRollout(tenantID string, globalEnabled bool, enabledTenants, disabledTenants []string) bool {
+	if tenantID != "" {
+		if slices.Contains(disabledTenants, tenantID) {
+			return false
+		}
+		if slices.Contains(enabledTenants, tenantID) {
+			return true
+		}
+	}
+	return globalEnabled
 }
 
 type Email struct {
@@ -448,6 +496,8 @@ func NewConfig() (*Configuration, error) {
 	// Step 2: Initialize Viper
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
+	v.AddConfigPath("../../../internal/config")
+	v.AddConfigPath("../../internal/config")
 	v.AddConfigPath("./internal/config")
 	v.AddConfigPath("./config")
 
@@ -477,6 +527,12 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("logging.otel_auth_header", "FLEXPRICE_LOGGING_OTEL_AUTH_HEADER")
 	_ = v.BindEnv("logging.otel_auth_value", "FLEXPRICE_LOGGING_OTEL_AUTH_VALUE")
 	_ = v.BindEnv("logging.otel_debug", "FLEXPRICE_LOGGING_OTEL_DEBUG")
+
+	// Explicitly bind Temporal env vars — AutomaticEnv + Unmarshal misses these
+	// because the yaml ships non-empty defaults (api_key: "strong api key"), so
+	// Unmarshal returns the yaml value instead of consulting AutomaticEnv.
+	_ = v.BindEnv("temporal.api_key", "FLEXPRICE_TEMPORAL_API_KEY")
+	_ = v.BindEnv("temporal.api_key_name", "FLEXPRICE_TEMPORAL_API_KEY_NAME")
 
 	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
 	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")

@@ -127,12 +127,15 @@ func ToMeterUsageAnalyticsResponse(results []*events.MeterUsageAggregationResult
 type MeterUsageDetailedAnalyticsRequest struct {
 	ExternalCustomerID string              `json:"external_customer_id" validate:"required" binding:"required" example:"cust_123"`
 	MeterIDs           []string            `json:"meter_ids,omitempty" example:"mtr_abc,mtr_def"`
+	FeatureIDs         []string            `json:"feature_ids,omitempty" example:"feat_abc,feat_def"`
 	StartTime          time.Time           `json:"start_time,omitempty" example:"2024-01-01T00:00:00Z"`
 	EndTime            time.Time           `json:"end_time,omitempty" example:"2024-02-01T00:00:00Z"`
 	GroupBy            []string            `json:"group_by,omitempty" example:"meter_id,source"`
 	PropertyFilters    map[string][]string `json:"property_filters,omitempty"`
 	Sources            []string            `json:"sources,omitempty"`
 	WindowSize         types.WindowSize    `json:"window_size,omitempty" example:"DAY"`
+	Expand             []string            `json:"expand,omitempty" example:"price"`
+	IncludeChildren    bool                `json:"include_children,omitempty" example:"false"` // folds child customers' usage into the single aggregated total
 	BillingAnchor      *time.Time          `json:"billing_anchor,omitempty"`
 }
 
@@ -147,12 +150,15 @@ func (r *MeterUsageDetailedAnalyticsRequest) ToParams(tenantID, environmentID st
 		EnvironmentID:      environmentID,
 		ExternalCustomerID: r.ExternalCustomerID,
 		MeterIDs:           r.MeterIDs,
+		FeatureIDs:         r.FeatureIDs,
 		StartTime:          r.StartTime,
 		EndTime:            r.EndTime,
 		GroupBy:            r.GroupBy,
 		PropertyFilters:    r.PropertyFilters,
 		Sources:            r.Sources,
 		WindowSize:         r.WindowSize,
+		Expand:             r.Expand,
+		IncludeChildren:    r.IncludeChildren,
 		BillingAnchor:      r.BillingAnchor,
 	}
 }

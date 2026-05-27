@@ -126,3 +126,7 @@ docs/superpowers/*
 # Postman
 postman/
 .postman/
+
+
+# graphify
+graphify-out/

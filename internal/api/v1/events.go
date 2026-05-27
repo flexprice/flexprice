@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	domainevents "github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -23,17 +24,19 @@ type EventsHandler struct {
 	featureUsageTrackingService  service.FeatureUsageTrackingService
 	rawEventsReprocessingService service.RawEventsReprocessingService
 	rawEventConsumptionService   service.RawEventConsumptionService
+	meterUsageService            service.MeterUsageService
 	config                       *config.Configuration
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
 		eventPostProcessingService:   eventPostProcessingService,
 		featureUsageTrackingService:  featureUsageTrackingService,
 		rawEventsReprocessingService: rawEventsReprocessingService,
 		rawEventConsumptionService:   rawEventConsumptionService,
+		meterUsageService:            meterUsageService,
 		config:                       config,
 		log:                          log,
 	}
@@ -385,10 +388,29 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 		return
 	}
 
-	// Call the appropriate service based on feature flag
+	// Call the appropriate service based on feature flag.
+	// Priority: meter-usage > v1 forced > feature-usage > v1 default
 	var response *dto.GetUsageAnalyticsResponse
 
-	if !h.config.FeatureFlag.EnableFeatureUsageForAnalytics || h.config.FeatureFlag.ForceV1ForTenant == types.GetTenantID(ctx) {
+	if h.config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
+		params := &domainevents.MeterUsageDetailedAnalyticsParams{
+			TenantID:            types.GetTenantID(ctx),
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			ExternalCustomerID:  req.ExternalCustomerID,
+			ExternalCustomerIDs: req.ExternalCustomerIDs,
+			FeatureIDs:          req.FeatureIDs,
+			StartTime:           req.StartTime,
+			EndTime:             req.EndTime,
+			GroupBy:             req.GroupBy,
+			PropertyFilters:     req.PropertyFilters,
+			Sources:             req.Sources,
+			WindowSize:          req.WindowSize,
+			Expand:              req.Expand,
+			IncludeChildren:     req.IncludeChildren,
+			// BillingAnchor omitted: service defaults to subscription's billing anchor
+		}
+		response, err = h.meterUsageService.GetDetailedAnalytics(ctx, params)
+	} else if !h.config.FeatureFlag.EnableFeatureUsageForAnalytics || h.config.FeatureFlag.ForceV1ForTenant == types.GetTenantID(ctx) {
 		// Use v1 (eventPostProcessingService) when flag is disabled
 		response, err = h.eventPostProcessingService.GetDetailedUsageAnalytics(ctx, &req)
 	} else {

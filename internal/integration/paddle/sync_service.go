@@ -319,7 +319,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	}
 
 	// EnsureCustomerSynced guarantees customer_id and address_id are present.
-	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: sub.CustomerID})
+	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: sub.GetInvoicingCustomerID()})
 	if err != nil {
 		return nil, fmt.Errorf("ensuring customer synced: %w", err)
 	}
@@ -1093,6 +1093,20 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 			s.logger.Infow("subscription.activated: set incomplete→active",
 				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 		}
+	case types.SubscriptionStatusDraft:
+		startDate := time.Now()
+		if data.StartedAt != nil {
+			if parsed, parseErr := time.Parse(time.RFC3339, *data.StartedAt); parseErr == nil {
+				startDate = parsed
+			}
+		}
+		if _, err := subscriptionService.ActivateDraftSubscription(ctx, flexSubID, apidto.ActivateDraftSubscriptionRequest{
+			StartDate: &startDate,
+		}); err != nil {
+			return fmt.Errorf("activating draft subscription: %w", err)
+		}
+		s.logger.Infow("subscription.activated",
+			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	default:
 		s.logger.Infow("subscription.activated: subscription not in incomplete state — no-op",
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
@@ -1114,6 +1128,8 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 // If TemporalService is nil (e.g. in unit-test environments), the method returns silently.
 func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
 	if s.temporalSvc == nil {
+		s.logger.Errorw("temporal service is nil, skipping resync pending invoices for subscription",
+			"subscription_id", subscriptionID)
 		return
 	}
 
@@ -1155,9 +1171,9 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 			TenantID:       tenantID,
 			EnvironmentID:  environmentID,
 		}
-		_, wErr := s.temporalSvc.ExecuteWorkflowWithDelay(ctx, types.TemporalPaddleInvoiceSyncWorkflow, input, 30)
+		_, wErr := s.temporalSvc.ExecuteWorkflow(ctx, types.TemporalPaddleInvoiceSyncWorkflow, input)
 		if wErr != nil {
-			s.logger.Warnw("failed to trigger invoice resync workflow after subscription.activated",
+			s.logger.Error("failed to trigger invoice resync workflow after subscription.activated",
 				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", wErr)
 			continue
 		}
