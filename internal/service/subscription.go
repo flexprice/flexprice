@@ -101,8 +101,9 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			WithReportableDetails(map[string]interface{}{"plan_id": req.PlanID, "status": plan.Status}).
 			Mark(ierr.ErrValidation)
 	}
-
-	sub := req.ToSubscription(ctx)
+	paddleInt, _ := s.IntegrationFactory.GetPaddleIntegration(ctx)
+	hasPaddleIntegration := paddleInt != nil
+	sub := req.ToSubscription(ctx, hasPaddleIntegration)
 
 	// Validate and filter prices
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, plan.ID, types.PRICE_ENTITY_TYPE_PLAN, sub, req.Workflow)
