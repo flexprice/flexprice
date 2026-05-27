@@ -1094,7 +1094,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 		}
 	case types.SubscriptionStatusDraft:
-		startDate := time.Now()
+		startDate := time.Now().UTC()
 		if data.StartedAt != nil {
 			if parsed, parseErr := time.Parse(time.RFC3339, *data.StartedAt); parseErr == nil {
 				startDate = parsed
