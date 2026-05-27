@@ -26,6 +26,12 @@ fi
 : "${WL_TS_PACKAGE_NAME:?WL_TS_PACKAGE_NAME is required}"
 : "${WL_MCP_PACKAGE_NAME:?WL_MCP_PACKAGE_NAME is required}"
 
+# Guard: skip entirely for standard (non-WL) builds
+if [ "${WL_SDK_CLASS_NAME}" = "Flexprice" ]; then
+  echo "WL_SDK_CLASS_NAME is 'Flexprice' — standard build, skipping white-label branding."
+  exit 0
+fi
+
 echo "=== Applying white-label branding to merged custom files ==="
 echo "    SDK class:    ${WL_SDK_CLASS_NAME}"
 echo "    Go module:    ${WL_GO_MODULE_PATH}"
@@ -95,6 +101,7 @@ if [ -f "$PORTAL" ]; then
   # Replace all occurrences: imports, type aliases, field decls, constructor calls.
   # No compound identifiers (e.g. FlexpriceClient) exist in this file, so a plain
   # replace is safe and avoids \b portability issues across sed variants.
+  # If new compound identifiers are added, update to word-boundary match.
   _sed_i "s/Flexprice/${WL_SDK_CLASS_NAME}/g" "$PORTAL"
   echo "  [ts] customer-portal.ts → ${WL_SDK_CLASS_NAME}"
 else
