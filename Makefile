@@ -401,7 +401,7 @@ test-github-workflow:
 
 # Check that white-label templates are in sync with .speakeasy/gen/*.yaml
 # Run this after Speakeasy CLI updates gen configs (it auto-bumps fields)
-.PHONY: check-wl-templates
+# Note: workflow.yaml.tmpl is intentionally excluded — it has no .speakeasy/gen/ counterpart.
 check-wl-templates:
 	@bash -c '\
 	  DRIFT=0; \
