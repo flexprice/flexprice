@@ -232,7 +232,6 @@ meter_usage_tracking:
   topic: "events"
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service"
-  properties_enabled_tenants: [] # List of tenant IDs for which event properties will be processed and stored. For other tenants, properties will be ignored to save storage and processing costs.
 
 usage_benchmark:
   enabled: false

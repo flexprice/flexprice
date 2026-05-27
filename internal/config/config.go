@@ -323,11 +323,10 @@ type FeatureUsageTrackingReplayConfig struct {
 
 // MeterUsageTrackingConfig configures the meter_usage pipeline consumer
 type MeterUsageTrackingConfig struct {
-	Enabled                  bool     `mapstructure:"enabled" default:"true"`
-	Topic                    string   `mapstructure:"topic" default:"events"`
-	RateLimit                int64    `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup            string   `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
-	PropertiesEnabledTenants []string `mapstructure:"properties_enabled_tenants"`
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
 }
 
 // UsageBenchmarkConfig configures the usage benchmarking consumer
