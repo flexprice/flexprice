@@ -500,7 +500,7 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 
 	var resp *dto.InvoiceResponse
 	var err error
-	if h.config.FeatureFlag.EnableMeterUsageForPreviewInvoice {
+	if h.config.FeatureFlag.IsMeterUsageEnabledForPreviewInvoice(types.GetTenantID(c.Request.Context())) {
 		resp, err = h.invoiceService.GetMeterUsagePreviewInvoice(c.Request.Context(), req)
 	} else {
 		resp, err = h.invoiceService.GetPreviewInvoice(c.Request.Context(), req)

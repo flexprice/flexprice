@@ -392,7 +392,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 	// Priority: meter-usage > v1 forced > feature-usage > v1 default
 	var response *dto.GetUsageAnalyticsResponse
 
-	if h.config.FeatureFlag.EnableMeterUsageForAnalytics {
+	if h.config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
 		params := &domainevents.MeterUsageDetailedAnalyticsParams{
 			TenantID:            types.GetTenantID(ctx),
 			EnvironmentID:       types.GetEnvironmentID(ctx),
