@@ -20,7 +20,7 @@ set -euo pipefail
 #   qty_total       → CAST(qty_total, 'Decimal(18,8)')
 #   unique_hash     → COALESCE(unique_hash, '')
 #   source          → COALESCE(source, '')
-#   properties      → '' (skipped per requirement)
+#   properties      → direct
 # ---------------------------
 
 # ---- ClickHouse connection (from .env.backfill) ----
@@ -180,7 +180,7 @@ SELECT
     CAST(qty_total, 'Decimal(18,8)')         AS qty_total,
     ''                                       AS unique_hash,
     COALESCE(source, '')                     AS source,
-    ''                                       AS properties
+    properties                               AS properties
 FROM ${SRC_TABLE}
 WHERE tenant_id      = '${TENANT_ID}'
   AND environment_id = '${ENVIRONMENT_ID}'

@@ -267,6 +267,12 @@ feature_flag:
   enable_meter_usage_for_preview_invoice: false
   # Switch /events/analytics to use meter-usage
   enable_meter_usage_for_analytics: false
+  # Per-tenant rollout overrides for meter-usage. Resolution order per tenant:
+  #   disabled_tenants > enabled_tenants > global enable_* flag above.
+  meter_usage_for_preview_invoice_enabled_tenants: []
+  meter_usage_for_preview_invoice_disabled_tenants: []
+  meter_usage_for_analytics_enabled_tenants: []
+  meter_usage_for_analytics_disabled_tenants: []
 
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:

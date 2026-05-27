@@ -742,8 +742,8 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 
-	// Enrich with Plans/Addons/Groups so the response can expand them
-	s.enrichAnalyticsDataForResponse(ctx, data)
+	// Enrich with Groups + parent prices (always-on) and expand-gated Plans/Addons
+	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
 	// Convert to response DTO
 	return s.toUsageAnalyticsResponseDTO(data, data.Meters, params), nil
@@ -884,12 +884,20 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 	return data
 }
 
-// enrichAnalyticsDataForResponse populates Plans, Addons, and Groups on data so
-// the response builder can fill PlanID/AddOnID/Group and expand the corresponding
-// objects. Mirrors feature_usage_tracking's fetchPlans/fetchAddons + group
-// backfill so meter-usage responses reach full parity. Errors are logged and
-// swallowed — analytics should still return without the enrichment.
-func (s *meterUsageService) enrichAnalyticsDataForResponse(ctx context.Context, data *AnalyticsData) {
+// enrichAnalyticsDataForResponse fetches downstream objects the response
+// builder needs:
+//   - Groups (unconditional, scoped to features that have a GroupID) — item.Group is always-on.
+//   - Parent prices for SUBSCRIPTION-typed override prices — needed so PlanID/AddOnID
+//     can be derived from the parent's EntityType/EntityID.
+//   - Plans / Addons (only when expand=plan / expand=addon) — required only when the
+//     response needs the embedded object; PlanID/AddOnID derivation uses price.EntityID alone.
+//
+// Errors are logged and swallowed — analytics should still return without enrichment.
+func (s *meterUsageService) enrichAnalyticsDataForResponse(
+	ctx context.Context,
+	data *AnalyticsData,
+	params *events.MeterUsageDetailedAnalyticsParams,
+) {
 	if data == nil {
 		return
 	}
@@ -903,7 +911,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(ctx context.Context, 
 		data.Groups = make(map[string]*group.Group)
 	}
 
-	// Groups: walk features for GroupIDs, fetch each, then backfill Feature.Group.
+	// Groups — always populate item.Group, but only fetch when features need them.
 	groupIDs := make(map[string]struct{})
 	for _, f := range data.Features {
 		if f != nil && f.GroupID != "" {
@@ -927,26 +935,65 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(ctx context.Context, 
 		}
 	}
 
-	// Plans + Addons: mirror feature_usage which fetches all in scope and
-	// indexes by ID. The response builder picks the ones referenced via
-	// price.EntityType/EntityID.
-	planFilter := types.NewNoLimitPlanFilter()
-	plans, err := s.PlanRepo.List(ctx, planFilter)
-	if err != nil {
-		s.logger.Warnw("failed to fetch plans for meter usage analytics", "error", err)
-	} else {
-		for _, p := range plans {
-			data.Plans[p.ID] = p
+	// Parent prices — override (subscription-scoped) prices carry the plan/addon
+	// link only on the parent row. Fetch any missing parents into data.Prices so
+	// the response builder can resolve PlanID/AddOnID via one extra lookup.
+	parentIDs := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, p := range data.Prices {
+		if p == nil || p.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION || p.ParentPriceID == "" {
+			continue
+		}
+		if _, ok := data.Prices[p.ParentPriceID]; ok {
+			continue
+		}
+		if _, ok := seen[p.ParentPriceID]; ok {
+			continue
+		}
+		seen[p.ParentPriceID] = struct{}{}
+		parentIDs = append(parentIDs, p.ParentPriceID)
+	}
+	if len(parentIDs) > 0 {
+		priceService := NewPriceService(s.ServiceParams)
+		parentFilter := types.NewNoLimitPriceFilter()
+		parentFilter.PriceIDs = parentIDs
+		parentFilter.AllowExpiredPrices = true
+		parentList, err := priceService.GetPrices(ctx, parentFilter)
+		if err != nil {
+			s.logger.Warnw("failed to fetch parent prices for meter usage analytics", "error", err)
+		} else {
+			for _, p := range parentList.Items {
+				data.Prices[p.ID] = p.Price
+			}
 		}
 	}
 
-	addonFilter := types.NewNoLimitAddonFilter()
-	addons, err := s.AddonRepo.List(ctx, addonFilter)
-	if err != nil {
-		s.logger.Warnw("failed to fetch addons for meter usage analytics", "error", err)
-	} else {
-		for _, a := range addons {
-			data.Addons[a.ID] = a
+	expand := lo.SliceToMap(params.Expand, func(e string) (string, struct{}) { return e, struct{}{} })
+
+	// Plans — only needed when caller asked to expand them. PlanID is already
+	// derivable from price.EntityID without fetching the Plan object.
+	if _, want := expand["plan"]; want {
+		planFilter := types.NewNoLimitPlanFilter()
+		plans, err := s.PlanRepo.List(ctx, planFilter)
+		if err != nil {
+			s.logger.Warnw("failed to fetch plans for meter usage analytics", "error", err)
+		} else {
+			for _, p := range plans {
+				data.Plans[p.ID] = p
+			}
+		}
+	}
+
+	// Addons — same gating as Plans.
+	if _, want := expand["addon"]; want {
+		addonFilter := types.NewNoLimitAddonFilter()
+		addons, err := s.AddonRepo.List(ctx, addonFilter)
+		if err != nil {
+			s.logger.Warnw("failed to fetch addons for meter usage analytics", "error", err)
+		} else {
+			for _, a := range addons {
+				data.Addons[a.ID] = a
+			}
 		}
 	}
 }
@@ -1112,8 +1159,8 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		data.Analytics = append(data.Analytics, analytic)
 	}
 
-	// Enrich with Plans/Addons/Groups so the response can expand them
-	s.enrichAnalyticsDataForResponse(ctx, data)
+	// Enrich with Groups + parent prices (always-on) and expand-gated Plans/Addons
+	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
 	// Convert to response DTO (no cost calculation without subscription context)
 	return s.toUsageAnalyticsResponseDTO(data, meterMap, params), nil
@@ -1196,8 +1243,9 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			item.Sources = analytic.Sources
 		}
 
-		// Derive PlanID/AddOnID from price entity type, walking ParentPriceID for
-		// subscription-override prices.
+		// Derive PlanID/AddOnID from price.EntityType. For SUBSCRIPTION-typed
+		// override prices, walk to the parent (enrichAnalyticsDataForResponse
+		// adds the parent rows to data.Prices).
 		if p, ok := data.Prices[analytic.PriceID]; ok && p != nil {
 			switch p.EntityType {
 			case types.PRICE_ENTITY_TYPE_PLAN:
