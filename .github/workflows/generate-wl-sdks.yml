@@ -202,6 +202,9 @@ jobs:
       - name: Verify SDK builds
         run: bash scripts/verify-sdk-builds.sh
 
+      - name: Apply resolved version to artifacts
+        run: ./scripts/force-sdk-version.sh "${{ needs.matrix-setup.outputs.version }}"
+
       - name: Push Go SDK to client repo
         run: |
           VERSION="${{ needs.matrix-setup.outputs.version }}"
@@ -214,9 +217,12 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git add . && git commit -m "Release Go SDK v${VERSION}"
             git tag -a "v${VERSION}" -m "Go SDK v${VERSION}" 2>/dev/null || true
-            git push origin main && git push origin "v${VERSION}" 2>/dev/null || true
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+            echo "Pushed Go SDK to ${WL_GO_REPO}"
+          else
+            echo "No changes to push for Go SDK (${WL_GO_REPO})"
           fi
-          echo "Pushed Go SDK to ${WL_GO_REPO}"
 
       - name: Push Python SDK to client repo
         run: |
@@ -230,9 +236,12 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git add . && git commit -m "Release Python SDK v${VERSION}"
             git tag -a "v${VERSION}" -m "Python SDK v${VERSION}" 2>/dev/null || true
-            git push origin main && git push origin "v${VERSION}" 2>/dev/null || true
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+            echo "Pushed Python SDK to ${WL_PYTHON_REPO}"
+          else
+            echo "No changes to push for Python SDK (${WL_PYTHON_REPO})"
           fi
-          echo "Pushed Python SDK to ${WL_PYTHON_REPO}"
 
       - name: Push TypeScript SDK to client repo
         run: |
@@ -246,9 +255,12 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git add . && git commit -m "Release TypeScript SDK v${VERSION}"
             git tag -a "v${VERSION}" -m "TypeScript SDK v${VERSION}" 2>/dev/null || true
-            git push origin main && git push origin "v${VERSION}" 2>/dev/null || true
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+            echo "Pushed TypeScript SDK to ${WL_TS_REPO}"
+          else
+            echo "No changes to push for TypeScript SDK (${WL_TS_REPO})"
           fi
-          echo "Pushed TypeScript SDK to ${WL_TS_REPO}"
 
       - name: Push MCP to client repo
         run: |
@@ -262,9 +274,12 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             git add . && git commit -m "Release MCP v${VERSION}"
             git tag -a "v${VERSION}" -m "MCP v${VERSION}" 2>/dev/null || true
-            git push origin main && git push origin "v${VERSION}" 2>/dev/null || true
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+            echo "Pushed MCP to ${WL_MCP_REPO}"
+          else
+            echo "No changes to push for MCP (${WL_MCP_REPO})"
           fi
-          echo "Pushed MCP to ${WL_MCP_REPO}"
 
       - name: Create Go SDK GitHub release
         run: |
@@ -299,14 +314,11 @@ jobs:
 
       - name: Publish Python SDK to PyPI
         if: env.WL_PUBLISH_PYPI == 'true'
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ env.WL_PYPI_TOKEN }}
         run: |
           cd api/python
           python -m pip install --upgrade pip build twine
           python -m build
-          twine upload --skip-existing dist/*
+          TWINE_USERNAME=__token__ TWINE_PASSWORD="$WL_PYPI_TOKEN" twine upload --skip-existing dist/*
 
   # ---------------------------------------------------------------------------
   # Summary: always runs, reports overall status
