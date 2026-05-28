@@ -136,6 +136,7 @@ func NewRouter(
 		{
 			user.GET("/me", handlers.User.GetUserInfo)
 			user.POST("", write("user", types.ActionWrite), handlers.User.CreateUser)
+			user.PUT("/me", write("user", types.ActionWrite), handlers.User.UpdateUser)
 			user.POST("/search", handlers.User.QueryUsers)
 		}
 
@@ -518,10 +519,10 @@ func NewRouter(
 			integrations.POST("/sync", handlers.Integration.Sync)
 			integrations.GET("/mappings", handlers.Integration.GetMappings)
 			integrations.GET("/config", handlers.Integration.GetConfig)
-// 			paddleGroup := integrations.Group("/paddle")
-// 			{
-// 				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
-// 			}
+			// 			paddleGroup := integrations.Group("/paddle")
+			// 			{
+			// 				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
+			// 			}
 		}
 
 		// Coupon routes

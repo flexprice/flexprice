@@ -20,6 +20,7 @@ import (
 type UserService interface {
 	GetUserInfo(ctx context.Context) (*dto.UserResponse, error)
 	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error)
+	UpdateUser(ctx context.Context, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error)
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 }
 
@@ -193,6 +194,56 @@ func (s *userService) ListUsersByFilter(ctx context.Context, filter *types.UserF
 	return &dto.ListUsersResponse{
 		Items:      userResponses,
 		Pagination: types.NewPaginationResponse(int(total), filter.GetLimit(), filter.GetOffset()),
+	}, nil
+}
+
+func (s *userService) UpdateUser(ctx context.Context, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	userID := types.GetUserID(ctx)
+	if userID == "" {
+		return nil, ierr.NewError("user ID is required").
+			WithHint("User ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		return nil, ierr.NewError("tenant ID is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	existingUser, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	mergedMetadata := make(map[string]string, len(existingUser.Metadata)+len(req.Metadata))
+	for key, value := range existingUser.Metadata {
+		mergedMetadata[key] = value
+	}
+	for key, value := range req.Metadata {
+		mergedMetadata[key] = value
+	}
+
+	existingUser.Metadata = mergedMetadata
+	existingUser.UpdatedBy = userID
+	existingUser.UpdatedAt = types.GetDefaultBaseModel(ctx).UpdatedAt
+
+	if err := s.userRepo.Update(ctx, existingUser); err != nil {
+		return nil, err
+	}
+
+	return &dto.UpdateUserResponse{
+		UserResponse: dto.NewUserResponse(existingUser, tenant),
 	}, nil
 }
 

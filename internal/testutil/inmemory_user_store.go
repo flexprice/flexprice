@@ -48,6 +48,25 @@ func (r *InMemoryUserStore) GetByEmail(ctx context.Context, email string) (*user
 	return user, nil
 }
 
+func (r *InMemoryUserStore) Update(ctx context.Context, updatedUser *user.User) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for key, u := range r.users {
+		if u.ID == updatedUser.ID && u.TenantID == updatedUser.TenantID {
+			if updatedUser.Metadata != nil {
+				u.Metadata = updatedUser.Metadata
+			}
+			u.UpdatedBy = updatedUser.UpdatedBy
+			u.UpdatedAt = updatedUser.UpdatedAt
+			r.users[key] = u
+			return nil
+		}
+	}
+
+	return ierr.NewError("user not found").Mark(ierr.ErrNotFound)
+}
+
 // GetByID retrieves a user by ID from the in-memory store
 func (r *InMemoryUserStore) GetByID(ctx context.Context, userID string) (*user.User, error) {
 	r.mu.Lock()
@@ -77,15 +96,15 @@ func (r *InMemoryUserStore) ListByFilter(ctx context.Context, filter *types.User
 		if u.TenantID != tenantID {
 			continue
 		}
-		
+
 		// Filter by type if specified
 		if filter.Type != nil && u.Type != *filter.Type {
 			continue
 		}
-		
+
 		result = append(result, u)
 	}
-	
+
 	return result, int64(len(result)), nil
 }
 
