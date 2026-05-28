@@ -3075,16 +3075,25 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		sub.CurrentPeriodStart = newPeriod.start
 		sub.CurrentPeriodEnd = newPeriod.end
 
-		// Final cancellation check
-		if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(newPeriod.end) {
+		// Final cancellation check — only fire when the termination date has already
+		// passed. If the subscription was advanced into its last billing period
+		// (newPeriod.end == CancelAt/EndDate but that date is still in the future),
+		// leave it ACTIVE. The inner-loop check (above) will cancel it correctly on
+		// the next cron run once the period actually expires.
+		if sub.CancelAtPeriodEnd && sub.CancelAt != nil &&
+			!sub.CancelAt.After(newPeriod.end) && !sub.CancelAt.After(now) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		}
 
-		// Check if the new period end matches the subscription end date
-		if sub.EndDate != nil && newPeriod.end.Equal(*sub.EndDate) {
+		// Check if the new period end matches the subscription end date AND the end
+		// date has already passed. Without the now-guard, backdated subscriptions
+		// whose catch-up advances them into their final period (newPeriod.end ==
+		// end_date, end_date still in the future) would be cancelled immediately
+		// instead of remaining active through that period.
+		if sub.EndDate != nil && newPeriod.end.Equal(*sub.EndDate) && !sub.EndDate.After(now) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 			sub.CancelledAt = sub.EndDate
-			s.Logger.InfowCtx(ctx, "subscription will be cancelled at new period end (end date reached)",
+			s.Logger.InfowCtx(ctx, "subscription cancelled at end date (end date reached)",
 				"subscription_id", sub.ID,
 				"new_period_end", newPeriod.end,
 				"end_date", *sub.EndDate)
