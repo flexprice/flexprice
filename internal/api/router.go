@@ -524,10 +524,10 @@ func NewRouter(
 			integrations.POST("/sync", handlers.Integration.Sync)
 			integrations.GET("/mappings", handlers.Integration.GetMappings)
 			integrations.GET("/config", handlers.Integration.GetConfig)
-			paddleGroup := integrations.Group("/paddle")
-			{
-				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
-			}
+			// paddleGroup := integrations.Group("/paddle")
+			// {
+			// 	paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
+			// }
 		}
 
 		// Coupon routes
