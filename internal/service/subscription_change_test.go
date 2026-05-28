@@ -1658,6 +1658,36 @@ func (s *SubscriptionChangeServiceTestSuite) TestIsFirstSubscriptionOpenInvoiceR
 	}
 }
 
+func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionChangeTrialingNoProration() {
+	ctx := s.GetContext()
+
+	// Arrange: create a trialing subscription
+	customer := s.createTestCustomer()
+	basicPlan := s.createTestPlan("Basic", decimal.NewFromFloat(10.00))
+	premiumPlan := s.createTestPlan("Premium", decimal.NewFromFloat(20.00))
+	testSub := s.createTestSubscription(basicPlan.ID, customer.ID)
+
+	// Force subscription into trialing state (no payment collected yet)
+	testSub.SubscriptionStatus = types.SubscriptionStatusTrialing
+	trialEnd := time.Now().UTC().AddDate(0, 0, 7)
+	testSub.TrialEnd = &trialEnd
+	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, testSub))
+
+	// Act: upgrade during trial with proration requested
+	req := s.createSubscriptionChangeRequest(premiumPlan.ID, types.ProrationBehaviorCreateProrations)
+	response, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, testSub.ID, req)
+
+	// Assert: no proration applied — ghost adjustment must not appear
+	require.NoError(s.T(), err)
+	assert.Nil(s.T(), response.ProrationApplied,
+		"trialing subscription plan change must not produce a proration adjustment")
+
+	// New subscription's opening invoice must have zero adjustment amount
+	openingInv := s.getOpeningInvoiceForSub(response.NewSubscription.ID)
+	assert.True(s.T(), openingInv.AmountDue.IsPositive(),
+		"new subscription invoice should charge the full plan amount")
+}
+
 // TestSubscriptionChangeServiceTestSuite runs the subscription change suite.
 func TestSubscriptionChangeServiceTestSuite(t *testing.T) {
 	suite.Run(t, new(SubscriptionChangeServiceTestSuite))

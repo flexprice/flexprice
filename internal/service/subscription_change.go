@@ -702,6 +702,12 @@ func (s *subscriptionChangeService) executeChange(
 	effectiveDate time.Time,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
 
+	// Trialing subscriptions have never been charged, so there is no unused credit to apply.
+	// Calculating proration would produce a ghost adjustment — skip it entirely.
+	// Capture this BEFORE CancelSubscription runs, because the in-place mutation of the
+	// subscription struct inside CancelSubscription would otherwise overwrite the status.
+	isTrialing := currentSub.SubscriptionStatus == types.SubscriptionStatusTrialing
+
 	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
@@ -716,8 +722,9 @@ func (s *subscriptionChangeService) executeChange(
 
 	// For immediate plan changes with create_prorations, we net the old subscription's proration
 	// credit against the new subscription's opening invoice (instead of issuing wallet credit).
+
 	cancelledSubCreditAmount := decimal.Zero
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 		prorationDetails, err := s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
 		if err != nil {
 			return nil, err
@@ -752,7 +759,7 @@ func (s *subscriptionChangeService) executeChange(
 		Metadata:      req.Metadata,
 	}
 
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 		prorationApplied, calcErr := s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
 		if calcErr != nil {
 			return nil, calcErr
