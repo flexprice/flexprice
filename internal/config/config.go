@@ -235,13 +235,14 @@ type OtelConfig struct {
 // env-var friendly. Use Headers when you need to send more than one header.
 // AuthHeader/AuthValue are merged into the resolved header set at startup.
 type OtelTracesConfig struct {
-	Enabled    bool              `mapstructure:"enabled" default:"false"`
-	Endpoint   string            `mapstructure:"endpoint" validate:"omitempty"` // host:port (grpc) or full URL (http)
-	Protocol   string            `mapstructure:"protocol" validate:"omitempty"` // overrides otel.protocol when non-empty
-	AuthHeader string            `mapstructure:"auth_header" validate:"omitempty"`
-	AuthValue  string            `mapstructure:"auth_value" validate:"omitempty"`
-	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"` // overrides otel.headers when non-empty
-	SampleRate float64           `mapstructure:"sample_rate" default:"1.0"`    // 0.0 - 1.0
+	Enabled             bool              `mapstructure:"enabled" default:"false"`
+	Endpoint            string            `mapstructure:"endpoint" validate:"omitempty"` // host:port (grpc) or full URL (http)
+	Protocol            string            `mapstructure:"protocol" validate:"omitempty"` // overrides otel.protocol when non-empty
+	AuthHeader          string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue           string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"` // overrides otel.headers when non-empty
+	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`    // 0.0 - 1.0
+	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
 }
 
 // OtelLogsConfig configures OTLP log export. See OtelTracesConfig for the
@@ -652,6 +653,7 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("otel.traces.auth_header", "FLEXPRICE_OTEL_TRACES_AUTH_HEADER")
 	_ = v.BindEnv("otel.traces.auth_value", "FLEXPRICE_OTEL_TRACES_AUTH_VALUE")
 	_ = v.BindEnv("otel.traces.sample_rate", "FLEXPRICE_OTEL_TRACES_SAMPLE_RATE")
+	_ = v.BindEnv("otel.traces.storage_spans_enabled", "FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED")
 	_ = v.BindEnv("otel.logs.enabled", "FLEXPRICE_OTEL_LOGS_ENABLED")
 	_ = v.BindEnv("otel.logs.endpoint", "FLEXPRICE_OTEL_LOGS_ENDPOINT")
 	_ = v.BindEnv("otel.logs.protocol", "FLEXPRICE_OTEL_LOGS_PROTOCOL")

@@ -29,14 +29,17 @@ func NewClickHouseStore(config *config.Configuration, tracingService *tracing.Se
 	}, nil
 }
 
-// GetConn returns the underlying ClickHouse driver connection.
+// GetConn returns the ClickHouse driver connection.
 //
-// Per-query spans (clickhouse.select, clickhouse.query_row, clickhouse.ping,
-// clickhouse.batch_flush) are currently disabled to keep the Sentry/OTLP span
-// volume low. The tracedConn wrapper below is kept in the file so we can
-// re-enable selectively by switching this to `return &tracedConn{...}` again
-// once we have a feel for cost at scale.
+// When otel.traces.storage_spans_enabled is true (env:
+// FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED=true), the connection is wrapped
+// in tracedConn so every Select/QueryRow/Ping/Batch call emits a child span.
+// The flag defaults to false to avoid span volume explosion before operators
+// have a feel for the cost at scale.
 func (s *ClickHouseStore) GetConn() driver.Conn {
+	if s.tracing != nil && s.tracing.IsStorageSpansEnabled() {
+		return &tracedConn{conn: s.conn, tracing: s.tracing}
+	}
 	return s.conn
 }
 

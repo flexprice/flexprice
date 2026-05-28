@@ -6,8 +6,11 @@ import (
 	"github.com/flexprice/flexprice/internal/tracing"
 )
 
-// StartRepositorySpan creates a new span for a repository operation.
-// Currently a no-op; preserved as a hook for selective re-enablement.
+// StartRepositorySpan creates a span for a ClickHouse repository operation.
+//
+// Currently a no-op at the repository level; ClickHouse query-level spans are
+// enabled via the tracedConn wrapper in internal/clickhouse when
+// FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED=true.
 func StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) *tracing.Span {
 	_ = ctx
 	_ = repository

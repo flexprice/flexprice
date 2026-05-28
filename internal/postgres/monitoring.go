@@ -27,18 +27,23 @@ func NewTracingClient(client IClient, tracingSvc *tracing.Service, logger *logge
 
 // WithTx wraps the given function in a transaction.
 //
-// We deliberately do NOT start a separate "postgres.transaction" span here.
-// Under the old sentry-go SDK, child spans were embedded inside the parent
-// transaction's payload and never appeared as standalone rows. With OTel +
-// Sentry's OTLP integration, every span becomes its own searchable row, which
-// clutters the trace list with one extra row per HTTP request. The timing
-// information for the transaction is already captured implicitly by the parent
-// HTTP span (otelgin); per-statement detail will come from otelpgx when added.
-//
-// We still tag the parent span in Writer/Reader below so observers can see
-// which endpoint each query hit.
+// A "postgres.transaction" child span is created only when
+// otel.traces.storage_spans_enabled is true. At default (false) the span is
+// skipped to avoid one extra row per HTTP request in Sentry/SigNoz; the parent
+// HTTP span from otelgin already captures total request latency.
 func (c *TracingClient) WithTx(ctx context.Context, fn func(context.Context) error) error {
-	return c.client.WithTx(ctx, fn)
+	if !c.tracing.IsStorageSpansEnabled() {
+		return c.client.WithTx(ctx, fn)
+	}
+	span, spanCtx := c.tracing.StartDBSpan(ctx, "postgres.transaction", nil)
+	defer span.Finish()
+	err := c.client.WithTx(spanCtx, fn)
+	if err != nil {
+		span.SetStatusError(err)
+	} else {
+		span.SetStatusOK()
+	}
+	return err
 }
 
 // TxFromContext returns the transaction from context if it exists.

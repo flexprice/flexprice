@@ -6,9 +6,11 @@ import (
 	"github.com/flexprice/flexprice/internal/tracing"
 )
 
-// StartRepositorySpan creates a new span for a repository operation.
-// Currently disabled to keep span volume in check; retained as a hook for the
-// per-repo wrappers so we can re-enable selectively without touching callers.
+// StartRepositorySpan creates a span for an Ent/Postgres repository operation.
+//
+// Currently a no-op at the repository level; Postgres transaction-level spans
+// are enabled via TracingClient.WithTx when
+// FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED=true.
 func StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) *tracing.Span {
 	_ = ctx
 	_ = repository

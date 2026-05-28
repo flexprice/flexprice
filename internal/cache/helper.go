@@ -36,8 +36,11 @@ func UnmarshalCacheValue[T any](value interface{}) (*T, bool) {
 	return nil, false
 }
 
-// StartCacheSpan creates a new span for a cache operation.
-// Currently a no-op; preserved as a hook for selective re-enablement.
+// StartCacheSpan creates a span for a cache operation.
+//
+// Currently a no-op; cache-level spans are not yet config-gated.
+// Set FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED=true to enable DB and
+// ClickHouse storage spans; per-cache spans will follow in a future pass.
 func StartCacheSpan(ctx context.Context, cache, operation string, params map[string]interface{}) *tracing.Span {
 	_ = ctx
 	_ = cache

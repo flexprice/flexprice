@@ -246,6 +246,14 @@ func (s *Service) IsSentryEnabled() bool {
 	return s.sentryEnabled
 }
 
+// IsStorageSpansEnabled reports whether per-query storage spans (DB, cache,
+// ClickHouse) should be created. Controlled by
+// FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED (default: false) to avoid span
+// volume explosion before operators have a feel for the cost.
+func (s *Service) IsStorageSpansEnabled() bool {
+	return s.tracingEnabled && s.cfg.Otel.Traces.StorageSpansEnabled
+}
+
 // Tracer returns the underlying OTel tracer (for callers that prefer the raw API).
 func (s *Service) Tracer() trace.Tracer {
 	return s.tracer
