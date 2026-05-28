@@ -2172,6 +2172,7 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "email", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "type", Type: field.TypeString, Default: "user"},
 		{Name: "roles", Type: field.TypeJSON, Nullable: true},
@@ -2185,7 +2186,7 @@ var (
 			{
 				Name:    "idx_user_email_unique",
 				Unique:  true,
-				Columns: []*schema.Column{UsersColumns[7]},
+				Columns: []*schema.Column{UsersColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "status = 'published' AND email IS NOT NULL AND email != ''",
 				},
@@ -2193,7 +2194,7 @@ var (
 			{
 				Name:    "idx_user_tenant_status",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[1], UsersColumns[2], UsersColumns[8]},
+				Columns: []*schema.Column{UsersColumns[1], UsersColumns[2], UsersColumns[9]},
 			},
 			{
 				Name:    "idx_user_tenant_created_at",

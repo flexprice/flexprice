@@ -73,6 +73,38 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
+// @Summary Update current user
+// @ID updateUser
+// @Description Update the current authenticated user. Only metadata updates are supported.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.UpdateUserRequest true "Update current user request (metadata only)"
+// @Success 200 {object} dto.UpdateUserResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /users/me [put]
+func (h *UserHandler) UpdateUser(c *gin.Context) {
+	var req dto.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Errorw("invalid request body", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request. Provide metadata object.").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.userService.UpdateUser(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.Errorw("failed to update user", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Query users
 // @ID queryUser
 // @Description Use when listing or searching service accounts in an admin UI, or when auditing who has API access and which roles they have.

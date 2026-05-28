@@ -96,6 +96,12 @@ func (uc *UserCreate) SetNillableUpdatedBy(s *string) *UserCreate {
 	return uc
 }
 
+// SetMetadata sets the "metadata" field.
+func (uc *UserCreate) SetMetadata(m map[string]string) *UserCreate {
+	uc.mutation.SetMetadata(m)
+	return uc
+}
+
 // SetEmail sets the "email" field.
 func (uc *UserCreate) SetEmail(s string) *UserCreate {
 	uc.mutation.SetEmail(s)
@@ -273,6 +279,10 @@ func (uc *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := uc.mutation.UpdatedBy(); ok {
 		_spec.SetField(user.FieldUpdatedBy, field.TypeString, value)
 		_node.UpdatedBy = value
+	}
+	if value, ok := uc.mutation.Metadata(); ok {
+		_spec.SetField(user.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
 	}
 	if value, ok := uc.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
