@@ -80,18 +80,18 @@ otel:
   insecure: false
 
   traces:
-    enabled: true
-    endpoint: "https://o4507167699435520.ingest.us.sentry.io/api/4508519084130304/integration/otlp/v1/traces"
+    enabled: false
+    endpoint: "" # Set via FLEXPRICE_OTEL_TRACES_ENDPOINT
     protocol: "http"
-    headers:
-      x-sentry-auth: "sentry sentry_key=3fe19a52f5df8388a8eac108ca400162"
+    auth_header: "x-sentry-auth" # Set auth_value via FLEXPRICE_OTEL_TRACES_AUTH_VALUE
+    auth_value: ""
     sample_rate: 1.0
 
   logs:
-    enabled: true
-    endpoint: "ingest.in2.signoz.cloud:443"
-    headers:
-      signoz-ingestion-key: "Jfd6fk86mY18ufQ65Rewwtwp68tLIjocPTXM"
+    enabled: false
+    endpoint: "" # Set via FLEXPRICE_OTEL_LOGS_ENDPOINT
+    auth_header: "signoz-ingestion-key" # Set auth_value via FLEXPRICE_OTEL_LOGS_AUTH_VALUE
+    auth_value: ""
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling

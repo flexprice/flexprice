@@ -145,8 +145,8 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 	}
 
 	return &tracedBatch{
-		batch: batch,
-		// sentry: tc.tracing,
+		batch:   batch,
+		tracing: tc.tracing,
 	}, nil
 }
 

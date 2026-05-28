@@ -129,6 +129,9 @@ func (s *Service) initTracer(ctx context.Context) error {
 	if sampleRate <= 0 {
 		sampleRate = 1.0
 	}
+	if sampleRate > 1.0 {
+		sampleRate = 1.0
+	}
 	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRate))
 
 	tp := sdktrace.NewTracerProvider(
@@ -212,7 +215,9 @@ func (s *Service) newResource(ctx context.Context) (*resource.Resource, error) {
 func (s *Service) shutdown(ctx context.Context) {
 	if s.tracerProvider != nil {
 		s.logger.Info("Shutting down OTel tracer provider")
-		_ = s.tracerProvider.Shutdown(ctx)
+		if err := s.tracerProvider.Shutdown(ctx); err != nil {
+			s.logger.Warnw("OTel tracer provider shutdown error", "error", err)
+		}
 	}
 	if s.sentryEnabled {
 		s.logger.Info("Flushing Sentry events before shutdown")

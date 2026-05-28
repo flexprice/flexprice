@@ -62,19 +62,22 @@ func (w *workflowInboundInterceptor) ExecuteWorkflow(ctx workflow.Context, in *i
 
 	result, err := w.Next.ExecuteWorkflow(ctx, in)
 
-	// Workflow body is deterministic; CaptureException is safe only after Next returns.
-	if err != nil && w.tracing.IsSentryEnabled() {
+	if err != nil {
 		logger.Error("Workflow execution failed, capturing in Sentry",
 			"workflow_type", workflowInfo.WorkflowType.Name,
 			"workflow_id", workflowInfo.WorkflowExecution.ID,
 			"run_id", workflowInfo.WorkflowExecution.RunID,
 			"error", err,
 		)
-		w.tracing.CaptureException(fmt.Errorf("temporal workflow failed: %s (ID: %s) - %w",
-			workflowInfo.WorkflowType.Name,
-			workflowInfo.WorkflowExecution.ID,
-			err,
-		))
+		// Guard against replay: replayed workflows re-run deterministically and
+		// would emit duplicate Sentry events for the same failure.
+		if w.tracing.IsSentryEnabled() && !workflow.IsReplaying(ctx) {
+			w.tracing.CaptureException(fmt.Errorf("temporal workflow failed: %s (ID: %s) - %w",
+				workflowInfo.WorkflowType.Name,
+				workflowInfo.WorkflowExecution.ID,
+				err,
+			))
+		}
 	}
 
 	return result, err

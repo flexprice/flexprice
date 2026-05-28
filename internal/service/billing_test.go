@@ -2430,7 +2430,6 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 				PeriodStart:  s.testData.subscription.CurrentPeriodStart,
 				PeriodEnd:    s.testData.subscription.CurrentPeriodEnd,
 			})
-			lineItems, totalAmount := usageRes.LineItems, usageRes.TotalAmount
 
 			if tt.wantErr {
 				s.Error(err)
@@ -2438,6 +2437,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 			}
 
 			s.NoError(err)
+			lineItems, totalAmount := usageRes.LineItems, usageRes.TotalAmount
 			s.Len(lineItems, tt.expectedLineItems, "Expected %d line items, got %d", tt.expectedLineItems, len(lineItems))
 			s.True(tt.expectedTotalAmount.Equal(totalAmount),
 				"Expected total amount %s, got %s for test case %s", tt.expectedTotalAmount, totalAmount, tt.name)
