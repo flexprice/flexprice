@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	domainAuth "github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -20,6 +23,24 @@ type UserServiceSuite struct {
 	userService *userService
 	userRepo    *testutil.InMemoryUserStore
 	tenantRepo  *testutil.InMemoryTenantStore
+}
+
+// failingUserRepo returns an error for Create to simulate DB failure.
+type failingUserRepo struct {
+	*testutil.InMemoryUserStore
+	createErr error
+}
+
+func (r *failingUserRepo) Create(ctx context.Context, u *user.User) error {
+	return r.createErr
+}
+
+// authRepoSpy records create/delete calls.
+type authRepoSpy struct {
+	createdAuth   *domainAuth.Auth
+	deletedUserID string
+	createCalls   int
+	deleteCalls   int
 }
 
 func TestUserService(t *testing.T) {
@@ -226,4 +247,77 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 			}
 		})
 	}
+}
+
+func (r *authRepoSpy) CreateAuth(ctx context.Context, a *domainAuth.Auth) error {
+	r.createdAuth = a
+	r.createCalls++
+	return nil
+}
+
+func (r *authRepoSpy) GetAuthByUserID(ctx context.Context, userID string) (*domainAuth.Auth, error) {
+	if r.createdAuth != nil && r.createdAuth.UserID == userID {
+		return r.createdAuth, nil
+	}
+	return nil, errors.New("not found")
+}
+
+func (r *authRepoSpy) UpdateAuth(ctx context.Context, a *domainAuth.Auth) error {
+	return nil
+}
+
+func (r *authRepoSpy) DeleteAuth(ctx context.Context, userID string) error {
+	r.deletedUserID = userID
+	r.deleteCalls++
+	return nil
+}
+
+func (s *UserServiceSuite) TestInviteUser_CompensatingDeleteOnUserCreateFailure() {
+	ctx := testutil.SetupContext()
+	// set tenant and actor
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "test-actor")
+
+	// prepare tenant repo with default tenant
+	tenantRepo := testutil.NewInMemoryTenantStore()
+	_ = tenantRepo.Create(ctx, &tenant.Tenant{ID: types.DefaultTenantID, Name: "Test Tenant"})
+
+	// prepare settings service expected by InviteUser
+	settingsSvc := &settingsService{
+		ServiceParams: ServiceParams{
+			SettingsRepo: testutil.NewInMemorySettingsStore(),
+		},
+	}
+
+	// auth spy and failing user repo
+	authSpy := &authRepoSpy{}
+	userRepo := &failingUserRepo{
+		InMemoryUserStore: testutil.NewInMemoryUserStore(),
+		createErr:         errors.New("forced user create failure"),
+	}
+
+	svc := &userService{
+		userRepo:        userRepo,
+		tenantRepo:      tenantRepo,
+		authRepo:        authSpy,
+		cfg:             &config.Configuration{Auth: config.AuthConfig{Provider: types.AuthProviderFlexprice}},
+		rbacService:     nil,
+		supabaseAuth:    nil,
+		settingsService: settingsSvc,
+		logger:          logger.NewNoopLogger(),
+	}
+
+	// Call InviteUser which should attempt CreateAuth then fail on userRepo.Create,
+	// and then call DeleteAuth as compensation.
+	resp, pw, err := svc.InviteUser(ctx, &dto.CreateUserRequest{Type: types.UserTypeUser, Email: "rollback@example.com"}, "test-actor")
+
+	s.Error(err)
+	s.Nil(resp)
+	s.Nil(pw)
+
+	// Validate that CreateAuth was called once and DeleteAuth was called once
+	s.Equal(1, authSpy.createCalls, "expected CreateAuth to be called once")
+	s.Equal(1, authSpy.deleteCalls, "expected DeleteAuth to be called once")
+	s.NotNil(authSpy.createdAuth, "created auth should be recorded")
+	s.Equal(authSpy.createdAuth.UserID, authSpy.deletedUserID, "deleted user id should match created auth user id")
 }

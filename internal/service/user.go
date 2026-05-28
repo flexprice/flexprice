@@ -283,6 +283,35 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 		return nil, nil, err
 	}
 	if err := s.userRepo.Create(ctx, newUser); err != nil {
+		// Flexprice path: Consider deleting the provisioned auth record in case of user creation failure to avoid orphaned records, depending on your consistency requirements.
+		if inviteResp.AuthRecord != nil {
+			if rollBackErr := s.authRepo.DeleteAuth(ctx, inviteResp.AuthRecord.UserID); rollBackErr != nil {
+				if s.logger != nil {
+					s.logger.Warnw("failed to roll back auth record after user create failure",
+						"user_id", inviteResp.AuthRecord.UserID,
+						"email", req.Email,
+						"rollback_error", rollBackErr,
+						"create_error", err,
+					)
+				}
+			} else {
+				if s.logger != nil {
+					s.logger.Infow("rolled back auth record after user create failure",
+						"user_id", inviteResp.AuthRecord.UserID,
+						"email", req.Email,
+					)
+				}
+			}
+		} else if inviteResp.AuthRecord == nil && s.logger != nil && s.cfg != nil && s.cfg.Auth.Provider == types.AuthProviderSupabase {
+			// TODO: Handle Supabase partial-failure recovery.
+			// Supabase path: If Supabase user creation succeeds but local user creation fails,
+			// an orphaned Supabase user may remain and require manual remediation.
+			s.logger.Warnw("user create failed after remote auth provisioning; manual remediation may be required",
+				"email", req.Email,
+				"provider", s.cfg.Auth.Provider,
+				"create_error", err,
+			)
+		}
 		return nil, nil, err
 	}
 	return newUser, &password, nil
