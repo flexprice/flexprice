@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -35,6 +36,7 @@ func (s *EntityIntegrationMappingServiceSuite) setupService() {
 		DB:                           s.GetDB(),
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
 		CustomerRepo:                 stores.CustomerRepo,
+		ConnectionRepo:               stores.ConnectionRepo,
 		WebhookPublisher:             s.GetWebhookPublisher(),
 		IntegrationFactory:           s.GetIntegrationFactory(),
 	})
@@ -198,6 +200,23 @@ func (s *EntityIntegrationMappingServiceSuite) seedCustomer(id string) {
 	require.NoError(s.T(), err)
 }
 
+func (s *EntityIntegrationMappingServiceSuite) seedConnection(provider types.SecretProvider) {
+	ctx := s.testCtx()
+	err := s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            "conn_" + string(provider),
+		Name:          string(provider) + " connection",
+		ProviderType:  provider,
+		EnvironmentID: "test_env",
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedBy: types.DefaultUserID,
+			UpdatedBy: types.DefaultUserID,
+		},
+	})
+	require.NoError(s.T(), err)
+}
+
 // TestLinkIntegrationMapping_ValidationMissingFields ensures required fields are enforced.
 func (s *EntityIntegrationMappingServiceSuite) TestLinkIntegrationMapping_ValidationMissingFields() {
 	ctx := s.testCtx()
@@ -236,6 +255,7 @@ func (s *EntityIntegrationMappingServiceSuite) TestLinkIntegrationMapping_Invali
 // TestLinkIntegrationMapping_CreatesNewMapping verifies a mapping is created when none exists.
 func (s *EntityIntegrationMappingServiceSuite) TestLinkIntegrationMapping_CreatesNewMapping() {
 	ctx := s.testCtx()
+	s.seedConnection(types.SecretProviderRazorpay)
 	s.seedCustomer("cust_razorpay_001")
 
 	resp, err := s.service.LinkIntegrationMapping(ctx, dto.LinkIntegrationMappingRequest{
@@ -260,6 +280,7 @@ func (s *EntityIntegrationMappingServiceSuite) TestLinkIntegrationMapping_Create
 // the provider entity ID instead of creating a duplicate.
 func (s *EntityIntegrationMappingServiceSuite) TestLinkIntegrationMapping_UpsertExistingMapping() {
 	ctx := s.testCtx()
+	s.seedConnection(types.SecretProviderRazorpay)
 	s.seedCustomer("cust_razorpay_002")
 
 	req := dto.LinkIntegrationMappingRequest{
@@ -297,6 +318,7 @@ func (s *EntityIntegrationMappingServiceSuite) TestLinkIntegrationMapping_Upsert
 // razorpay_customer_id onto the customer metadata.
 func (s *EntityIntegrationMappingServiceSuite) TestLinkIntegrationMapping_CustomerMetadataUpdated() {
 	ctx := s.testCtx()
+	s.seedConnection(types.SecretProviderRazorpay)
 	s.seedCustomer("cust_meta_001")
 
 	_, err := s.service.LinkIntegrationMapping(ctx, dto.LinkIntegrationMappingRequest{
