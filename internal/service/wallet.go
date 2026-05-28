@@ -3036,17 +3036,10 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		// RealTimeCreditBalance = (currency balance - pending charges) / conversion_rate
 		ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
 
-		// Trigger auto top-up if enabled; threshold check is handled internally by triggerAutoTopup
-		if autoTopupEnabled {
-			if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
-					"error", err,
-					"wallet_id", w.ID,
-				)
-			}
-		}
-
-		// Process wallet-level balance alert if enabled
+		// Process wallet-level balance alert BEFORE triggering auto top-up so the
+		// pre-topup state (e.g. Warning) is recorded first. The nested
+		// CheckWalletBalanceAlert call that fires inside processWalletOperation
+		// during the top-up credit will then log the post-topup state (ok).
 		if walletAlertsEnabled {
 			s.Logger.InfowCtx(ctx, "wallet balance details for alert check",
 				"wallet_id", w.ID,
@@ -3074,6 +3067,18 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 					"error", err,
 					"wallet_id", w.ID,
 					"event_id", req.ID,
+				)
+			}
+		}
+
+		// Trigger auto top-up after alerts have been logged. The nested
+		// CheckWalletBalanceAlert that fires inside processWalletOperation during
+		// the top-up credit will record the recovered (ok) state automatically.
+		if autoTopupEnabled {
+			if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
+				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
+					"error", err,
+					"wallet_id", w.ID,
 				)
 			}
 		}
