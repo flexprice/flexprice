@@ -235,6 +235,21 @@ func ConvertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			Paddle: paddleMetadata,
 		}
 
+	case types.SecretProviderWhop:
+		whopMetadata := &types.WhopConnectionMetadata{}
+		if v, ok := flatMetadata["api_key"].(string); ok {
+			whopMetadata.APIKey = v
+		}
+		if v, ok := flatMetadata["company_id"].(string); ok {
+			whopMetadata.CompanyID = v
+		}
+		if v, ok := flatMetadata["product_id"].(string); ok {
+			whopMetadata.ProductID = v
+		}
+		return types.ConnectionMetadata{
+			Whop: whopMetadata,
+		}
+
 	case types.SecretProviderZohoBooks:
 		zohoMetadata := &types.ZohoBooksConnectionMetadata{}
 		if v, ok := flatMetadata["client_id"].(string); ok {
@@ -310,7 +325,7 @@ type UpdateConnectionRequest struct {
 func updateRequestMetadataStructPopulated(cm types.ConnectionMetadata) bool {
 	return cm.Stripe != nil || cm.S3 != nil || cm.HubSpot != nil || cm.Razorpay != nil ||
 		cm.Chargebee != nil || cm.QuickBooks != nil || cm.Nomod != nil || cm.Moyasar != nil ||
-		cm.Paddle != nil || cm.ZohoBooks != nil || cm.Generic != nil || cm.Settings != nil
+		cm.Paddle != nil || cm.ZohoBooks != nil || cm.Whop != nil || cm.Generic != nil || cm.Settings != nil
 }
 
 // UnmarshalJSON accepts either nested encrypted_secret_data (e.g. {"zoho_books":{"webhook_secret":"..."}})

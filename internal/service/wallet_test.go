@@ -2287,3 +2287,573 @@ func (s *WalletServiceSuite) TestGetCreditsAvailableBreakdown() {
 	s.True(breakdown.Free.Equal(decimal.NewFromInt(100)),
 		"Expected free credits to be 100, got %s", breakdown.Free)
 }
+
+// ---------------------------------------------------------------------------
+// WalletAutoTopupInvoiceSuite
+// ---------------------------------------------------------------------------
+
+// WalletAutoTopupInvoiceSuite exercises the deduplication guard implemented in
+// hasPendingAutoTopupInvoice and triggerAutoTopup.
+type WalletAutoTopupInvoiceSuite struct {
+	testutil.BaseServiceTestSuite
+	service  WalletService
+	customer *customer.Customer
+	wallet   *wallet.Wallet
+}
+
+func TestWalletAutoTopupInvoice(t *testing.T) {
+	suite.Run(t, new(WalletAutoTopupInvoiceSuite))
+}
+
+func (s *WalletAutoTopupInvoiceSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	s.setupService()
+	s.setupTestData()
+}
+
+// GetContext overrides the base context to include an environment ID so the
+// in-memory invoice filter functions correctly (mirrors WalletServiceSuite).
+func (s *WalletAutoTopupInvoiceSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
+func (s *WalletAutoTopupInvoiceSuite) TearDownTest() {
+	s.BaseServiceTestSuite.TearDownTest()
+	s.BaseServiceTestSuite.ClearStores()
+}
+
+func (s *WalletAutoTopupInvoiceSuite) setupService() {
+	stores := s.GetStores()
+	pubsub := testutil.NewInMemoryPubSub()
+	s.service = NewWalletService(ServiceParams{
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               stores.WalletRepo,
+		SubRepo:                  stores.SubscriptionRepo,
+		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
+		PlanRepo:                 stores.PlanRepo,
+		PriceRepo:                stores.PriceRepo,
+		EventRepo:                stores.EventRepo,
+		MeterRepo:                stores.MeterRepo,
+		CustomerRepo:             stores.CustomerRepo,
+		InvoiceRepo:              stores.InvoiceRepo,
+		EntitlementRepo:          stores.EntitlementRepo,
+		FeatureRepo:              stores.FeatureRepo,
+		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		SettingsRepo:             stores.SettingsRepo,
+		AlertLogsRepo:            stores.AlertLogsRepo,
+		FeatureUsageRepo:         stores.FeatureUsageRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
+	})
+}
+
+func (s *WalletAutoTopupInvoiceSuite) setupTestData() {
+	ctx := s.GetContext()
+
+	// Create a customer.
+	s.customer = &customer.Customer{
+		ID:         "cust_autotopup",
+		ExternalID: "ext_cust_autotopup",
+		Name:       "AutoTopup Customer",
+		Email:      "autotopup@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, s.customer))
+
+	// Create a wallet with auto-topup enabled (invoicing mode),
+	// threshold=5 and amount=10. Initial balance is 3 (below threshold).
+	threshold := decimal.NewFromInt(5)
+	amount := decimal.NewFromInt(10)
+	enabled := true
+	invoicing := true
+
+	s.wallet = &wallet.Wallet{
+		ID:          "wallet_autotopup",
+		CustomerID:  s.customer.ID,
+		Currency:    "usd",
+		WalletType:  types.WalletTypePrePaid,
+		WalletStatus: types.WalletStatusActive,
+		Balance:     decimal.NewFromInt(3), // 3 credits * conversion_rate 1.0 = $3
+		CreditBalance: decimal.NewFromInt(3),
+		ConversionRate:      decimal.NewFromFloat(1.0),
+		TopupConversionRate: decimal.NewFromFloat(1.0),
+		AutoTopup: &types.AutoTopup{
+			Enabled:   &enabled,
+			Threshold: &threshold,
+			Amount:    &amount,
+			Invoicing: &invoicing,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(ctx, s.wallet))
+}
+
+// svc casts the WalletService interface to the concrete *walletService so we
+// can call unexported helpers directly (tests are in the same package).
+func (s *WalletAutoTopupInvoiceSuite) svc() *walletService {
+	return s.service.(*walletService)
+}
+
+// helper to count WALLET_AUTO_TOPUP invoices in the store for our customer.
+func (s *WalletAutoTopupInvoiceSuite) countAutoTopupInvoices() int {
+	ctx := s.GetContext()
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.CustomerID = s.customer.ID
+	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.NoError(err)
+	return len(invoices)
+}
+
+// ---------------------------------------------------------------------------
+// Test 1 – no invoices exist → hasPendingAutoTopupInvoice returns false.
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestHasPendingAutoTopupInvoice_NoneExist() {
+	ctx := s.GetContext()
+	has, err := s.svc().hasPendingAutoTopupInvoice(ctx, s.customer.ID)
+	s.NoError(err)
+	s.False(has, "expected no pending auto-topup invoice when none exist")
+}
+
+// ---------------------------------------------------------------------------
+// Test 2 – a FINALIZED / PENDING invoice exists → returns true.
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestHasPendingAutoTopupInvoice_PendingExists() {
+	ctx := s.GetContext()
+
+	inv := &invoice.Invoice{
+		ID:            "inv_pending_001",
+		CustomerID:    s.customer.ID,
+		InvoiceStatus: types.InvoiceStatusFinalized,
+		PaymentStatus: types.PaymentStatusPending,
+		BillingReason: string(types.InvoiceBillingReasonWalletAutoTopup),
+		Currency:      "usd",
+		InvoiceType:   types.InvoiceTypeOneOff,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+
+	has, err := s.svc().hasPendingAutoTopupInvoice(ctx, s.customer.ID)
+	s.NoError(err)
+	s.True(has, "expected pending auto-topup invoice to be detected")
+}
+
+// ---------------------------------------------------------------------------
+// Test 3 – a PAID invoice exists → should NOT block (returns false).
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestHasPendingAutoTopupInvoice_PaidDoesNotBlock() {
+	ctx := s.GetContext()
+
+	inv := &invoice.Invoice{
+		ID:            "inv_paid_001",
+		CustomerID:    s.customer.ID,
+		InvoiceStatus: types.InvoiceStatusFinalized,
+		PaymentStatus: types.PaymentStatusSucceeded,
+		BillingReason: string(types.InvoiceBillingReasonWalletAutoTopup),
+		Currency:      "usd",
+		InvoiceType:   types.InvoiceTypeOneOff,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+
+	has, err := s.svc().hasPendingAutoTopupInvoice(ctx, s.customer.ID)
+	s.NoError(err)
+	s.False(has, "a paid auto-topup invoice must NOT block a new top-up")
+}
+
+// ---------------------------------------------------------------------------
+// Test 4 – calling triggerAutoTopup twice creates only ONE invoice.
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_GuardPreventsSecondInvoice() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3) // below threshold of 5
+
+	// First call – should create one invoice.
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	s.NoError(err)
+	s.Equal(1, s.countAutoTopupInvoices(), "expected 1 auto-topup invoice after first trigger")
+
+	// Second call – guard must detect the pending invoice and skip.
+	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	s.NoError(err)
+	s.Equal(1, s.countAutoTopupInvoices(), "expected still 1 auto-topup invoice after second trigger (guard blocked it)")
+}
+
+// ---------------------------------------------------------------------------
+// Test 5 – after the invoice is paid, a new call creates a second invoice.
+// ---------------------------------------------------------------------------
+
+func (s *WalletAutoTopupInvoiceSuite) TestTriggerAutoTopup_AllowsNewInvoiceAfterPayment() {
+	ctx := s.GetContext()
+	balance := decimal.NewFromInt(3) // below threshold of 5
+
+	// First trigger – creates one pending invoice.
+	err := s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	s.NoError(err)
+	s.Equal(1, s.countAutoTopupInvoices(), "expected 1 auto-topup invoice after first trigger")
+
+	// Fetch the invoice and mark it as paid.
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.CustomerID = s.customer.ID
+	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.NoError(err)
+	s.Require().Len(invoices, 1, "expected exactly one auto-topup invoice before payment")
+
+	invoices[0].PaymentStatus = types.PaymentStatusSucceeded
+	s.NoError(s.GetStores().InvoiceRepo.Update(ctx, invoices[0]))
+
+	// Second trigger – guard no longer blocks because invoice is paid.
+	// Re-read wallet to get fresh state (balance still low since no actual credit was added).
+	err = s.svc().triggerAutoTopup(ctx, s.wallet, balance)
+	s.NoError(err)
+	s.Equal(2, s.countAutoTopupInvoices(), "expected 2 auto-topup invoices after payment cleared the guard")
+}
+
+// ---------------------------------------------------------------------------
+// CheckWalletBalanceAlertSuite
+// ---------------------------------------------------------------------------
+
+// CheckWalletBalanceAlertSuite exercises the orchestration logic in
+// CheckWalletBalanceAlert: settings resolution ordering, conditional balance
+// fetch, alert processing, and auto top-up — all as independent paths.
+type CheckWalletBalanceAlertSuite struct {
+	testutil.BaseServiceTestSuite
+	service  WalletService
+	customer *customer.Customer
+}
+
+func TestCheckWalletBalanceAlert(t *testing.T) {
+	suite.Run(t, new(CheckWalletBalanceAlertSuite))
+}
+
+func (s *CheckWalletBalanceAlertSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
+func (s *CheckWalletBalanceAlertSuite) SetupTest() {
+	s.BaseServiceTestSuite.SetupTest()
+	s.setupService()
+
+	ctx := s.GetContext()
+	s.customer = &customer.Customer{
+		ID:         "cust_bal_alert",
+		ExternalID: "ext_cust_bal_alert",
+		Name:       "Balance Alert Customer",
+		Email:      "balalert@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, s.customer))
+}
+
+func (s *CheckWalletBalanceAlertSuite) TearDownTest() {
+	s.BaseServiceTestSuite.TearDownTest()
+	s.BaseServiceTestSuite.ClearStores()
+}
+
+func (s *CheckWalletBalanceAlertSuite) setupService() {
+	stores := s.GetStores()
+	pubsub := testutil.NewInMemoryPubSub()
+	s.service = NewWalletService(ServiceParams{
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               stores.WalletRepo,
+		SubRepo:                  stores.SubscriptionRepo,
+		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
+		PlanRepo:                 stores.PlanRepo,
+		PriceRepo:                stores.PriceRepo,
+		EventRepo:                stores.EventRepo,
+		MeterRepo:                stores.MeterRepo,
+		CustomerRepo:             stores.CustomerRepo,
+		InvoiceRepo:              stores.InvoiceRepo,
+		EntitlementRepo:          stores.EntitlementRepo,
+		FeatureRepo:              stores.FeatureRepo,
+		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		SettingsRepo:             stores.SettingsRepo,
+		AlertLogsRepo:            stores.AlertLogsRepo,
+		FeatureUsageRepo:         stores.FeatureUsageRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
+	})
+}
+
+// makeEvent builds a minimal WalletBalanceAlertEvent for the suite's customer.
+func (s *CheckWalletBalanceAlertSuite) makeEvent() *wallet.WalletBalanceAlertEvent {
+	ctx := s.GetContext()
+	return &wallet.WalletBalanceAlertEvent{
+		ID:            types.GenerateUUIDWithPrefix("evt"),
+		CustomerID:    s.customer.ID,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		Source:        "test",
+	}
+}
+
+// makeWallet creates and persists a wallet for the suite's customer.
+func (s *CheckWalletBalanceAlertSuite) makeWallet(id string, balance decimal.Decimal, alertSettings *types.AlertSettings, autoTopup *types.AutoTopup) *wallet.Wallet {
+	ctx := s.GetContext()
+	w := &wallet.Wallet{
+		ID:                  id,
+		CustomerID:          s.customer.ID,
+		Currency:            "usd",
+		WalletType:          types.WalletTypePrePaid,
+		WalletStatus:        types.WalletStatusActive,
+		Balance:             balance,
+		CreditBalance:       balance,
+		ConversionRate:      decimal.NewFromFloat(1.0),
+		TopupConversionRate: decimal.NewFromFloat(1.0),
+		AlertSettings:       alertSettings,
+		AutoTopup:           autoTopup,
+		Config:              *types.GetDefaultWalletConfig(),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(ctx, w))
+	return w
+}
+
+// enabledAlertSettings returns AlertSettings with a single "below" critical threshold.
+func (s *CheckWalletBalanceAlertSuite) enabledAlertSettings(criticalThreshold decimal.Decimal) *types.AlertSettings {
+	return &types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Critical: &types.AlertThreshold{
+			Threshold: criticalThreshold,
+			Condition: types.AlertConditionBelow,
+		},
+	}
+}
+
+// autoTopupCfg returns an invoiced auto top-up configuration.
+func (s *CheckWalletBalanceAlertSuite) autoTopupCfg(threshold, amount decimal.Decimal) *types.AutoTopup {
+	enabled := true
+	invoicing := true
+	return &types.AutoTopup{
+		Enabled:   &enabled,
+		Threshold: &threshold,
+		Amount:    &amount,
+		Invoicing: &invoicing,
+	}
+}
+
+// countWalletAlertLogs returns the number of alert logs stored for the given wallet.
+func (s *CheckWalletBalanceAlertSuite) countWalletAlertLogs(walletID string) int {
+	ctx := s.GetContext()
+	logs, err := s.GetStores().AlertLogsRepo.ListByEntity(ctx, types.AlertEntityTypeWallet, walletID, 100)
+	s.NoError(err)
+	return len(logs)
+}
+
+// countAutoTopupInvoices returns the number of auto top-up invoices for the suite's customer.
+func (s *CheckWalletBalanceAlertSuite) countAutoTopupInvoices() int {
+	ctx := s.GetContext()
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.CustomerID = s.customer.ID
+	filter.BillingReason = types.InvoiceBillingReasonWalletAutoTopup
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	s.NoError(err)
+	return len(invoices)
+}
+
+// ---------------------------------------------------------------------------
+// Test 1 – no wallets for customer → returns nil, no side effects
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestNoWallets_ReturnsNilNoSideEffects() {
+	err := s.service.CheckWalletBalanceAlert(s.GetContext(), s.makeEvent())
+	s.NoError(err)
+	s.Equal(0, s.countAutoTopupInvoices())
+}
+
+// ---------------------------------------------------------------------------
+// Test 2 – wallet with alerts disabled and no auto top-up → skipped entirely
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestAllDisabled_WalletSkipped() {
+	w := s.makeWallet("wallet_all_off", decimal.NewFromInt(100), nil, nil)
+
+	err := s.service.CheckWalletBalanceAlert(s.GetContext(), s.makeEvent())
+	s.NoError(err)
+	s.Equal(0, s.countWalletAlertLogs(w.ID), "no alert logs when alerts disabled")
+	s.Equal(0, s.countAutoTopupInvoices(), "no invoice when auto top-up disabled")
+}
+
+// ---------------------------------------------------------------------------
+// Test 3 – auto top-up enabled, wallet alerts disabled
+//          → top-up fires, no alert logs produced
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestAutoTopupOnly_FiresWithoutAlertLogs() {
+	// balance=3 < threshold=5 → top-up should trigger
+	w := s.makeWallet("wallet_topup_only", decimal.NewFromInt(3), nil,
+		s.autoTopupCfg(decimal.NewFromInt(5), decimal.NewFromInt(10)))
+
+	err := s.service.CheckWalletBalanceAlert(s.GetContext(), s.makeEvent())
+	s.NoError(err)
+	s.Equal(0, s.countWalletAlertLogs(w.ID), "no alert log when wallet alerts are off")
+	s.Equal(1, s.countAutoTopupInvoices(), "auto top-up invoice must be created")
+}
+
+// ---------------------------------------------------------------------------
+// Test 4 – wallet alerts enabled, balance above critical threshold
+//          The alert service only logs state transitions. When balance starts
+//          healthy (OK) with no prior alarm, there is no transition to record.
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestWalletAlerts_BalanceAboveCritical_NoLogCreated() {
+	// balance=100 > threshold=50 below → OK, no prior alarm → no log expected
+	w := s.makeWallet("wallet_ok", decimal.NewFromInt(100),
+		s.enabledAlertSettings(decimal.NewFromInt(50)), nil)
+
+	err := s.service.CheckWalletBalanceAlert(s.GetContext(), s.makeEvent())
+	s.NoError(err)
+
+	s.Equal(0, s.countWalletAlertLogs(w.ID), "no log expected when balance is OK from the start — nothing to transition from")
+
+	updated, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.NoError(err)
+	s.Equal(types.AlertStateOk, updated.AlertState, "wallet alert state must be set to OK")
+}
+
+// ---------------------------------------------------------------------------
+// Test 4b – alarm recovery: balance rises above threshold → OK log created
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestWalletAlerts_RecoveryFromAlarm_OKLogCreated() {
+	ctx := s.GetContext()
+
+	// First call: balance=20 → in_alarm
+	w := s.makeWallet("wallet_recovery", decimal.NewFromInt(20),
+		s.enabledAlertSettings(decimal.NewFromInt(50)), nil)
+
+	s.NoError(s.service.CheckWalletBalanceAlert(ctx, s.makeEvent()))
+
+	logsAfterAlarm, err := s.GetStores().AlertLogsRepo.ListByEntity(ctx, types.AlertEntityTypeWallet, w.ID, 10)
+	s.NoError(err)
+	s.Require().Len(logsAfterAlarm, 1)
+	s.Equal(types.AlertStateInAlarm, logsAfterAlarm[0].AlertStatus)
+
+	// Raise the balance above threshold in the store to simulate recovery
+	w.Balance = decimal.NewFromInt(100)
+	w.CreditBalance = decimal.NewFromInt(100)
+	s.NoError(s.GetStores().WalletRepo.UpdateWallet(ctx, w.ID, w))
+
+	// Second call: balance=100 → OK (transition from in_alarm → log created)
+	s.NoError(s.service.CheckWalletBalanceAlert(ctx, s.makeEvent()))
+
+	logsAfterRecovery, err := s.GetStores().AlertLogsRepo.ListByEntity(ctx, types.AlertEntityTypeWallet, w.ID, 10)
+	s.NoError(err)
+	s.Require().Len(logsAfterRecovery, 2, "recovery must produce a second log entry")
+	s.Equal(types.AlertStateOk, logsAfterRecovery[0].AlertStatus, "most recent log should be OK")
+
+	updated, err := s.GetStores().WalletRepo.GetWalletByID(ctx, w.ID)
+	s.NoError(err)
+	s.Equal(types.AlertStateOk, updated.AlertState, "wallet alert state must be updated to OK after recovery")
+}
+
+// ---------------------------------------------------------------------------
+// Test 5 – wallet alerts enabled, balance below critical threshold → in_alarm
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestWalletAlerts_BalanceBelowCritical_InAlarm() {
+	// balance=20 < threshold=50 below → in_alarm
+	w := s.makeWallet("wallet_alarm", decimal.NewFromInt(20),
+		s.enabledAlertSettings(decimal.NewFromInt(50)), nil)
+
+	err := s.service.CheckWalletBalanceAlert(s.GetContext(), s.makeEvent())
+	s.NoError(err)
+
+	logs, err := s.GetStores().AlertLogsRepo.ListByEntity(s.GetContext(), types.AlertEntityTypeWallet, w.ID, 10)
+	s.NoError(err)
+	s.Require().Len(logs, 1, "expected one alert log")
+	s.Equal(types.AlertStateInAlarm, logs[0].AlertStatus)
+
+	updated, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), w.ID)
+	s.NoError(err)
+	s.Equal(types.AlertStateInAlarm, updated.AlertState, "wallet alert state must be updated to in_alarm")
+}
+
+// ---------------------------------------------------------------------------
+// Test 6 – both wallet alerts and auto top-up enabled → both fire independently
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestAlertsAndAutoTopup_BothFireIndependently() {
+	// balance=20: below critical=50 (in_alarm) AND below topup threshold=30 (fires)
+	w := s.makeWallet("wallet_both", decimal.NewFromInt(20),
+		s.enabledAlertSettings(decimal.NewFromInt(50)),
+		s.autoTopupCfg(decimal.NewFromInt(30), decimal.NewFromInt(50)))
+
+	err := s.service.CheckWalletBalanceAlert(s.GetContext(), s.makeEvent())
+	s.NoError(err)
+
+	logs, err := s.GetStores().AlertLogsRepo.ListByEntity(s.GetContext(), types.AlertEntityTypeWallet, w.ID, 10)
+	s.NoError(err)
+	s.Require().Len(logs, 1, "expected alert log")
+	s.Equal(types.AlertStateInAlarm, logs[0].AlertStatus, "alert status must be in_alarm")
+
+	s.Equal(1, s.countAutoTopupInvoices(), "auto top-up must fire even when alerts also fire")
+}
+
+// ---------------------------------------------------------------------------
+// Test 7 – multiple wallets for same customer, each processed independently
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestMultipleWallets_EachProcessedIndependently() {
+	ctx := s.GetContext()
+
+	// Wallet A: alerts on, balance above threshold → OK
+	wA := s.makeWallet("wallet_multi_a", decimal.NewFromInt(100),
+		s.enabledAlertSettings(decimal.NewFromInt(50)), nil)
+
+	// Wallet B: alerts on, balance below threshold → in_alarm
+	wB := s.makeWallet("wallet_multi_b", decimal.NewFromInt(10),
+		s.enabledAlertSettings(decimal.NewFromInt(50)), nil)
+
+	// Wallet C: only auto top-up, balance below threshold → top-up fires, no alerts
+	wC := s.makeWallet("wallet_multi_c", decimal.NewFromInt(2), nil,
+		s.autoTopupCfg(decimal.NewFromInt(5), decimal.NewFromInt(10)))
+
+	err := s.service.CheckWalletBalanceAlert(ctx, s.makeEvent())
+	s.NoError(err)
+
+	// Wallet A is healthy from the start — no state transition to log.
+	s.Equal(0, s.countWalletAlertLogs(wA.ID), "wallet A has no alarm history so no log is expected")
+	updatedA, err := s.GetStores().WalletRepo.GetWalletByID(ctx, wA.ID)
+	s.NoError(err)
+	s.Equal(types.AlertStateOk, updatedA.AlertState, "wallet A alert state must be OK")
+
+	logsB, err := s.GetStores().AlertLogsRepo.ListByEntity(ctx, types.AlertEntityTypeWallet, wB.ID, 10)
+	s.NoError(err)
+	s.Require().Len(logsB, 1)
+	s.Equal(types.AlertStateInAlarm, logsB[0].AlertStatus, "wallet B should be in_alarm")
+
+	s.Equal(0, s.countWalletAlertLogs(wC.ID), "wallet C should have no alert logs")
+	s.Equal(1, s.countAutoTopupInvoices(), "exactly one auto top-up invoice for wallet C")
+}
+
+// ---------------------------------------------------------------------------
+// Test 8 – auto top-up not blocked by disabled alerts
+//          Verifies the bug fix: when alert settings resolve to disabled (no
+//          wallet-level settings, tenant default disabled), the wallet must NOT
+//          be skipped — auto top-up still runs.
+// ---------------------------------------------------------------------------
+
+func (s *CheckWalletBalanceAlertSuite) TestAutoTopupNotBlockedByDisabledAlerts() {
+	// No wallet-level alert settings → falls back to tenant default (disabled).
+	// Auto top-up IS enabled and balance is below threshold.
+	w := s.makeWallet("wallet_topup_no_alert_cfg", decimal.NewFromInt(3),
+		nil,
+		s.autoTopupCfg(decimal.NewFromInt(5), decimal.NewFromInt(10)))
+
+	err := s.service.CheckWalletBalanceAlert(s.GetContext(), s.makeEvent())
+	s.NoError(err)
+	s.Equal(0, s.countWalletAlertLogs(w.ID), "no alert logs when alerts not configured")
+	s.Equal(1, s.countAutoTopupInvoices(), "auto top-up must not be blocked by disabled alerts")
+}

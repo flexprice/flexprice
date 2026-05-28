@@ -27,6 +27,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/proration"
@@ -94,6 +95,7 @@ type Stores struct {
 	AlertLogsRepo                alertlogs.Repository
 	FeatureUsageRepo             events.FeatureUsageRepository
 	MeterUsageRepo               events.MeterUsageRepository
+	PlanPriceSyncRepo            planpricesync.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -156,7 +158,8 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.T().Fatalf("failed to create encryption service: %v", err)
 	}
 
-	// Initialize integration factory
+	// Initialize integration factory (nil TemporalService is fine for tests — Paddle resync
+	// guards against it and skips gracefully).
 	s.integrationFactory = integration.NewFactory(
 		s.config,
 		s.logger,
@@ -170,6 +173,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.stores.MeterRepo,
 		s.stores.FeatureRepo,
 		encryptionService,
+		nil, // TemporalService — not needed in unit tests
 	)
 }
 
@@ -199,6 +203,8 @@ func (s *BaseServiceTestSuite) setupStores() {
 	invLineItemStore := NewInMemoryInvoiceLineItemStore()
 	invoiceStore := NewInMemoryInvoiceStore()
 	invoiceStore.SetLineItemStore(invLineItemStore)
+	priceStore := NewInMemoryPriceStore()
+	planPriceSyncStore := NewInMemoryPlanPriceSyncStore(priceStore, subStore, lineItemStore)
 	s.stores = Stores{
 		SubscriptionRepo:             subStore,
 		SubscriptionLineItemRepo:     lineItemStore,
@@ -206,7 +212,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		SubscriptionScheduleRepo:     NewInMemorySubscriptionScheduleStore(),
 		EventRepo:                    NewInMemoryEventStore(),
 		PlanRepo:                     NewInMemoryPlanStore(),
-		PriceRepo:                    NewInMemoryPriceStore(),
+		PriceRepo:                    priceStore,
 		PriceUnitRepo:                NewInMemoryPriceUnitStore(),
 		MeterRepo:                    NewInMemoryMeterStore(),
 		CustomerRepo:                 NewInMemoryCustomerStore(),
@@ -240,6 +246,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
 		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
 		MeterUsageRepo:               NewInMemoryMeterUsageStore(),
+		PlanPriceSyncRepo:            planPriceSyncStore,
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -294,6 +301,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
 	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
 	s.stores.MeterUsageRepo.(*InMemoryMeterUsageStore).Clear()
+	s.stores.PlanPriceSyncRepo.(*InMemoryPlanPriceSyncStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

@@ -18,6 +18,8 @@ const (
 	FieldName = "name"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldInternalStatus holds the string denoting the internal_status field in the database.
+	FieldInternalStatus = "internal_status"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -35,6 +37,7 @@ var Columns = []string{
 	FieldID,
 	FieldName,
 	FieldStatus,
+	FieldInternalStatus,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldBillingDetails,
@@ -56,6 +59,8 @@ var (
 	NameValidator func(string) error
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
+	// DefaultInternalStatus holds the default value on creation for the "internal_status" field.
+	DefaultInternalStatus string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -82,6 +87,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByInternalStatus orders the results by the internal_status field.
+func ByInternalStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInternalStatus, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

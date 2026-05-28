@@ -475,6 +475,14 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.PaddleInvoiceSyncWorkflowInput); ok {
 			return input.InvoiceID
 		}
+	case types.TemporalWhopInvoiceSyncWorkflow:
+		if input, ok := params.(models.WhopInvoiceSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
+	case types.TemporalWhopInvoiceMarkPaidWorkflow:
+		if input, ok := params.(models.WhopInvoiceMarkPaidWorkflowInput); ok {
+			return input.InvoiceID
+		}
 
 	// Vendor customer sync workflows — deterministic IDs prevent duplicate concurrent syncs.
 	case types.TemporalStripeCustomerSyncWorkflow:
@@ -500,6 +508,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 	case types.TemporalPaddleCustomerSyncWorkflow:
 		if input, ok := params.(models.PaddleCustomerSyncWorkflowInput); ok {
 			return input.CustomerID
+		}
+	case types.TemporalPaddleSubscriptionSyncWorkflow:
+		if input, ok := params.(models.PaddleSubscriptionSyncWorkflowInput); ok {
+			return input.SubscriptionID
 		}
 	case types.TemporalRecalculateInvoiceWorkflow:
 		// Extract invoice ID from RecalculateInvoiceWorkflowInput
@@ -624,6 +636,10 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildChargebeeInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalQuickBooksInvoiceSyncWorkflow:
 		return s.buildQuickBooksInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalWhopInvoiceSyncWorkflow:
+		return s.buildWhopInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalWhopInvoiceMarkPaidWorkflow:
+		return s.buildWhopInvoiceMarkPaidInput(ctx, tenantID, environmentID, params)
 	case types.TemporalZohoBooksInvoiceSyncWorkflow:
 		return s.buildZohoBooksInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalStripeCustomerSyncWorkflow:
@@ -638,6 +654,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildNomodCustomerSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalPaddleCustomerSyncWorkflow:
 		return s.buildPaddleCustomerSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalPaddleSubscriptionSyncWorkflow:
+		return s.buildPaddleSubscriptionSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalCustomerOnboardingWorkflow:
 		return s.buildCustomerOnboardingInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalPrepareProcessedEventsWorkflow:
@@ -855,6 +873,38 @@ func (s *temporalService) buildNomodInvoiceSyncInput(_ context.Context, tenantID
 
 	return nil, errors.NewError("invalid input for Nomod invoice sync workflow").
 		WithHint("Provide NomodInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildWhopInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.WhopInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.WhopInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Whop invoice sync workflow").
+		WithHint("Provide WhopInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildWhopInvoiceMarkPaidInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.WhopInvoiceMarkPaidWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+	if input, ok := params.(models.WhopInvoiceMarkPaidWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Whop mark-paid workflow").
+		WithHint("Provide WhopInvoiceMarkPaidWorkflowInput with invoice_id").
 		Mark(errors.ErrValidation)
 }
 
@@ -1082,6 +1132,18 @@ func (s *temporalService) buildPaddleCustomerSyncInput(_ context.Context, tenant
 	return nil, errors.NewError("invalid input for Paddle customer sync workflow").
 		WithHint("Provide PaddleCustomerSyncWorkflowInput with customer_id").
 		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildPaddleSubscriptionSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	input, ok := params.(models.PaddleSubscriptionSyncWorkflowInput)
+	if !ok {
+		return nil, errors.NewError("invalid input for Paddle subscription sync workflow").
+			WithHint("Provide PaddleSubscriptionSyncWorkflowInput with subscription_id").
+			Mark(errors.ErrValidation)
+	}
+	input.TenantID = tenantID
+	input.EnvironmentID = environmentID
+	return input, nil
 }
 
 // buildProcessInvoiceInput builds input for process invoice workflow

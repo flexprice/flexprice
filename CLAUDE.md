@@ -285,3 +285,15 @@ Temporal UI (http://localhost:8088): monitor/debug workflow executions, manually
 ## License
 
 Core is AGPLv3 licensed. Enterprise features (`internal/ee/`) require a commercial license.
+
+## Graphify
+
+This project can maintain a code knowledge graph under **`graphify-out/`** (when the Graphify CLI is used).
+
+- If **`graphify-out/graph.json`** exists, prefer **`graphify query "<question>"`** for codebase questions, **`graphify path "<A>" "<B>"`** for relationships, and **`graphify explain "<concept>"`** for focused subgraphs.
+- If **`graphify-out/wiki/index.md`** exists, use it for broad navigation instead of undirected browsing.
+- Read **`graphify-out/GRAPH_REPORT.md`** only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code in ways that change structure or dependencies, run **`graphify update .`** from the repository root to keep the graph current (AST-only). Use the **same command** day-to-day and for a **first-time** graph (creates `graphify-out/` when the CLI supports it); confirm with `graphify --help` if your build uses a separate init step.
+
+Persistent human/agent-oriented architecture docs live under **`docs/`** (`REPO_MAP.md`, `ARCHITECTURE.md`, `DEPENDENCY_GRAPH.md`, `HOTSPOTS.md`, `FLOWS/`). For the same workflow in **any** repository, use the personal Cursor skill **`repo-architecture-intelligence`** in `~/.cursor/skills/repo-architecture-intelligence/SKILL.md` and copy prompts from **`USAGE.md`** in that folder.
+

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/costsheet"
@@ -747,6 +748,12 @@ func (pc *PriceCreate) check() error {
 	if v, ok := pc.mutation.EntityID(); ok {
 		if err := price.EntityIDValidator(v); err != nil {
 			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "Price.entity_id": %w`, err)}
+		}
+	}
+	switch pc.driver.Dialect() {
+	case dialect.MySQL, dialect.SQLite:
+		if _, ok := pc.mutation.Sequence(); !ok {
+			return &ValidationError{Name: "sequence", err: errors.New(`ent: missing required field "Price.sequence"`)}
 		}
 	}
 	return nil

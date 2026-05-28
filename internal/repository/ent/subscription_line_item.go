@@ -283,6 +283,44 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 	return nil
 }
 
+// BulkTerminate terminates all subscription line items for a subscription up to a given date
+func (r *subscriptionLineItemRepository) BulkTerminate(ctx context.Context, subscriptionID string, effectiveDate time.Time) (int, error) {
+	span := StartRepositorySpan(ctx, "subscription_line_item", "bulk_terminate", map[string]interface{}{
+		"subscription_id": subscriptionID,
+		"effective_date":  effectiveDate,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	affected, err := client.SubscriptionLineItem.Update().
+		SetNillableEndDate(types.ToNillableTime(effectiveDate)).
+		SetStatus(string(types.StatusPublished)).
+		Where(
+			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
+			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+			subscriptionlineitem.SubscriptionID(subscriptionID),
+			subscriptionlineitem.Or(
+				subscriptionlineitem.EndDateIsNil(),
+				subscriptionlineitem.EndDateGT(effectiveDate),
+			),
+		).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return 0, ierr.NewError("no subscription line items terminated").
+				WithHint("No subscription line items were terminated").
+				Mark(ierr.ErrNotFound)
+		}
+		return 0, ierr.WithError(err).
+			WithHint("Failed to terminate subscription line items").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return affected, nil
+}
+
 // Delete deletes a subscription line item
 func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) error {
 	// Start a span for this repository operation

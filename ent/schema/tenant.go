@@ -49,6 +49,11 @@ func (Tenant) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			Default("published"),
+		field.String("internal_status").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Default("trialing"),
 		field.Time("created_at").
 			Immutable().
 			Default(time.Now),

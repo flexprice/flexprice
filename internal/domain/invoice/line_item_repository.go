@@ -36,7 +36,7 @@ type LineItemRepository interface {
 	List(ctx context.Context, filter *types.InvoiceLineItemFilter) ([]*InvoiceLineItem, error)
 
 	// GetRevenueByCustomer aggregates invoice line item amounts grouped by
-	// customer_id and price_type for DRAFT/FINALIZED invoices within the given period.
+	// customer_id, price_type, and currency for DRAFT/FINALIZED invoices within the given period.
 	// When customerIDs is non-empty, results are scoped to those customers only.
 	GetRevenueByCustomer(ctx context.Context, periodStart, periodEnd time.Time, customerIDs []string) ([]RevenueByCustomerRow, error)
 

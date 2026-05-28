@@ -25,6 +25,9 @@ const (
 	// Dashboard context keys
 	CtxCustomerID         ContextKey = "ctx_customer_id"
 	CtxExternalCustomerID ContextKey = "ctx_external_customer_id"
+
+	// Tenant internal state
+	CtxTenantInternalStatus ContextKey = "ctx_tenant_internal_status"
 )
 
 func GetUserID(ctx context.Context) string {
@@ -109,6 +112,14 @@ func SetExternalCustomerID(ctx context.Context, externalCustomerID string) conte
 // SetCustomerID sets the customer ID in context
 func SetCustomerID(ctx context.Context, customerID string) context.Context {
 	return context.WithValue(ctx, CtxCustomerID, customerID)
+}
+
+// GetTenantInternalStatus returns the tenant's internal status from the context.
+func GetTenantInternalStatus(ctx context.Context) TenantInternalStatus {
+	if s, ok := ctx.Value(CtxTenantInternalStatus).(TenantInternalStatus); ok {
+		return s
+	}
+	return ""
 }
 
 // WithForceWriter returns a context that forces database operations to use the writer connection.

@@ -7,10 +7,11 @@ import (
 )
 
 // RevenueByCustomerRow represents a single row from the revenue aggregation query,
-// grouped by customer_id and price_type.
+// grouped by customer_id, price_type, and currency.
 type RevenueByCustomerRow struct {
 	CustomerID string
 	PriceType  string // "USAGE" or "FIXED"
+	Currency   string
 	Amount     decimal.Decimal
 }
 
