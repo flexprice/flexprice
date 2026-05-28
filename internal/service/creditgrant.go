@@ -11,7 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -738,8 +738,7 @@ func (s *creditGrantService) handleCreditGrantFailure(
 		"error", err)
 
 	// Send to Sentry early
-	sentrySvc := sentry.NewSentryService(s.Config, s.Logger)
-	sentrySvc.CaptureException(err)
+	tracing.NewService(s.Config, s.Logger).CaptureException(err)
 
 	// Prepare status update with readable error message
 	cga.ApplicationStatus = types.ApplicationStatusFailed

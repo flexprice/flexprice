@@ -9,30 +9,30 @@ import (
 
 // InvoiceData represents the data model for invoice PDF generation
 type InvoiceData struct {
-	Currency        string     `json:"currency"`
-	Precision       int32      `json:"precision"`
-	BannerImage     string     `json:"banner_image,omitempty"`
-	ID              string     `json:"id"`
-	InvoiceStatus   string     `json:"invoice_status"`
-	InvoiceNumber   string     `json:"invoice_number"`
-	IssuingDate     CustomTime `json:"issuing_date"`
-	DueDate         CustomTime `json:"due_date"`
-	AmountDue       float64    `json:"amount_due"`     // Total amount (subtotal - discount + tax)
-	Subtotal        float64    `json:"subtotal"`       // Before discounts and taxes
-	TotalDiscount   float64    `json:"total_discount"` // Total discounts applied
-	TotalPrepaidCreditsApplied float64 `json:"total_prepaid_credits_applied"` // Total prepaid credits applied
-	TotalTax        float64    `json:"total_tax"`      // Total tax amount
-	VAT             float64    `json:"vat"`            // VAT percentage as decimal (0.18 = 18%)
-	Notes           string     `json:"notes"`
-	BillingReason   string     `json:"billing_reason"`
-	PeriodStart     CustomTime `json:"period_start"`
-	PeriodEnd       CustomTime `json:"period_end"`
-	BillingPeriod   string     `json:"billing_period,omitempty"`
-	Description     string     `json:"description,omitempty"`
-	AmountPaid      float64    `json:"amount_paid,omitempty"`
-	AmountRemaining float64    `json:"amount_remaining,omitempty"`
-	PaymentStatus   string     `json:"payment_status,omitempty"`
-	InvoiceType     string     `json:"invoice_type,omitempty"`
+	Currency                   string     `json:"currency"`
+	Precision                  int32      `json:"precision"`
+	BannerImage                string     `json:"banner_image,omitempty"`
+	ID                         string     `json:"id"`
+	InvoiceStatus              string     `json:"invoice_status"`
+	InvoiceNumber              string     `json:"invoice_number"`
+	IssuingDate                CustomTime `json:"issuing_date"`
+	DueDate                    CustomTime `json:"due_date"`
+	AmountDue                  float64    `json:"amount_due"`                    // Total amount (subtotal - discount + tax)
+	Subtotal                   float64    `json:"subtotal"`                      // Before discounts and taxes
+	TotalDiscount              float64    `json:"total_discount"`                // Total discounts applied
+	TotalPrepaidCreditsApplied float64    `json:"total_prepaid_credits_applied"` // Total prepaid credits applied
+	TotalTax                   float64    `json:"total_tax"`                     // Total tax amount
+	VAT                        float64    `json:"vat"`                           // VAT percentage as decimal (0.18 = 18%)
+	Notes                      string     `json:"notes"`
+	BillingReason              string     `json:"billing_reason"`
+	PeriodStart                CustomTime `json:"period_start"`
+	PeriodEnd                  CustomTime `json:"period_end"`
+	BillingPeriod              string     `json:"billing_period,omitempty"`
+	Description                string     `json:"description,omitempty"`
+	AmountPaid                 float64    `json:"amount_paid,omitempty"`
+	AmountRemaining            float64    `json:"amount_remaining,omitempty"`
+	PaymentStatus              string     `json:"payment_status,omitempty"`
+	InvoiceType                string     `json:"invoice_type,omitempty"`
 
 	// Company information
 	Biller    *BillerInfo    `json:"biller"`

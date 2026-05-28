@@ -233,27 +233,27 @@ func (m *MoyasarConnectionMetadata) Validate() error {
 
 // PaddleConnectionMetadata represents Paddle-specific connection metadata
 type PaddleConnectionMetadata struct {
-	APIKey          string `json:"api_key"`            // Paddle API Key (encrypted)
-	WebhookSecret   string `json:"webhook_secret"`     // Paddle webhook secret (encrypted)
-	ClientSideToken string `json:"client_side_token"`  // Paddle.js client-side token (optional, encrypted)
+	APIKey          string `json:"api_key"`           // Paddle API Key (encrypted)
+	WebhookSecret   string `json:"webhook_secret"`    // Paddle webhook secret (encrypted)
+	ClientSideToken string `json:"client_side_token"` // Paddle.js client-side token (optional, encrypted)
 }
 
 // ZohoBooksConnectionMetadata represents Zoho Books OAuth connection metadata
 type ZohoBooksConnectionMetadata struct {
-	ClientID     string `json:"client_id"`                    // OAuth Client ID (encrypted)
-	ClientSecret string `json:"client_secret"`                // OAuth Client Secret (encrypted)
-	RefreshToken string `json:"refresh_token,omitempty"`       // OAuth Refresh Token (encrypted)
-	AccessToken  string `json:"access_token,omitempty"`        // OAuth Access Token (encrypted cache)
-	AuthCode     string `json:"auth_code,omitempty"`           // OAuth Authorization Code (temporary, encrypted)
-	RedirectURI  string `json:"redirect_uri,omitempty"`        // OAuth Redirect URI
-	APIDomain    string `json:"api_domain,omitempty"`          // Zoho API domain from token exchange
-	AccountsURL  string `json:"accounts_server,omitempty"`     // Zoho Accounts base URL / DC
-	Location     string `json:"location,omitempty"`            // Zoho account location/DC hint
-	OrganizationID   string `json:"organization_id,omitempty"`   // Selected Zoho Books organization
-	OrganizationName string `json:"organization_name,omitempty"` // Selected organization name
-	Scopes           string `json:"scopes,omitempty"`            // Granted scopes, comma-separated
+	ClientID             string `json:"client_id"`                         // OAuth Client ID (encrypted)
+	ClientSecret         string `json:"client_secret"`                     // OAuth Client Secret (encrypted)
+	RefreshToken         string `json:"refresh_token,omitempty"`           // OAuth Refresh Token (encrypted)
+	AccessToken          string `json:"access_token,omitempty"`            // OAuth Access Token (encrypted cache)
+	AuthCode             string `json:"auth_code,omitempty"`               // OAuth Authorization Code (temporary, encrypted)
+	RedirectURI          string `json:"redirect_uri,omitempty"`            // OAuth Redirect URI
+	APIDomain            string `json:"api_domain,omitempty"`              // Zoho API domain from token exchange
+	AccountsURL          string `json:"accounts_server,omitempty"`         // Zoho Accounts base URL / DC
+	Location             string `json:"location,omitempty"`                // Zoho account location/DC hint
+	OrganizationID       string `json:"organization_id,omitempty"`         // Selected Zoho Books organization
+	OrganizationName     string `json:"organization_name,omitempty"`       // Selected organization name
+	Scopes               string `json:"scopes,omitempty"`                  // Granted scopes, comma-separated
 	AccessTokenExpiresAt string `json:"access_token_expires_at,omitempty"` // RFC3339 expiry timestamp
-	OAuthSessionData string `json:"oauth_session_data,omitempty"` // Temporary encrypted session data
+	OAuthSessionData     string `json:"oauth_session_data,omitempty"`      // Temporary encrypted session data
 	// WebhookSecret is the Zoho Books webhook signing secret (encrypted at rest). Optional until inbound webhooks are configured.
 	WebhookSecret string `json:"webhook_secret,omitempty"`
 }

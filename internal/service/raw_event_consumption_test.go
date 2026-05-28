@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
-	domainSettings "github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/events"
-	"github.com/flexprice/flexprice/internal/sentry"
+	domainSettings "github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/testutil"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -49,7 +49,7 @@ func (s *RawEventConsumptionSuite) SetupTest() {
 	s.svc = &rawEventConsumptionService{
 		ServiceParams: params,
 		outputPubSub:  s.outputPubSub,
-		sentryService: sentry.NewSentryService(s.GetConfig(), s.GetLogger()),
+		sentryService: tracing.NewService(s.GetConfig(), s.GetLogger()),
 	}
 
 	// Default output topic
@@ -129,16 +129,16 @@ func (s *RawEventConsumptionSuite) publishedExternalIDs() []string {
 
 func (s *RawEventConsumptionSuite) TestProcessMessage_FilterBehavior() {
 	tests := []struct {
-		name           string
-		setupFilter    func()
-		inputOrgIDs    []string // one event per org ID
-		wantForwarded  []string // sorted expected ExternalCustomerIDs that reach the output topic
-		wantErr        bool
+		name          string
+		setupFilter   func()
+		inputOrgIDs   []string // one event per org ID
+		wantForwarded []string // sorted expected ExternalCustomerIDs that reach the output topic
+		wantErr       bool
 	}{
 		{
-			name:        "no filter setting → all events forwarded",
-			setupFilter: func() { /* no setting created */ },
-			inputOrgIDs: []string{"org_001", "org_002", "org_003"},
+			name:          "no filter setting → all events forwarded",
+			setupFilter:   func() { /* no setting created */ },
+			inputOrgIDs:   []string{"org_001", "org_002", "org_003"},
 			wantForwarded: []string{"org_001", "org_002", "org_003"},
 		},
 		{

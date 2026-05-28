@@ -645,7 +645,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 			wantErrCont: "either price_id or price is required",
 		},
 		{
-			name: "start_date after end_date",
+			name:  "start_date after end_date",
 			subID: s.testData.subscription.ID,
 			req: dto.CreateSubscriptionLineItemRequest{
 				PriceID:              s.testData.price.ID,
@@ -656,7 +656,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 			wantErrCont: "start_date cannot be after end_date",
 		},
 		{
-			name: "line item start_date before subscription start",
+			name:  "line item start_date before subscription start",
 			subID: s.testData.subscription.ID,
 			req: dto.CreateSubscriptionLineItemRequest{
 				PriceID:              s.testData.price.ID,
@@ -666,7 +666,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 			wantErrCont: "line item start_date cannot be before subscription start date",
 		},
 		{
-			name: "line item end_date after subscription end",
+			name:  "line item end_date after subscription end",
 			subID: subWithEnd.ID,
 			req: dto.CreateSubscriptionLineItemRequest{
 				PriceID:              s.testData.price.ID,
@@ -676,7 +676,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 			wantErrCont: "line item end_date cannot be after subscription end date",
 		},
 		{
-			name: "inline price start_date before subscription start",
+			name:  "inline price start_date before subscription start",
 			subID: s.testData.subscription.ID,
 			req: dto.CreateSubscriptionLineItemRequest{
 				Price: &dto.SubscriptionPriceCreateRequest{
@@ -695,7 +695,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Validatio
 			wantErrCont: "price start_date cannot be before subscription start date",
 		},
 		{
-			name: "inline price end_date after subscription end",
+			name:  "inline price end_date after subscription end",
 			subID: subWithEnd.ID,
 			req: dto.CreateSubscriptionLineItemRequest{
 				Price: &dto.SubscriptionPriceCreateRequest{

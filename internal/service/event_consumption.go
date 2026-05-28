@@ -15,7 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -40,7 +40,7 @@ type eventConsumptionService struct {
 	lazyPubSub             pubsub.PubSub
 	replayPubSub           pubsub.PubSub
 	eventRepo              events.Repository
-	sentryService          *sentry.Service
+	sentryService          *tracing.Service
 	eventPostProcessingSvc EventPostProcessingService
 }
 
@@ -48,7 +48,7 @@ type eventConsumptionService struct {
 func NewEventConsumptionService(
 	params ServiceParams,
 	eventRepo events.Repository,
-	sentryService *sentry.Service,
+	sentryService *tracing.Service,
 	eventPostProcessingSvc EventPostProcessingService,
 ) EventConsumptionService {
 	ev := &eventConsumptionService{

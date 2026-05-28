@@ -8,15 +8,15 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2/lib/column"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 )
 
 type ClickHouseStore struct {
-	conn   driver.Conn
-	sentry *sentry.Service
+	conn    driver.Conn
+	tracing *tracing.Service
 }
 
-func NewClickHouseStore(config *config.Configuration, sentryService *sentry.Service) (*ClickHouseStore, error) {
+func NewClickHouseStore(config *config.Configuration, tracingService *tracing.Service) (*ClickHouseStore, error) {
 	options := config.ClickHouse.GetClientOptions()
 	conn, err := clickhouse_go.Open(options)
 	if err != nil {
@@ -24,17 +24,20 @@ func NewClickHouseStore(config *config.Configuration, sentryService *sentry.Serv
 	}
 
 	return &ClickHouseStore{
-		conn:   conn,
-		sentry: sentryService,
+		conn:    conn,
+		tracing: tracingService,
 	}, nil
 }
 
-// TracedConn returns a connection that automatically traces all database operations
+// GetConn returns the underlying ClickHouse driver connection.
+//
+// Per-query spans (clickhouse.select, clickhouse.query_row, clickhouse.ping,
+// clickhouse.batch_flush) are currently disabled to keep the Sentry/OTLP span
+// volume low. The tracedConn wrapper below is kept in the file so we can
+// re-enable selectively by switching this to `return &tracedConn{...}` again
+// once we have a feel for cost at scale.
 func (s *ClickHouseStore) GetConn() driver.Conn {
-	return &tracedConn{
-		conn:   s.conn,
-		sentry: s.sentry,
-	}
+	return s.conn
 }
 
 // Original connection accessor if needed
@@ -47,19 +50,19 @@ func (s *ClickHouseStore) Close() error {
 }
 
 // WithSpan creates a new context with a ClickHouse span for monitoring database operations
-func (s *ClickHouseStore) WithSpan(ctx context.Context, operation string, params map[string]interface{}) (context.Context, *sentry.SpanFinisher) {
-	if s.sentry == nil {
-		return ctx, &sentry.SpanFinisher{}
+func (s *ClickHouseStore) WithSpan(ctx context.Context, operation string, params map[string]interface{}) (context.Context, *tracing.SpanFinisher) {
+	if s.tracing == nil {
+		return ctx, &tracing.SpanFinisher{}
 	}
 
-	span, newCtx := s.sentry.StartClickHouseSpan(ctx, operation, params)
-	return newCtx, &sentry.SpanFinisher{Span: span}
+	span, newCtx := s.tracing.StartClickHouseSpan(ctx, operation, params)
+	return newCtx, &tracing.SpanFinisher{Span: span}
 }
 
 // tracedConn is a wrapper around the ClickHouse Conn interface that adds tracing
 type tracedConn struct {
-	conn   driver.Conn
-	sentry *sentry.Service
+	conn    driver.Conn
+	tracing *tracing.Service
 }
 
 // Contributors delegates to the underlying connection
@@ -74,11 +77,11 @@ func (tc *tracedConn) ServerVersion() (*driver.ServerVersion, error) {
 
 // Select adds tracing and delegates to the underlying connection
 func (tc *tracedConn) Select(ctx context.Context, dest any, query string, args ...any) error {
-	if tc.sentry == nil {
+	if tc.tracing == nil {
 		return tc.conn.Select(ctx, dest, query, args...)
 	}
 
-	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.select", map[string]interface{}{
+	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.select", map[string]interface{}{
 		"query":      truncateQuery(query),
 		"args_count": len(args),
 	})
@@ -91,11 +94,11 @@ func (tc *tracedConn) Select(ctx context.Context, dest any, query string, args .
 
 // Query adds tracing and delegates to the underlying connection
 func (tc *tracedConn) Query(ctx context.Context, query string, args ...any) (driver.Rows, error) {
-	if tc.sentry == nil {
+	if tc.tracing == nil {
 		return tc.conn.Query(ctx, query, args...)
 	}
 
-	// span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.query", map[string]interface{}{
+	// span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.query", map[string]interface{}{
 	// 	"query":      truncateQuery(query),
 	// 	"args_count": len(args),
 	// })
@@ -108,11 +111,11 @@ func (tc *tracedConn) Query(ctx context.Context, query string, args ...any) (dri
 
 // QueryRow adds tracing and delegates to the underlying connection
 func (tc *tracedConn) QueryRow(ctx context.Context, query string, args ...any) driver.Row {
-	if tc.sentry == nil {
+	if tc.tracing == nil {
 		return tc.conn.QueryRow(ctx, query, args...)
 	}
 
-	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.query_row", map[string]interface{}{
+	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.query_row", map[string]interface{}{
 		"query":      truncateQuery(query),
 		"args_count": len(args),
 	})
@@ -125,11 +128,11 @@ func (tc *tracedConn) QueryRow(ctx context.Context, query string, args ...any) d
 
 // PrepareBatch adds tracing and delegates to the underlying connection
 func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ...driver.PrepareBatchOption) (driver.Batch, error) {
-	if tc.sentry == nil {
+	if tc.tracing == nil {
 		return tc.conn.PrepareBatch(ctx, query, options...)
 	}
 
-	// span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
+	// span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.prepare_batch", map[string]interface{}{
 	// 	"query": truncateQuery(query),
 	// })
 	// if span != nil {
@@ -143,17 +146,17 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 
 	return &tracedBatch{
 		batch: batch,
-		// sentry: tc.sentry,
+		// sentry: tc.tracing,
 	}, nil
 }
 
 // Exec adds tracing and delegates to the underlying connection
 func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error {
-	if tc.sentry == nil {
+	if tc.tracing == nil {
 		return tc.conn.Exec(ctx, query, args...)
 	}
 
-	// span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.exec", map[string]interface{}{
+	// span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.exec", map[string]interface{}{
 	// 	"query":      truncateQuery(query),
 	// 	"args_count": len(args),
 	// })
@@ -166,11 +169,11 @@ func (tc *tracedConn) Exec(ctx context.Context, query string, args ...any) error
 
 // AsyncInsert adds tracing and delegates to the underlying connection
 func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	if tc.sentry == nil {
+	if tc.tracing == nil {
 		return tc.conn.AsyncInsert(ctx, query, wait, args...)
 	}
 
-	// span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.async_insert", map[string]interface{}{
+	// span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.async_insert", map[string]interface{}{
 	// 	"query": truncateQuery(query),
 	// 	"wait":  wait,
 	// })
@@ -183,11 +186,11 @@ func (tc *tracedConn) AsyncInsert(ctx context.Context, query string, wait bool, 
 
 // Ping adds tracing and delegates to the underlying connection
 func (tc *tracedConn) Ping(ctx context.Context) error {
-	if tc.sentry == nil {
+	if tc.tracing == nil {
 		return tc.conn.Ping(ctx)
 	}
 
-	span, ctx := tc.sentry.StartClickHouseSpan(ctx, "clickhouse.ping", nil)
+	span, ctx := tc.tracing.StartClickHouseSpan(ctx, "clickhouse.ping", nil)
 	if span != nil {
 		defer span.Finish()
 	}
@@ -207,8 +210,8 @@ func (tc *tracedConn) Close() error {
 
 // tracedBatch is a wrapper around the ClickHouse Batch interface that adds tracing
 type tracedBatch struct {
-	batch  driver.Batch
-	sentry *sentry.Service
+	batch   driver.Batch
+	tracing *tracing.Service
 }
 
 // Append delegates to the underlying batch
@@ -233,12 +236,12 @@ func (tb *tracedBatch) Abort() error {
 
 // Flush delegates to the underlying batch
 func (tb *tracedBatch) Flush() error {
-	if tb.sentry == nil {
+	if tb.tracing == nil {
 		return tb.batch.Flush()
 	}
 
 	ctx := context.Background()
-	span, _ := tb.sentry.StartClickHouseSpan(ctx, "clickhouse.batch_flush", nil)
+	span, _ := tb.tracing.StartClickHouseSpan(ctx, "clickhouse.batch_flush", nil)
 	if span != nil {
 		defer span.Finish()
 	}
@@ -248,12 +251,12 @@ func (tb *tracedBatch) Flush() error {
 
 // Send adds tracing and delegates to the underlying batch
 func (tb *tracedBatch) Send() error {
-	if tb.sentry == nil {
+	if tb.tracing == nil {
 		return tb.batch.Send()
 	}
 
 	// ctx := context.Background()
-	// span, _ := tb.sentry.StartClickHouseSpan(ctx, "clickhouse.batch_send", map[string]interface{}{
+	// span, _ := tb.tracing.StartClickHouseSpan(ctx, "clickhouse.batch_send", map[string]interface{}{
 	// 	"count": tb.batch.IsSent(),
 	// })
 	// if span != nil {

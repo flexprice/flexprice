@@ -4,79 +4,73 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/interceptor"
 	"go.temporal.io/sdk/workflow"
 )
 
-// SentryInterceptor provides Sentry integration for Temporal workflows and activities
-type SentryInterceptor struct {
+// TracingInterceptor adds OTel spans around activity executions and forwards
+// workflow / activity errors to Sentry via the shared tracing.Service.
+//
+// For Temporal-native span/trace propagation across workflow boundaries, the
+// recommended upstream package is github.com/temporalio/sdk-contrib/opentelemetry.
+// We stay manual here to avoid adding a new module dependency; activities still
+// get spans through the standard OTel tracer (exported to SigNoz / OTLP).
+type TracingInterceptor struct {
 	interceptor.InterceptorBase
-	sentry *sentry.Service
+	tracing *tracing.Service
 }
 
-// NewSentryInterceptor creates a new Sentry interceptor
-func NewSentryInterceptor(sentryService *sentry.Service) *SentryInterceptor {
-	return &SentryInterceptor{
-		sentry: sentryService,
-	}
+// NewTracingInterceptor constructs the interceptor.
+func NewTracingInterceptor(tracingSvc *tracing.Service) *TracingInterceptor {
+	return &TracingInterceptor{tracing: tracingSvc}
 }
 
-// InterceptWorkflow creates a workflow inbound interceptor
-func (s *SentryInterceptor) InterceptWorkflow(ctx workflow.Context, next interceptor.WorkflowInboundInterceptor) interceptor.WorkflowInboundInterceptor {
+// InterceptWorkflow creates a workflow inbound interceptor.
+func (s *TracingInterceptor) InterceptWorkflow(_ workflow.Context, next interceptor.WorkflowInboundInterceptor) interceptor.WorkflowInboundInterceptor {
 	return &workflowInboundInterceptor{
-		WorkflowInboundInterceptorBase: interceptor.WorkflowInboundInterceptorBase{
-			Next: next,
-		},
-		sentry: s.sentry,
+		WorkflowInboundInterceptorBase: interceptor.WorkflowInboundInterceptorBase{Next: next},
+		tracing:                        s.tracing,
 	}
 }
 
-// InterceptActivity creates an activity inbound interceptor
-func (s *SentryInterceptor) InterceptActivity(ctx context.Context, next interceptor.ActivityInboundInterceptor) interceptor.ActivityInboundInterceptor {
+// InterceptActivity creates an activity inbound interceptor.
+func (s *TracingInterceptor) InterceptActivity(_ context.Context, next interceptor.ActivityInboundInterceptor) interceptor.ActivityInboundInterceptor {
 	return &activityInboundInterceptor{
-		ActivityInboundInterceptorBase: interceptor.ActivityInboundInterceptorBase{
-			Next: next,
-		},
-		sentry: s.sentry,
+		ActivityInboundInterceptorBase: interceptor.ActivityInboundInterceptorBase{Next: next},
+		tracing:                        s.tracing,
 	}
 }
 
-// workflowInboundInterceptor intercepts workflow executions
+// workflowInboundInterceptor intercepts workflow executions.
 type workflowInboundInterceptor struct {
 	interceptor.WorkflowInboundInterceptorBase
-	sentry *sentry.Service
+	tracing *tracing.Service
 }
 
-// ExecuteWorkflow intercepts workflow execution
+// ExecuteWorkflow intercepts workflow execution.
 func (w *workflowInboundInterceptor) ExecuteWorkflow(ctx workflow.Context, in *interceptor.ExecuteWorkflowInput) (interface{}, error) {
 	workflowInfo := workflow.GetInfo(ctx)
 
-	// Create a logger for this workflow
 	logger := workflow.GetLogger(ctx)
-	logger.Info("Starting workflow execution with Sentry monitoring",
+	logger.Info("Starting workflow execution with tracing",
 		"workflow_type", workflowInfo.WorkflowType.Name,
 		"workflow_id", workflowInfo.WorkflowExecution.ID,
 		"run_id", workflowInfo.WorkflowExecution.RunID,
 	)
 
-	// Execute the workflow
 	result, err := w.Next.ExecuteWorkflow(ctx, in)
 
-	// After workflow completes, we're outside the deterministic context
-	// Now we CAN capture to Sentry
-	if err != nil && w.sentry.IsEnabled() {
+	// Workflow body is deterministic; CaptureException is safe only after Next returns.
+	if err != nil && w.tracing.IsSentryEnabled() {
 		logger.Error("Workflow execution failed, capturing in Sentry",
 			"workflow_type", workflowInfo.WorkflowType.Name,
 			"workflow_id", workflowInfo.WorkflowExecution.ID,
 			"run_id", workflowInfo.WorkflowExecution.RunID,
 			"error", err,
 		)
-
-		// Capture workflow failure as a Sentry error with full context
-		// This will appear in Sentry Issues and can be monitored as a background job
-		w.sentry.CaptureException(fmt.Errorf("temporal workflow failed: %s (ID: %s) - %w",
+		w.tracing.CaptureException(fmt.Errorf("temporal workflow failed: %s (ID: %s) - %w",
 			workflowInfo.WorkflowType.Name,
 			workflowInfo.WorkflowExecution.ID,
 			err,
@@ -86,24 +80,17 @@ func (w *workflowInboundInterceptor) ExecuteWorkflow(ctx workflow.Context, in *i
 	return result, err
 }
 
-// activityInboundInterceptor intercepts activity executions
+// activityInboundInterceptor intercepts activity executions.
 type activityInboundInterceptor struct {
 	interceptor.ActivityInboundInterceptorBase
-	sentry *sentry.Service
+	tracing *tracing.Service
 }
 
-// ExecuteActivity intercepts activity execution
+// ExecuteActivity intercepts activity execution.
 func (a *activityInboundInterceptor) ExecuteActivity(ctx context.Context, in *interceptor.ExecuteActivityInput) (interface{}, error) {
-	// Skip if Sentry is not enabled
-	if !a.sentry.IsEnabled() {
-		return a.Next.ExecuteActivity(ctx, in)
-	}
-
-	// Get activity info from context
 	activityInfo := activity.GetInfo(ctx)
 
-	// Start a Sentry span for this activity
-	span, spanCtx := a.sentry.StartMonitoringSpan(ctx, fmt.Sprintf("temporal.activity.%s", activityInfo.ActivityType.Name), map[string]interface{}{
+	span, spanCtx := a.tracing.StartMonitoringSpan(ctx, fmt.Sprintf("temporal.activity.%s", activityInfo.ActivityType.Name), map[string]interface{}{
 		"activity_type": activityInfo.ActivityType.Name,
 		"activity_id":   activityInfo.ActivityID,
 		"workflow_type": activityInfo.WorkflowType.Name,
@@ -113,21 +100,19 @@ func (a *activityInboundInterceptor) ExecuteActivity(ctx context.Context, in *in
 		"attempt":       activityInfo.Attempt,
 	})
 
-	// Execute the activity with the span context
 	result, err := a.Next.ExecuteActivity(spanCtx, in)
 
-	// Finish the span
 	if span != nil {
 		if err != nil {
-			span.Status = 1 // Error status
-			span.SetData("error", err.Error())
+			span.SetStatusError(err)
+		} else {
+			span.SetStatusOK()
 		}
 		span.Finish()
 	}
 
-	// Capture error if activity failed
-	if err != nil {
-		a.sentry.CaptureException(fmt.Errorf("temporal activity failed: %s - %w", activityInfo.ActivityType.Name, err))
+	if err != nil && a.tracing.IsSentryEnabled() {
+		a.tracing.CaptureException(fmt.Errorf("temporal activity failed: %s - %w", activityInfo.ActivityType.Name, err))
 	}
 
 	return result, err

@@ -64,6 +64,35 @@ sentry:
   environment: "development" # Override via FLEXPRICE_SENTRY_ENVIRONMENT
   sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
 
+# Unified OpenTelemetry exporter — traces and logs each have their own
+# endpoint/headers so you can route them to different backends. Common use
+# cases:
+#   - Logs to SigNoz, traces to Sentry (different vendors, different auth)
+#   - Both to a local OTel Collector
+#   - One to a vendor, the other disabled
+#
+# Top-level fields (protocol, insecure, headers) act as defaults; each signal
+# can override when non-empty.
+otel:
+  enabled: true
+  service_name: "flexprice-local"
+  protocol: "grpc"
+  insecure: false
+
+  traces:
+    enabled: true
+    endpoint: "https://o4507167699435520.ingest.us.sentry.io/api/4508519084130304/integration/otlp/v1/traces"
+    protocol: "http"
+    headers:
+      x-sentry-auth: "sentry sentry_key=3fe19a52f5df8388a8eac108ca400162"
+    sample_rate: 1.0
+
+  logs:
+    enabled: true
+    endpoint: "ingest.in2.signoz.cloud:443"
+    headers:
+      signoz-ingestion-key: "Jfd6fk86mY18ufQ65Rewwtwp68tLIjocPTXM"
+
 pyroscope:
   enabled: false # Set to true to enable continuous profiling
   server_address: "http://localhost:4040" # Pyroscope server URL or Grafana Cloud Profiles URL
@@ -92,6 +121,16 @@ logging:
   fluentd_enabled: false # Set to true to enable Fluentd logging
   fluentd_host: "" # e.g., "fluentd-forward.kube-system.svc.cluster.local" or "X.X.X.X"
   fluentd_port: 0 # e.g., 24224
+  # DEPRECATED: configure OTLP log export under `otel.logs.*` (top of file).
+  # The following keys are still read for back-compat and will be removed in a
+  # future release. otel_debug below is still honored for legacy debug runs.
+  # otel_enabled: false
+  # otel_endpoint: ""
+  # otel_protocol: "grpc"
+  # otel_insecure: false
+  # otel_auth_header: ""
+  # otel_auth_value: ""
+  otel_debug: false # synchronous SimpleProcessor for log export; use to confirm delivery
 
 webhook:
   enabled: true

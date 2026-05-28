@@ -16,7 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
 )
@@ -36,7 +36,7 @@ type rawEventConsumptionService struct {
 	ServiceParams
 	pubSub        pubsub.PubSub
 	outputPubSub  pubsub.PubSub
-	sentryService *sentry.Service
+	sentryService *tracing.Service
 }
 
 // RawEventBatch represents the batch structure from Bento
@@ -49,7 +49,7 @@ type RawEventBatch struct {
 // NewRawEventConsumptionService creates a new raw event consumption service
 func NewRawEventConsumptionService(
 	params ServiceParams,
-	sentryService *sentry.Service,
+	sentryService *tracing.Service,
 ) RawEventConsumptionService {
 	ev := &rawEventConsumptionService{
 		ServiceParams: params,

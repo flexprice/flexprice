@@ -17,7 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/publisher"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -195,7 +195,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 	if len(req) == 0 {
 		return make(map[string]*events.AggregationResult), nil
 	}
-	sentrySvc := sentry.NewSentryService(s.config, s.logger)
+	sentrySvc := tracing.NewService(s.config, s.logger)
 
 	// Get configuration values or use defaults
 	// Reduced max workers and batch size to reduce ClickHouse CPU load
@@ -253,7 +253,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 				// 2. Create a transaction specifically for this meter
 
 				// Create a new transaction for this specific meter
-				var meterSpanFinisher *sentry.SpanFinisher
+				var meterSpanFinisher *tracing.SpanFinisher
 
 				// Create a description for this operation that includes meter details
 				operationName := "BulkGetUsageByMeter"
@@ -266,7 +266,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 				span, spanCtx := sentrySvc.StartRepositorySpan(ctx, "GetUsageByMeter", operationName, params)
 				if span != nil {
 					ctx = spanCtx
-					meterSpanFinisher = &sentry.SpanFinisher{Span: span}
+					meterSpanFinisher = &tracing.SpanFinisher{Span: span}
 					defer meterSpanFinisher.Finish()
 				}
 
@@ -384,7 +384,7 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 		return make(map[string]*events.AggregationResult), nil
 	}
 
-	sentrySvc := sentry.NewSentryService(s.config, s.logger)
+	sentrySvc := tracing.NewService(s.config, s.logger)
 	timeoutDuration := 10 * time.Second
 
 	s.logger.With(
@@ -407,10 +407,10 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 
 		span, spanCtx := sentrySvc.StartRepositorySpan(ctx, "GetUsageByMeter", "BulkGetUsageByMeterSync", params)
 		callCtx := ctx
-		var spanFinisher *sentry.SpanFinisher
+		var spanFinisher *tracing.SpanFinisher
 		if span != nil {
 			callCtx = spanCtx
-			spanFinisher = &sentry.SpanFinisher{Span: span}
+			spanFinisher = &tracing.SpanFinisher{Span: span}
 		}
 
 		processingStart := time.Now()
@@ -691,7 +691,7 @@ func createEventIteratorKey(timestamp time.Time, id string) string {
 // MonitorKafkaLag monitors Kafka consumer lag for event consumption and post-processing pipelines.
 // It creates Sentry monitoring spans to track lag metrics for alerting and observability.
 func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
-	sentrySvc := sentry.NewSentryService(s.config, s.logger)
+	sentrySvc := tracing.NewService(s.config, s.logger)
 	kafkaMonitoring := kafka.NewMonitoringService(s.config, s.logger)
 
 	// Get Kafka configuration for the current tenant
@@ -734,7 +734,7 @@ func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
 // It creates a Sentry monitoring span with lag details for observability.
 func (s *eventService) monitorConsumerLag(
 	ctx context.Context,
-	sentrySvc *sentry.Service,
+	sentrySvc *tracing.Service,
 	kafkaMonitoring *kafka.MonitoringService,
 	topic string,
 	consumerGroup string,

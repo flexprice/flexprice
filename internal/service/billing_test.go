@@ -1479,42 +1479,42 @@ func (s *BillingServiceSuite) TestSubscriptionLineItemPeriodScenarios() {
 			s.Require().Len(periods, tt.periodsToAssert)
 
 			for i, p := range periods {
-			// Period-end reference point
-			reqEnd, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-				Subscription:   sub,
-				PeriodStart:    p.Start,
-				PeriodEnd:      p.End,
-				ReferencePoint: types.ReferencePointPeriodEnd,
-			})
-			s.NoError(err, "period %d PeriodEnd", i+1)
-			s.assertInvoiceRequestFixedLines(reqEnd, tt.expectedPerPeriod[i])
+				// Period-end reference point
+				reqEnd, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+					Subscription:   sub,
+					PeriodStart:    p.Start,
+					PeriodEnd:      p.End,
+					ReferencePoint: types.ReferencePointPeriodEnd,
+				})
+				s.NoError(err, "period %d PeriodEnd", i+1)
+				s.assertInvoiceRequestFixedLines(reqEnd, tt.expectedPerPeriod[i])
 
-			// Preview (same window; no already-invoiced filter)
-			reqPreview, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-				Subscription:   sub,
-				PeriodStart:    p.Start,
-				PeriodEnd:      p.End,
-				ReferencePoint: types.ReferencePointPreview,
-			})
-			s.NoError(err, "period %d Preview", i+1)
-			s.assertInvoiceRequestFixedLines(reqPreview, tt.expectedPerPeriod[i])
+				// Preview (same window; no already-invoiced filter)
+				reqPreview, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+					Subscription:   sub,
+					PeriodStart:    p.Start,
+					PeriodEnd:      p.End,
+					ReferencePoint: types.ReferencePointPreview,
+				})
+				s.NoError(err, "period %d Preview", i+1)
+				s.assertInvoiceRequestFixedLines(reqPreview, tt.expectedPerPeriod[i])
 			}
 
 			// For monthly scenario only: assert ReferencePointPeriodStart for first period (advance-only, correct periods)
 			if tt.name == "monthly_sub_monthly_quarterly_advance_arrear" {
 				p := periods[0]
-			reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
-				Subscription:   sub,
-				PeriodStart:    p.Start,
-				PeriodEnd:      p.End,
-				ReferencePoint: types.ReferencePointPeriodStart,
-			})
-			s.NoError(err)
-			// Period start = only advance for current period: monthly (Jan1-Feb1), quarterly (Jan1-Apr1, natural period end)
-			s.assertInvoiceRequestFixedLines(reqStart, []expectedLineForPeriodTests{
-				{"p_mo_adv", jan1, feb1},
-				{"p_q_adv", jan1, apr1},
-			})
+				reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, &dto.PrepareSubscriptionInvoiceRequestParams{
+					Subscription:   sub,
+					PeriodStart:    p.Start,
+					PeriodEnd:      p.End,
+					ReferencePoint: types.ReferencePointPeriodStart,
+				})
+				s.NoError(err)
+				// Period start = only advance for current period: monthly (Jan1-Feb1), quarterly (Jan1-Apr1, natural period end)
+				s.assertInvoiceRequestFixedLines(reqStart, []expectedLineForPeriodTests{
+					{"p_mo_adv", jan1, feb1},
+					{"p_q_adv", jan1, apr1},
+				})
 			}
 		})
 	}
@@ -2423,14 +2423,14 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 			s.Equal(float64(500), usage.Charges[0].Quantity, "Should have 500 units of usage")
 			s.Equal(float64(10), usage.Charges[0].Amount, "Should have $10 of charges")
 
-		// Calculate charges
-		usageRes, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
-			Subscription: s.testData.subscription,
-			Usage:        usage,
-			PeriodStart:  s.testData.subscription.CurrentPeriodStart,
-			PeriodEnd:    s.testData.subscription.CurrentPeriodEnd,
-		})
-		lineItems, totalAmount := usageRes.LineItems, usageRes.TotalAmount
+			// Calculate charges
+			usageRes, err := s.service.CalculateUsageCharges(s.GetContext(), &dto.CalculateUsageChargesParams{
+				Subscription: s.testData.subscription,
+				Usage:        usage,
+				PeriodStart:  s.testData.subscription.CurrentPeriodStart,
+				PeriodEnd:    s.testData.subscription.CurrentPeriodEnd,
+			})
+			lineItems, totalAmount := usageRes.LineItems, usageRes.TotalAmount
 
 			if tt.wantErr {
 				s.Error(err)

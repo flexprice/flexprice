@@ -63,4 +63,3 @@ func (a *QuoteSyncActivities) CreateQuoteAndLineItems(
 
 	return nil
 }
-
