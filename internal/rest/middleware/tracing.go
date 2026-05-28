@@ -34,15 +34,6 @@ func TracingMiddleware(cfg *config.Configuration) []gin.HandlerFunc {
 	return handlers
 }
 
-// SentryMiddleware is retained as a thin wrapper around TracingMiddleware so
-// the router doesn't have to know about the slice form. Prefer TracingMiddleware
-// in new code.
-//
-// Deprecated: kept for back-compat; new code should use TracingMiddleware.
-func SentryMiddleware(cfg *config.Configuration) []gin.HandlerFunc {
-	return TracingMiddleware(cfg)
-}
-
 // TenantContextMiddleware enriches the active OTel span and Sentry scope with
 // tenant_id, environment_id, and user_id. Mount this after AuthenticateMiddleware
 // and EnvAccessMiddleware so the request context already has these set.
@@ -81,11 +72,4 @@ func TenantContextMiddleware(c *gin.Context) {
 	}
 
 	c.Next()
-}
-
-// SentryTenantContextMiddleware is the previous name for TenantContextMiddleware.
-//
-// Deprecated: use TenantContextMiddleware.
-func SentryTenantContextMiddleware(c *gin.Context) {
-	TenantContextMiddleware(c)
 }

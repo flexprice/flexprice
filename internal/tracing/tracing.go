@@ -203,8 +203,12 @@ func (s *Service) newResource(ctx context.Context) (*resource.Resource, error) {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(s.cfg.Otel.ResolveServiceName(s.cfg)),
 	}
-	if s.cfg.Logging.Environment != "" {
-		attrs = append(attrs, semconv.DeploymentEnvironmentName(s.cfg.Logging.Environment))
+	env := s.cfg.Logging.Environment
+	if env == "" {
+		env = s.cfg.Sentry.Environment
+	}
+	if env != "" {
+		attrs = append(attrs, semconv.DeploymentEnvironmentName(env))
 	}
 	if s.cfg.Logging.Region != "" {
 		attrs = append(attrs, semconv.CloudRegion(s.cfg.Logging.Region))
