@@ -228,11 +228,24 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 		return nil, err
 	}
 
-	mapping, err := s.upsertEntityMapping(ctx, req)
+	connections, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
+		QueryFilter:  types.NewNoLimitPublishedQueryFilter(),
+		ProviderType: types.SecretProvider(req.ProviderType),
+	})
 	if err != nil {
 		return nil, err
 	}
+	if len(connections) == 0 {
+		return nil, ierr.NewError(fmt.Sprintf("no active connection found for provider %s", req.ProviderType)).
+			WithHint("Create a connection for this provider before linking entities").
+			Mark(ierr.ErrValidation)
+	}
+
 	if err := s.applyEntitySideEffects(ctx, req); err != nil {
+		return nil, err
+	}
+	mapping, err := s.upsertEntityMapping(ctx, req)
+	if err != nil {
 		return nil, err
 	}
 
@@ -312,9 +325,7 @@ func (s *entityIntegrationMappingService) applyEntitySideEffects(ctx context.Con
 	case types.IntegrationEntityTypeCustomer:
 		return s.applyCustomerLinkSideEffects(ctx, req)
 	default:
-		return ierr.NewError("unsupported entity type for link side effects").
-			WithHint(fmt.Sprintf("Entity type %s is not supported yet", req.EntityType)).
-			Mark(ierr.ErrValidation)
+		return nil
 	}
 }
 
@@ -323,9 +334,7 @@ func (s *entityIntegrationMappingService) applyCustomerLinkSideEffects(ctx conte
 	case types.SecretProviderRazorpay:
 		return s.applyRazorpayCustomerLinkSideEffects(ctx, req)
 	default:
-		return ierr.NewError("unsupported provider for customer link").
-			WithHint(fmt.Sprintf("Provider %s is not supported yet for customer links", req.ProviderType)).
-			Mark(ierr.ErrValidation)
+		return nil
 	}
 }
 
