@@ -525,6 +525,30 @@ func (s *SubscriptionChangeServiceTestSuite) TestPreviewSubscriptionLateral() {
 	assert.Equal(s.T(), types.SubscriptionChangeTypeLateral, response.ChangeType)
 }
 
+func (s *SubscriptionChangeServiceTestSuite) TestCreateSubscriptionHonoursPreGeneratedID() {
+	ctx := s.GetContext()
+
+	customer := s.createTestCustomer()
+	plan := s.createTestPlan("Basic", decimal.NewFromFloat(10.00))
+
+	preGeneratedID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)
+
+	req := dto.CreateSubscriptionRequest{
+		ID:                 preGeneratedID,
+		CustomerID:         customer.ID,
+		PlanID:             plan.ID,
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	}
+
+	response, err := s.subscriptionService.CreateSubscription(ctx, req)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), preGeneratedID, response.Subscription.ID)
+}
+
 func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionUpgrade() {
 	ctx := s.GetContext()
 
