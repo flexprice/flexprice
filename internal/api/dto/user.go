@@ -79,18 +79,12 @@ func NewUserResponse(u *user.User, tenant *tenant.Tenant) *UserResponse {
 }
 
 type UpdateUserRequest struct {
-	Metadata map[string]string `json:"metadata" validate:"required"`
+	Metadata map[string]string `json:"metadata" validate:"omitempty"`
 }
 
 func (r *UpdateUserRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
-	}
-
-	if r.Metadata == nil {
-		return ierr.NewError("metadata is required").
-			WithHint("Provide metadata object with key/value pairs").
-			Mark(ierr.ErrValidation)
 	}
 
 	return nil
