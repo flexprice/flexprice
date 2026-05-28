@@ -4413,23 +4413,28 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	s.NoError(err)
 }
 
-// TestProcessSubscriptionPeriod_BackdatedWithEndDate verifies that a backdated
-// subscription with a future end_date is NOT prematurely cancelled when the
-// period-update cron catches up through historical billing periods and advances
-// the subscription into its final billing period (where newPeriod.end == end_date).
-//
-// Regression for: premature cancellation at lines 3083-3091 of subscription.go.
+// TestProcessSubscriptionPeriod_BackdatedWithEndDate verifies the complete
+// cancellation behavior matrix for backdated catch-up processing.
 func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_BackdatedWithEndDate() {
 	ctx := s.GetContext()
 	subService := s.service.(*subscriptionService)
 
-	makeBackdatedSub := func(id string, startDate, endDate time.Time, periodStart, periodEnd time.Time, period types.BillingPeriod) *subscription.Subscription {
+	makeSub := func(
+		id string,
+		startDate time.Time,
+		periodStart time.Time,
+		periodEnd time.Time,
+		period types.BillingPeriod,
+		endDate *time.Time,
+		cancelAt *time.Time,
+		cancelAtPeriodEnd bool,
+	) *subscription.Subscription {
 		sub := &subscription.Subscription{
 			ID:                 id,
 			PlanID:             s.testData.plan.ID,
 			CustomerID:         s.testData.customer.ID,
 			StartDate:          startDate,
-			EndDate:            &endDate,
+			EndDate:            endDate,
 			CurrentPeriodStart: periodStart,
 			CurrentPeriodEnd:   periodEnd,
 			BillingAnchor:      startDate,
@@ -4438,117 +4443,224 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_BackdatedWithEn
 			BillingPeriodCount: 1,
 			Currency:           "usd",
 			SubscriptionStatus: types.SubscriptionStatusActive,
+			CancelAt:           cancelAt,
+			CancelAtPeriodEnd:  cancelAtPeriodEnd,
 			BaseModel:          types.GetDefaultBaseModel(ctx),
 		}
 		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
 		return sub
 	}
 
-	s.Run("backdated quarterly subscription in last period stays ACTIVE (k-health scenario)", func() {
-		// Mirrors the exact k-health production bug:
-		// start=May 30 2025, end=May 30 2026, quarterly billing, created May 22 2026.
-		// Cron runs at May 28 2026 — end_date is 2 days away, subscription must be ACTIVE.
+	s.Run("k-health quarterly future end_date stays ACTIVE in final period", func() {
 		start := time.Date(2025, 5, 30, 0, 0, 0, 0, time.UTC)
 		endDate := time.Date(2026, 5, 30, 0, 0, 0, 0, time.UTC)
-		// First period at creation time: (May 30 2025, Aug 30 2025)
 		periodStart := time.Date(2025, 5, 30, 0, 0, 0, 0, time.UTC)
 		periodEnd := time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC)
 		now := time.Date(2026, 5, 28, 15, 0, 0, 0, time.UTC)
 
-		sub := makeBackdatedSub("sub_khealth_test", start, endDate, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER)
+		sub := makeSub("sub_khealth_test", start, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER, &endDate, nil, false)
 
 		err := subService.processSubscriptionPeriod(ctx, sub, now)
 		s.NoError(err)
 
 		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 		s.NoError(err)
-		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus,
-			"subscription must remain ACTIVE: it is in its last billing period, end_date is still in the future")
-		s.Nil(updated.CancelledAt,
-			"cancelled_at must not be set to a future date")
-		// Current period should end at end_date (the final quarterly period)
-		s.Equal(endDate.UTC(), updated.CurrentPeriodEnd.UTC(),
-			"current_period_end should advance to end_date (last period boundary)")
+		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus)
+		s.Nil(updated.CancelledAt, "cancelled_at must not be set to a future date")
+		s.Equal(endDate.UTC(), updated.CurrentPeriodEnd.UTC(), "current period should advance to final boundary")
 	})
 
-	s.Run("backdated monthly subscription in last period stays ACTIVE (future end_date)", func() {
-		// Monthly billing: start Jan 1 2025, end Jan 1 2026, now = Nov 15 2025.
-		// Catch-up produces periods through Oct→Jan. newPeriod=(Oct 1, Jan 1 2026)=end_date.
-		// Must remain ACTIVE — subscription is in its last period, end_date still in future.
+	s.Run("backdated monthly future end_date stays ACTIVE in final period", func() {
 		start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 		endDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		periodStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-		periodEnd := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
+		periodEnd := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 		now := time.Date(2025, 11, 15, 0, 0, 0, 0, time.UTC)
 
-		sub := makeBackdatedSub("sub_monthly_future_end", start, endDate, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER)
+		sub := makeSub("sub_monthly_future_end", start, periodStart, periodEnd, types.BILLING_PERIOD_MONTHLY, &endDate, nil, false)
 
 		err := subService.processSubscriptionPeriod(ctx, sub, now)
 		s.NoError(err)
 
 		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 		s.NoError(err)
-		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus,
-			"subscription must stay ACTIVE through its last period when end_date is in the future")
+		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus)
 		s.Nil(updated.CancelledAt)
 	})
 
-	s.Run("backdated subscription with past end_date is CANCELLED after final invoice", func() {
-		// Quarterly billing: start Jan 1 2025, end Oct 1 2025 (already past), now = Dec 1 2025.
-		// The final period (Jul 1 → Oct 1) ends at end_date (in the past) → CANCELLED is correct.
+	s.Run("non-backdated future end_date remains ACTIVE", func() {
+		start := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
+		endDate := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+		periodStart := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
+		periodEnd := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
+		now := time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC)
+
+		sub := makeSub("sub_non_backdated_future_end", start, periodStart, periodEnd, types.BILLING_PERIOD_MONTHLY, &endDate, nil, false)
+
+		err := subService.processSubscriptionPeriod(ctx, sub, now)
+		s.NoError(err)
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus)
+		s.Nil(updated.CancelledAt)
+	})
+
+	s.Run("backdated past end_date is CANCELLED", func() {
 		start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 		endDate := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC)
 		periodStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 		periodEnd := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
 		now := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
 
-		sub := makeBackdatedSub("sub_quarterly_past_end", start, endDate, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER)
+		sub := makeSub("sub_quarterly_past_end", start, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER, &endDate, nil, false)
 
 		err := subService.processSubscriptionPeriod(ctx, sub, now)
 		s.NoError(err)
 
 		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 		s.NoError(err)
-		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus,
-			"subscription with past end_date must be CANCELLED after its final period is processed")
-		s.NotNil(updated.CancelledAt,
-			"cancelled_at must be set when subscription is cancelled at end_date")
+		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
+		s.NotNil(updated.CancelledAt)
 	})
 
-	s.Run("backdated subscription with no end_date stays ACTIVE indefinitely", func() {
-		// No end_date: catch-up should never cancel regardless of how backdated.
+	s.Run("backdated with no end_date stays ACTIVE", func() {
 		start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 		periodStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 		periodEnd := time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC)
 		now := time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)
 
-		sub := &subscription.Subscription{
-			ID:                 "sub_no_enddate",
-			PlanID:             s.testData.plan.ID,
-			CustomerID:         s.testData.customer.ID,
-			StartDate:          start,
-			EndDate:            nil,
-			CurrentPeriodStart: periodStart,
-			CurrentPeriodEnd:   periodEnd,
-			BillingAnchor:      start,
-			BillingCycle:       types.BillingCycleAnniversary,
-			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-			BillingPeriodCount: 1,
-			Currency:           "usd",
-			SubscriptionStatus: types.SubscriptionStatusActive,
-			BaseModel:          types.GetDefaultBaseModel(ctx),
-		}
-		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
+		sub := makeSub("sub_no_enddate", start, periodStart, periodEnd, types.BILLING_PERIOD_MONTHLY, nil, nil, false)
 
 		err := subService.processSubscriptionPeriod(ctx, sub, now)
 		s.NoError(err)
 
 		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
 		s.NoError(err)
-		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus,
-			"subscription with no end_date must never be auto-cancelled by period processing")
+		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus)
 		s.Nil(updated.CancelledAt)
 	})
+
+	s.Run("backdated CancelAtPeriodEnd in future stays ACTIVE", func() {
+		start := time.Date(2025, 5, 30, 0, 0, 0, 0, time.UTC)
+		cancelAt := time.Date(2026, 5, 30, 0, 0, 0, 0, time.UTC)
+		periodStart := time.Date(2025, 5, 30, 0, 0, 0, 0, time.UTC)
+		periodEnd := time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC)
+		now := time.Date(2026, 5, 28, 15, 0, 0, 0, time.UTC)
+
+		sub := makeSub("sub_cancel_at_future", start, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER, nil, &cancelAt, true)
+
+		err := subService.processSubscriptionPeriod(ctx, sub, now)
+		s.NoError(err)
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus)
+	})
+
+	s.Run("backdated CancelAtPeriodEnd in past is CANCELLED", func() {
+		start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		cancelAt := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC)
+		periodStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		periodEnd := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
+		now := time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC)
+
+		sub := makeSub("sub_cancel_at_past", start, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER, nil, &cancelAt, true)
+
+		err := subService.processSubscriptionPeriod(ctx, sub, now)
+		s.NoError(err)
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
+	})
+
+	s.Run("end_date equal now is CANCELLED", func() {
+		start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		endDate := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC)
+		periodStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		periodEnd := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
+		now := endDate
+
+		sub := makeSub("sub_end_date_now", start, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER, &endDate, nil, false)
+
+		err := subService.processSubscriptionPeriod(ctx, sub, now)
+		s.NoError(err)
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
+		s.NotNil(updated.CancelledAt)
+		s.Equal(endDate.Unix(), updated.CancelledAt.Unix())
+	})
+
+	s.Run("cancel_at equal now is CANCELLED", func() {
+		start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		cancelAt := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC)
+		periodStart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		periodEnd := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
+		now := cancelAt
+
+		sub := makeSub("sub_cancel_at_now", start, periodStart, periodEnd, types.BILLING_PERIOD_QUARTER, nil, &cancelAt, true)
+
+		err := subService.processSubscriptionPeriod(ctx, sub, now)
+		s.NoError(err)
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
+	})
+}
+
+// TestProcessSubscriptionPeriod_BackdatedWithEndDate_TwoRuns verifies the
+// intended lifecycle: active in final period before end_date, then cancelled on
+// the first cron run after end_date passes.
+func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_BackdatedWithEndDate_TwoRuns() {
+	ctx := s.GetContext()
+	subService := s.service.(*subscriptionService)
+
+	start := time.Date(2025, 5, 30, 0, 0, 0, 0, time.UTC)
+	endDate := time.Date(2026, 5, 30, 0, 0, 0, 0, time.UTC)
+	periodStart := time.Date(2025, 5, 30, 0, 0, 0, 0, time.UTC)
+	periodEnd := time.Date(2025, 8, 30, 0, 0, 0, 0, time.UTC)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_two_run_khealth",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          start,
+		EndDate:            &endDate,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		BillingAnchor:      start,
+		BillingCycle:       types.BillingCycleAnniversary,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		Currency:           "usd",
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{}))
+
+	// Run 1: before end_date.
+	run1Now := time.Date(2026, 5, 28, 15, 0, 0, 0, time.UTC)
+	s.NoError(subService.processSubscriptionPeriod(ctx, sub, run1Now))
+
+	afterRun1, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.Equal(types.SubscriptionStatusActive, afterRun1.SubscriptionStatus)
+	s.Nil(afterRun1.CancelledAt)
+	s.Equal(endDate.UTC(), afterRun1.CurrentPeriodEnd.UTC())
+
+	// Run 2: after end_date.
+	run2Now := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	s.NoError(subService.processSubscriptionPeriod(ctx, afterRun1, run2Now))
+
+	afterRun2, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.NoError(err)
+	s.Equal(types.SubscriptionStatusCancelled, afterRun2.SubscriptionStatus)
+	s.NotNil(afterRun2.CancelledAt)
+	s.Equal(endDate.Unix(), afterRun2.CancelledAt.Unix())
 }
 
 func (s *SubscriptionServiceSuite) TestSubscriptionAnchor_CalendarAndAnniversary() {
