@@ -2,6 +2,7 @@ package ent
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	entUser "github.com/flexprice/flexprice/ent/user"
@@ -54,6 +55,9 @@ func (r *userRepository) Create(ctx context.Context, user *domainUser.User) erro
 	if user.Email != "" {
 		builder.SetEmail(user.Email)
 	}
+	if user.Metadata != nil {
+		builder.SetMetadata(user.Metadata)
+	}
 
 	_, err := builder.Save(ctx)
 
@@ -65,6 +69,59 @@ func (r *userRepository) Create(ctx context.Context, user *domainUser.User) erro
 				"user_id":   user.ID,
 				"email":     user.Email,
 				"tenant_id": user.TenantID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return nil
+}
+
+// Update updates an existing user.
+func (r *userRepository) Update(ctx context.Context, user *domainUser.User) error {
+	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
+	if !ok {
+		return ierr.NewError("tenant ID not found in context").
+			WithHint("Tenant ID is required in the context").
+			Mark(ierr.ErrValidation)
+	}
+
+	span := StartRepositorySpan(ctx, "user", "update", map[string]interface{}{
+		"user_id":   user.ID,
+		"tenant_id": tenantID,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Writer(ctx)
+	updateQuery := client.User.Update().
+		Where(
+			entUser.ID(user.ID),
+			entUser.TenantID(tenantID),
+		).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetUpdatedAt(time.Now().UTC())
+
+	if user.Metadata != nil {
+		updateQuery = updateQuery.SetMetadata(user.Metadata)
+	}
+
+	if _, err := updateQuery.Save(ctx); err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHint("User not found").
+				WithReportableDetails(map[string]interface{}{
+					"user_id":   user.ID,
+					"tenant_id": tenantID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+
+		return ierr.WithError(err).
+			WithHint("Failed to update user").
+			WithReportableDetails(map[string]interface{}{
+				"user_id":   user.ID,
+				"tenant_id": tenantID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
