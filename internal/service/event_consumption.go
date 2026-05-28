@@ -40,7 +40,7 @@ type eventConsumptionService struct {
 	lazyPubSub             pubsub.PubSub
 	replayPubSub           pubsub.PubSub
 	eventRepo              events.Repository
-	sentryService          *tracing.Service
+	tracingService          *tracing.Service
 	eventPostProcessingSvc EventPostProcessingService
 }
 
@@ -48,13 +48,13 @@ type eventConsumptionService struct {
 func NewEventConsumptionService(
 	params ServiceParams,
 	eventRepo events.Repository,
-	sentryService *tracing.Service,
+	tracingService *tracing.Service,
 	eventPostProcessingSvc EventPostProcessingService,
 ) EventConsumptionService {
 	ev := &eventConsumptionService{
 		ServiceParams:          params,
 		eventRepo:              eventRepo,
-		sentryService:          sentryService,
+		tracingService:          tracingService,
 		eventPostProcessingSvc: eventPostProcessingSvc,
 	}
 
@@ -206,7 +206,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 			"error", err,
 			"payload", string(msg.Payload),
 		)
-		s.sentryService.CaptureException(err)
+		s.tracingService.CaptureException(err)
 
 		// Return error for non-retriable parse errors
 		// Watermill's poison queue middleware will handle moving it to DLQ
@@ -328,7 +328,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 // ProcessRawEvent processes a raw event payload (used for AWS Lambda and direct processing)
 func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload []byte) error {
 	// Start a transaction for this event processing
-	transaction, ctx := s.sentryService.StartTransaction(ctx, "event.process")
+	transaction, ctx := s.tracingService.StartTransaction(ctx, "event.process")
 	if transaction != nil {
 		defer transaction.Finish()
 	}
@@ -340,7 +340,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 			"error", err,
 			"payload", string(payload),
 		)
-		s.sentryService.CaptureException(err)
+		s.tracingService.CaptureException(err)
 		return fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 

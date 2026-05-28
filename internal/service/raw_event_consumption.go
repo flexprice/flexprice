@@ -36,7 +36,7 @@ type rawEventConsumptionService struct {
 	ServiceParams
 	pubSub        pubsub.PubSub
 	outputPubSub  pubsub.PubSub
-	sentryService *tracing.Service
+	tracingService *tracing.Service
 }
 
 // RawEventBatch represents the batch structure from Bento
@@ -49,11 +49,11 @@ type RawEventBatch struct {
 // NewRawEventConsumptionService creates a new raw event consumption service
 func NewRawEventConsumptionService(
 	params ServiceParams,
-	sentryService *tracing.Service,
+	tracingService *tracing.Service,
 ) RawEventConsumptionService {
 	ev := &rawEventConsumptionService{
 		ServiceParams: params,
-		sentryService: sentryService,
+		tracingService: tracingService,
 	}
 
 	// Consumer pubsub for raw_events topic
@@ -163,7 +163,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 			"error", err,
 			"payload", string(msg.Payload),
 		)
-		s.sentryService.CaptureException(err)
+		s.tracingService.CaptureException(err)
 		return fmt.Errorf("non-retriable unmarshal error: %w", err)
 	}
 
