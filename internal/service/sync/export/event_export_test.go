@@ -81,7 +81,7 @@ func TestEventExporter_PrepareData_CostColumn(t *testing.T) {
 		t.Fatalf("setup usage: %v", err)
 	}
 
-	exporter := NewEventExporter(featureUsageStore, priceStore, nil, log)
+	exporter := NewEventExporter(featureUsageStore, nil, priceStore, nil, nil, log)
 	req := &dto.ExportRequest{
 		TenantID:    tenantID,
 		EnvID:       envID,
@@ -158,7 +158,7 @@ func TestEventExporter_PrepareData_CostEmptyWhenPriceIDEmpty(t *testing.T) {
 		t.Fatalf("setup usage: %v", err)
 	}
 
-	exporter := NewEventExporter(featureUsageStore, priceStore, nil, log)
+	exporter := NewEventExporter(featureUsageStore, nil, priceStore, nil, nil, log)
 	req := &dto.ExportRequest{
 		TenantID:   tenantID,
 		EnvID:      envID,
@@ -230,7 +230,7 @@ func TestEventExporter_PrepareData_CostEmptyWhenPriceNotFound(t *testing.T) {
 		t.Fatalf("setup usage: %v", err)
 	}
 
-	exporter := NewEventExporter(featureUsageStore, priceStore, nil, log)
+	exporter := NewEventExporter(featureUsageStore, nil, priceStore, nil, nil, log)
 	req := &dto.ExportRequest{
 		TenantID:   tenantID,
 		EnvID:      envID,
@@ -272,7 +272,7 @@ func TestEventExporter_CSVHeadersIncludeCost(t *testing.T) {
 	priceStore := testutil.NewInMemoryPriceStore()
 	log := logger.GetLogger()
 
-	exporter := NewEventExporter(featureUsageStore, priceStore, nil, log)
+	exporter := NewEventExporter(featureUsageStore, nil, priceStore, nil, nil, log)
 	now := time.Now().UTC()
 	req := &dto.ExportRequest{
 		TenantID:   tenantID,
