@@ -298,3 +298,20 @@ func (f *flexpriceAuth) UserInvite(ctx context.Context, req UserInviteRequest) (
 		AuthRecord: auth.NewAuth(userID, types.AuthProviderFlexprice, string(hashedPassword)),
 	}, nil
 }
+
+// RemoveUserFromTenant is a no-op for Flexprice — JWTs are self-contained and expire after 30 days.
+func (f *flexpriceAuth) RemoveUserFromTenant(ctx context.Context, userID string) error {
+	return nil
+}
+
+// GetUserByEmail always returns nil for Flexprice — there is no global user store.
+// Re-invite for Flexprice always follows the fresh-create path.
+func (f *flexpriceAuth) GetUserByEmail(ctx context.Context, email string) (*ProviderUser, error) {
+	return nil, nil
+}
+
+// ResetUserPassword is a no-op for Flexprice — GetUserByEmail always returns nil,
+// so this method is never reached in the current feature.
+func (f *flexpriceAuth) ResetUserPassword(ctx context.Context, userID string, newPassword string) error {
+	return nil
+}
