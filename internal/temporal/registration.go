@@ -108,6 +108,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	walletService := service.NewWalletService(params)
 	exportActivity := exportActivities.NewExportActivity(
 		params.FeatureUsageRepo,
+		params.MeterUsageRepo,
 		params.PriceRepo,
 		params.InvoiceRepo,
 		params.WalletRepo,
@@ -115,6 +116,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.CustomerRepo,
 		params.ConnectionRepo,
 		params.IntegrationFactory,
+		params.Config,
 		params.Logger,
 		featureUsageTrackingService,
 		params.EventRepo,
