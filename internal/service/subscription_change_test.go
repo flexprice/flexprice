@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	invoicedomain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -523,6 +524,30 @@ func (s *SubscriptionChangeServiceTestSuite) TestPreviewSubscriptionLateral() {
 	require.NoError(s.T(), err)
 	assert.NotNil(s.T(), response)
 	assert.Equal(s.T(), types.SubscriptionChangeTypeLateral, response.ChangeType)
+}
+
+func (s *SubscriptionChangeServiceTestSuite) TestCreateSubscriptionHonoursPreGeneratedID() {
+	ctx := s.GetContext()
+
+	customer := s.createTestCustomer()
+	plan := s.createTestPlan("Basic", decimal.NewFromFloat(10.00))
+
+	preGeneratedID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)
+
+	req := dto.CreateSubscriptionRequest{
+		ID:                 preGeneratedID,
+		CustomerID:         customer.ID,
+		PlanID:             plan.ID,
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	}
+
+	response, err := s.subscriptionService.CreateSubscription(ctx, req)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), preGeneratedID, response.Subscription.ID)
 }
 
 func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionUpgrade() {
@@ -1632,6 +1657,79 @@ func (s *SubscriptionChangeServiceTestSuite) TestIsFirstSubscriptionOpenInvoiceR
 				"IsFirstSubscriptionOpenInvoiceReason() for reason %q", tc.reason)
 		})
 	}
+}
+
+func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionChangeTrialingNoProration() {
+	ctx := s.GetContext()
+
+	// Arrange: create a trialing subscription
+	customer := s.createTestCustomer()
+	basicPlan := s.createTestPlan("Basic", decimal.NewFromFloat(10.00))
+	premiumPlan := s.createTestPlan("Premium", decimal.NewFromFloat(20.00))
+	testSub := s.createTestSubscription(basicPlan.ID, customer.ID)
+
+	// Force subscription into trialing state (no payment collected yet)
+	testSub.SubscriptionStatus = types.SubscriptionStatusTrialing
+	trialEnd := time.Now().UTC().AddDate(0, 0, 7)
+	testSub.TrialEnd = &trialEnd
+	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, testSub))
+
+	// Act: upgrade during trial with proration requested
+	req := s.createSubscriptionChangeRequest(premiumPlan.ID, types.ProrationBehaviorCreateProrations)
+	response, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, testSub.ID, req)
+
+	// Assert: no proration applied — ghost adjustment must not appear
+	require.NoError(s.T(), err)
+	assert.Nil(s.T(), response.ProrationApplied,
+		"trialing subscription plan change must not produce a proration adjustment")
+
+	// New subscription's opening invoice must have zero adjustment amount
+	openingInv := s.getOpeningInvoiceForSub(response.NewSubscription.ID)
+	assert.True(s.T(), openingInv.AmountDue.IsPositive(),
+		"new subscription invoice should charge the full plan amount")
+}
+
+func (s *SubscriptionChangeServiceTestSuite) TestPaddleEntityMappingInheritedOnPlanChange() {
+	ctx := s.GetContext()
+
+	cust := s.createTestCustomer()
+	basicPlan := s.createTestPlan("Basic", decimal.NewFromFloat(10.00))
+	premiumPlan := s.createTestPlan("Premium", decimal.NewFromFloat(20.00))
+	testSub := s.createTestSubscription(basicPlan.ID, cust.ID)
+
+	// Seed a Paddle entity mapping on the old subscription
+	paddleEntityID := "paddle_sub_test_" + testSub.ID
+	existingMapping := &entityintegrationmapping.EntityIntegrationMapping{
+		ID:               "eim_test_" + testSub.ID,
+		EntityID:         testSub.ID,
+		EntityType:       types.IntegrationEntityTypeSubscription,
+		ProviderType:     "paddle",
+		ProviderEntityID: paddleEntityID,
+		Metadata:         map[string]interface{}{"paddle_subscription_id": paddleEntityID},
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		BaseModel:        types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(s.T(), s.GetStores().EntityIntegrationMappingRepo.Create(ctx, existingMapping))
+
+	// Execute upgrade
+	req := s.createSubscriptionChangeRequest(premiumPlan.ID, types.ProrationBehaviorNone)
+	response, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, testSub.ID, req)
+	require.NoError(s.T(), err)
+
+	newSubID := response.NewSubscription.ID
+
+	// Verify: new subscription has a Paddle mapping pointing to the same Paddle entity
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityID = newSubID
+	filter.EntityType = types.IntegrationEntityTypeSubscription
+	filter.ProviderTypes = []string{"paddle"}
+	mappings, err := s.GetStores().EntityIntegrationMappingRepo.List(ctx, filter)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), mappings, 1, "new subscription must have exactly one Paddle mapping")
+	assert.Equal(s.T(), paddleEntityID, mappings[0].ProviderEntityID,
+		"new mapping must point to the same Paddle subscription ID")
+	assert.NotEqual(s.T(), existingMapping.ID, mappings[0].ID,
+		"new mapping must have a different record ID")
 }
 
 // TestSubscriptionChangeServiceTestSuite runs the subscription change suite.

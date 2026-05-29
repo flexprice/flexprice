@@ -89,6 +89,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetCustomerTimezone(sub.CustomerTimezone).
 		SetProrationBehavior(sub.ProrationBehavior).
 		SetVersion(1).
+		SetMetadata(sub.Metadata).
 		SetPaymentBehavior(types.PaymentBehavior(sub.PaymentBehavior)).
 		SetCollectionMethod(types.CollectionMethod(sub.CollectionMethod)).
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).

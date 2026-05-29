@@ -464,6 +464,16 @@ func UpdatedByContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldUpdatedBy, v))
 }
 
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldMetadata))
+}
+
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldMetadata))
+}
+
 // EmailEQ applies the EQ predicate on the "email" field.
 func EmailEQ(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldEmail, v))

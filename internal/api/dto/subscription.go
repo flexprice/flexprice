@@ -342,6 +342,12 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 }
 
 type CreateSubscriptionRequest struct {
+	// ID is an optional pre-generated subscription ID for internal use only.
+	// This exists as a temporary patch to allow Paddle entity mapping to be created
+	// before the subscription row is written, so both share the same transaction.
+	// TODO: Remove once plan-change integration carryover is handled generically.
+	// Never populated from external JSON.
+	ID string `json:"-"`
 
 	// customer_id is the flexprice customer id
 	// and it is prioritized over external_customer_id in case both are provided.
@@ -1246,8 +1252,13 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		trialStart, trialEnd = r.TrialStart, r.TrialEnd
 	}
 
+	subID := r.ID
+	if subID == "" {
+		subID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)
+	}
+
 	sub := &subscription.Subscription{
-		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		ID:                 subID,
 		CustomerID:         r.CustomerID,
 		PlanID:             r.PlanID,
 		Currency:           strings.ToLower(r.Currency),

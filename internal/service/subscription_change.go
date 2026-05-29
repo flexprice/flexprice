@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -108,9 +109,12 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	// Calculate effective date
 	effectiveDate := time.Now()
 
-	// Calculate proration if needed
+	// Calculate proration if needed.
+	// Trialing subscriptions have never been charged, so there is no unused credit to apply.
+	// Calculating proration would produce a ghost adjustment — skip it entirely.
 	var prorationDetails *dto.ProrationDetails
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+	isTrialing := currentSub.SubscriptionStatus == types.SubscriptionStatusTrialing
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 		prorationDetails, err = s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
 		if err != nil {
 			logger.Error("failed to calculate proration preview", zap.Error(err))
@@ -702,6 +706,12 @@ func (s *subscriptionChangeService) executeChange(
 	effectiveDate time.Time,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
 
+	// Trialing subscriptions have never been charged, so there is no unused credit to apply.
+	// Calculating proration would produce a ghost adjustment — skip it entirely.
+	// Capture this BEFORE CancelSubscription runs, because the in-place mutation of the
+	// subscription struct inside CancelSubscription would otherwise overwrite the status.
+	isTrialing := currentSub.SubscriptionStatus == types.SubscriptionStatusTrialing
+
 	// Cancel the old subscription (pass through proration_behavior so execute matches preview).
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	archivedSub, err := subscriptionService.CancelSubscription(ctx, currentSub.ID, &dto.CancelSubscriptionRequest{
@@ -716,8 +726,9 @@ func (s *subscriptionChangeService) executeChange(
 
 	// For immediate plan changes with create_prorations, we net the old subscription's proration
 	// credit against the new subscription's opening invoice (instead of issuing wallet credit).
+
 	cancelledSubCreditAmount := decimal.Zero
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 		prorationDetails, err := s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
 		if err != nil {
 			return nil, err
@@ -752,7 +763,7 @@ func (s *subscriptionChangeService) executeChange(
 		Metadata:      req.Metadata,
 	}
 
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 		prorationApplied, calcErr := s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
 		if calcErr != nil {
 			return nil, calcErr
@@ -853,7 +864,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		BillingCycle:       req.BillingCycle,
 		BillingAnchor:      newBillingAnchor,
 		StartDate:          &effectiveDate,
-		Metadata:           req.Metadata,
+		Metadata:           lo.Assign(currentSub.Metadata, req.Metadata),
 		ProrationBehavior:  req.ProrationBehavior,
 		CustomerTimezone:   currentSub.CustomerTimezone,
 		CommitmentAmount:   currentSub.CommitmentAmount,
@@ -869,6 +880,17 @@ func (s *subscriptionChangeService) createNewSubscription(
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !cancelledSubTotalCreditAmount.IsZero() {
 		createSubReq.OpeningInvoiceAdjustmentAmount = &cancelledSubTotalCreditAmount
 	}
+
+	// Pre-generate the subscription ID so Paddle mapping can be created first,
+	// within the same transaction. Temporary until generic integration carryover exists.
+	// TODO: Remove once plan-change integration carryover is handled generically.
+	newSubID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)
+	createSubReq.ID = newSubID
+
+	// Carry Paddle entity mapping from old subscription to new before the row is written.
+	// Both operations run inside the same WithTx context; if CreateSubscription rolls back,
+	// the mapping row rolls back with it.
+	s.inheritPaddleEntityMappings(ctx, currentSub.ID, newSubID)
 
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	response, err := subscriptionService.CreateSubscription(ctx, createSubReq)
@@ -913,6 +935,56 @@ func (s *subscriptionChangeService) createNewSubscription(
 	}
 
 	return newSub, nil
+}
+
+// mergeSubscriptionMetadata merges old subscription metadata with change-request metadata.
+// Keys in overlay (change request) take precedence over keys in base (old subscription),
+// so callers can explicitly override specific keys while everything else carries forward.
+func mergeSubscriptionMetadata(base, overlay map[string]string) map[string]string {
+	if len(base) == 0 && len(overlay) == 0 {
+		return nil
+	}
+	merged := make(map[string]string, len(base)+len(overlay))
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range overlay {
+		merged[k] = v
+	}
+	return merged
+}
+
+// inheritPaddleEntityMappings copies Paddle subscription entity mappings from the old
+// subscription to the new one after a plan change, avoiding a repeat checkout flow.
+//
+// NOTE: This is a temporary patch for the Paddle integration until a proper
+// cross-provider entity mapping inheritance mechanism is implemented.
+// TODO: Remove once plan-change integration carryover is handled generically.
+func (s *subscriptionChangeService) inheritPaddleEntityMappings(
+	ctx context.Context,
+	oldSubID, newSubID string,
+) {
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityID = oldSubID
+	filter.EntityType = types.IntegrationEntityTypeSubscription
+	filter.ProviderTypes = []string{string(types.SecretProviderPaddle)}
+
+	mappings, err := s.serviceParams.EntityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		s.serviceParams.Logger.Warnw("failed to list paddle entity mappings for old subscription",
+			"old_sub_id", oldSubID, "error", err)
+		return
+	}
+
+	for _, m := range mappings {
+		newMapping := m.CopyWith(ctx, &entityintegrationmapping.EntityIntegrationMappingCloneOverrides{
+			EntityID: &newSubID,
+		})
+		if createErr := s.serviceParams.EntityIntegrationMappingRepo.Create(ctx, newMapping); createErr != nil {
+			s.serviceParams.Logger.Warnw("failed to create paddle entity mapping for new subscription",
+				"new_sub_id", newSubID, "paddle_entity_id", m.ProviderEntityID, "error", createErr)
+		}
+	}
 }
 
 // handleSubscriptionChangeEntitlementProration handles entitlement proration for subscription plan changes
