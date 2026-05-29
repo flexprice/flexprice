@@ -91,7 +91,6 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetCreatedBy(p.CreatedBy).
 		SetUpdatedBy(p.UpdatedBy).
 		SetEnvironmentID(p.EnvironmentID).
-		SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
 		SetEntityType(p.EntityType).
 		SetEntityID(p.EntityID).
 		SetNillablePriceUnitID(p.PriceUnitID).
@@ -102,6 +101,9 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 
 	if p.GroupID != "" {
 		priceBuilder = priceBuilder.SetGroupID(p.GroupID)
+	}
+	if p.ParentPriceID != "" {
+		priceBuilder = priceBuilder.SetNillableParentPriceID(lo.EmptyableToPtr(p.ParentPriceID))
 	}
 
 	price, err := priceBuilder.Save(ctx)
@@ -454,7 +456,6 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetDisplayAmount(p.DisplayAmount).
 			SetEntityID(p.EntityID).
 			SetEntityType(p.EntityType).
-			SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
 			SetType(p.Type).
 			SetBillingPeriod(p.BillingPeriod).
 			SetBillingPeriodCount(p.BillingPeriodCount).
@@ -476,6 +477,9 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetStatus(string(p.Status))
 		if p.MinQuantity != nil {
 			builders[i] = builders[i].SetMinQuantity(*p.MinQuantity)
+		}
+		if p.ParentPriceID != "" {
+			builders[i] = builders[i].SetNillableParentPriceID(lo.EmptyableToPtr(p.ParentPriceID))
 		}
 		builders[i] = builders[i].
 			SetCreatedAt(p.CreatedAt).
