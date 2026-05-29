@@ -864,7 +864,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		BillingCycle:       req.BillingCycle,
 		BillingAnchor:      newBillingAnchor,
 		StartDate:          &effectiveDate,
-		Metadata:           mergeSubscriptionMetadata(currentSub.Metadata, req.Metadata),
+		Metadata:           lo.Assign(currentSub.Metadata, req.Metadata),
 		ProrationBehavior:  req.ProrationBehavior,
 		CustomerTimezone:   currentSub.CustomerTimezone,
 		CommitmentAmount:   currentSub.CommitmentAmount,
