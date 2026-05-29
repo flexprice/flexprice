@@ -872,6 +872,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		PaymentTerms:       currentSub.PaymentTerms,
 		Workflow:           lo.ToPtr(types.TemporalSubscriptionCreationWorkflow),
 		Inheritance:        inheritance,
+		TrialPeriodDays:    lo.ToPtr(0), // THIS IS IMPORTANT: we don't want to inherit the trial period days from the old subscription
 	}
 
 	// When doing an immediate plan change, we cancel the old subscription with proration but
