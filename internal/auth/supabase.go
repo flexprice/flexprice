@@ -2,7 +2,12 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -14,6 +19,11 @@ import (
 	"github.com/nedpals/supabase-go"
 	"github.com/sethvargo/go-password/password"
 )
+
+// supabaseAdminUsersResponse matches the Supabase Auth Admin GET /auth/v1/admin/users response.
+type supabaseAdminUsersResponse struct {
+	Users []supabase.AdminUser `json:"users"`
+}
 
 type supabaseAuth struct {
 	AuthConfig config.AuthConfig
@@ -221,4 +231,87 @@ func (s *supabaseAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*
 	}
 
 	return &UserInviteResponse{ID: supabaseUser.ID, Password: createdPassword, AuthRecord: nil}, nil
+}
+
+func (s *supabaseAuth) RemoveUserFromTenant(ctx context.Context, userID string) error {
+	_, err := s.client.Admin.UpdateUser(ctx, userID, supabase.AdminUserParams{
+		AppMetadata: map[string]interface{}{
+			"tenant_id": "",
+		},
+	})
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to remove user from tenant in Supabase").
+			Mark(ierr.ErrSystem)
+	}
+	return nil
+}
+
+func (s *supabaseAuth) GetUserByEmail(ctx context.Context, email string) (*ProviderUser, error) {
+	// Supabase Admin API: GET /auth/v1/admin/users?email=<email>&per_page=1
+	reqURL := fmt.Sprintf("%s/auth/v1/admin/users?email=%s&per_page=1",
+		s.AuthConfig.Supabase.BaseURL,
+		url.QueryEscape(email),
+	)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to build Supabase admin list users request").
+			Mark(ierr.ErrSystem)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.AuthConfig.Supabase.ServiceKey))
+	req.Header.Set("apikey", s.AuthConfig.Supabase.ServiceKey)
+
+	httpClient := &http.Client{}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to call Supabase admin list users").
+			Mark(ierr.ErrSystem)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, ierr.NewError("Supabase admin list users returned non-200").
+			WithHint(fmt.Sprintf("status %d: %s", resp.StatusCode, string(body))).
+			Mark(ierr.ErrSystem)
+	}
+
+	var result supabaseAdminUsersResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to decode Supabase admin list users response").
+			Mark(ierr.ErrSystem)
+	}
+
+	// Filter for exact email match (Supabase may do substring matching)
+	for _, u := range result.Users {
+		if u.Email != email {
+			continue
+		}
+		tenantID := ""
+		if tid, ok := u.AppMetaData["tenant_id"].(string); ok {
+			tenantID = tid
+		}
+		return &ProviderUser{
+			ID:       u.ID,
+			TenantID: tenantID,
+		}, nil
+	}
+
+	return nil, nil // user does not exist
+}
+
+func (s *supabaseAuth) ResetUserPassword(ctx context.Context, userID string, newPassword string) error {
+	_, err := s.client.Admin.UpdateUser(ctx, userID, supabase.AdminUserParams{
+		Password: &newPassword,
+	})
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to reset user password in Supabase").
+			Mark(ierr.ErrSystem)
+	}
+	return nil
 }
