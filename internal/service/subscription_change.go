@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -880,6 +881,17 @@ func (s *subscriptionChangeService) createNewSubscription(
 		createSubReq.OpeningInvoiceAdjustmentAmount = &cancelledSubTotalCreditAmount
 	}
 
+	// Pre-generate the subscription ID so Paddle mapping can be created first,
+	// within the same transaction. Temporary until generic integration carryover exists.
+	// TODO: Remove once plan-change integration carryover is handled generically.
+	newSubID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)
+	createSubReq.ID = newSubID
+
+	// Carry Paddle entity mapping from old subscription to new before the row is written.
+	// Both operations run inside the same WithTx context; if CreateSubscription rolls back,
+	// the mapping row rolls back with it.
+	s.inheritPaddleEntityMappings(ctx, currentSub.ID, newSubID)
+
 	subscriptionService := NewSubscriptionService(s.serviceParams)
 	response, err := subscriptionService.CreateSubscription(ctx, createSubReq)
 	if err != nil {
@@ -923,6 +935,39 @@ func (s *subscriptionChangeService) createNewSubscription(
 	}
 
 	return newSub, nil
+}
+
+// inheritPaddleEntityMappings copies Paddle subscription entity mappings from the old
+// subscription to the new one after a plan change, avoiding a repeat checkout flow.
+//
+// NOTE: This is a temporary patch for the Paddle integration until a proper
+// cross-provider entity mapping inheritance mechanism is implemented.
+// TODO: Remove once plan-change integration carryover is handled generically.
+func (s *subscriptionChangeService) inheritPaddleEntityMappings(
+	ctx context.Context,
+	oldSubID, newSubID string,
+) {
+	filter := types.NewNoLimitEntityIntegrationMappingFilter()
+	filter.EntityID = oldSubID
+	filter.EntityType = types.IntegrationEntityTypeSubscription
+	filter.ProviderTypes = []string{"paddle"}
+
+	mappings, err := s.serviceParams.EntityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		s.serviceParams.Logger.Warnw("failed to list paddle entity mappings for old subscription",
+			"old_sub_id", oldSubID, "error", err)
+		return
+	}
+
+	for _, m := range mappings {
+		newMapping := m.CopyWith(ctx, &entityintegrationmapping.EntityIntegrationMappingCloneOverrides{
+			EntityID: &newSubID,
+		})
+		if createErr := s.serviceParams.EntityIntegrationMappingRepo.Create(ctx, newMapping); createErr != nil {
+			s.serviceParams.Logger.Warnw("failed to create paddle entity mapping for new subscription",
+				"new_sub_id", newSubID, "paddle_entity_id", m.ProviderEntityID, "error", createErr)
+		}
+	}
 }
 
 // handleSubscriptionChangeEntitlementProration handles entitlement proration for subscription plan changes
