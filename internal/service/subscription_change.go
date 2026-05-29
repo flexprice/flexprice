@@ -950,7 +950,7 @@ func (s *subscriptionChangeService) inheritPaddleEntityMappings(
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = oldSubID
 	filter.EntityType = types.IntegrationEntityTypeSubscription
-	filter.ProviderTypes = []string{"paddle"}
+	filter.ProviderTypes = []string{string(types.SecretProviderPaddle)}
 
 	mappings, err := s.serviceParams.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
