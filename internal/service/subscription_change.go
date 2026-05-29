@@ -108,9 +108,12 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	// Calculate effective date
 	effectiveDate := time.Now()
 
-	// Calculate proration if needed
+	// Calculate proration if needed.
+	// Trialing subscriptions have never been charged, so there is no unused credit to apply.
+	// Calculating proration would produce a ghost adjustment — skip it entirely.
 	var prorationDetails *dto.ProrationDetails
-	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+	isTrialing := currentSub.SubscriptionStatus == types.SubscriptionStatusTrialing
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 		prorationDetails, err = s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
 		if err != nil {
 			logger.Error("failed to calculate proration preview", zap.Error(err))
