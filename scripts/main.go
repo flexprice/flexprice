@@ -34,6 +34,11 @@ var commands = []Command{
 		Run:         internal.GenerateNewAPIKey,
 	},
 	{
+		Name:        "generate-dev-token",
+		Description: "Generate a short-lived JWT for internal developer testing",
+		Run:         internal.GenerateDevToken,
+	},
+	{
 		Name:        "assign-tenant",
 		Description: "Assign tenant to user",
 		Run:         internal.AssignTenantToUser,
@@ -193,6 +198,7 @@ func main() {
 		failedOutput       string
 		successOutput      string
 		apiBaseURL         string
+		expiryHours        string
 	)
 
 	flag.BoolVar(&listCommands, "list", false, "List all available commands")
@@ -224,6 +230,7 @@ func main() {
 	flag.StringVar(&failedOutput, "failed-output", "", "Path for failed rows CSV (migrate-calendar-billing-csv)")
 	flag.StringVar(&successOutput, "success-output", "", "Path for successful rows CSV (migrate-calendar-billing-csv)")
 	flag.StringVar(&apiBaseURL, "api-base-url", "", "Flexprice API base URL including /v1 (migrate-calendar-billing-csv); default https://api.cloud.flexprice.io/v1")
+	flag.StringVar(&expiryHours, "expiry-hours", "", "Token expiry in hours (generate-dev-token; default 1)")
 	flag.Parse()
 
 	if listCommands {
@@ -320,6 +327,9 @@ func main() {
 	}
 	if successOutput != "" {
 		os.Setenv("SUCCESS_OUTPUT_PATH", successOutput)
+	}
+	if expiryHours != "" {
+		os.Setenv("EXPIRY_HOURS", expiryHours)
 	}
 
 	// Find and run the command
