@@ -143,8 +143,9 @@ type UpdateSubscriptionLineItemRequest struct {
 	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty"`
 	CommitmentTrueUpEnabled *bool                  `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      *bool                  `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
-	CommitmentTimeBuckets   types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	CommitmentDuration      *types.BillingPeriod    `json:"commitment_duration,omitempty"`
+	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
+	CommitmentTimeBuckets *types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -434,6 +435,14 @@ func (r *CreateSubscriptionLineItemRequest) validateCommitmentFields() error {
 		return err
 	}
 
+	// commitment_time_buckets only constrains the commitment-application window —
+	// it has no meaning unless commitment_windowed is true.
+	if len(r.CommitmentTimeBuckets) > 0 && !r.CommitmentWindowed {
+		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
+			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Auto-set commitment type if not provided (only for create requests)
 	if r.HasCommitment() && r.CommitmentType == "" {
 		hasAmountCommitment := r.CommitmentAmount != nil && r.CommitmentAmount.GreaterThan(decimal.Zero)
@@ -604,13 +613,27 @@ func (r *UpdateSubscriptionLineItemRequest) Validate() error {
 // validateCommitmentFields validates commitment-related fields for update request
 func (r *UpdateSubscriptionLineItemRequest) validateCommitmentFields() error {
 	// Use shared validation logic (update requests require explicit commitment type)
-	return validateCommitmentFieldsCommon(
+	if err := validateCommitmentFieldsCommon(
 		r.CommitmentAmount,
 		r.CommitmentQuantity,
 		r.CommitmentType,
 		r.CommitmentOverageFactor,
 		false, // isCreateRequest
-	)
+	); err != nil {
+		return err
+	}
+
+	// commitment_time_buckets only constrains the commitment-application window —
+	// it has no meaning unless commitment_windowed is true. We can only enforce this
+	// when both fields are explicitly provided in the update; cross-checks against
+	// the existing line item's windowed flag happen at the service layer.
+	if r.CommitmentTimeBuckets != nil && len(*r.CommitmentTimeBuckets) > 0 &&
+		r.CommitmentWindowed != nil && !*r.CommitmentWindowed {
+		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
+			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // ShouldCreateNewLineItem checks if the request contains any critical fields that require creating a new line item
@@ -625,7 +648,7 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 		r.CommitmentTrueUpEnabled != nil ||
 		r.CommitmentWindowed != nil ||
 		r.CommitmentDuration != nil ||
-		len(r.CommitmentTimeBuckets) > 0
+		r.CommitmentTimeBuckets != nil
 }
 
 // ToSubscriptionLineItem converts the update request to a domain subscription line item
@@ -702,8 +725,8 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		newLineItem.CommitmentDuration = existingLineItem.CommitmentDuration
 	}
 
-	if len(r.CommitmentTimeBuckets) > 0 {
-		newLineItem.CommitmentTimeBuckets = r.CommitmentTimeBuckets
+	if r.CommitmentTimeBuckets != nil {
+		newLineItem.CommitmentTimeBuckets = append(types.TimeOfDayBuckets(nil), (*r.CommitmentTimeBuckets)...)
 	} else {
 		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets
 	}

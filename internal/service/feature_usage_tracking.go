@@ -2154,7 +2154,8 @@ func (s *featureUsageTrackingService) processPointsWithBuckets(
 	case isWindowed:
 		cost = decimal.Zero // Will be summed from points after processing
 	default:
-		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, decimal.Zero)
+		// Non-windowed (cumulative) commitment — TimeBuckets is windowed-only.
+		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, nil, decimal.Zero)
 	}
 
 	// Calculate per-point costs
@@ -2188,7 +2189,11 @@ func (s *featureUsageTrackingService) processSingleBucket(
 		bucketedValues := []decimal.Decimal{totalUsage}
 		baseCost := p.priceService.CalculateBucketedCost(p.ctx, p.price, bucketedValues)
 		if hasCommitment {
-			return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, baseCost)
+			// Single-bucket path: the value is a period-wide aggregate with no per-window
+			// timestamps. We cannot determine which UTC hours the events occurred in, so
+			// any proxy timestamp would be arbitrary. Pass nil to skip TimeBucket filtering
+			// — commitment applies normally (24/7) in this degenerate case.
+			return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, nil, baseCost)
 		}
 		return baseCost
 	}
@@ -2202,7 +2207,7 @@ func (s *featureUsageTrackingService) processSingleBucket(
 		return s.fillZeroUsageWindows(p, lineItem)
 	}
 
-	return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, nil, decimal.Zero)
+	return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, nil, nil, decimal.Zero)
 }
 
 // extractBucketValues extracts usage values from points based on aggregation type.
@@ -2227,7 +2232,7 @@ func (s *featureUsageTrackingService) calculatePointCosts(p *bucketedCostParams,
 	commitmentCalc := newCommitmentCalculator(s.Logger, p.priceService)
 	for i := range p.item.Points {
 		usage := s.getCorrectUsageValueForPoint(p.item.Points[i], p.aggType)
-		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, p.price)
+		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, []time.Time{p.item.Points[i].Timestamp}, p.price)
 		if err != nil {
 			s.Logger.Warnw("failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
 			pointCost = p.priceService.CalculateCost(p.ctx, p.price, usage)
@@ -2268,7 +2273,7 @@ func (s *featureUsageTrackingService) fillMissingWindowsAndRecalculate(p *bucket
 	}
 
 	p.item.Points = filledPoints
-	if totalCost, _, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, p.price); err == nil {
+	if totalCost, _, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, expectedStarts, p.price); err == nil {
 		return totalCost
 	}
 	return decimal.Zero
@@ -2284,7 +2289,7 @@ func (s *featureUsageTrackingService) fillZeroUsageWindows(p *bucketedCostParams
 	filled := make([]decimal.Decimal, len(expectedStarts))
 	commitmentCalc := newCommitmentCalculator(s.Logger, p.priceService)
 
-	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, p.price)
+	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, expectedStarts, p.price)
 	if err != nil {
 		return decimal.Zero
 	}
@@ -2307,7 +2312,7 @@ func (s *featureUsageTrackingService) createFillPoint(
 	billingAnchor *time.Time,
 	calc *commitmentCalculator,
 ) events.UsageAnalyticPoint {
-	pointCost, info, _ := calc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{decimal.Zero}, p.price)
+	pointCost, info, _ := calc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{decimal.Zero}, []time.Time{timestamp}, p.price)
 	windowStart := truncateToBucketStart(timestamp, p.data.Params.WindowSize, billingAnchor)
 
 	pt := events.UsageAnalyticPoint{
@@ -2382,19 +2387,21 @@ func (s *featureUsageTrackingService) calculateRegularCost(ctx context.Context, 
 				// Let's support it if points exist
 				if len(item.Points) > 0 {
 					bucketedValues := make([]decimal.Decimal, len(item.Points))
+					bucketStarts := make([]time.Time, len(item.Points))
 					for i, point := range item.Points {
 						bucketedValues[i] = s.getCorrectUsageValueForPoint(point, meter.Aggregation.Type)
+						bucketStarts[i] = point.Timestamp
 					}
 
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, bucketedValues, decimal.Zero)
+					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, bucketedValues, bucketStarts, decimal.Zero)
 				} else {
 					// Fallback to standard commitment if no points (single window)
 					// We pass empty bucketedValues to hint that it's not a bucketed calculation unless default cost is zero
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, nil, cost)
+					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, nil, nil, cost)
 				}
 			} else {
 				// Non-window commitment
-				cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, nil, cost)
+				cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, nil, nil, cost)
 			}
 		}
 	}
@@ -3387,7 +3394,9 @@ func (s *featureUsageTrackingService) GetHuggingFaceBillingData(ctx context.Cont
 	}, nil
 }
 
-// applyLineItemCommitment applies commitment logic to the calculated cost
+// applyLineItemCommitment applies commitment logic to the calculated cost.
+// bucketStarts (optional) is paired 1:1 with bucketedValues and enables time-of-day
+// filtering on lineItem.CommitmentTimeBuckets in the windowed path.
 func (s *featureUsageTrackingService) applyLineItemCommitment(
 	ctx context.Context,
 	priceService PriceService,
@@ -3395,6 +3404,7 @@ func (s *featureUsageTrackingService) applyLineItemCommitment(
 	lineItem *subscription.SubscriptionLineItem,
 	price *price.Price,
 	bucketedValues []decimal.Decimal,
+	bucketStarts []time.Time,
 	defaultCost decimal.Decimal,
 ) decimal.Decimal {
 	commitmentCalc := newCommitmentCalculator(s.Logger, priceService)
@@ -3404,7 +3414,7 @@ func (s *featureUsageTrackingService) applyLineItemCommitment(
 
 	if lineItem.CommitmentWindowed {
 		cost, commitmentInfo, err = commitmentCalc.applyWindowCommitmentToLineItem(
-			ctx, lineItem, bucketedValues, price)
+			ctx, lineItem, bucketedValues, bucketStarts, price)
 		if err == nil {
 			item.CommitmentInfo = commitmentInfo
 			return cost

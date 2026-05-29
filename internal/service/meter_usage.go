@@ -121,12 +121,11 @@ type GetSubscriptionMeterUsageRequest struct {
 }
 
 // dateRangeGroup is the key used to batch standard-meter queries that share
-// the same effective time range, aggregation type, and commitment time buckets.
+// the same effective time range and aggregation type.
 type dateRangeGroup struct {
-	Start          time.Time
-	End            time.Time
-	AggType        types.AggregationType
-	TimeBucketsKey string // Fingerprint() of CommitmentTimeBuckets; "" = no restriction
+	Start   time.Time
+	End     time.Time
+	AggType types.AggregationType
 }
 
 // lineItemWithMeter pairs a line item with its meter ID for grouping.
@@ -334,10 +333,9 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			start := item.GetPeriodStart(usageStartTime)
 			end := item.GetPeriodEnd(usageEndTime)
 			key := dateRangeGroup{
-				Start:          start,
-				End:            end,
-				AggType:        meterAggType[meterID],
-				TimeBucketsKey: item.CommitmentTimeBuckets.ToString(),
+				Start:   start,
+				End:     end,
+				AggType: meterAggType[meterID],
 			}
 			standardGroups[key] = append(standardGroups[key], &lineItemWithMeter{Item: item, MeterID: meterID})
 		}
@@ -395,24 +393,15 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			// Scalar billing query — use GetUsageMultiMeter for batch efficiency.
 			// Analytics-only filters (PropertyFilters, Sources, GroupBy) are never
 			// set by billing callers, so nothing is lost here.
-			// All items in a group share the same TimeBucketsKey, so pull buckets from the first.
-			var groupTimeBuckets types.TimeOfDayBuckets
-			for _, liw := range lineItemsInGroup {
-				if liw.Item.HasCommitmentTimeBuckets() {
-					groupTimeBuckets = liw.Item.CommitmentTimeBuckets
-					break
-				}
-			}
 			queryParams := &events.MeterUsageQueryParams{
-				TenantID:              types.GetTenantID(ctx),
-				EnvironmentID:         types.GetEnvironmentID(ctx),
-				ExternalCustomerIDs:   externalCustomerIDs,
-				MeterIDs:              meterIDs,
-				StartTime:             group.Start,
-				EndTime:               group.End,
-				AggregationType:       group.AggType,
-				UseFinal:              req.UseFinal,
-				CommitmentTimeBuckets: groupTimeBuckets,
+				TenantID:            types.GetTenantID(ctx),
+				EnvironmentID:       types.GetEnvironmentID(ctx),
+				ExternalCustomerIDs: externalCustomerIDs,
+				MeterIDs:            meterIDs,
+				StartTime:           group.Start,
+				EndTime:             group.End,
+				AggregationType:     group.AggType,
+				UseFinal:            req.UseFinal,
 			}
 
 			results, err := s.repo.GetUsageMultiMeter(ctx, queryParams)
@@ -1752,14 +1741,19 @@ func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceServ
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
-	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
+	// needsWindowedFill gates the per-window fill paths (fillMissingWindowsAndRecalculate,
+	// fillZeroUsageWindows). True-up requires filling missing windows so commitment can be
+	// charged for them too — but only meaningful when the commitment is itself windowed.
+	// Non-windowed commitments with TrueUpEnabled still get true-up applied at the
+	// aggregate level inside applyCommitmentToLineItem; no per-window fill needed.
+	needsWindowedFill := isWindowed && lineItem.CommitmentTrueUpEnabled
 
 	var cost decimal.Decimal
 
 	if len(item.Points) > 0 {
-		cost = s.processPointsWithBuckets(params, lineItem, hasCommitment, isWindowed, hasTrueUp)
+		cost = s.processPointsWithBuckets(params, lineItem, hasCommitment, isWindowed, needsWindowedFill)
 	} else {
-		cost = s.processSingleBucket(params, lineItem, hasCommitment, isWindowed, hasTrueUp)
+		cost = s.processSingleBucket(params, lineItem, hasCommitment, isWindowed, needsWindowedFill)
 	}
 
 	item.TotalCost = cost
@@ -1767,10 +1761,13 @@ func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceServ
 }
 
 // processPointsWithBuckets handles the case where we have time-series points to process.
+// needsWindowedFill is true when isWindowed AND CommitmentTrueUpEnabled; it gates the
+// fillMissingWindowsAndRecalculate path that materializes empty windows for windowed
+// true-up commitments.
 func (s *meterUsageService) processPointsWithBuckets(
 	p *meterUsageBucketedCostParams,
 	lineItem *subscription.SubscriptionLineItem,
-	hasCommitment, isWindowed, hasTrueUp bool,
+	hasCommitment, isWindowed, needsWindowedFill bool,
 ) decimal.Decimal {
 	bucketedValues := s.extractBucketValues(p.item.Points, p.aggType)
 
@@ -1781,18 +1778,19 @@ func (s *meterUsageService) processPointsWithBuckets(
 	case isWindowed:
 		cost = decimal.Zero // Will be summed from points after processing
 	default:
-		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, decimal.Zero)
+		// Non-windowed (cumulative) commitment — TimeBuckets is windowed-only.
+		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, nil, decimal.Zero)
 	}
 
 	s.calculatePointCosts(p, lineItem, isWindowed)
 
-	if hasTrueUp && p.bucketSize != "" {
+	if needsWindowedFill && p.bucketSize != "" {
 		cost = s.fillMissingWindowsAndRecalculate(p, lineItem)
 	}
 
 	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType)
 
-	if isWindowed && !hasTrueUp {
+	if isWindowed && !needsWindowedFill {
 		cost = s.sumPointCosts(p.item.Points)
 	}
 
@@ -1800,10 +1798,12 @@ func (s *meterUsageService) processPointsWithBuckets(
 }
 
 // processSingleBucket handles the case where there are no time-series points.
+// needsWindowedFill is true when isWindowed AND CommitmentTrueUpEnabled; it gates the
+// fillZeroUsageWindows path used for windowed true-up when there's no usage at all.
 func (s *meterUsageService) processSingleBucket(
 	p *meterUsageBucketedCostParams,
 	lineItem *subscription.SubscriptionLineItem,
-	hasCommitment, isWindowed, hasTrueUp bool,
+	hasCommitment, isWindowed, needsWindowedFill bool,
 ) decimal.Decimal {
 	// p.item.TotalUsage is the primary aggregation value (see
 	// buildMeterUsageAggregationColumns) — bucketed-max meters also write it from
@@ -1814,7 +1814,11 @@ func (s *meterUsageService) processSingleBucket(
 		bucketedValues := []decimal.Decimal{totalUsage}
 		baseCost := p.priceService.CalculateBucketedCost(p.ctx, p.price, bucketedValues)
 		if hasCommitment {
-			return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, baseCost)
+			// Single-bucket path: the value is a period-wide aggregate with no per-window
+			// timestamps. We cannot determine which UTC hours the events occurred in, so
+			// any proxy timestamp would be arbitrary. Pass nil to skip TimeBucket filtering
+			// — commitment applies normally (24/7) in this degenerate case.
+			return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, nil, baseCost)
 		}
 		return baseCost
 	}
@@ -1823,11 +1827,11 @@ func (s *meterUsageService) processSingleBucket(
 		return decimal.Zero
 	}
 
-	if hasTrueUp && p.bucketSize != "" {
+	if needsWindowedFill && p.bucketSize != "" {
 		return s.fillZeroUsageWindows(p, lineItem)
 	}
 
-	return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, nil, decimal.Zero)
+	return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, nil, nil, decimal.Zero)
 }
 
 // extractBucketValues extracts usage values from points based on aggregation type.
@@ -1851,8 +1855,8 @@ func (s *meterUsageService) calculatePointCosts(p *meterUsageBucketedCostParams,
 
 	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
 	for i := range p.item.Points {
-		usage := p.item.Points[i].Usage
-		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, p.price)
+		usage := s.getCorrectUsageValueForPoint(p.item.Points[i], p.aggType)
+		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, []time.Time{p.item.Points[i].Timestamp}, p.price)
 		if err != nil {
 			s.logger.Warnw("failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
 			pointCost = p.priceService.CalculateCost(p.ctx, p.price, usage)
@@ -1866,29 +1870,12 @@ func (s *meterUsageService) calculatePointCosts(p *meterUsageBucketedCostParams,
 	}
 }
 
-// generateInBucketStarts returns bucket start times filtered to those within the configured
-// time-of-day buckets. When timeBuckets is empty, all starts are returned unchanged.
-// This is used for windowed true-up so phantom charges are not applied to out-of-bucket windows.
-func generateInBucketStarts(start, end time.Time, bucketSize types.WindowSize, billingAnchor *time.Time, timeBuckets types.TimeOfDayBuckets) []time.Time {
-	all := generateBucketStarts(start, end, bucketSize, billingAnchor)
-	if len(timeBuckets) == 0 {
-		return all
-	}
-	filtered := make([]time.Time, 0, len(all))
-	for _, t := range all {
-		if timeBuckets.ContainsHour(t.UTC().Hour()) {
-			filtered = append(filtered, t)
-		}
-	}
-	return filtered
-}
-
 // fillMissingWindowsAndRecalculate fills gaps in bucket windows and recalculates total cost.
 func (s *meterUsageService) fillMissingWindowsAndRecalculate(p *meterUsageBucketedCostParams, lineItem *subscription.SubscriptionLineItem) decimal.Decimal {
 	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
 	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
 	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
-	expectedStarts := generateInBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor, lineItem.CommitmentTimeBuckets)
+	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
 
 	pointsByBucket := make(map[time.Time]events.UsageAnalyticPoint, len(p.item.Points))
 	for _, pt := range p.item.Points {
@@ -1910,7 +1897,7 @@ func (s *meterUsageService) fillMissingWindowsAndRecalculate(p *meterUsageBucket
 	}
 
 	p.item.Points = filledPoints
-	if totalCost, _, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, p.price); err == nil {
+	if totalCost, _, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, expectedStarts, p.price); err == nil {
 		return totalCost
 	}
 	return decimal.Zero
@@ -1921,12 +1908,12 @@ func (s *meterUsageService) fillZeroUsageWindows(p *meterUsageBucketedCostParams
 	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
 	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
 	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
-	expectedStarts := generateInBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor, lineItem.CommitmentTimeBuckets)
+	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
 
 	filled := make([]decimal.Decimal, len(expectedStarts))
 	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
 
-	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, p.price)
+	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, expectedStarts, p.price)
 	if err != nil {
 		return decimal.Zero
 	}
@@ -1949,7 +1936,7 @@ func (s *meterUsageService) createFillPoint(
 	billingAnchor *time.Time,
 	calc *commitmentCalculator,
 ) events.UsageAnalyticPoint {
-	pointCost, info, _ := calc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{decimal.Zero}, p.price)
+	pointCost, info, _ := calc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{decimal.Zero}, []time.Time{timestamp}, p.price)
 	windowStart := truncateToBucketStart(timestamp, p.data.Params.WindowSize, billingAnchor)
 
 	pt := events.UsageAnalyticPoint{
@@ -1999,15 +1986,17 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 			if lineItem.CommitmentWindowed {
 				if len(item.Points) > 0 {
 					bucketedValues := make([]decimal.Decimal, len(item.Points))
+					bucketStarts := make([]time.Time, len(item.Points))
 					for i, point := range item.Points {
-						bucketedValues[i] = point.Usage
+						bucketedValues[i] = s.getCorrectUsageValueForPoint(point, m.Aggregation.Type)
+						bucketStarts[i] = point.Timestamp
 					}
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, bucketedValues, decimal.Zero)
+					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, bucketedValues, bucketStarts, decimal.Zero)
 				} else {
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, cost)
+					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, nil, cost)
 				}
 			} else {
-				cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, cost)
+				cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, nil, cost)
 			}
 		}
 	}
@@ -2023,6 +2012,8 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 }
 
 // applyLineItemCommitment applies commitment logic to the calculated cost.
+// bucketStarts (optional) is paired 1:1 with bucketedValues and enables time-of-day
+// filtering on lineItem.CommitmentTimeBuckets in the windowed path.
 func (s *meterUsageService) applyLineItemCommitment(
 	ctx context.Context,
 	priceService PriceService,
@@ -2030,6 +2021,7 @@ func (s *meterUsageService) applyLineItemCommitment(
 	lineItem *subscription.SubscriptionLineItem,
 	p *price.Price,
 	bucketedValues []decimal.Decimal,
+	bucketStarts []time.Time,
 	defaultCost decimal.Decimal,
 ) decimal.Decimal {
 	commitmentCalc := newCommitmentCalculator(s.logger, priceService)
@@ -2038,8 +2030,7 @@ func (s *meterUsageService) applyLineItemCommitment(
 	var err error
 
 	if lineItem.CommitmentWindowed {
-		cost, commitmentInfo, err = commitmentCalc.applyWindowCommitmentToLineItem(
-			ctx, lineItem, bucketedValues, p)
+		cost, commitmentInfo, err = commitmentCalc.applyWindowCommitmentToLineItem(ctx, lineItem, bucketedValues, bucketStarts, p)
 		if err == nil {
 			item.CommitmentInfo = commitmentInfo
 			return cost

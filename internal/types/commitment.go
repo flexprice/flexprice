@@ -1,9 +1,7 @@
 package types
 
 import (
-	"fmt"
-	"sort"
-	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -33,53 +31,58 @@ func (ct CommitmentType) String() string {
 	return string(ct)
 }
 
-// TimeOfDayBucket defines a [StartHour, EndHour) half-open hour range within a UTC day.
-// Hours are integers in [0, 24].
-// When StartHour < EndHour: normal range (e.g. {0, 12} = midnight to noon).
-// When StartHour >= EndHour: wraps midnight (e.g. {22, 6} = 10pm to 6am next day).
-type TimeOfDayBucket struct {
-	StartHour int `json:"start_hour"`
-	EndHour   int `json:"end_hour"`
+// Bucket is a point in a UTC day expressed as Hour (0-24) and Minute (0-59).
+// Hour=24 with Minute=0 is allowed so callers can express "end of day"
+// (e.g. {Start: {0, 0}, End: {24, 0}} = the whole day).
+type Bucket struct {
+	Hour   int `json:"hour"`
+	Minute int `json:"minute"`
 }
 
-// ContainsHour reports whether the given UTC hour (0–23) falls within this bucket.
-func (b TimeOfDayBucket) ContainsHour(hour int) bool {
-	if b.StartHour < b.EndHour {
-		return hour >= b.StartHour && hour < b.EndHour
+// MinuteOfDay returns the bucket's position in the day as Hour*60 + Minute,
+// in the range [0, 1440]. Used for ordering and overlap checks.
+func (b Bucket) MinuteOfDay() int {
+	return b.Hour*60 + b.Minute
+}
+
+// TimeOfDayBucket defines a [Start, End) half-open range within a UTC day.
+// When Start.MinuteOfDay() < End.MinuteOfDay(): normal range (e.g. 09:00-17:00).
+// When Start.MinuteOfDay() > End.MinuteOfDay(): wraps midnight (e.g. 22:00-06:00).
+// When equal: empty range — matches nothing.
+type TimeOfDayBucket struct {
+	Start Bucket `json:"start_bucket"`
+	End   Bucket `json:"end_bucket"`
+}
+
+// ContainsTime reports whether t falls within this bucket. The check uses the
+// UTC hour and minute of t.
+func (b TimeOfDayBucket) ContainsTime(t time.Time) bool {
+	utc := t.UTC()
+	cur := utc.Hour()*60 + utc.Minute()
+	start := b.Start.MinuteOfDay()
+	end := b.End.MinuteOfDay()
+	if start == end {
+		// Half-open [n, n) — empty range.
+		return false
 	}
-	// Midnight-wrapping: e.g. {22, 6} covers hours 22, 23, 0, 1, 2, 3, 4, 5
-	return hour >= b.StartHour || hour < b.EndHour
+	if start < end {
+		return cur >= start && cur < end
+	}
+	// Midnight-wrapping: e.g. {22:00, 06:00} covers 22:00..23:59 and 00:00..05:59.
+	return cur >= start || cur < end
 }
 
 // TimeOfDayBuckets is a slice of TimeOfDayBucket.
 type TimeOfDayBuckets []TimeOfDayBucket
 
-// ContainsHour reports whether the given UTC hour falls within any configured bucket.
-func (bs TimeOfDayBuckets) ContainsHour(hour int) bool {
+// ContainsTime reports whether t falls within any configured bucket.
+func (bs TimeOfDayBuckets) ContainsTime(t time.Time) bool {
 	for _, b := range bs {
-		if b.ContainsHour(hour) {
+		if b.ContainsTime(t) {
 			return true
 		}
 	}
 	return false
-}
-
-// ToString returns a deterministic string suitable for use as a Go map key.
-// Returns "" for an empty slice. Example: "0-12", "0-2,8-14".
-func (bs TimeOfDayBuckets) ToString() string {
-	if len(bs) == 0 {
-		return ""
-	}
-	sorted := make(TimeOfDayBuckets, len(bs))
-	copy(sorted, bs)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].StartHour < sorted[j].StartHour
-	})
-	parts := make([]string, len(sorted))
-	for i, b := range sorted {
-		parts[i] = fmt.Sprintf("%d-%d", b.StartHour, b.EndHour)
-	}
-	return strings.Join(parts, ",")
 }
 
 // CommitmentInfo holds information about a commitment
