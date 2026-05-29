@@ -864,7 +864,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 		BillingCycle:       req.BillingCycle,
 		BillingAnchor:      newBillingAnchor,
 		StartDate:          &effectiveDate,
-		Metadata:           req.Metadata,
+		Metadata:           mergeSubscriptionMetadata(currentSub.Metadata, req.Metadata),
 		ProrationBehavior:  req.ProrationBehavior,
 		CustomerTimezone:   currentSub.CustomerTimezone,
 		CommitmentAmount:   currentSub.CommitmentAmount,
@@ -935,6 +935,23 @@ func (s *subscriptionChangeService) createNewSubscription(
 	}
 
 	return newSub, nil
+}
+
+// mergeSubscriptionMetadata merges old subscription metadata with change-request metadata.
+// Keys in overlay (change request) take precedence over keys in base (old subscription),
+// so callers can explicitly override specific keys while everything else carries forward.
+func mergeSubscriptionMetadata(base, overlay map[string]string) map[string]string {
+	if len(base) == 0 && len(overlay) == 0 {
+		return nil
+	}
+	merged := make(map[string]string, len(base)+len(overlay))
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range overlay {
+		merged[k] = v
+	}
+	return merged
 }
 
 // inheritPaddleEntityMappings copies Paddle subscription entity mappings from the old
