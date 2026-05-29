@@ -622,6 +622,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 		  AND timestamp < ?
 		ORDER BY timestamp DESC
 		LIMIT ? OFFSET ?
+		SETTINGS max_memory_usage = 96636764160
 	`
 
 	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, startTime, endTime, batchSize, offset)
