@@ -666,5 +666,39 @@ func propertiesString(p map[string]string) string {
 	return strings.Join(parts, "|")
 }
 
+// GetMeterUsageForExport returns records within the time range, paginated by batchSize/offset.
+// Mirrors the ClickHouse impl's batching semantics for tests.
+func (s *InMemoryMeterUsageStore) GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*events.MeterUsage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	var filtered []*events.MeterUsage
+	for _, rec := range s.records {
+		if rec.TenantID != tenantID || rec.EnvironmentID != environmentID {
+			continue
+		}
+		if rec.Timestamp.Before(startTime) || !rec.Timestamp.Before(endTime) {
+			continue
+		}
+		filtered = append(filtered, rec)
+	}
+
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return filtered[i].Timestamp.After(filtered[j].Timestamp)
+	})
+
+	if offset >= len(filtered) {
+		return nil, nil
+	}
+	end := offset + batchSize
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	return filtered[offset:end], nil
+}
+
 // Ensure interface compliance
 var _ events.MeterUsageRepository = (*InMemoryMeterUsageStore)(nil)

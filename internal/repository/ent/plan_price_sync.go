@@ -422,7 +422,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 					AND sp.entity_id = s.id
 					AND (
 						sp.parent_price_id = p.id
-						OR (p.parent_price_id IS NOT NULL AND sp.parent_price_id = p.parent_price_id)
+						OR (NULLIF(p.parent_price_id, '') IS NOT NULL AND sp.parent_price_id = p.parent_price_id)
 					)
 			)
 			AND NOT EXISTS (

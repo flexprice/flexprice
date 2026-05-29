@@ -2428,6 +2428,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}
 
 		billingService := NewBillingService(s.ServiceParams)
+		useMeterUsage := s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx))
 
 		// Calculate total pending charges (usage)
 		for _, sub := range filteredSubscriptions {
@@ -2435,19 +2436,26 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			periodStart := sub.CurrentPeriodStart
 			periodEnd := sub.CurrentPeriodEnd
 
-			// Get usage data for current period using feature usage table
-			usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+			usageReq := &dto.GetUsageBySubscriptionRequest{
 				SubscriptionID: sub.ID,
 				StartTime:      periodStart,
 				EndTime:        periodEnd,
 				Source:         string(types.UsageSourceWallet),
-			})
+			}
+
+			var usage *dto.GetUsageBySubscriptionResponse
+			var err error
+			if useMeterUsage {
+				usage, err = subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
+			} else {
+				usage, err = subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
+			}
 			if err != nil {
 				return nil, err
 			}
 			// s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
 
-			// Calculate usage charges for feature usage data
+			// Calculate usage charges for feature/meter usage data
 			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
 				Subscription: sub,
 				Usage:        usage,
@@ -2593,6 +2601,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		}
 
 		billingService := NewBillingService(s.ServiceParams)
+		useMeterUsage := s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx))
 
 		// Calculate total pending charges (usage)
 		for _, sub := range filteredSubscriptions {
@@ -2611,18 +2620,25 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 
 			*/
 
-			// Get usage data for current period using feature usage table
-			usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+			usageReq := &dto.GetUsageBySubscriptionRequest{
 				SubscriptionID: sub.ID,
 				StartTime:      periodStart,
 				EndTime:        periodEnd,
 				Source:         string(types.UsageSourceWallet),
-			})
+			}
+
+			var usage *dto.GetUsageBySubscriptionResponse
+			var err error
+			if useMeterUsage {
+				usage, err = subscriptionService.GetMeterUsageBySubscription(ctx, usageReq)
+			} else {
+				usage, err = subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
+			}
 			if err != nil {
 				return nil, err
 			}
 			// s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
-			// Calculate usage charges for feature usage data
+			// Calculate usage charges for the resolved usage data
 			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
 				Subscription: sub,
 				Usage:        usage,

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -21,8 +22,10 @@ import (
 // EventExporter handles feature usage export operations
 type EventExporter struct {
 	featureUsageRepo   events.FeatureUsageRepository
-	priceRepo         price.Repository
+	meterUsageRepo     events.MeterUsageRepository
+	priceRepo          price.Repository
 	integrationFactory *integration.Factory
+	config             *config.Configuration
 	logger             *logger.Logger
 }
 
@@ -52,14 +55,18 @@ type FeatureUsageCSV struct {
 // NewEventExporter creates a new event exporter
 func NewEventExporter(
 	featureUsageRepo events.FeatureUsageRepository,
+	meterUsageRepo events.MeterUsageRepository,
 	priceRepo price.Repository,
 	integrationFactory *integration.Factory,
+	cfg *config.Configuration,
 	logger *logger.Logger,
 ) *EventExporter {
 	return &EventExporter{
 		featureUsageRepo:   featureUsageRepo,
-		priceRepo:         priceRepo,
+		meterUsageRepo:     meterUsageRepo,
+		priceRepo:          priceRepo,
 		integrationFactory: integrationFactory,
+		config:             cfg,
 		logger:             logger,
 	}
 }
@@ -68,12 +75,19 @@ func NewEventExporter(
 func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
 	const batchSize = 500
 
+	useMeterUsage := e.config != nil && e.config.FeatureFlag.IsMeterUsageEnabledForAnalytics(request.TenantID)
+
 	e.logger.Infow("starting batched feature usage data fetch",
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
 		"start_time", request.StartTime,
 		"end_time", request.EndTime,
-		"batch_size", batchSize)
+		"batch_size", batchSize,
+		"source_table", lo.Ternary(useMeterUsage, "meter_usage", "feature_usage"))
+
+	if useMeterUsage {
+		return e.prepareDataFromMeterUsage(ctx, request, batchSize)
+	}
 
 	// Collect all CSV records
 	var csvRecords []*FeatureUsageCSV
@@ -180,6 +194,111 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 	}
 
 	return csvBytes, totalRecords, nil
+}
+
+// prepareDataFromMeterUsage fetches rows from the meter_usage table and maps each
+// into the existing FeatureUsageCSV schema. Columns that meter_usage does not
+// carry (subscription_id, sub_line_item_id, price_id, customer_id, feature_id,
+// period_id, provisional_usage_charges) are left as empty strings — the schema
+// stays stable so downstream consumers don't see a header-row change.
+func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *dto.ExportRequest, batchSize int) ([]byte, int, error) {
+	var csvRecords []*FeatureUsageCSV
+	totalRecords := 0
+	offset := 0
+
+	for {
+		e.logger.Debugw("fetching meter_usage batch",
+			"offset", offset,
+			"batch_size", batchSize)
+
+		usageData, err := e.meterUsageRepo.GetMeterUsageForExport(
+			ctx,
+			request.StartTime,
+			request.EndTime,
+			batchSize,
+			offset,
+		)
+		if err != nil {
+			return nil, 0, ierr.WithError(err).
+				WithHint("Failed to fetch meter usage data batch").
+				WithReportableDetails(map[string]interface{}{
+					"offset":     offset,
+					"batch_size": batchSize,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+
+		if len(usageData) == 0 {
+			break
+		}
+
+		batchRecords, err := e.convertMeterUsageToCSVRecords(usageData)
+		if err != nil {
+			return nil, 0, err
+		}
+		csvRecords = append(csvRecords, batchRecords...)
+
+		totalRecords += len(usageData)
+		offset += batchSize
+
+		if len(usageData) < batchSize {
+			break
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := gocsv.Marshal(csvRecords, &buf); err != nil {
+		return nil, 0, ierr.WithError(err).
+			WithHint("Failed to marshal data to CSV").
+			Mark(ierr.ErrInternal)
+	}
+	csvBytes := buf.Bytes()
+
+	if totalRecords == 0 {
+		e.logger.Infow("no meter usage data found for export - will upload empty CSV with headers only",
+			"tenant_id", request.TenantID,
+			"env_id", request.EnvID,
+			"csv_size_bytes", len(csvBytes))
+	} else {
+		e.logger.Infow("completed batched meter_usage fetch and CSV conversion",
+			"total_records", totalRecords,
+			"csv_size_bytes", len(csvBytes))
+	}
+
+	return csvBytes, totalRecords, nil
+}
+
+// convertMeterUsageToCSVRecords maps MeterUsage rows into FeatureUsageCSV with
+// feature_usage-only columns left blank.
+func (e *EventExporter) convertMeterUsageToCSVRecords(usageData []*events.MeterUsage) ([]*FeatureUsageCSV, error) {
+	records := make([]*FeatureUsageCSV, 0, len(usageData))
+
+	for _, usage := range usageData {
+		propertiesJSON, err := json.Marshal(usage.Properties)
+		if err != nil {
+			e.logger.Warnw("failed to marshal properties, using empty object",
+				"usage_id", usage.ID,
+				"error", err)
+			propertiesJSON = []byte("{}")
+		}
+
+		records = append(records, &FeatureUsageCSV{
+			ID:                 usage.ID,
+			TenantID:           usage.TenantID,
+			EnvironmentID:      usage.EnvironmentID,
+			ExternalCustomerID: usage.ExternalCustomerID,
+			MeterID:            usage.MeterID,
+			EventName:          usage.EventName,
+			Source:             usage.Source,
+			Timestamp:          usage.Timestamp.Format(time.RFC3339),
+			IngestedAt:         usage.IngestedAt.Format(time.RFC3339),
+			QtyTotal:           usage.QtyTotal.String(),
+			Properties:         string(propertiesJSON),
+			UniqueHash:         usage.UniqueHash,
+		})
+	}
+
+	return records, nil
 }
 
 // convertToCSVRecords converts FeatureUsage domain models to CSV records
