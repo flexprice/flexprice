@@ -1883,11 +1883,15 @@ func (s *subscriptionService) CancelSubscription(
 	var prorationDetails []dto.ProrationDetail
 	totalCreditAmount := decimal.Zero
 
+	// Trialing subscriptions have not been charged yet, so generating a
+	// non-zero invoice on cancellation is incorrect — skip invoice creation.
+	isTrialing := subscription.SubscriptionStatus == types.SubscriptionStatusTrialing
+
 	// Step 5: Execute in transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
 		// Step 6: Calculate proration using unified function
-		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && isTrialing {
 			prorationService := NewProrationService(s.ServiceParams)
 			prorationResult, err := prorationService.CalculateSubscriptionCancellationProration(
 				ctx, subscription, lineItems, req.CancellationType, effectiveDate, req.Reason, req.ProrationBehavior)

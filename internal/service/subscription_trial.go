@@ -140,6 +140,14 @@ func derivePerSubscriptionCtx(parentCtx context.Context, sub *subscription.Subsc
 	return ctx
 }
 
+// ProcessSingleSubscriptionTrialEnd is the public entry point for ending a single subscription's
+// trial on demand (e.g. from the modification API). It delegates to the private batch-oriented
+// processSubscriptionTrialEnd with now = time.Now().
+func (s *subscriptionService) ProcessSingleSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, now time.Time) error {
+	invService := NewInvoiceService(s.ServiceParams)
+	return s.processSubscriptionTrialEnd(ctx, sub, invService, now)
+}
+
 func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, invoiceService InvoiceService, now time.Time) error {
 	if sub.SubscriptionType == types.SubscriptionTypeInherited {
 		return nil
@@ -229,6 +237,7 @@ func (s *subscriptionService) cascadeTrialEndToInherited(ctx context.Context, pa
 		return err
 	}
 	for _, child := range children {
+		child.TrialEnd = parentSub.TrialEnd
 		child.SubscriptionStatus = types.SubscriptionStatusIncomplete
 		child.BillingAnchor = parentSub.BillingAnchor
 		child.CurrentPeriodStart = parentSub.CurrentPeriodStart

@@ -1315,3 +1315,258 @@ func (s *SubscriptionModificationServiceSuite) TestExecute_UnknownTypeRejected()
 	})
 	s.Require().Error(err)
 }
+
+// ─────────────────────────────────────────────
+// Sub-feature: Trial End Modification
+// ─────────────────────────────────────────────
+
+func (s *SubscriptionModificationServiceSuite) createTrialingSub(customerID string) *subscription.Subscription {
+	ctx := s.GetContext()
+	now := s.GetNow()
+	p := s.createPlan()
+	trialStart := now
+	trialEnd := now.AddDate(0, 0, 14)
+	sub := &subscription.Subscription{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		CustomerID:         customerID,
+		PlanID:             p.ID,
+		Currency:           "USD",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		BillingAnchor:      now,
+		SubscriptionStatus: types.SubscriptionStatusTrialing,
+		SubscriptionType:   types.SubscriptionTypeStandalone,
+		CurrentPeriodStart: trialStart,
+		CurrentPeriodEnd:   trialEnd,
+		StartDate:          now,
+		TrialStart:         &trialStart,
+		TrialEnd:           &trialEnd,
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+	return sub
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_RejectsNonTrialingSub() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-001")
+	sub := s.createActiveSub(cust.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action: dto.TrialEndActionEndNow,
+		},
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "not in trialing status")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewRejectsNonTrialing() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-002")
+	sub := s.createActiveSub(cust.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action: dto.TrialEndActionEndNow,
+		},
+	}
+	_, err := s.service.Preview(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "not in trialing status")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ValidationMissingParams() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-003")
+	sub := s.createTrialingSub(cust.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "trial_end_params is required")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateRequiresDate() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-004")
+	sub := s.createTrialingSub(cust.ID)
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action: dto.TrialEndActionModifyDate,
+		},
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "new_trial_end is required")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateRejectsPast() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-005")
+	sub := s.createTrialingSub(cust.ID)
+
+	pastDate := time.Now().UTC().Add(-24 * time.Hour)
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action:      dto.TrialEndActionModifyDate,
+			NewTrialEnd: &pastDate,
+		},
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "new_trial_end must be in the future")
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateExtend() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-006")
+	sub := s.createTrialingSub(cust.ID)
+	originalTrialEnd := *sub.TrialEnd
+
+	newEnd := originalTrialEnd.AddDate(0, 0, 7)
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action:      dto.TrialEndActionModifyDate,
+			NewTrialEnd: &newEnd,
+		},
+	}
+	resp, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	// Verify subscription was updated
+	updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusTrialing, updated.SubscriptionStatus)
+	s.True(updated.TrialEnd.Equal(newEnd))
+	s.True(updated.CurrentPeriodEnd.Equal(newEnd))
+
+	// Verify changed resources
+	s.Require().Len(resp.ChangedResources.Subscriptions, 1)
+	s.Equal(sub.ID, resp.ChangedResources.Subscriptions[0].ID)
+	s.Equal(dto.ChangedSubscriptionActionUpdated, resp.ChangedResources.Subscriptions[0].Action)
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateReduce() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-007")
+	sub := s.createTrialingSub(cust.ID)
+
+	// Reduce by 7 days but still in the future
+	newEnd := time.Now().UTC().Add(24 * time.Hour)
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action:      dto.TrialEndActionModifyDate,
+			NewTrialEnd: &newEnd,
+		},
+	}
+	resp, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusTrialing, updated.SubscriptionStatus)
+	s.True(updated.TrialEnd.Equal(newEnd))
+	s.True(updated.CurrentPeriodEnd.Equal(newEnd))
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewModifyDate() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-008")
+	sub := s.createTrialingSub(cust.ID)
+	originalTrialEnd := *sub.TrialEnd
+
+	newEnd := originalTrialEnd.AddDate(0, 0, 7)
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action:      dto.TrialEndActionModifyDate,
+			NewTrialEnd: &newEnd,
+		},
+	}
+	resp, err := s.service.Preview(ctx, sub.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	// Preview should NOT mutate the subscription
+	unchanged, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.Require().NoError(err)
+	s.True(unchanged.TrialEnd.Equal(originalTrialEnd))
+
+	s.Require().Len(resp.ChangedResources.Subscriptions, 1)
+	s.Equal(dto.ChangedSubscriptionActionUpdated, resp.ChangedResources.Subscriptions[0].Action)
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewEndNow() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-009")
+	sub := s.createTrialingSub(cust.ID)
+	originalTrialEnd := *sub.TrialEnd
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action: dto.TrialEndActionEndNow,
+		},
+	}
+	resp, err := s.service.Preview(ctx, sub.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	// Preview should NOT mutate the subscription
+	unchanged, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+	s.Require().NoError(err)
+	s.True(unchanged.TrialEnd.Equal(originalTrialEnd))
+	s.Equal(types.SubscriptionStatusTrialing, unchanged.SubscriptionStatus)
+}
+
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_RejectsInheritedSub() {
+	ctx := s.GetContext()
+	cust := s.createCustomer("ext-trial-010")
+	now := s.GetNow()
+	p := s.createPlan()
+	trialStart := now
+	trialEnd := now.AddDate(0, 0, 14)
+	sub := &subscription.Subscription{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+		CustomerID:         cust.ID,
+		PlanID:             p.ID,
+		Currency:           "USD",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		BillingAnchor:      now,
+		SubscriptionStatus: types.SubscriptionStatusTrialing,
+		SubscriptionType:   types.SubscriptionTypeInherited,
+		CurrentPeriodStart: trialStart,
+		CurrentPeriodEnd:   trialEnd,
+		StartDate:          now,
+		TrialStart:         &trialStart,
+		TrialEnd:           &trialEnd,
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, sub))
+
+	req := dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeTrialEnd,
+		TrialEndParams: &dto.SubModifyTrialEndRequest{
+			Action: dto.TrialEndActionEndNow,
+		},
+	}
+	_, err := s.service.Execute(ctx, sub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "inherited subscription")
+}

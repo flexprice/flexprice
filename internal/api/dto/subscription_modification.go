@@ -58,6 +58,42 @@ func (r *SubModifyQuantityChangeRequest) Validate() error {
 	return nil
 }
 
+// TrialEndAction specifies how to modify the trial period.
+type TrialEndAction string
+
+const (
+	// TrialEndActionEndNow ends the trial immediately and begins conversion.
+	TrialEndActionEndNow TrialEndAction = "end_now"
+	// TrialEndActionModifyDate changes the trial end date to a new value.
+	TrialEndActionModifyDate TrialEndAction = "modify_date"
+)
+
+// SubModifyTrialEndRequest is the payload for modifying a subscription's trial period end.
+type SubModifyTrialEndRequest struct {
+	// Action is "end_now" or "modify_date".
+	Action TrialEndAction `json:"action" binding:"required"`
+	// NewTrialEnd is the new trial end date. Required when action is "modify_date".
+	NewTrialEnd *time.Time `json:"new_trial_end,omitempty"`
+}
+
+func (r *SubModifyTrialEndRequest) Validate() error {
+	switch r.Action {
+	case TrialEndActionEndNow:
+		// no extra fields needed
+	case TrialEndActionModifyDate:
+		if r.NewTrialEnd == nil {
+			return ierr.NewError("new_trial_end is required when action is 'modify_date'").
+				WithHint("Provide a new_trial_end date to extend or reduce the trial").
+				Mark(ierr.ErrValidation)
+		}
+	default:
+		return ierr.NewError("unknown trial end action: " + string(r.Action)).
+			WithHint("Valid values: end_now, modify_date").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // SubscriptionModifyType identifies the kind of modification.
 type SubscriptionModifyType string
 
@@ -65,6 +101,7 @@ const (
 	SubscriptionModifyTypeInheritance      SubscriptionModifyType = "inheritance"
 	SubscriptionModifyTypeQuantityChange   SubscriptionModifyType = "quantity_change"
 	SubscriptionModifyTypeGroupedInvoicing SubscriptionModifyType = "grouped_invoicing"
+	SubscriptionModifyTypeTrialEnd         SubscriptionModifyType = "trial_end"
 )
 
 // GroupedInvoicingAction identifies whether children are being added to or removed from grouped invoicing.
@@ -104,12 +141,13 @@ func (r *SubModifyGroupedInvoicingParams) Validate() error {
 
 // ExecuteSubscriptionModifyRequest is the unified body for
 // POST /subscriptions/:id/modify/execute and /modify/preview.
-// Exactly one of InheritanceParams or QuantityChangeParams must be set.
+// Exactly one of the *Params fields must be set, matching the type.
 type ExecuteSubscriptionModifyRequest struct {
 	Type                   SubscriptionModifyType           `json:"type" binding:"required"`
 	InheritanceParams      *SubModifyInheritanceRequest     `json:"inheritance_params,omitempty"`
 	QuantityChangeParams   *SubModifyQuantityChangeRequest  `json:"quantity_change_params,omitempty"`
 	GroupedInvoicingParams *SubModifyGroupedInvoicingParams `json:"grouped_invoicing_params,omitempty"`
+	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
 }
 
 func (r *ExecuteSubscriptionModifyRequest) Validate() error {
@@ -132,9 +170,15 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 		return r.GroupedInvoicingParams.Validate()
+	case SubscriptionModifyTypeTrialEnd:
+		if r.TrialEndParams == nil {
+			return ierr.NewError("trial_end_params is required for type 'trial_end'").
+				Mark(ierr.ErrValidation)
+		}
+		return r.TrialEndParams.Validate()
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end").
 			Mark(ierr.ErrValidation)
 	}
 }
