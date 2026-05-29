@@ -47,6 +47,13 @@ type UserInviteResponse struct {
 	AuthRecord *auth.Auth
 }
 
+// ProviderUser is a minimal user record returned by the auth provider.
+// TenantID is empty when the user has no tenant association ("free" user).
+type ProviderUser struct {
+	ID       string
+	TenantID string
+}
+
 type Provider interface {
 
 	// User Management
@@ -56,6 +63,9 @@ type Provider interface {
 	Login(ctx context.Context, req AuthRequest, userAuthInfo *auth.Auth) (*AuthResponse, error)
 	ValidateToken(ctx context.Context, token string) (*auth.Claims, error)
 	AssignUserToTenant(ctx context.Context, userID string, tenantID string) error
+	RemoveUserFromTenant(ctx context.Context, userID string) error
+	GetUserByEmail(ctx context.Context, email string) (*ProviderUser, error)
+	ResetUserPassword(ctx context.Context, userID string, newPassword string) error
 
 	// Customer Dashboard Token Management
 	GenerateSessionToken(customerID, externalCustomerID, tenantID, environmentID string, timeoutHours int) (string, time.Time, error)
