@@ -248,8 +248,8 @@ func (s *supabaseAuth) RemoveUserFromTenant(ctx context.Context, userID string) 
 }
 
 func (s *supabaseAuth) GetUserByEmail(ctx context.Context, email string) (*ProviderUser, error) {
-	// Supabase Admin API: GET /auth/v1/admin/users?email=<email>&per_page=1
-	reqURL := fmt.Sprintf("%s/auth/v1/admin/users?email=%s&per_page=1",
+	// Supabase Admin API: GET /auth/v1/admin/users?email=<email>&per_page=100
+	reqURL := fmt.Sprintf("%s/auth/v1/admin/users?email=%s&per_page=100",
 		s.AuthConfig.Supabase.BaseURL,
 		url.QueryEscape(email),
 	)
@@ -263,7 +263,7 @@ func (s *supabaseAuth) GetUserByEmail(ctx context.Context, email string) (*Provi
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.AuthConfig.Supabase.ServiceKey))
 	req.Header.Set("apikey", s.AuthConfig.Supabase.ServiceKey)
 
-	httpClient := &http.Client{}
+	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, ierr.WithError(err).
