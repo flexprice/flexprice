@@ -1891,7 +1891,8 @@ func (s *subscriptionService) CancelSubscription(
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
 		// Step 6: Calculate proration using unified function
-		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && isTrialing {
+		// Trialing subscriptions have not been charged yet, so proration is not applicable.
+		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 			prorationService := NewProrationService(s.ServiceParams)
 			prorationResult, err := prorationService.CalculateSubscriptionCancellationProration(
 				ctx, subscription, lineItems, req.CancellationType, effectiveDate, req.Reason, req.ProrationBehavior)

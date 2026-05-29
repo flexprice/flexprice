@@ -11,7 +11,13 @@ import (
 	"github.com/samber/lo"
 )
 
-func (s *subscriptionModificationService) validateTrialEndSubscription(sub *subscription.Subscription, subscriptionID string) error {
+// validateTrialEndRequest validates the subscription state and, for modify_date actions,
+// the new trial end date. Combines subscription-level and date-level checks in one pass.
+func (s *subscriptionModificationService) validateTrialEndRequest(
+	sub *subscription.Subscription,
+	subscriptionID string,
+	params *dto.SubModifyTrialEndRequest,
+) error {
 	if sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
 		return ierr.NewError("subscription is not in trialing status").
 			WithHint("Only trialing subscriptions can have their trial period modified").
@@ -30,32 +36,25 @@ func (s *subscriptionModificationService) validateTrialEndSubscription(sub *subs
 			WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID}).
 			Mark(ierr.ErrValidation)
 	}
-	return nil
-}
 
-func (s *subscriptionModificationService) validateModifyDate(newTrialEnd time.Time, sub *subscription.Subscription, subscriptionID string) error {
-	now := time.Now().UTC()
-	if !newTrialEnd.After(now) {
-		return ierr.NewError("new_trial_end must be in the future").
-			WithHint("To end the trial immediately, use action 'end_now'").
-			WithReportableDetails(map[string]interface{}{"new_trial_end": newTrialEnd, "now": now}).
-			Mark(ierr.ErrValidation)
-	}
-	if !newTrialEnd.After(lo.FromPtr(sub.TrialStart)) {
-		return ierr.NewError("new_trial_end must be after trial start").
-			WithReportableDetails(map[string]interface{}{
-				"new_trial_end": newTrialEnd,
-				"trial_start":   lo.FromPtr(sub.TrialStart),
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	if sub.EndDate != nil && newTrialEnd.After(lo.FromPtr(sub.EndDate)) {
-		return ierr.NewError("new_trial_end cannot be after the subscription end date").
-			WithReportableDetails(map[string]interface{}{
-				"new_trial_end":         newTrialEnd,
-				"subscription_end_date": lo.FromPtr(sub.EndDate),
-			}).
-			Mark(ierr.ErrValidation)
+	// Date-specific validation only applies to modify_date action.
+	if params.Action == dto.TrialEndActionModifyDate {
+		newTrialEnd := params.NewTrialEnd.UTC()
+		now := time.Now().UTC()
+		if !newTrialEnd.After(now) {
+			return ierr.NewError("new_trial_end must be in the future").
+				WithHint("To end the trial immediately, use action 'end_now'").
+				WithReportableDetails(map[string]interface{}{"new_trial_end": newTrialEnd, "now": now}).
+				Mark(ierr.ErrValidation)
+		}
+		if sub.EndDate != nil && newTrialEnd.After(lo.FromPtr(sub.EndDate)) {
+			return ierr.NewError("new_trial_end cannot be after the subscription end date").
+				WithReportableDetails(map[string]interface{}{
+					"new_trial_end":         newTrialEnd,
+					"subscription_end_date": lo.FromPtr(sub.EndDate),
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 	return nil
 }
@@ -76,7 +75,7 @@ func (s *subscriptionModificationService) executeTrialEnd(
 		return nil, err
 	}
 
-	if err := s.validateTrialEndSubscription(sub, subscriptionID); err != nil {
+	if err := s.validateTrialEndRequest(sub, subscriptionID, params); err != nil {
 		return nil, err
 	}
 
@@ -84,11 +83,7 @@ func (s *subscriptionModificationService) executeTrialEnd(
 	case dto.TrialEndActionEndNow:
 		return s.executeTrialEndNow(ctx, sub)
 	case dto.TrialEndActionModifyDate:
-		newTrialEnd := params.NewTrialEnd.UTC()
-		if err := s.validateModifyDate(newTrialEnd, sub, subscriptionID); err != nil {
-			return nil, err
-		}
-		return s.executeTrialEndModifyDate(ctx, sub, newTrialEnd)
+		return s.executeTrialEndModifyDate(ctx, sub, params.NewTrialEnd.UTC())
 	default:
 		return nil, ierr.NewError("unknown trial end action: " + string(params.Action)).
 			Mark(ierr.ErrValidation)
@@ -106,7 +101,8 @@ func (s *subscriptionModificationService) executeTrialEndNow(
 	subSvc := NewSubscriptionService(sp)
 	now := time.Now().UTC()
 	sub.TrialEnd = lo.ToPtr(now)
-	if err := subSvc.ProcessSingleSubscriptionTrialEnd(ctx, sub, now); err != nil {
+	invRes, err := subSvc.ProcessSingleSubscriptionTrialEnd(ctx, sub, now)
+	if err != nil {
 		return nil, err
 	}
 
@@ -120,9 +116,17 @@ func (s *subscriptionModificationService) executeTrialEndNow(
 		CurrentPeriodEnd: lo.ToPtr(now),
 	}}
 
+	changedInvoice := []dto.ChangedInvoice{
+		{
+			ID:      invRes.ID,
+			Action:  dto.ChangedInvoiceActionCreated,
+			Invoice: invRes,
+		},
+	}
 	return &dto.SubscriptionModifyResponse{
 		ChangedResources: dto.ChangedResources{
 			Subscriptions: changedSubs,
+			Invoices:      changedInvoice,
 		},
 	}, nil
 }
@@ -182,7 +186,7 @@ func (s *subscriptionModificationService) previewTrialEnd(
 		return nil, err
 	}
 
-	if err := s.validateTrialEndSubscription(sub, subscriptionID); err != nil {
+	if err := s.validateTrialEndRequest(sub, subscriptionID, params); err != nil {
 		return nil, err
 	}
 
@@ -191,9 +195,6 @@ func (s *subscriptionModificationService) previewTrialEnd(
 	if params.Action == dto.TrialEndActionModifyDate {
 		status = types.SubscriptionStatusTrialing
 		endDate = params.NewTrialEnd.UTC()
-		if err := s.validateModifyDate(endDate, sub, subscriptionID); err != nil {
-			return nil, err
-		}
 	}
 
 	changedSubs := []dto.ChangedSubscription{{
