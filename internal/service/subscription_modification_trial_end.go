@@ -11,7 +11,7 @@ import (
 	"github.com/samber/lo"
 )
 
-// validateTrialEndRequest validates the subscription state and, for modify_date actions,
+// validateTrialEndRequest validates the subscription state and, for scheduled_date actions,
 // the new trial end date. Combines subscription-level and date-level checks in one pass.
 func (s *subscriptionModificationService) validateTrialEndRequest(
 	sub *subscription.Subscription,
@@ -37,13 +37,13 @@ func (s *subscriptionModificationService) validateTrialEndRequest(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Date-specific validation only applies to modify_date action.
-	if params.Action == dto.TrialEndActionModifyDate {
+	// Date-specific validation only applies to scheduled_date action.
+	if params.Action == dto.TrialEndActionScheduledDate {
 		newTrialEnd := params.NewTrialEnd.UTC()
 		now := time.Now().UTC()
 		if !newTrialEnd.After(now) {
 			return ierr.NewError("new_trial_end must be in the future").
-				WithHint("To end the trial immediately, use action 'end_now'").
+				WithHint("To end the trial immediately, use action 'immediate'").
 				WithReportableDetails(map[string]interface{}{"new_trial_end": newTrialEnd, "now": now}).
 				Mark(ierr.ErrValidation)
 		}
@@ -80,9 +80,9 @@ func (s *subscriptionModificationService) executeTrialEnd(
 	}
 
 	switch params.Action {
-	case dto.TrialEndActionEndNow:
+	case dto.TrialEndActionImmediate:
 		return s.executeTrialEndNow(ctx, sub)
-	case dto.TrialEndActionModifyDate:
+	case dto.TrialEndActionScheduledDate:
 		return s.executeTrialEndModifyDate(ctx, sub, params.NewTrialEnd.UTC())
 	default:
 		return nil, ierr.NewError("unknown trial end action: " + string(params.Action)).
@@ -192,7 +192,7 @@ func (s *subscriptionModificationService) previewTrialEnd(
 
 	status := types.SubscriptionStatusIncomplete
 	endDate := time.Now().UTC()
-	if params.Action == dto.TrialEndActionModifyDate {
+	if params.Action == dto.TrialEndActionScheduledDate {
 		status = types.SubscriptionStatusTrialing
 		endDate = params.NewTrialEnd.UTC()
 	}

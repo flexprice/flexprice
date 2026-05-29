@@ -1356,7 +1356,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_RejectsNonTrialingSu
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action: dto.TrialEndActionEndNow,
+			Action: dto.TrialEndActionImmediate,
 		},
 	}
 	_, err := s.service.Execute(ctx, sub.ID, req)
@@ -1372,7 +1372,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewRejectsNonTri
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action: dto.TrialEndActionEndNow,
+			Action: dto.TrialEndActionImmediate,
 		},
 	}
 	_, err := s.service.Preview(ctx, sub.ID, req)
@@ -1393,7 +1393,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ValidationMissingPar
 	s.Contains(err.Error(), "trial_end_params is required")
 }
 
-func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateRequiresDate() {
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ScheduledDateRequiresDate() {
 	ctx := s.GetContext()
 	cust := s.createCustomer("ext-trial-004")
 	sub := s.createTrialingSub(cust.ID)
@@ -1401,7 +1401,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateRequiresDa
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action: dto.TrialEndActionModifyDate,
+			Action: dto.TrialEndActionScheduledDate,
 		},
 	}
 	_, err := s.service.Execute(ctx, sub.ID, req)
@@ -1409,7 +1409,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateRequiresDa
 	s.Contains(err.Error(), "new_trial_end is required")
 }
 
-func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateRejectsPast() {
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ScheduledDateRejectsPast() {
 	ctx := s.GetContext()
 	cust := s.createCustomer("ext-trial-005")
 	sub := s.createTrialingSub(cust.ID)
@@ -1418,7 +1418,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateRejectsPas
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action:      dto.TrialEndActionModifyDate,
+			Action:      dto.TrialEndActionScheduledDate,
 			NewTrialEnd: &pastDate,
 		},
 	}
@@ -1427,7 +1427,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateRejectsPas
 	s.Contains(err.Error(), "new_trial_end must be in the future")
 }
 
-func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateExtend() {
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ScheduledDateExtend() {
 	ctx := s.GetContext()
 	cust := s.createCustomer("ext-trial-006")
 	sub := s.createTrialingSub(cust.ID)
@@ -1437,7 +1437,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateExtend() {
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action:      dto.TrialEndActionModifyDate,
+			Action:      dto.TrialEndActionScheduledDate,
 			NewTrialEnd: &newEnd,
 		},
 	}
@@ -1458,7 +1458,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateExtend() {
 	s.Equal(dto.ChangedSubscriptionActionUpdated, resp.ChangedResources.Subscriptions[0].Action)
 }
 
-func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateReduce() {
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ScheduledDateReduce() {
 	ctx := s.GetContext()
 	cust := s.createCustomer("ext-trial-007")
 	sub := s.createTrialingSub(cust.ID)
@@ -1468,7 +1468,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateReduce() {
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action:      dto.TrialEndActionModifyDate,
+			Action:      dto.TrialEndActionScheduledDate,
 			NewTrialEnd: &newEnd,
 		},
 	}
@@ -1483,7 +1483,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_ModifyDateReduce() {
 	s.True(updated.CurrentPeriodEnd.Equal(newEnd))
 }
 
-func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewModifyDate() {
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewScheduledDate() {
 	ctx := s.GetContext()
 	cust := s.createCustomer("ext-trial-008")
 	sub := s.createTrialingSub(cust.ID)
@@ -1493,7 +1493,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewModifyDate() 
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action:      dto.TrialEndActionModifyDate,
+			Action:      dto.TrialEndActionScheduledDate,
 			NewTrialEnd: &newEnd,
 		},
 	}
@@ -1510,7 +1510,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewModifyDate() 
 	s.Equal(dto.ChangedSubscriptionActionUpdated, resp.ChangedResources.Subscriptions[0].Action)
 }
 
-func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewEndNow() {
+func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewImmediate() {
 	ctx := s.GetContext()
 	cust := s.createCustomer("ext-trial-009")
 	sub := s.createTrialingSub(cust.ID)
@@ -1519,7 +1519,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_PreviewEndNow() {
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action: dto.TrialEndActionEndNow,
+			Action: dto.TrialEndActionImmediate,
 		},
 	}
 	resp, err := s.service.Preview(ctx, sub.ID, req)
@@ -1563,7 +1563,7 @@ func (s *SubscriptionModificationServiceSuite) TestTrialEnd_RejectsInheritedSub(
 	req := dto.ExecuteSubscriptionModifyRequest{
 		Type: dto.SubscriptionModifyTypeTrialEnd,
 		TrialEndParams: &dto.SubModifyTrialEndRequest{
-			Action: dto.TrialEndActionEndNow,
+			Action: dto.TrialEndActionImmediate,
 		},
 	}
 	_, err := s.service.Execute(ctx, sub.ID, req)

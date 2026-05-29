@@ -62,33 +62,33 @@ func (r *SubModifyQuantityChangeRequest) Validate() error {
 type TrialEndAction string
 
 const (
-	// TrialEndActionEndNow ends the trial immediately and begins conversion.
-	TrialEndActionEndNow TrialEndAction = "end_now"
-	// TrialEndActionModifyDate changes the trial end date to a new value.
-	TrialEndActionModifyDate TrialEndAction = "modify_date"
+	// TrialEndActionImmediate ends the trial immediately and begins conversion.
+	TrialEndActionImmediate TrialEndAction = "immediate"
+	// TrialEndActionScheduledDate changes the trial end date to a new value.
+	TrialEndActionScheduledDate TrialEndAction = "scheduled_date"
 )
 
 // SubModifyTrialEndRequest is the payload for modifying a subscription's trial period end.
 type SubModifyTrialEndRequest struct {
-	// Action is "end_now" or "modify_date".
+	// Action is "immediate" or "scheduled_date".
 	Action TrialEndAction `json:"action" binding:"required"`
-	// NewTrialEnd is the new trial end date. Required when action is "modify_date".
+	// NewTrialEnd is the new trial end date. Required when action is "scheduled_date".
 	NewTrialEnd *time.Time `json:"new_trial_end,omitempty"`
 }
 
 func (r *SubModifyTrialEndRequest) Validate() error {
 	switch r.Action {
-	case TrialEndActionEndNow:
+	case TrialEndActionImmediate:
 		// no extra fields needed
-	case TrialEndActionModifyDate:
+	case TrialEndActionScheduledDate:
 		if r.NewTrialEnd == nil {
-			return ierr.NewError("new_trial_end is required when action is 'modify_date'").
+			return ierr.NewError("new_trial_end is required when action is 'scheduled_date'").
 				WithHint("Provide a new_trial_end date to extend or reduce the trial").
 				Mark(ierr.ErrValidation)
 		}
 	default:
 		return ierr.NewError("unknown trial end action: " + string(r.Action)).
-			WithHint("Valid values: end_now, modify_date").
+			WithHint("Valid values: immediate, scheduled_date").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
