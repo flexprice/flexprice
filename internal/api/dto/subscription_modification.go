@@ -239,9 +239,11 @@ type ChangedLineItem struct {
 
 // ChangedSubscription describes a subscription that was created or updated.
 type ChangedSubscription struct {
-	ID     string                    `json:"id"`
-	Action ChangedSubscriptionAction `json:"action"`
-	Status types.SubscriptionStatus  `json:"status"`
+	ID               string                    `json:"id"`
+	Action           ChangedSubscriptionAction `json:"action"`
+	Status           types.SubscriptionStatus  `json:"status"`
+	TrialEnd         *time.Time                `json:"trial_end,omitempty"`
+	CurrentPeriodEnd *time.Time                `json:"current_period_end,omitempty"`
 }
 
 // ChangedInvoice describes a proration invoice or wallet credit from a modification.

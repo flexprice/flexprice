@@ -113,9 +113,11 @@ func (s *subscriptionModificationService) executeTrialEndNow(
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 
 	changedSubs := []dto.ChangedSubscription{{
-		ID:     sub.ID,
-		Action: dto.ChangedSubscriptionActionUpdated,
-		Status: types.SubscriptionStatusIncomplete,
+		ID:               sub.ID,
+		Action:           dto.ChangedSubscriptionActionUpdated,
+		Status:           types.SubscriptionStatusIncomplete,
+		TrialEnd:         lo.ToPtr(now),
+		CurrentPeriodEnd: lo.ToPtr(now),
 	}}
 
 	return &dto.SubscriptionModifyResponse{
@@ -150,9 +152,11 @@ func (s *subscriptionModificationService) executeTrialEndModifyDate(
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
 
 	changedSubs := []dto.ChangedSubscription{{
-		ID:     sub.ID,
-		Action: dto.ChangedSubscriptionActionUpdated,
-		Status: sub.SubscriptionStatus,
+		ID:               sub.ID,
+		Action:           dto.ChangedSubscriptionActionUpdated,
+		Status:           sub.SubscriptionStatus,
+		TrialEnd:         lo.ToPtr(newTrialEnd),
+		CurrentPeriodEnd: lo.ToPtr(newTrialEnd),
 	}}
 
 	return &dto.SubscriptionModifyResponse{
@@ -182,17 +186,22 @@ func (s *subscriptionModificationService) previewTrialEnd(
 		return nil, err
 	}
 
+	status := types.SubscriptionStatusIncomplete
+	endDate := time.Now().UTC()
 	if params.Action == dto.TrialEndActionModifyDate {
-		newTrialEnd := params.NewTrialEnd.UTC()
-		if err := s.validateModifyDate(newTrialEnd, sub, subscriptionID); err != nil {
+		status = types.SubscriptionStatusTrialing
+		endDate = params.NewTrialEnd.UTC()
+		if err := s.validateModifyDate(endDate, sub, subscriptionID); err != nil {
 			return nil, err
 		}
 	}
 
 	changedSubs := []dto.ChangedSubscription{{
-		ID:     sub.ID,
-		Action: dto.ChangedSubscriptionActionUpdated,
-		Status: sub.SubscriptionStatus,
+		ID:               sub.ID,
+		Action:           dto.ChangedSubscriptionActionUpdated,
+		Status:           status,
+		TrialEnd:         lo.ToPtr(endDate),
+		CurrentPeriodEnd: lo.ToPtr(endDate),
 	}}
 
 	// For inherited children, show them as preview-updated too.
@@ -203,21 +212,16 @@ func (s *subscriptionModificationService) previewTrialEnd(
 		}
 		for _, child := range children {
 			changedSubs = append(changedSubs, dto.ChangedSubscription{
-				ID:     child.ID,
-				Action: dto.ChangedSubscriptionActionUpdated,
-				Status: child.SubscriptionStatus,
+				ID:               child.ID,
+				Action:           dto.ChangedSubscriptionActionUpdated,
+				Status:           status,
+				TrialEnd:         lo.ToPtr(endDate),
+				CurrentPeriodEnd: lo.ToPtr(endDate),
 			})
 		}
 	}
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
 	return &dto.SubscriptionModifyResponse{
-		Subscription: subResp,
 		ChangedResources: dto.ChangedResources{
 			Subscriptions: changedSubs,
 		},
