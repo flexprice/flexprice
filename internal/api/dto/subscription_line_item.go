@@ -137,13 +137,13 @@ type UpdateSubscriptionLineItemRequest struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal       `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal       `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType   `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled *bool                  `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      *bool                  `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod    `json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled *bool                `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
 	CommitmentTimeBuckets *types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
@@ -442,6 +442,9 @@ func (r *CreateSubscriptionLineItemRequest) validateCommitmentFields() error {
 			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
 			Mark(ierr.ErrValidation)
 	}
+	if err := validateTimeOfDayBuckets(r.CommitmentTimeBuckets); err != nil {
+		return err
+	}
 
 	// Auto-set commitment type if not provided (only for create requests)
 	if r.HasCommitment() && r.CommitmentType == "" {
@@ -582,7 +585,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		lineItem.CommitmentDuration = r.CommitmentDuration
 	}
 	if len(r.CommitmentTimeBuckets) > 0 {
-		lineItem.CommitmentTimeBuckets = r.CommitmentTimeBuckets
+		// Copy to avoid aliasing the request's backing array — mutations to r
+		// after validation must not bleed into the domain object.
+		lineItem.CommitmentTimeBuckets = append(types.TimeOfDayBuckets(nil), r.CommitmentTimeBuckets...)
 	}
 
 	return lineItem
@@ -631,6 +636,60 @@ func (r *UpdateSubscriptionLineItemRequest) validateCommitmentFields() error {
 		r.CommitmentWindowed != nil && !*r.CommitmentWindowed {
 		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
 			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+	if r.CommitmentTimeBuckets != nil {
+		if err := validateTimeOfDayBuckets(*r.CommitmentTimeBuckets); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59],
+// rejecting Hour=24 combined with Minute>0 (only 24:00 is a meaningful end-of-day).
+func validateTimeOfDayBuckets(buckets types.TimeOfDayBuckets) error {
+	for i, b := range buckets {
+		if err := validateBucketPoint(b.Start, "start_bucket", i); err != nil {
+			return err
+		}
+		if err := validateBucketPoint(b.End, "end_bucket", i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateBucketPoint(b types.Bucket, field string, idx int) error {
+	if b.Hour < 0 || b.Hour > 24 {
+		return ierr.NewError("commitment_time_buckets: hour out of range").
+			WithHint("Hour must be in [0, 24]").
+			WithReportableDetails(map[string]interface{}{
+				"index": idx,
+				"field": field,
+				"hour":  b.Hour,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if b.Minute < 0 || b.Minute > 59 {
+		return ierr.NewError("commitment_time_buckets: minute out of range").
+			WithHint("Minute must be in [0, 59]").
+			WithReportableDetails(map[string]interface{}{
+				"index":  idx,
+				"field":  field,
+				"minute": b.Minute,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if b.Hour == 24 && b.Minute > 0 {
+		return ierr.NewError("commitment_time_buckets: 24:00 is the only allowed end-of-day value").
+			WithHint("Hour=24 must have Minute=0").
+			WithReportableDetails(map[string]interface{}{
+				"index":  idx,
+				"field":  field,
+				"hour":   b.Hour,
+				"minute": b.Minute,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 	return nil
