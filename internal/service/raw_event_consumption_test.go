@@ -49,7 +49,7 @@ func (s *RawEventConsumptionSuite) SetupTest() {
 	s.svc = &rawEventConsumptionService{
 		ServiceParams: params,
 		outputPubSub:  s.outputPubSub,
-		sentryService: tracing.NewService(s.GetConfig(), s.GetLogger()),
+		tracingService: tracing.NewService(s.GetConfig(), s.GetLogger()),
 	}
 
 	// Default output topic
