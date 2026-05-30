@@ -90,13 +90,15 @@ func (r *CreatePlanRequest) Validate() error {
 
 func (r *CreatePlanRequest) ToPlan(ctx context.Context) *plan.Plan {
 	plan := &plan.Plan{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
-		LookupKey:     r.LookupKey,
-		Name:          r.Name,
-		Description:   r.Description,
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		Metadata:      r.Metadata,
-		BaseModel:     types.GetDefaultBaseModel(ctx),
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		LookupKey:      r.LookupKey,
+		Name:           r.Name,
+		Description:    r.Description,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		Metadata:       r.Metadata,
+		InvoiceCadence: types.InvoiceCadenceAdvance,
+		TrialPeriod:    0,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 	if r.DisplayOrder != nil {
 		plan.DisplayOrder = r.DisplayOrder
