@@ -242,6 +242,7 @@ func (m *Meter) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	seenKeys := make(map[string]struct{}, len(m.Filters))
 	for _, filter := range m.Filters {
 		if filter.Key == "" {
 			return ierr.NewError("filter key cannot be empty").
@@ -256,6 +257,15 @@ func (m *Meter) Validate() error {
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if _, exists := seenKeys[filter.Key]; exists {
+			return ierr.NewError("duplicate filter key").
+				WithHint("Each filter key must be unique within a meter").
+				WithReportableDetails(map[string]interface{}{
+					"filter_key": filter.Key,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		seenKeys[filter.Key] = struct{}{}
 	}
 	return nil
 }
