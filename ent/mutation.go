@@ -63986,6 +63986,7 @@ type UserMutation struct {
 	updated_at    *time.Time
 	created_by    *string
 	updated_by    *string
+	metadata      *map[string]string
 	email         *string
 	_type         *string
 	roles         *[]string
@@ -64342,6 +64343,55 @@ func (m *UserMutation) ResetUpdatedBy() {
 	delete(m.clearedFields, user.FieldUpdatedBy)
 }
 
+// SetMetadata sets the "metadata" field.
+func (m *UserMutation) SetMetadata(value map[string]string) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *UserMutation) Metadata() (r map[string]string, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldMetadata(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *UserMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[user.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *UserMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[user.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *UserMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, user.FieldMetadata)
+}
+
 // SetEmail sets the "email" field.
 func (m *UserMutation) SetEmail(s string) {
 	m.email = &s
@@ -64526,7 +64576,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.tenant_id != nil {
 		fields = append(fields, user.FieldTenantID)
 	}
@@ -64544,6 +64594,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.updated_by != nil {
 		fields = append(fields, user.FieldUpdatedBy)
+	}
+	if m.metadata != nil {
+		fields = append(fields, user.FieldMetadata)
 	}
 	if m.email != nil {
 		fields = append(fields, user.FieldEmail)
@@ -64574,6 +64627,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedBy()
 	case user.FieldUpdatedBy:
 		return m.UpdatedBy()
+	case user.FieldMetadata:
+		return m.Metadata()
 	case user.FieldEmail:
 		return m.Email()
 	case user.FieldType:
@@ -64601,6 +64656,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldCreatedBy(ctx)
 	case user.FieldUpdatedBy:
 		return m.OldUpdatedBy(ctx)
+	case user.FieldMetadata:
+		return m.OldMetadata(ctx)
 	case user.FieldEmail:
 		return m.OldEmail(ctx)
 	case user.FieldType:
@@ -64657,6 +64714,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUpdatedBy(v)
+		return nil
+	case user.FieldMetadata:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
 		return nil
 	case user.FieldEmail:
 		v, ok := value.(string)
@@ -64715,6 +64779,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldUpdatedBy) {
 		fields = append(fields, user.FieldUpdatedBy)
 	}
+	if m.FieldCleared(user.FieldMetadata) {
+		fields = append(fields, user.FieldMetadata)
+	}
 	if m.FieldCleared(user.FieldEmail) {
 		fields = append(fields, user.FieldEmail)
 	}
@@ -64740,6 +64807,9 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldUpdatedBy:
 		m.ClearUpdatedBy()
+		return nil
+	case user.FieldMetadata:
+		m.ClearMetadata()
 		return nil
 	case user.FieldEmail:
 		m.ClearEmail()
@@ -64772,6 +64842,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldUpdatedBy:
 		m.ResetUpdatedBy()
+		return nil
+	case user.FieldMetadata:
+		m.ResetMetadata()
 		return nil
 	case user.FieldEmail:
 		m.ResetEmail()

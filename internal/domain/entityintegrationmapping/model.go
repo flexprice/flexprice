@@ -1,6 +1,8 @@
 package entityintegrationmapping
 
 import (
+	"context"
+
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -141,4 +143,32 @@ func Validate(m *EntityIntegrationMapping) error {
 	}
 
 	return nil
+}
+
+// EntityIntegrationMappingCloneOverrides holds overrides for CopyWith.
+// Nil fields mean "keep existing value".
+type EntityIntegrationMappingCloneOverrides struct {
+	ID       *string
+	EntityID *string
+}
+
+// CopyWith returns a shallow copy with a fresh ID/BaseModel and any overrides applied.
+func (m *EntityIntegrationMapping) CopyWith(ctx context.Context, overrides *EntityIntegrationMappingCloneOverrides) *EntityIntegrationMapping {
+	if m == nil {
+		return nil
+	}
+	out := *m
+	out.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING)
+	out.BaseModel = types.GetDefaultBaseModel(ctx)
+	out.EnvironmentID = types.GetEnvironmentID(ctx)
+	if overrides == nil {
+		return &out
+	}
+	if overrides.ID != nil {
+		out.ID = *overrides.ID
+	}
+	if overrides.EntityID != nil {
+		out.EntityID = *overrides.EntityID
+	}
+	return &out
 }

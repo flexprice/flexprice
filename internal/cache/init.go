@@ -24,7 +24,7 @@ func Initialize(config *config.Configuration, log *logger.Logger) Cache {
 
 	switch CacheType(config.Cache.Type) {
 	case CacheTypeRedis:
-		InitializeRedisCache()
+		InitializeRedisCache(config, log)
 		cache = GetRedisCache()
 	case CacheTypeInMemory:
 		fallthrough

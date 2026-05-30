@@ -1883,11 +1883,16 @@ func (s *subscriptionService) CancelSubscription(
 	var prorationDetails []dto.ProrationDetail
 	totalCreditAmount := decimal.Zero
 
+	// Trialing subscriptions have not been charged yet, so generating a
+	// non-zero invoice on cancellation is incorrect — skip invoice creation.
+	isTrialing := subscription.SubscriptionStatus == types.SubscriptionStatusTrialing
+
 	// Step 5: Execute in transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
 		// Step 6: Calculate proration using unified function
-		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+		// Trialing subscriptions have not been charged yet, so proration is not applicable.
+		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 			prorationService := NewProrationService(s.ServiceParams)
 			prorationResult, err := prorationService.CalculateSubscriptionCancellationProration(
 				ctx, subscription, lineItems, req.CancellationType, effectiveDate, req.Reason, req.ProrationBehavior)
@@ -3075,16 +3080,25 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		sub.CurrentPeriodStart = newPeriod.start
 		sub.CurrentPeriodEnd = newPeriod.end
 
-		// Final cancellation check
-		if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(newPeriod.end) {
+		// Final catch-up cancellation guard:
+		// cancel only when the termination timestamp has already been reached.
+		// If catch-up advances a backdated subscription into its last billing period
+		// (newPeriod.end == CancelAt/EndDate) while that boundary is still in the
+		// future, keep it ACTIVE. The inner-loop period-end check above performs the
+		// correct cancellation on the first run after that boundary actually passes.
+		if sub.CancelAtPeriodEnd && sub.CancelAt != nil &&
+			!sub.CancelAt.After(newPeriod.end) && !sub.CancelAt.After(now) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		}
 
-		// Check if the new period end matches the subscription end date
-		if sub.EndDate != nil && newPeriod.end.Equal(*sub.EndDate) {
+		// Apply the same guard for explicit EndDate cancellation:
+		// only cancel when newPeriod.end matches EndDate and EndDate <= now.
+		// This prevents premature cancellation/corruption for backdated catch-up
+		// flows where newPeriod.end == EndDate but EndDate is still in the future.
+		if sub.EndDate != nil && newPeriod.end.Equal(*sub.EndDate) && !sub.EndDate.After(now) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 			sub.CancelledAt = sub.EndDate
-			s.Logger.InfowCtx(ctx, "subscription will be cancelled at new period end (end date reached)",
+			s.Logger.InfowCtx(ctx, "subscription cancelled at end date (end date reached)",
 				"subscription_id", sub.ID,
 				"new_period_end", newPeriod.end,
 				"end_date", *sub.EndDate)

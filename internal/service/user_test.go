@@ -227,3 +227,36 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 		})
 	}
 }
+
+func (s *UserServiceSuite) TestUpdateUser_MetadataMerge() {
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "user-1")
+
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.TenantID = types.DefaultTenantID
+	baseModel.CreatedBy = "seed-user"
+	baseModel.UpdatedBy = "seed-user"
+
+	err := s.userRepo.Create(ctx, &user.User{
+		ID:       "user-1",
+		Email:    "test@example.com",
+		Type:     types.UserTypeUser,
+		Roles:    []string{},
+		Metadata: map[string]string{"region": "us", "plan": "basic"},
+		BaseModel: baseModel,
+	})
+	s.NoError(err)
+
+	resp, err := s.userService.UpdateUser(ctx, &dto.UpdateUserRequest{
+		Metadata: map[string]string{"plan": "pro", "team": "growth"},
+	})
+
+	s.NoError(err)
+	s.NotNil(resp)
+	s.NotNil(resp.UserResponse)
+	s.Equal("user-1", resp.ID)
+	s.Equal("us", resp.Metadata["region"])
+	s.Equal("pro", resp.Metadata["plan"])
+	s.Equal("growth", resp.Metadata["team"])
+}

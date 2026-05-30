@@ -109,7 +109,7 @@ func (s *subscriptionService) ProcessTrialEndDue(ctx context.Context) (*dto.Subs
 				PeriodEnd:      trialingSubscription.CurrentPeriodEnd,
 			}
 
-			err := s.processSubscriptionTrialEnd(subCtx, trialingSubscription, invoiceService, now)
+			_, err := s.processSubscriptionTrialEnd(subCtx, trialingSubscription, invoiceService, now)
 			if err != nil {
 				s.Logger.ErrorwCtx(subCtx, "failed to process trial end for subscription",
 					"subscription_id", trialingSubscription.ID,
@@ -140,23 +140,31 @@ func derivePerSubscriptionCtx(parentCtx context.Context, sub *subscription.Subsc
 	return ctx
 }
 
-func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, invoiceService InvoiceService, now time.Time) error {
+// ProcessSingleSubscriptionTrialEnd is the public entry point for ending a single subscription's
+// trial on demand (e.g. from the modification API). It delegates to the private batch-oriented
+// processSubscriptionTrialEnd with now = time.Now().
+func (s *subscriptionService) ProcessSingleSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, now time.Time) (*dto.InvoiceResponse, error) {
+	invService := NewInvoiceService(s.ServiceParams)
+	return s.processSubscriptionTrialEnd(ctx, sub, invService, now)
+}
+
+func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, invoiceService InvoiceService, now time.Time) (*dto.InvoiceResponse, error) {
 	if sub.SubscriptionType == types.SubscriptionTypeInherited {
-		return nil
+		return nil, nil
 	}
 	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
-		return nil
+		return nil, nil
 	}
 	if sub.SubscriptionStatus != types.SubscriptionStatusTrialing {
-		return nil
+		return nil, nil
 	}
 	if sub.TrialStart == nil || sub.TrialEnd == nil {
 		s.Logger.WarnwCtx(ctx, "trialing subscription missing trial bounds, skipping",
 			"subscription_id", sub.ID)
-		return nil
+		return nil, nil
 	}
 	if sub.TrialEnd.After(now) {
-		return nil
+		return nil, nil
 	}
 
 	// Billing really starts at trial end. Anchor there so the first paid period isn't short-changed
@@ -165,7 +173,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 	sub.BillingAnchor = firstPeriodStart
 	firstPeriodEnd, err := types.NextBillingDate(firstPeriodStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Out of trialing, first real period on the books. If this job double-fires, we bail earlier because
@@ -199,7 +207,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		return errInv
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	s.Logger.InfowCtx(ctx, "subscription period advanced and moved to incomplete after trial end",
@@ -210,12 +218,12 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 	// Runs after commit: webhooks and credit grants must not fire if the tx above rolled back.
 	if trialEndInvoice == nil {
 		if err := s.completeTrialConversionToActive(ctx, sub); err != nil {
-			return err
+			return nil, err
 		}
 		s.Logger.InfowCtx(ctx, "subscription activated after zero-amount trial end",
 			"subscription_id", sub.ID)
 	}
-	return nil
+	return trialEndInvoice, nil
 }
 
 // cascadeTrialEndToInherited propagates the trial-end state (incomplete + advanced period) to all
@@ -229,6 +237,7 @@ func (s *subscriptionService) cascadeTrialEndToInherited(ctx context.Context, pa
 		return err
 	}
 	for _, child := range children {
+		child.TrialEnd = parentSub.TrialEnd
 		child.SubscriptionStatus = types.SubscriptionStatusIncomplete
 		child.BillingAnchor = parentSub.BillingAnchor
 		child.CurrentPeriodStart = parentSub.CurrentPeriodStart
