@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -47,11 +46,8 @@ func SentryTenantContextMiddleware(c *gin.Context) {
 		hub.Scope().SetTag("user_id", userID)
 		hub.Scope().SetUser(sentry.User{ID: userID})
 	}
-	roles := types.GetRoles(ctx)
-	if len(roles) > 0 {
-		hub.Scope().SetTag("roles", strings.Join(roles, ","))
-	} else {
-		hub.Scope().SetTag("roles", "full_access")
+	for _, role := range types.GetRoles(ctx) {
+		hub.Scope().SetTag(role, "true")
 	}
 	c.Next()
 }
