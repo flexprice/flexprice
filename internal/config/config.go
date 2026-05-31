@@ -134,6 +134,10 @@ type KafkaConfig struct {
 	SASLMechanism          sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
 	SASLUser               string               `mapstructure:"sasl_user"`
 	SASLPassword           string               `mapstructure:"sasl_password"`
+	// SASLOAuthScopes is consulted only when SASLMechanism is OAUTHBEARER.
+	// Empty defaults to ["https://www.googleapis.com/auth/cloud-platform"],
+	// which is what GCP Managed Kafka requires.
+	SASLOAuthScopes        []string             `mapstructure:"sasl_oauth_scopes"`
 	ClientID               string               `mapstructure:"client_id" validate:"required"`
 	RouteTenantsOnLazyMode []string             `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
 }
