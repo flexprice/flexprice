@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/sha512"
+	"fmt"
 	"hash"
 
 	"crypto/tls"
@@ -58,7 +59,7 @@ func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
 		// User/Password are not used.
 		provider, err := newGCPTokenProvider(context.Background(), cfg.Kafka.SASLOAuthScopes)
 		if err != nil {
-			panic(err)
+			panic(fmt.Errorf("kafka oauthbearer: init token provider (scopes=%v) — check GCP Application Default Credentials: %w", cfg.Kafka.SASLOAuthScopes, err))
 		}
 		saramaConfig.Net.SASL.TokenProvider = provider
 	case sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512:
