@@ -46,7 +46,11 @@ func SentryTenantContextMiddleware(c *gin.Context) {
 		hub.Scope().SetTag("user_id", userID)
 		hub.Scope().SetUser(sentry.User{ID: userID})
 	}
-	for _, role := range types.GetRoles(ctx) {
+	roles := types.GetRoles(ctx)
+	if len(roles) == 0 {
+		hub.Scope().SetTag("full_access", "true")
+	}
+	for _, role := range roles {
 		hub.Scope().SetTag(role, "true")
 	}
 	c.Next()
