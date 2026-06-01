@@ -443,6 +443,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			bucketedResult, err := s.queryBucketedMeterUsage(
 				ctx, m, externalCustomerIDs,
 				itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
+				req.PropertyFilters, req.Sources,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
@@ -618,7 +619,8 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 }
 
 // queryBucketedMeterUsage queries the meter_usage table for a single bucketed meter,
-// returning a per-bucket AggregationResult.
+// returning a per-bucket AggregationResult. propertyFilters and sources are forwarded
+// from analytics callers; pass nil for billing callers that don't use them.
 func (s *meterUsageService) queryBucketedMeterUsage(
 	ctx context.Context,
 	m *meter.Meter,
@@ -626,6 +628,8 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	periodStart, periodEnd time.Time,
 	billingAnchor *time.Time,
 	useFinal bool,
+	propertyFilters map[string][]string,
+	sources []string,
 ) (*events.AggregationResult, error) {
 	aggType := m.Aggregation.Type
 	groupBy := m.Aggregation.GroupBy
@@ -645,6 +649,8 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 		BillingAnchor:       billingAnchor,
 		GroupByProperty:     groupBy,
 		UseFinal:            useFinal,
+		PropertyFilters:     propertyFilters,
+		Sources:             sources,
 	})
 }
 
@@ -1395,6 +1401,8 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 		GroupByProperty:    m.Aggregation.GroupBy,
 		UseFinal:           params.UseFinal,
 		BillingAnchor:      params.BillingAnchor,
+		PropertyFilters:    params.PropertyFilters,
+		Sources:            params.Sources,
 	}
 
 	if len(params.ExternalCustomerIDs) > 0 {
@@ -1455,6 +1463,8 @@ func (s *meterUsageService) getEventCountForMeter(ctx context.Context, params *e
 		EndTime:            params.EndTime,
 		AggregationType:    types.AggregationCount,
 		UseFinal:           params.UseFinal,
+		PropertyFilters:    params.PropertyFilters,
+		Sources:            params.Sources,
 	}
 
 	if len(params.ExternalCustomerIDs) > 0 {
@@ -1641,6 +1651,15 @@ func subscriptionStatusPriority(sub *subscription.Subscription) int {
 func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsData) error {
 	priceService := NewPriceService(s.ServiceParams)
 
+	// Analytics filters (property_filters, sources) restrict the SQL result set
+	// to a subset of the customer's actual usage. Commitment / overage / true-up
+	// are billing concepts tied to the FULL usage in the period — applying them
+	// to a filtered subset surfaces misleading values (e.g. a filter that yields
+	// zero matching events would otherwise show the full commitment as unutilized
+	// and report it as cost). When any analytics-only filter is active, skip
+	// commitment application and report the raw filtered cost.
+	skipCommitment := len(data.Params.PropertyFilters) > 0 || len(data.Params.Sources) > 0
+
 	for _, item := range data.Analytics {
 		// Resolve meter: prefer via feature, fall back to direct MeterID lookup.
 		var m *meter.Meter
@@ -1660,9 +1679,9 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 		}
 
 		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
-			s.calculateBucketedCost(ctx, priceService, item, p, m, data)
+			s.calculateBucketedCost(ctx, priceService, item, p, m, data, skipCommitment)
 		} else {
-			s.calculateRegularCost(ctx, priceService, item, m, p, data)
+			s.calculateRegularCost(ctx, priceService, item, m, p, data, skipCommitment)
 		}
 	}
 
@@ -1681,10 +1700,13 @@ type meterUsageBucketedCostParams struct {
 }
 
 // calculateBucketedCost calculates cost for bucketed max/sum meters.
-func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, p *price.Price, m *meter.Meter, data *AnalyticsData) {
+// skipCommitment forces hasCommitment=false when set; used for analytics queries
+// with property/source filters where applying commitment over a filtered subset
+// of events would surface misleading commitment/overage/true-up amounts.
+func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, p *price.Price, m *meter.Meter, data *AnalyticsData, skipCommitment bool) {
 	params := &meterUsageBucketedCostParams{ctx, priceService, item, p, data, m.Aggregation.Type, m.Aggregation.BucketSize}
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-	hasCommitment := lineItem != nil && lineItem.HasCommitment()
+	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
 	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
 
@@ -1908,10 +1930,13 @@ func (s *meterUsageService) sumPointCosts(points []events.UsageAnalyticPoint) de
 }
 
 // calculateRegularCost calculates cost for regular (non-bucketed) meters.
-func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, m *meter.Meter, p *price.Price, data *AnalyticsData) {
+// skipCommitment forces the commitment branch to be bypassed; used for analytics
+// queries with property/source filters where applying commitment over a filtered
+// subset of events would surface misleading commitment/overage/true-up amounts.
+func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, m *meter.Meter, p *price.Price, data *AnalyticsData, skipCommitment bool) {
 	cost := priceService.CalculateCost(ctx, p, item.TotalUsage)
 
-	if item.SubLineItemID != "" {
+	if !skipCommitment && item.SubLineItemID != "" {
 		lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 
 		if lineItem != nil && lineItem.HasCommitment() {

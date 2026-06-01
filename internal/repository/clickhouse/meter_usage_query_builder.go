@@ -106,7 +106,62 @@ func (qb *MeterUsageQueryBuilder) BuildWhereClause(params *events.MeterUsageQuer
 		conditions = append(conditions, "unique_hash != ''")
 	}
 
+	// Source filter
+	if clause, addArgs := buildSourceFilterClause(params.Sources); clause != "" {
+		conditions = append(conditions, clause)
+		args = append(args, addArgs...)
+	}
+
+	// Property filters
+	if clauses, addArgs := buildPropertyFilterClauses(params.PropertyFilters); len(clauses) > 0 {
+		conditions = append(conditions, clauses...)
+		args = append(args, addArgs...)
+	}
+
 	return strings.Join(conditions, " AND "), args
+}
+
+// buildSourceFilterClause builds the "source IN (?, ?, …)" fragment.
+// Returns ("", nil) when sources is empty.
+func buildSourceFilterClause(sources []string) (string, []interface{}) {
+	if len(sources) == 0 {
+		return "", nil
+	}
+	placeholders := make([]string, len(sources))
+	args := make([]interface{}, 0, len(sources))
+	for i, src := range sources {
+		placeholders[i] = "?"
+		args = append(args, src)
+	}
+	return fmt.Sprintf("source IN (%s)", strings.Join(placeholders, ", ")), args
+}
+
+// buildPropertyFilterClauses builds JSONExtractString filter fragments. First clause
+// is "properties != ”" so the JSON extracts work; remaining clauses are per-property
+// equality (one value) or IN (multi-value). Returns (nil, nil) for empty filters.
+func buildPropertyFilterClauses(filters map[string][]string) ([]string, []interface{}) {
+	if len(filters) == 0 {
+		return nil, nil
+	}
+	clauses := []string{"properties != ''"}
+	args := make([]interface{}, 0)
+	for property, values := range filters {
+		if len(values) == 1 {
+			clauses = append(clauses, "JSONExtractString(properties, ?) = ?")
+			args = append(args, property, values[0])
+		} else if len(values) > 1 {
+			placeholders := make([]string, len(values))
+			for i := range values {
+				placeholders[i] = "?"
+			}
+			clauses = append(clauses, fmt.Sprintf("JSONExtractString(properties, ?) IN (%s)", strings.Join(placeholders, ",")))
+			args = append(args, property)
+			for _, v := range values {
+				args = append(args, v)
+			}
+		}
+	}
+	return clauses, args
 }
 
 // BuildFinalClause returns FINAL keyword and SETTINGS for ReplacingMergeTree dedup
@@ -251,34 +306,15 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedWhereClause(params *events.MeterU
 	}
 
 	// Source filter
-	if len(params.Sources) > 0 {
-		placeholders := make([]string, len(params.Sources))
-		for i, src := range params.Sources {
-			placeholders[i] = "?"
-			args = append(args, src)
-		}
-		conditions = append(conditions, fmt.Sprintf("source IN (%s)", strings.Join(placeholders, ", ")))
+	if clause, addArgs := buildSourceFilterClause(params.Sources); clause != "" {
+		conditions = append(conditions, clause)
+		args = append(args, addArgs...)
 	}
 
-	// Property filters — guarded with properties != '' for tenants with empty properties
-	if len(params.PropertyFilters) > 0 {
-		conditions = append(conditions, "properties != ''")
-		for property, values := range params.PropertyFilters {
-			if len(values) == 1 {
-				conditions = append(conditions, "JSONExtractString(properties, ?) = ?")
-				args = append(args, property, values[0])
-			} else if len(values) > 1 {
-				placeholders := make([]string, len(values))
-				for i := range values {
-					placeholders[i] = "?"
-				}
-				conditions = append(conditions, fmt.Sprintf("JSONExtractString(properties, ?) IN (%s)", strings.Join(placeholders, ",")))
-				args = append(args, property)
-				for _, v := range values {
-					args = append(args, v)
-				}
-			}
-		}
+	// Property filters
+	if clauses, addArgs := buildPropertyFilterClauses(params.PropertyFilters); len(clauses) > 0 {
+		conditions = append(conditions, clauses...)
+		args = append(args, addArgs...)
 	}
 
 	return strings.Join(conditions, " AND "), args
