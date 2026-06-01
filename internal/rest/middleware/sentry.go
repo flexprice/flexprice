@@ -48,10 +48,10 @@ func SentryTenantContextMiddleware(c *gin.Context) {
 	}
 	roles := types.GetRoles(ctx)
 	if len(roles) == 0 {
-		hub.Scope().SetTag("full_access", "true")
+		hub.Scope().SetTag("role_super_admin", "true")
 	}
 	for _, role := range roles {
-		hub.Scope().SetTag(role, "true")
+		hub.Scope().SetTag("role_"+role, "true")
 	}
 	c.Next()
 }
