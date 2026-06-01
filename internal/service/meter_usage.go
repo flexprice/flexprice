@@ -1342,8 +1342,13 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 
 // getUsageValueFromDetailedResult extracts the correct scalar usage from a
 // MeterUsageDetailedResult based on aggregation type.
+//
+// For COUNT meters, buildConditionalAggregationColumns emits total_usage as a
+// literal zero — the actual count lives in the event_count column.
 func getUsageValueFromDetailedResult(r *events.MeterUsageDetailedResult, aggType types.AggregationType) decimal.Decimal {
 	switch aggType {
+	case types.AggregationCount:
+		return decimal.NewFromInt(int64(r.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(r.CountUniqueUsage))
 	case types.AggregationMax:
@@ -2090,6 +2095,8 @@ func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnaly
 // getCorrectUsageValue returns the correct usage value based on the meter's aggregation type.
 func (s *meterUsageService) getCorrectUsageValue(item *events.DetailedUsageAnalytic, aggregationType types.AggregationType) decimal.Decimal {
 	switch aggregationType {
+	case types.AggregationCount:
+		return decimal.NewFromInt(int64(item.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(item.CountUniqueUsage))
 	case types.AggregationMax:
@@ -2104,8 +2111,11 @@ func (s *meterUsageService) getCorrectUsageValue(item *events.DetailedUsageAnaly
 }
 
 // getCorrectUsageValueForPoint returns the correct usage value for a time series point based on aggregation type.
+// COUNT meters store the per-window count in point.EventCount (same convention as the aggregate-level helper).
 func (s *meterUsageService) getCorrectUsageValueForPoint(point events.UsageAnalyticPoint, aggregationType types.AggregationType) decimal.Decimal {
 	switch aggregationType {
+	case types.AggregationCount:
+		return decimal.NewFromInt(int64(point.EventCount))
 	case types.AggregationCountUnique:
 		return decimal.NewFromInt(int64(point.CountUniqueUsage))
 	case types.AggregationMax:
