@@ -1690,6 +1690,94 @@ func (s *MeterUsageServiceSuite) TestMultiMeter_MaxAndLatest_NoSubscription() {
 		"LATEST meter total: expected 7 (would be 200 under priority-collapse bug), got %s", byMeter[mLatest.ID])
 }
 
+// TestMultiMeter_MixedAggregations_GroupByAndFilter exercises the no-sub
+// fallback with the full combination: three meters with distinct aggregation
+// types (SUM, MAX, COUNT), a user-supplied group_by on a property field, and
+// a property filter. Each meter gets its own subquery (per the split-by-agg
+// pattern); each subquery applies the filter and groups by (meter_id, region).
+// The converter then produces one item per (meter, region) with the correct
+// per-meter primary aggregation in TotalUsage.
+func (s *MeterUsageServiceSuite) TestMultiMeter_MixedAggregations_GroupByAndFilter() {
+	ctx := s.GetContext()
+	mSum := s.createMeterWithAggregation(ctx, "mtr_full_sum", "ev_sum", types.AggregationSum)
+	mMax := s.createMeterWithAggregation(ctx, "mtr_full_max", "ev_max", types.AggregationMax)
+	mCnt := s.createMeterWithAggregation(ctx, "mtr_full_cnt", "ev_cnt", types.AggregationCount)
+
+	// us-east + cloud=aws — should pass filter.
+	props := func(region, cloud string) map[string]interface{} {
+		return map[string]interface{}{"region": region, "cloud": cloud}
+	}
+
+	// SUM meter: us-east+aws → 10+20=30; us-west+aws → 50; us-east+gcp → filtered out.
+	s.insertMeterUsageFull(ctx, mSum.ID, "unknown_cust", "", "ev_sum",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, "", props("us-east", "aws"))
+	s.insertMeterUsageFull(ctx, mSum.ID, "unknown_cust", "", "ev_sum",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 20, "", props("us-east", "aws"))
+	s.insertMeterUsageFull(ctx, mSum.ID, "unknown_cust", "", "ev_sum",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 50, "", props("us-west", "aws"))
+	s.insertMeterUsageFull(ctx, mSum.ID, "unknown_cust", "", "ev_sum",
+		time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC), 999, "", props("us-east", "gcp"))
+
+	// MAX meter: us-east+aws → max(7,15)=15; us-west+aws → 99; us-east+gcp → filtered.
+	s.insertMeterUsageFull(ctx, mMax.ID, "unknown_cust", "", "ev_max",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 7, "", props("us-east", "aws"))
+	s.insertMeterUsageFull(ctx, mMax.ID, "unknown_cust", "", "ev_max",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 15, "", props("us-east", "aws"))
+	s.insertMeterUsageFull(ctx, mMax.ID, "unknown_cust", "", "ev_max",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 99, "", props("us-west", "aws"))
+	s.insertMeterUsageFull(ctx, mMax.ID, "unknown_cust", "", "ev_max",
+		time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC), 8888, "", props("us-east", "gcp"))
+
+	// COUNT meter: us-east+aws → 3 distinct ids; us-west+aws → 1; us-east+gcp → filtered.
+	for i := 0; i < 3; i++ {
+		s.insertMeterUsageFull(ctx, mCnt.ID, "unknown_cust", "", "ev_cnt",
+			time.Date(2026, 1, 5, 10, i, 0, 0, time.UTC), 1, "", props("us-east", "aws"))
+	}
+	s.insertMeterUsageFull(ctx, mCnt.ID, "unknown_cust", "", "ev_cnt",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 1, "", props("us-west", "aws"))
+	s.insertMeterUsageFull(ctx, mCnt.ID, "unknown_cust", "", "ev_cnt",
+		time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC), 1, "", props("us-east", "gcp"))
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: "unknown_cust",
+		MeterIDs:           []string{mSum.ID, mMax.ID, mCnt.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"properties.region"},
+		PropertyFilters:    map[string][]string{"cloud": {"aws"}},
+	})
+	s.NoError(err)
+
+	// Key by (meter, region) → expected primary value.
+	type k struct{ meter, region string }
+	got := map[k]decimal.Decimal{}
+	for _, item := range resp.Items {
+		got[k{item.MeterID, item.Properties["region"]}] = item.TotalUsage
+	}
+
+	s.True(got[k{mSum.ID, "us-east"}].Equal(decimal.NewFromInt(30)),
+		"SUM us-east: expected 30, got %s", got[k{mSum.ID, "us-east"}])
+	s.True(got[k{mSum.ID, "us-west"}].Equal(decimal.NewFromInt(50)),
+		"SUM us-west: expected 50, got %s", got[k{mSum.ID, "us-west"}])
+	s.True(got[k{mMax.ID, "us-east"}].Equal(decimal.NewFromInt(15)),
+		"MAX us-east: expected 15, got %s", got[k{mMax.ID, "us-east"}])
+	s.True(got[k{mMax.ID, "us-west"}].Equal(decimal.NewFromInt(99)),
+		"MAX us-west: expected 99, got %s", got[k{mMax.ID, "us-west"}])
+	s.True(got[k{mCnt.ID, "us-east"}].Equal(decimal.NewFromInt(3)),
+		"COUNT us-east: expected 3, got %s", got[k{mCnt.ID, "us-east"}])
+	s.True(got[k{mCnt.ID, "us-west"}].Equal(decimal.NewFromInt(1)),
+		"COUNT us-west: expected 1, got %s", got[k{mCnt.ID, "us-west"}])
+
+	// gcp rows must be filtered out — no (meter, "gcp") keys should exist
+	// AND no value should equal the gcp-only payload (999, 8888).
+	for kk, v := range got {
+		s.False(v.Equal(decimal.NewFromInt(999)), "SUM gcp leaked: %v=%s", kk, v)
+		s.False(v.Equal(decimal.NewFromInt(8888)), "MAX gcp leaked: %v=%s", kk, v)
+	}
+}
+
 // TestAvgMeter_NoSubscriptionAnalytics: pre-fix AVG was missing from the
 // primary switch in buildMeterUsageAggregationColumns and from the in-memory
 // primaryAggregationValue, so AVG meters returned total_usage = 0. After fix,
