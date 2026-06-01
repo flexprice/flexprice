@@ -1049,13 +1049,11 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 	}
 
 	// Split meters
-	var bucketedMaxMeterIDs, bucketedSumMeterIDs, standardMeterIDs []string
+	var bucketedMeterIDs, standardMeterIDs []string
 	for _, m := range meters {
 		switch {
-		case m.IsBucketedMaxMeter():
-			bucketedMaxMeterIDs = append(bucketedMaxMeterIDs, m.ID)
-		case m.IsBucketedSumMeter():
-			bucketedSumMeterIDs = append(bucketedSumMeterIDs, m.ID)
+		case m.IsBucketedMaxMeter(), m.IsBucketedSumMeter():
+			bucketedMeterIDs = append(bucketedMeterIDs, m.ID)
 		default:
 			standardMeterIDs = append(standardMeterIDs, m.ID)
 		}
@@ -1063,7 +1061,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 
 	var allResults []*events.MeterUsageDetailedResult
 
-	for _, meterID := range bucketedMaxMeterIDs {
+	for _, meterID := range bucketedMeterIDs {
 		results, err := s.getBucketedMeterAnalytics(ctx, params, meterMap[meterID])
 		if err != nil {
 			return nil, err
@@ -1071,27 +1069,52 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		allResults = append(allResults, results...)
 	}
 
-	for _, meterID := range bucketedSumMeterIDs {
-		results, err := s.getBucketedMeterAnalytics(ctx, params, meterMap[meterID])
-		if err != nil {
-			return nil, err
+	// Standard (non-bucketed) meters: one repo call per aggregation type.
+	// Mirrors the subscription path, which already splits by AggType via
+	// dateRangeGroup (see queryAndAppendAnalyticsEntries). N is small in
+	// practice — most requests touch 1-2 aggregation types — and keeping the
+	// two paths consistent is worth more than collapsing this loop.
+	// Without splitting, buildMeterUsageAggregationColumns would emit a
+	// single primary total_usage expression chosen by priority order, which
+	// is wrong for every non-winning meter in a mixed-type request.
+	var standardTargets []string
+	if len(standardMeterIDs) > 0 {
+		standardTargets = standardMeterIDs
+	} else if len(params.MeterIDs) == 0 {
+		// Catch-all: enumerate every standard meter we already fetched.
+		for _, m := range meters {
+			if !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() {
+				standardTargets = append(standardTargets, m.ID)
+			}
 		}
-		allResults = append(allResults, results...)
 	}
 
-	if len(standardMeterIDs) > 0 || len(params.MeterIDs) == 0 {
-		standardParams := *params
-		if len(standardMeterIDs) > 0 {
-			standardParams.MeterIDs = standardMeterIDs
+	if len(standardTargets) > 0 {
+		byAggType := make(map[types.AggregationType][]string)
+		for _, mid := range standardTargets {
+			m := meterMap[mid]
+			if m == nil {
+				continue
+			}
+			byAggType[m.Aggregation.Type] = append(byAggType[m.Aggregation.Type], mid)
 		}
-		if len(standardParams.MeterIDs) > 1 && !lo.Contains(standardParams.GroupBy, "meter_id") {
-			standardParams.GroupBy = append([]string{"meter_id"}, standardParams.GroupBy...)
+
+		for aggType, meterIDs := range byAggType {
+			subParams := *params
+			subParams.MeterIDs = meterIDs
+			subParams.AggregationTypes = []types.AggregationType{aggType}
+			// Always group by meter_id so the repo populates result.MeterID even
+			// when the subquery has a single meter — the converter keys analytics
+			// by MeterID downstream.
+			if !lo.Contains(subParams.GroupBy, "meter_id") {
+				subParams.GroupBy = append([]string{"meter_id"}, subParams.GroupBy...)
+			}
+			results, err := s.repo.GetDetailedAnalytics(ctx, &subParams)
+			if err != nil {
+				return nil, err
+			}
+			allResults = append(allResults, results...)
 		}
-		results, err := s.repo.GetDetailedAnalytics(ctx, &standardParams)
-		if err != nil {
-			return nil, err
-		}
-		allResults = append(allResults, results...)
 	}
 
 	// Build minimal AnalyticsData (no subscription context)

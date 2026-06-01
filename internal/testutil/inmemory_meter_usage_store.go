@@ -670,7 +670,7 @@ func computeDetailedPoints(records []*events.MeterUsage, ws types.WindowSize, an
 
 // primaryAggregationValue returns the value that buildMeterUsageAggregationColumns
 // would put in total_usage for these records and requested aggregation types.
-// Priority matches the repo function: SUM → COUNT → COUNT_UNIQUE → MAX → LATEST.
+// Priority matches the repo function: SUM → COUNT → COUNT_UNIQUE → MAX → AVG → LATEST.
 func primaryAggregationValue(records []*events.MeterUsage, aggTypes []types.AggregationType, eventCount, countUnique uint64) decimal.Decimal {
 	aggSet := make(map[types.AggregationType]bool, len(aggTypes))
 	for _, t := range aggTypes {
@@ -685,6 +685,8 @@ func primaryAggregationValue(records []*events.MeterUsage, aggTypes []types.Aggr
 		return decimal.NewFromInt(int64(countUnique))
 	case aggSet[types.AggregationMax]:
 		return aggregateScalar(records, types.AggregationMax)
+	case aggSet[types.AggregationAvg]:
+		return aggregateScalar(records, types.AggregationAvg)
 	case aggSet[types.AggregationLatest]:
 		return aggregateScalar(records, types.AggregationLatest)
 	default:

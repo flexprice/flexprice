@@ -1515,14 +1515,17 @@ func (s *MeterUsageServiceSuite) TestWindowedAnalytics_MaxMeter() {
 // These tests pin the correct commitment behavior across aggregation types.
 // ---------------------------------------------------------------------------
 
-// TestCommitmentNonWindowed_CountMeter: $10 commitment, true-up enabled, COUNT
-// meter at $1/event. With 3 events the usage cost ($3) is below commitment
-// ($10) and true-up would charge full commitment — but the analytics path
-// SKIPS commitment when filters/groupings are set. With no filters and going
-// through GetSubscriptionMeterUsage (billing), the commitment logic runs at
-// the billing layer, not in analytics. Here we verify analytics returns the
-// raw filtered cost when filters skip commitment, AND verify the analytic's
-// EventCount / TotalUsage match expectations for COUNT.
+// TestCommitmentNonWindowed_CountMeter exercises the billing path through
+// GetSubscriptionMeterUsage with a COUNT meter at $1/event, a $10 commitment,
+// and true-up enabled. 15 events ingested with no property/source filters so
+// the commitment runs normally: $10 utilized + $5 overage × 1.5 overage factor
+// → TotalCost = $17.50. Asserts:
+//   - EventCount == 15 and TotalUsage == 15 (COUNT semantics for COUNT meter)
+//   - TotalCost == 17.5 (commitment applied with overage)
+//   - CommitmentInfo populated (commitment recorded on the response)
+//
+// This pins the COUNT-meter contract end-to-end: the primary aggregation
+// expression in total_usage feeds commitment computation correctly.
 func (s *MeterUsageServiceSuite) TestCommitmentNonWindowed_CountMeter() {
 	ctx := s.GetContext()
 	m := s.createMeterWithAggregation(ctx, "mtr_cnt_commit", "ev_cnt", types.AggregationCount)
@@ -1633,6 +1636,86 @@ func (s *MeterUsageServiceSuite) TestMultiMeter_MixedAggregations_NoSubscription
 		"multi-meter SUM total: expected 60, got %s", byMeter[mSum.ID])
 	s.True(byMeter[mCnt.ID].Equal(decimal.NewFromInt(4)),
 		"multi-meter COUNT total: expected 4, got %s", byMeter[mCnt.ID])
+}
+
+// ---------------------------------------------------------------------------
+// Mixed-aggregation regression — MAX + LATEST. Pre-fix, the fallback path
+// sent both meters through one repo call with AggregationTypes=[MAX,LATEST].
+// buildMeterUsageAggregationColumns prefers MAX, so total_usage came back as
+// MAX(qty_total) for every row — wrong for the LATEST meter (which should
+// report argMax(qty_total, timestamp)). With the split fix each meter gets
+// its own primary expression, so values are correct.
+// ---------------------------------------------------------------------------
+
+func (s *MeterUsageServiceSuite) TestMultiMeter_MaxAndLatest_NoSubscription() {
+	ctx := s.GetContext()
+	mMax := s.createMeterWithAggregation(ctx, "mtr_mix_max", "ev_max", types.AggregationMax)
+	mLatest := s.createMeterWithAggregation(ctx, "mtr_mix_latest", "ev_latest", types.AggregationLatest)
+
+	// MAX meter: 3 events qty 5, 30, 12 → MAX=30.
+	s.insertMeterUsageFull(ctx, mMax.ID, "unknown_cust", "", "ev_max",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 5, "", nil)
+	s.insertMeterUsageFull(ctx, mMax.ID, "unknown_cust", "", "ev_max",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 30, "", nil)
+	s.insertMeterUsageFull(ctx, mMax.ID, "unknown_cust", "", "ev_max",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 12, "", nil)
+
+	// LATEST meter: 3 events qty 100, 200, 7 at increasing timestamps → LATEST=7.
+	// Critically, MAX of this set is 200, so a MAX-poisoned total_usage would
+	// be 200 — clearly distinguishable from the correct LATEST=7.
+	s.insertMeterUsageFull(ctx, mLatest.ID, "unknown_cust", "", "ev_latest",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 100, "", nil)
+	s.insertMeterUsageFull(ctx, mLatest.ID, "unknown_cust", "", "ev_latest",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 200, "", nil)
+	s.insertMeterUsageFull(ctx, mLatest.ID, "unknown_cust", "", "ev_latest",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 7, "", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: "unknown_cust",
+		MeterIDs:           []string{mMax.ID, mLatest.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+
+	byMeter := map[string]decimal.Decimal{}
+	for _, item := range resp.Items {
+		byMeter[item.MeterID] = item.TotalUsage
+	}
+	s.True(byMeter[mMax.ID].Equal(decimal.NewFromInt(30)),
+		"MAX meter total: expected 30, got %s", byMeter[mMax.ID])
+	s.True(byMeter[mLatest.ID].Equal(decimal.NewFromInt(7)),
+		"LATEST meter total: expected 7 (would be 200 under priority-collapse bug), got %s", byMeter[mLatest.ID])
+}
+
+// TestAvgMeter_NoSubscriptionAnalytics: pre-fix AVG was missing from the
+// primary switch in buildMeterUsageAggregationColumns and from the in-memory
+// primaryAggregationValue, so AVG meters returned total_usage = 0. After fix,
+// AVG meters compute AVG(qty_total) and the in-memory store mirrors that.
+func (s *MeterUsageServiceSuite) TestAvgMeter_NoSubscriptionAnalytics() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_avg", "ev_avg", types.AggregationAvg)
+
+	// 4 events qty 10, 20, 30, 40 → AVG = 25.
+	for i, q := range []int64{10, 20, 30, 40} {
+		s.insertMeterUsageFull(ctx, m.ID, "unknown_cust", "", "ev_avg",
+			time.Date(2026, 1, 5, 10, i, 0, 0, time.UTC), float64(q), "", nil)
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: "unknown_cust",
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	s.Len(resp.Items, 1)
+	s.True(resp.Items[0].TotalUsage.Equal(decimal.NewFromInt(25)),
+		"AVG meter total: expected 25, got %s", resp.Items[0].TotalUsage)
 }
 
 // ---------------------------------------------------------------------------

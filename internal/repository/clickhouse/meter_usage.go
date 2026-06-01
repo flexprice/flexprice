@@ -603,7 +603,7 @@ func getMeterUsageAggExprs(agg MeterUsageAggregator) (aggExpr string, countExpr 
 // only holds a real value when SUM is in the aggregation set), here total_usage
 // always holds the PRIMARY aggregation result regardless of type — COUNT meters
 // get total_usage = COUNT(DISTINCT id), MAX meters get total_usage = MAX(qty_total),
-// etc. Priority order matches frequency (SUM → COUNT → COUNT_UNIQUE → MAX → LATEST).
+// etc. Priority order matches frequency (SUM → COUNT → COUNT_UNIQUE → MAX → AVG → LATEST).
 //
 // This keeps the Go-side simple: r.TotalUsage and p.TotalUsage carry the
 // aggregation-aware value with no further routing needed. The per-type columns
@@ -627,6 +627,8 @@ func buildMeterUsageAggregationColumns(aggTypes []types.AggregationType) []strin
 		primaryExpr = "COUNT(DISTINCT unique_hash)"
 	case aggSet[types.AggregationMax]:
 		primaryExpr = "MAX(qty_total)"
+	case aggSet[types.AggregationAvg]:
+		primaryExpr = "AVG(qty_total)"
 	case aggSet[types.AggregationLatest]:
 		primaryExpr = "argMax(qty_total, timestamp)"
 	default:
