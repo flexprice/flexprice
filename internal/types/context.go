@@ -17,6 +17,7 @@ const (
 	CtxDBTransaction ContextKey = "ctx_db_transaction"
 	CtxForceWriter   ContextKey = "ctx_force_writer" // Force DB operations to use writer connection
 	CtxRoles         ContextKey = "ctx_roles"        // RBAC roles array for permission checks
+	CtxUserType      ContextKey = "ctx_user_type"    // "user" or "service_account"
 
 	// Default values
 	DefaultTenantID = "00000000-0000-0000-0000-000000000000"
@@ -71,6 +72,14 @@ func GetRoles(ctx context.Context) []string {
 		return roles
 	}
 	return []string{} // Empty roles = full access
+}
+
+// IsServiceAccount returns true if the caller authenticated as a service account API key.
+func IsServiceAccount(ctx context.Context) bool {
+	if ut, ok := ctx.Value(CtxUserType).(string); ok {
+		return ut == string(UserTypeServiceAccount)
+	}
+	return false
 }
 
 // GetCustomerID returns the customer ID from the context
