@@ -62,6 +62,7 @@ require (
 	go.uber.org/fx v1.23.0
 	go.uber.org/zap v1.27.1
 	golang.org/x/crypto v0.48.0
+	golang.org/x/oauth2 v0.36.0
 	golang.org/x/time v0.8.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -76,6 +77,7 @@ require (
 require (
 	ariga.io/atlas v0.19.1-0.20240203083654-5948b60a8e43 // indirect
 	cel.dev/expr v0.25.1 // indirect
+	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/ClickHouse/ch-go v0.66.0 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/agext/levenshtein v1.2.1 // indirect
