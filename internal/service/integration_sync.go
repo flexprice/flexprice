@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -30,12 +31,41 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 
 	switch req.EntityType {
 	case types.IntegrationEntityTypeInvoice:
+		if req.Method == dto.IntegrationSyncMethodPull {
+			return s.pullInvoice(ctx, req.EntityID)
+		}
 		return s.syncInvoice(ctx, req.EntityID)
 	case types.IntegrationEntityTypeCustomer:
 		return s.syncCustomer(ctx, req.EntityID)
 	default:
 		return ierr.NewError("unsupported entity_type").Mark(ierr.ErrValidation)
 	}
+}
+
+func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID string) error {
+	connections, err := s.ConnectionRepo.List(ctx, &types.ConnectionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, conn := range connections {
+		if conn.Status != types.StatusPublished {
+			continue
+		}
+		integ, err := s.IntegrationFactory.GetIntegrationByProvider(ctx, conn.ProviderType)
+		if err != nil {
+			continue
+		}
+		if base, ok := integ.(integration.Base); ok {
+			if err := base.PullAndUpdateInvoice(ctx, invoiceID); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID string) error {

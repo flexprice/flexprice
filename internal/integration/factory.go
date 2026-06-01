@@ -16,6 +16,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
+	_default "github.com/flexprice/flexprice/internal/integration/default"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
@@ -60,7 +61,9 @@ type Factory struct {
 	// Storage clients (cached for reuse)
 	s3Client *s3.Client
 
-	temporalSvc temporalservice.TemporalService
+	temporalSvc    temporalservice.TemporalService
+	paymentService interfaces.PaymentService
+	invoiceService interfaces.InvoiceService
 }
 
 // NewFactory creates a new integration factory
@@ -95,6 +98,14 @@ func NewFactory(
 		encryptionService:            encryptionService,
 		temporalSvc:                  temporalSvc,
 	}
+}
+
+// SetServices sets payment and invoice services on the factory.
+// Called via fx.Invoke after all services are constructed to break the
+// ServiceParams → Factory → PaymentService → ServiceParams cycle.
+func (f *Factory) SetServices(paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) {
+	f.paymentService = paymentService
+	f.invoiceService = invoiceService
 }
 
 // GetStripeIntegration returns a complete Stripe integration setup
@@ -450,6 +461,7 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 		f.config.Auth.Secret,
 		f.temporalSvc,
 	)
+	syncSvc.SetServices(f.paymentService, f.invoiceService)
 
 	paymentSvc := paddle.NewPaymentService(f.logger)
 
@@ -708,6 +720,7 @@ func (f *Factory) HasProvider(providerType types.SecretProvider) bool {
 
 // StripeIntegration contains all Stripe integration services
 type StripeIntegration struct {
+	_default.Default
 	Client         *stripe.Client
 	CustomerSvc    *stripe.CustomerService
 	PaymentSvc     *stripe.PaymentService
@@ -717,6 +730,7 @@ type StripeIntegration struct {
 
 // HubSpotIntegration contains all HubSpot integration services
 type HubSpotIntegration struct {
+	_default.Default
 	Client         hubspot.HubSpotClient
 	CustomerSvc    hubspot.HubSpotCustomerService
 	InvoiceSyncSvc *hubspot.InvoiceSyncService
@@ -727,6 +741,7 @@ type HubSpotIntegration struct {
 
 // RazorpayIntegration contains all Razorpay integration services
 type RazorpayIntegration struct {
+	_default.Default
 	Client         razorpay.RazorpayClient
 	CustomerSvc    razorpay.RazorpayCustomerService
 	PaymentSvc     *razorpay.PaymentService
@@ -736,6 +751,7 @@ type RazorpayIntegration struct {
 
 // ChargebeeIntegration contains all Chargebee integration services
 type ChargebeeIntegration struct {
+	_default.Default
 	Client         chargebee.ChargebeeClient
 	ItemFamilySvc  chargebee.ChargebeeItemFamilyService
 	ItemSvc        chargebee.ChargebeeItemService
@@ -748,6 +764,7 @@ type ChargebeeIntegration struct {
 
 // QuickBooksIntegration contains all QuickBooks integration services
 type QuickBooksIntegration struct {
+	_default.Default
 	Client         quickbooks.QuickBooksClient
 	CustomerSvc    quickbooks.QuickBooksCustomerService
 	ItemSyncSvc    quickbooks.QuickBooksItemSyncService
@@ -758,13 +775,19 @@ type QuickBooksIntegration struct {
 
 // PaddleIntegration contains all Paddle integration services
 type PaddleIntegration struct {
+	_default.Default
 	Client         paddle.PaddleClient
 	SyncSvc        *paddle.PaddleSyncService
 	WebhookHandler *paddlewebhook.Handler
 }
 
+func (p *PaddleIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return p.SyncSvc.PullAndUpdateInvoice(ctx, invoiceID)
+}
+
 // NomodIntegration contains all Nomod integration services
 type NomodIntegration struct {
+	_default.Default
 	Client         nomod.NomodClient
 	CustomerSvc    nomod.NomodCustomerService
 	PaymentSvc     *nomod.PaymentService
@@ -774,6 +797,7 @@ type NomodIntegration struct {
 
 // MoyasarIntegration contains all Moyasar integration services
 type MoyasarIntegration struct {
+	_default.Default
 	Client         moyasar.MoyasarClient
 	CustomerSvc    moyasar.MoyasarCustomerService
 	PaymentSvc     *moyasar.PaymentService
@@ -783,6 +807,7 @@ type MoyasarIntegration struct {
 
 // WhopIntegration contains all Whop integration services
 type WhopIntegration struct {
+	_default.Default
 	Client         whop.WhopClient
 	InvoiceSyncSvc *whop.InvoiceSyncService
 	WebhookHandler *whopwebhook.Handler
@@ -790,6 +815,7 @@ type WhopIntegration struct {
 
 // ZohoBooksIntegration contains all Zoho Books integration services
 type ZohoBooksIntegration struct {
+	_default.Default
 	Client      zoho.ZohoClient
 	CustomerSvc zoho.ZohoCustomerService
 	InvoiceSvc  zoho.ZohoInvoiceService

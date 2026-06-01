@@ -5,9 +5,17 @@ import (
 	"github.com/flexprice/flexprice/internal/validator"
 )
 
+type IntegrationSyncMethod string
+
+const (
+	IntegrationSyncMethodPull IntegrationSyncMethod = "pull"
+	IntegrationSyncMethodPush IntegrationSyncMethod = "push"
+)
+
 type IntegrationSyncRequest struct {
 	EntityType types.IntegrationEntityType `json:"entity_type" validate:"required"`
 	EntityID   string                      `json:"entity_id" validate:"required"`
+	Method     IntegrationSyncMethod       `json:"method"`
 }
 
 func (r *IntegrationSyncRequest) Validate() error {

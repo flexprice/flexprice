@@ -36,6 +36,8 @@ type PaddleSyncService struct {
 	logger           *logger.Logger
 	authSecret       string
 	temporalSvc      temporalservice.TemporalService
+	paymentService   interfaces.PaymentService
+	invoiceService   interfaces.InvoiceService
 }
 
 // NewPaddleSyncService creates a new PaddleSyncService.
@@ -61,6 +63,12 @@ func NewPaddleSyncService(
 		authSecret:       authSecret,
 		temporalSvc:      temporalSvc,
 	}
+}
+
+// SetServices sets the payment and invoice services needed by PullAndUpdateInvoice.
+func (s *PaddleSyncService) SetServices(paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) {
+	s.paymentService = paymentService
+	s.invoiceService = invoiceService
 }
 
 // EnsureCustomerSynced ensures the given FlexPrice customer exists in Paddle
@@ -1220,4 +1228,63 @@ func mapToUpdateCustomerAddressRequest(addr *paddlenotification.AddressNotificat
 		req.AddressCountry = lo.ToPtr(strings.ToUpper(string(addr.CountryCode)))
 	}
 	return req
+}
+
+// PullAndUpdateInvoice polls Paddle for the payment status of an already-synced invoice.
+// If the invoice mapping exists and the invoice is finalized+paid, it returns early.
+// If the invoice is unpaid, it fetches the Paddle transaction by ID and, if the
+// transaction is completed, processes the payment (same flow as handleTransactionCompleted).
+func (s *PaddleSyncService) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	flexInvoice, err := s.invoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return fmt.Errorf("fetching invoice: %w", err)
+	}
+
+	existingMapping, err := s.getExistingInvoiceMapping(ctx, invoiceID)
+	if err != nil {
+		return fmt.Errorf("checking invoice mapping: %w", err)
+	}
+	if existingMapping == nil {
+		return ierr.NewError("no Paddle mapping found for invoice").
+			WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	if flexInvoice.InvoiceStatus == types.InvoiceStatusFinalized &&
+		flexInvoice.PaymentStatus == types.PaymentStatusSucceeded {
+		s.logger.Debugw("invoice already finalized and paid, skipping reconciliation",
+			"invoice_id", invoiceID)
+		return nil
+	}
+
+	paddleTransactionID := existingMapping.ProviderEntityID
+	txnCollection, err := s.client.ListTransactions(ctx, &paddlesdk.ListTransactionsRequest{
+		ID: []string{paddleTransactionID},
+	})
+	if err != nil {
+		return fmt.Errorf("listing Paddle transaction %s: %w", paddleTransactionID, err)
+	}
+
+	var txn *paddlesdk.Transaction
+	if txnCollection != nil {
+		if res := txnCollection.Next(ctx); res != nil && res.Ok() {
+			txn = res.Value()
+		}
+	}
+	if txn == nil {
+		return ierr.NewError("Paddle transaction not found").
+			WithReportableDetails(map[string]interface{}{"paddle_transaction_id": paddleTransactionID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	if txn.Status != paddlesdk.TransactionStatusCompleted {
+		s.logger.Debugw("Paddle transaction not yet completed",
+			"invoice_id", invoiceID,
+			"paddle_transaction_id", paddleTransactionID,
+			"status", txn.Status)
+		return nil
+	}
+
+	paymentSvc := NewPaymentService(s.logger)
+	return paymentSvc.ProcessExternalPaddleTransaction(ctx, transactionToNotification(txn), invoiceID, s.paymentService, s.invoiceService)
 }
