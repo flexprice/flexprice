@@ -42,6 +42,10 @@ type MeterUsageQueryParams struct {
 	GroupByProperty string
 	// UseFinal enables FINAL for ReplacingMergeTree deduplication (use for billing queries)
 	UseFinal bool
+	// PropertyFilters restrict events whose properties match. e.g. {"model": ["gpt-4"]}
+	PropertyFilters map[string][]string
+	// Sources restricts events to those whose source is in the list.
+	Sources []string
 }
 
 // MeterUsageResult represents a single time-bucketed aggregation point
