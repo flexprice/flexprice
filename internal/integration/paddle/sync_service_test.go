@@ -13,8 +13,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
-	invoice_domain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	invoice_domain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -321,6 +321,7 @@ func buildTestSyncService(
 		connectionRepo,
 		buildTestLogger(),
 		"test-auth-secret",
+		nil, // TemporalService — not needed in unit tests
 	)
 }
 
@@ -333,7 +334,7 @@ func seedCustomer(ctx context.Context, t *testing.T, store *testutil.InMemoryCus
 		Name:           "Test Customer",
 		AddressCountry: "US",
 		EnvironmentID:  types.GetEnvironmentID(ctx),
-		BaseModel: types.GetDefaultBaseModel(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 	require.NoError(t, store.Create(ctx, c))
 }
@@ -814,6 +815,9 @@ func (m *mockSubscriptionService) UpdateBillingPeriods(ctx context.Context) (*ap
 	return nil, nil
 }
 func (m *mockSubscriptionService) ProcessTrialEndDue(ctx context.Context) (*apidto.SubscriptionUpdatePeriodResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) ProcessSingleSubscriptionTrialEnd(ctx context.Context, sub *subscription.Subscription, now time.Time) (*apidto.InvoiceResponse, error) {
 	return nil, nil
 }
 func (m *mockSubscriptionService) PauseSubscription(ctx context.Context, subscriptionID string, req *apidto.PauseSubscriptionRequest) (*apidto.PauseSubscriptionResponse, error) {

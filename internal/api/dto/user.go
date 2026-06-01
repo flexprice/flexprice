@@ -53,11 +53,12 @@ func (r *CreateUserRequest) Validate() error {
 }
 
 type UserResponse struct {
-	ID     string          `json:"id"`
-	Email  string          `json:"email,omitempty"` // Empty for service accounts
-	Type   types.UserType  `json:"type"`
-	Roles  []string        `json:"roles,omitempty"`
-	Tenant *TenantResponse `json:"tenant"`
+	ID       string            `json:"id"`
+	Email    string            `json:"email,omitempty"` // Empty for service accounts
+	Type     types.UserType    `json:"type"`
+	Roles    []string          `json:"roles,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	Tenant   *TenantResponse   `json:"tenant"`
 }
 
 // CreateUserResponse is the response for POST /users: same shape for both types; password only when type=user.
@@ -68,12 +69,29 @@ type CreateUserResponse struct {
 
 func NewUserResponse(u *user.User, tenant *tenant.Tenant) *UserResponse {
 	return &UserResponse{
-		ID:     u.ID,
-		Email:  u.Email,
-		Type:   u.Type,
-		Roles:  u.Roles,
-		Tenant: NewTenantResponse(tenant),
+		ID:       u.ID,
+		Email:    u.Email,
+		Type:     u.Type,
+		Roles:    u.Roles,
+		Metadata: u.Metadata,
+		Tenant:   NewTenantResponse(tenant),
 	}
+}
+
+type UpdateUserRequest struct {
+	Metadata map[string]string `json:"metadata" validate:"omitempty"`
+}
+
+func (r *UpdateUserRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type UpdateUserResponse struct {
+	*UserResponse
 }
 
 // ListUsersResponse is the response type for listing users with pagination

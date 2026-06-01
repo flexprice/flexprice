@@ -19,6 +19,15 @@ const (
 	InvoiceLineItemEntityTypeSubscription InvoiceLineItemEntityType = "subscription"
 )
 
+// InvoiceLineItemMetadataKey represents well-known metadata keys on invoice line items.
+type InvoiceLineItemMetadataKey = string
+
+const (
+	// InvoiceLineItemMetadataKeyChildCustomerID is the customer name of the child subscription
+	// in a grouped-invoicing scenario.
+	InvoiceLineItemMetadataKeyChildCustomerID InvoiceLineItemMetadataKey = "child_customer_id"
+)
+
 // InvoiceCadence defines when an invoice is generated relative to the billing period
 // ARREAR: Invoice generated at the end of the billing period (after service delivery)
 // ADVANCE: Invoice generated at the beginning of the billing period (before service delivery)
@@ -236,6 +245,10 @@ const (
 	// Zero-dollar: marked SKIPPED; current_period_start still advances to avoid re-checking.
 	// Side-effect: advances current_period_start to the invoice's period_end after finalization.
 	InvoiceBillingReasonAutoInvoiceThreshold InvoiceBillingReason = "AUTO_INVOICE_THRESHOLD"
+
+	// InvoiceBillingReasonWalletAutoTopup is generated when a wallet balance drops
+	// below the auto-topup threshold and invoiced top-up is enabled.
+	InvoiceBillingReasonWalletAutoTopup InvoiceBillingReason = "WALLET_AUTO_TOPUP"
 )
 
 func (r InvoiceBillingReason) String() string {
@@ -252,6 +265,7 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
 		InvoiceBillingReasonAutoInvoiceThreshold,
+		InvoiceBillingReasonWalletAutoTopup,
 	}
 
 	if r != "" && !lo.Contains(allowed, r) {
@@ -428,6 +442,9 @@ type InvoiceFilter struct {
 	// Multiple statuses can be specified to include invoices with any of the listed payment states
 	PaymentStatus []PaymentStatus `json:"payment_status,omitempty" form:"payment_status"`
 
+	// BillingReason filters invoices by why they were generated
+	BillingReason InvoiceBillingReason `json:"billing_reason,omitempty" form:"billing_reason"`
+
 	// amount_due_gt filters invoices with a total amount due greater than the specified value
 	// Useful for finding invoices above a certain threshold or identifying high-value invoices
 	AmountDueGt *decimal.Decimal `json:"amount_due_gt,omitempty" form:"amount_due_gt"`
@@ -474,6 +491,13 @@ func (f *InvoiceFilter) Validate() error {
 			return ierr.WithError(err).WithHint("invalid time range").Mark(ierr.ErrValidation)
 		}
 	}
+
+	if f.BillingReason != "" {
+		if err := f.BillingReason.Validate(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

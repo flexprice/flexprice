@@ -342,6 +342,12 @@ func (c *SubscriptionInheritanceConfig) Validate() error {
 }
 
 type CreateSubscriptionRequest struct {
+	// ID is an optional pre-generated subscription ID for internal use only.
+	// This exists as a temporary patch to allow Paddle entity mapping to be created
+	// before the subscription row is written, so both share the same transaction.
+	// TODO: Remove once plan-change integration carryover is handled generically.
+	// Never populated from external JSON.
+	ID string `json:"-"`
 
 	// customer_id is the flexprice customer id
 	// and it is prioritized over external_customer_id in case both are provided.
@@ -681,6 +687,11 @@ type SubscriptionResponseV2 struct {
 
 	// Pauses are included when subscription has pause status
 	Pauses []*subscription.SubscriptionPause `json:"pauses,omitempty"`
+
+	// PlanPricesOutOfSync is true when the subscription's synced_price_sequence
+	// is behind the plan's current max prices.sequence — i.e. plan-price
+	// changes have not yet been reconciled into this subscription's line items.
+	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
 }
 
 func (r *CreateSubscriptionRequest) Validate() error {
@@ -1241,8 +1252,13 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		trialStart, trialEnd = r.TrialStart, r.TrialEnd
 	}
 
+	subID := r.ID
+	if subID == "" {
+		subID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)
+	}
+
 	sub := &subscription.Subscription{
-		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		ID:                 subID,
 		CustomerID:         r.CustomerID,
 		PlanID:             r.PlanID,
 		Currency:           strings.ToLower(r.Currency),
@@ -1793,10 +1809,10 @@ type SubscriptionUpdatePeriodResponseItem struct {
 
 // AutoInvoiceThresholdBillingResult is the result of a single ProcessAutoInvoiceThresholdBilling run.
 type AutoInvoiceThresholdBillingResult struct {
-	TotalChecked  int                                    `json:"total_checked"`
-	TotalInvoiced int                                    `json:"total_invoiced"`
-	TotalSkipped  int                                    `json:"total_skipped"`
-	TotalFailed   int                                    `json:"total_failed"`
+	TotalChecked  int                                      `json:"total_checked"`
+	TotalInvoiced int                                      `json:"total_invoiced"`
+	TotalSkipped  int                                      `json:"total_skipped"`
+	TotalFailed   int                                      `json:"total_failed"`
 	Items         []*AutoInvoiceThresholdBillingResultItem `json:"items,omitempty"`
 }
 

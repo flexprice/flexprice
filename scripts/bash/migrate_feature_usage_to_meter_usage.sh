@@ -20,7 +20,7 @@ set -euo pipefail
 #   qty_total       → CAST(qty_total, 'Decimal(18,8)')
 #   unique_hash     → COALESCE(unique_hash, '')
 #   source          → COALESCE(source, '')
-#   properties      → '' (skipped per requirement)
+#   properties      → direct
 # ---------------------------
 
 # ---- ClickHouse connection (from .env.backfill) ----
@@ -89,6 +89,7 @@ now_ts() {
 }
 
 # Count rows already in destination for this tenant+env+day
+# </dev/null prevents terminal XTGETTCAP responses from leaking into the query
 dst_count_for_day() {
   local day="$1"
   ch --query "
@@ -98,7 +99,7 @@ dst_count_for_day() {
       AND environment_id = '${ENVIRONMENT_ID}'
       AND timestamp >= toDateTime('${day} 00:00:00')
       AND timestamp <  toDateTime('${day} 00:00:00') + INTERVAL 1 DAY
-  " 2>/dev/null | tr -d '\r\n '
+  " </dev/null 2>/dev/null | tr -d '\r\n '
 }
 
 # Count rows in source for this tenant+env+day
@@ -111,7 +112,7 @@ src_count_for_day() {
       AND environment_id = '${ENVIRONMENT_ID}'
       AND timestamp >= toDateTime64('${day} 00:00:00', 3)
       AND timestamp <  toDateTime64('${day} 00:00:00', 3) + INTERVAL 1 DAY
-  " 2>/dev/null | tr -d '\r\n '
+  " </dev/null 2>/dev/null | tr -d '\r\n '
 }
 
 # ---------------------------
@@ -180,7 +181,7 @@ SELECT
     CAST(qty_total, 'Decimal(18,8)')         AS qty_total,
     ''                                       AS unique_hash,
     COALESCE(source, '')                     AS source,
-    ''                                       AS properties
+    properties                               AS properties
 FROM ${SRC_TABLE}
 WHERE tenant_id      = '${TENANT_ID}'
   AND environment_id = '${ENVIRONMENT_ID}'

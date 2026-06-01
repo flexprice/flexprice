@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -593,4 +594,97 @@ func getMeterUsageAggExprs(agg MeterUsageAggregator) (aggExpr string, countExpr 
 	}
 
 	return aggExpr, countExpr
+}
+
+// GetMeterUsageForExport retrieves meter usage data for export in batches.
+func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*events.MeterUsage, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	query := `
+		SELECT
+			id,
+			tenant_id,
+			environment_id,
+			external_customer_id,
+			event_name,
+			source,
+			timestamp,
+			ingested_at,
+			properties,
+			meter_id,
+			qty_total,
+			unique_hash
+		FROM meter_usage FINAL
+		WHERE tenant_id = ?
+		  AND environment_id = ?
+		  AND timestamp >= ?
+		  AND timestamp < ?
+		ORDER BY timestamp DESC
+		LIMIT ? OFFSET ?
+		SETTINGS max_memory_usage = 96636764160
+	`
+
+	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, startTime, endTime, batchSize, offset)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query meter_usage for export in batch").
+			WithReportableDetails(map[string]interface{}{
+				"batch_size": batchSize,
+				"offset":     offset,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []*events.MeterUsage
+	for rows.Next() {
+		var usage events.MeterUsage
+		var propertiesJSON string
+
+		if err := rows.Scan(
+			&usage.ID,
+			&usage.TenantID,
+			&usage.EnvironmentID,
+			&usage.ExternalCustomerID,
+			&usage.EventName,
+			&usage.Source,
+			&usage.Timestamp,
+			&usage.IngestedAt,
+			&propertiesJSON,
+			&usage.MeterID,
+			&usage.QtyTotal,
+			&usage.UniqueHash,
+		); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan meter_usage row").
+				Mark(ierr.ErrDatabase)
+		}
+
+		if propertiesJSON != "" {
+			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
+				r.logger.Warnw("failed to parse properties JSON",
+					"event_id", usage.ID,
+					"error", err)
+				usage.Properties = make(map[string]interface{})
+			}
+		}
+
+		results = append(results, &usage)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating meter_usage rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	r.logger.Debugw("meter_usage export batch query completed",
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+		"batch_size", batchSize,
+		"offset", offset,
+		"records_in_batch", len(results))
+
+	return results, nil
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"strings"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -16,7 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
-	"strings"
 )
 
 const invoiceLineItemBatchSize = 1000
@@ -633,6 +634,7 @@ func (r *invoiceLineItemRepository) GetRevenueByCustomer(
 		SELECT
 			ili.customer_id,
 			ili.price_type,
+			ili.currency,
 			COALESCE(SUM(ili.amount), 0)::text AS amount
 		FROM invoice_line_items ili
 		INNER JOIN invoices inv
@@ -645,7 +647,7 @@ func (r *invoiceLineItemRepository) GetRevenueByCustomer(
 			AND ili.tenant_id = $1
 			AND ili.environment_id = $2
 			%s
-		GROUP BY ili.customer_id, ili.price_type
+		GROUP BY ili.customer_id, ili.price_type, ili.currency
 	`, customerFilter)
 
 	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, args...)
@@ -661,7 +663,7 @@ func (r *invoiceLineItemRepository) GetRevenueByCustomer(
 	for rows.Next() {
 		var row domaininvoice.RevenueByCustomerRow
 		var amountStr string
-		if err := rows.Scan(&row.CustomerID, &row.PriceType, &amountStr); err != nil {
+		if err := rows.Scan(&row.CustomerID, &row.PriceType, &row.Currency, &amountStr); err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
 				WithHint("failed to scan revenue row").

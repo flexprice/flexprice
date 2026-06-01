@@ -41,3 +41,28 @@ func (r *LinkIntegrationMappingRequest) Validate() error {
 	}
 	return nil
 }
+
+type IntegrationConfigEntry struct {
+	Provider      types.SecretProvider `json:"provider"`
+	BaseConfig    *types.SyncConfig    `json:"base_config"`
+	CurrentConfig *types.SyncConfig    `json:"current_config"`
+}
+
+type IntegrationConfigResponse struct {
+	Integrations []IntegrationConfigEntry `json:"integrations"`
+}
+
+func EntityOnlySyncConfig(sc *types.SyncConfig) *types.SyncConfig {
+	if sc == nil {
+		return types.DefaultSyncConfig()
+	}
+	return &types.SyncConfig{
+		Plan:         sc.Plan,
+		Subscription: sc.Subscription,
+		Invoice:      sc.Invoice,
+		Customer:     sc.Customer,
+		Payment:      sc.Payment,
+		Deal:         sc.Deal,
+		Quote:        sc.Quote,
+	}
+}

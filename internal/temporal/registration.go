@@ -22,6 +22,7 @@ import (
 	stripeActivities "github.com/flexprice/flexprice/internal/temporal/activities/stripe"
 	subscriptionActivities "github.com/flexprice/flexprice/internal/temporal/activities/subscription"
 	taskActivities "github.com/flexprice/flexprice/internal/temporal/activities/task"
+	whopActivities "github.com/flexprice/flexprice/internal/temporal/activities/whop"
 	workflowActivities "github.com/flexprice/flexprice/internal/temporal/activities/workflow"
 	zohoActivities "github.com/flexprice/flexprice/internal/temporal/activities/zoho"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
@@ -107,6 +108,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	walletService := service.NewWalletService(params)
 	exportActivity := exportActivities.NewExportActivity(
 		params.FeatureUsageRepo,
+		params.MeterUsageRepo,
 		params.PriceRepo,
 		params.InvoiceRepo,
 		params.WalletRepo,
@@ -114,6 +116,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.CustomerRepo,
 		params.ConnectionRepo,
 		params.IntegrationFactory,
+		params.Config,
 		params.Logger,
 		featureUsageTrackingService,
 		params.EventRepo,
@@ -158,6 +161,13 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.Logger,
 	)
 	nomodCustomerSyncActivities := nomodActivities.NewCustomerSyncActivities(
+		params.IntegrationFactory,
+		customerService,
+		params.Logger,
+	)
+
+	// Whop activities
+	whopInvoiceSyncActivities := whopActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		customerService,
 		params.Logger,
@@ -259,7 +269,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities, envActivities, cronBundle)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, nomodCustomerSyncActivities, whopInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, paddleCustomerSyncActivities, paddleSubscriptionSyncActivities, stripeInvoiceSyncActivities, stripeCustomerSyncActivities, razorpayInvoiceSyncActivities, razorpayCustomerSyncActivities, chargebeeInvoiceSyncActivities, chargebeeCustomerSyncActivities, qbInvoiceSyncActivities, qbCustomerSyncActivities, zohoInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities, envActivities, cronBundle)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -284,6 +294,7 @@ func buildWorkerConfig(
 	qbPriceSyncActivities *qbActivities.QuickBooksPriceSyncActivities,
 	nomodInvoiceSyncActivities *nomodActivities.InvoiceSyncActivities,
 	nomodCustomerSyncActivities *nomodActivities.CustomerSyncActivities,
+	whopInvoiceSyncActivities *whopActivities.InvoiceSyncActivities,
 	moyasarInvoiceSyncActivities *moyasarActivities.InvoiceSyncActivities,
 	paddleInvoiceSyncActivities *paddleActivities.InvoiceSyncActivities,
 	paddleCustomerSyncActivities *paddleActivities.CustomerSyncActivities,
@@ -321,6 +332,8 @@ func buildWorkerConfig(
 			workflows.HubSpotInvoiceSyncWorkflow,
 			workflows.HubSpotQuoteSyncWorkflow,
 			workflows.NomodInvoiceSyncWorkflow,
+			workflows.WhopInvoiceSyncWorkflow,
+			workflows.WhopInvoiceMarkPaidWorkflow,
 			workflows.MoyasarInvoiceSyncWorkflow,
 			workflows.PaddleInvoiceSyncWorkflow,
 			workflows.StripeInvoiceSyncWorkflow,
@@ -344,6 +357,8 @@ func buildWorkerConfig(
 			hubspotInvoiceSyncActivities.SyncInvoiceToHubSpot,
 			hubspotQuoteSyncActivities.CreateQuoteAndLineItems,
 			nomodInvoiceSyncActivities.SyncInvoiceToNomod,
+			whopInvoiceSyncActivities.SyncInvoiceToWhop,
+			whopInvoiceSyncActivities.MarkWhopInvoicePaid,
 			moyasarInvoiceSyncActivities.SyncInvoiceToMoyasar,
 			paddleInvoiceSyncActivities.SyncInvoiceToPaddle,
 			stripeInvoiceSyncActivities.SyncInvoiceToStripe,

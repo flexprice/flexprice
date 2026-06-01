@@ -101,8 +101,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			WithReportableDetails(map[string]interface{}{"plan_id": req.PlanID, "status": plan.Status}).
 			Mark(ierr.ErrValidation)
 	}
-
 	sub := req.ToSubscription(ctx)
+	s.overRideSubscriptionBasedOnIntegration(ctx, sub, &req)
 
 	// Validate and filter prices
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, plan.ID, types.PRICE_ENTITY_TYPE_PLAN, sub, req.Workflow)
@@ -256,6 +256,16 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		sub.SubscriptionStatus = req.SubscriptionStatus
 	}
 	syncTrialingStateFromCreateRequest(&req, sub)
+
+	// Stamp the sub with the plan's current max prices.sequence so new subscriptions are considered already-synced.
+	currentPlanSeq, seqErr := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, plan.ID)
+	if seqErr != nil {
+		return nil, ierr.WithError(seqErr).
+			WithHint("Failed to read current plan price sequence").
+			WithReportableDetails(map[string]any{"plan_id": plan.ID}).
+			Mark(ierr.ErrDatabase)
+	}
+	sub.SyncedPriceSequence = currentPlanSeq
 
 	s.Logger.InfowCtx(ctx, "creating subscription",
 		"customer_id", sub.CustomerID, "plan_id", sub.PlanID, "start_date", sub.StartDate,
@@ -482,6 +492,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	isDraft := req.SubscriptionStatus == types.SubscriptionStatusDraft
 	if isDraft {
 		s.triggerHubSpotQuoteSyncWorkflow(ctx, sub.ID, customer.ID)
+		s.runPaddleSubscriptionSync(ctx, sub)
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionDraftCreated, sub.ID)
 	} else {
 		s.triggerHubSpotDealSyncWorkflow(ctx, sub.ID, customer.ID)
@@ -489,6 +500,19 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		s.publishSubscriptionCreatedEvent(ctx, sub)
 	}
 	return response, nil
+}
+
+func (s *subscriptionService) overRideSubscriptionBasedOnIntegration(ctx context.Context, sub *subscription.Subscription, req *dto.CreateSubscriptionRequest) {
+	paddleInt, _ := s.IntegrationFactory.GetPaddleIntegration(ctx)
+	if paddleInt != nil {
+		overRideSubscriptionBasedOnPaddleIntegration(sub, req)
+	}
+}
+
+func overRideSubscriptionBasedOnPaddleIntegration(sub *subscription.Subscription, req *dto.CreateSubscriptionRequest) {
+	if sub.PaymentBehavior == types.PaymentBehaviorAllowIncomplete.String() && lo.FromPtr(req.TrialPeriodDays) > 0 {
+		sub.SubscriptionStatus = types.SubscriptionStatusDraft
+	}
 }
 
 func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, subID string, req dto.ActivateDraftSubscriptionRequest) (*dto.SubscriptionResponse, error) {
@@ -531,6 +555,16 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	nextBillingDate, err := types.NextBillingDate(sub.StartDate, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
 	if err != nil {
 		return nil, err
+	}
+
+	isTrialActivation := sub.TrialStart != nil && sub.TrialEnd != nil && newStartDate.After(*sub.TrialStart) && newStartDate.Before(*sub.TrialEnd)
+	var billingReason types.InvoiceBillingReason
+	if isTrialActivation {
+		trialDuration := sub.TrialEnd.Sub(lo.FromPtr(sub.TrialStart))
+		sub.TrialStart = lo.ToPtr(newStartDate)
+		sub.TrialEnd = lo.ToPtr(newStartDate.Add(trialDuration))
+		nextBillingDate = lo.FromPtr(sub.TrialEnd)
+		billingReason = types.InvoiceBillingReasonSubscriptionTrialStart
 	}
 
 	sub.CurrentPeriodStart = sub.StartDate
@@ -579,6 +613,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			PeriodStart:    sub.CurrentPeriodStart,
 			PeriodEnd:      sub.CurrentPeriodEnd,
 			ReferencePoint: types.ReferencePointPeriodStart,
+			BillingReason:  billingReason,
 		}, paymentParams, types.InvoiceFlowSubscriptionCreation, true) // Pass true for draft activation
 		if err != nil {
 			return err
@@ -603,7 +638,11 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete || sub.SubscriptionStatus == types.SubscriptionStatusDraft {
 			if invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded {
 				// No invoice created or payment succeeded - activate subscription
-				targetStatus = types.SubscriptionStatusActive
+				if isTrialActivation {
+					targetStatus = types.SubscriptionStatusTrialing
+				} else {
+					targetStatus = types.SubscriptionStatusActive
+				}
 			} else {
 				// Set status based on payment_behavior
 				paymentBehavior := types.PaymentBehavior(sub.PaymentBehavior)
@@ -1568,6 +1607,21 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 		Subscription: sub,
 	}
 
+	// Compare sub.SyncedPriceSequence against the plan's current max
+	// prices.sequence — when the sub is behind, plan-price changes have not
+	// yet been reconciled into this sub's line items.
+	if sub.PlanID != "" {
+		currentPlanSeq, seqErr := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, sub.PlanID)
+		if seqErr != nil {
+			s.Logger.ErrorwCtx(ctx, "failed to fetch current plan sequence for out-of-sync flag",
+				"subscription_id", id,
+				"plan_id", sub.PlanID,
+				"error", seqErr)
+		} else {
+			response.PlanPricesOutOfSync = sub.SyncedPriceSequence < currentPlanSeq
+		}
+	}
+
 	// Expand pauses if subscription has pause status
 	if sub.PauseStatus != types.PauseStatusNone {
 		pauses, err := s.SubRepo.ListPauses(ctx, id)
@@ -1829,11 +1883,16 @@ func (s *subscriptionService) CancelSubscription(
 	var prorationDetails []dto.ProrationDetail
 	totalCreditAmount := decimal.Zero
 
+	// Trialing subscriptions have not been charged yet, so generating a
+	// non-zero invoice on cancellation is incorrect — skip invoice creation.
+	isTrialing := subscription.SubscriptionStatus == types.SubscriptionStatusTrialing
+
 	// Step 5: Execute in transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
 		// Step 6: Calculate proration using unified function
-		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+		// Trialing subscriptions have not been charged yet, so proration is not applicable.
+		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 			prorationService := NewProrationService(s.ServiceParams)
 			prorationResult, err := prorationService.CalculateSubscriptionCancellationProration(
 				ctx, subscription, lineItems, req.CancellationType, effectiveDate, req.Reason, req.ProrationBehavior)
@@ -3021,16 +3080,25 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		sub.CurrentPeriodStart = newPeriod.start
 		sub.CurrentPeriodEnd = newPeriod.end
 
-		// Final cancellation check
-		if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(newPeriod.end) {
+		// Final catch-up cancellation guard:
+		// cancel only when the termination timestamp has already been reached.
+		// If catch-up advances a backdated subscription into its last billing period
+		// (newPeriod.end == CancelAt/EndDate) while that boundary is still in the
+		// future, keep it ACTIVE. The inner-loop period-end check above performs the
+		// correct cancellation on the first run after that boundary actually passes.
+		if sub.CancelAtPeriodEnd && sub.CancelAt != nil &&
+			!sub.CancelAt.After(newPeriod.end) && !sub.CancelAt.After(now) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		}
 
-		// Check if the new period end matches the subscription end date
-		if sub.EndDate != nil && newPeriod.end.Equal(*sub.EndDate) {
+		// Apply the same guard for explicit EndDate cancellation:
+		// only cancel when newPeriod.end matches EndDate and EndDate <= now.
+		// This prevents premature cancellation/corruption for backdated catch-up
+		// flows where newPeriod.end == EndDate but EndDate is still in the future.
+		if sub.EndDate != nil && newPeriod.end.Equal(*sub.EndDate) && !sub.EndDate.After(now) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 			sub.CancelledAt = sub.EndDate
-			s.Logger.InfowCtx(ctx, "subscription will be cancelled at new period end (end date reached)",
+			s.Logger.InfowCtx(ctx, "subscription cancelled at end date (end date reached)",
 				"subscription_id", sub.ID,
 				"new_period_end", newPeriod.end,
 				"end_date", *sub.EndDate)
@@ -7224,6 +7292,7 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 		SubscriptionType:       types.SubscriptionTypeInherited,
 		PaymentTerms:           parent.PaymentTerms,
 		EnableTrueUp:           parent.EnableTrueUp,
+		SyncedPriceSequence:    parent.SyncedPriceSequence,
 		BaseModel:              types.GetDefaultBaseModel(ctx),
 	}
 
@@ -7298,7 +7367,7 @@ func syncTrialingStateFromCreateRequest(req *dto.CreateSubscriptionRequest, sub 
 	if sub.TrialStart == nil || sub.TrialEnd == nil {
 		return
 	}
-	if req.SubscriptionStatus == types.SubscriptionStatusDraft {
+	if req.SubscriptionStatus == types.SubscriptionStatusDraft || sub.SubscriptionStatus == types.SubscriptionStatusDraft {
 		return
 	}
 	// While trialing, "current period" is the trial, not the normal billing interval.

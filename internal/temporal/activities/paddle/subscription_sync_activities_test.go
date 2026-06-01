@@ -62,6 +62,7 @@ func buildActivityFactory(
 		testutil.NewInMemoryMeterStore(),
 		testutil.NewInMemoryFeatureStore(),
 		encSvc,
+		nil, // TemporalService — not needed in activity unit tests
 	)
 }
 

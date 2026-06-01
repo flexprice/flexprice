@@ -53,9 +53,11 @@ func (s *subscriptionModificationService) Execute(ctx context.Context, subscript
 		return s.executeQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
 		return s.executeGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
+	case dto.SubscriptionModifyTypeTrialEnd:
+		return s.executeTrialEnd(ctx, subscriptionID, req.TrialEndParams)
 	default:
 		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end").
 			Mark(ierr.ErrValidation)
 	}
 }
@@ -73,9 +75,11 @@ func (s *subscriptionModificationService) Preview(ctx context.Context, subscript
 		return s.previewQuantityChange(ctx, subscriptionID, req.QuantityChangeParams)
 	case dto.SubscriptionModifyTypeGroupedInvoicing:
 		return s.previewGroupedInvoicingMembership(ctx, req.GroupedInvoicingParams)
+	case dto.SubscriptionModifyTypeTrialEnd:
+		return s.previewTrialEnd(ctx, subscriptionID, req.TrialEndParams)
 	default:
 		return nil, ierr.NewError("unknown modification type: " + string(req.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end").
 			Mark(ierr.ErrValidation)
 	}
 }

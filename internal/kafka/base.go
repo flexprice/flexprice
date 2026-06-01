@@ -1,8 +1,10 @@
 package kafka
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/sha512"
+	"fmt"
 	"hash"
 
 	"crypto/tls"
@@ -49,14 +51,27 @@ func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
 
 	// sasl configs
 	saramaConfig.Net.SASL.Mechanism = cfg.Kafka.SASLMechanism
-	saramaConfig.Net.SASL.User = cfg.Kafka.SASLUser
-	saramaConfig.Net.SASL.Password = cfg.Kafka.SASLPassword
 
-	// Configure SCRAM client generator for SCRAM mechanisms
-	if cfg.Kafka.SASLMechanism == sarama.SASLTypeSCRAMSHA256 || cfg.Kafka.SASLMechanism == sarama.SASLTypeSCRAMSHA512 {
+	switch cfg.Kafka.SASLMechanism {
+	case sarama.SASLTypeOAuth:
+		// OAUTHBEARER (e.g. GCP Managed Kafka). Token comes from Application
+		// Default Credentials — Workload Identity on GKE, gcloud locally.
+		// User/Password are not used.
+		provider, err := newGCPTokenProvider(context.Background(), cfg.Kafka.SASLOAuthScopes)
+		if err != nil {
+			panic(fmt.Errorf("kafka oauthbearer: init token provider (scopes=%v) — check GCP Application Default Credentials: %w", cfg.Kafka.SASLOAuthScopes, err))
+		}
+		saramaConfig.Net.SASL.TokenProvider = provider
+	case sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512:
+		saramaConfig.Net.SASL.User = cfg.Kafka.SASLUser
+		saramaConfig.Net.SASL.Password = cfg.Kafka.SASLPassword
 		saramaConfig.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
 			return &XDGSCRAMClient{HashGeneratorFcn: getHashGenerator(cfg.Kafka.SASLMechanism)}
 		}
+	default:
+		// PLAIN and any other mechanism that uses user+password.
+		saramaConfig.Net.SASL.User = cfg.Kafka.SASLUser
+		saramaConfig.Net.SASL.Password = cfg.Kafka.SASLPassword
 	}
 
 	return saramaConfig

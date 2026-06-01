@@ -31,10 +31,13 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
+	"github.com/flexprice/flexprice/internal/integration/whop"
+	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	"github.com/flexprice/flexprice/internal/integration/zoho"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -56,6 +59,8 @@ type Factory struct {
 
 	// Storage clients (cached for reuse)
 	s3Client *s3.Client
+
+	temporalSvc temporalservice.TemporalService
 }
 
 // NewFactory creates a new integration factory
@@ -72,6 +77,7 @@ func NewFactory(
 	meterRepo meter.Repository,
 	featureRepo feature.Repository,
 	encryptionService security.EncryptionService,
+	temporalSvc temporalservice.TemporalService,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -87,6 +93,7 @@ func NewFactory(
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
+		temporalSvc:                  temporalSvc,
 	}
 }
 
@@ -441,6 +448,7 @@ func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration,
 		f.connectionRepo,
 		f.logger,
 		f.config.Auth.Secret,
+		f.temporalSvc,
 	)
 
 	paymentSvc := paddle.NewPaymentService(f.logger)
@@ -559,6 +567,36 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 	}, nil
 }
 
+// GetWhopIntegration returns a complete Whop integration setup
+func (f *Factory) GetWhopIntegration(ctx context.Context) (*WhopIntegration, error) {
+	whopClient := whop.NewClient(
+		f.connectionRepo,
+		f.encryptionService,
+		f.logger,
+		f.config,
+	)
+
+	invoiceSyncSvc := whop.NewInvoiceSyncService(
+		whopClient,
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	webhookHandler := whopwebhook.NewHandler(
+		f.entityIntegrationMappingRepo,
+		invoiceSyncSvc,
+		whopClient,
+		f.logger,
+	)
+
+	return &WhopIntegration{
+		Client:         whopClient,
+		InvoiceSyncSvc: invoiceSyncSvc,
+		WebhookHandler: webhookHandler,
+	}, nil
+}
+
 // GetZohoBooksIntegration returns a complete Zoho Books integration setup
 func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegration, error) {
 	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
@@ -629,6 +667,8 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetMoyasarIntegration(ctx)
 	case types.SecretProviderZohoBooks:
 		return f.GetZohoBooksIntegration(ctx)
+	case types.SecretProviderWhop:
+		return f.GetWhopIntegration(ctx)
 	default:
 		return nil, ierr.NewError("unsupported integration provider").
 			WithHint("Provider type is not supported").
@@ -651,6 +691,7 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 		types.SecretProviderPaddle,
 		types.SecretProviderMoyasar,
 		types.SecretProviderZohoBooks,
+		types.SecretProviderWhop,
 	}
 }
 
@@ -738,6 +779,13 @@ type MoyasarIntegration struct {
 	PaymentSvc     *moyasar.PaymentService
 	InvoiceSyncSvc *moyasar.InvoiceSyncService
 	WebhookHandler *moyasarwebhook.Handler
+}
+
+// WhopIntegration contains all Whop integration services
+type WhopIntegration struct {
+	Client         whop.WhopClient
+	InvoiceSyncSvc *whop.InvoiceSyncService
+	WebhookHandler *whopwebhook.Handler
 }
 
 // ZohoBooksIntegration contains all Zoho Books integration services
@@ -927,7 +975,31 @@ func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvi
 		}
 	}
 
+	// Check Whop
+	whopIntegration, err := f.GetWhopIntegration(ctx)
+	if err == nil {
+		whopProvider := &WhopProvider{integration: whopIntegration}
+		if whopProvider.IsAvailable(ctx) {
+			providers = append(providers, whopProvider)
+		}
+	}
+
 	return providers, nil
+}
+
+// WhopProvider implements IntegrationProvider for Whop
+type WhopProvider struct {
+	integration *WhopIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *WhopProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderWhop
+}
+
+// IsAvailable checks if Whop integration is available
+func (p *WhopProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasWhopConnection(ctx)
 }
 
 // GetStorageProvider returns an S3 storage client for the given connection

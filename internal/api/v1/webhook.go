@@ -19,6 +19,7 @@ import (
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
+	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	zohowebhook "github.com/flexprice/flexprice/internal/integration/zoho/webhook"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -1173,5 +1174,63 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		h.logger.Errorw("failed to handle Paddle webhook event",
 			"error", err,
 			"event_type", payload.EventType)
+	}
+}
+func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
+	// Always return 200 OK to Whop to prevent retries
+	// We log errors internally but don't expose them to Whop
+	defer func() {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Webhook received",
+		})
+	}()
+
+	tenantID := c.Param("tenant_id")
+	environmentID := c.Param("environment_id")
+	if tenantID == "" || environmentID == "" {
+		h.logger.Errorw("missing tenant_id or environment_id in Whop webhook URL")
+		return
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.Errorw("failed to read Whop webhook body", "error", err)
+		return
+	}
+
+	ctx := types.SetTenantID(c.Request.Context(), tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+
+	var event whopwebhook.WhopWebhookEvent
+	if err := json.Unmarshal(body, &event); err != nil {
+		h.logger.Errorw("failed to parse Whop webhook payload", "error", err)
+		return
+	}
+
+	h.logger.Infow("received Whop webhook",
+		"type", event.Type,
+		"tenant_id", tenantID,
+		"environment_id", environmentID)
+
+	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Whop integration", "error", err)
+		return
+	}
+
+	serviceDeps := &whopwebhook.ServiceDependencies{
+		CustomerService:                 h.customerService,
+		PaymentService:                  h.paymentService,
+		InvoiceService:                  h.invoiceService,
+		PlanService:                     h.planService,
+		SubscriptionService:             h.subscriptionService,
+		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		DB:                              h.db,
+	}
+
+	if err := whopIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, serviceDeps); err != nil {
+		h.logger.Errorw("failed to handle Whop webhook event",
+			"error", err,
+			"type", event.Type)
 	}
 }

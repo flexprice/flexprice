@@ -68,15 +68,23 @@ type MeterUsageDetailedAnalyticsParams struct {
 	ExternalCustomerID  string
 	ExternalCustomerIDs []string
 	MeterIDs            []string
-	StartTime           time.Time
-	EndTime             time.Time
-	GroupBy             []string            // "source", "meter_id", "properties.<field>"
-	PropertyFilters     map[string][]string // e.g. {"model": ["gpt-4", "gpt-3.5"]}
-	Sources             []string
-	AggregationTypes    []types.AggregationType // SUM, MAX, LATEST, COUNT_UNIQUE, COUNT
-	WindowSize          types.WindowSize
-	BillingAnchor       *time.Time
-	UseFinal            bool
+	// FeatureIDs are resolved to MeterIDs by the service before querying.
+	// Takes effect only when MeterIDs is empty.
+	FeatureIDs       []string
+	StartTime        time.Time
+	EndTime          time.Time
+	GroupBy          []string            // "source", "meter_id", "properties.<field>"
+	PropertyFilters  map[string][]string // e.g. {"model": ["gpt-4", "gpt-3.5"]}
+	Sources          []string
+	AggregationTypes []types.AggregationType // SUM, MAX, LATEST, COUNT_UNIQUE, COUNT
+	WindowSize       types.WindowSize
+	BillingAnchor    *time.Time
+	UseFinal         bool
+	// Expand mirrors dto.GetUsageAnalyticsRequest.Expand. Allowed values:
+	// "price", "meter", "feature", "subscription_line_item", "plan", "addon", "source".
+	Expand []string
+	// IncludeChildren mirrors dto.GetUsageAnalyticsRequest.IncludeChildren.
+	IncludeChildren bool
 }
 
 // MeterUsageDetailedResult holds aggregated analytics for a single group combination
@@ -127,4 +135,7 @@ type MeterUsageRepository interface {
 
 	// GetDetailedAnalytics provides comprehensive analytics with filtering, grouping, and time-series data
 	GetDetailedAnalytics(ctx context.Context, params *MeterUsageDetailedAnalyticsParams) ([]*MeterUsageDetailedResult, error)
+
+	// GetMeterUsageForExport retrieves meter usage data for export in batches
+	GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*MeterUsage, error)
 }

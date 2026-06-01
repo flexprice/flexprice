@@ -146,7 +146,7 @@ func (s *InMemoryInvoiceLineItemStore) GetRevenueByCustomer(
 		custFilter[id] = true
 	}
 
-	// Aggregate: key = customerID + "|" + priceType
+	// key = customerID | priceType | currency
 	agg := make(map[string]decimal.Decimal)
 	for _, item := range s.data {
 		if item.Status != types.StatusPublished {
@@ -165,16 +165,21 @@ func (s *InMemoryInvoiceLineItemStore) GetRevenueByCustomer(
 		if item.PriceType != nil {
 			pt = *item.PriceType
 		}
-		key := item.CustomerID + "|" + pt
+		cur := item.Currency
+		if cur == "" {
+			cur = "usd"
+		}
+		key := item.CustomerID + "|" + pt + "|" + cur
 		agg[key] = agg[key].Add(item.Amount)
 	}
 
 	var results []invoice.RevenueByCustomerRow
 	for key, amount := range agg {
-		parts := splitKeyOnce(key, "|")
+		parts := splitN3(key, "|")
 		results = append(results, invoice.RevenueByCustomerRow{
 			CustomerID: parts[0],
 			PriceType:  parts[1],
+			Currency:   parts[2],
 			Amount:     amount,
 		})
 	}
@@ -360,14 +365,27 @@ func (s *InMemoryInvoiceLineItemStore) GetVoiceMinutesTimeSeries(
 	return results, nil
 }
 
-// splitKeyOnce splits s on the first occurrence of sep into exactly 2 parts.
-func splitKeyOnce(s, sep string) [2]string {
+// splitN3 splits s on sep into exactly 3 parts (customerID, priceType, currency).
+func splitN3(s, sep string) [3]string {
+	first := -1
+	second := -1
 	for i := 0; i < len(s); i++ {
 		if s[i] == sep[0] {
-			return [2]string{s[:i], s[i+1:]}
+			if first == -1 {
+				first = i
+			} else {
+				second = i
+				break
+			}
 		}
 	}
-	return [2]string{s, ""}
+	if first == -1 {
+		return [3]string{s, "", ""}
+	}
+	if second == -1 {
+		return [3]string{s[:first], s[first+1:], ""}
+	}
+	return [3]string{s[:first], s[first+1 : second], s[second+1:]}
 }
 
 func (s *InMemoryInvoiceLineItemStore) Clear() {

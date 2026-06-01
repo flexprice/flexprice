@@ -302,7 +302,6 @@ func main() {
 			startServer,
 		),
 	)
-
 	app := fx.New(opts...)
 	app.Run()
 }
@@ -367,7 +366,7 @@ func provideHandlers(
 	webhookService *webhook.WebhookService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -383,7 +382,7 @@ func provideHandlers(
 		SubscriptionSchedule:     v1.NewSubscriptionScheduleHandler(subscriptionScheduleService),
 		Wallet:                   v1.NewWalletHandler(walletService, logger),
 		Tenant:                   v1.NewTenantHandler(tenantService, logger),
-		Invoice:                  v1.NewInvoiceHandler(invoiceService, logger),
+		Invoice:                  v1.NewInvoiceHandler(invoiceService, cfg, logger),
 		Feature:                  v1.NewFeatureHandler(featureService, logger),
 		Entitlement:              v1.NewEntitlementHandler(entitlementService, logger),
 		Payment:                  v1.NewPaymentHandler(paymentService, paymentProcessorService, logger),
@@ -401,7 +400,7 @@ func provideHandlers(
 		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:               v1.NewCreditNoteHandler(creditNoteService, logger),
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
-		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, logger),
+		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService),
 		Coupon:                   v1.NewCouponHandler(couponService, logger),

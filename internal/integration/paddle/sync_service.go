@@ -18,6 +18,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/samber/lo"
@@ -33,6 +35,7 @@ type PaddleSyncService struct {
 	connectionRepo   connection.Repository
 	logger           *logger.Logger
 	authSecret       string
+	temporalSvc      temporalservice.TemporalService
 }
 
 // NewPaddleSyncService creates a new PaddleSyncService.
@@ -45,6 +48,7 @@ func NewPaddleSyncService(
 	connectionRepo connection.Repository,
 	log *logger.Logger,
 	authSecret string,
+	temporalSvc temporalservice.TemporalService,
 ) *PaddleSyncService {
 	return &PaddleSyncService{
 		client:           client,
@@ -55,6 +59,7 @@ func NewPaddleSyncService(
 		connectionRepo:   connectionRepo,
 		logger:           log,
 		authSecret:       authSecret,
+		temporalSvc:      temporalSvc,
 	}
 }
 
@@ -314,7 +319,7 @@ func (s *PaddleSyncService) EnsureSubscriptionSynced(ctx context.Context, req En
 	}
 
 	// EnsureCustomerSynced guarantees customer_id and address_id are present.
-	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: sub.CustomerID})
+	customerResp, err := s.EnsureCustomerSynced(ctx, EnsureCustomerSyncedRequest{CustomerID: sub.GetInvoicingCustomerID()})
 	if err != nil {
 		return nil, fmt.Errorf("ensuring customer synced: %w", err)
 	}
@@ -1088,6 +1093,20 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 			s.logger.Infow("subscription.activated: set incomplete→active",
 				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 		}
+	case types.SubscriptionStatusDraft:
+		startDate := time.Now().UTC()
+		if data.StartedAt != nil {
+			if parsed, parseErr := time.Parse(time.RFC3339, *data.StartedAt); parseErr == nil {
+				startDate = parsed
+			}
+		}
+		if _, err := subscriptionService.ActivateDraftSubscription(ctx, flexSubID, apidto.ActivateDraftSubscriptionRequest{
+			StartDate: &startDate,
+		}); err != nil {
+			return fmt.Errorf("activating draft subscription: %w", err)
+		}
+		s.logger.Infow("subscription.activated",
+			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	default:
 		s.logger.Infow("subscription.activated: subscription not in incomplete state — no-op",
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
@@ -1097,11 +1116,23 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 	return nil
 }
 
-// resyncPendingInvoicesForSubscription attempts to sync all finalized+pending invoices
-// for the given subscription. Called after subscription.activated is processed so that invoices
-// created before the Paddle mapping existed can be synced and auto-charged.
-// All errors are soft-fail: each invoice is tried independently; failures are logged.
+// resyncPendingInvoicesForSubscription re-triggers the PaddleInvoiceSyncWorkflow for every
+// finalized+pending invoice that belongs to the given subscription.
+//
+// Called from ProcessSubscriptionActivatedWebhook after the subscription mapping is confirmed.
+// Invoices created during subscription setup failed their original sync because the mapping
+// didn't exist yet; now that it does, we schedule a fresh workflow run for each one.
+//
+// Each workflow is delayed 30 seconds so Paddle has time to fully settle the subscription
+// before the charge is attempted. The workflow's own retry policy handles transient failures.
+// If TemporalService is nil (e.g. in unit-test environments), the method returns silently.
 func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
+	if s.temporalSvc == nil {
+		s.logger.Errorw("temporal service is nil, skipping resync pending invoices for subscription",
+			"subscription_id", subscriptionID)
+		return
+	}
+
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.SubscriptionID = subscriptionID
 	filter.InvoiceStatus = []types.InvoiceStatus{
@@ -1120,28 +1151,40 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 	}
 
 	if len(invoices) == 0 {
+		s.logger.Infow("no pending invoices to resync after subscription.activated",
+			"subscription_id", subscriptionID)
 		return
 	}
 
-	s.logger.Infow("resyncing pending invoices after subscription.activated",
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	s.logger.Infow("triggering post-activation invoice resync workflows",
 		"subscription_id", subscriptionID, "count", len(invoices))
 
-	succeeded := 0
+	triggered := 0
 	for _, inv := range invoices {
-		_, syncErr := s.SyncInvoice(ctx, SyncInvoiceRequest{InvoiceID: inv.ID})
-		if syncErr != nil {
-			s.logger.Warnw("failed to resync invoice after subscription.activated",
-				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", syncErr)
+		input := temporalmodels.PaddleInvoiceSyncWorkflowInput{
+			InvoiceID:      inv.ID,
+			CustomerID:     inv.CustomerID,
+			SubscriptionID: subscriptionID,
+			TenantID:       tenantID,
+			EnvironmentID:  environmentID,
+		}
+		_, wErr := s.temporalSvc.ExecuteWorkflow(ctx, types.TemporalPaddleInvoiceSyncWorkflow, input)
+		if wErr != nil {
+			s.logger.Error("failed to trigger invoice resync workflow after subscription.activated",
+				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", wErr)
 			continue
 		}
-		succeeded++
+		triggered++
 	}
 
-	s.logger.Infow("completed post-activation invoice resync",
+	s.logger.Infow("completed post-activation invoice resync workflow dispatch",
 		"subscription_id", subscriptionID,
 		"attempted", len(invoices),
-		"succeeded", succeeded,
-		"failed", len(invoices)-succeeded)
+		"triggered", triggered,
+		"failed", len(invoices)-triggered)
 }
 
 func syncableInvoiceLineItems(items []*invoice.InvoiceLineItem) []*invoice.InvoiceLineItem {

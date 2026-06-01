@@ -136,6 +136,7 @@ func NewRouter(
 		{
 			user.GET("/me", handlers.User.GetUserInfo)
 			user.POST("", write("user", types.ActionWrite), handlers.User.CreateUser)
+			user.PUT("/me", write("user", types.ActionWrite), handlers.User.UpdateUser)
 			user.POST("/search", handlers.User.QueryUsers)
 		}
 
@@ -516,10 +517,12 @@ func NewRouter(
 		{
 			integrations.POST("/link", write("integration", types.ActionWrite), handlers.Integration.Link)
 			integrations.POST("/sync", write("integration", types.ActionWrite), handlers.Integration.Sync)
-			paddleGroup := integrations.Group("/paddle")
-			{
-				paddleGroup.POST("/invoices/:invoice_id/sync", write("integration", types.ActionWrite), handlers.Paddle.SyncInvoice)
-			}
+			integrations.GET("/mappings", handlers.Integration.GetMappings)
+			integrations.GET("/config", handlers.Integration.GetConfig)
+			// 			paddleGroup := integrations.Group("/paddle")
+			// 			{
+			// 				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
+			// 			}
 		}
 
 		// Coupon routes
@@ -622,6 +625,8 @@ func NewRouter(
 		webhooks.POST("/paddle/:tenant_id/:environment_id", handlers.Webhook.HandlePaddleWebhook)
 		// Zoho Books webhook endpoint: POST /v1/webhooks/zoho_books/{tenant_id}/{environment_id}
 		webhooks.POST("/zoho_books/:tenant_id/:environment_id", handlers.Webhook.HandleZohoBooksWebhook)
+		// Whop webhook endpoint: POST /v1/webhooks/whop/{tenant_id}/{environment_id}
+		webhooks.POST("/whop/:tenant_id/:environment_id", handlers.Webhook.HandleWhopWebhook)
 	}
 
 	// HTTP cron: optional manual/legacy triggers (deprecated for automation; Temporal workers ensure server schedules on startup).

@@ -2379,6 +2379,12 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			}
 			for i := range childReq.LineItems {
 				childReq.LineItems[i].SubscriptionID = lo.ToPtr(child.ID)
+				if child.CustomerID != "" {
+					if childReq.LineItems[i].Metadata == nil {
+						childReq.LineItems[i].Metadata = types.Metadata{}
+					}
+					childReq.LineItems[i].Metadata[types.InvoiceLineItemMetadataKeyChildCustomerID] = child.CustomerID
+				}
 			}
 			invReq.LineItems = append(invReq.LineItems, childReq.LineItems...)
 		}

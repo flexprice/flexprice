@@ -9,10 +9,11 @@ import (
 )
 
 type User struct {
-	ID    string         `json:"id"`
-	Email string         `json:"email"` // Empty for service accounts
-	Type  types.UserType `json:"type"`
-	Roles []string       `json:"roles"`
+	ID       string            `json:"id"`
+	Email    string            `json:"email"` // Empty for service accounts
+	Type     types.UserType    `json:"type"`
+	Roles    []string          `json:"roles"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 	types.BaseModel
 }
 
@@ -49,10 +50,11 @@ func FromEnt(e *ent.User) *User {
 	}
 
 	return &User{
-		ID:    e.ID,
-		Email: lo.FromPtrOr(e.Email, ""),
-		Type:  types.UserType(e.Type),
-		Roles: e.Roles,
+		ID:       e.ID,
+		Email:    lo.FromPtrOr(e.Email, ""),
+		Type:     types.UserType(e.Type),
+		Roles:    e.Roles,
+		Metadata: e.Metadata,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
