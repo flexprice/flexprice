@@ -143,8 +143,8 @@ func buildPropertyFilterClauses(filters map[string][]string) ([]string, []interf
 	if len(filters) == 0 {
 		return nil, nil
 	}
-	clauses := []string{"properties != ''"}
-	args := make([]interface{}, 0)
+	clauses := make([]string, 0, len(filters))
+	args := make([]interface{}, 0, len(filters))
 	for property, values := range filters {
 		if len(values) == 1 {
 			clauses = append(clauses, "JSONExtractString(properties, ?) = ?")
