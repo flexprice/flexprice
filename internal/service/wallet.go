@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -546,18 +545,6 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		req.CreditsToAdd = s.GetCreditsFromCurrencyAmount(req.Amount, w.TopupConversionRate)
 	}
 
-	// If ExpiryDateUTC is provided, convert it to YYYYMMDD format
-	if req.ExpiryDateUTC != nil && req.ExpiryDate == nil {
-		expiryDate := req.ExpiryDateUTC.UTC()
-		parsedDate, err := strconv.Atoi(expiryDate.Format("20060102"))
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Invalid expiry date").
-				Mark(ierr.ErrValidation)
-		}
-		req.ExpiryDate = &parsedDate
-	}
-
 	// Create a credit operation
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
@@ -635,6 +622,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		ReferenceType:     referenceType,
 		ReferenceID:       referenceID,
 		ExpiryDate:        req.ExpiryDate,
+		ExpiryDateTime:    req.ExpiryDateUTC, // ExpiryDateUTC is the preferred input: a full-precision timestamp
 		IdempotencyKey:    idempotencyKey,
 		Priority:          req.Priority,
 	}
@@ -740,7 +728,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			CreditBalanceAfter:  balanceAfter,
 			Currency:            w.Currency,
 			TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
-			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
+			ExpiryDate:          lo.Ternary(req.ExpiryDateUTC != nil, req.ExpiryDateUTC, types.ParseYYYYMMDDToDate(req.ExpiryDate)),
 			BaseModel:           types.GetDefaultBaseModel(ctx),
 		}
 
@@ -1604,7 +1592,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			Metadata:            req.Metadata,
 			TxStatus:            types.TransactionStatusCompleted,
 			TransactionReason:   req.TransactionReason,
-			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
+			ExpiryDate:          req.ResolvedExpiryDate(),
 			Priority:            req.Priority,
 			CreditBalanceBefore: w.CreditBalance,
 			CreditBalanceAfter:  newCreditBalance,
@@ -1625,9 +1613,6 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		// Set transaction-specific fields based on transaction type
 		if req.Type == types.TransactionTypeCredit {
 			tx.TopupConversionRate = lo.ToPtr(w.TopupConversionRate)
-			if req.ExpiryDate != nil {
-				tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
-			}
 		} else if req.Type == types.TransactionTypeDebit {
 			tx.ConversionRate = lo.ToPtr(w.ConversionRate)
 		}
@@ -1810,6 +1795,8 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 	invoiceFilter := types.NewInvoiceFilter()
 	invoiceFilter.CustomerID = tx.CustomerID
 	invoiceFilter.InvoiceType = types.InvoiceTypeSubscription
+	invoiceFilter.Currency = tx.Currency // wallets are per-currency; an EUR invoice can't be paid by a USD wallet
+	invoiceFilter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized, types.InvoiceStatusDraft}
 	invoiceFilter.AmountRemainingGt = lo.ToPtr(decimal.Zero)
 	invoiceFilter.Limit = lo.ToPtr(1)
 	invoiceFilter.PeriodStartLTE = &tx.CreatedAt // period_start <= grant created_at
@@ -3052,17 +3039,10 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		// RealTimeCreditBalance = (currency balance - pending charges) / conversion_rate
 		ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
 
-		// Trigger auto top-up if enabled; threshold check is handled internally by triggerAutoTopup
-		if autoTopupEnabled {
-			if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
-					"error", err,
-					"wallet_id", w.ID,
-				)
-			}
-		}
-
-		// Process wallet-level balance alert if enabled
+		// Process wallet-level balance alert BEFORE triggering auto top-up so the
+		// pre-topup state (e.g. Warning) is recorded first. The nested
+		// CheckWalletBalanceAlert call that fires inside processWalletOperation
+		// during the top-up credit will then log the post-topup state (ok).
 		if walletAlertsEnabled {
 			s.Logger.InfowCtx(ctx, "wallet balance details for alert check",
 				"wallet_id", w.ID,
@@ -3090,6 +3070,18 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 					"error", err,
 					"wallet_id", w.ID,
 					"event_id", req.ID,
+				)
+			}
+		}
+
+		// Trigger auto top-up after alerts have been logged. The nested
+		// CheckWalletBalanceAlert that fires inside processWalletOperation during
+		// the top-up credit will record the recovered (ok) state automatically.
+		if autoTopupEnabled {
+			if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
+				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
+					"error", err,
+					"wallet_id", w.ID,
 				)
 			}
 		}
