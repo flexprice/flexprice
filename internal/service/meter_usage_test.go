@@ -426,6 +426,92 @@ func (s *MeterUsageServiceSuite) insertMeterUsageWithProps(
 	}))
 }
 
+// insertMeterUsageFull is the most flexible inserter: lets the test specify
+// unique_hash (needed for COUNT_UNIQUE) and event_name.
+func (s *MeterUsageServiceSuite) insertMeterUsageFull(
+	ctx context.Context, meterID, extCustID, source, eventName string,
+	ts time.Time, qty float64, uniqueHash string, props map[string]interface{},
+) {
+	s.NoError(s.meterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{
+		{
+			Event: events.Event{
+				ID:                 types.GenerateUUID(),
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				ExternalCustomerID: extCustID,
+				Timestamp:          ts,
+				EventName:          eventName,
+				Source:             source,
+				Properties:         props,
+			},
+			MeterID:    meterID,
+			QtyTotal:   decimal.NewFromFloat(qty),
+			UniqueHash: uniqueHash,
+		},
+	}))
+}
+
+// createMeterWithAggregation creates a custom meter with the given aggregation type.
+func (s *MeterUsageServiceSuite) createMeterWithAggregation(
+	ctx context.Context, id, eventName string, aggType types.AggregationType,
+) *meter.Meter {
+	m := &meter.Meter{
+		ID:        id,
+		Name:      id,
+		EventName: eventName,
+		Aggregation: meter.Aggregation{
+			Type: aggType,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+	return m
+}
+
+// createPriceForMeter creates a per-unit USD price for the given meter.
+func (s *MeterUsageServiceSuite) createPriceForMeter(
+	ctx context.Context, id, meterID string, amount decimal.Decimal,
+) *price.Price {
+	p := &price.Price{
+		ID:             id,
+		Amount:         amount,
+		Currency:       "usd",
+		EntityType:     types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:       "plan_1",
+		BillingModel:   types.BILLING_MODEL_FLAT_FEE,
+		Type:           types.PRICE_TYPE_USAGE,
+		MeterID:        meterID,
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	return p
+}
+
+// createLineItemForMeter creates a line item bound to a specific meter + price.
+func (s *MeterUsageServiceSuite) createLineItemForMeter(
+	ctx context.Context, id, meterID, priceID string,
+) *subscription.SubscriptionLineItem {
+	li := &subscription.SubscriptionLineItem{
+		ID:             id,
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        priceID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        meterID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		EndDate:        s.periodEnd,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+	return li
+}
+
 // TestPropertyFiltersStandardMeter verifies that property_filters restrict the
 // counted events when GetSubscriptionMeterUsage is invoked with PropertyFilters.
 // Without the fix, all events are counted — the SQL builder's WHERE clause
@@ -722,6 +808,55 @@ func (s *MeterUsageServiceSuite) TestGroupByPropertyField() {
 		"run_id=A: expected 30, got %s", byRunID["A"])
 	s.True(byRunID["B"].Equal(decimal.NewFromInt(55)),
 		"run_id=B: expected 55, got %s", byRunID["B"])
+}
+
+// TestCountMeter_NoSubscriptionAnalytics verifies the COUNT-meter fix for the
+// no-subscription analytics path (getDetailedAnalyticsWithoutSubscriptionContext).
+// Triggered when no external_customer_id is supplied (or the customer has no
+// subscriptions), this path goes through the "Convert results to analytics"
+// loop in meter_usage.go (around line 1138) which copies r.TotalUsage directly.
+// For COUNT meters that field is literal zero in the analytics SQL — without
+// substituting EventCount, every item would report TotalUsage=0 (and per-point
+// Usage=0). The subscription path was fixed earlier via getUsageValueFromDetailedResult;
+// this test pins the parity fix for the no-subscription branch.
+func (s *MeterUsageServiceSuite) TestCountMeter_NoSubscriptionAnalytics() {
+	ctx := s.GetContext()
+
+	cm := &meter.Meter{
+		ID:        "meter_count_nosub",
+		Name:      "Sessions",
+		EventName: "session_start",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationCount,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, cm))
+
+	// 3 events for an external_customer_id that has NO Flexprice customer
+	// record — forces resolveCustomerAndSubscriptions to return empty, and
+	// GetDetailedAnalytics falls through to the no-subscription path.
+	for i := 0; i < 3; i++ {
+		s.insertMeterUsage(ctx, cm.ID, "unknown_customer",
+			time.Date(2026, 1, 5+i, 10, 0, 0, 0, time.UTC), 1)
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: "unknown_customer", // no customer record → no-sub path
+		MeterIDs:           []string{cm.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Lenf(resp.Items, 1, "expected one item for the count meter, got %d", len(resp.Items))
+
+	item := resp.Items[0]
+	s.True(item.TotalUsage.Equal(decimal.NewFromInt(3)),
+		"no-sub COUNT path: expected TotalUsage=3 (was 0 before fix), got %s", item.TotalUsage)
+	s.Equal(uint64(3), item.EventCount,
+		"no-sub COUNT path: expected EventCount=3, got %d", item.EventCount)
 }
 
 // TestCountMeter_ScalarBilling sanity-checks the scalar billing path for COUNT
@@ -1045,60 +1180,572 @@ func (s *MeterUsageServiceSuite) TestPropertyFiltersBucketedMeter() {
 		"only gpt-4 events should be counted on bucketed meter, got %s", bucketedUsage.Usage)
 }
 
-// TestGroupByFeatureID_RewritesToMeterID: the API contract (dto/events.go)
-// documents group_by=[feature_id], but meter_usage has no feature_id column.
-// The service rewrites feature_id → meter_id at entry (features are 1:1 with
-// meters), and the converter populates FeatureID on each item via the
-// meter→feature lookup. This test pins both: the query no longer errors out,
-// AND callers still get FeatureID in the response.
-func (s *MeterUsageServiceSuite) TestGroupByFeatureID_RewritesToMeterID() {
+// ---------------------------------------------------------------------------
+// Aggregation-type matrix
+//
+// Verifies that buildMeterUsageAggregationColumns puts the correct value in
+// total_usage for every aggregation type, across both the subscription
+// analytics path (queryAndAppendAnalyticsEntries) and the no-subscription
+// analytics path (getDetailedAnalyticsWithoutSubscriptionContext), plus the
+// scalar billing path (GetUsageMultiMeter) where applicable.
+// ---------------------------------------------------------------------------
+
+// --- MAX ---
+
+func (s *MeterUsageServiceSuite) TestMaxMeter_AnalyticsWithGroupBy() {
 	ctx := s.GetContext()
-	s.createLineItem(ctx, "li_feat_groupby", s.periodStart, s.periodEnd)
+	m := s.createMeterWithAggregation(ctx, "mtr_max_grp", "ev_max", types.AggregationMax)
+	p := s.createPriceForMeter(ctx, "pr_max_grp", m.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_max_grp", m.ID, p.ID)
 
-	// Feature pointing at the existing s.meterAPI.
-	feat := &feature.Feature{
-		ID: "feat_api", Name: "API Feature", MeterID: s.meterAPI.ID,
-		BaseModel: types.GetDefaultBaseModel(ctx),
-	}
-	s.NoError(s.GetStores().FeatureRepo.Create(ctx, feat))
-
-	s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID,
-		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 25)
+	// us-east: 10, 50, 20 → MAX = 50;  us-west: 5, 30 → MAX = 30
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, "", map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 50, "", map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 20, "", map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC), 5, "", map[string]interface{}{"region": "us-west"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 9, 10, 0, 0, 0, time.UTC), 30, "", map[string]interface{}{"region": "us-west"})
 
 	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
 		TenantID:           types.GetTenantID(ctx),
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
 		StartTime:          s.periodStart,
 		EndTime:            s.periodEnd,
-		GroupBy:            []string{"feature_id"}, // public contract — must not error
+		GroupBy:            []string{"properties.region"},
 	})
 	s.NoError(err)
-	s.Require().Len(resp.Items, 1, "expected one item for the single meter")
-	s.Equal(feat.ID, resp.Items[0].FeatureID,
-		"FeatureID should be populated from meter→feature lookup")
-	s.True(resp.Items[0].TotalUsage.Equal(decimal.NewFromInt(25)),
-		"TotalUsage: expected 25, got %s", resp.Items[0].TotalUsage)
+	byRegion := map[string]decimal.Decimal{}
+	for _, item := range resp.Items {
+		byRegion[item.Properties["region"]] = item.TotalUsage
+	}
+	s.True(byRegion["us-east"].Equal(decimal.NewFromInt(50)), "MAX us-east: expected 50, got %s", byRegion["us-east"])
+	s.True(byRegion["us-west"].Equal(decimal.NewFromInt(30)), "MAX us-west: expected 30, got %s", byRegion["us-west"])
 }
 
-// TestGroupByFeatureIDAndMeterID_Deduplicates: passing both feature_id and
-// meter_id in GroupBy shouldn't produce [meter_id, meter_id] after rewrite.
-func (s *MeterUsageServiceSuite) TestGroupByFeatureIDAndMeterID_Deduplicates() {
+func (s *MeterUsageServiceSuite) TestMaxMeter_NoSubscriptionAnalytics() {
 	ctx := s.GetContext()
-	s.createLineItem(ctx, "li_feat_dedup", s.periodStart, s.periodEnd)
+	m := s.createMeterWithAggregation(ctx, "mtr_max_nosub", "ev_max", types.AggregationMax)
 
-	s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID,
-		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 42)
+	// External customer with no Flexprice record → no-sub path.
+	for _, q := range []float64{10, 50, 20} {
+		s.insertMeterUsageFull(ctx, m.ID, "unknown_cust", "", "ev_max",
+			time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC).Add(time.Duration(q)*time.Hour), q, "", nil)
+	}
 
 	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
 		TenantID:           types.GetTenantID(ctx),
 		EnvironmentID:      types.GetEnvironmentID(ctx),
-		ExternalCustomerID: s.customer.ExternalID,
+		ExternalCustomerID: "unknown_cust",
+		MeterIDs:           []string{m.ID},
 		StartTime:          s.periodStart,
 		EndTime:            s.periodEnd,
-		GroupBy:            []string{"feature_id", "meter_id"},
 	})
 	s.NoError(err)
 	s.Require().Len(resp.Items, 1)
-	s.True(resp.Items[0].TotalUsage.Equal(decimal.NewFromInt(42)))
+	s.True(resp.Items[0].TotalUsage.Equal(decimal.NewFromInt(50)),
+		"no-sub MAX: expected 50, got %s", resp.Items[0].TotalUsage)
+}
+
+func (s *MeterUsageServiceSuite) TestMaxMeter_ScalarBilling() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_max_scalar", "ev_max", types.AggregationMax)
+	p := s.createPriceForMeter(ctx, "pr_max_scalar", m.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_max_scalar", m.ID, p.ID)
+
+	for _, q := range []float64{10, 50, 20} {
+		s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+			time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC).Add(time.Duration(q)*time.Hour), q, "", nil)
+	}
+
+	result, err := s.svc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID: s.sub.ID,
+		StartTime:      s.periodStart,
+		EndTime:        s.periodEnd,
+	})
+	s.NoError(err)
+
+	var lu *LineItemMeterUsage
+	for _, x := range result.LineItemUsages {
+		if x.LineItem.ID == "li_max_scalar" {
+			lu = x
+			break
+		}
+	}
+	s.Require().NotNil(lu)
+	s.True(lu.Usage.Equal(decimal.NewFromInt(50)), "scalar MAX: expected 50, got %s", lu.Usage)
+}
+
+// --- LATEST ---
+
+func (s *MeterUsageServiceSuite) TestLatestMeter_AnalyticsWithGroupBy() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_latest_grp", "ev_latest", types.AggregationLatest)
+	p := s.createPriceForMeter(ctx, "pr_latest_grp", m.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_latest_grp", m.ID, p.ID)
+
+	// us-east: 10 @ Jan5, 99 @ Jan10  → LATEST = 99
+	// us-west: 7 @ Jan8, 3 @ Jan12   → LATEST = 3
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_latest",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, "", map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_latest",
+		time.Date(2026, 1, 10, 10, 0, 0, 0, time.UTC), 99, "", map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_latest",
+		time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC), 7, "", map[string]interface{}{"region": "us-west"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_latest",
+		time.Date(2026, 1, 12, 10, 0, 0, 0, time.UTC), 3, "", map[string]interface{}{"region": "us-west"})
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"properties.region"},
+	})
+	s.NoError(err)
+	byRegion := map[string]decimal.Decimal{}
+	for _, item := range resp.Items {
+		byRegion[item.Properties["region"]] = item.TotalUsage
+	}
+	s.True(byRegion["us-east"].Equal(decimal.NewFromInt(99)), "LATEST us-east: expected 99, got %s", byRegion["us-east"])
+	s.True(byRegion["us-west"].Equal(decimal.NewFromInt(3)), "LATEST us-west: expected 3, got %s", byRegion["us-west"])
+}
+
+func (s *MeterUsageServiceSuite) TestLatestMeter_NoSubscriptionAnalytics() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_latest_nosub", "ev_latest", types.AggregationLatest)
+
+	s.insertMeterUsageFull(ctx, m.ID, "unknown_cust", "", "ev_latest",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, "", nil)
+	s.insertMeterUsageFull(ctx, m.ID, "unknown_cust", "", "ev_latest",
+		time.Date(2026, 1, 12, 10, 0, 0, 0, time.UTC), 77, "", nil)
+	s.insertMeterUsageFull(ctx, m.ID, "unknown_cust", "", "ev_latest",
+		time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC), 22, "", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: "unknown_cust",
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.True(resp.Items[0].TotalUsage.Equal(decimal.NewFromInt(77)),
+		"no-sub LATEST: expected 77 (Jan 12), got %s", resp.Items[0].TotalUsage)
+}
+
+// --- COUNT_UNIQUE ---
+
+func (s *MeterUsageServiceSuite) TestCountUniqueMeter_AnalyticsWithGroupBy() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_unique_grp", "ev_unique", types.AggregationCountUnique)
+	p := s.createPriceForMeter(ctx, "pr_unique_grp", m.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_unique_grp", m.ID, p.ID)
+
+	// us-east: unique_hash ∈ {u1, u2, u1} → 2 distinct
+	// us-west: unique_hash ∈ {u3}         → 1 distinct
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_unique",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 1, "u1", map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_unique",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 1, "u2", map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_unique",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 1, "u1", map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_unique",
+		time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC), 1, "u3", map[string]interface{}{"region": "us-west"})
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"properties.region"},
+	})
+	s.NoError(err)
+	byRegion := map[string]decimal.Decimal{}
+	for _, item := range resp.Items {
+		byRegion[item.Properties["region"]] = item.TotalUsage
+	}
+	s.True(byRegion["us-east"].Equal(decimal.NewFromInt(2)),
+		"COUNT_UNIQUE us-east: expected 2, got %s", byRegion["us-east"])
+	s.True(byRegion["us-west"].Equal(decimal.NewFromInt(1)),
+		"COUNT_UNIQUE us-west: expected 1, got %s", byRegion["us-west"])
+}
+
+func (s *MeterUsageServiceSuite) TestCountUniqueMeter_NoSubscriptionAnalytics() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_unique_nosub", "ev_unique", types.AggregationCountUnique)
+
+	// 3 events, 2 distinct unique_hash values.
+	s.insertMeterUsageFull(ctx, m.ID, "unknown_cust", "", "ev_unique",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 1, "u1", nil)
+	s.insertMeterUsageFull(ctx, m.ID, "unknown_cust", "", "ev_unique",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 1, "u2", nil)
+	s.insertMeterUsageFull(ctx, m.ID, "unknown_cust", "", "ev_unique",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 1, "u1", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: "unknown_cust",
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.True(resp.Items[0].TotalUsage.Equal(decimal.NewFromInt(2)),
+		"no-sub COUNT_UNIQUE: expected 2, got %s", resp.Items[0].TotalUsage)
+}
+
+// ---------------------------------------------------------------------------
+// Windowed analytics — per-window points carry the aggregation-aware Usage.
+// ---------------------------------------------------------------------------
+
+// TestWindowedAnalytics_CountMeter exercises BuildDetailedPointsQuery for a
+// COUNT meter with WindowSize=DAY. Each per-window point.Usage should equal
+// the count of events in that window — not zero.
+func (s *MeterUsageServiceSuite) TestWindowedAnalytics_CountMeter() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_count_win", "ev_cnt", types.AggregationCount)
+	p := s.createPriceForMeter(ctx, "pr_count_win", m.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_count_win", m.ID, p.ID)
+
+	// 2 events on Jan 5, 3 events on Jan 6, 1 event on Jan 7.
+	for i := 0; i < 2; i++ {
+		s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_cnt",
+			time.Date(2026, 1, 5, 10+i, 0, 0, 0, time.UTC), 1, "", nil)
+	}
+	for i := 0; i < 3; i++ {
+		s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_cnt",
+			time.Date(2026, 1, 6, 10+i, 0, 0, 0, time.UTC), 1, "", nil)
+	}
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_cnt",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 1, "", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeDay,
+	})
+	s.NoError(err)
+	s.Require().Lenf(resp.Items, 1, "expected one item, got %d", len(resp.Items))
+	item := resp.Items[0]
+
+	// Aggregate TotalUsage = 2 + 3 + 1 = 6 distinct events.
+	s.True(item.TotalUsage.Equal(decimal.NewFromInt(6)),
+		"windowed COUNT total: expected 6, got %s", item.TotalUsage)
+
+	// Per-window points: each carries its day's count in Usage.
+	byDay := map[string]decimal.Decimal{}
+	for _, pt := range item.Points {
+		byDay[pt.Timestamp.UTC().Format("2006-01-02")] = pt.Usage
+	}
+	s.True(byDay["2026-01-05"].Equal(decimal.NewFromInt(2)),
+		"per-window COUNT Jan 5: expected 2, got %s", byDay["2026-01-05"])
+	s.True(byDay["2026-01-06"].Equal(decimal.NewFromInt(3)),
+		"per-window COUNT Jan 6: expected 3, got %s", byDay["2026-01-06"])
+	s.True(byDay["2026-01-07"].Equal(decimal.NewFromInt(1)),
+		"per-window COUNT Jan 7: expected 1, got %s", byDay["2026-01-07"])
+}
+
+// TestWindowedAnalytics_MaxMeter same as above but for MAX — verifies per-window
+// Usage carries the per-window MAX value via total_usage.
+func (s *MeterUsageServiceSuite) TestWindowedAnalytics_MaxMeter() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_max_win", "ev_max", types.AggregationMax)
+	p := s.createPriceForMeter(ctx, "pr_max_win", m.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_max_win", m.ID, p.ID)
+
+	// Jan 5: qty 10, 50 → MAX 50
+	// Jan 6: qty 20    → MAX 20
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, "", nil)
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 5, 11, 0, 0, 0, time.UTC), 50, "", nil)
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 20, "", nil)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeDay,
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	item := resp.Items[0]
+
+	// Aggregate MAX across all events = 50.
+	s.True(item.TotalUsage.Equal(decimal.NewFromInt(50)),
+		"windowed MAX total: expected 50, got %s", item.TotalUsage)
+
+	byDay := map[string]decimal.Decimal{}
+	for _, pt := range item.Points {
+		byDay[pt.Timestamp.UTC().Format("2006-01-02")] = pt.Usage
+	}
+	s.True(byDay["2026-01-05"].Equal(decimal.NewFromInt(50)),
+		"per-window MAX Jan 5: expected 50, got %s", byDay["2026-01-05"])
+	s.True(byDay["2026-01-06"].Equal(decimal.NewFromInt(20)),
+		"per-window MAX Jan 6: expected 20, got %s", byDay["2026-01-06"])
+}
+
+// ---------------------------------------------------------------------------
+// Commitment + non-SUM aggregation
+//
+// Before the primary-aggregation SQL fix, COUNT/MAX meters returned TotalUsage=0
+// in analytics, which made commitment + overage / true-up surface bogus values.
+// These tests pin the correct commitment behavior across aggregation types.
+// ---------------------------------------------------------------------------
+
+// TestCommitmentNonWindowed_CountMeter: $10 commitment, true-up enabled, COUNT
+// meter at $1/event. With 3 events the usage cost ($3) is below commitment
+// ($10) and true-up would charge full commitment — but the analytics path
+// SKIPS commitment when filters/groupings are set. With no filters and going
+// through GetSubscriptionMeterUsage (billing), the commitment logic runs at
+// the billing layer, not in analytics. Here we verify analytics returns the
+// raw filtered cost when filters skip commitment, AND verify the analytic's
+// EventCount / TotalUsage match expectations for COUNT.
+func (s *MeterUsageServiceSuite) TestCommitmentNonWindowed_CountMeter() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_cnt_commit", "ev_cnt", types.AggregationCount)
+	p := s.createPriceForMeter(ctx, "pr_cnt_commit", m.ID, decimal.NewFromInt(1))
+
+	commitmentAmount := decimal.NewFromInt(10)
+	overageFactor := decimal.NewFromFloat(1.5)
+	li := &subscription.SubscriptionLineItem{
+		ID:                      "li_cnt_commit",
+		SubscriptionID:          s.sub.ID,
+		CustomerID:              s.customer.ID,
+		PriceID:                 p.ID,
+		PriceType:               types.PRICE_TYPE_USAGE,
+		MeterID:                 m.ID,
+		Currency:                "usd",
+		BillingPeriod:           types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:          types.InvoiceCadenceArrear,
+		StartDate:               s.periodStart,
+		EndDate:                 s.periodEnd,
+		Quantity:                decimal.NewFromInt(1),
+		CommitmentAmount:        &commitmentAmount,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentTrueUpEnabled: true,
+		BaseModel:               types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// 15 events @ $1 = $15 → above $10 commitment, expect overage.
+	for i := 0; i < 15; i++ {
+		s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_cnt",
+			time.Date(2026, 1, 5, 10, i, 0, 0, time.UTC), 1, "", nil)
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{m.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_cnt_commit" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+
+	// Without filters the commitment path runs: cost = $10 commitment +
+	// ($15-$10)*1.5 = $10 + $7.5 = $17.5.
+	s.True(item.TotalUsage.Equal(decimal.NewFromInt(15)),
+		"COUNT total usage: expected 15 events, got %s", item.TotalUsage)
+	s.True(item.TotalCost.Equal(decimal.NewFromFloat(17.5)),
+		"commitment + overage: expected 17.5, got %s", item.TotalCost)
+	s.Require().NotNil(item.CommitmentInfo)
+	s.True(item.CommitmentInfo.ComputedCommitmentUtilizedAmount.Equal(decimal.NewFromInt(10)),
+		"commitment utilized: expected 10, got %s",
+		item.CommitmentInfo.ComputedCommitmentUtilizedAmount)
+}
+
+// ---------------------------------------------------------------------------
+// Multi-meter analytics query — exercises the no-subscription path with
+// mixed aggregation types in a single call (passes a single AggregationTypes
+// slice containing both SUM and COUNT).
+// ---------------------------------------------------------------------------
+
+func (s *MeterUsageServiceSuite) TestMultiMeter_MixedAggregations_NoSubscription() {
+	ctx := s.GetContext()
+	mSum := s.createMeterWithAggregation(ctx, "mtr_mix_sum", "ev_sum", types.AggregationSum)
+	mCnt := s.createMeterWithAggregation(ctx, "mtr_mix_cnt", "ev_cnt", types.AggregationCount)
+
+	// SUM meter: 3 events qty 10 + 20 + 30 = 60.
+	s.insertMeterUsageFull(ctx, mSum.ID, "unknown_cust", "", "ev_sum",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, "", nil)
+	s.insertMeterUsageFull(ctx, mSum.ID, "unknown_cust", "", "ev_sum",
+		time.Date(2026, 1, 6, 10, 0, 0, 0, time.UTC), 20, "", nil)
+	s.insertMeterUsageFull(ctx, mSum.ID, "unknown_cust", "", "ev_sum",
+		time.Date(2026, 1, 7, 10, 0, 0, 0, time.UTC), 30, "", nil)
+	// COUNT meter: 4 distinct events.
+	for i := 0; i < 4; i++ {
+		s.insertMeterUsageFull(ctx, mCnt.ID, "unknown_cust", "", "ev_cnt",
+			time.Date(2026, 1, 5, 10, i, 0, 0, time.UTC), 1, "", nil)
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: "unknown_cust",
+		MeterIDs:           []string{mSum.ID, mCnt.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+
+	byMeter := map[string]decimal.Decimal{}
+	for _, item := range resp.Items {
+		byMeter[item.MeterID] = item.TotalUsage
+	}
+	// With mixed aggregations, the SUM in the priority order populates total_usage
+	// for any row that GROUPs together SUM rows; COUNT rows still report their
+	// distinct-event count via the same column thanks to the priority fallback.
+	// Concretely: SUM meter → 60; COUNT meter → 4 distinct events.
+	s.True(byMeter[mSum.ID].Equal(decimal.NewFromInt(60)),
+		"multi-meter SUM total: expected 60, got %s", byMeter[mSum.ID])
+	s.True(byMeter[mCnt.ID].Equal(decimal.NewFromInt(4)),
+		"multi-meter COUNT total: expected 4, got %s", byMeter[mCnt.ID])
+}
+
+// ---------------------------------------------------------------------------
+// Time-bounding sanity for non-SUM aggregations — make sure the basic
+// effective-period bounding (already tested for SUM) also works for MAX/COUNT.
+// ---------------------------------------------------------------------------
+
+func (s *MeterUsageServiceSuite) TestMaxMeter_LineItemDateBounding() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_max_bound", "ev_max", types.AggregationMax)
+	p := s.createPriceForMeter(ctx, "pr_max_bound", m.ID, decimal.NewFromInt(1))
+
+	// Line item active Jan 1 – Jan 15.
+	li := &subscription.SubscriptionLineItem{
+		ID:             "li_max_bound",
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        p.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        m.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		EndDate:        time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// In-bounds events with MAX 50.
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10, "", nil)
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 10, 10, 0, 0, 0, time.UTC), 50, "", nil)
+	// Out-of-bounds with qty 999 — must be excluded.
+	s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_max",
+		time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC), 999, "", nil)
+
+	result, err := s.svc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID: s.sub.ID,
+		StartTime:      s.periodStart,
+		EndTime:        s.periodEnd,
+	})
+	s.NoError(err)
+
+	var lu *LineItemMeterUsage
+	for _, x := range result.LineItemUsages {
+		if x.LineItem.ID == "li_max_bound" {
+			lu = x
+			break
+		}
+	}
+	s.Require().NotNil(lu)
+	s.True(lu.Usage.Equal(decimal.NewFromInt(50)),
+		"MAX with date bounding: expected 50 (Jan 20 event excluded), got %s", lu.Usage)
+}
+
+func (s *MeterUsageServiceSuite) TestCountMeter_LineItemDateBounding() {
+	ctx := s.GetContext()
+	m := s.createMeterWithAggregation(ctx, "mtr_cnt_bound", "ev_cnt", types.AggregationCount)
+	p := s.createPriceForMeter(ctx, "pr_cnt_bound", m.ID, decimal.NewFromInt(1))
+
+	li := &subscription.SubscriptionLineItem{
+		ID:             "li_cnt_bound",
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        p.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        m.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		EndDate:        time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC),
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// 4 in-bounds, 2 out-of-bounds.
+	for _, t := range []time.Time{
+		time.Date(2026, 1, 3, 10, 0, 0, 0, time.UTC),
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC),
+		time.Date(2026, 1, 8, 10, 0, 0, 0, time.UTC),
+		time.Date(2026, 1, 14, 10, 0, 0, 0, time.UTC),
+	} {
+		s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_cnt", t, 1, "", nil)
+	}
+	for _, t := range []time.Time{
+		time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC),
+		time.Date(2026, 1, 25, 10, 0, 0, 0, time.UTC),
+	} {
+		s.insertMeterUsageFull(ctx, m.ID, s.customer.ExternalID, "", "ev_cnt", t, 1, "", nil)
+	}
+
+	result, err := s.svc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID: s.sub.ID,
+		StartTime:      s.periodStart,
+		EndTime:        s.periodEnd,
+	})
+	s.NoError(err)
+
+	var lu *LineItemMeterUsage
+	for _, x := range result.LineItemUsages {
+		if x.LineItem.ID == "li_cnt_bound" {
+			lu = x
+			break
+		}
+	}
+	s.Require().NotNil(lu)
+	s.True(lu.Usage.Equal(decimal.NewFromInt(4)),
+		"COUNT with date bounding: expected 4 in-bounds events, got %s", lu.Usage)
+	s.Equal(uint64(4), lu.EventCount,
+		"COUNT EventCount: expected 4, got %d", lu.EventCount)
 }

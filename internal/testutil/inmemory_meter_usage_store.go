@@ -597,15 +597,17 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 
 	results := make([]*events.MeterUsageDetailedResult, 0, len(byKey))
 	for _, g := range byKey {
+		eventCount := uint64(distinctIDCount(g.records))
+		countUnique := uint64(distinctUniqueHashCount(g.records))
 		res := &events.MeterUsageDetailedResult{
 			MeterID:          g.meterID,
 			Source:           g.source,
 			Properties:       g.properties,
-			TotalUsage:       aggregateScalar(g.records, types.AggregationSum),
+			TotalUsage:       primaryAggregationValue(g.records, params.AggregationTypes, eventCount, countUnique),
 			MaxUsage:         aggregateScalar(g.records, types.AggregationMax),
 			LatestUsage:      aggregateScalar(g.records, types.AggregationLatest),
-			CountUniqueUsage: uint64(distinctUniqueHashCount(g.records)),
-			EventCount:       uint64(distinctIDCount(g.records)),
+			CountUniqueUsage: countUnique,
+			EventCount:       eventCount,
 		}
 
 		// When source isn't a group dimension, ClickHouse returns groupUniqArray(source)
@@ -624,7 +626,7 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 		}
 
 		if params.WindowSize != "" {
-			res.Points = computeDetailedPoints(g.records, params.WindowSize, params.BillingAnchor)
+			res.Points = computeDetailedPoints(g.records, params.WindowSize, params.BillingAnchor, params.AggregationTypes)
 		}
 
 		results = append(results, res)
@@ -644,23 +646,50 @@ func (s *InMemoryMeterUsageStore) GetDetailedAnalytics(_ context.Context, params
 	return results, nil
 }
 
-// computeDetailedPoints buckets a group's records by WindowSize and computes
-// all five aggregations per bucket (mirroring buildConditionalAggregationColumns).
-func computeDetailedPoints(records []*events.MeterUsage, ws types.WindowSize, anchor *time.Time) []events.MeterUsageDetailedPoint {
+// computeDetailedPoints buckets a group's records by WindowSize and mirrors
+// buildMeterUsageAggregationColumns: total_usage holds the primary aggregation
+// result, per-type columns retain their independent values.
+func computeDetailedPoints(records []*events.MeterUsage, ws types.WindowSize, anchor *time.Time, aggTypes []types.AggregationType) []events.MeterUsageDetailedPoint {
 	buckets := bucketRecords(records, ws, anchor)
 	points := make([]events.MeterUsageDetailedPoint, 0, len(buckets))
 	for _, b := range buckets {
+		eventCount := uint64(distinctIDCount(b.records))
+		countUnique := uint64(distinctUniqueHashCount(b.records))
 		points = append(points, events.MeterUsageDetailedPoint{
 			WindowStart:      b.start,
-			TotalUsage:       aggregateScalar(b.records, types.AggregationSum),
+			TotalUsage:       primaryAggregationValue(b.records, aggTypes, eventCount, countUnique),
 			MaxUsage:         aggregateScalar(b.records, types.AggregationMax),
 			LatestUsage:      aggregateScalar(b.records, types.AggregationLatest),
-			CountUniqueUsage: uint64(distinctUniqueHashCount(b.records)),
-			EventCount:       uint64(distinctIDCount(b.records)),
+			CountUniqueUsage: countUnique,
+			EventCount:       eventCount,
 		})
 	}
 	sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
 	return points
+}
+
+// primaryAggregationValue returns the value that buildMeterUsageAggregationColumns
+// would put in total_usage for these records and requested aggregation types.
+// Priority matches the repo function: SUM → COUNT → COUNT_UNIQUE → MAX → LATEST.
+func primaryAggregationValue(records []*events.MeterUsage, aggTypes []types.AggregationType, eventCount, countUnique uint64) decimal.Decimal {
+	aggSet := make(map[types.AggregationType]bool, len(aggTypes))
+	for _, t := range aggTypes {
+		aggSet[t] = true
+	}
+	switch {
+	case aggSet[types.AggregationSum]:
+		return aggregateScalar(records, types.AggregationSum)
+	case aggSet[types.AggregationCount]:
+		return decimal.NewFromInt(int64(eventCount))
+	case aggSet[types.AggregationCountUnique]:
+		return decimal.NewFromInt(int64(countUnique))
+	case aggSet[types.AggregationMax]:
+		return aggregateScalar(records, types.AggregationMax)
+	case aggSet[types.AggregationLatest]:
+		return aggregateScalar(records, types.AggregationLatest)
+	default:
+		return decimal.Zero
+	}
 }
 
 func propertiesString(p map[string]string) string {
