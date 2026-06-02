@@ -108,6 +108,21 @@ func (r *InMemoryUserStore) ListByFilter(ctx context.Context, filter *types.User
 	return result, int64(len(result)), nil
 }
 
+// Delete soft-deletes a user by setting status to archived
+func (r *InMemoryUserStore) Delete(ctx context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for key, u := range r.users {
+		if u.ID == id {
+			u.Status = types.StatusArchived
+			r.users[key] = u
+			return nil
+		}
+	}
+	return ierr.NewError("user not found").Mark(ierr.ErrNotFound)
+}
+
 func (s *InMemoryUserStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

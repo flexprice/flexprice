@@ -2174,6 +2174,7 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "email", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "name", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "type", Type: field.TypeString, Default: "user"},
 		{Name: "roles", Type: field.TypeJSON, Nullable: true},
 	}
@@ -2194,7 +2195,7 @@ var (
 			{
 				Name:    "idx_user_tenant_status",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[1], UsersColumns[2], UsersColumns[9]},
+				Columns: []*schema.Column{UsersColumns[1], UsersColumns[2], UsersColumns[10]},
 			},
 			{
 				Name:    "idx_user_tenant_created_at",

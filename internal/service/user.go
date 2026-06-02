@@ -20,7 +20,9 @@ import (
 type UserService interface {
 	GetUserInfo(ctx context.Context) (*dto.UserResponse, error)
 	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error)
-	UpdateUser(ctx context.Context, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error)
+	// UpdateUser updates a user by id; id="" resolves to the authenticated user from context.
+	UpdateUser(ctx context.Context, id string, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error)
+	DeleteUser(ctx context.Context, id string) error
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 }
 
@@ -136,6 +138,7 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		}
 		newUser = &user.User{
 			ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
+			Name:  req.Name,
 			Email: "",
 			Type:  types.UserTypeServiceAccount,
 			Roles: req.Roles,
@@ -197,13 +200,17 @@ func (s *userService) ListUsersByFilter(ctx context.Context, filter *types.UserF
 	}, nil
 }
 
-func (s *userService) UpdateUser(ctx context.Context, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error) {
+func (s *userService) UpdateUser(ctx context.Context, id string, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
-	userID := types.GetUserID(ctx)
-	if userID == "" {
+	// Resolve target user: explicit id overrides the authenticated user from context
+	targetID := id
+	if targetID == "" {
+		targetID = types.GetUserID(ctx)
+	}
+	if targetID == "" {
 		return nil, ierr.NewError("user ID is required").
 			WithHint("User ID is required").
 			Mark(ierr.ErrValidation)
@@ -216,9 +223,17 @@ func (s *userService) UpdateUser(ctx context.Context, req *dto.UpdateUserRequest
 			Mark(ierr.ErrValidation)
 	}
 
-	existingUser, err := s.userRepo.GetByID(ctx, userID)
+	existingUser, err := s.userRepo.GetByID(ctx, targetID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Explicit ID — only service accounts are addressable this way.
+	if id != "" && existingUser.Type != types.UserTypeServiceAccount {
+		return nil, ierr.NewError("service account not found").
+			WithHint("The provided ID does not belong to a service account").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(ierr.ErrNotFound)
 	}
 
 	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
@@ -235,16 +250,19 @@ func (s *userService) UpdateUser(ctx context.Context, req *dto.UpdateUserRequest
 	}
 
 	existingUser.Metadata = mergedMetadata
-	existingUser.UpdatedBy = userID
+
+	if req.Name != "" {
+		existingUser.Name = req.Name
+	}
+
+	existingUser.UpdatedBy = types.GetUserID(ctx)
 	existingUser.UpdatedAt = types.GetDefaultBaseModel(ctx).UpdatedAt
 
 	if err := s.userRepo.Update(ctx, existingUser); err != nil {
 		return nil, err
 	}
 
-	return &dto.UpdateUserResponse{
-		UserResponse: dto.NewUserResponse(existingUser, tenant),
-	}, nil
+	return &dto.UpdateUserResponse{UserResponse: dto.NewUserResponse(existingUser, tenant)}, nil
 }
 
 // InviteUser invites a user to the tenant
@@ -337,4 +355,17 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 		return nil, nil, err
 	}
 	return newUser, &password, nil
+}
+
+func (s *userService) DeleteUser(ctx context.Context, id string) error {
+	existingUser, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if existingUser.Type != types.UserTypeServiceAccount {
+		return ierr.NewError("only service accounts can be deleted").
+			WithHint("Deletion is supported for service accounts only").
+			Mark(ierr.ErrValidation)
+	}
+	return s.userRepo.Delete(ctx, id)
 }

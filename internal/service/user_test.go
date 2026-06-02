@@ -248,7 +248,7 @@ func (s *UserServiceSuite) TestUpdateUser_MetadataMerge() {
 	})
 	s.NoError(err)
 
-	resp, err := s.userService.UpdateUser(ctx, &dto.UpdateUserRequest{
+	resp, err := s.userService.UpdateUser(ctx, "", &dto.UpdateUserRequest{
 		Metadata: map[string]string{"plan": "pro", "team": "growth"},
 	})
 

@@ -29,6 +29,8 @@ const (
 	FieldMetadata = "metadata"
 	// FieldEmail holds the string denoting the email field in the database.
 	FieldEmail = "email"
+	// FieldName holds the string denoting the name field in the database.
+	FieldName = "name"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldRoles holds the string denoting the roles field in the database.
@@ -48,6 +50,7 @@ var Columns = []string{
 	FieldUpdatedBy,
 	FieldMetadata,
 	FieldEmail,
+	FieldName,
 	FieldType,
 	FieldRoles,
 }
@@ -120,6 +123,11 @@ func ByUpdatedBy(opts ...sql.OrderTermOption) OrderOption {
 // ByEmail orders the results by the email field.
 func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmail, opts...).ToFunc()
+}
+
+// ByName orders the results by the name field.
+func ByName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
 // ByType orders the results by the type field.

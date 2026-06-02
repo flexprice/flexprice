@@ -63988,6 +63988,7 @@ type UserMutation struct {
 	updated_by    *string
 	metadata      *map[string]string
 	email         *string
+	name          *string
 	_type         *string
 	roles         *[]string
 	appendroles   []string
@@ -64441,6 +64442,55 @@ func (m *UserMutation) ResetEmail() {
 	delete(m.clearedFields, user.FieldEmail)
 }
 
+// SetName sets the "name" field.
+func (m *UserMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *UserMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldName(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ClearName clears the value of the "name" field.
+func (m *UserMutation) ClearName() {
+	m.name = nil
+	m.clearedFields[user.FieldName] = struct{}{}
+}
+
+// NameCleared returns if the "name" field was cleared in this mutation.
+func (m *UserMutation) NameCleared() bool {
+	_, ok := m.clearedFields[user.FieldName]
+	return ok
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *UserMutation) ResetName() {
+	m.name = nil
+	delete(m.clearedFields, user.FieldName)
+}
+
 // SetType sets the "type" field.
 func (m *UserMutation) SetType(s string) {
 	m._type = &s
@@ -64576,7 +64626,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.tenant_id != nil {
 		fields = append(fields, user.FieldTenantID)
 	}
@@ -64600,6 +64650,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.email != nil {
 		fields = append(fields, user.FieldEmail)
+	}
+	if m.name != nil {
+		fields = append(fields, user.FieldName)
 	}
 	if m._type != nil {
 		fields = append(fields, user.FieldType)
@@ -64631,6 +64684,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Metadata()
 	case user.FieldEmail:
 		return m.Email()
+	case user.FieldName:
+		return m.Name()
 	case user.FieldType:
 		return m.GetType()
 	case user.FieldRoles:
@@ -64660,6 +64715,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldMetadata(ctx)
 	case user.FieldEmail:
 		return m.OldEmail(ctx)
+	case user.FieldName:
+		return m.OldName(ctx)
 	case user.FieldType:
 		return m.OldType(ctx)
 	case user.FieldRoles:
@@ -64729,6 +64786,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEmail(v)
 		return nil
+	case user.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
 	case user.FieldType:
 		v, ok := value.(string)
 		if !ok {
@@ -64785,6 +64849,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldEmail) {
 		fields = append(fields, user.FieldEmail)
 	}
+	if m.FieldCleared(user.FieldName) {
+		fields = append(fields, user.FieldName)
+	}
 	if m.FieldCleared(user.FieldRoles) {
 		fields = append(fields, user.FieldRoles)
 	}
@@ -64813,6 +64880,9 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldEmail:
 		m.ClearEmail()
+		return nil
+	case user.FieldName:
+		m.ClearName()
 		return nil
 	case user.FieldRoles:
 		m.ClearRoles()
@@ -64848,6 +64918,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldEmail:
 		m.ResetEmail()
+		return nil
+	case user.FieldName:
+		m.ResetName()
 		return nil
 	case user.FieldType:
 		m.ResetType()
