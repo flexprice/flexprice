@@ -1103,24 +1103,24 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 
 	// Activate the FlexPrice subscription.
 	switch sub.SubscriptionStatus {
-	case types.SubscriptionStatusIncomplete:
-		if sub.TrialEnd != nil && sub.TrialEnd.After(time.Now()) {
-			sub.SubscriptionStatus = types.SubscriptionStatusTrialing
-			if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
-				return fmt.Errorf("setting subscription to trialing: %w", err)
-			}
-			s.logger.Infow("subscription.activated: set incomplete→trialing",
-				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
-		} else {
-			if subscriptionService == nil {
-				return ierr.NewError("subscriptionService is required to activate subscription").Mark(ierr.ErrInternal)
-			}
-			if err := subscriptionService.ActivateIncompleteSubscription(ctx, flexSubID); err != nil {
-				return fmt.Errorf("activating incomplete subscription: %w", err)
-			}
-			s.logger.Infow("subscription.activated: set incomplete→active",
-				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
-		}
+	//case types.SubscriptionStatusIncomplete:
+	//	if sub.TrialEnd != nil && sub.TrialEnd.After(time.Now()) {
+	//		sub.SubscriptionStatus = types.SubscriptionStatusTrialing
+	//		if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
+	//			return fmt.Errorf("setting subscription to trialing: %w", err)
+	//		}
+	//		s.logger.Infow("subscription.activated: set incomplete→trialing",
+	//			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
+	//	} else {
+	//		if subscriptionService == nil {
+	//			return ierr.NewError("subscriptionService is required to activate subscription").Mark(ierr.ErrInternal)
+	//		}
+	//		if err := subscriptionService.ActivateIncompleteSubscription(ctx, flexSubID); err != nil {
+	//			return fmt.Errorf("activating incomplete subscription: %w", err)
+	//		}
+	//		s.logger.Infow("subscription.activated: set incomplete→active",
+	//			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
+	//	}
 	case types.SubscriptionStatusDraft:
 		startDate := time.Now().UTC()
 		if data.StartedAt != nil {
@@ -1136,7 +1136,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 		s.logger.Infow("subscription.activated",
 			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	default:
-		s.logger.Infow("subscription.activated: subscription not in incomplete state — no-op",
+		s.logger.Infow("subscription not in draft state — no-op",
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
 	}
 
