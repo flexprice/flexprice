@@ -1083,6 +1083,9 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.InvoiceType != "" {
 		query = query.Where(invoice.InvoiceType(f.InvoiceType))
 	}
+	if f.Currency != "" {
+		query = query.Where(invoice.Currency(f.Currency))
+	}
 	if len(f.InvoiceIDs) > 0 {
 		query = query.Where(invoice.IDIn(f.InvoiceIDs...))
 	}

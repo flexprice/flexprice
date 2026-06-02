@@ -32,10 +32,14 @@ type WalletOperation struct {
 	// which is important for accurate billing and credit consumption.
 	InvoiceID *string `json:"invoice_id,omitempty"`
 
-	Metadata          types.Metadata          `json:"metadata,omitempty"`
-	IdempotencyKey    string                  `json:"idempotency_key,omitempty"`
-	ExpiryDate        *int                    `json:"expiry_date,omitempty"` // YYYYMMDD format
-	Priority          *int                    `json:"priority,omitempty"`    // lower number means higher priority
+	Metadata       types.Metadata `json:"metadata,omitempty"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
+	ExpiryDate     *int           `json:"expiry_date,omitempty"` // YYYYMMDD format (legacy/external-API path)
+	// ExpiryDateTime is the full-precision expiry timestamp. Preferred over ExpiryDate
+	// for internal callers (e.g. subscription credit grants) to avoid the YYYYMMDD truncation
+	// that strips hours/timezone and shifts the wall-clock expiry by up to ~24h.
+	ExpiryDateTime    *time.Time              `json:"expiry_date_time,omitempty"`
+	Priority          *int                    `json:"priority,omitempty"` // lower number means higher priority
 	TransactionReason types.TransactionReason `json:"transaction_reason,omitempty"`
 	// For Expiry Credits, this is the ID of the parent credit transaction
 	// so that we can use the same credits for the expiry debit transaction
@@ -86,7 +90,16 @@ func (w *WalletOperation) Validate() error {
 		return err
 	}
 
-	if w.ExpiryDate != nil {
+	if w.ExpiryDateTime != nil {
+		if w.ExpiryDateTime.Before(time.Now().UTC()) {
+			return ierr.NewError("expiry date cannot be in the past").
+				WithHint("Expiry date must be in the future").
+				WithReportableDetails(map[string]interface{}{
+					"expiry_date": w.ExpiryDateTime,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	} else if w.ExpiryDate != nil {
 		expiryTime := types.ParseYYYYMMDDToDate(w.ExpiryDate)
 		if expiryTime == nil {
 			return ierr.NewError("invalid expiry date").
@@ -108,4 +121,14 @@ func (w *WalletOperation) Validate() error {
 	}
 
 	return nil
+}
+
+// ResolvedExpiryDate returns the full-precision expiry timestamp regardless of
+// which field the caller populated. Prefers ExpiryDateTime; falls back to the
+// YYYYMMDD ExpiryDate (interpreted as midnight UTC per ParseYYYYMMDDToDate).
+func (w *WalletOperation) ResolvedExpiryDate() *time.Time {
+	if w.ExpiryDateTime != nil {
+		return w.ExpiryDateTime
+	}
+	return types.ParseYYYYMMDDToDate(w.ExpiryDate)
 }

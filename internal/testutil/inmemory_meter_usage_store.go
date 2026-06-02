@@ -92,6 +92,19 @@ func matchRecord(r *events.MeterUsage, p *events.MeterUsageQueryParams) bool {
 	if p.AggregationType == types.AggregationCountUnique && r.UniqueHash == "" {
 		return false
 	}
+	if len(p.Sources) > 0 && !containsString(p.Sources, r.Source) {
+		return false
+	}
+	if len(p.PropertyFilters) > 0 {
+		for key, allowed := range p.PropertyFilters {
+			if len(allowed) == 0 {
+				continue
+			}
+			if !containsString(allowed, propertyValue(r.Properties, key)) {
+				return false
+			}
+		}
+	}
 	return true
 }
 
