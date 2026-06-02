@@ -64,7 +64,7 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 			"error", err, "event_type", EventTransactionCompleted)
 		return nil
 	}
-	err := h.syncSvc.ProcessTransactionCompletedWebhook(ctx, event.Data.ID, services.PaymentService, services.InvoiceService, "")
+	err := h.syncSvc.ProcessTransactionCompletedWebhook(ctx, event.Data.ID, services.PaymentService, services.InvoiceService)
 	if err != nil {
 		h.logger.Errorw("failed to process transaction.completed webhook",
 			"error", err, "paddle_transaction_id", event.Data.ID)

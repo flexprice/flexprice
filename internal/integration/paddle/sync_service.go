@@ -998,21 +998,16 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	txnID string,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
-	flexpriceInvoiceID string,
 ) error {
-	// Find the FlexPrice invoice ID from entity_integration_mapping if absent.
-	if flexpriceInvoiceID == "" {
-		invID, err := s.GetFlexPriceInvoiceIDByTransaction(ctx, txnID)
-		if err != nil {
-			if ierr.IsNotFound(err) {
-				// No mapping — this transaction may not be one we created, skip.
-				s.logger.Warnw("no FlexPrice invoice found for Paddle transaction, skipping",
-					"paddle_transaction_id", txnID)
-				return nil
-			}
-			return err
+	invID, err := s.GetFlexPriceInvoiceIDByTransaction(ctx, txnID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			// No mapping — this transaction may not be one we created, skip.
+			s.logger.Warnw("no FlexPrice invoice found for Paddle transaction, skipping",
+				"paddle_transaction_id", txnID)
+			return nil
 		}
-		flexpriceInvoiceID = invID
+		return err
 	}
 	txnCollection, err := s.client.ListTransactions(ctx, &paddlesdk.ListTransactionsRequest{
 		ID: []string{txnID},
@@ -1042,7 +1037,7 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 
 	// Process the payment (idempotent — checks if payment already exists).
 	paymentSvc := NewPaymentService(s.logger)
-	return paymentSvc.ProcessExternalPaddleTransaction(ctx, txn, flexpriceInvoiceID, paymentService, invoiceService)
+	return paymentSvc.ProcessExternalPaddleTransaction(ctx, txn, invID, paymentService, invoiceService)
 }
 
 // extractFlexSubIDFromCustomData reads flexprice_subscription_id from a Paddle custom_data map.
@@ -1287,5 +1282,5 @@ func (s *PaddleSyncService) PullAndUpdateInvoice(ctx context.Context, invoiceID 
 	}
 
 	paddleTransactionID := existingMapping.ProviderEntityID
-	return s.ProcessTransactionCompletedWebhook(ctx, paddleTransactionID, s.paymentService, s.invoiceService, invoiceID)
+	return s.ProcessTransactionCompletedWebhook(ctx, paddleTransactionID, s.paymentService, s.invoiceService)
 }
