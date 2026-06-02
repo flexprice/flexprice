@@ -214,11 +214,16 @@ fi
 if [ "${WL_PUBLISH_PYPI}" = "true" ]; then
   step "Publishing Python SDK to PyPI (${WL_PYTHON_PACKAGE_NAME})"
   cd "${REPO_ROOT}/api/python"
+  # Use a venv to avoid macOS "externally managed environment" restriction
+  VENV_DIR="/tmp/wl-pypi-venv"
+  python3 -m venv "$VENV_DIR"
+  source "$VENV_DIR/bin/activate"
   pip install --upgrade pip build twine --quiet
   python -m build
   twine check dist/*
   TWINE_USERNAME=__token__ TWINE_PASSWORD="${WL_PYPI_TOKEN}" \
     twine upload --skip-existing dist/*
+  deactivate
   cd "$REPO_ROOT"
   ok "Python SDK published → ${WL_PYTHON_PACKAGE_NAME}"
 else
