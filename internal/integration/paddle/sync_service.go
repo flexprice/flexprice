@@ -999,7 +999,7 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
 ) error {
-	invID, err := s.GetFlexPriceInvoiceIDByTransaction(ctx, txnID)
+	flexpriceInvoiceID, err := s.GetFlexPriceInvoiceIDByTransaction(ctx, txnID)
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			// No mapping — this transaction may not be one we created, skip.
@@ -1037,7 +1037,7 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 
 	// Process the payment (idempotent — checks if payment already exists).
 	paymentSvc := NewPaymentService(s.logger)
-	return paymentSvc.ProcessExternalPaddleTransaction(ctx, txn, invID, paymentService, invoiceService)
+	return paymentSvc.ProcessExternalPaddleTransaction(ctx, txn, flexpriceInvoiceID, paymentService, invoiceService)
 }
 
 // extractFlexSubIDFromCustomData reads flexprice_subscription_id from a Paddle custom_data map.
