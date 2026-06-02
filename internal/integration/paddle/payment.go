@@ -7,7 +7,6 @@ import (
 	"time"
 
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
-	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -209,40 +208,6 @@ func (s *PaymentService) reconcileInvoice(
 	s.logger.Debugw("reconciled invoice", "invoice_id", invoiceID)
 
 	return nil
-}
-
-// transactionToNotification converts a Paddle SDK Transaction (API response) to the
-// notification type used by ProcessExternalPaddleTransaction, allowing reuse of the
-// same payment processing logic for both webhook events and API-polled transactions.
-func transactionToNotification(txn *paddlesdk.Transaction) *paddlenotification.TransactionNotification {
-	notif := &paddlenotification.TransactionNotification{
-		ID:           txn.ID,
-		CurrencyCode: paddlenotification.CurrencyCode(txn.CurrencyCode),
-		Details: paddlenotification.TransactionDetails{
-			Totals: paddlenotification.TransactionTotals{
-				Total: txn.Details.Totals.Total,
-			},
-		},
-	}
-
-	for _, p := range txn.Payments {
-		attempt := paddlenotification.TransactionPaymentAttempt{
-			PaymentAttemptID: p.PaymentAttemptID,
-			PaymentMethodID:  p.PaymentMethodID,
-			Status:           paddlenotification.PaymentAttemptStatus(p.Status),
-			MethodDetails: paddlenotification.MethodDetails{
-				Type: paddlenotification.PaymentMethodType(p.MethodDetails.Type),
-			},
-		}
-		if p.MethodDetails.Card != nil {
-			attempt.MethodDetails.Card = &paddlenotification.Card{
-				Last4: p.MethodDetails.Card.Last4,
-			}
-		}
-		notif.Payments = append(notif.Payments, attempt)
-	}
-
-	return notif
 }
 
 // convertFromSmallestUnit converts Paddle amount (smallest unit, e.g. cents) to standard unit.
