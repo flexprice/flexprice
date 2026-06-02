@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -1042,4 +1043,62 @@ func (s *MeterUsageServiceSuite) TestPropertyFiltersBucketedMeter() {
 	s.Require().NotNil(bucketedUsage, "bucketed line item usage entry should exist")
 	s.True(bucketedUsage.Usage.Equal(decimal.NewFromInt(30)),
 		"only gpt-4 events should be counted on bucketed meter, got %s", bucketedUsage.Usage)
+}
+
+// TestGroupByFeatureID_RewritesToMeterID: the API contract (dto/events.go)
+// documents group_by=[feature_id], but meter_usage has no feature_id column.
+// The service rewrites feature_id → meter_id at entry (features are 1:1 with
+// meters), and the converter populates FeatureID on each item via the
+// meter→feature lookup. This test pins both: the query no longer errors out,
+// AND callers still get FeatureID in the response.
+func (s *MeterUsageServiceSuite) TestGroupByFeatureID_RewritesToMeterID() {
+	ctx := s.GetContext()
+	s.createLineItem(ctx, "li_feat_groupby", s.periodStart, s.periodEnd)
+
+	// Feature pointing at the existing s.meterAPI.
+	feat := &feature.Feature{
+		ID: "feat_api", Name: "API Feature", MeterID: s.meterAPI.ID,
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().FeatureRepo.Create(ctx, feat))
+
+	s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID,
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 25)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"feature_id"}, // public contract — must not error
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1, "expected one item for the single meter")
+	s.Equal(feat.ID, resp.Items[0].FeatureID,
+		"FeatureID should be populated from meter→feature lookup")
+	s.True(resp.Items[0].TotalUsage.Equal(decimal.NewFromInt(25)),
+		"TotalUsage: expected 25, got %s", resp.Items[0].TotalUsage)
+}
+
+// TestGroupByFeatureIDAndMeterID_Deduplicates: passing both feature_id and
+// meter_id in GroupBy shouldn't produce [meter_id, meter_id] after rewrite.
+func (s *MeterUsageServiceSuite) TestGroupByFeatureIDAndMeterID_Deduplicates() {
+	ctx := s.GetContext()
+	s.createLineItem(ctx, "li_feat_dedup", s.periodStart, s.periodEnd)
+
+	s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID,
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 42)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"feature_id", "meter_id"},
+	})
+	s.NoError(err)
+	s.Require().Len(resp.Items, 1)
+	s.True(resp.Items[0].TotalUsage.Equal(decimal.NewFromInt(42)))
 }
