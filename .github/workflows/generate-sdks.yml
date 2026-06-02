@@ -29,6 +29,9 @@ jobs:
   # ---------------------------------------------------------------------------
   version-check:
     runs-on: ubuntu-latest
+    if: |
+      !github.event.release.prerelease &&
+      !github.event.release.draft
     permissions:
       contents: read
     outputs:
