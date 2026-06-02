@@ -68,6 +68,7 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 	if err != nil {
 		h.logger.Errorw("failed to process transaction.completed webhook",
 			"error", err, "paddle_transaction_id", event.Data.ID)
+		return err
 	}
 	return nil
 }
