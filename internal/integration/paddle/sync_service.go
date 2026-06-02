@@ -1136,7 +1136,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 		s.logger.Infow("subscription.activated",
 			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	default:
-		s.logger.Infow("subscription.activated: subscription not in incomplete state — no-op",
+		s.logger.Infow("subscription not in draft state — no-op",
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
 	}
 
