@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
@@ -43,6 +44,7 @@ func newAddEnvironmentScript() (*addEnvironmentScript, error) {
 	repoParams := repository.RepositoryParams{
 		EntClient: client,
 		Logger:    log,
+		Cache:     cache.GetInMemoryCache(),
 	}
 
 	return &addEnvironmentScript{
