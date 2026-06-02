@@ -7,10 +7,13 @@ import (
 	"github.com/samber/lo"
 )
 
+// IntegrationSyncMethod defined the type of sync to run
 type IntegrationSyncMethod string
 
 const (
+	// IntegrationSyncMethodPull fetches data from integration and updates entities in flexprice
 	IntegrationSyncMethodPull IntegrationSyncMethod = "pull"
+	// IntegrationSyncMethodPush updates entities in integration from current entity state in flexprice
 	IntegrationSyncMethodPush IntegrationSyncMethod = "push"
 )
 
@@ -20,8 +23,8 @@ func (i IntegrationSyncMethod) Validate() error {
 		IntegrationSyncMethodPush,
 	}
 	if !lo.Contains(allowed, i) {
-		return ierr.NewError("invalid entity type").
-			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price").
+		return ierr.NewError("invalid sync method").
+			WithHint("Sync method must be one of: pull, push").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -34,10 +37,16 @@ func (i IntegrationSyncMethod) String() string {
 type IntegrationSyncRequest struct {
 	EntityType types.IntegrationEntityType `json:"entity_type" validate:"required"`
 	EntityID   string                      `json:"entity_id" validate:"required"`
-	Method     IntegrationSyncMethod       `json:"method" default:"push"`
+	// Method controls the direction of sync. "push" (default) writes the local
+	// entity to the external provider. "pull" fetches the latest state from the
+	// provider and updates the local record. Omitting this field defaults to "push".
+	Method IntegrationSyncMethod `json:"method"`
 }
 
 func (r *IntegrationSyncRequest) Validate() error {
+	if r.Method == "" {
+		r.Method = IntegrationSyncMethodPush
+	}
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
