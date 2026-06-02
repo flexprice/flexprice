@@ -170,5 +170,65 @@ fi
 
 echo "Python branding applied."
 
+# ─── Documentation: all *.md files in every SDK output dir ───────────────────
+echo ""
+echo "--- Documentation ---"
+
+# Derive UPPERCASE class name for env var substitution (Omkar → OMKAR)
+WL_SDK_CLASS_NAME_UPPER=$(echo "${WL_SDK_CLASS_NAME}" | tr '[:lower:]' '[:upper:]')
+# Escape WL_GO_MODULE_PATH for sed replacement (used in Go README imports)
+WL_MOD_ESC=$(printf '%s\n' "${WL_GO_MODULE_PATH}" | sed 's/[&\]/\\&/g')
+# Escape WL_API_BASE_URL for sed (replacing the hardcoded default API URL)
+WL_URL_ESC=$(printf '%s\n' "${WL_API_BASE_URL}" | sed 's/[&\]/\\&/g')
+
+for SDK_DIR in api/go api/typescript api/python api/mcp; do
+  [ -d "$SDK_DIR" ] || continue
+  while IFS= read -r -d '' f; do
+    CHANGED=0
+    # Order matters — compound forms first to avoid partial substitution
+
+    # 1. Error class names (before plain Flexprice to avoid double-sub)
+    if grep -qE 'FlexpriceError|FlexPriceError' "$f" 2>/dev/null; then
+      _sed_i "s/FlexpriceError/${WL_SDK_CLASS_NAME}Error/g" "$f"
+      _sed_i "s/FlexPriceError/${WL_SDK_CLASS_NAME}Error/g" "$f"
+      CHANGED=1
+    fi
+    # 2. PascalCase and lowercase-p brand name (FlexPrice, Flexprice)
+    if grep -qE 'FlexPrice|Flexprice' "$f" 2>/dev/null; then
+      _sed_i "s/FlexPrice/${WL_SDK_CLASS_NAME}/g" "$f"
+      _sed_i "s/Flexprice/${WL_SDK_CLASS_NAME}/g" "$f"
+      CHANGED=1
+    fi
+    # 3. UPPERCASE brand name → used for env var prefixes (FLEXPRICE_API_KEY → OMKAR_API_KEY)
+    if grep -q 'FLEXPRICE' "$f" 2>/dev/null; then
+      _sed_i "s/FLEXPRICE/${WL_SDK_CLASS_NAME_UPPER}/g" "$f"
+      CHANGED=1
+    fi
+    # 4. TypeScript package name in install/import examples
+    if grep -q '@flexprice/sdk' "$f" 2>/dev/null; then
+      _sed_i "s|@flexprice/sdk|${WL_TS_PACKAGE_NAME}|g" "$f"
+      CHANGED=1
+    fi
+    # 5. MCP package name in config examples
+    if grep -q '@flexprice/mcp-server' "$f" 2>/dev/null; then
+      _sed_i "s|@flexprice/mcp-server|${WL_MCP_PACKAGE_NAME}|g" "$f"
+      CHANGED=1
+    fi
+    # 6. Go module path in import examples
+    if grep -q 'github\.com/flexprice/go-sdk' "$f" 2>/dev/null; then
+      _sed_i "s|github\.com/flexprice/go-sdk|${WL_MOD_ESC}|g" "$f"
+      CHANGED=1
+    fi
+    # 7. Default API URL (us.api.flexprice.io/v1 → WL_API_BASE_URL)
+    if grep -q 'us\.api\.flexprice\.io' "$f" 2>/dev/null; then
+      _sed_i "s|https://us\.api\.flexprice\.io/v1|${WL_URL_ESC}|g" "$f"
+      CHANGED=1
+    fi
+    [ "$CHANGED" -eq 1 ] && echo "  [docs] $f"
+  done < <(find "$SDK_DIR" -name "*.md" -print0)
+done
+
+echo "Documentation branding applied."
+
 echo ""
 echo "=== White-label custom branding complete ==="
