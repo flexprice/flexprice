@@ -14,6 +14,11 @@ TEMPLATES="configs/white-label/templates"
 # Verify all required env vars are present (quick check — full validation is in validate-wl-config.sh)
 : "${WL_SDK_CLASS_NAME:?WL_SDK_CLASS_NAME is required}"
 : "${WL_API_BASE_URL:?WL_API_BASE_URL is required}"
+: "${WL_PYTHON_PACKAGE_NAME:?WL_PYTHON_PACKAGE_NAME is required}"
+
+# Derive Python module name: PyPI allows dashes (acme-sdk) but Python import names require
+# underscores (acme_sdk). Auto-derive so callers only need to set WL_PYTHON_PACKAGE_NAME.
+WL_PYTHON_MODULE_NAME="${WL_PYTHON_PACKAGE_NAME//-/_}"
 
 # Step 1: Write the server URL overlay (used by workflow.yaml.tmpl)
 cat > .speakeasy/overlays/wl-server-url.yaml <<EOF
@@ -31,8 +36,8 @@ echo "Written: .speakeasy/overlays/wl-server-url.yaml (url: ${WL_API_BASE_URL})"
 # Step 2: Scoped envsubst — only substitute WL_* variables
 # This prevents envsubst from touching Speakeasy's own $npm_token/$pypi_token in workflow.yaml
 WL_VARS='${WL_SDK_CLASS_NAME} ${WL_GO_MODULE_PATH} ${WL_GO_PACKAGE_NAME}
-         ${WL_TS_PACKAGE_NAME} ${WL_PYTHON_PACKAGE_NAME} ${WL_MCP_PACKAGE_NAME}
-         ${WL_AUTHOR_NAME} ${WL_API_BASE_URL}
+         ${WL_TS_PACKAGE_NAME} ${WL_PYTHON_PACKAGE_NAME} ${WL_PYTHON_MODULE_NAME}
+         ${WL_MCP_PACKAGE_NAME} ${WL_AUTHOR_NAME} ${WL_API_BASE_URL}
          ${WL_GO_REPO} ${WL_PYTHON_REPO} ${WL_TS_REPO} ${WL_MCP_REPO}'
 
 envsubst "$WL_VARS" < "$TEMPLATES/go.yaml.tmpl"         > .speakeasy/gen/go.yaml
