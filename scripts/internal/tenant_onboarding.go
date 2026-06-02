@@ -142,6 +142,7 @@ func (s *onboardingScript) createEnvironment(ctx context.Context, name string, e
 			CreatedBy: types.DefaultUserID,
 			UpdatedBy: types.DefaultUserID,
 			CreatedAt: time.Now(),
+			Status:    types.StatusPublished,
 			UpdatedAt: time.Now(),
 		},
 	}
@@ -189,12 +190,12 @@ func OnboardNewTenant() error {
 	// Create default environments (development, staging, production)
 	envTypes := []types.EnvironmentType{
 		types.EnvironmentDevelopment,
-		types.EnvironmentProduction,
+		// types.EnvironmentProduction,
 	}
 
 	envNameMap := map[types.EnvironmentType]string{
 		types.EnvironmentDevelopment: "Sandbox",
-		types.EnvironmentProduction:  "Production",
+		// types.EnvironmentProduction:  "Production",
 	}
 
 	for _, envType := range envTypes {

@@ -84,6 +84,11 @@ var commands = []Command{
 		Run:         internal.AddNewUserToTenant,
 	},
 	{
+		Name:        "add-environment",
+		Description: "Add an environment to an existing tenant",
+		Run:         internal.AddEnvironmentToTenant,
+	},
+	{
 		Name:        "migrate-invoice-sequences",
 		Description: "Migrate invoice sequences to include environment isolation",
 		Run:         internal.MigrateInvoiceSequences,
@@ -187,6 +192,8 @@ func main() {
 		startDate          string
 		billingCycle       string
 		customerCount      string
+		environmentName    string
+		environmentType    string
 		addonID            string
 		workerCount        string
 		effectiveDate      string
@@ -205,6 +212,8 @@ func main() {
 	flag.StringVar(&userID, "user-id", "", "User ID for operations")
 	flag.StringVar(&password, "user-password", "", "password for setting up new user")
 	flag.StringVar(&environmentID, "environment-id", "", "Environment ID for operations")
+	flag.StringVar(&environmentName, "environment-name", "", "Environment name for add-environment command")
+	flag.StringVar(&environmentType, "environment-type", "", "Environment type for add-environment (development or production)")
 	flag.StringVar(&filePath, "file-path", "", "File path for operations")
 	flag.StringVar(&planID, "plan-id", "", "Plan ID for operations")
 	flag.StringVar(&meterID, "meter-id", "", "Meter ID (for setup-dummy-billing-customer)")
@@ -262,6 +271,12 @@ func main() {
 	}
 	if environmentID != "" {
 		os.Setenv("ENVIRONMENT_ID", environmentID)
+	}
+	if environmentName != "" {
+		os.Setenv("ENVIRONMENT_NAME", environmentName)
+	}
+	if environmentType != "" {
+		os.Setenv("ENVIRONMENT_TYPE", environmentType)
 	}
 	if filePath != "" {
 		os.Setenv("FILE_PATH", filePath)

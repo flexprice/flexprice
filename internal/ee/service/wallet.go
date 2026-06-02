@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -201,17 +200,6 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		req.CreditsToAdd = s.getCreditsFromCurrencyAmount(req.Amount, w.TopupConversionRate)
 	}
 
-	if req.ExpiryDateUTC != nil && req.ExpiryDate == nil {
-		expiryDate := req.ExpiryDateUTC.UTC()
-		parsedDate, err := strconv.Atoi(expiryDate.Format("20060102"))
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Invalid expiry date").
-				Mark(ierr.ErrValidation)
-		}
-		req.ExpiryDate = &parsedDate
-	}
-
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Invalid top up wallet request").
@@ -278,6 +266,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 		ReferenceType:     referenceType,
 		ReferenceID:       referenceID,
 		ExpiryDate:        req.ExpiryDate,
+		ExpiryDateTime:    req.ExpiryDateUTC, // ExpiryDateUTC is the preferred input: a full-precision timestamp
 		IdempotencyKey:    idempotencyKey,
 		Priority:          req.Priority,
 	}
@@ -361,7 +350,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			CreditBalanceAfter:  balanceAfter,
 			Currency:            w.Currency,
 			TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
-			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
+			ExpiryDate:          lo.Ternary(req.ExpiryDateUTC != nil, req.ExpiryDateUTC, types.ParseYYYYMMDDToDate(req.ExpiryDate)),
 			BaseModel:           types.GetDefaultBaseModel(ctx),
 		}
 
@@ -619,7 +608,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			Metadata:            req.Metadata,
 			TxStatus:            types.TransactionStatusCompleted,
 			TransactionReason:   req.TransactionReason,
-			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
+			ExpiryDate:          req.ResolvedExpiryDate(),
 			Priority:            req.Priority,
 			CreditBalanceBefore: w.CreditBalance,
 			CreditBalanceAfter:  newCreditBalance,
@@ -638,9 +627,6 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 
 		if req.Type == types.TransactionTypeCredit {
 			tx.TopupConversionRate = lo.ToPtr(w.TopupConversionRate)
-			if req.ExpiryDate != nil {
-				tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
-			}
 		} else if req.Type == types.TransactionTypeDebit {
 			tx.ConversionRate = lo.ToPtr(w.ConversionRate)
 		}

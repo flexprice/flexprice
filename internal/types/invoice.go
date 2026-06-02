@@ -434,6 +434,10 @@ type InvoiceFilter struct {
 	// Use this to separate recurring charges from one-time fees or credit adjustments
 	InvoiceType InvoiceType `json:"invoice_type,omitempty" form:"invoice_type"`
 
+	// currency filters invoices by their currency (ISO 4217 code, e.g. "usd", "eur").
+	// Matches on the invoices.currency column exactly.
+	Currency string `json:"currency,omitempty" form:"currency"`
+
 	// invoice_status filters by the current state of invoices in their lifecycle
 	// Multiple statuses can be specified to include invoices in any of the listed states
 	InvoiceStatus []InvoiceStatus `json:"invoice_status,omitempty" form:"invoice_status"`
