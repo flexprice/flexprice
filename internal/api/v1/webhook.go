@@ -1174,6 +1174,8 @@ func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
 		h.logger.Errorw("failed to handle Paddle webhook event",
 			"error", err,
 			"event_type", payload.EventType)
+		c.JSON(http.StatusInternalServerError, gin.H{})
+		handled = true
 	}
 }
 func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {

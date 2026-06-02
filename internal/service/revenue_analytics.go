@@ -39,9 +39,15 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 			Mark(ierr.ErrValidation)
 	}
 
-	// 1. Fetch cost analytics using the costsheet usage tracking service
+	// 1. Fetch cost analytics. Behind a feature flag we now compute cost from
+	// the meter_usage table instead of the legacy costsheet_usage table.
 	var costAnalytics *dto.GetCostAnalyticsResponse
-	costAnalytics, err := s.costsheetUsageTrackingService.GetCostSheetUsageAnalytics(ctx, req)
+	var err error
+	if s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(types.GetTenantID(ctx)) {
+		costAnalytics, err = s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req)
+	} else {
+		costAnalytics, err = s.costsheetUsageTrackingService.GetCostSheetUsageAnalytics(ctx, req)
+	}
 	if err != nil {
 		s.Logger.Warnw("failed to fetch cost analytics", "error", err)
 		costAnalytics = nil

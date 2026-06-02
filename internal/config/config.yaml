@@ -240,13 +240,13 @@ usage_benchmark:
   consumer_group: "v1_usage_benchmark_service"
 
 costsheet_usage_tracking:
-  enabled: true
+  enabled: false
   topic: "events"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service"
 
 costsheet_usage_tracking_lazy:
-  enabled: true
+  enabled: false
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service_lazy"

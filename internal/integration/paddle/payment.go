@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
+	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -32,7 +32,7 @@ func NewPaymentService(logger *logger.Logger) *PaymentService {
 // It creates a payment record and reconciles the invoice.
 func (s *PaymentService) ProcessExternalPaddleTransaction(
 	ctx context.Context,
-	transaction *paddlenotification.TransactionNotification,
+	transaction *paddlesdk.Transaction,
 	flexpriceInvoiceID string,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
@@ -86,7 +86,7 @@ func (s *PaymentService) ProcessExternalPaddleTransaction(
 // createExternalPaymentRecord creates a payment record for an external Paddle transaction
 func (s *PaymentService) createExternalPaymentRecord(
 	ctx context.Context,
-	transaction *paddlenotification.TransactionNotification,
+	transaction *paddlesdk.Transaction,
 	invoiceID string,
 	paymentService interfaces.PaymentService,
 ) error {
@@ -99,7 +99,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 	var paddlePaymentMethodType string
 	var cardLast4 string
 	for _, p := range transaction.Payments {
-		if p.Status == paddlenotification.PaymentAttemptStatusCaptured {
+		if p.Status == paddlesdk.PaymentAttemptStatusCaptured {
 			paddlePaymentAttemptID = p.PaymentAttemptID
 			if p.PaymentMethodID != nil && *p.PaymentMethodID != "" {
 				paddlePaymentMethodID = *p.PaymentMethodID
