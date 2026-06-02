@@ -36,6 +36,8 @@ type PaddleSyncService struct {
 	logger           *logger.Logger
 	authSecret       string
 	temporalSvc      temporalservice.TemporalService
+	paymentService   interfaces.PaymentService
+	invoiceService   interfaces.InvoiceService
 }
 
 // NewPaddleSyncService creates a new PaddleSyncService.
@@ -61,6 +63,12 @@ func NewPaddleSyncService(
 		authSecret:       authSecret,
 		temporalSvc:      temporalSvc,
 	}
+}
+
+// SetServices sets the payment and invoice services needed by PullAndUpdateInvoice.
+func (s *PaddleSyncService) SetServices(paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) {
+	s.paymentService = paymentService
+	s.invoiceService = invoiceService
 }
 
 // EnsureCustomerSynced ensures the given FlexPrice customer exists in Paddle
@@ -984,19 +992,43 @@ func (s *PaddleSyncService) ProcessAddressCreatedWebhook(
 // It finds the FlexPrice invoice via entity_integration_mapping and delegates payment processing.
 func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	ctx context.Context,
-	txn *paddlenotification.TransactionNotification,
+	txnID string,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
 ) error {
-	// Find the FlexPrice invoice ID from entity_integration_mapping.
-	flexpriceInvoiceID, err := s.GetFlexPriceInvoiceIDByTransaction(ctx, txn.ID)
+	flexpriceInvoiceID, err := s.GetFlexPriceInvoiceIDByTransaction(ctx, txnID)
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			// No mapping — this transaction may not be one we created, skip.
 			s.logger.Warnw("no FlexPrice invoice found for Paddle transaction, skipping",
-				"paddle_transaction_id", txn.ID)
+				"paddle_transaction_id", txnID)
 		}
 		return err
+	}
+	txnCollection, err := s.client.ListTransactions(ctx, &paddlesdk.ListTransactionsRequest{
+		ID: []string{txnID},
+	})
+	if err != nil {
+		return fmt.Errorf("listing Paddle transaction %s: %w", txnID, err)
+	}
+
+	var txn *paddlesdk.Transaction
+	if txnCollection != nil {
+		if res := txnCollection.Next(ctx); res != nil && res.Ok() {
+			txn = res.Value()
+		}
+	}
+	if txn == nil {
+		return ierr.NewError("Paddle transaction not found").
+			WithReportableDetails(map[string]interface{}{"paddle_transaction_id": txnID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	if txn.Status != paddlesdk.TransactionStatusCompleted {
+		s.logger.Debugw("Paddle transaction not yet completed",
+			"paddle_transaction_id", txnID,
+			"status", txn.Status)
+		return nil
 	}
 
 	// Process the payment (idempotent — checks if payment already exists).
@@ -1071,24 +1103,24 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 
 	// Activate the FlexPrice subscription.
 	switch sub.SubscriptionStatus {
-	case types.SubscriptionStatusIncomplete:
-		if sub.TrialEnd != nil && sub.TrialEnd.After(time.Now()) {
-			sub.SubscriptionStatus = types.SubscriptionStatusTrialing
-			if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
-				return fmt.Errorf("setting subscription to trialing: %w", err)
-			}
-			s.logger.Infow("subscription.activated: set incomplete→trialing",
-				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
-		} else {
-			if subscriptionService == nil {
-				return ierr.NewError("subscriptionService is required to activate subscription").Mark(ierr.ErrInternal)
-			}
-			if err := subscriptionService.ActivateIncompleteSubscription(ctx, flexSubID); err != nil {
-				return fmt.Errorf("activating incomplete subscription: %w", err)
-			}
-			s.logger.Infow("subscription.activated: set incomplete→active",
-				"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
-		}
+	//case types.SubscriptionStatusIncomplete:
+	//	if sub.TrialEnd != nil && sub.TrialEnd.After(time.Now()) {
+	//		sub.SubscriptionStatus = types.SubscriptionStatusTrialing
+	//		if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
+	//			return fmt.Errorf("setting subscription to trialing: %w", err)
+	//		}
+	//		s.logger.Infow("subscription.activated: set incomplete→trialing",
+	//			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
+	//	} else {
+	//		if subscriptionService == nil {
+	//			return ierr.NewError("subscriptionService is required to activate subscription").Mark(ierr.ErrInternal)
+	//		}
+	//		if err := subscriptionService.ActivateIncompleteSubscription(ctx, flexSubID); err != nil {
+	//			return fmt.Errorf("activating incomplete subscription: %w", err)
+	//		}
+	//		s.logger.Infow("subscription.activated: set incomplete→active",
+	//			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
+	//	}
 	case types.SubscriptionStatusDraft:
 		startDate := time.Now().UTC()
 		if data.StartedAt != nil {
@@ -1104,7 +1136,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 		s.logger.Infow("subscription.activated",
 			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	default:
-		s.logger.Infow("subscription.activated: subscription not in incomplete state — no-op",
+		s.logger.Infow("subscription not in draft state — no-op",
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
 	}
 
@@ -1216,4 +1248,35 @@ func mapToUpdateCustomerAddressRequest(addr *paddlenotification.AddressNotificat
 		req.AddressCountry = lo.ToPtr(strings.ToUpper(string(addr.CountryCode)))
 	}
 	return req
+}
+
+// PullAndUpdateInvoice polls Paddle for the payment status of an already-synced invoice.
+// If the invoice mapping exists and the invoice is finalized+paid, it returns early.
+// If the invoice is unpaid, it fetches the Paddle transaction by ID and, if the
+// transaction is completed, processes the payment (same flow as handleTransactionCompleted).
+func (s *PaddleSyncService) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	flexInvoice, err := s.invoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return fmt.Errorf("fetching invoice: %w", err)
+	}
+
+	existingMapping, err := s.getExistingInvoiceMapping(ctx, invoiceID)
+	if err != nil {
+		return fmt.Errorf("checking invoice mapping: %w", err)
+	}
+	if existingMapping == nil {
+		return ierr.NewError("no Paddle mapping found for invoice").
+			WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	if flexInvoice.InvoiceStatus == types.InvoiceStatusFinalized &&
+		flexInvoice.PaymentStatus == types.PaymentStatusSucceeded {
+		s.logger.Debugw("invoice already finalized and paid, skipping reconciliation",
+			"invoice_id", invoiceID)
+		return nil
+	}
+
+	paddleTransactionID := existingMapping.ProviderEntityID
+	return s.ProcessTransactionCompletedWebhook(ctx, paddleTransactionID, s.paymentService, s.invoiceService)
 }

@@ -44,6 +44,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	ee "github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/security"
 	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
 	"github.com/gin-gonic/gin"
@@ -299,6 +300,7 @@ func main() {
 		fx.Invoke(
 			sentry.RegisterHooks,
 			pyroscope.RegisterHooks,
+			initIntegrationFactory,
 			startServer,
 		),
 	)
@@ -438,6 +440,10 @@ func provideRouter(
 		rbacService,
 		tenantService,
 	)
+}
+
+func initIntegrationFactory(factory *integration.Factory, paymentService interfaces.PaymentService, invoiceService service.InvoiceService) {
+	factory.SetServices(paymentService, invoiceService)
 }
 
 func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {

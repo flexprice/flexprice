@@ -1,0 +1,38 @@
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+    swagger-json:
+        inputs:
+            - location: docs/swagger/swagger-3-0.json
+        overlays:
+            - location: .speakeasy/overlays/flexprice-sdk.yaml
+            - location: .speakeasy/overlays/wl-server-url.yaml
+    swagger-json-mcp:
+        inputs:
+            - location: docs/swagger/swagger-3-0-mcp.json
+targets:
+    flexprice-go:
+        target: go
+        source: swagger-json
+        output: ./api/go
+    flexprice-mcp:
+        target: mcp-typescript
+        source: swagger-json-mcp
+        output: ./api/mcp
+        publish:
+            npm:
+                token: $npm_token
+    flexprice-python:
+        target: python
+        source: swagger-json
+        output: ./api/python
+        publish:
+            pypi:
+                token: $pypi_token
+    flexprice-typescript:
+        target: typescript
+        source: swagger-json
+        output: ./api/typescript
+        publish:
+            npm:
+                token: $npm_token

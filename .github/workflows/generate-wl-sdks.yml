@@ -1,0 +1,347 @@
+# Generate white-label SDKs (Go, TypeScript, Python, MCP) for all clients in WL_SDK_CONFIG.
+#
+# Trigger: same release event as generate-sdks.yml (single v1.2.3 tag fires both).
+# Config: WL_SDK_CONFIG repository secret — JSON array, one object per client.
+# If WL_SDK_CONFIG is not set or is an empty array, this workflow skips gracefully.
+#
+# Required secrets: WL_SDK_CONFIG (JSON array), SPEAKEASY_API_KEY
+# Per-client secrets embedded in WL_SDK_CONFIG: see configs/white-label/README.md
+
+name: Generate White-Label SDKs
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: sdk-generate-wl-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Parse WL_SDK_CONFIG, validate JSON, build index matrix
+  # ---------------------------------------------------------------------------
+  matrix-setup:
+    runs-on: ubuntu-latest
+    if: |
+      !github.event.release.prerelease &&
+      !github.event.release.draft
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.setup.outputs.should_run }}
+      indices: ${{ steps.setup.outputs.indices }}
+      version: ${{ steps.setup.outputs.version }}
+    steps:
+      - name: Parse WL_SDK_CONFIG and build matrix
+        id: setup
+        env:
+          WL_SDK_CONFIG: ${{ secrets.WL_SDK_CONFIG }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          # Strip version from release tag (v1.2.3 → 1.2.3); tag comes from env to avoid shell injection
+          RAW="$RELEASE_TAG"
+          VERSION="${RAW#v}"
+          if [ -z "$VERSION" ] || ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid release tag (expected semver like v1.2.3): $RAW"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Not set at all → skip gracefully
+          if [ -z "$WL_SDK_CONFIG" ]; then
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "## White-label SDK: Skipped" >> $GITHUB_STEP_SUMMARY
+            echo "WL_SDK_CONFIG secret is not set. No white-label SDKs generated." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          # Must be valid JSON array
+          if ! echo "$WL_SDK_CONFIG" | jq -e 'if type == "array" then . else error end' > /dev/null 2>&1; then
+            echo "::error::WL_SDK_CONFIG must be a JSON array e.g. [{...},{...}]. Got invalid JSON or non-array value."
+            exit 1
+          fi
+
+          # Empty array → skip gracefully
+          COUNT=$(echo "$WL_SDK_CONFIG" | jq 'length')
+          if [ "$COUNT" -eq 0 ]; then
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "## White-label SDK: Skipped" >> $GITHUB_STEP_SUMMARY
+            echo "WL_SDK_CONFIG is an empty array. No white-label SDKs generated." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          # Build index array [0, 1, 2, ...]
+          INDICES=$(echo "$WL_SDK_CONFIG" | jq -c '[range(length)]')
+          echo "should_run=true" >> $GITHUB_OUTPUT
+          echo "indices=$INDICES" >> $GITHUB_OUTPUT
+          echo "Found $COUNT white-label client(s). Generating SDKs for version $VERSION."
+
+  # ---------------------------------------------------------------------------
+  # Per-client: parse config → validate → generate → verify → publish
+  # ---------------------------------------------------------------------------
+  generate-wl:
+    needs: matrix-setup
+    if: needs.matrix-setup.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        index: ${{ fromJson(needs.matrix-setup.outputs.indices) }}
+    env:
+      SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse and export client config
+        env:
+          WL_SDK_CONFIG: ${{ secrets.WL_SDK_CONFIG }}
+        run: |
+          INDEX=${{ matrix.index }}
+          CONFIG="$WL_SDK_CONFIG"
+
+          # Mask sensitive values BEFORE writing them anywhere
+          mask_and_export() {
+            local key=$1
+            local val
+            val=$(echo "$CONFIG" | jq -r ".[$INDEX].$key // empty")
+            if [ -n "$val" ]; then
+              echo "::add-mask::$val"
+              echo "$key=$val" >> $GITHUB_ENV
+            fi
+          }
+          mask_and_export WL_SDK_DEPLOY_GIT_TOKEN
+          mask_and_export WL_NPM_TOKEN
+          mask_and_export WL_PYPI_TOKEN
+
+          # Export non-sensitive fields directly
+          echo "$CONFIG" | jq -r --argjson i "$INDEX" '
+            .[$i] | {
+              WL_SDK_CLASS_NAME, WL_GO_MODULE_PATH, WL_GO_PACKAGE_NAME,
+              WL_TS_PACKAGE_NAME, WL_PYTHON_PACKAGE_NAME, WL_MCP_PACKAGE_NAME,
+              WL_AUTHOR_NAME, WL_API_BASE_URL,
+              WL_GO_REPO, WL_PYTHON_REPO, WL_TS_REPO, WL_MCP_REPO,
+              WL_PUBLISH_NPM, WL_PUBLISH_PYPI, WL_NPM_REGISTRY
+            } | to_entries[] | select(.value != null and .value != "") | "\(.key)=\(.value)"
+          ' >> $GITHUB_ENV
+
+          # Make index available to validate script error messages
+          echo "WL_CLIENT_INDEX=$INDEX" >> $GITHUB_ENV
+
+      - name: Validate white-label config
+        run: bash scripts/validate-wl-config.sh
+
+      - name: Verify client repo accessibility
+        run: |
+          FAIL=0
+          for VAR in WL_GO_REPO WL_PYTHON_REPO WL_TS_REPO WL_MCP_REPO; do
+            REPO="${!VAR}"
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: token $WL_SDK_DEPLOY_GIT_TOKEN" \
+              "https://api.github.com/repos/$REPO")
+            if [ "$HTTP" != "200" ]; then
+              echo "::error::Cannot access $REPO (HTTP $HTTP). Ensure WL_SDK_DEPLOY_GIT_TOKEN has Contents R/W + Metadata Read on this repo."
+              FAIL=1
+            else
+              echo "OK: $REPO (HTTP $HTTP)"
+            fi
+          done
+          [ "$FAIL" -eq 0 ] || exit 1
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.0"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate OpenAPI spec
+        run: |
+          set -euxo pipefail
+          make swagger
+
+      - name: Verify OpenAPI spec exists
+        run: |
+          [ -f "docs/swagger/swagger-3-0.json" ] || {
+            echo "::error::docs/swagger/swagger-3-0.json not found after make swagger"
+            exit 1
+          }
+          echo "OpenAPI spec: $(wc -c < docs/swagger/swagger-3-0.json) bytes"
+
+      - name: Apply white-label configs
+        run: bash scripts/generate-wl-configs.sh
+
+      - name: Install Speakeasy CLI
+        run: unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+
+      - name: Generate SDKs
+        run: make sdk-all VERSION=${{ needs.matrix-setup.outputs.version }}
+
+      - name: Apply white-label branding to custom files
+        run: bash scripts/apply-wl-custom-branding.sh
+
+      - name: Verify SDK builds
+        run: bash scripts/verify-sdk-builds.sh
+
+      - name: Apply resolved version to artifacts
+        run: ./scripts/force-sdk-version.sh "${{ needs.matrix-setup.outputs.version }}"
+
+      - name: Push Go SDK to client repo
+        run: |
+          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          git clone https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${WL_GO_REPO}.git /tmp/wl-go-sdk
+          cd /tmp/wl-go-sdk
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r "$GITHUB_WORKSPACE/api/go/." .
+          [ -f "$GITHUB_WORKSPACE/LICENSE" ] && cp "$GITHUB_WORKSPACE/LICENSE" .
+          git config user.name "GitHub Actions Bot" && git config user.email "actions@github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add . && git commit -m "Release Go SDK v${VERSION}"
+            git tag -a "v${VERSION}" -m "Go SDK v${VERSION}" 2>/dev/null || true
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+            echo "Pushed Go SDK to ${WL_GO_REPO}"
+          else
+            echo "No changes to push for Go SDK (${WL_GO_REPO})"
+          fi
+
+      - name: Push Python SDK to client repo
+        run: |
+          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          git clone https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${WL_PYTHON_REPO}.git /tmp/wl-python-sdk
+          cd /tmp/wl-python-sdk
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r "$GITHUB_WORKSPACE/api/python/." .
+          [ -f "$GITHUB_WORKSPACE/LICENSE" ] && cp "$GITHUB_WORKSPACE/LICENSE" .
+          git config user.name "GitHub Actions Bot" && git config user.email "actions@github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add . && git commit -m "Release Python SDK v${VERSION}"
+            git tag -a "v${VERSION}" -m "Python SDK v${VERSION}" 2>/dev/null || true
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+            echo "Pushed Python SDK to ${WL_PYTHON_REPO}"
+          else
+            echo "No changes to push for Python SDK (${WL_PYTHON_REPO})"
+          fi
+
+      - name: Push TypeScript SDK to client repo
+        run: |
+          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          git clone https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${WL_TS_REPO}.git /tmp/wl-ts-sdk
+          cd /tmp/wl-ts-sdk
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r "$GITHUB_WORKSPACE/api/typescript/." .
+          [ -f "$GITHUB_WORKSPACE/LICENSE" ] && cp "$GITHUB_WORKSPACE/LICENSE" .
+          git config user.name "GitHub Actions Bot" && git config user.email "actions@github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add . && git commit -m "Release TypeScript SDK v${VERSION}"
+            git tag -a "v${VERSION}" -m "TypeScript SDK v${VERSION}" 2>/dev/null || true
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+            echo "Pushed TypeScript SDK to ${WL_TS_REPO}"
+          else
+            echo "No changes to push for TypeScript SDK (${WL_TS_REPO})"
+          fi
+
+      - name: Push MCP to client repo
+        run: |
+          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          git clone https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${WL_MCP_REPO}.git /tmp/wl-mcp
+          cd /tmp/wl-mcp
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r "$GITHUB_WORKSPACE/api/mcp/." .
+          [ -f "$GITHUB_WORKSPACE/LICENSE" ] && cp "$GITHUB_WORKSPACE/LICENSE" .
+          git config user.name "GitHub Actions Bot" && git config user.email "actions@github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add . && git commit -m "Release MCP v${VERSION}"
+            git tag -a "v${VERSION}" -m "MCP v${VERSION}" 2>/dev/null || true
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+            echo "Pushed MCP to ${WL_MCP_REPO}"
+          else
+            echo "No changes to push for MCP (${WL_MCP_REPO})"
+          fi
+
+      - name: Create Go SDK GitHub release
+        run: |
+          VERSION="${{ needs.matrix-setup.outputs.version }}"
+          TAG="v${VERSION}"
+          GH_TOKEN="$WL_SDK_DEPLOY_GIT_TOKEN" gh release view "$TAG" --repo "${WL_GO_REPO}" > /dev/null 2>&1 && \
+            echo "Release $TAG already exists in ${WL_GO_REPO}, skipping." || \
+            GH_TOKEN="$WL_SDK_DEPLOY_GIT_TOKEN" gh release create "$TAG" --repo "${WL_GO_REPO}" \
+              --title "Go SDK ${TAG}" \
+              --notes "Automated release for Go SDK ${TAG}."
+
+      - name: Publish TypeScript SDK to npm
+        if: env.WL_PUBLISH_NPM == 'true'
+        run: |
+          REGISTRY="${WL_NPM_REGISTRY:-https://registry.npmjs.org}"
+          cd api/typescript
+          echo "//${REGISTRY#https://}/:_authToken=${WL_NPM_TOKEN}" >> .npmrc
+          npm install --ignore-scripts
+          npm run build
+          npm publish --access public --registry "$REGISTRY" || echo "TypeScript SDK version already published, skipping."
+
+      - name: Publish MCP to npm
+        if: env.WL_PUBLISH_NPM == 'true'
+        run: |
+          REGISTRY="${WL_NPM_REGISTRY:-https://registry.npmjs.org}"
+          cd api/mcp
+          echo "//${REGISTRY#https://}/:_authToken=${WL_NPM_TOKEN}" >> .npmrc
+          npm install --ignore-scripts
+          [ -f node_modules/bun/install.js ] && node node_modules/bun/install.js || true
+          npm run build
+          npm publish --access public --registry "$REGISTRY" || echo "MCP version already published, skipping."
+
+      - name: Publish Python SDK to PyPI
+        if: env.WL_PUBLISH_PYPI == 'true'
+        run: |
+          cd api/python
+          python -m pip install --upgrade pip build twine
+          python -m build
+          TWINE_USERNAME=__token__ TWINE_PASSWORD="$WL_PYPI_TOKEN" twine upload --skip-existing dist/*
+
+  # ---------------------------------------------------------------------------
+  # Summary: always runs, reports overall status
+  # ---------------------------------------------------------------------------
+  wl-summary:
+    needs: [matrix-setup, generate-wl]
+    if: always() && needs.matrix-setup.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Report results
+        run: |
+          echo "## White-label SDK Generation" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.matrix-setup.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Overall result:** ${{ needs.generate-wl.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.generate-wl.result }}" = "success" ]; then
+            echo "All white-label SDKs generated and published successfully." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.generate-wl.result }}" = "failure" ]; then
+            echo "One or more white-label SDK generations failed. Check individual job logs above." >> $GITHUB_STEP_SUMMARY
+          fi

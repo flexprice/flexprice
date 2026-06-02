@@ -671,6 +671,23 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
 	}
 
+	// feature_id is a feature_usage-table column; meter_usage doesn't carry it.
+	// Since feature.meter_id is 1:1, group_by=[feature_id] is semantically
+	// equivalent to group_by=[meter_id] — rewrite at the entry point so the
+	// downstream query builder (which only knows meter_id/source/properties.*)
+	// accepts it, and the converter populates FeatureID from the meter→feature
+	// lookup. Dedupe so [feature_id, meter_id] doesn't become [meter_id, meter_id].
+	if len(params.GroupBy) > 0 {
+		rewritten := make([]string, 0, len(params.GroupBy))
+		for _, g := range params.GroupBy {
+			if g == "feature_id" {
+				g = "meter_id"
+			}
+			rewritten = append(rewritten, g)
+		}
+		params.GroupBy = lo.Uniq(rewritten)
+	}
+
 	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified).
 	// Fail closed: a feature-scoped request must not silently broaden to all meters.
 	if len(params.FeatureIDs) > 0 && len(params.MeterIDs) == 0 {
