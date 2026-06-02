@@ -682,9 +682,6 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		return nil, fmt.Errorf("creating subscription charge: %w", err)
 	}
 
-	// Step 8: Fetch the charge transaction.
-	// Brief wait to allow Paddle to index the newly-created charge transaction.
-	time.Sleep(2 * time.Second)
 	// Filter by origin=subscription_charge to skip the $0 bootstrap transaction (origin=api)
 	// and always retrieve the actual invoice charge regardless of creation order.
 	orderBy := "created_at[DESC]"
