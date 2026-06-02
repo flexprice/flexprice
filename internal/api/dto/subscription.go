@@ -1330,14 +1330,15 @@ type SubscriptionLineItemRequest struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal       `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal       `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType   `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                   `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                   `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
-	CommitmentTimeBuckets   types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// CommitmentTimeBuckets - if provided, applies commitment only in specified time buckets
+	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
 // SubscriptionLineItemResponse represents the response for a subscription line item

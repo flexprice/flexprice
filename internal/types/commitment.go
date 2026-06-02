@@ -50,8 +50,8 @@ func (b Bucket) MinuteOfDay() int {
 // When Start.MinuteOfDay() > End.MinuteOfDay(): wraps midnight (e.g. 22:00-06:00).
 // When equal: empty range — matches nothing.
 type TimeOfDayBucket struct {
-	Start Bucket `json:"start_bucket"`
-	End   Bucket `json:"end_bucket"`
+	Start Bucket `json:"start"`
+	End   Bucket `json:"end"`
 }
 
 // ContainsTime reports whether t falls within this bucket. The check uses the

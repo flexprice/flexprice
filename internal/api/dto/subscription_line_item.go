@@ -587,7 +587,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	if len(r.CommitmentTimeBuckets) > 0 {
 		// Copy to avoid aliasing the request's backing array — mutations to r
 		// after validation must not bleed into the domain object.
-		lineItem.CommitmentTimeBuckets = append(types.TimeOfDayBuckets(nil), r.CommitmentTimeBuckets...)
+		commitmentTimeBuckets := make(types.TimeOfDayBuckets, len(r.CommitmentTimeBuckets))
+		copy(commitmentTimeBuckets, r.CommitmentTimeBuckets)
+		lineItem.CommitmentTimeBuckets = commitmentTimeBuckets
 	}
 
 	return lineItem
@@ -650,23 +652,22 @@ func (r *UpdateSubscriptionLineItemRequest) validateCommitmentFields() error {
 // rejecting Hour=24 combined with Minute>0 (only 24:00 is a meaningful end-of-day).
 func validateTimeOfDayBuckets(buckets types.TimeOfDayBuckets) error {
 	for i, b := range buckets {
-		if err := validateBucketPoint(b.Start, "start_bucket", i); err != nil {
+		if err := validateBucketPoint(b.Start, i); err != nil {
 			return err
 		}
-		if err := validateBucketPoint(b.End, "end_bucket", i); err != nil {
+		if err := validateBucketPoint(b.End, i); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateBucketPoint(b types.Bucket, field string, idx int) error {
+func validateBucketPoint(b types.Bucket, idx int) error {
 	if b.Hour < 0 || b.Hour > 24 {
 		return ierr.NewError("commitment_time_buckets: hour out of range").
 			WithHint("Hour must be in [0, 24]").
 			WithReportableDetails(map[string]interface{}{
 				"index": idx,
-				"field": field,
 				"hour":  b.Hour,
 			}).
 			Mark(ierr.ErrValidation)
@@ -676,7 +677,6 @@ func validateBucketPoint(b types.Bucket, field string, idx int) error {
 			WithHint("Minute must be in [0, 59]").
 			WithReportableDetails(map[string]interface{}{
 				"index":  idx,
-				"field":  field,
 				"minute": b.Minute,
 			}).
 			Mark(ierr.ErrValidation)
@@ -686,7 +686,6 @@ func validateBucketPoint(b types.Bucket, field string, idx int) error {
 			WithHint("Hour=24 must have Minute=0").
 			WithReportableDetails(map[string]interface{}{
 				"index":  idx,
-				"field":  field,
 				"hour":   b.Hour,
 				"minute": b.Minute,
 			}).
@@ -785,7 +784,9 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	}
 
 	if r.CommitmentTimeBuckets != nil {
-		newLineItem.CommitmentTimeBuckets = append(types.TimeOfDayBuckets(nil), (*r.CommitmentTimeBuckets)...)
+		commitmentTimeBuckets := make(types.TimeOfDayBuckets, len(*r.CommitmentTimeBuckets))
+		copy(commitmentTimeBuckets, *r.CommitmentTimeBuckets)
+		newLineItem.CommitmentTimeBuckets = commitmentTimeBuckets
 	} else {
 		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets
 	}
