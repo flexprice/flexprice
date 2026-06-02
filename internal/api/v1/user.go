@@ -189,7 +189,7 @@ func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Service Account ID"
-// @Success 200 {object} dto.UpdateUserResponse
+// @Success 204 "No content"
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"

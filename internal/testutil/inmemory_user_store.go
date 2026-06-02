@@ -108,13 +108,17 @@ func (r *InMemoryUserStore) ListByFilter(ctx context.Context, filter *types.User
 	return result, int64(len(result)), nil
 }
 
-// Delete soft-deletes a user by setting status to archived
+// Delete soft-deletes a user by setting status to archived (tenant-scoped, matches prod semantics)
 func (r *InMemoryUserStore) Delete(ctx context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	tenantID, _ := ctx.Value(types.CtxTenantID).(string)
 	for key, u := range r.users {
-		if u.ID == id {
+		if u.ID == id && (tenantID == "" || u.TenantID == tenantID) {
+			if u.Status == types.StatusArchived {
+				return ierr.NewError("user not found").Mark(ierr.ErrNotFound)
+			}
 			u.Status = types.StatusArchived
 			r.users[key] = u
 			return nil

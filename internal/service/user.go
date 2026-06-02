@@ -358,6 +358,11 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 }
 
 func (s *userService) DeleteUser(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("service account ID is required").
+			WithHint("Provide a valid service account ID").
+			Mark(ierr.ErrValidation)
+	}
 	existingUser, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
