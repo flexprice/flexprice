@@ -4,7 +4,9 @@
 set -euo pipefail
 
 echo "=== Verifying Go SDK builds ==="
-(cd api/go && go build ./...)
+# go mod tidy updates go.sum for any deps introduced by custom files (e.g. ajson)
+# that Speakeasy didn't see during generation.
+(cd api/go && go mod tidy && go build ./...)
 echo "Go SDK: OK"
 
 echo "=== Verifying TypeScript SDK builds ==="
