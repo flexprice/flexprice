@@ -92,7 +92,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        index: ${{ fromJson(needs.matrix-setup.outputs.indices) }}
+        index: ${{ fromJson(needs.matrix-setup.outputs.indices || '[0]') }}
     env:
       SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
     steps:
