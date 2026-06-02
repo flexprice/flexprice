@@ -643,6 +643,9 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	// then reference it by ID so Paddle treats this as a catalog-price charge.
 	chargeItems := make([]paddlesdk.CreateSubscriptionChargeItems, 0, len(syncable))
 	for _, li := range syncable {
+		if li.Amount.InexactFloat64() == 0 {
+			continue
+		}
 		priceID := lo.FromPtr(li.PriceID)
 		paddleProductID := productsResp.PriceIDToPaddleProductID[priceID]
 		if paddleProductID == "" {
