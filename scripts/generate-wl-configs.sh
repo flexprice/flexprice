@@ -18,7 +18,7 @@ TEMPLATES="configs/white-label/templates"
 
 # Derive Python module name: PyPI allows dashes (acme-sdk) but Python import names require
 # underscores (acme_sdk). Auto-derive so callers only need to set WL_PYTHON_PACKAGE_NAME.
-WL_PYTHON_MODULE_NAME="${WL_PYTHON_PACKAGE_NAME//-/_}"
+export WL_PYTHON_MODULE_NAME="${WL_PYTHON_PACKAGE_NAME//-/_}"
 
 # Step 1: Write the server URL overlay (used by workflow.yaml.tmpl)
 cat > .speakeasy/overlays/wl-server-url.yaml <<EOF
