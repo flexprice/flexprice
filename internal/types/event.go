@@ -9,6 +9,7 @@ const (
 	FailurePointTypeMeterLookup                FailurePointType = "meter_lookup"
 	FailurePointTypePriceLookup                FailurePointType = "price_lookup"
 	FailurePointTypeSubscriptionLineItemLookup FailurePointType = "subscription_line_item_lookup"
+	FailurePointTypeAttributedToCustomer       FailurePointType = "attributed_to_customer"
 )
 
 type FailurePoint struct {
@@ -23,6 +24,8 @@ const (
 	DebugTrackerStatusNotFound    DebugTrackerStatus = "not_found"
 	DebugTrackerStatusFound       DebugTrackerStatus = "found"
 	DebugTrackerStatusError       DebugTrackerStatus = "error"
+	DebugTrackerStatusProcessing  DebugTrackerStatus = "processing"
+	DebugTrackerStatusAttributed  DebugTrackerStatus = "attributed"
 )
 
 type EventProcessingStatusType string
