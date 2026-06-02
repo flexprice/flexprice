@@ -44,6 +44,7 @@ if [ -n "${WL_SDK_CLASS_NAME:-}" ] && [ "${WL_SDK_CLASS_NAME}" != "Flexprice" ];
     -e 'from flexprice' \
     -e 'import flexprice' \
     -e 'flexprice' \
+    -e 'flexPrice' \
     api/go api/typescript api/python api/mcp 2>/dev/null || true)
   RESIDUAL="${RESIDUAL}${RESIDUAL_MD}"
   if [ -n "$RESIDUAL" ]; then

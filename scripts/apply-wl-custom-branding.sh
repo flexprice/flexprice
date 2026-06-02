@@ -239,7 +239,13 @@ for SDK_DIR in api/go api/typescript api/python api/mcp; do
       _sed_i "s|import flexprice|import ${WL_PYTHON_MODULE_NAME}|g" "$f"
       CHANGED=1
     fi
-    # 9. All-lowercase brand name — catches remaining 'flexprice' after steps 1-8
+    # 9. camelCase variable name 'flexPrice' in TS README examples
+    #    (e.g. "const flexPrice = new Tirdad(...)") — not caught by step 2 or 10
+    if grep -q 'flexPrice' "$f" 2>/dev/null; then
+      _sed_i "s/flexPrice/${WL_SDK_CLASS_NAME_LOWER}/g" "$f"
+      CHANGED=1
+    fi
+    # 10. All-lowercase brand name — catches remaining 'flexprice' after steps 1-9
     #    (e.g. "flexprice MCP Server", "flexprice-mcp" Docker image, JSON key "flexprice")
     #    Run LAST so Python import/install replacements (step 8) fire first.
     if grep -q 'flexprice' "$f" 2>/dev/null; then
