@@ -995,7 +995,6 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 			// No mapping — this transaction may not be one we created, skip.
 			s.logger.Warnw("no FlexPrice invoice found for Paddle transaction, skipping",
 				"paddle_transaction_id", txn.ID)
-			return nil
 		}
 		return err
 	}
