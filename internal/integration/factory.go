@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -16,7 +17,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
-	_default "github.com/flexprice/flexprice/internal/integration/default"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
@@ -659,7 +659,7 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 }
 
 // GetIntegrationByProvider returns the appropriate integration for the given provider type
-func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (interface{}, error) {
+func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (Base, error) {
 	switch providerType {
 	case types.SecretProviderStripe:
 		return f.GetStripeIntegration(ctx)
@@ -720,7 +720,6 @@ func (f *Factory) HasProvider(providerType types.SecretProvider) bool {
 
 // StripeIntegration contains all Stripe integration services
 type StripeIntegration struct {
-	_default.Default
 	Client         *stripe.Client
 	CustomerSvc    *stripe.CustomerService
 	PaymentSvc     *stripe.PaymentService
@@ -728,9 +727,12 @@ type StripeIntegration struct {
 	WebhookHandler *webhook.Handler
 }
 
+func (s *StripeIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for stripe")
+}
+
 // HubSpotIntegration contains all HubSpot integration services
 type HubSpotIntegration struct {
-	_default.Default
 	Client         hubspot.HubSpotClient
 	CustomerSvc    hubspot.HubSpotCustomerService
 	InvoiceSyncSvc *hubspot.InvoiceSyncService
@@ -739,9 +741,12 @@ type HubSpotIntegration struct {
 	WebhookHandler *hubspotwebhook.Handler
 }
 
+func (h *HubSpotIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for hubspot")
+}
+
 // RazorpayIntegration contains all Razorpay integration services
 type RazorpayIntegration struct {
-	_default.Default
 	Client         razorpay.RazorpayClient
 	CustomerSvc    razorpay.RazorpayCustomerService
 	PaymentSvc     *razorpay.PaymentService
@@ -749,9 +754,12 @@ type RazorpayIntegration struct {
 	WebhookHandler *razorpaywebhook.Handler
 }
 
+func (r *RazorpayIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for razorpay")
+}
+
 // ChargebeeIntegration contains all Chargebee integration services
 type ChargebeeIntegration struct {
-	_default.Default
 	Client         chargebee.ChargebeeClient
 	ItemFamilySvc  chargebee.ChargebeeItemFamilyService
 	ItemSvc        chargebee.ChargebeeItemService
@@ -762,9 +770,12 @@ type ChargebeeIntegration struct {
 	WebhookHandler *chargebeewebhook.Handler
 }
 
+func (c *ChargebeeIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for chargebee")
+}
+
 // QuickBooksIntegration contains all QuickBooks integration services
 type QuickBooksIntegration struct {
-	_default.Default
 	Client         quickbooks.QuickBooksClient
 	CustomerSvc    quickbooks.QuickBooksCustomerService
 	ItemSyncSvc    quickbooks.QuickBooksItemSyncService
@@ -773,9 +784,12 @@ type QuickBooksIntegration struct {
 	WebhookHandler *quickbookswebhook.Handler
 }
 
+func (q *QuickBooksIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for quickbooks")
+}
+
 // PaddleIntegration contains all Paddle integration services
 type PaddleIntegration struct {
-	_default.Default
 	Client         paddle.PaddleClient
 	SyncSvc        *paddle.PaddleSyncService
 	WebhookHandler *paddlewebhook.Handler
@@ -787,7 +801,6 @@ func (p *PaddleIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID 
 
 // NomodIntegration contains all Nomod integration services
 type NomodIntegration struct {
-	_default.Default
 	Client         nomod.NomodClient
 	CustomerSvc    nomod.NomodCustomerService
 	PaymentSvc     *nomod.PaymentService
@@ -795,9 +808,12 @@ type NomodIntegration struct {
 	WebhookHandler *nomodwebhook.Handler
 }
 
+func (n *NomodIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for nomod")
+}
+
 // MoyasarIntegration contains all Moyasar integration services
 type MoyasarIntegration struct {
-	_default.Default
 	Client         moyasar.MoyasarClient
 	CustomerSvc    moyasar.MoyasarCustomerService
 	PaymentSvc     *moyasar.PaymentService
@@ -805,22 +821,32 @@ type MoyasarIntegration struct {
 	WebhookHandler *moyasarwebhook.Handler
 }
 
+func (m *MoyasarIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for moyasar")
+}
+
 // WhopIntegration contains all Whop integration services
 type WhopIntegration struct {
-	_default.Default
 	Client         whop.WhopClient
 	InvoiceSyncSvc *whop.InvoiceSyncService
 	WebhookHandler *whopwebhook.Handler
 }
 
+func (w *WhopIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for whop")
+}
+
 // ZohoBooksIntegration contains all Zoho Books integration services
 type ZohoBooksIntegration struct {
-	_default.Default
 	Client      zoho.ZohoClient
 	CustomerSvc zoho.ZohoCustomerService
 	InvoiceSvc  zoho.ZohoInvoiceService
 	ItemSyncSvc zoho.ZohoItemSyncService
 	TaxSvc      zoho.ZohoTaxService
+}
+
+func (z *ZohoBooksIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
+	return fmt.Errorf("invoice pull sync not supported for zohobooks")
 }
 
 // IntegrationProvider defines the interface for all integration providers

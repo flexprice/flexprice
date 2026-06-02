@@ -6,7 +6,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/integration"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -58,10 +57,8 @@ func (s *integrationSyncService) pullInvoice(ctx context.Context, invoiceID stri
 		if err != nil {
 			continue
 		}
-		if base, ok := integ.(integration.Base); ok {
-			if err := base.PullAndUpdateInvoice(ctx, invoiceID); err != nil {
-				return err
-			}
+		if err := integ.PullAndUpdateInvoice(ctx, invoiceID); err != nil {
+			return err
 		}
 	}
 

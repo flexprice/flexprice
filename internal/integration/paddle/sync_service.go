@@ -995,20 +995,49 @@ func (s *PaddleSyncService) ProcessAddressCreatedWebhook(
 // It finds the FlexPrice invoice via entity_integration_mapping and delegates payment processing.
 func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	ctx context.Context,
-	txn *paddlenotification.TransactionNotification,
+	txnID string,
 	paymentService interfaces.PaymentService,
 	invoiceService interfaces.InvoiceService,
+	flexpriceInvoiceID string,
 ) error {
-	// Find the FlexPrice invoice ID from entity_integration_mapping.
-	flexpriceInvoiceID, err := s.GetFlexPriceInvoiceIDByTransaction(ctx, txn.ID)
-	if err != nil {
-		if ierr.IsNotFound(err) {
-			// No mapping — this transaction may not be one we created, skip.
-			s.logger.Warnw("no FlexPrice invoice found for Paddle transaction, skipping",
-				"paddle_transaction_id", txn.ID)
-			return nil
+	// Find the FlexPrice invoice ID from entity_integration_mapping if absent.
+	if flexpriceInvoiceID == "" {
+		invID, err := s.GetFlexPriceInvoiceIDByTransaction(ctx, txnID)
+		if err != nil {
+			if ierr.IsNotFound(err) {
+				// No mapping — this transaction may not be one we created, skip.
+				s.logger.Warnw("no FlexPrice invoice found for Paddle transaction, skipping",
+					"paddle_transaction_id", txnID)
+				return nil
+			}
+			return err
 		}
-		return err
+		flexpriceInvoiceID = invID
+	}
+	txnCollection, err := s.client.ListTransactions(ctx, &paddlesdk.ListTransactionsRequest{
+		ID: []string{txnID},
+	})
+	if err != nil {
+		return fmt.Errorf("listing Paddle transaction %s: %w", txnID, err)
+	}
+
+	var txn *paddlesdk.Transaction
+	if txnCollection != nil {
+		if res := txnCollection.Next(ctx); res != nil && res.Ok() {
+			txn = res.Value()
+		}
+	}
+	if txn == nil {
+		return ierr.NewError("Paddle transaction not found").
+			WithReportableDetails(map[string]interface{}{"paddle_transaction_id": txnID}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	if txn.Status != paddlesdk.TransactionStatusCompleted {
+		s.logger.Debugw("Paddle transaction not yet completed",
+			"paddle_transaction_id", txnID,
+			"status", txn.Status)
+		return nil
 	}
 
 	// Process the payment (idempotent — checks if payment already exists).
@@ -1258,33 +1287,5 @@ func (s *PaddleSyncService) PullAndUpdateInvoice(ctx context.Context, invoiceID 
 	}
 
 	paddleTransactionID := existingMapping.ProviderEntityID
-	txnCollection, err := s.client.ListTransactions(ctx, &paddlesdk.ListTransactionsRequest{
-		ID: []string{paddleTransactionID},
-	})
-	if err != nil {
-		return fmt.Errorf("listing Paddle transaction %s: %w", paddleTransactionID, err)
-	}
-
-	var txn *paddlesdk.Transaction
-	if txnCollection != nil {
-		if res := txnCollection.Next(ctx); res != nil && res.Ok() {
-			txn = res.Value()
-		}
-	}
-	if txn == nil {
-		return ierr.NewError("Paddle transaction not found").
-			WithReportableDetails(map[string]interface{}{"paddle_transaction_id": paddleTransactionID}).
-			Mark(ierr.ErrNotFound)
-	}
-
-	if txn.Status != paddlesdk.TransactionStatusCompleted {
-		s.logger.Debugw("Paddle transaction not yet completed",
-			"invoice_id", invoiceID,
-			"paddle_transaction_id", paddleTransactionID,
-			"status", txn.Status)
-		return nil
-	}
-
-	paymentSvc := NewPaymentService(s.logger)
-	return paymentSvc.ProcessExternalPaddleTransaction(ctx, transactionToNotification(txn), invoiceID, s.paymentService, s.invoiceService)
+	return s.ProcessTransactionCompletedWebhook(ctx, paddleTransactionID, s.paymentService, s.invoiceService, invoiceID)
 }
