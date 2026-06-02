@@ -79,12 +79,15 @@ else
     fi
   done < <(find "$GO_DIR" \( -name "*.go" -o -name "go.mod" \) -print0)
 
-  # 4. Fix log prefix strings in async.go
+  # 4. Fix FlexPrice branding strings in Go files:
+  #    - [FlexPrice Debug] / [FlexPrice Error] log prefixes
+  #    - "for the FlexPrice API" in doc comments (e.g. async.go)
   while IFS= read -r -d '' f; do
-    if grep -q '\[FlexPrice ' "$f" 2>/dev/null; then
+    if grep -qE '\[FlexPrice |for the FlexPrice API' "$f" 2>/dev/null; then
       _sed_i "s/\[FlexPrice Debug\]/[${WL_SDK_CLASS_NAME} Debug]/g" "$f"
       _sed_i "s/\[FlexPrice Error\]/[${WL_SDK_CLASS_NAME} Error]/g" "$f"
-      echo "  [go] log strings: $f"
+      _sed_i "s/for the FlexPrice API/for the ${WL_SDK_CLASS_NAME} API/g" "$f"
+      echo "  [go] branding strings: $f"
     fi
   done < <(find "$GO_DIR" -name "*.go" -print0)
 
@@ -139,6 +142,16 @@ if [ -f "$MCP_PKG" ]; then
 else
   echo "  WARNING: $MCP_PKG not found"
 fi
+
+# Also replace "@flexprice/mcp-server" string in any other JSON files (e.g. examples/).
+# Escape replacement so & and \ aren't interpreted by sed.
+WL_MCP_ESC=$(printf '%s\n' "${WL_MCP_PACKAGE_NAME}" | sed 's/[&\]/\\&/g')
+while IFS= read -r -d '' f; do
+  if grep -q '"@flexprice/mcp-server"' "$f" 2>/dev/null; then
+    _sed_i "s|\"@flexprice/mcp-server\"|\"${WL_MCP_ESC}\"|g" "$f"
+    echo "  [mcp] json ref: $f"
+  fi
+done < <(find "api/mcp" -name "*.json" -print0)
 
 echo "MCP branding applied."
 
