@@ -140,6 +140,7 @@ push_sdk() {
 
   step "Pushing ${LANG} SDK → ${REPO}"
 
+  rm -rf "$TMP_DIR"
   git clone "https://x-access-token:${WL_SDK_DEPLOY_GIT_TOKEN}@github.com/${REPO}.git" "$TMP_DIR"
   cd "$TMP_DIR"
   find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
@@ -197,6 +198,8 @@ if [ "${WL_PUBLISH_NPM}" = "true" ]; then
   cd "${REPO_ROOT}/api/mcp"
   echo "//${REGISTRY#https://}/:_authToken=${WL_NPM_TOKEN}" >> .npmrc
   npm install --ignore-scripts
+  # bun requires its postinstall to run even with --ignore-scripts
+  [ -f node_modules/bun/install.js ] && node node_modules/bun/install.js || true
   npm run build
   npm publish --access public --registry "$REGISTRY" \
     || warn "MCP version already published — skipping"
