@@ -176,6 +176,8 @@ echo "--- Documentation ---"
 
 # Derive UPPERCASE class name for env var substitution (Omkar → OMKAR)
 WL_SDK_CLASS_NAME_UPPER=$(echo "${WL_SDK_CLASS_NAME}" | tr '[:lower:]' '[:upper:]')
+# Derive lowercase class name for brand name substitution (Tirdad → tirdad)
+WL_SDK_CLASS_NAME_LOWER=$(echo "${WL_SDK_CLASS_NAME}" | tr '[:upper:]' '[:lower:]')
 # Derive Python module name (tirdad-sdk → tirdad_sdk) for import statements
 WL_PYTHON_MODULE_NAME="${WL_PYTHON_PACKAGE_NAME//-/_}"
 # Escape WL_GO_MODULE_PATH for sed replacement (used in Go README imports)
@@ -235,6 +237,13 @@ for SDK_DIR in api/go api/typescript api/python api/mcp; do
       _sed_i "s|poetry add flexprice|poetry add ${WL_PYTHON_PACKAGE_NAME}|g" "$f"
       _sed_i "s|from flexprice|from ${WL_PYTHON_MODULE_NAME}|g" "$f"
       _sed_i "s|import flexprice|import ${WL_PYTHON_MODULE_NAME}|g" "$f"
+      CHANGED=1
+    fi
+    # 9. All-lowercase brand name — catches remaining 'flexprice' after steps 1-8
+    #    (e.g. "flexprice MCP Server", "flexprice-mcp" Docker image, JSON key "flexprice")
+    #    Run LAST so Python import/install replacements (step 8) fire first.
+    if grep -q 'flexprice' "$f" 2>/dev/null; then
+      _sed_i "s/flexprice/${WL_SDK_CLASS_NAME_LOWER}/g" "$f"
       CHANGED=1
     fi
     [ "$CHANGED" -eq 1 ] && echo "  [docs] $f"
