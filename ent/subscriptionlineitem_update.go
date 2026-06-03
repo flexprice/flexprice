@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/predicate"
@@ -488,6 +489,24 @@ func (sliu *SubscriptionLineItemUpdate) ClearCommitmentDuration() *SubscriptionL
 	return sliu
 }
 
+// SetCommitmentTimeBuckets sets the "commitment_time_buckets" field.
+func (sliu *SubscriptionLineItemUpdate) SetCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetCommitmentTimeBuckets(todb)
+	return sliu
+}
+
+// AppendCommitmentTimeBuckets appends todb to the "commitment_time_buckets" field.
+func (sliu *SubscriptionLineItemUpdate) AppendCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemUpdate {
+	sliu.mutation.AppendCommitmentTimeBuckets(todb)
+	return sliu
+}
+
+// ClearCommitmentTimeBuckets clears the value of the "commitment_time_buckets" field.
+func (sliu *SubscriptionLineItemUpdate) ClearCommitmentTimeBuckets() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearCommitmentTimeBuckets()
+	return sliu
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sliu *SubscriptionLineItemUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
 	sliu.mutation.AddCouponAssociationIDs(ids...)
@@ -756,6 +775,17 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	}
 	if sliu.mutation.CommitmentDurationCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString)
+	}
+	if value, ok := sliu.mutation.CommitmentTimeBuckets(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON, value)
+	}
+	if value, ok := sliu.mutation.AppendedCommitmentTimeBuckets(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, subscriptionlineitem.FieldCommitmentTimeBuckets, value)
+		})
+	}
+	if sliu.mutation.CommitmentTimeBucketsCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON)
 	}
 	if sliu.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1279,6 +1309,24 @@ func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentDuration() *Subscript
 	return sliuo
 }
 
+// SetCommitmentTimeBuckets sets the "commitment_time_buckets" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetCommitmentTimeBuckets(todb)
+	return sliuo
+}
+
+// AppendCommitmentTimeBuckets appends todb to the "commitment_time_buckets" field.
+func (sliuo *SubscriptionLineItemUpdateOne) AppendCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.AppendCommitmentTimeBuckets(todb)
+	return sliuo
+}
+
+// ClearCommitmentTimeBuckets clears the value of the "commitment_time_buckets" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentTimeBuckets() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearCommitmentTimeBuckets()
+	return sliuo
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
 	sliuo.mutation.AddCouponAssociationIDs(ids...)
@@ -1577,6 +1625,17 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.CommitmentDurationCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString)
+	}
+	if value, ok := sliuo.mutation.CommitmentTimeBuckets(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON, value)
+	}
+	if value, ok := sliuo.mutation.AppendedCommitmentTimeBuckets(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, subscriptionlineitem.FieldCommitmentTimeBuckets, value)
+		})
+	}
+	if sliuo.mutation.CommitmentTimeBucketsCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON)
 	}
 	if sliuo.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

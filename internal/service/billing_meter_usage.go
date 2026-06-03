@@ -502,12 +502,12 @@ func (s *billingService) applyMeterUsageCommitment(
 		}
 	}
 
-	bucketedValues := s.fillBucketedValuesForWindowedCommitment(
+	bucketedValues, bucketStarts := s.fillBucketedValuesForWindowedCommitment(
 		item, usageResult, linePeriodStart, effectiveEnd,
 		m.Aggregation.BucketSize, &sub.BillingAnchor, m.Aggregation.Type,
 	)
 
-	adjustedAmount, info, err := commitmentCalc.applyWindowCommitmentToLineItem(ctx, item, bucketedValues, matchingCharge.Price)
+	adjustedAmount, info, err := commitmentCalc.applyWindowCommitmentToLineItem(ctx, item, bucketedValues, bucketStarts, matchingCharge.Price)
 	if err != nil {
 		return decimal.Zero, nil, err
 	}

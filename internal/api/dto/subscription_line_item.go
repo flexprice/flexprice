@@ -97,13 +97,14 @@ type CreateSubscriptionLineItemRequest struct {
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal       `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal       `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType   `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                   `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      bool                   `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
+	CommitmentTimeBuckets   types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -143,6 +144,8 @@ type UpdateSubscriptionLineItemRequest struct {
 	CommitmentTrueUpEnabled *bool                `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
 	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
+	CommitmentTimeBuckets *types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -432,6 +435,17 @@ func (r *CreateSubscriptionLineItemRequest) validateCommitmentFields() error {
 		return err
 	}
 
+	// commitment_time_buckets only constrains the commitment-application window —
+	// it has no meaning unless commitment_windowed is true.
+	if len(r.CommitmentTimeBuckets) > 0 && !r.CommitmentWindowed {
+		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
+			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+	if err := validateTimeOfDayBuckets(r.CommitmentTimeBuckets); err != nil {
+		return err
+	}
+
 	// Auto-set commitment type if not provided (only for create requests)
 	if r.HasCommitment() && r.CommitmentType == "" {
 		hasAmountCommitment := r.CommitmentAmount != nil && r.CommitmentAmount.GreaterThan(decimal.Zero)
@@ -570,6 +584,13 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	if r.CommitmentDuration != nil {
 		lineItem.CommitmentDuration = r.CommitmentDuration
 	}
+	if len(r.CommitmentTimeBuckets) > 0 {
+		// Copy to avoid aliasing the request's backing array — mutations to r
+		// after validation must not bleed into the domain object.
+		commitmentTimeBuckets := make(types.TimeOfDayBuckets, len(r.CommitmentTimeBuckets))
+		copy(commitmentTimeBuckets, r.CommitmentTimeBuckets)
+		lineItem.CommitmentTimeBuckets = commitmentTimeBuckets
+	}
 
 	return lineItem
 }
@@ -599,13 +620,78 @@ func (r *UpdateSubscriptionLineItemRequest) Validate() error {
 // validateCommitmentFields validates commitment-related fields for update request
 func (r *UpdateSubscriptionLineItemRequest) validateCommitmentFields() error {
 	// Use shared validation logic (update requests require explicit commitment type)
-	return validateCommitmentFieldsCommon(
+	if err := validateCommitmentFieldsCommon(
 		r.CommitmentAmount,
 		r.CommitmentQuantity,
 		r.CommitmentType,
 		r.CommitmentOverageFactor,
 		false, // isCreateRequest
-	)
+	); err != nil {
+		return err
+	}
+
+	// commitment_time_buckets only constrains the commitment-application window —
+	// it has no meaning unless commitment_windowed is true. We can only enforce this
+	// when both fields are explicitly provided in the update; cross-checks against
+	// the existing line item's windowed flag happen at the service layer.
+	if r.CommitmentTimeBuckets != nil && len(*r.CommitmentTimeBuckets) > 0 &&
+		r.CommitmentWindowed != nil && !*r.CommitmentWindowed {
+		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
+			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+	if r.CommitmentTimeBuckets != nil {
+		if err := validateTimeOfDayBuckets(*r.CommitmentTimeBuckets); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59],
+// rejecting Hour=24 combined with Minute>0 (only 24:00 is a meaningful end-of-day).
+func validateTimeOfDayBuckets(buckets types.TimeOfDayBuckets) error {
+	for i, b := range buckets {
+		if err := validateBucketPoint(b.Start, i); err != nil {
+			return err
+		}
+		if err := validateBucketPoint(b.End, i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateBucketPoint(b types.Bucket, idx int) error {
+	if b.Hour < 0 || b.Hour > 24 {
+		return ierr.NewError("commitment_time_buckets: hour out of range").
+			WithHint("Hour must be in [0, 24]").
+			WithReportableDetails(map[string]interface{}{
+				"index": idx,
+				"hour":  b.Hour,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if b.Minute < 0 || b.Minute > 59 {
+		return ierr.NewError("commitment_time_buckets: minute out of range").
+			WithHint("Minute must be in [0, 59]").
+			WithReportableDetails(map[string]interface{}{
+				"index":  idx,
+				"minute": b.Minute,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if b.Hour == 24 && b.Minute > 0 {
+		return ierr.NewError("commitment_time_buckets: 24:00 is the only allowed end-of-day value").
+			WithHint("Hour=24 must have Minute=0").
+			WithReportableDetails(map[string]interface{}{
+				"index":  idx,
+				"hour":   b.Hour,
+				"minute": b.Minute,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // ShouldCreateNewLineItem checks if the request contains any critical fields that require creating a new line item
@@ -619,7 +705,8 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 		r.CommitmentOverageFactor != nil ||
 		r.CommitmentTrueUpEnabled != nil ||
 		r.CommitmentWindowed != nil ||
-		r.CommitmentDuration != nil
+		r.CommitmentDuration != nil ||
+		r.CommitmentTimeBuckets != nil
 }
 
 // ToSubscriptionLineItem converts the update request to a domain subscription line item
@@ -694,6 +781,14 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		newLineItem.CommitmentDuration = r.CommitmentDuration
 	} else {
 		newLineItem.CommitmentDuration = existingLineItem.CommitmentDuration
+	}
+
+	if r.CommitmentTimeBuckets != nil {
+		commitmentTimeBuckets := make(types.TimeOfDayBuckets, len(*r.CommitmentTimeBuckets))
+		copy(commitmentTimeBuckets, *r.CommitmentTimeBuckets)
+		newLineItem.CommitmentTimeBuckets = commitmentTimeBuckets
+	} else {
+		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets
 	}
 
 	return newLineItem

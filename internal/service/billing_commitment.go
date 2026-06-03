@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -227,14 +228,36 @@ func (c *commitmentCalculator) applyCommitmentToLineItem(
 	return finalCharge, info, nil
 }
 
-// applyWindowCommitmentToLineItem applies window-based commitment logic
-// Processes each bucket individually and applies commitment per window
+// applyWindowCommitmentToLineItem applies window-based commitment logic.
+// Processes each bucket individually and applies commitment per window.
+//
+// bucketStarts is the start timestamp of each window in bucketedValues. Pass nil
+// when the caller has no per-window timestamps (in which case time-of-day filtering
+// is skipped and every window goes through the normal commitment path). When
+// non-nil, bucketStarts MUST be the same length as bucketedValues — the two slices
+// are 1:1 (bucketStarts[i] is the start of the window whose usage is bucketedValues[i]).
+//
+// When lineItem.CommitmentTimeBuckets is set AND bucketStarts is provided, windows
+// whose start hour falls outside the configured buckets are billed at the base
+// usage rate with no commitment credit, no overage premium, and no true-up.
 func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	ctx context.Context,
 	lineItem *subscription.SubscriptionLineItem,
 	bucketedValues []decimal.Decimal,
+	bucketStarts []time.Time,
 	priceObj *price.Price,
 ) (decimal.Decimal, *types.CommitmentInfo, error) {
+	// Defensive: when starts are provided, they must align with values.
+	if bucketStarts != nil && len(bucketStarts) != len(bucketedValues) {
+		return decimal.Zero, nil, ierr.NewError("bucketStarts/bucketedValues length mismatch").
+			WithHint("When bucketStarts is non-nil, it must have the same length as bucketedValues").
+			WithReportableDetails(map[string]interface{}{
+				"bucket_starts": len(bucketStarts),
+				"bucket_values": len(bucketedValues),
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
 	// Normalize commitment to amount (this is the per-window commitment)
 	commitmentAmountPerWindow, err := c.normalizeCommitmentToAmount(ctx, lineItem, priceObj)
 	if err != nil {
@@ -258,10 +281,20 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	windowsWithOverage := 0
 	windowsWithTrueUp := 0
 
+	// Time-of-day filter applies only when the line item has buckets configured
+	// AND the caller provided per-window timestamps to check against.
+	hasTimeBuckets := lineItem.HasCommitmentTimeBuckets() && bucketStarts != nil
+
 	// Process each window independently
-	for _, bucketValue := range bucketedValues {
+	for i, bucketValue := range bucketedValues {
 		// Calculate cost for this window
 		windowCost := c.priceService.CalculateCost(ctx, priceObj, bucketValue)
+
+		// Out-of-bucket windows: bill at base usage rate, no commitment logic.
+		if hasTimeBuckets && !lineItem.CommitmentTimeBuckets.ContainsTime(bucketStarts[i]) {
+			totalCharge = totalCharge.Add(windowCost)
+			continue
+		}
 
 		var windowCharge decimal.Decimal
 
@@ -302,13 +335,13 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 
 // CumulativeSubscriptionCommitmentResult holds the result of applying cumulative subscription commitment
 type CumulativeSubscriptionCommitmentResult struct {
-	TotalCharge            decimal.Decimal
-	CommitmentUtilized     decimal.Decimal
-	OverageAmount          decimal.Decimal
-	TrueUpAmount           decimal.Decimal
-	WithinCommitment       decimal.Decimal
-	OverageBase            decimal.Decimal
-	CommitmentRemaining    decimal.Decimal
+	TotalCharge         decimal.Decimal
+	CommitmentUtilized  decimal.Decimal
+	OverageAmount       decimal.Decimal
+	TrueUpAmount        decimal.Decimal
+	WithinCommitment    decimal.Decimal
+	OverageBase         decimal.Decimal
+	CommitmentRemaining decimal.Decimal
 }
 
 // applyCumulativeSubscriptionCommitment applies cumulative commitment logic at subscription level.
