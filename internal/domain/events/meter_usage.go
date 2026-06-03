@@ -46,9 +46,6 @@ type MeterUsageQueryParams struct {
 	PropertyFilters map[string][]string
 	// Sources restricts events to those whose source is in the list.
 	Sources []string
-	// CommitmentTimeBuckets restricts counted events to those whose UTC hour falls
-	// within one of the configured buckets. Empty = no restriction.
-	CommitmentTimeBuckets types.TimeOfDayBuckets
 }
 
 // MeterUsageResult represents a single time-bucketed aggregation point

@@ -38,14 +38,14 @@ type SubscriptionLineItem struct {
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
-	CommitmentQuantity      *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
-	CommitmentType          types.CommitmentType `db:"commitment_type" json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
-	CommitmentTrueUpEnabled bool                 `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
-	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
+	CommitmentAmount        *decimal.Decimal       `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
+	CommitmentQuantity      *decimal.Decimal       `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
+	CommitmentType          types.CommitmentType   `db:"commitment_type" json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal       `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
+	CommitmentTrueUpEnabled bool                   `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
+	CommitmentWindowed      bool                   `db:"commitment_windowed" json:"commitment_windowed"`
 	CommitmentDuration      *types.BillingPeriod   `db:"commitment_duration" json:"commitment_duration,omitempty"`
-	CommitmentTimeBuckets  types.TimeOfDayBuckets `db:"commitment_time_buckets" json:"commitment_time_buckets,omitempty"`
+	CommitmentTimeBuckets   types.TimeOfDayBuckets `db:"commitment_time_buckets" json:"commitment_time_buckets,omitempty"`
 
 	Price *price.Price `json:"price,omitempty"`
 
@@ -194,8 +194,8 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		CommitmentOverageFactor: e.CommitmentOverageFactor,
 		CommitmentTrueUpEnabled: e.CommitmentTrueUpEnabled,
 		CommitmentWindowed:      e.CommitmentWindowed,
-		CommitmentDuration:     commitmentDuration,
-		CommitmentTimeBuckets: e.CommitmentTimeBuckets,
+		CommitmentDuration:      commitmentDuration,
+		CommitmentTimeBuckets:   e.CommitmentTimeBuckets,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

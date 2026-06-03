@@ -448,7 +448,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				ctx, m, externalCustomerIDs,
 				itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
 				req.PropertyFilters, req.Sources,
-				item.CommitmentTimeBuckets,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
@@ -635,7 +634,6 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	useFinal bool,
 	propertyFilters map[string][]string,
 	sources []string,
-	timeBuckets types.TimeOfDayBuckets,
 ) (*events.AggregationResult, error) {
 	aggType := m.Aggregation.Type
 	groupBy := m.Aggregation.GroupBy
@@ -644,20 +642,19 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 		groupBy = ""
 	}
 	return s.repo.GetUsageForBucketedMeters(ctx, &events.MeterUsageQueryParams{
-		TenantID:              types.GetTenantID(ctx),
-		EnvironmentID:         types.GetEnvironmentID(ctx),
-		ExternalCustomerIDs:   externalCustomerIDs,
-		MeterID:               m.ID,
-		StartTime:             periodStart,
-		EndTime:               periodEnd,
-		AggregationType:       aggType,
-		WindowSize:            m.Aggregation.BucketSize,
-		BillingAnchor:         billingAnchor,
-		GroupByProperty:       groupBy,
-		UseFinal:              useFinal,
-		PropertyFilters:       propertyFilters,
-		Sources:               sources,
-		CommitmentTimeBuckets: timeBuckets,
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerIDs: externalCustomerIDs,
+		MeterID:             m.ID,
+		StartTime:           periodStart,
+		EndTime:             periodEnd,
+		AggregationType:     aggType,
+		WindowSize:          m.Aggregation.BucketSize,
+		BillingAnchor:       billingAnchor,
+		GroupByProperty:     groupBy,
+		UseFinal:            useFinal,
+		PropertyFilters:     propertyFilters,
+		Sources:             sources,
 	})
 }
 

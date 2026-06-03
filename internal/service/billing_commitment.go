@@ -335,13 +335,13 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 
 // CumulativeSubscriptionCommitmentResult holds the result of applying cumulative subscription commitment
 type CumulativeSubscriptionCommitmentResult struct {
-	TotalCharge            decimal.Decimal
-	CommitmentUtilized     decimal.Decimal
-	OverageAmount          decimal.Decimal
-	TrueUpAmount           decimal.Decimal
-	WithinCommitment       decimal.Decimal
-	OverageBase            decimal.Decimal
-	CommitmentRemaining    decimal.Decimal
+	TotalCharge         decimal.Decimal
+	CommitmentUtilized  decimal.Decimal
+	OverageAmount       decimal.Decimal
+	TrueUpAmount        decimal.Decimal
+	WithinCommitment    decimal.Decimal
+	OverageBase         decimal.Decimal
+	CommitmentRemaining decimal.Decimal
 }
 
 // applyCumulativeSubscriptionCommitment applies cumulative commitment logic at subscription level.
