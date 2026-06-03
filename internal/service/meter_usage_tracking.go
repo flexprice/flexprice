@@ -58,11 +58,16 @@ type MeterUsageTrackingService interface {
 
 	// RegisterHandler registers the consumer handler with the router
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
+
+	// RegisterHandlerLazy registers a dedicated consumer for the events_lazy
+	// topic (lazy-mode tenants — see kafka.RouteTenantsOnLazyMode).
+	RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration)
 }
 
 type meterUsageTrackingService struct {
 	ServiceParams
 	pubSub              pubsub.PubSub
+	lazyPubSub          pubsub.PubSub
 	meterUsageRepo      events.MeterUsageRepository
 	expressionEvaluator expression.Evaluator
 	// meterListCache is a dedicated in-memory cache for meter lists keyed by
@@ -95,6 +100,17 @@ func NewMeterUsageTrackingService(
 		return nil
 	}
 	svc.pubSub = ps
+
+	lazyPS, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.MeterUsageTrackingLazy.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatalw("failed to create lazy pubsub for meter usage tracking", "error", err)
+		return nil
+	}
+	svc.lazyPubSub = lazyPS
 
 	return svc
 }
@@ -146,6 +162,33 @@ func (s *meterUsageTrackingService) RegisterHandler(router *pubsubRouter.Router,
 	s.Logger.Infow("registered meter usage tracking handler",
 		"topic", cfg.MeterUsageTracking.Topic,
 		"rate_limit", cfg.MeterUsageTracking.RateLimit,
+	)
+}
+
+// RegisterHandlerLazy registers a separate consumer for the events_lazy topic.
+// Same processMessage logic as RegisterHandler; the split lets lazy-mode tenant
+// traffic flow through its own topic + consumer group so it can't starve or
+// be starved by the normal stream. Mirrors the pattern in
+// FeatureUsageTrackingService and CostSheetUsageTrackingService.
+func (s *meterUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.MeterUsageTrackingLazy.Enabled {
+		s.Logger.Infow("meter usage tracking lazy handler disabled by configuration")
+		return
+	}
+
+	throttle := middleware.NewThrottle(cfg.MeterUsageTrackingLazy.RateLimit, time.Second)
+
+	router.AddNoPublishHandler(
+		"meter_usage_tracking_lazy_handler",
+		cfg.MeterUsageTrackingLazy.Topic,
+		s.lazyPubSub,
+		s.processMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Infow("registered meter usage tracking lazy handler",
+		"topic", cfg.MeterUsageTrackingLazy.Topic,
+		"rate_limit", cfg.MeterUsageTrackingLazy.RateLimit,
 	)
 }
 

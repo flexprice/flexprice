@@ -233,6 +233,12 @@ meter_usage_tracking:
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service"
 
+meter_usage_tracking_lazy:
+  enabled: true
+  topic: "events_lazy"
+  rate_limit: 1
+  consumer_group: "v1_meter_usage_tracking_service_lazy"
+
 usage_benchmark:
   enabled: false
   topic: "staging_benchmarking"
