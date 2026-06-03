@@ -515,8 +515,8 @@ func NewRouter(
 		// Integration routes
 		integrations := v1Private.Group("/integrations")
 		{
-			integrations.POST("/link", handlers.Integration.Link)
-			integrations.POST("/sync", handlers.Integration.Sync)
+			integrations.POST("/link", write("integration", types.ActionWrite), handlers.Integration.Link)
+			integrations.POST("/sync", write("integration", types.ActionWrite), handlers.Integration.Sync)
 			integrations.GET("/mappings", handlers.Integration.GetMappings)
 			integrations.GET("/config", handlers.Integration.GetConfig)
 			// 			paddleGroup := integrations.Group("/paddle")
