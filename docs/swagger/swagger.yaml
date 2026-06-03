@@ -779,10 +779,14 @@ definitions:
     properties:
       action:
         $ref: '#/definitions/ChangedSubscriptionAction'
+      current_period_end:
+        type: string
       id:
         type: string
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
+      trial_end:
+        type: string
     type: object
   ChangedSubscriptionAction:
     description: created | updated
@@ -1534,6 +1538,10 @@ definitions:
     type: object
   CreateInvoiceLineItemRequest:
     properties:
+      adjusted_entitlement_quantity:
+        description: adjusted_entitlement_quantity is the entitlement-covered units
+          deducted from raw usage.
+        type: string
       amount:
         description: amount is the monetary amount for this line item
         type: string
@@ -1614,6 +1622,15 @@ definitions:
         type: string
       quantity:
         description: quantity is the quantity of units for this line item
+        type: string
+      subscription_id:
+        description: |-
+          subscription_id overrides the invoice's subscription_id for this specific line item.
+          Used for grouped invoicing where child line items belong to child subscriptions.
+        type: string
+      subscription_line_item_id:
+        description: sub_line_item_id links this line item to the subscription_line_item
+          that generated it.
         type: string
     required:
     - amount
@@ -2347,6 +2364,10 @@ definitions:
         type: string
       id:
         type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
       password:
         type: string
       roles:
@@ -2944,6 +2965,9 @@ definitions:
         type: string
       id:
         type: string
+      metadata:
+        additionalProperties: true
+        type: object
       provider_entity_id:
         type: string
       provider_type:
@@ -2992,6 +3016,8 @@ definitions:
         $ref: '#/definitions/SubModifyInheritanceRequest'
       quantity_change_params:
         $ref: '#/definitions/SubModifyQuantityChangeRequest'
+      trial_end_params:
+        $ref: '#/definitions/SubModifyTrialEndRequest'
       type:
         $ref: '#/definitions/SubscriptionModifyType'
     required:
@@ -3582,6 +3608,22 @@ definitions:
     - event_name
     - external_customer_id
     type: object
+  IntegrationConfigEntry:
+    properties:
+      base_config:
+        $ref: '#/definitions/types.SyncConfig'
+      current_config:
+        $ref: '#/definitions/types.SyncConfig'
+      provider:
+        $ref: '#/definitions/types.SecretProvider'
+    type: object
+  IntegrationConfigResponse:
+    properties:
+      integrations:
+        items:
+          $ref: '#/definitions/IntegrationConfigEntry'
+        type: array
+    type: object
   InvoiceCoupon:
     properties:
       coupon_association_id:
@@ -3630,6 +3672,11 @@ definitions:
     type: object
   InvoiceLineItemResponse:
     properties:
+      adjusted_entitlement_quantity:
+        description: |-
+          adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.
+          Nil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity.
+        type: string
       amount:
         type: string
       commitment_info:
@@ -3693,6 +3740,10 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
+        type: string
+      subscription_line_item_id:
+        description: sub_line_item_id links this invoice line item to the subscription_line_item
+          that generated it.
         type: string
       tenant_id:
         type: string
@@ -4018,6 +4069,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/CostsheetResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListEntityIntegrationMappingsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/EntityIntegrationMappingResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -4453,6 +4513,13 @@ definitions:
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
       pricing_unit:
         $ref: '#/definitions/PriceUnitResponse'
+      sequence:
+        description: |-
+          Sequence is the monotonic stamp bumped on every state change that
+          subscription line items need to react to. Read by the plan-price sync;
+          set by the database (DEFAULT nextval) on create and by the price
+          repository on termination / compatibility-affecting edits.
+        type: integer
       start_date:
         description: StartDate is the start date of the price
         type: string
@@ -4713,6 +4780,19 @@ definitions:
         type: array
     required:
     - line_items
+    type: object
+  SubModifyTrialEndRequest:
+    properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/TrialEndAction'
+        description: Action is "immediate" or "scheduled_date".
+      new_trial_end:
+        description: NewTrialEnd is the new trial end date. Required when action is
+          "scheduled_date".
+        type: string
+    required:
+    - action
     type: object
   SubscriptionChangeExecuteResponse:
     description: Response after successfully executing a subscription plan change
@@ -5011,11 +5091,13 @@ definitions:
     - inheritance
     - quantity_change
     - grouped_invoicing
+    - trial_end
     type: string
     x-enum-varnames:
     - SubscriptionModifyTypeInheritance
     - SubscriptionModifyTypeQuantityChange
     - SubscriptionModifyTypeGroupedInvoicing
+    - SubscriptionModifyTypeTrialEnd
   SubscriptionPhaseCreateRequest:
     properties:
       coupons:
@@ -5325,6 +5407,12 @@ definitions:
         - $ref: '#/definitions/types.SubscriptionType'
         description: SubscriptionType categorises the subscription within a customer
           hierarchy (standalone, parent, inherited).
+      synced_price_sequence:
+        description: |-
+          SyncedPriceSequence is the plan-price sequence up to which this
+          subscription's line items have been reconciled. Bumped by the
+          plan-price sync after a successful pass.
+        type: integer
       tenant_id:
         type: string
       trial_end:
@@ -5506,6 +5594,12 @@ definitions:
       plan_id:
         description: PlanID is the identifier for the plan in our system
         type: string
+      plan_prices_out_of_sync:
+        description: |-
+          PlanPricesOutOfSync is true when the subscription's synced_price_sequence
+          is behind the plan's current max prices.sequence — i.e. plan-price
+          changes have not yet been reconciled into this subscription's line items.
+        type: boolean
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
       start_date:
@@ -5520,6 +5614,12 @@ definitions:
         - $ref: '#/definitions/types.SubscriptionType'
         description: SubscriptionType categorises the subscription within a customer
           hierarchy (standalone, parent, inherited).
+      synced_price_sequence:
+        description: |-
+          SyncedPriceSequence is the plan-price sequence up to which this
+          subscription's line items have been reconciled. Bumped by the
+          plan-price sync after a successful pass.
+        type: integer
       tenant_id:
         type: string
       trial_end:
@@ -5956,6 +6056,14 @@ definitions:
         - $ref: '#/definitions/WalletTransactionResponse'
         description: Wallet transaction created (could be PENDING or COMPLETED)
     type: object
+  TrialEndAction:
+    enum:
+    - immediate
+    - scheduled_date
+    type: string
+    x-enum-varnames:
+    - TrialEndActionImmediate
+    - TrialEndActionScheduledDate
   TriggerForceRunRequest:
     properties:
       end_time:
@@ -6344,6 +6452,33 @@ definitions:
       name:
         type: string
     type: object
+  UpdateUserRequest:
+    properties:
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  UpdateUserResponse:
+    properties:
+      email:
+        description: Empty for service accounts
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      roles:
+        items:
+          type: string
+        type: array
+      tenant:
+        $ref: '#/definitions/TenantResponse'
+      type:
+        $ref: '#/definitions/types.UserType'
+    type: object
   UpdateWalletRequest:
     properties:
       alert_settings:
@@ -6515,6 +6650,10 @@ definitions:
         type: string
       id:
         type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
       roles:
         items:
           type: string
@@ -7633,6 +7772,15 @@ definitions:
     - ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER
     - ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR
     - ENTITLEMENT_USAGE_RESET_PERIOD_NEVER
+  types.EntitySyncConfig:
+    properties:
+      inbound:
+        description: Inbound from external provider to FlexPrice
+        type: boolean
+      outbound:
+        description: Outbound from FlexPrice to external provider
+        type: boolean
+    type: object
   types.EntityType:
     enum:
     - EVENTS
@@ -7891,6 +8039,7 @@ definitions:
     - PRORATION
     - MANUAL
     - AUTO_INVOICE_THRESHOLD
+    - WALLET_AUTO_TOPUP
     type: string
     x-enum-varnames:
     - InvoiceBillingReasonSubscriptionCreate
@@ -7901,6 +8050,7 @@ definitions:
     - InvoiceBillingReasonProration
     - InvoiceBillingReasonManual
     - InvoiceBillingReasonAutoInvoiceThreshold
+    - InvoiceBillingReasonWalletAutoTopup
   types.InvoiceCadence:
     enum:
     - ARREAR
@@ -7921,6 +8071,15 @@ definitions:
           amount_remaining_gt filters invoices with an outstanding balance greater than the specified value
           Useful for finding invoices that still have significant unpaid amounts
         type: number
+      billing_reason:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceBillingReason'
+        description: BillingReason filters invoices by why they were generated
+      currency:
+        description: |-
+          currency filters invoices by their currency (ISO 4217 code, e.g. "usd", "eur").
+          Matches on the invoices.currency column exactly.
+        type: string
       customer_id:
         description: |-
           customer_id filters invoices for a specific customer using FlexPrice's internal customer ID
@@ -8025,6 +8184,16 @@ definitions:
     - InvoiceStatusFinalized
     - InvoiceStatusVoided
     - InvoiceStatusSkipped
+  types.InvoiceSyncSettings:
+    properties:
+      normalize_fixed_to:
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: |-
+          NormalizeFixedTo re-expresses fixed-charge line items in a smaller billing period.
+          For example, a quarterly fixed charge of $300 with NormalizeFixedTo=MONTHLY becomes
+          qty=3, rate=$100. Empty string means no normalization (keep original).
+    type: object
   types.InvoiceType:
     enum:
     - SUBSCRIPTION
@@ -8093,6 +8262,7 @@ definitions:
     - nomod
     - moyasar
     - paddle
+    - whop
     type: string
     x-enum-varnames:
     - PaymentGatewayTypeStripe
@@ -8100,6 +8270,7 @@ definitions:
     - PaymentGatewayTypeNomod
     - PaymentGatewayTypeMoyasar
     - PaymentGatewayTypePaddle
+    - PaymentGatewayTypeWhop
   types.PaymentMethodType:
     enum:
     - CARD
@@ -8405,6 +8576,30 @@ definitions:
     - S3EncryptionTypeAES256
     - S3EncryptionTypeAwsKms
     - S3EncryptionTypeAwsKmsDsse
+  types.S3ExportConfig:
+    properties:
+      bucket:
+        description: S3 bucket name
+        type: string
+      compression:
+        allOf:
+        - $ref: '#/definitions/types.S3CompressionType'
+        description: 'Compression type: "gzip", "none" (default: "none")'
+      encryption:
+        allOf:
+        - $ref: '#/definitions/types.S3EncryptionType'
+        description: 'Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default:
+          "AES256")'
+      is_flexprice_managed:
+        description: If true, use Flexprice-managed S3 credentials instead of user-provided
+        type: boolean
+      key_prefix:
+        description: Optional prefix for S3 keys (e.g., "flexprice-exports/")
+        type: string
+      region:
+        description: AWS region (e.g., "us-west-2")
+        type: string
+    type: object
   types.S3JobConfig:
     properties:
       bucket:
@@ -8502,6 +8697,7 @@ definitions:
     - nomod
     - moyasar
     - paddle
+    - whop
     type: string
     x-enum-comments:
       SecretProviderS3: supports multiple connections per environment
@@ -8517,6 +8713,7 @@ definitions:
     - SecretProviderNomod
     - SecretProviderMoyasar
     - SecretProviderPaddle
+    - SecretProviderWhop
   types.SecretType:
     enum:
     - private_key
@@ -8777,6 +8974,38 @@ definitions:
     - SubscriptionTypeParent
     - SubscriptionTypeInherited
     - SubscriptionTypeGroupedInvoicing
+  types.SyncConfig:
+    properties:
+      customer:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      deal:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: CRM sync (HubSpot, Salesforce, etc.)
+      invoice:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      invoice_sync_settings:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceSyncSettings'
+        description: InvoiceSyncSettings controls line-item transformation during
+          outbound invoice sync
+      payment:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: Payment sync (QuickBooks bidirectional)
+      plan:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: Integration sync (Stripe, Razorpay, QuickBooks, etc.)
+      quote:
+        $ref: '#/definitions/types.EntitySyncConfig'
+      s3:
+        allOf:
+        - $ref: '#/definitions/types.S3ExportConfig'
+        description: S3 connection metadata (for Flexprice-managed S3 connections)
+      subscription:
+        $ref: '#/definitions/types.EntitySyncConfig'
+    type: object
   types.TaskStatus:
     enum:
     - PENDING
@@ -9281,6 +9510,11 @@ definitions:
     type: object
   invoice.InvoiceLineItem:
     properties:
+      adjusted_entitlement_quantity:
+        description: |-
+          adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.
+          Nil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity.
+        type: string
       amount:
         type: string
       commitment_info:
@@ -9344,6 +9578,10 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
+        type: string
+      subscription_line_item_id:
+        description: sub_line_item_id links this invoice line item to the subscription_line_item
+          that generated it.
         type: string
       tenant_id:
         type: string
@@ -9581,6 +9819,13 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.PriceUnitType'
         description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
+      sequence:
+        description: |-
+          Sequence is the monotonic stamp bumped on every state change that
+          subscription line items need to react to. Read by the plan-price sync;
+          set by the database (DEFAULT nextval) on create and by the price
+          repository on termination / compatibility-affecting edits.
+        type: integer
       start_date:
         description: StartDate is the start date of the price
         type: string
@@ -12322,6 +12567,27 @@ paths:
       summary: Query groups
       tags:
       - Groups
+  /integrations/config:
+    get:
+      description: Returns the base capabilities and current sync configuration for
+        all connected providers.
+      operationId: getIntegrationConfig
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/IntegrationConfigResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get integration configurations
+      tags:
+      - Integrations
   /integrations/link:
     post:
       consumes:
@@ -12354,6 +12620,43 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Link integration mapping
+      tags:
+      - Integrations
+  /integrations/mappings:
+    get:
+      description: Get integration mappings for a specific entity by entity type and
+        entity ID.
+      operationId: getEntityIntegrationMappings
+      parameters:
+      - description: Entity type (customer, plan, invoice, subscription, payment,
+          credit_note, addon, item, item_price, price)
+        in: query
+        name: entity_type
+        required: true
+        type: string
+      - description: Entity ID
+        in: query
+        name: entity_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListEntityIntegrationMappingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get entity integration mappings
       tags:
       - Integrations
   /invoices:
@@ -16102,6 +16405,39 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get current user
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Update the current authenticated user. Only metadata updates are
+        supported.
+      operationId: updateUser
+      parameters:
+      - description: Update current user request (metadata only)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/UpdateUserResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update current user
       tags:
       - Users
   /users/search:

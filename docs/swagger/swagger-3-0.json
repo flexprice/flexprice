@@ -4367,6 +4367,43 @@
         ]
       }
     },
+    "/integrations/config": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Get integration configurations",
+        "description": "Returns the base capabilities and current sync configuration for all connected providers.",
+        "operationId": "getIntegrationConfig",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationConfigResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
     "/integrations/link": {
       "post": {
         "tags": [
@@ -4424,6 +4461,73 @@
           }
         ],
         "x-codegen-request-body-name": "request"
+      }
+    },
+    "/integrations/mappings": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Get entity integration mappings",
+        "description": "Get integration mappings for a specific entity by entity type and entity ID.",
+        "operationId": "getEntityIntegrationMappings",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "query",
+            "description": "Entity type (customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "query",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEntityIntegrationMappingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/invoices": {
@@ -11203,6 +11307,63 @@
             "ApiKeyAuth": []
           }
         ]
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update current user",
+        "description": "Update the current authenticated user. Only metadata updates are supported.",
+        "operationId": "updateUser",
+        "requestBody": {
+          "description": "Update current user request (metadata only)",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateUserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request"
       }
     },
     "/users/search": {
@@ -14324,11 +14485,19 @@
           "action": {
             "$ref": "#/components/schemas/ChangedSubscriptionAction"
           },
+          "current_period_end": {
+            "type": "string",
+            "format": "date-time"
+          },
           "id": {
             "type": "string"
           },
           "status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
+          },
+          "trial_end": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -15360,6 +15529,10 @@
         ],
         "type": "object",
         "properties": {
+          "adjusted_entitlement_quantity": {
+            "type": "string",
+            "description": "adjusted_entitlement_quantity is the entitlement-covered units deducted from raw usage."
+          },
           "amount": {
             "type": "string",
             "description": "amount is the monetary amount for this line item"
@@ -15439,6 +15612,14 @@
           "quantity": {
             "type": "string",
             "description": "quantity is the quantity of units for this line item"
+          },
+          "subscription_id": {
+            "type": "string",
+            "description": "subscription_id overrides the invoice's subscription_id for this specific line item.\nUsed for grouped invoicing where child line items belong to child subscriptions."
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "sub_line_item_id links this line item to the subscription_line_item that generated it."
           }
         }
       },
@@ -16303,6 +16484,12 @@
           "id": {
             "type": "string"
           },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "password": {
             "type": "string"
           },
@@ -17086,6 +17273,10 @@
           "id": {
             "type": "string"
           },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "provider_entity_id": {
             "type": "string"
           },
@@ -17162,6 +17353,9 @@
           },
           "quantity_change_params": {
             "$ref": "#/components/schemas/SubModifyQuantityChangeRequest"
+          },
+          "trial_end_params": {
+            "$ref": "#/components/schemas/SubModifyTrialEndRequest"
           },
           "type": {
             "$ref": "#/components/schemas/SubscriptionModifyType"
@@ -17956,6 +18150,31 @@
           }
         }
       },
+      "IntegrationConfigEntry": {
+        "type": "object",
+        "properties": {
+          "base_config": {
+            "$ref": "#/components/schemas/types.SyncConfig"
+          },
+          "current_config": {
+            "$ref": "#/components/schemas/types.SyncConfig"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/types.SecretProvider"
+          }
+        }
+      },
+      "IntegrationConfigResponse": {
+        "type": "object",
+        "properties": {
+          "integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntegrationConfigEntry"
+            }
+          }
+        }
+      },
       "InvoiceCoupon": {
         "required": [
           "coupon_id"
@@ -18027,6 +18246,10 @@
       "InvoiceLineItemResponse": {
         "type": "object",
         "properties": {
+          "adjusted_entitlement_quantity": {
+            "type": "string",
+            "description": "adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.\nNil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity."
+          },
           "amount": {
             "type": "string"
           },
@@ -18119,6 +18342,10 @@
           },
           "subscription_id": {
             "type": "string"
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "sub_line_item_id links this invoice line item to the subscription_line_item that generated it."
           },
           "tenant_id": {
             "type": "string"
@@ -18497,6 +18724,20 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CostsheetResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListEntityIntegrationMappingsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityIntegrationMappingResponse"
             }
           },
           "pagination": {
@@ -19115,6 +19356,10 @@
           "pricing_unit": {
             "$ref": "#/components/schemas/PriceUnitResponse"
           },
+          "sequence": {
+            "type": "integer",
+            "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits."
+          },
           "start_date": {
             "type": "string",
             "description": "StartDate is the start date of the price",
@@ -19487,6 +19732,22 @@
           }
         }
       },
+      "SubModifyTrialEndRequest": {
+        "required": [
+          "action"
+        ],
+        "type": "object",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/TrialEndAction"
+          },
+          "new_trial_end": {
+            "type": "string",
+            "description": "NewTrialEnd is the new trial end date. Required when action is \"scheduled_date\".",
+            "format": "date-time"
+          }
+        }
+      },
       "SubscriptionChangeExecuteResponse": {
         "type": "object",
         "properties": {
@@ -19835,12 +20096,14 @@
         "enum": [
           "inheritance",
           "quantity_change",
-          "grouped_invoicing"
+          "grouped_invoicing",
+          "trial_end"
         ],
         "x-enum-varnames": [
           "SubscriptionModifyTypeInheritance",
           "SubscriptionModifyTypeQuantityChange",
-          "SubscriptionModifyTypeGroupedInvoicing"
+          "SubscriptionModifyTypeGroupedInvoicing",
+          "SubscriptionModifyTypeTrialEnd"
         ]
       },
       "SubscriptionPhaseCreateRequest": {
@@ -20229,6 +20492,10 @@
           "subscription_type": {
             "$ref": "#/components/schemas/types.SubscriptionType"
           },
+          "synced_price_sequence": {
+            "type": "integer",
+            "description": "SyncedPriceSequence is the plan-price sequence up to which this\nsubscription's line items have been reconciled. Bumped by the\nplan-price sync after a successful pass."
+          },
           "tenant_id": {
             "type": "string"
           },
@@ -20431,6 +20698,10 @@
             "type": "string",
             "description": "PlanID is the identifier for the plan in our system"
           },
+          "plan_prices_out_of_sync": {
+            "type": "boolean",
+            "description": "PlanPricesOutOfSync is true when the subscription's synced_price_sequence\nis behind the plan's current max prices.sequence \u2014 i.e. plan-price\nchanges have not yet been reconciled into this subscription's line items."
+          },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
@@ -20447,6 +20718,10 @@
           },
           "subscription_type": {
             "$ref": "#/components/schemas/types.SubscriptionType"
+          },
+          "synced_price_sequence": {
+            "type": "integer",
+            "description": "SyncedPriceSequence is the plan-price sequence up to which this\nsubscription's line items have been reconciled. Bumped by the\nplan-price sync after a successful pass."
           },
           "tenant_id": {
             "type": "string"
@@ -21074,6 +21349,17 @@
           }
         }
       },
+      "TrialEndAction": {
+        "type": "string",
+        "enum": [
+          "immediate",
+          "scheduled_date"
+        ],
+        "x-enum-varnames": [
+          "TrialEndActionImmediate",
+          "TrialEndActionScheduledDate"
+        ]
+      },
       "TriggerForceRunRequest": {
         "type": "object",
         "properties": {
@@ -21591,6 +21877,47 @@
           }
         }
       },
+      "UpdateUserRequest": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UpdateUserResponse": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Empty for service accounts"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/TenantResponse"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.UserType"
+          }
+        }
+      },
       "UpdateWalletRequest": {
         "type": "object",
         "properties": {
@@ -21805,6 +22132,12 @@
           },
           "id": {
             "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "roles": {
             "type": "array",
@@ -23421,6 +23754,20 @@
         ],
         "x-speakeasy-name-override": "EntitlementUsageResetPeriod"
       },
+      "types.EntitySyncConfig": {
+        "type": "object",
+        "properties": {
+          "inbound": {
+            "type": "boolean",
+            "description": "Inbound from external provider to FlexPrice"
+          },
+          "outbound": {
+            "type": "boolean",
+            "description": "Outbound from FlexPrice to external provider"
+          }
+        },
+        "x-speakeasy-name-override": "EntitySyncConfig"
+      },
       "types.EntityType": {
         "type": "string",
         "enum": [
@@ -23783,7 +24130,8 @@
           "SUBSCRIPTION_TRIAL_START",
           "PRORATION",
           "MANUAL",
-          "AUTO_INVOICE_THRESHOLD"
+          "AUTO_INVOICE_THRESHOLD",
+          "WALLET_AUTO_TOPUP"
         ],
         "x-enum-varnames": [
           "InvoiceBillingReasonSubscriptionCreate",
@@ -23793,7 +24141,8 @@
           "InvoiceBillingReasonSubscriptionTrialStart",
           "InvoiceBillingReasonProration",
           "InvoiceBillingReasonManual",
-          "InvoiceBillingReasonAutoInvoiceThreshold"
+          "InvoiceBillingReasonAutoInvoiceThreshold",
+          "InvoiceBillingReasonWalletAutoTopup"
         ],
         "x-speakeasy-name-override": "InvoiceBillingReason"
       },
@@ -23819,6 +24168,13 @@
           "amount_remaining_gt": {
             "type": "number",
             "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts"
+          },
+          "billing_reason": {
+            "$ref": "#/components/schemas/types.InvoiceBillingReason"
+          },
+          "currency": {
+            "type": "string",
+            "description": "currency filters invoices by their currency (ISO 4217 code, e.g. \"usd\", \"eur\").\nMatches on the invoices.currency column exactly."
           },
           "customer_id": {
             "type": "string",
@@ -23944,6 +24300,15 @@
         ],
         "x-speakeasy-name-override": "InvoiceStatus"
       },
+      "types.InvoiceSyncSettings": {
+        "type": "object",
+        "properties": {
+          "normalize_fixed_to": {
+            "$ref": "#/components/schemas/types.BillingPeriod"
+          }
+        },
+        "x-speakeasy-name-override": "InvoiceSyncSettings"
+      },
       "types.InvoiceType": {
         "type": "string",
         "enum": [
@@ -24038,14 +24403,16 @@
           "razorpay",
           "nomod",
           "moyasar",
-          "paddle"
+          "paddle",
+          "whop"
         ],
         "x-enum-varnames": [
           "PaymentGatewayTypeStripe",
           "PaymentGatewayTypeRazorpay",
           "PaymentGatewayTypeNomod",
           "PaymentGatewayTypeMoyasar",
-          "PaymentGatewayTypePaddle"
+          "PaymentGatewayTypePaddle",
+          "PaymentGatewayTypeWhop"
         ],
         "x-speakeasy-name-override": "PaymentGatewayType"
       },
@@ -24488,6 +24855,34 @@
         ],
         "x-speakeasy-name-override": "S3EncryptionType"
       },
+      "types.S3ExportConfig": {
+        "type": "object",
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "description": "S3 bucket name"
+          },
+          "compression": {
+            "$ref": "#/components/schemas/types.S3CompressionType"
+          },
+          "encryption": {
+            "$ref": "#/components/schemas/types.S3EncryptionType"
+          },
+          "is_flexprice_managed": {
+            "type": "boolean",
+            "description": "If true, use Flexprice-managed S3 credentials instead of user-provided"
+          },
+          "key_prefix": {
+            "type": "string",
+            "description": "Optional prefix for S3 keys (e.g., \"flexprice-exports/\")"
+          },
+          "region": {
+            "type": "string",
+            "description": "AWS region (e.g., \"us-west-2\")"
+          }
+        },
+        "x-speakeasy-name-override": "S3ExportConfig"
+      },
       "types.S3JobConfig": {
         "type": "object",
         "properties": {
@@ -24609,7 +25004,8 @@
           "zoho_books",
           "nomod",
           "moyasar",
-          "paddle"
+          "paddle",
+          "whop"
         ],
         "x-enum-comments": {
           "SecretProviderS3": "supports multiple connections per environment"
@@ -24625,7 +25021,8 @@
           "SecretProviderZohoBooks",
           "SecretProviderNomod",
           "SecretProviderMoyasar",
-          "SecretProviderPaddle"
+          "SecretProviderPaddle",
+          "SecretProviderWhop"
         ],
         "x-speakeasy-name-override": "SecretProvider"
       },
@@ -24999,6 +25396,39 @@
           "SubscriptionTypeGroupedInvoicing"
         ],
         "x-speakeasy-name-override": "SubscriptionType"
+      },
+      "types.SyncConfig": {
+        "type": "object",
+        "properties": {
+          "customer": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "deal": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "invoice_sync_settings": {
+            "$ref": "#/components/schemas/types.InvoiceSyncSettings"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "quote": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          },
+          "s3": {
+            "$ref": "#/components/schemas/types.S3ExportConfig"
+          },
+          "subscription": {
+            "$ref": "#/components/schemas/types.EntitySyncConfig"
+          }
+        },
+        "x-speakeasy-name-override": "SyncConfig"
       },
       "types.TaskStatus": {
         "type": "string",
@@ -25686,6 +26116,10 @@
       "invoice.InvoiceLineItem": {
         "type": "object",
         "properties": {
+          "adjusted_entitlement_quantity": {
+            "type": "string",
+            "description": "adjusted_entitlement_quantity is the entitlement-covered portion deducted from raw usage.\nNil when no entitlement was applied. Raw usage = Quantity + AdjustedEntitlementQuantity."
+          },
           "amount": {
             "type": "string"
           },
@@ -25778,6 +26212,10 @@
           },
           "subscription_id": {
             "type": "string"
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "sub_line_item_id links this invoice line item to the subscription_line_item that generated it."
           },
           "tenant_id": {
             "type": "string"
@@ -26048,6 +26486,10 @@
           },
           "price_unit_type": {
             "$ref": "#/components/schemas/types.PriceUnitType"
+          },
+          "sequence": {
+            "type": "integer",
+            "description": "Sequence is the monotonic stamp bumped on every state change that\nsubscription line items need to react to. Read by the plan-price sync;\nset by the database (DEFAULT nextval) on create and by the price\nrepository on termination / compatibility-affecting edits."
           },
           "start_date": {
             "type": "string",
