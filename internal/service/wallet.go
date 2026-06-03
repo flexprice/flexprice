@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -105,6 +106,11 @@ type WalletService interface {
 
 	// GetCreditsAvailableBreakdown retrieves the breakdown of available credits by type (purchased, free, other)
 	GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error)
+
+	// ConvertToPostpaid converts a prepaid wallet to a postpaid wallet.
+	// The operation is atomic: it locks the wallet, terminates it, creates a new postpaid wallet,
+	// and transfers any remaining credits.
+	ConvertToPostpaid(ctx context.Context, req *dto.ConvertToPostpaidRequest) (*dto.ConvertToPostpaidResponse, error)
 }
 
 type walletService struct {
@@ -3327,4 +3333,187 @@ func (s *walletService) publishBenchmarkEvent(ctx context.Context, subscriptionI
 			"error", err,
 		)
 	}
+}
+
+// ConvertToPostpaid converts a prepaid wallet to a postpaid wallet.
+// The operation is atomic and follows these steps:
+// 1. Lock the wallet to prevent concurrent operations
+// 2. Pick current balance from DB
+// 3. Terminate the wallet (debit remaining balance, set status to closed)
+// 4. Create a new postpaid wallet with AllowedPriceTypes set to ALL (fixed + usage)
+// 5. Top up the credits from the prepaid wallet if any
+// 6. All within a single database transaction
+func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertToPostpaidRequest) (*dto.ConvertToPostpaidResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid convert to postpaid request").
+			Mark(ierr.ErrValidation)
+	}
+
+	var originalWallet *wallet.Wallet
+	var newWallet *wallet.Wallet
+	var creditsTransferred decimal.Decimal
+
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Step 1: Acquire advisory lock for the wallet
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: req.WalletID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire wallet lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Step 2: Get wallet inside transaction (after acquiring lock)
+		var err error
+		originalWallet, err = s.WalletRepo.GetWalletByID(ctx, req.WalletID)
+		if err != nil {
+			return err
+		}
+
+		// Validate wallet is prepaid and active
+		if originalWallet.WalletType != types.WalletTypePrePaid {
+			return ierr.NewError("wallet is not a prepaid wallet").
+				WithHint("Only prepaid wallets can be converted to postpaid").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_id":   req.WalletID,
+					"wallet_type": originalWallet.WalletType,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		if originalWallet.WalletStatus != types.WalletStatusActive {
+			return ierr.NewError("wallet is not active").
+				WithHint("Only active wallets can be converted").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_id":     req.WalletID,
+					"wallet_status": originalWallet.WalletStatus,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		// Step 3: Store the current credit balance before termination
+		creditsTransferred = originalWallet.CreditBalance
+
+		// Step 4: Terminate the wallet (debit remaining balance and close)
+		if originalWallet.CreditBalance.GreaterThan(decimal.Zero) {
+			debitReq := &wallet.WalletOperation{
+				WalletID:          req.WalletID,
+				CreditAmount:      originalWallet.CreditBalance,
+				Type:              types.TransactionTypeDebit,
+				Description:       "Wallet conversion - prepaid to postpaid",
+				TransactionReason: types.TransactionReasonWalletTermination,
+				ReferenceType:     types.WalletTxReferenceTypeRequest,
+				IdempotencyKey:    req.WalletID + "_conversion_debit",
+				ReferenceID:       types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+			}
+
+			if err := s.DebitWallet(ctx, debitReq); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to debit prepaid wallet during conversion").
+					Mark(ierr.ErrInternal)
+			}
+		}
+
+		// Update wallet status to closed
+		if err := s.WalletRepo.UpdateWalletStatus(ctx, req.WalletID, types.WalletStatusClosed); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to close prepaid wallet").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Refresh original wallet state after termination
+		originalWallet, err = s.WalletRepo.GetWalletByID(ctx, req.WalletID)
+		if err != nil {
+			return err
+		}
+
+		// Step 5: Create a new postpaid wallet
+		newWallet = &wallet.Wallet{
+			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
+			CustomerID:          originalWallet.CustomerID,
+			Name:                "Postpaid Wallet - " + strings.ToUpper(originalWallet.Currency),
+			Currency:            originalWallet.Currency,
+			Description:         "Converted from prepaid wallet " + originalWallet.ID,
+			Metadata:            types.Metadata{"converted_from": originalWallet.ID},
+			Balance:             decimal.Zero,
+			CreditBalance:       decimal.Zero,
+			WalletStatus:        types.WalletStatusActive,
+			WalletType:          types.WalletTypePostPaid,
+			Config:              types.WalletConfig{AllowedPriceTypes: []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}},
+			ConversionRate:      originalWallet.ConversionRate,
+			TopupConversionRate: originalWallet.TopupConversionRate,
+			AlertSettings:       originalWallet.AlertSettings,
+			AlertState:          types.AlertStateOk,
+			AutoTopup:           originalWallet.AutoTopup,
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			BaseModel:           types.GetDefaultBaseModel(ctx),
+		}
+
+		if err := s.WalletRepo.CreateWallet(ctx, newWallet); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create postpaid wallet").
+				Mark(ierr.ErrDatabase)
+		}
+
+		s.Logger.InfowCtx(ctx, "created postpaid wallet during conversion",
+			"new_wallet_id", newWallet.ID,
+			"original_wallet_id", originalWallet.ID,
+			"customer_id", originalWallet.CustomerID,
+		)
+
+		// Step 6: Top up the new wallet with credits from the prepaid wallet
+		if creditsTransferred.GreaterThan(decimal.Zero) {
+			idempotencyKey := s.idempGen.GenerateKey(idempotency.ScopeCreditGrant, map[string]interface{}{
+				"wallet_id":           newWallet.ID,
+				"source_wallet_id":    originalWallet.ID,
+				"credits_to_add":      creditsTransferred,
+				"transaction_reason":  types.TransactionReasonFreeCredit,
+				"conversion_transfer": true,
+			})
+
+			creditReq := &wallet.WalletOperation{
+				WalletID:          newWallet.ID,
+				CreditAmount:      creditsTransferred,
+				Type:              types.TransactionTypeCredit,
+				Description:       "Credits transferred from prepaid wallet " + originalWallet.ID,
+				TransactionReason: types.TransactionReasonFreeCredit,
+				ReferenceType:     types.WalletTxReferenceTypeRequest,
+				IdempotencyKey:    idempotencyKey,
+				ReferenceID:       types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+			}
+
+			if err := s.CreditWallet(ctx, creditReq); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to transfer credits to postpaid wallet").
+					Mark(ierr.ErrInternal)
+			}
+
+			// Refresh new wallet state after credit
+			newWallet, err = s.WalletRepo.GetWalletByID(ctx, newWallet.ID)
+			if err != nil {
+				return err
+			}
+
+			s.Logger.InfowCtx(ctx, "transferred credits during wallet conversion",
+				"new_wallet_id", newWallet.ID,
+				"original_wallet_id", originalWallet.ID,
+				"credits_transferred", creditsTransferred,
+			)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Publish webhook events outside the transaction
+	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletTerminated, originalWallet.ID)
+	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, newWallet.ID)
+
+	return &dto.ConvertToPostpaidResponse{
+		OriginalWallet:     dto.FromWallet(originalWallet),
+		NewWallet:          dto.FromWallet(newWallet),
+		CreditsTransferred: creditsTransferred,
+	}, nil
 }

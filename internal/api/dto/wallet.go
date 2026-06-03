@@ -453,3 +453,28 @@ func (r *ManualBalanceDebitRequest) Validate() error {
 
 	return nil
 }
+
+// ConvertToPostpaidRequest represents a request to convert a prepaid wallet to postpaid
+type ConvertToPostpaidRequest struct {
+	// wallet_id is the ID of the prepaid wallet to convert (passed as URL path parameter)
+	WalletID string `json:"-"`
+}
+
+func (r *ConvertToPostpaidRequest) Validate() error {
+	if r.WalletID == "" {
+		return ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ConvertToPostpaidResponse represents the response for converting a prepaid wallet to postpaid
+type ConvertToPostpaidResponse struct {
+	// OriginalWallet is the terminated prepaid wallet
+	OriginalWallet *WalletResponse `json:"original_wallet"`
+	// NewWallet is the newly created postpaid wallet
+	NewWallet *WalletResponse `json:"new_wallet"`
+	// CreditsTransferred is the number of credits transferred to the new wallet
+	CreditsTransferred decimal.Decimal `json:"credits_transferred" swaggertype:"string"`
+}

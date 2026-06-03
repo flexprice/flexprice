@@ -340,6 +340,7 @@ func NewRouter(
 			wallet.GET("/:id/transactions", handlers.Wallet.GetWalletTransactions)
 			wallet.POST("/:id/top-up", write("wallet", types.ActionWrite), handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", write("wallet", types.ActionWrite), handlers.Wallet.TerminateWallet)
+			wallet.POST("/:id/convert-to-postpaid", write("wallet", types.ActionWrite), handlers.Wallet.ConvertToPostpaid)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
 			wallet.GET("/:id/balance/real-time-cached", handlers.Wallet.GetWalletBalanceForceCached)
 			wallet.PUT("/:id", write("wallet", types.ActionWrite), handlers.Wallet.UpdateWallet)
