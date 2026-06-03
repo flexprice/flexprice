@@ -3939,6 +3939,89 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			})
 		}
 	})
+
+	s.Run("TestBackdatedImmediateCancellation", func() {
+		periodStart := s.testData.now.Add(-7 * 24 * time.Hour)
+		periodEnd := s.testData.now.Add(23 * 24 * time.Hour)
+		backdateSub := &subscription.Subscription{
+			ID:                 "sub_backdate_test",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: periodStart,
+			CurrentPeriodEnd:   periodEnd,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+			LineItems:          []*subscription.SubscriptionLineItem{},
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), backdateSub, backdateSub.LineItems))
+
+		// Valid backdated cancellation — 3 days into the current period
+		validBackdate := periodStart.Add(3 * 24 * time.Hour)
+		resp, err := s.service.CancelSubscription(s.GetContext(), backdateSub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			CancelAt:          &validBackdate,
+			Reason:            "test_backdated",
+		})
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, resp.Status)
+		s.True(resp.EffectiveDate.Equal(validBackdate), "effective date should match cancel_at")
+
+		// Verify persisted state
+		updated, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), backdateSub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
+		s.NotNil(updated.EndDate)
+		s.True(updated.EndDate.Equal(validBackdate), "EndDate should equal cancel_at")
+		s.NotNil(updated.CancelAt)
+		s.True(updated.CancelAt.Equal(validBackdate), "CancelAt should equal cancel_at")
+
+		s.T().Logf("✅ Backdated immediate cancellation completed successfully")
+	})
+
+	s.Run("TestBackdatedCancellationAtPeriodStartRejected", func() {
+		periodStart := s.testData.now.Add(-7 * 24 * time.Hour)
+		periodEnd := s.testData.now.Add(23 * 24 * time.Hour)
+		subAtBoundary := &subscription.Subscription{
+			ID:                 "sub_boundary_test",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: periodStart,
+			CurrentPeriodEnd:   periodEnd,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+			LineItems:          []*subscription.SubscriptionLineItem{},
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), subAtBoundary, subAtBoundary.LineItems))
+
+		// cancel_at == current_period_start → rejected
+		atStart := periodStart
+		_, err := s.service.CancelSubscription(s.GetContext(), subAtBoundary.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			CancelAt:          &atStart,
+		})
+		s.Error(err, "cancel_at == current_period_start should be rejected")
+
+		// cancel_at before current_period_start → rejected
+		beforeStart := periodStart.Add(-1 * time.Hour)
+		_, err = s.service.CancelSubscription(s.GetContext(), subAtBoundary.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			CancelAt:          &beforeStart,
+		})
+		s.Error(err, "cancel_at before current_period_start should be rejected")
+
+		s.T().Logf("✅ Backdated cancellation boundary rejection completed successfully")
+	})
 }
 
 func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {

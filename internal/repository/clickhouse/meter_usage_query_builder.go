@@ -377,7 +377,7 @@ func (qb *MeterUsageQueryBuilder) BuildDetailedPointsQuery(
 		return "", nil
 	}
 
-	aggColumns := buildConditionalAggregationColumns(params.AggregationTypes)
+	aggColumns := buildMeterUsageAggregationColumns(params.AggregationTypes)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
 	// Start with the base WHERE from the detailed params

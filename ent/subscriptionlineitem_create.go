@@ -472,6 +472,12 @@ func (slic *SubscriptionLineItemCreate) SetNillableCommitmentDuration(tp *types.
 	return slic
 }
 
+// SetCommitmentTimeBuckets sets the "commitment_time_buckets" field.
+func (slic *SubscriptionLineItemCreate) SetCommitmentTimeBuckets(todb types.TimeOfDayBuckets) *SubscriptionLineItemCreate {
+	slic.mutation.SetCommitmentTimeBuckets(todb)
+	return slic
+}
+
 // SetID sets the "id" field.
 func (slic *SubscriptionLineItemCreate) SetID(s string) *SubscriptionLineItemCreate {
 	slic.mutation.SetID(s)
@@ -837,6 +843,10 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.CommitmentDuration(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
 		_node.CommitmentDuration = &value
+	}
+	if value, ok := slic.mutation.CommitmentTimeBuckets(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentTimeBuckets, field.TypeJSON, value)
+		_node.CommitmentTimeBuckets = value
 	}
 	if nodes := slic.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

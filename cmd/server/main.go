@@ -662,6 +662,7 @@ func registerRouterHandlers(
 		walletBalanceAlertSvc.RegisterHandler(router, cfg)
 		rawEventConsumptionSvc.RegisterHandler(router, cfg)
 		meterUsageTrackingSvc.RegisterHandler(router, cfg)
+		meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
 		usageBenchmarkSvc.RegisterHandler(router, cfg)
 	}
 }

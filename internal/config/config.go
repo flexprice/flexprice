@@ -47,6 +47,7 @@ type Configuration struct {
 	FeatureUsageTrackingLazy   FeatureUsageTrackingLazyConfig   `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
 	FeatureUsageTrackingReplay FeatureUsageTrackingReplayConfig `mapstructure:"feature_usage_tracking_replay" validate:"required"`
 	MeterUsageTracking         MeterUsageTrackingConfig         `mapstructure:"meter_usage_tracking" validate:"required"`
+	MeterUsageTrackingLazy     MeterUsageTrackingLazyConfig     `mapstructure:"meter_usage_tracking_lazy" validate:"required"`
 	UsageBenchmark             UsageBenchmarkConfig             `mapstructure:"usage_benchmark" validate:"omitempty"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
@@ -331,6 +332,18 @@ type MeterUsageTrackingConfig struct {
 	Topic         string `mapstructure:"topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service"`
+}
+
+// MeterUsageTrackingLazyConfig configures the lazy consumer for tenants that
+// the central publisher routes to the events_lazy topic (see Kafka.TopicLazy
+// and Kafka.RouteTenantsOnLazyMode). Mirrors MeterUsageTrackingConfig but
+// reads from a separate topic with its own consumer group so lazy traffic is
+// isolated from the normal stream.
+type MeterUsageTrackingLazyConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"events_lazy"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_meter_usage_tracking_service_lazy"`
 }
 
 // UsageBenchmarkConfig configures the usage benchmarking consumer

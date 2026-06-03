@@ -38,13 +38,14 @@ type SubscriptionLineItem struct {
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
-	CommitmentQuantity      *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
-	CommitmentType          types.CommitmentType `db:"commitment_type" json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
-	CommitmentTrueUpEnabled bool                 `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
-	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
-	CommitmentDuration      *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal       `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
+	CommitmentQuantity      *decimal.Decimal       `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
+	CommitmentType          types.CommitmentType   `db:"commitment_type" json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal       `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
+	CommitmentTrueUpEnabled bool                   `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
+	CommitmentWindowed      bool                   `db:"commitment_windowed" json:"commitment_windowed"`
+	CommitmentDuration      *types.BillingPeriod   `db:"commitment_duration" json:"commitment_duration,omitempty"`
+	CommitmentTimeBuckets   types.TimeOfDayBuckets `db:"commitment_time_buckets" json:"commitment_time_buckets,omitempty"`
 
 	Price *price.Price `json:"price,omitempty"`
 
@@ -80,6 +81,11 @@ func (li *SubscriptionLineItem) IsUsage() bool {
 // (i.e. BillingPeriod == BILLING_PERIOD_ONETIME).
 func (li *SubscriptionLineItem) IsOneTime() bool {
 	return li.BillingPeriod == types.BILLING_PERIOD_ONETIME
+}
+
+// HasCommitmentTimeBuckets returns true when time-of-day filtering is configured.
+func (li *SubscriptionLineItem) HasCommitmentTimeBuckets() bool {
+	return len(li.CommitmentTimeBuckets) > 0
 }
 
 // HasCommitment returns true if the line item has commitment configured
@@ -189,6 +195,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		CommitmentTrueUpEnabled: e.CommitmentTrueUpEnabled,
 		CommitmentWindowed:      e.CommitmentWindowed,
 		CommitmentDuration:      commitmentDuration,
+		CommitmentTimeBuckets:   e.CommitmentTimeBuckets,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

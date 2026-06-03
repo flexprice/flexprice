@@ -2502,6 +2502,16 @@ func CommitmentDurationContainsFold(v types.BillingPeriod) predicate.Subscriptio
 	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldCommitmentDuration, vc))
 }
 
+// CommitmentTimeBucketsIsNil applies the IsNil predicate on the "commitment_time_buckets" field.
+func CommitmentTimeBucketsIsNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIsNull(FieldCommitmentTimeBuckets))
+}
+
+// CommitmentTimeBucketsNotNil applies the NotNil predicate on the "commitment_time_buckets" field.
+func CommitmentTimeBucketsNotNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldCommitmentTimeBuckets))
+}
+
 // HasSubscription applies the HasEdge predicate on the "subscription" edge.
 func HasSubscription() predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(func(s *sql.Selector) {
