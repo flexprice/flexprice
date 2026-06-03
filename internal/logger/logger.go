@@ -177,9 +177,11 @@ func NewNoopLogger() *Logger {
 func resolveOtelLogsConfig(cfg *config.Configuration) (config.OtelLogsConfig, map[string]string, bool) {
 	if cfg.Otel.Enabled && cfg.Otel.Logs.Enabled && cfg.Otel.Logs.Endpoint != "" {
 		logs := cfg.Otel.Logs
-		if logs.Protocol == "" {
-			logs.Protocol = cfg.Otel.ResolveProtocol("")
-		}
+		// Always normalize through ResolveProtocol so values like "http/protobuf"
+		// collapse to the canonical "http" transport. Without this, an exact
+		// `logsCfg.Protocol == "http"` check below would miss "http/protobuf" and
+		// silently fall back to the gRPC exporter (404 against an HTTP endpoint).
+		logs.Protocol = cfg.Otel.ResolveProtocol(logs.Protocol)
 		headers := cfg.Otel.ResolveHeaders(logs.MergedHeaders())
 		return logs, headers, false
 	}
@@ -216,7 +218,7 @@ func newOtelLogProvider(ctx context.Context, cfg *config.Configuration, logsCfg 
 
 	endpointIsURL := strings.HasPrefix(logsCfg.Endpoint, "http://") || strings.HasPrefix(logsCfg.Endpoint, "https://")
 
-	if logsCfg.Protocol == "http" {
+	if strings.HasPrefix(logsCfg.Protocol, "http") {
 		httpOpts := []otlploghttp.Option{}
 		if endpointIsURL {
 			httpOpts = append(httpOpts, otlploghttp.WithEndpointURL(logsCfg.Endpoint))

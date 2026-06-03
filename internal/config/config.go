@@ -293,13 +293,21 @@ func (c OtelConfig) ResolveServiceName(cfg *Configuration) string {
 }
 
 // ResolveProtocol picks a per-signal protocol, falling back to otel.protocol,
-// then to "grpc".
+// then to "grpc". The result is normalized to a canonical transport value:
+// "http" for any HTTP variant (the OTel-standard "http/protobuf", "http/json",
+// or a bare "http") and "grpc" otherwise. Normalizing here prevents the
+// exporter-selection bug where a config value of "http/protobuf" failed an
+// exact `protocol == "http"` check and silently fell back to the gRPC exporter.
 func (c OtelConfig) ResolveProtocol(signalProtocol string) string {
-	if signalProtocol != "" {
-		return signalProtocol
+	raw := signalProtocol
+	if raw == "" {
+		raw = c.Protocol
 	}
-	if c.Protocol != "" {
-		return c.Protocol
+	if raw == "" {
+		return "grpc"
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "http") {
+		return "http"
 	}
 	return "grpc"
 }

@@ -167,7 +167,7 @@ func (s *Service) newTraceExporter(ctx context.Context) (sdktrace.SpanExporter, 
 	headers := s.cfg.Otel.ResolveHeaders(tracesCfg.MergedHeaders())
 	endpointIsURL := strings.HasPrefix(tracesCfg.Endpoint, "http://") || strings.HasPrefix(tracesCfg.Endpoint, "https://")
 
-	if protocol == "http" {
+	if strings.HasPrefix(protocol, "http") {
 		opts := []otlptracehttp.Option{}
 		if endpointIsURL {
 			// Full URL form: vendor-specific path (e.g. Sentry's OTLP gateway).
@@ -181,6 +181,11 @@ func (s *Service) newTraceExporter(ctx context.Context) (sdktrace.SpanExporter, 
 		if len(headers) > 0 {
 			opts = append(opts, otlptracehttp.WithHeaders(headers))
 		}
+		// Gzip-compress the OTLP/HTTP payload. Sentry's OTLP gateway expects
+		// compressed protobuf (their reference OpenTelemetry Collector config uses
+		// `compression: gzip`); uncompressed proto is accepted with HTTP 200 but
+		// silently dropped before it reaches the spans store.
+		opts = append(opts, otlptracehttp.WithCompression(otlptracehttp.GzipCompression))
 		return otlptrace.New(ctx, otlptracehttp.NewClient(opts...))
 	}
 
