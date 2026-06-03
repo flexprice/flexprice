@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	temporalInterceptor "github.com/flexprice/flexprice/internal/temporal/interceptor"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -17,6 +16,7 @@ import (
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/interceptor"
 )
@@ -31,25 +31,25 @@ type temporalService struct {
 	client        client.TemporalClient
 	workerManager worker.TemporalWorkerManager
 	logger        *logger.Logger
-	sentry        *sentry.Service
+	tracing       *tracing.Service
 	workerConfig  config.TemporalWorkerConfig
 }
 
 // NewTemporalService creates a new temporal service instance
-func NewTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, sentryService *sentry.Service, cfg *config.TemporalConfig) TemporalService {
+func NewTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, tracingSvc *tracing.Service, cfg *config.TemporalConfig) TemporalService {
 	return &temporalService{
 		client:        client,
 		workerManager: workerManager,
 		logger:        logger,
-		sentry:        sentryService,
+		tracing:       tracingSvc,
 		workerConfig:  cfg.Worker,
 	}
 }
 
 // InitializeGlobalTemporalService initializes the global Temporal service instance
-func InitializeGlobalTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, sentryService *sentry.Service, cfg *config.TemporalConfig) {
+func InitializeGlobalTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, tracingSvc *tracing.Service, cfg *config.TemporalConfig) {
 	globalTemporalOnce.Do(func() {
-		globalTemporalService = NewTemporalService(client, workerManager, logger, sentryService, cfg)
+		globalTemporalService = NewTemporalService(client, workerManager, logger, tracingSvc, cfg)
 	})
 }
 
@@ -315,9 +315,9 @@ func (s *temporalService) buildWorkerOptions() *models.WorkerOptions {
 	}
 
 	// Add interceptors
-	if s.sentry != nil && s.sentry.IsEnabled() {
+	if s.tracing != nil && s.tracing.IsEnabled() {
 		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewSentryInterceptor(s.sentry),
+			temporalInterceptor.NewTracingInterceptor(s.tracing),
 			temporalInterceptor.NewWorkflowTrackingInterceptor(),
 		}
 	} else {

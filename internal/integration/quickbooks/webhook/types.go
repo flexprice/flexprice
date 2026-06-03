@@ -66,4 +66,3 @@ type ServiceDependencies struct {
 	PaymentService interface{} // interfaces.PaymentService
 	InvoiceService interface{} // interfaces.InvoiceService
 }
-

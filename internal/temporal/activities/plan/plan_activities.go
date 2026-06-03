@@ -10,8 +10,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/types"
 	eventsModels "github.com/flexprice/flexprice/internal/temporal/models/events"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const ActivityPrefix = "PlanActivities"

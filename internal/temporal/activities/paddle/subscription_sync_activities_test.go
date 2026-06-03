@@ -9,10 +9,10 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
-	paddleactivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
+	paddleactivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -257,8 +257,8 @@ func TestCheckSubscriptionSyncStatus_MappingExists(t *testing.T) {
 
 	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
 	const (
-		subscriptionID  = "sub_with_mapping"
-		paddleSubID     = "sub_paddle_existing"
+		subscriptionID = "sub_with_mapping"
+		paddleSubID    = "sub_paddle_existing"
 	)
 	// Seed an existing mapping for the subscription.
 	seedSubscriptionSyncMapping(ctx, t, mappingStore, subscriptionID, paddleSubID)

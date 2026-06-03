@@ -152,11 +152,11 @@ func executeCreateFeatureAndPriceAction(
 	}
 
 	activityInput := models.CreateFeatureAndPriceActivityInput{
-		EventName:                  input.EventName,
-		EventProperties:            input.EventProperties,
-		TenantID:                   input.TenantID,
-		EnvironmentID:              input.EnvironmentID,
-		FeatureAndPriceConfig:      featureAction,
+		EventName:                   input.EventName,
+		EventProperties:             input.EventProperties,
+		TenantID:                    input.TenantID,
+		EnvironmentID:               input.EnvironmentID,
+		FeatureAndPriceConfig:       featureAction,
 		OnlyCreateAggregationFields: input.OnlyCreateAggregationFields,
 	}
 

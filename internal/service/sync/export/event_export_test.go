@@ -83,12 +83,12 @@ func TestEventExporter_PrepareData_CostColumn(t *testing.T) {
 
 	exporter := NewEventExporter(featureUsageStore, nil, priceStore, nil, nil, log)
 	req := &dto.ExportRequest{
-		TenantID:    tenantID,
-		EnvID:       envID,
-		StartTime:   now.Add(-time.Hour),
-		EndTime:     now.Add(time.Hour),
-		EntityType:  types.ScheduledTaskEntityTypeEvents,
-		JobConfig:   &types.S3JobConfig{},
+		TenantID:   tenantID,
+		EnvID:      envID,
+		StartTime:  now.Add(-time.Hour),
+		EndTime:    now.Add(time.Hour),
+		EntityType: types.ScheduledTaskEntityTypeEvents,
+		JobConfig:  &types.S3JobConfig{},
 	}
 
 	csvBytes, count, err := exporter.PrepareData(ctx, req)

@@ -441,7 +441,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 			"error", err,
 			"payment_id", paymentResp.ID,
 			"moyasar_payment_id", moyasarPaymentID)
-		
+
 		// Cleanup: Delete the orphaned payment record to prevent inconsistent state
 		// If cleanup fails, log the error but return the original update error
 		if deleteErr := paymentService.DeletePayment(ctx, paymentResp.ID); deleteErr != nil {
@@ -454,7 +454,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 				"payment_id", paymentResp.ID,
 				"moyasar_payment_id", moyasarPaymentID)
 		}
-		
+
 		return err
 	}
 
