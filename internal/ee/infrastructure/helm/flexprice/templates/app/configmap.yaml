@@ -146,7 +146,14 @@ data:
       topic: {{ .Values.featureUsageTrackingLazy.topic | quote }}
       rate_limit: {{ .Values.featureUsageTrackingLazy.rateLimit }}
       consumer_group: {{ .Values.featureUsageTrackingLazy.consumerGroup | quote }}
-    
+
+    onboarding_events:
+      enabled: {{ .Values.onboardingEvents.enabled }}
+      topic: {{ .Values.onboardingEvents.topic | quote }}
+      rate_limit: {{ .Values.onboardingEvents.rateLimit }}
+      consumer_group: {{ .Values.onboardingEvents.consumerGroup | quote }}
+      max_retries: {{ .Values.onboardingEvents.maxRetries }}
+
     webhook:
       enabled: {{ .Values.webhook.enabled }}
       topic: {{ .Values.webhook.topic | quote }}

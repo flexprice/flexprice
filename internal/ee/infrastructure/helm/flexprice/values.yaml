@@ -761,6 +761,18 @@ featureUsageTrackingLazy:
   rateLimit: 1
   consumerGroup: "v1_feature_tracking_service_lazy"
 
+# Onboarding event-generator (POST /v1/portal/onboarding/events).
+# The app's OnboardingEvents.Topic resolves to empty if this is not rendered
+# into the mounted config.yaml: viper ignores the Go `default` struct tag and
+# AutomaticEnv won't bind the nested onboarding_events.topic key. An empty
+# topic makes the publish fail with a broker "invalid topic" error (a 400).
+onboardingEvents:
+  enabled: true
+  topic: "onboarding_events"
+  rateLimit: 10
+  consumerGroup: "onboarding_events_consumer"
+  maxRetries: 3
+
 # Raw event consumption configuration
 rawEventConsumption:
   enabled: false
