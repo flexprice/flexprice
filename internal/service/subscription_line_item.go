@@ -714,6 +714,13 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	if cfg.CommitmentDuration != nil {
 		lineItem.CommitmentDuration = cfg.CommitmentDuration
 	}
+	if len(cfg.CommitmentTimeBuckets) > 0 {
+		// Copy to avoid aliasing the config's backing array — mutations to cfg
+		// after this point must not bleed into the domain object.
+		buckets := make(types.TimeOfDayBuckets, len(cfg.CommitmentTimeBuckets))
+		copy(buckets, cfg.CommitmentTimeBuckets)
+		lineItem.CommitmentTimeBuckets = buckets
+	}
 	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
 		return err
 	}

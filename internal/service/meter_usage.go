@@ -1898,7 +1898,7 @@ func (s *meterUsageService) calculatePointCosts(p *meterUsageBucketedCostParams,
 
 	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
 	for i := range p.item.Points {
-		usage := s.getCorrectUsageValueForPoint(p.item.Points[i], p.aggType)
+		usage := p.item.Points[i].Usage
 		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, []time.Time{p.item.Points[i].Timestamp}, p.price)
 		if err != nil {
 			s.logger.Warnw("failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
@@ -2031,7 +2031,7 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 					bucketedValues := make([]decimal.Decimal, len(item.Points))
 					bucketStarts := make([]time.Time, len(item.Points))
 					for i, point := range item.Points {
-						bucketedValues[i] = s.getCorrectUsageValueForPoint(point, m.Aggregation.Type)
+						bucketedValues[i] = point.Usage
 						bucketStarts[i] = point.Timestamp
 					}
 					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, bucketedValues, bucketStarts, decimal.Zero)

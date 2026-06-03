@@ -100,6 +100,11 @@ type LineItemCommitmentConfig struct {
 
 	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
+
+	// CommitmentTimeBuckets restricts commitment treatment to windows whose start
+	// UTC hour falls within one of the configured buckets. Empty/omitted = no
+	// restriction (commitment applies 24/7). Requires IsWindowCommitment=true.
+	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.
@@ -233,6 +238,19 @@ func (c *LineItemCommitmentConfig) Validate() error {
 				"commitment_quantity": c.CommitmentQuantity,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Rule 5: commitment_time_buckets only constrains the per-window application
+	// path — it has no meaning without is_window_commitment=true.
+	if len(c.CommitmentTimeBuckets) > 0 {
+		if c.IsWindowCommitment == nil || !*c.IsWindowCommitment {
+			return ierr.NewError("commitment_time_buckets requires is_window_commitment=true").
+				WithHint("Set is_window_commitment=true to apply commitment only during the configured hours").
+				Mark(ierr.ErrValidation)
+		}
+		if err := validateTimeOfDayBuckets(c.CommitmentTimeBuckets); err != nil {
+			return err
+		}
 	}
 
 	return nil
