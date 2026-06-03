@@ -49,6 +49,7 @@ import (
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 )
@@ -61,6 +62,7 @@ type ServiceParams struct {
 	DB           postgres.IClient
 	PDFGenerator pdf.Generator
 	S3           s3.Service
+	TracingSvc   *tracing.Service
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -137,6 +139,7 @@ func NewServiceParams(
 	config *config.Configuration,
 	db postgres.IClient,
 	pdfGenerator pdf.Generator,
+	tracingSvc *tracing.Service,
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,
@@ -200,6 +203,7 @@ func NewServiceParams(
 		Config:                       config,
 		DB:                           db,
 		PDFGenerator:                 pdfGenerator,
+		TracingSvc:                   tracingSvc,
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,

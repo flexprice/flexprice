@@ -240,16 +240,25 @@ func (s *Service) shutdown(ctx context.Context) {
 // Sentry error capture). Kept broad so existing call sites that gate "should
 // we do observability work?" continue to behave sensibly.
 func (s *Service) IsEnabled() bool {
+	if s == nil {
+		return false
+	}
 	return s.tracingEnabled || s.sentryEnabled
 }
 
 // IsTracingEnabled reports whether OTel span export is active.
 func (s *Service) IsTracingEnabled() bool {
+	if s == nil {
+		return false
+	}
 	return s.tracingEnabled
 }
 
 // IsSentryEnabled reports whether Sentry error capture is configured.
 func (s *Service) IsSentryEnabled() bool {
+	if s == nil {
+		return false
+	}
 	return s.sentryEnabled
 }
 
@@ -258,6 +267,9 @@ func (s *Service) IsSentryEnabled() bool {
 // FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED (default: false) to avoid span
 // volume explosion before operators have a feel for the cost.
 func (s *Service) IsStorageSpansEnabled() bool {
+	if s == nil {
+		return false
+	}
 	return s.tracingEnabled && s.cfg.Otel.Traces.StorageSpansEnabled
 }
 
@@ -269,6 +281,9 @@ func (s *Service) Tracer() trace.Tracer {
 // Flush is a no-op for the OTel pipeline (BatchSpanProcessor handles its own
 // flushing on shutdown) but ensures Sentry events are delivered.
 func (s *Service) Flush(timeout uint) bool {
+	if s == nil {
+		return true
+	}
 	if s.sentryEnabled {
 		return sentry.Flush(time.Duration(timeout) * time.Second)
 	}
@@ -277,7 +292,7 @@ func (s *Service) Flush(timeout uint) bool {
 
 // CaptureException reports an error to Sentry Issues.
 func (s *Service) CaptureException(err error) {
-	if !s.sentryEnabled || err == nil {
+	if s == nil || !s.sentryEnabled || err == nil {
 		return
 	}
 	sentry.CaptureException(err)
@@ -285,7 +300,7 @@ func (s *Service) CaptureException(err error) {
 
 // AddBreadcrumb attaches a Sentry breadcrumb to the current scope.
 func (s *Service) AddBreadcrumb(category, message string, data map[string]interface{}) {
-	if !s.sentryEnabled {
+	if s == nil || !s.sentryEnabled {
 		return
 	}
 	sentry.AddBreadcrumb(&sentry.Breadcrumb{
@@ -376,7 +391,7 @@ func (f *SpanFinisher) Finish() {
 // ---------------------------------------------------------------------------
 
 func (s *Service) startSpan(ctx context.Context, name, op string, params map[string]interface{}) (*Span, context.Context) {
-	if !s.tracingEnabled {
+	if s == nil || !s.tracingEnabled {
 		return nil, ctx
 	}
 	newCtx, sp := s.tracer.Start(ctx, name)
@@ -426,9 +441,9 @@ func (s *Service) MonitorEventProcessing(ctx context.Context, eventName string, 
 	if root := rootSpan(newCtx); root != nil {
 		root.SetAttributes(attribute.String("event.lag.ms", fmt.Sprintf("%d", lagMs)))
 		switch {
-		case lag.Milliseconds() >= 5*time.Minute.Milliseconds():
+		case lag >= 5*time.Minute:
 			root.SetAttributes(attribute.String("event.lag.severity", "critical"))
-		case lag.Milliseconds() >= 1*time.Minute.Milliseconds():
+		case lag >= 1*time.Minute:
 			root.SetAttributes(attribute.String("event.lag.severity", "warning"))
 		default:
 			root.SetAttributes(attribute.String("event.lag.severity", "normal"))
@@ -440,7 +455,7 @@ func (s *Service) MonitorEventProcessing(ctx context.Context, eventName string, 
 // StartTransaction starts a new top-level span. In OTel there's no separate
 // transaction concept; we just start a span with the SpanKindServer hint.
 func (s *Service) StartTransaction(ctx context.Context, name string) (*Span, context.Context) {
-	if !s.tracingEnabled {
+	if s == nil || !s.tracingEnabled {
 		return nil, ctx
 	}
 	newCtx, sp := s.tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindServer))
@@ -460,6 +475,9 @@ func (s *Service) StartRepositorySpan(ctx context.Context, repository, operation
 
 // GetSpanFromContext returns the currently active span (wrapped), if any.
 func (s *Service) GetSpanFromContext(ctx context.Context) *Span {
+	if s == nil {
+		return nil
+	}
 	sp := trace.SpanFromContext(ctx)
 	if sp == nil || !sp.SpanContext().IsValid() {
 		return nil
@@ -518,9 +536,11 @@ func toAttr(key string, v interface{}) attribute.KeyValue {
 	}
 }
 
-// rootSpan walks back to the outermost span in the current context. OTel does
-// not expose this directly, so we fall back to the active span — which is
-// already the closest thing to "transaction-level" for our purposes.
+// rootSpan returns the currently active span from the context. OTel does not
+// expose span ancestry, so this is the innermost active span rather than the
+// root. For our purposes (tagging lag severity) it is the closest analogue to
+// the old Sentry transaction object. Callers should not rely on it being the
+// outermost span.
 func rootSpan(ctx context.Context) trace.Span {
 	sp := trace.SpanFromContext(ctx)
 	if sp == nil || !sp.SpanContext().IsValid() {

@@ -39,11 +39,12 @@ type EventService interface {
 }
 
 type eventService struct {
-	eventRepo events.Repository
-	meterRepo meter.Repository
-	publisher publisher.EventPublisher
-	logger    *logger.Logger
-	config    *config.Configuration
+	eventRepo  events.Repository
+	meterRepo  meter.Repository
+	publisher  publisher.EventPublisher
+	logger     *logger.Logger
+	config     *config.Configuration
+	tracingSvc *tracing.Service
 }
 
 func NewEventService(
@@ -52,13 +53,15 @@ func NewEventService(
 	publisher publisher.EventPublisher,
 	logger *logger.Logger,
 	config *config.Configuration,
+	tracingSvc *tracing.Service,
 ) EventService {
 	return &eventService{
-		eventRepo: eventRepo,
-		meterRepo: meterRepo,
-		publisher: publisher,
-		logger:    logger,
-		config:    config,
+		eventRepo:  eventRepo,
+		meterRepo:  meterRepo,
+		publisher:  publisher,
+		logger:     logger,
+		config:     config,
+		tracingSvc: tracingSvc,
 	}
 }
 
@@ -195,7 +198,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 	if len(req) == 0 {
 		return make(map[string]*events.AggregationResult), nil
 	}
-	sentrySvc := tracing.NewService(s.config, s.logger)
+	sentrySvc := s.tracingSvc
 
 	// Get configuration values or use defaults
 	// Reduced max workers and batch size to reduce ClickHouse CPU load
@@ -384,7 +387,7 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 		return make(map[string]*events.AggregationResult), nil
 	}
 
-	sentrySvc := tracing.NewService(s.config, s.logger)
+	sentrySvc := s.tracingSvc
 	timeoutDuration := 10 * time.Second
 
 	s.logger.With(
@@ -689,9 +692,9 @@ func createEventIteratorKey(timestamp time.Time, id string) string {
 }
 
 // MonitorKafkaLag monitors Kafka consumer lag for event consumption and post-processing pipelines.
-// It creates Sentry monitoring spans to track lag metrics for alerting and observability.
+// It creates OTel monitoring spans to track lag metrics for alerting and observability.
 func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
-	sentrySvc := tracing.NewService(s.config, s.logger)
+	sentrySvc := s.tracingSvc
 	kafkaMonitoring := kafka.NewMonitoringService(s.config, s.logger)
 
 	// Get Kafka configuration for the current tenant

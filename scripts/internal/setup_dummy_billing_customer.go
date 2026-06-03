@@ -258,7 +258,7 @@ func SetupDummyBillingCustomer() error {
 	customerSvc := service.NewCustomerService(params)
 	subscriptionSvc := service.NewSubscriptionService(params)
 	walletSvc := service.NewWalletService(params)
-	eventSvc := service.NewEventService(eventRepo, meterRepo, eventPublisher, appLogger, cfg)
+	eventSvc := service.NewEventService(eventRepo, meterRepo, eventPublisher, appLogger, cfg, nil)
 
 	ctx := context.Background()
 	ctx = types.SetTenantID(ctx, tenantID)

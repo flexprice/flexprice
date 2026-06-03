@@ -274,7 +274,7 @@ func (s *onboardingService) processMessage(msg *message.Message) error {
 
 // generateEvents generates events at a rate of 1 per second
 func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.OnboardingEventsMessage) {
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
 
 	// Calculate total events to generate
 	totalEvents := eventMsg.Duration * 5

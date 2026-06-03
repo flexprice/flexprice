@@ -150,6 +150,7 @@ func (tc *tracedConn) PrepareBatch(ctx context.Context, query string, options ..
 	return &tracedBatch{
 		batch:   batch,
 		tracing: tc.tracing,
+		ctx:     ctx,
 	}, nil
 }
 
@@ -215,6 +216,7 @@ func (tc *tracedConn) Close() error {
 type tracedBatch struct {
 	batch   driver.Batch
 	tracing *tracing.Service
+	ctx     context.Context // context captured at PrepareBatch time for child spans
 }
 
 // Append delegates to the underlying batch
@@ -243,8 +245,9 @@ func (tb *tracedBatch) Flush() error {
 		return tb.batch.Flush()
 	}
 
-	ctx := context.Background()
-	span, _ := tb.tracing.StartClickHouseSpan(ctx, "clickhouse.batch_flush", nil)
+	// Use the context captured at PrepareBatch time so the flush span is a
+	// child of the originating request trace rather than a detached root span.
+	span, _ := tb.tracing.StartClickHouseSpan(tb.ctx, "clickhouse.batch_flush", nil)
 	if span != nil {
 		defer span.Finish()
 	}
@@ -284,7 +287,7 @@ func (tb *tracedBatch) Rows() int {
 	return tb.batch.Rows()
 }
 
-// Truncate query to avoid sending too much data to Sentry
+// truncateQuery limits query length to keep OTel span attributes small.
 func truncateQuery(query string) string {
 	const maxQueryLength = 1000
 	if len(query) > maxQueryLength {
