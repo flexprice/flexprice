@@ -208,7 +208,14 @@ func (s *Service) newResource(ctx context.Context) (*resource.Resource, error) {
 		env = s.cfg.Sentry.Environment
 	}
 	if env != "" {
-		attrs = append(attrs, semconv.DeploymentEnvironmentName(env))
+		// Set both old and new semconv keys for broad backend compatibility.
+		// semconv v1.22+ renamed the key to "deployment.environment.name"; Sentry's
+		// OTLP gateway (and some other backends) still read the old
+		// "deployment.environment" attribute, so we emit both.
+		attrs = append(attrs,
+			semconv.DeploymentEnvironmentName(env),   // deployment.environment.name (new)
+			attribute.String("deployment.environment", env), // deployment.environment (legacy, Sentry)
+		)
 	}
 	if s.cfg.Logging.Region != "" {
 		attrs = append(attrs, semconv.CloudRegion(s.cfg.Logging.Region))
