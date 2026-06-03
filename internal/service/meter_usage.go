@@ -1170,18 +1170,13 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		}
 	}
 
-	// Convert results to analytics. TotalUsage / Usage hold the aggregation-aware
-	// value (mirrors the subscription-context path), so downstream consumers can
-	// read .TotalUsage / .Usage without knowing the meter's aggregation type.
+	// Convert results to analytics. r.TotalUsage / p.TotalUsage hold the primary
+	// aggregation value courtesy of buildMeterUsageAggregationColumns, so no
+	// per-aggregation routing is needed here.
 	for _, r := range allResults {
-		aggType := types.AggregationSum
-		if m, ok := meterMap[r.MeterID]; ok {
-			aggType = m.Aggregation.Type
-		}
-
 		analytic := &events.DetailedUsageAnalytic{
 			MeterID:          r.MeterID,
-			TotalUsage:       getUsageValueFromDetailedResult(r, aggType),
+			TotalUsage:       r.TotalUsage,
 			MaxUsage:         r.MaxUsage,
 			LatestUsage:      r.LatestUsage,
 			CountUniqueUsage: r.CountUniqueUsage,
@@ -1189,10 +1184,10 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 			Source:           r.Source,
 			Sources:          r.Sources,
 			Properties:       r.Properties,
-			AggregationType:  aggType,
 		}
 		if m, ok := meterMap[r.MeterID]; ok {
 			analytic.EventName = m.EventName
+			analytic.AggregationType = m.Aggregation.Type
 		}
 		if f, ok := meterToFeature[r.MeterID]; ok {
 			analytic.FeatureID = f.ID
@@ -1206,7 +1201,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 				analytic.Points = append(analytic.Points, events.UsageAnalyticPoint{
 					Timestamp:        p.WindowStart,
 					WindowStart:      p.WindowStart,
-					Usage:            getUsageValueFromDetailedPoint(p, aggType),
+					Usage:            p.TotalUsage,
 					MaxUsage:         p.MaxUsage,
 					LatestUsage:      p.LatestUsage,
 					CountUniqueUsage: p.CountUniqueUsage,
@@ -1391,48 +1386,6 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// getUsageValueFromDetailedResult extracts the correct scalar usage from a
-// MeterUsageDetailedResult based on aggregation type.
-//
-// For COUNT meters, buildConditionalAggregationColumns emits total_usage as a
-// literal zero — the actual count lives in the event_count column.
-func getUsageValueFromDetailedResult(r *events.MeterUsageDetailedResult, aggType types.AggregationType) decimal.Decimal {
-	switch aggType {
-	case types.AggregationCount:
-		return decimal.NewFromInt(int64(r.EventCount))
-	case types.AggregationCountUnique:
-		return decimal.NewFromInt(int64(r.CountUniqueUsage))
-	case types.AggregationMax:
-		if !r.TotalUsage.IsZero() {
-			return r.TotalUsage
-		}
-		return r.MaxUsage
-	case types.AggregationLatest:
-		return r.LatestUsage
-	default:
-		return r.TotalUsage
-	}
-}
-
-// getUsageValueFromDetailedPoint mirrors getUsageValueFromDetailedResult for a
-// single time-series point so consumers can read point.Usage without knowing
-// the meter's aggregation type.
-func getUsageValueFromDetailedPoint(p events.MeterUsageDetailedPoint, aggType types.AggregationType) decimal.Decimal {
-	switch aggType {
-	case types.AggregationCountUnique:
-		return decimal.NewFromInt(int64(p.CountUniqueUsage))
-	case types.AggregationMax:
-		if !p.TotalUsage.IsZero() {
-			return p.TotalUsage
-		}
-		return p.MaxUsage
-	case types.AggregationLatest:
-		return p.LatestUsage
-	default:
-		return p.TotalUsage
-	}
-}
 
 // fetchMeters fetches meter configurations for the requested meter IDs.
 func (s *meterUsageService) fetchMeters(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) ([]*meter.Meter, error) {
