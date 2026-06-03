@@ -3426,7 +3426,29 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 			return err
 		}
 
-		// Step 5: Create a new postpaid wallet
+		// Step 5: Check for existing active postpaid wallet before creating
+		existingWallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, originalWallet.CustomerID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to check existing wallets before conversion").
+				Mark(ierr.ErrDatabase)
+		}
+		for _, existing := range existingWallets {
+			if existing.WalletStatus == types.WalletStatusActive &&
+				existing.WalletType == types.WalletTypePostPaid &&
+				existing.Currency == originalWallet.Currency {
+				return ierr.NewError("customer already has an active postpaid wallet with the same currency").
+					WithHint("A customer can only have one active postpaid wallet per currency").
+					WithReportableDetails(map[string]interface{}{
+						"customer_id": originalWallet.CustomerID,
+						"wallet_id":   existing.ID,
+						"currency":    originalWallet.Currency,
+					}).
+					Mark(ierr.ErrAlreadyExists)
+			}
+		}
+
+		// Step 6: Create a new postpaid wallet
 		newWallet = &wallet.Wallet{
 			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
 			CustomerID:          originalWallet.CustomerID,
@@ -3460,7 +3482,7 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 			"customer_id", originalWallet.CustomerID,
 		)
 
-		// Step 6: Top up the new wallet with credits from the prepaid wallet
+		// Step 7: Top up the new wallet with credits from the prepaid wallet
 		if creditsTransferred.GreaterThan(decimal.Zero) {
 			idempotencyKey := s.idempGen.GenerateKey(idempotency.ScopeCreditGrant, map[string]interface{}{
 				"wallet_id":           newWallet.ID,

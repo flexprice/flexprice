@@ -643,6 +643,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
+// @x-scope write
 // @Param id path string true "Wallet ID of the prepaid wallet to convert"
 // @Success 200 {object} dto.ConvertToPostpaidResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request or wallet is not prepaid"
