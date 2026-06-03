@@ -603,13 +603,25 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	if r.CancellationType == types.CancellationTypeScheduledDate {
 		if r.CancelAt == nil {
 			return ierr.NewError("cancel_at is required for scheduled_date").
-				WithHint("Provide a future date in cancel_at").
+				WithHint("Provide a date strictly after the current period start in cancel_at").
 				Mark(ierr.ErrValidation)
 		}
 		now := time.Now().UTC()
 		if !r.CancelAt.After(now) {
 			return ierr.NewError("cancel_at must be a future date for scheduled_date cancellation").
 				WithHint("Provide a date strictly in the future for cancel_at").
+				WithReportableDetails(map[string]interface{}{
+					"cancel_at": r.CancelAt.UTC().Format(time.RFC3339),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if r.CancellationType == types.CancellationTypeImmediate && r.CancelAt != nil {
+		now := time.Now().UTC()
+		if r.CancelAt.After(now) {
+			return ierr.NewError("cancel_at cannot be a future date for immediate cancellation").
+				WithHint("Use cancellation_type 'scheduled_date' to schedule a future cancellation").
 				WithReportableDetails(map[string]interface{}{
 					"cancel_at": r.CancelAt.UTC().Format(time.RFC3339),
 				}).

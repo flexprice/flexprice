@@ -83,6 +83,75 @@ func TestCreateSubscriptionRequestValidate_BillingAnchorOnOrAfterStartDate(t *te
 	})
 }
 
+func TestCancelSubscriptionRequest_Validate_BackdatedImmediate(t *testing.T) {
+	now := time.Now().UTC()
+	past := now.Add(-5 * 24 * time.Hour)
+	future := now.Add(5 * 24 * time.Hour)
+
+	tests := []struct {
+		name    string
+		req     CancelSubscriptionRequest
+		wantErr bool
+	}{
+		{
+			name: "immediate_no_cancel_at_is_valid",
+			req: CancelSubscriptionRequest{
+				CancellationType:  types.CancellationTypeImmediate,
+				ProrationBehavior: types.ProrationBehaviorNone,
+			},
+			wantErr: false,
+		},
+		{
+			name: "immediate_past_cancel_at_is_valid",
+			req: CancelSubscriptionRequest{
+				CancellationType:  types.CancellationTypeImmediate,
+				ProrationBehavior: types.ProrationBehaviorNone,
+				CancelAt:          &past,
+			},
+			wantErr: false,
+		},
+		{
+			name: "immediate_future_cancel_at_is_rejected",
+			req: CancelSubscriptionRequest{
+				CancellationType:  types.CancellationTypeImmediate,
+				ProrationBehavior: types.ProrationBehaviorNone,
+				CancelAt:          &future,
+			},
+			wantErr: true,
+		},
+		{
+			name: "scheduled_date_past_cancel_at_still_rejected",
+			req: CancelSubscriptionRequest{
+				CancellationType:  types.CancellationTypeScheduledDate,
+				ProrationBehavior: types.ProrationBehaviorNone,
+				CancelAt:          &past,
+			},
+			wantErr: true,
+		},
+		{
+			name: "scheduled_date_future_cancel_at_is_valid",
+			req: CancelSubscriptionRequest{
+				CancellationType:  types.CancellationTypeScheduledDate,
+				ProrationBehavior: types.ProrationBehaviorNone,
+				CancelAt:          &future,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected validation error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestCreateSubscriptionRequestValidate_AutoInvoiceThreshold(t *testing.T) {
 	t.Run("nil passes", func(t *testing.T) {
 		req := baseCreateSubscriptionRequest()

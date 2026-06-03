@@ -1847,6 +1847,19 @@ func (s *subscriptionService) CancelSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
+	// Backdated immediate cancellation: cancel_at must be after current period start
+	if req.CancellationType == types.CancellationTypeImmediate && req.CancelAt != nil {
+		if !req.CancelAt.After(subscription.CurrentPeriodStart) {
+			return nil, ierr.NewError("cancel_at must be after current period start").
+				WithHint("Backdated cancellation is not allowed at or before the current period start").
+				WithReportableDetails(map[string]interface{}{
+					"cancel_at":            req.CancelAt.UTC().Format(time.RFC3339),
+					"current_period_start": subscription.CurrentPeriodStart.UTC().Format(time.RFC3339),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Reject proration for subscriptions with mixed billing periods
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && subscription.HasMixedBillingPeriods() {
 		return nil, ierr.NewError("proration is not supported for subscriptions with mixed billing periods").
@@ -5316,6 +5329,9 @@ func (s *subscriptionService) determineEffectiveDate(
 
 	switch cancellationType {
 	case types.CancellationTypeImmediate:
+		if customDate != nil && customDate.Before(now) {
+			return customDate.UTC(), nil
+		}
 		return now, nil
 
 	case types.CancellationTypeEndOfPeriod:
