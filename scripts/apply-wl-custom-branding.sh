@@ -176,6 +176,10 @@ echo "--- Documentation ---"
 
 # Derive UPPERCASE class name for env var substitution (Omkar → OMKAR)
 WL_SDK_CLASS_NAME_UPPER=$(echo "${WL_SDK_CLASS_NAME}" | tr '[:lower:]' '[:upper:]')
+# Derive lowercase class name for brand name substitution (Tirdad → tirdad)
+WL_SDK_CLASS_NAME_LOWER=$(echo "${WL_SDK_CLASS_NAME}" | tr '[:upper:]' '[:lower:]')
+# Derive Python module name (tirdad-sdk → tirdad_sdk) for import statements
+WL_PYTHON_MODULE_NAME="${WL_PYTHON_PACKAGE_NAME//-/_}"
 # Escape WL_GO_MODULE_PATH for sed replacement (used in Go README imports)
 WL_MOD_ESC=$(printf '%s\n' "${WL_GO_MODULE_PATH}" | sed 's/[&\]/\\&/g')
 # Escape WL_API_BASE_URL for sed (replacing the hardcoded default API URL)
@@ -222,6 +226,30 @@ for SDK_DIR in api/go api/typescript api/python api/mcp; do
     # 7. Default API URL (us.api.flexprice.io/v1 → WL_API_BASE_URL)
     if grep -q 'us\.api\.flexprice\.io' "$f" 2>/dev/null; then
       _sed_i "s|https://us\.api\.flexprice\.io/v1|${WL_URL_ESC}|g" "$f"
+      CHANGED=1
+    fi
+    # 8. Python package/module name — lowercase 'flexprice' in install commands and imports
+    #    install: pip/uv/poetry use the PyPI name (dashes)  → WL_PYTHON_PACKAGE_NAME
+    #    import:  Python source uses the module name (underscores) → WL_PYTHON_MODULE_NAME
+    if grep -qE 'pip install flexprice|uv add flexprice|poetry add flexprice|from flexprice|import flexprice' "$f" 2>/dev/null; then
+      _sed_i "s|pip install flexprice|pip install ${WL_PYTHON_PACKAGE_NAME}|g" "$f"
+      _sed_i "s|uv add flexprice|uv add ${WL_PYTHON_PACKAGE_NAME}|g" "$f"
+      _sed_i "s|poetry add flexprice|poetry add ${WL_PYTHON_PACKAGE_NAME}|g" "$f"
+      _sed_i "s|from flexprice|from ${WL_PYTHON_MODULE_NAME}|g" "$f"
+      _sed_i "s|import flexprice|import ${WL_PYTHON_MODULE_NAME}|g" "$f"
+      CHANGED=1
+    fi
+    # 9. camelCase variable name 'flexPrice' in TS README examples
+    #    (e.g. "const flexPrice = new Tirdad(...)") — not caught by step 2 or 10
+    if grep -q 'flexPrice' "$f" 2>/dev/null; then
+      _sed_i "s/flexPrice/${WL_SDK_CLASS_NAME_LOWER}/g" "$f"
+      CHANGED=1
+    fi
+    # 10. All-lowercase brand name — catches remaining 'flexprice' after steps 1-9
+    #    (e.g. "flexprice MCP Server", "flexprice-mcp" Docker image, JSON key "flexprice")
+    #    Run LAST so Python import/install replacements (step 8) fire first.
+    if grep -q 'flexprice' "$f" 2>/dev/null; then
+      _sed_i "s/flexprice/${WL_SDK_CLASS_NAME_LOWER}/g" "$f"
       CHANGED=1
     fi
     [ "$CHANGED" -eq 1 ] && echo "  [docs] $f"
