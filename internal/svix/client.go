@@ -7,7 +7,7 @@ import (
 	"net/url"
 
 	"github.com/flexprice/flexprice/internal/config"
-	sentryService "github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	svix "github.com/svix/svix-webhooks/go"
 	"github.com/svix/svix-webhooks/go/models"
 )
@@ -17,11 +17,11 @@ type Client struct {
 	client  *svix.Svix
 	baseURL string
 	enabled bool
-	sentry  *sentryService.Service
+	sentry  *tracing.Service
 }
 
 // NewClient creates a new Svix client
-func NewClient(config *config.Configuration, sentry *sentryService.Service) (*Client, error) {
+func NewClient(config *config.Configuration, sentry *tracing.Service) (*Client, error) {
 	if !config.Webhook.Svix.Enabled {
 		return &Client{
 			enabled: false,
@@ -167,7 +167,7 @@ func (c *Client) SendMessage(ctx context.Context, applicationID string, eventTyp
 	return out.Id, nil
 }
 
-func (c *Client) startSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentryService.SpanFinisher, context.Context) {
+func (c *Client) startSpan(ctx context.Context, operation string, params map[string]interface{}) (*tracing.SpanFinisher, context.Context) {
 	if c.sentry == nil {
 		return nil, ctx
 	}
@@ -175,7 +175,7 @@ func (c *Client) startSpan(ctx context.Context, operation string, params map[str
 	if span == nil {
 		return nil, ctx
 	}
-	return &sentryService.SpanFinisher{Span: span}, ctx
+	return &tracing.SpanFinisher{Span: span}, ctx
 }
 
 func (c *Client) captureException(err error) {

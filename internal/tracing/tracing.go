@@ -218,7 +218,7 @@ func (s *Service) newResource(ctx context.Context) (*resource.Resource, error) {
 		// OTLP gateway (and some other backends) still read the old
 		// "deployment.environment" attribute, so we emit both.
 		attrs = append(attrs,
-			semconv.DeploymentEnvironmentName(env),   // deployment.environment.name (new)
+			semconv.DeploymentEnvironmentName(env),          // deployment.environment.name (new)
 			attribute.String("deployment.environment", env), // deployment.environment (legacy, Sentry)
 		)
 	}
@@ -552,4 +552,20 @@ func rootSpan(ctx context.Context) trace.Span {
 		return nil
 	}
 	return sp
+}
+
+func (s *Service) StartSvixSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	operationName := fmt.Sprintf("svix.%s", operation)
+	span, newCtx := s.startSpan(ctx, operationName, operation, params)
+	if span != nil {
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, newCtx
 }
