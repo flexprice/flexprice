@@ -635,21 +635,6 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// ConvertToPostpaid godoc
-// @Summary Convert a prepaid wallet to postpaid
-// @ID convertWalletToPostpaid
-// @Description Converts a prepaid wallet to a postpaid wallet. This operation is atomic and performs the following steps: locks the wallet, terminates it, creates a new postpaid wallet with all price types allowed (fixed + usage), and transfers any remaining credits to the new wallet.
-// @Tags Wallets
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @x-scope write
-// @Param id path string true "Wallet ID of the prepaid wallet to convert"
-// @Success 200 {object} dto.ConvertToPostpaidResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request or wallet is not prepaid"
-// @Failure 404 {object} ierr.ErrorResponse "Wallet not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /wallets/{id}/convert-to-postpaid [post]
 func (h *WalletHandler) ConvertToPostpaid(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {
