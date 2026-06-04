@@ -3420,11 +3420,10 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 				Mark(ierr.ErrDatabase)
 		}
 
-		// Refresh original wallet state after termination
-		originalWallet, err = s.WalletRepo.GetWalletByID(ctx, req.WalletID)
-		if err != nil {
-			return err
-		}
+		// Update local state to reflect termination
+		originalWallet.WalletStatus = types.WalletStatusClosed
+		originalWallet.CreditBalance = decimal.Zero
+		originalWallet.Balance = decimal.Zero
 
 		// Step 5: Check for existing active postpaid wallet before creating
 		existingWallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, originalWallet.CustomerID)
@@ -3509,11 +3508,9 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 					Mark(ierr.ErrInternal)
 			}
 
-			// Refresh new wallet state after credit
-			newWallet, err = s.WalletRepo.GetWalletByID(ctx, newWallet.ID)
-			if err != nil {
-				return err
-			}
+			// Update local state to reflect credit transfer
+			newWallet.CreditBalance = newWallet.CreditBalance.Add(creditsTransferred)
+			newWallet.Balance = newWallet.Balance.Add(creditsTransferred)
 
 			s.Logger.InfowCtx(ctx, "transferred credits during wallet conversion",
 				"new_wallet_id", newWallet.ID,
