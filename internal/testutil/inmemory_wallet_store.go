@@ -329,15 +329,13 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 		toConsume := decimal.Min(remainingAmount, credit.CreditsAvailable)
 		newAvailable := credit.CreditsAvailable.Sub(toConsume)
 
-		consumedCredits = append(consumedCredits, credit)
-
 		credit.CreditsAvailable = newAvailable
 		credit.UpdatedAt = time.Now().UTC()
 		credit.UpdatedBy = types.GetUserID(ctx)
 
 		// Update credit's available amount
 		if err := s.transactions.Update(ctx, credit.ID, credit); err != nil {
-			return nil, ierr.WithError(err).
+			return consumedCredits, ierr.WithError(err).
 				WithHint("Failed to update credit available amount").
 				WithReportableDetails(map[string]interface{}{
 					"credit_id": credit.ID,
@@ -347,6 +345,7 @@ func (s *InMemoryWalletStore) ConsumeCredits(ctx context.Context, credits []*wal
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
+		consumedCredits = append(consumedCredits, credit)
 	}
 
 	return consumedCredits, nil
