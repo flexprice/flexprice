@@ -1091,12 +1091,12 @@ func (s *WalletServiceSuite) TestGetWalletBalanceV2_CurrencyMismatchDoesNotAffec
 		BaseModel:       types.GetDefaultBaseModel(ctx),
 		LineItems: []*invoice.InvoiceLineItem{
 			{
-				ID:        "li_eur_usage",
+				ID:         "li_eur_usage",
 				CustomerID: cust.ID,
-				Currency:  "eur",
-				Amount:    decimal.NewFromInt(999),
-				PriceType: lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
-				BaseModel: types.GetDefaultBaseModel(ctx),
+				Currency:   "eur",
+				Amount:     decimal.NewFromInt(999),
+				PriceType:  lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
+				BaseModel:  types.GetDefaultBaseModel(ctx),
 			},
 		},
 	}
@@ -2371,13 +2371,13 @@ func (s *WalletAutoTopupInvoiceSuite) setupTestData() {
 	invoicing := true
 
 	s.wallet = &wallet.Wallet{
-		ID:          "wallet_autotopup",
-		CustomerID:  s.customer.ID,
-		Currency:    "usd",
-		WalletType:  types.WalletTypePrePaid,
-		WalletStatus: types.WalletStatusActive,
-		Balance:     decimal.NewFromInt(3), // 3 credits * conversion_rate 1.0 = $3
-		CreditBalance: decimal.NewFromInt(3),
+		ID:                  "wallet_autotopup",
+		CustomerID:          s.customer.ID,
+		Currency:            "usd",
+		WalletType:          types.WalletTypePrePaid,
+		WalletStatus:        types.WalletStatusActive,
+		Balance:             decimal.NewFromInt(3), // 3 credits * conversion_rate 1.0 = $3
+		CreditBalance:       decimal.NewFromInt(3),
 		ConversionRate:      decimal.NewFromFloat(1.0),
 		TopupConversionRate: decimal.NewFromFloat(1.0),
 		AutoTopup: &types.AutoTopup{

@@ -28,12 +28,12 @@ type TrackWorkflowStartInput struct {
 
 // TrackWorkflowEndInput contains the parameters for tracking a workflow end
 type TrackWorkflowEndInput struct {
-	WorkflowStatus  types.WorkflowExecutionStatus
-	Error           string
-	EndTime         time.Time
-	DurationMs      int64
-	TenantID        string // required for repository lookup (tenant-scoped)
-	EnvironmentID   string // required for repository lookup (environment-scoped)
+	WorkflowStatus types.WorkflowExecutionStatus
+	Error          string
+	EndTime        time.Time
+	DurationMs     int64
+	TenantID       string // required for repository lookup (tenant-scoped)
+	EnvironmentID  string // required for repository lookup (environment-scoped)
 }
 
 // TrackWorkflowEndActivityInput is the input for the end tracking activity

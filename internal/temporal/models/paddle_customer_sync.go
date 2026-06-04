@@ -5,7 +5,7 @@ import (
 )
 
 type PaddleCustomerSyncWorkflowInput struct {
-	CustomerID    string `json:"customer_id"`
+	CustomerID string `json:"customer_id"`
 	// InvoiceID is set when the workflow is triggered from invoice events without a customer id in the payload;
 	// EnsureCustomerSyncedToPaddle resolves CustomerID by loading this invoice first.
 	InvoiceID     string `json:"invoice_id,omitempty"`

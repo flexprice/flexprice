@@ -23,8 +23,8 @@ type Feature struct {
 	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
 	GroupID       string               `json:"group_id,omitempty"`
 	// Group is populated by the service layer when building responses; repository/FromEnt do not set it.
-	Group         *group.Group         `json:"group,omitempty"`
-	EnvironmentID string               `json:"environment_id"`
+	Group         *group.Group `json:"group,omitempty"`
+	EnvironmentID string       `json:"environment_id"`
 	types.BaseModel
 }
 

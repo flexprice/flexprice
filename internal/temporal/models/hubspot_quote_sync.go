@@ -42,4 +42,3 @@ func (input *HubSpotQuoteSyncWorkflowInput) Validate() error {
 	}
 	return nil
 }
-

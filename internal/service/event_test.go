@@ -66,6 +66,7 @@ func (s *EventServiceSuite) SetupTest() {
 		s.publisher,
 		s.logger,
 		s.config,
+		nil, // tracing disabled in unit tests
 	)
 }
 
@@ -373,6 +374,7 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 		s.publisher,
 		s.logger,
 		s.config,
+		nil, // tracing disabled in unit tests
 	)
 
 	// Setup test events

@@ -16,8 +16,8 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/pubsub/memory"
 	"github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/publisher"
 )
@@ -45,7 +45,7 @@ func SyncBillingCustomers() error {
 	}
 
 	// Create postgres client wrapper
-	client := postgres.NewClient(entClient, logger, sentry.NewSentryService(cfg, logger))
+	client := postgres.NewClient(entClient, logger, tracing.NewService(cfg, logger))
 
 	// Initialize cache
 	cache := cache.GetInMemoryCache()

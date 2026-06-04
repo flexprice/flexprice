@@ -15,7 +15,7 @@ const (
 	// V2 workflow + activity names. Coexists with V1 (PriceSyncWorkflow /
 	// SyncPlanPrices); the API handler picks one based on
 	// PlanPriceSyncConfig.UseV2ForPlan.
-	WorkflowPriceSyncV2     = "PriceSyncV2Workflow"
+	WorkflowPriceSyncV2      = "PriceSyncV2Workflow"
 	ActivitySyncPlanPricesV2 = "SyncPlanPricesV2"
 )
 

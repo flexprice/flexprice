@@ -123,4 +123,3 @@ func (h *SecretHandler) DeleteAPIKey(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
-

@@ -22,8 +22,8 @@ import (
 	"github.com/flexprice/flexprice/internal/postgres"
 	chRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -111,7 +111,7 @@ func newCSVFeatureProcessor(tenantID, environmentID, userID string) (*CSVFeature
 	}
 
 	// Initialize ClickHouse client for event repositories
-	sentryService := sentry.NewSentryService(cfg, log)
+	sentryService := tracing.NewService(cfg, log)
 	chStore, err := clickhouse.NewClickHouseStore(cfg, sentryService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to clickhouse: %w", err)

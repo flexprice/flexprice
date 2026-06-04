@@ -14,7 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
@@ -49,7 +49,7 @@ func CopyPlanChargesToAddons() error {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
 
-	pgClient := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
+	pgClient := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
 	priceRepo := entRepo.NewPriceRepository(pgClient, log, cacheClient)
 

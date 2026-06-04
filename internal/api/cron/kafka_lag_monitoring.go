@@ -9,7 +9,6 @@ import (
 )
 
 // It monitors lag metrics across event consumption and post-processing pipelines.
-//
 type KafkaLagMonitoringHandler struct {
 	logger       *logger.Logger
 	eventService service.EventService
