@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -1472,7 +1473,7 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 }
 
 // processDebitOperation handles the debit operation with credit selection and consumption
-func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) error {
+func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) ([]*wallet.Transaction, error) {
 	// Find eligible credits with pagination
 	credits := []*wallet.Transaction{}
 	var err error
@@ -1480,7 +1481,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		// Get the parent debit transaction
 		parentCreditTx, err := s.WalletRepo.GetTransactionByID(ctx, req.ParentCreditTxID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		credits = append(credits, parentCreditTx)
 
@@ -1491,7 +1492,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 			// Use invoice's period end as the time reference
 			invoice, err := s.InvoiceRepo.Get(ctx, *req.InvoiceID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if invoice.PeriodEnd != nil {
 				timeReference = lo.FromPtr(invoice.PeriodEnd)
@@ -1499,7 +1500,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		}
 		credits, err = s.WalletRepo.FindEligibleCredits(ctx, req.WalletID, req.CreditAmount, 100, timeReference)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -1515,7 +1516,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	if totalAvailable.LessThan(req.CreditAmount) {
 		// if not manual debit, return error
 		if req.TransactionReason != types.TransactionReasonManualBalanceDebit {
-			return ierr.NewError("insufficient balance").
+			return nil, ierr.NewError("insufficient balance").
 				WithHint("Insufficient balance to process debit operation").
 				WithReportableDetails(map[string]interface{}{
 					"wallet_id": req.WalletID,
@@ -1526,11 +1527,12 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	}
 
 	// Process debit across credits
-	if err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount); err != nil {
-		return err
+	consumedCredits, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
+	if err != nil {
+		return consumedCredits, err
 	}
 
-	return nil
+	return consumedCredits, nil
 }
 
 // processWalletOperation handles both credit and debit operations
@@ -1568,8 +1570,18 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		if req.Type == types.TransactionTypeDebit {
 			newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
 			// Process debit operation (credit selection and consumption)
-			if err := s.processDebitOperation(ctx, req); err != nil {
+			consumedCredits, err := s.processDebitOperation(ctx, req)
+			if err != nil {
 				return err
+			}
+
+			if len(consumedCredits) > 0 {
+				consumedCreditsIDs := make([]string, 0)
+				for _, c := range consumedCredits {
+					consumedCreditsIDs = append(consumedCreditsIDs, c.ID)
+				}
+
+				req.Metadata["consumed_credit_tx_ids"] = strings.Join(consumedCreditsIDs, ",")
 			}
 		} else {
 			// Process credit operation
