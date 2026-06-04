@@ -311,6 +311,26 @@ func (s *Service) StartMonitoringSpan(ctx context.Context, operation string, par
 	return span, span.Context()
 }
 
+// StartSvixSpan starts a new Svix API span in the current transaction
+func (s *Service) StartSvixSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	operationName := fmt.Sprintf("svix.%s", operation)
+	span := sentry.StartSpan(ctx, operationName)
+	if span != nil {
+		span.Description = operationName
+		span.Op = "svix.api"
+
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, span.Context()
+}
+
 // StartKafkaLagMonitoringSpan creates a specialized span for Kafka consumer lag monitoring.
 // It tracks lag metrics with proper tagging for alerting and observability.
 func (s *Service) StartKafkaLagMonitoringSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
