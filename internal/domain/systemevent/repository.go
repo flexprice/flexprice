@@ -11,6 +11,7 @@ import (
 // ListStaleUndeliveredWebhooksParams configures the stale-webhook query.
 type ListStaleUndeliveredWebhooksParams struct {
 	OlderThan         time.Time
+	NewerThan         time.Time
 	Limit             int
 	MaxAttempts       int
 	ExcludedTenants   []string

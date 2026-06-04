@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	newerRecordsBasePeriod  = 48 * time.Hour
 	staleWebhookGracePeriod = 15 * time.Minute
 	staleWebhookPageSize    = 500
 )
@@ -117,10 +118,11 @@ func (s *WebhookService) RetryStalePendingWebhooks(ctx context.Context) (RetrySt
 	limiter := rate.NewLimiter(rate.Limit(rps), rps)
 
 	cutoff := time.Now().UTC().Add(-staleWebhookGracePeriod)
-
+	newerThan := time.Now().UTC().Add(-newerRecordsBasePeriod)
 	for {
 		rows, err := s.systemEventRepo.ListStaleUndeliveredWebhooks(ctx, domainsystemevent.ListStaleUndeliveredWebhooksParams{
 			OlderThan:         cutoff,
+			NewerThan:         newerThan,
 			Limit:             staleWebhookPageSize,
 			MaxAttempts:       jobCfg.MaxAttempts,
 			ExcludedTenants:   jobCfg.ExcludedTenants,
@@ -146,12 +148,8 @@ func (s *WebhookService) RetryStalePendingWebhooks(ctx context.Context) (RetrySt
 					"tenant_id", se.TenantID,
 					"environment_id", se.EnvironmentID,
 				)
-				if dbErr := s.systemEventRepo.OnFailed(ctx, se.ID, err.Error()); dbErr != nil {
-					s.logger.Warnw("failed to persist webhook failure_reason on stale retry",
-						"error", dbErr,
-						"system_event_id", se.ID,
-					)
-				}
+				// NOTE: OnFailed is already called inside DeliverWebhook (handler.go),
+				// so we do NOT call it again here to avoid double-incrementing failure_count.
 				continue
 			}
 			out.Succeeded++

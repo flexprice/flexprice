@@ -47,6 +47,7 @@ func (r *SystemEventRepository) ListStaleUndeliveredWebhooks(ctx context.Context
 		systemevent.WebhookMessageIDIsNil(),
 		systemevent.PublishedAtIsNil(),
 		systemevent.CreatedAtLT(params.OlderThan),
+		systemevent.CreatedAtGT(params.NewerThan),
 		systemevent.EventNameNotNil(),
 		systemevent.EventNameNEQ(""),
 		systemevent.FailureCountLT(params.MaxAttempts),
