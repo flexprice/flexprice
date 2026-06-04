@@ -13,6 +13,7 @@ package tracing
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -208,24 +209,48 @@ func (s *Service) newResource(ctx context.Context) (*resource.Resource, error) {
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(s.cfg.Otel.ResolveServiceName(s.cfg)),
 	}
+
+	// service.version — set via SERVICE_VERSION env var at deploy time (e.g. git SHA).
+	// Enables version-scoped queries and error tracking in SigNoz / Sentry.
+	if v := strings.TrimSpace(os.Getenv("SERVICE_VERSION")); v != "" {
+		attrs = append(attrs, semconv.ServiceVersion(v))
+	}
+
+	// deployment.environment — emit both old and new semconv keys for broad
+	// backend compatibility (Sentry relay reads the legacy key).
 	env := s.cfg.Logging.Environment
 	if env == "" {
 		env = s.cfg.Sentry.Environment
 	}
 	if env != "" {
-		// Set both old and new semconv keys for broad backend compatibility.
-		// semconv v1.22+ renamed the key to "deployment.environment.name"; Sentry's
-		// OTLP gateway (and some other backends) still read the old
-		// "deployment.environment" attribute, so we emit both.
 		attrs = append(attrs,
-			semconv.DeploymentEnvironmentName(env),          // deployment.environment.name (new)
-			attribute.String("deployment.environment", env), // deployment.environment (legacy, Sentry)
+			semconv.DeploymentEnvironmentName(env),          // deployment.environment.name (OTel v1.22+)
+			attribute.String("deployment.environment", env), // legacy key (Sentry, some backends)
 		)
 	}
+
 	if s.cfg.Logging.Region != "" {
 		attrs = append(attrs, semconv.CloudRegion(s.cfg.Logging.Region))
 	}
-	return resource.New(ctx, resource.WithAttributes(attrs...))
+
+	// app.component identifies which binary this process is (api / consumer /
+	// temporal_worker). Visible in SigNoz as a filterable resource attribute.
+	if mode := string(s.cfg.Deployment.Mode); mode != "" {
+		attrs = append(attrs, attribute.String("app.component", mode))
+	}
+
+	return resource.New(ctx,
+		resource.WithAttributes(attrs...),
+		// Auto-detect host.name (container hostname on ECS), process.pid,
+		// process.executable.name, and os.type. These populate the "Infrastructure"
+		// section in SigNoz Span Details and enable host-level filtering.
+		resource.WithHost(),
+		resource.WithProcess(),
+		resource.WithOS(),
+		// Merge OTEL_RESOURCE_ATTRIBUTES env var (standard OTel SDK mechanism for
+		// injecting per-deployment attributes without code changes).
+		resource.WithFromEnv(),
+	)
 }
 
 func (s *Service) shutdown(ctx context.Context) {
