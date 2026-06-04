@@ -1592,7 +1592,7 @@ func (s *walletService) convertToPostpaid(ctx context.Context, id string) (*dto.
 
 			// Update local state to reflect credit transfer
 			newWallet.CreditBalance = newWallet.CreditBalance.Add(creditsTransferred)
-			newWallet.Balance = newWallet.Balance.Add(creditsTransferred)
+			newWallet.Balance = s.GetCurrencyAmountFromCredits(newWallet.CreditBalance, newWallet.ConversionRate)
 
 			s.Logger.InfowCtx(ctx, "transferred credits during wallet conversion",
 				"new_wallet_id", newWallet.ID,
