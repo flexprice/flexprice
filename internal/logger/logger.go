@@ -41,6 +41,10 @@ type Logger struct {
 	fluentdLogger   *fluent.Fluent
 	otelLogProvider *sdklog.LoggerProvider
 	serviceName     string
+	// ctxBound is true once WithContext has wrapped the core with otelCtxCore.
+	// Guards against repeated WithContext calls accumulating nested wrappers,
+	// which would append multiple _span_ctx fields on every Write.
+	ctxBound bool
 }
 
 // ---------------------------------------------------------------------------
@@ -498,10 +502,17 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 	// record-level TraceId/SpanId (not just string attributes). This enables
 	// SigNoz's native trace-log correlation. We do this even for ended spans —
 	// the span context (TraceId, SpanId) remains valid after span.End().
-	if sc.IsValid() {
+	//
+	// Guard: only wrap once. Repeated WithContext calls (e.g. middleware chains
+	// calling Ctx(ctx) on an already-context-bound logger) would otherwise
+	// accumulate nested otelCtxCore layers, producing duplicate _span_ctx fields
+	// on every Write. ctxBound is set on the returned Logger to prevent this.
+	ctxBound := l.ctxBound
+	if sc.IsValid() && !l.ctxBound {
 		newSugared = newSugared.WithOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
 			return &otelCtxCore{Core: c, ctx: ctx}
 		}))
+		ctxBound = true
 	}
 
 	return &Logger{
@@ -509,6 +520,7 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 		fluentdLogger:   l.fluentdLogger,
 		otelLogProvider: l.otelLogProvider,
 		serviceName:     l.serviceName,
+		ctxBound:        ctxBound,
 	}
 }
 

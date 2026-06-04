@@ -45,13 +45,16 @@ const (
 
 // SpanEnrichmentMiddleware runs after otelgin (which creates the span) and
 // before the handler chain. It:
-//  1. Pre-request: stamps request_id on the span.
-//  2. Post-request: stashes trace_id/span_id in gin's context while the span
-//     is still present, before otelgin's deferred context-restore fires. This
-//     allows LoggingMiddleware (post-phase runs after otelgin fully returns) to
-//     read the IDs via c.GetString(ginKeyTraceID) without depending on the span
-//     still being in c.Request.Context() — which otelgin removes via defer.
-//  3. Marks the span as ERROR for 5xx responses and records gin errors as span events.
+//  1. Pre-request: stamps app.request_id on the span for cross-signal searching.
+//  2. Post-request: stashes trace_id/span_id and the full span-carrying context
+//     into gin's key-value store while the span is still present, before
+//     otelgin's deferred context-restore fires. LoggingMiddleware (post-phase
+//     runs after otelgin fully returns) reads these to inject trace_id/span_id
+//     into log fields and the OTLP log record — enabling SigNoz trace-log
+//     correlation in the Span Details "Logs" tab.
+//
+// Note: otelgin v0.69.0 already handles 5xx span status marking and gin error
+// recording. This middleware intentionally does NOT duplicate those operations.
 //
 // Middleware execution order:
 //
@@ -108,11 +111,13 @@ func TenantContextMiddleware(c *gin.Context) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 	userID := types.GetUserID(ctx)
-	requestID := types.GetRequestID(ctx)
 
-	// Attach to OTel span — visible as searchable attributes in SigNoz trace explorer.
+	// Attach tenant / user attributes to the OTel span.
+	// Note: app.request_id is intentionally omitted here — SpanEnrichmentMiddleware
+	// (which runs on all routes, including unauthenticated ones) already sets it in
+	// its pre-phase, before this middleware runs.
 	if span := trace.SpanFromContext(ctx); span != nil && span.SpanContext().IsValid() {
-		attrs := make([]attribute.KeyValue, 0, 4)
+		attrs := make([]attribute.KeyValue, 0, 3)
 		if tenantID != "" {
 			attrs = append(attrs, attribute.String("app.tenant_id", tenantID))
 		}
@@ -121,9 +126,6 @@ func TenantContextMiddleware(c *gin.Context) {
 		}
 		if userID != "" {
 			attrs = append(attrs, attribute.String("app.user_id", userID))
-		}
-		if requestID != "" {
-			attrs = append(attrs, attribute.String("app.request_id", requestID))
 		}
 		if len(attrs) > 0 {
 			span.SetAttributes(attrs...)
