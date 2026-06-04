@@ -23,7 +23,7 @@ import (
 const (
 	newerRecordsBasePeriod  = 48 * time.Hour
 	staleWebhookGracePeriod = 15 * time.Minute
-	staleWebhookPageSize    = 500
+	staleWebhookPageSize    = 1000
 )
 
 // RetryStalePendingWebhooksResult counts bulk retry outcomes for stale undelivered system_events.
