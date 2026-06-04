@@ -1529,7 +1529,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	// Process debit across credits
 	consumedCredits, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
 	if err != nil {
-		return consumedCredits, err
+		return nil, err
 	}
 
 	return consumedCredits, nil
@@ -1543,6 +1543,11 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	var tx *wallet.Transaction
 	var newCreditBalance decimal.Decimal
 	var finalBalance decimal.Decimal
+
+	metadata := make(types.Metadata)
+	if req.Metadata != nil {
+		metadata = req.Metadata
+	}
 
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Step 1: Acquire advisory lock for the wallet
@@ -1581,7 +1586,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 					consumedCreditsIDs = append(consumedCreditsIDs, c.ID)
 				}
 
-				req.Metadata["consumed_credit_tx_ids"] = strings.Join(consumedCreditsIDs, ",")
+				metadata["consumed_credit_tx_ids"] = strings.Join(consumedCreditsIDs, ",")
 			}
 		} else {
 			// Process credit operation
@@ -1601,7 +1606,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			ReferenceType:       req.ReferenceType,
 			ReferenceID:         req.ReferenceID,
 			Description:         req.Description,
-			Metadata:            req.Metadata,
+			Metadata:            metadata,
 			TxStatus:            types.TransactionStatusCompleted,
 			TransactionReason:   req.TransactionReason,
 			ExpiryDate:          req.ResolvedExpiryDate(),
