@@ -59,7 +59,7 @@ func (r *SystemEventRepository) ListStaleUndeliveredWebhooks(ctx context.Context
 	}
 	return r.client.Reader(ctx).SystemEvent.Query().
 		Where(preds...).
-		Order(flexent.Asc(systemevent.FieldCreatedAt)).
+		Order(flexent.Desc(systemevent.FieldCreatedAt)).
 		Limit(params.Limit).
 		All(ctx)
 }
