@@ -3,60 +3,33 @@ package ent
 import (
 	"context"
 
-	"github.com/getsentry/sentry-go"
+	"github.com/flexprice/flexprice/internal/tracing"
 )
 
-// StartRepositorySpan creates a new span for a repository operation
-// Returns nil if Sentry is not available in the context
-func StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) *sentry.Span {
-	// Disabled to reduce Sentry span quota usage
+// StartRepositorySpan creates a span for an Ent/Postgres repository operation.
+//
+// Currently a no-op at the repository level; Postgres transaction-level spans
+// are enabled via TracingClient.WithTx when
+// FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED=true.
+func StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) *tracing.Span {
+	_ = ctx
+	_ = repository
+	_ = operation
+	_ = params
 	return nil
-
-	// Get the hub from the context
-	hub := sentry.GetHubFromContext(ctx)
-	if hub == nil {
-		return nil
-	}
-
-	// Create a new span for this operation
-	span := sentry.StartSpan(ctx, "repository."+repository+"."+operation)
-	if span != nil {
-		span.Description = "repository." + repository + "." + operation
-		span.Op = "db.repository"
-
-		// Add repository data
-		span.SetData("repository", repository)
-		span.SetData("operation", operation)
-
-		// Add additional parameters
-		for k, v := range params {
-			span.SetData(k, v)
-		}
-	}
-
-	return span
 }
 
-// FinishSpan safely finishes a span, handling nil spans
-func FinishSpan(span *sentry.Span) {
-	if span != nil {
-		span.Finish()
-	}
+// FinishSpan safely finishes a span, handling nil spans.
+func FinishSpan(span *tracing.Span) {
+	span.Finish()
 }
 
-// SetSpanError marks a span as failed and adds error information
-func SetSpanError(span *sentry.Span, err error) {
-	if span == nil || err == nil {
-		return
-	}
-
-	span.Status = sentry.SpanStatusInternalError
-	span.SetData("error", err.Error())
+// SetSpanError marks a span as failed and adds error information.
+func SetSpanError(span *tracing.Span, err error) {
+	span.SetStatusError(err)
 }
 
-// SetSpanSuccess marks a span as successful
-func SetSpanSuccess(span *sentry.Span) {
-	if span != nil {
-		span.Status = sentry.SpanStatusOK
-	}
+// SetSpanSuccess marks a span as successful.
+func SetSpanSuccess(span *tracing.Span) {
+	span.SetStatusOK()
 }

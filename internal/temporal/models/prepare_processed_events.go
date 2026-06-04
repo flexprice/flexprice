@@ -9,13 +9,13 @@ import (
 // PrepareProcessedEventsWorkflowInput represents input for the prepare processed events workflow.
 // It is used when an ingested event references a non-existent feature/meter/price.
 type PrepareProcessedEventsWorkflowInput struct {
-	EventID                    string                 `json:"event_id"` // Event ID for workflow ID generation
-	EventName                  string                 `json:"event_name"`
-	EventTimestamp             time.Time              `json:"event_timestamp"` // Event timestamp for line item StartDate
-	EventProperties            map[string]interface{} `json:"event_properties"` // Event properties to determine feature creation logic
-	TenantID                   string                 `json:"tenant_id"`
-	EnvironmentID              string                 `json:"environment_id"`
-	WorkflowConfig             WorkflowConfig         `json:"workflow_config"`
+	EventID                     string                 `json:"event_id"` // Event ID for workflow ID generation
+	EventName                   string                 `json:"event_name"`
+	EventTimestamp              time.Time              `json:"event_timestamp"`  // Event timestamp for line item StartDate
+	EventProperties             map[string]interface{} `json:"event_properties"` // Event properties to determine feature creation logic
+	TenantID                    string                 `json:"tenant_id"`
+	EnvironmentID               string                 `json:"environment_id"`
+	WorkflowConfig              WorkflowConfig         `json:"workflow_config"`
 	OnlyCreateAggregationFields []string               `json:"only_create_aggregation_fields,omitempty"` // When set, create only features for these aggregation fields (skip existing)
 }
 
@@ -57,11 +57,11 @@ type PrepareProcessedEventsActionResult struct {
 }
 
 type CreateFeatureAndPriceActivityInput struct {
-	EventName                  string                             `json:"event_name"`
-	EventProperties            map[string]interface{}             `json:"event_properties"` // Event properties for feature determination
-	TenantID                   string                             `json:"tenant_id"`
-	EnvironmentID              string                             `json:"environment_id"`
-	FeatureAndPriceConfig      *CreateFeatureAndPriceActionConfig `json:"feature_and_price_config" validate:"required"`
+	EventName                   string                             `json:"event_name"`
+	EventProperties             map[string]interface{}             `json:"event_properties"` // Event properties for feature determination
+	TenantID                    string                             `json:"tenant_id"`
+	EnvironmentID               string                             `json:"environment_id"`
+	FeatureAndPriceConfig       *CreateFeatureAndPriceActionConfig `json:"feature_and_price_config" validate:"required"`
 	OnlyCreateAggregationFields []string                           `json:"only_create_aggregation_fields,omitempty"` // When set, create only features for these aggregation fields (skip existing)
 }
 

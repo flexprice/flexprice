@@ -80,15 +80,15 @@ type InitiateOAuthResponse struct {
 
 // CompleteOAuthRequest represents a generic request to complete OAuth for any provider
 type CompleteOAuthRequest struct {
-	Provider  types.OAuthProvider `json:"provider" binding:"required"`   // e.g., "quickbooks"
-	SessionID string              `json:"session_id" binding:"required"` // Session ID from initiate OAuth
-	Code      string              `json:"code" binding:"required"`       // OAuth authorization code from the provider
-	State     string              `json:"state" binding:"required"`      // CSRF state token
-	RealmID   string              `json:"realm_id"`                      // QuickBooks realm ID (required for QuickBooks, validated in Validate())
-	OrganizationID string         `json:"organization_id"`               // Zoho Books organization ID (required for Zoho)
-	OrganizationName string       `json:"organization_name,omitempty"`   // Zoho Books organization name
-	Location string               `json:"location,omitempty"`            // Zoho callback location/DC
-	AccountsServer string         `json:"accounts_server,omitempty"`     // Zoho callback accounts server
+	Provider         types.OAuthProvider `json:"provider" binding:"required"`   // e.g., "quickbooks"
+	SessionID        string              `json:"session_id" binding:"required"` // Session ID from initiate OAuth
+	Code             string              `json:"code" binding:"required"`       // OAuth authorization code from the provider
+	State            string              `json:"state" binding:"required"`      // CSRF state token
+	RealmID          string              `json:"realm_id"`                      // QuickBooks realm ID (required for QuickBooks, validated in Validate())
+	OrganizationID   string              `json:"organization_id"`               // Zoho Books organization ID (required for Zoho)
+	OrganizationName string              `json:"organization_name,omitempty"`   // Zoho Books organization name
+	Location         string              `json:"location,omitempty"`            // Zoho callback location/DC
+	AccountsServer   string              `json:"accounts_server,omitempty"`     // Zoho callback accounts server
 }
 
 // Validate validates the OAuth complete request with provider-specific rules

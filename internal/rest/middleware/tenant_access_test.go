@@ -131,6 +131,7 @@ func newPermissiveRBACService(t *testing.T) *rbac.RBACService {
 func TestTenantStatusMiddleware(t *testing.T) {
 	testCases := []struct {
 		name               string
+		skip               string
 		method             string
 		tenantID           string
 		status             types.TenantInternalStatus
@@ -163,15 +164,15 @@ func TestTenantStatusMiddleware(t *testing.T) {
 			wantCode:           http.StatusOK,
 			wantInternalStatus: string(types.TenantInternalStatusSuspended),
 		},
-		// TODO: re-enable when suspended-tenant write blocking is enabled in RequirePermission.
-		// {
-		// 	name:       "suspended tenant write is blocked by RequirePermission",
-		// 	method:     http.MethodPost,
-		// 	tenantID:   "tenant-3",
-		// 	status:     types.TenantInternalStatusSuspended,
-		// 	wantCode:   http.StatusForbidden,
-		// 	wantErrMsg: "tenant account is suspended",
-		// },
+		{
+			name:       "suspended tenant write is blocked by RequirePermission",
+			skip:       "permission check temporarily disabled in RequirePermission middleware (see PR #1857)",
+			method:     http.MethodPost,
+			tenantID:   "tenant-3",
+			status:     types.TenantInternalStatusSuspended,
+			wantCode:   http.StatusForbidden,
+			wantErrMsg: "tenant account is suspended",
+		},
 		{
 			name:               "active tenant write passes through",
 			method:             http.MethodPost,
@@ -200,6 +201,9 @@ func TestTenantStatusMiddleware(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.skip != "" {
+				t.Skip(tc.skip)
+			}
 			svc := &mockTenantService{status: tc.status, err: tc.svcErr}
 			router := newTestRouter(t, tc.tenantID, svc)
 

@@ -104,13 +104,13 @@ func (s *FeatureServiceSuite) setupTestData() {
 	now := time.Now().UTC()
 	// Create test features
 	s.testData.features.apiCalls = &feature.Feature{
-		ID:          "feature_api_calls",
-		Name:        "API Calls Feature",
-		Description: "Track API usage",
-		LookupKey:   "api_calls",
-		Type:        types.FeatureTypeMetered,
-		MeterID:     s.testData.meters.apiCalls.ID,
-		BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+		ID:            "feature_api_calls",
+		Name:          "API Calls Feature",
+		Description:   "Track API usage",
+		LookupKey:     "api_calls",
+		Type:          types.FeatureTypeMetered,
+		MeterID:       s.testData.meters.apiCalls.ID,
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
 		ReportingUnit: testutil.NewReportingUnit("thousand tokens", "thousands of tokens", "0.001"),
 	}
 	s.testData.features.apiCalls.CreatedAt = now
@@ -228,23 +228,23 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 		{
 			name: "successful creation with reporting_unit",
 			req: dto.CreateFeatureRequest{
-				Name:        "Tokens Feature",
-				Description: "Token usage",
-				LookupKey:   "tokens_key",
-				Type:        types.FeatureTypeMetered,
-				MeterID:     s.testData.meters.apiCalls.ID,
-				UnitSingular: "token",
-				UnitPlural:   "tokens",
+				Name:          "Tokens Feature",
+				Description:   "Token usage",
+				LookupKey:     "tokens_key",
+				Type:          types.FeatureTypeMetered,
+				MeterID:       s.testData.meters.apiCalls.ID,
+				UnitSingular:  "token",
+				UnitPlural:    "tokens",
 				ReportingUnit: testutil.NewReportingUnit("thousand tokens", "thousands of tokens", "0.001"),
 			},
 		},
 		{
 			name: "error - reporting_unit missing unit_singular",
 			req: dto.CreateFeatureRequest{
-				Name:        "Test Feature",
-				LookupKey:   "test_key",
-				Type:        types.FeatureTypeMetered,
-				MeterID:     s.testData.meters.apiCalls.ID,
+				Name:      "Test Feature",
+				LookupKey: "test_key",
+				Type:      types.FeatureTypeMetered,
+				MeterID:   s.testData.meters.apiCalls.ID,
 				ReportingUnit: &types.ReportingUnit{
 					UnitSingular:   "",
 					UnitPlural:     "thousands of tokens",
@@ -257,10 +257,10 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 		{
 			name: "error - reporting_unit missing conversion_rate",
 			req: dto.CreateFeatureRequest{
-				Name:        "Test Feature",
-				LookupKey:   "test_key",
-				Type:        types.FeatureTypeMetered,
-				MeterID:     s.testData.meters.apiCalls.ID,
+				Name:      "Test Feature",
+				LookupKey: "test_key",
+				Type:      types.FeatureTypeMetered,
+				MeterID:   s.testData.meters.apiCalls.ID,
 				ReportingUnit: &types.ReportingUnit{
 					UnitSingular:   "thousand tokens",
 					UnitPlural:     "thousands of tokens",
@@ -273,10 +273,10 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 		{
 			name: "error - non-existent group_id",
 			req: dto.CreateFeatureRequest{
-				Name:        "Feature With Bad Group",
-				LookupKey:   "bad_group_feature",
-				Type:        types.FeatureTypeBoolean,
-				GroupID:     "group_nonexistent",
+				Name:      "Feature With Bad Group",
+				LookupKey: "bad_group_feature",
+				Type:      types.FeatureTypeBoolean,
+				GroupID:   "group_nonexistent",
 			},
 			wantErr:   true,
 			errString: "not found",
@@ -329,10 +329,10 @@ func (s *FeatureServiceSuite) TestCreateFeature_InvalidGroupValidation() {
 	s.NoError(s.groupRepo.Create(s.GetContext(), priceGroup))
 
 	req := dto.CreateFeatureRequest{
-		Name:        "Feature With Wrong Group Type",
-		LookupKey:   "wrong_group_type_feature",
-		Type:        types.FeatureTypeBoolean,
-		GroupID:     priceGroup.ID,
+		Name:      "Feature With Wrong Group Type",
+		LookupKey: "wrong_group_type_feature",
+		Type:      types.FeatureTypeBoolean,
+		GroupID:   priceGroup.ID,
 	}
 	_, err := s.service.CreateFeature(s.GetContext(), req)
 	s.Error(err)
@@ -443,10 +443,10 @@ func (s *FeatureServiceSuite) TestGetFeature_WithGroup() {
 	s.NoError(s.groupRepo.Create(s.GetContext(), grp))
 
 	createReq := dto.CreateFeatureRequest{
-		Name:        "Feature With Group",
-		LookupKey:   "feature_with_group",
-		Type:        types.FeatureTypeBoolean,
-		GroupID:     grp.ID,
+		Name:      "Feature With Group",
+		LookupKey: "feature_with_group",
+		Type:      types.FeatureTypeBoolean,
+		GroupID:   grp.ID,
 	}
 	created, err := s.service.CreateFeature(s.GetContext(), createReq)
 	s.NoError(err)
@@ -707,11 +707,11 @@ func (s *FeatureServiceSuite) TestGetFeaturesWithFiltersAndSorting() {
 
 func (s *FeatureServiceSuite) TestUpdateFeature() {
 	tests := []struct {
-		name                        string
-		id                          string
-		req                         dto.UpdateFeatureRequest
-		wantErr                     bool
-		errString                   string
+		name                         string
+		id                           string
+		req                          dto.UpdateFeatureRequest
+		wantErr                      bool
+		errString                    string
 		expectReportingUnitPreserved bool
 	}{
 		{
@@ -942,7 +942,7 @@ func (s *FeatureServiceSuite) TestUpdateFeature() {
 			name: "successful update with reporting_unit",
 			id:   s.testData.features.apiCalls.ID,
 			req: dto.UpdateFeatureRequest{
-				Name: lo.ToPtr("API Calls Feature"),
+				Name:          lo.ToPtr("API Calls Feature"),
 				ReportingUnit: testutil.NewReportingUnit("million tokens", "millions of tokens", "0.000001"),
 			},
 		},

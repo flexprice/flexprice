@@ -31,25 +31,25 @@ type EventExporter struct {
 
 // FeatureUsageCSV represents the CSV structure for feature usage export
 type FeatureUsageCSV struct {
-	ID                 string `csv:"id"`
-	TenantID           string `csv:"tenant_id"`
-	EnvironmentID      string `csv:"environment_id"`
-	ExternalCustomerID string `csv:"external_customer_id"`
-	CustomerID         string `csv:"customer_id"`
-	SubscriptionID     string `csv:"subscription_id"`
-	SubLineItemID      string `csv:"sub_line_item_id"`
-	PriceID            string `csv:"price_id"`
-	MeterID            string `csv:"meter_id"`
-	FeatureID          string `csv:"feature_id"`
-	EventName          string `csv:"event_name"`
-	Source             string `csv:"source"`
-	Timestamp          string `csv:"timestamp"`   // RFC3339 format
-	IngestedAt         string `csv:"ingested_at"` // RFC3339 format
-	PeriodID           string `csv:"period_id"`   // Billing period ID (uint64 as string)
-	QtyTotal           string `csv:"qty_total"`   // Total quantity (decimal as string)
+	ID                      string `csv:"id"`
+	TenantID                string `csv:"tenant_id"`
+	EnvironmentID           string `csv:"environment_id"`
+	ExternalCustomerID      string `csv:"external_customer_id"`
+	CustomerID              string `csv:"customer_id"`
+	SubscriptionID          string `csv:"subscription_id"`
+	SubLineItemID           string `csv:"sub_line_item_id"`
+	PriceID                 string `csv:"price_id"`
+	MeterID                 string `csv:"meter_id"`
+	FeatureID               string `csv:"feature_id"`
+	EventName               string `csv:"event_name"`
+	Source                  string `csv:"source"`
+	Timestamp               string `csv:"timestamp"`                 // RFC3339 format
+	IngestedAt              string `csv:"ingested_at"`               // RFC3339 format
+	PeriodID                string `csv:"period_id"`                 // Billing period ID (uint64 as string)
+	QtyTotal                string `csv:"qty_total"`                 // Total quantity (decimal as string)
 	ProvisionalUsageCharges string `csv:"provisional_usage_charges"` // price.Amount * quantity (decimal as string)
-	Properties         string `csv:"properties"`  // Event properties as JSON string
-	UniqueHash         string `csv:"unique_hash"` // Deduplication hash
+	Properties              string `csv:"properties"`                // Event properties as JSON string
+	UniqueHash              string `csv:"unique_hash"`               // Deduplication hash
 }
 
 // NewEventExporter creates a new event exporter
@@ -143,7 +143,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 				return nil, 0, ierr.WithError(listErr).
 					WithHint("Failed to fetch prices for export batch").
 					WithReportableDetails(map[string]interface{}{
-						"offset":     offset,
+						"offset":    offset,
 						"price_ids": len(uniquePriceIDs),
 					}).
 					Mark(ierr.ErrDatabase)
@@ -323,25 +323,25 @@ func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage, pr
 		}
 
 		record := &FeatureUsageCSV{
-			ID:                 usage.ID,
-			TenantID:           usage.TenantID,
-			EnvironmentID:      usage.EnvironmentID,
-			ExternalCustomerID: usage.ExternalCustomerID,
-			CustomerID:         usage.CustomerID,
-			SubscriptionID:     usage.SubscriptionID,
-			SubLineItemID:      usage.SubLineItemID,
-			PriceID:            usage.PriceID,
-			MeterID:            usage.MeterID,
-			FeatureID:          usage.FeatureID,
-			EventName:          usage.EventName,
-			Source:             usage.Source,
-			Timestamp:          usage.Timestamp.Format(time.RFC3339),
-			IngestedAt:         usage.IngestedAt.Format(time.RFC3339),
-			PeriodID:           fmt.Sprintf("%d", usage.PeriodID),
-			QtyTotal:           usage.QtyTotal.String(),
+			ID:                      usage.ID,
+			TenantID:                usage.TenantID,
+			EnvironmentID:           usage.EnvironmentID,
+			ExternalCustomerID:      usage.ExternalCustomerID,
+			CustomerID:              usage.CustomerID,
+			SubscriptionID:          usage.SubscriptionID,
+			SubLineItemID:           usage.SubLineItemID,
+			PriceID:                 usage.PriceID,
+			MeterID:                 usage.MeterID,
+			FeatureID:               usage.FeatureID,
+			EventName:               usage.EventName,
+			Source:                  usage.Source,
+			Timestamp:               usage.Timestamp.Format(time.RFC3339),
+			IngestedAt:              usage.IngestedAt.Format(time.RFC3339),
+			PeriodID:                fmt.Sprintf("%d", usage.PeriodID),
+			QtyTotal:                usage.QtyTotal.String(),
 			ProvisionalUsageCharges: provisionalUsageChargesStr,
-			Properties:         string(propertiesJSON),
-			UniqueHash:         usage.UniqueHash,
+			Properties:              string(propertiesJSON),
+			UniqueHash:              usage.UniqueHash,
 		}
 
 		records = append(records, record)

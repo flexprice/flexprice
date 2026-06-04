@@ -460,7 +460,7 @@ func (s *billingService) CalculateUsageCharges(
 	if err != nil {
 		return nil, err
 	}
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
 
 	// filter out line items that are not active
 	for _, item := range sub.LineItems {
@@ -1202,7 +1202,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 	if err != nil {
 		return nil, err
 	}
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
 
 	// Build lineItemByID map for O(1) lookup by subscription_line_item_id (from feature_usage)
 	chargesByLineItemID := make(map[string]*dto.SubscriptionUsageByMetersResponse)
@@ -3319,7 +3319,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		return nil, err
 	}
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
 
 	// get customer
 	customer, err := s.CustomerRepo.Get(ctx, customerID)

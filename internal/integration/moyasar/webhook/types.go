@@ -19,7 +19,7 @@ type MoyasarWebhookEvent struct {
 	CreatedAt   string           `json:"created_at"`
 	SecretToken string           `json:"secret_token,omitempty"` // Webhook secret token for verification
 	AccountName string           `json:"account_name,omitempty"` // The name of the account
-	Live        bool             `json:"live"`                    // True if live mode, false if test mode
+	Live        bool             `json:"live"`                   // True if live mode, false if test mode
 	Data        PaymentEventData `json:"data"`
 }
 

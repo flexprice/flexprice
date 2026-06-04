@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -505,13 +506,13 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 	return nil
 }
 
-func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) error {
+func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) ([]*wallet.Transaction, error) {
 	credits := []*wallet.Transaction{}
 	var err error
 	if req.ParentCreditTxID != "" {
 		parentCreditTx, err := s.WalletRepo.GetTransactionByID(ctx, req.ParentCreditTxID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		credits = append(credits, parentCreditTx)
 
@@ -520,7 +521,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		if req.InvoiceID != nil && *req.InvoiceID != "" {
 			invoice, err := s.InvoiceRepo.Get(ctx, *req.InvoiceID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if invoice.PeriodEnd != nil {
 				timeReference = lo.FromPtr(invoice.PeriodEnd)
@@ -528,7 +529,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		}
 		credits, err = s.WalletRepo.FindEligibleCredits(ctx, req.WalletID, req.CreditAmount, 100, timeReference)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -542,7 +543,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 
 	if totalAvailable.LessThan(req.CreditAmount) {
 		if req.TransactionReason != types.TransactionReasonManualBalanceDebit {
-			return ierr.NewError("insufficient balance").
+			return nil, ierr.NewError("insufficient balance").
 				WithHint("Insufficient balance to process debit operation").
 				WithReportableDetails(map[string]interface{}{
 					"wallet_id": req.WalletID,
@@ -552,11 +553,12 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		}
 	}
 
-	if err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount); err != nil {
-		return err
+	consumedCredits, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	return consumedCredits, nil
 }
 
 func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.WalletOperation) error {
@@ -566,6 +568,11 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	var tx *wallet.Transaction
 	var newCreditBalance decimal.Decimal
 	var finalBalance decimal.Decimal
+
+	metadata := make(types.Metadata)
+	if req.Metadata != nil {
+		metadata = req.Metadata
+	}
 
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: req.WalletID}); err != nil {
@@ -586,8 +593,19 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 
 		if req.Type == types.TransactionTypeDebit {
 			newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
-			if err := s.processDebitOperation(ctx, req); err != nil {
+			// Process debit operation (credit selection and consumption)
+			consumedCredits, err := s.processDebitOperation(ctx, req)
+			if err != nil {
 				return err
+			}
+
+			if len(consumedCredits) > 0 {
+				consumedCreditsIDs := make([]string, 0)
+				for _, c := range consumedCredits {
+					consumedCreditsIDs = append(consumedCreditsIDs, c.ID)
+				}
+
+				metadata["consumed_credit_tx_ids"] = strings.Join(consumedCreditsIDs, ",")
 			}
 		} else {
 			newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
@@ -605,7 +623,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			ReferenceType:       req.ReferenceType,
 			ReferenceID:         req.ReferenceID,
 			Description:         req.Description,
-			Metadata:            req.Metadata,
+			Metadata:            metadata,
 			TxStatus:            types.TransactionStatusCompleted,
 			TransactionReason:   req.TransactionReason,
 			ExpiryDate:          req.ResolvedExpiryDate(),

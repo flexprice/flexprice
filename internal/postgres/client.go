@@ -11,7 +11,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	_ "github.com/lib/pq"
 	"go.uber.org/fx"
@@ -60,7 +60,7 @@ type Client struct {
 	writerClient *ent.Client // Primary database connection for writes
 	readerClient *ent.Client // Read replica connection (may be same as writer)
 	logger       *logger.Logger
-	sentry       *sentry.Service
+	tracing      *tracing.Service
 	hasReader    bool // Whether a separate reader endpoint is configured
 }
 
@@ -181,17 +181,17 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 }
 
 // NewClient creates a new ent client wrapper with transaction management
-func NewClient(clients *EntClients, logger *logger.Logger, sentry *sentry.Service) IClient {
+func NewClient(clients *EntClients, logger *logger.Logger, tracingSvc *tracing.Service) IClient {
 	postgresClient := &Client{
 		writerClient: clients.Writer,
 		readerClient: clients.Reader,
 		logger:       logger,
-		sentry:       sentry,
+		tracing:      tracingSvc,
 		hasReader:    clients.HasReader,
 	}
 
-	if sentry != nil {
-		return NewSentryClient(postgresClient, sentry, logger)
+	if tracingSvc != nil {
+		return NewTracingClient(postgresClient, tracingSvc, logger)
 	}
 
 	return postgresClient

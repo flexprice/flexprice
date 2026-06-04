@@ -54,7 +54,7 @@ func (b WalletPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 		if err != nil {
 			// Log error but don't fail the webhook if customer fetch fails
 			// Customer is optional in the payload
-			b.services.Sentry.CaptureException(err)
+			b.services.Tracing.CaptureException(err)
 			customerData = nil
 		} else {
 			customerData = customer

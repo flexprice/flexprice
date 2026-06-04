@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-
 type FixedChargeBillingSuite struct {
 	testutil.BaseServiceTestSuite
 	service BillingService
@@ -216,20 +215,20 @@ func (s *FixedChargeBillingSuite) TestFlatFee_Arrear_Monthly() {
 	})
 
 	sub := &subscription.Subscription{
-		ID:                  "sub_ff_arr",
-		PlanID:              pl.ID,
-		CustomerID:          "cust_ff_arr",
-		StartDate:           periodStart,
-		BillingAnchor:       periodStart,
-		CurrentPeriodStart:  periodStart,
-		CurrentPeriodEnd:    periodEnd,
-		Currency:            "usd",
-		BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount:  1,
-		SubscriptionStatus:  types.SubscriptionStatusActive,
-		CustomerTimezone:    "UTC",
-		ProrationBehavior:   types.ProrationBehaviorNone,
-		BaseModel:           types.GetDefaultBaseModel(ctx),
+		ID:                 "sub_ff_arr",
+		PlanID:             pl.ID,
+		CustomerID:         "cust_ff_arr",
+		StartDate:          periodStart,
+		BillingAnchor:      periodStart,
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 	li := &subscription.SubscriptionLineItem{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
