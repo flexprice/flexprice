@@ -332,8 +332,6 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		toConsume := decimal.Min(remainingAmount, credit.CreditsAvailable)
 		newAvailable := credit.CreditsAvailable.Sub(toConsume)
 
-		consumedCreditTransactions = append(consumedCreditTransactions, credit)
-
 		// Update credit's available amount
 		_, err := r.client.Writer(ctx).WalletTransaction.UpdateOne(&ent.WalletTransaction{
 			ID: credit.ID,
@@ -354,6 +352,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		}
 
 		remainingAmount = remainingAmount.Sub(toConsume)
+		consumedCreditTransactions = append(consumedCreditTransactions, credit)
 	}
 
 	return consumedCreditTransactions, nil
