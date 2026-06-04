@@ -12,6 +12,7 @@ package tracing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -123,7 +124,15 @@ func (s *Service) initTracer(ctx context.Context) error {
 
 	res, err := s.newResource(ctx)
 	if err != nil {
-		return err
+		// resource.ErrPartialResource means some auto-detectors failed (e.g.
+		// resource.WithHost failed in a restricted container) but a usable partial
+		// resource was still built. Treat this as a non-fatal warning so OTel
+		// starts with whatever attributes were collected rather than aborting the
+		// entire service startup.
+		if !errors.Is(err, resource.ErrPartialResource) {
+			return err
+		}
+		s.logger.Warnw("OTel resource: partial detection, some attributes may be missing", "error", err)
 	}
 
 	sampleRate := tracesCfg.SampleRate

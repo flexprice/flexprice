@@ -472,6 +472,12 @@ func (l *Logger) sprintf(template string, args ...interface{}) string {
 //     OTLP log record's record-level TraceId and SpanId fields — these are what
 //     SigNoz uses to link logs to their trace in the Span Details "Logs" tab.
 func (l *Logger) WithContext(ctx context.Context) *Logger {
+	// Guard against nil ctx: noopJSONContext embeds context.Context as an
+	// interface, so noopJSONContext{nil}.Value(...) panics deep in the OTel SDK.
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	fields := []interface{}{
 		"request_id", types.GetRequestID(ctx),
 		"tenant_id", types.GetTenantID(ctx),

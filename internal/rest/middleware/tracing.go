@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -12,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -92,25 +89,13 @@ func SpanEnrichmentMiddleware() gin.HandlerFunc {
 			c.Set(ginKeySpanCtx, c.Request.Context()) // save ctx BEFORE otelgin restores it
 		}
 
-		if !span.SpanContext().IsValid() {
-			return
-		}
-
-		// Record any gin-level errors as span events for full trace visibility.
-		for _, ginErr := range c.Errors {
-			span.RecordError(ginErr.Err, trace.WithAttributes(
-				attribute.String("error.type", fmt.Sprintf("%T", ginErr.Err)),
-				attribute.String("gin.error.meta", fmt.Sprintf("%v", ginErr.Meta)),
-			))
-		}
-
-		// Ensure 5xx responses are marked as span errors so SigNoz "Error" filter
-		// and RED metrics work correctly. otelgin does this for standard http.Errors
-		// but may miss application-level 500s in some versions.
-		if statusCode := c.Writer.Status(); statusCode >= http.StatusInternalServerError {
-			span.SetStatus(codes.Error, http.StatusText(statusCode))
-			span.SetAttributes(attribute.Bool("error", true))
-		}
+		// Note: otelgin v0.69.0 already:
+		//   - calls span.SetStatus(sc.Status(status)) which marks 5xx as codes.Error
+		//   - iterates c.Errors and calls span.RecordError for each
+		// We intentionally do NOT duplicate those here to avoid double span events.
+		// SpanEnrichmentMiddleware's sole additional responsibility is:
+		//   1. app.request_id attribute (set in the pre-phase above)
+		//   2. Stashing the span context for LoggingMiddleware (done above)
 	}
 }
 
