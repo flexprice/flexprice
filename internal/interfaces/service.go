@@ -169,6 +169,10 @@ type SubscriptionService interface {
 	// ExternalCustomerIDsForSubscription returns distinct non-empty external customer IDs
 	// for the subscription owner plus all active/trialing/draft inherited children.
 	ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error)
+
+	// PublishSubscriptionCancelledEvent publishes the subscription.cancelled webhook event.
+	// Used by Temporal workflows when subscription cancellation occurs at end date or period end.
+	PublishSubscriptionCancelledEvent(ctx context.Context, subscriptionID string)
 }
 
 // SubscriptionModificationService handles mid-cycle subscription modifications:

@@ -335,6 +335,11 @@ func (s *BillingActivities) CheckCancellationActivity(
 			return nil, err
 		}
 
+		// Publish subscription.cancelled event after successful transaction
+		// This covers scheduled cancellations (end date reached or cancel_at_period_end)
+		subscriptionService := service.NewSubscriptionService(s.serviceParams)
+		subscriptionService.PublishSubscriptionCancelledEvent(ctx, sub.ID)
+
 		s.logger.Infow("subscription cancelled successfully",
 			"subscription_id", sub.ID,
 			"cancelled_at", *cancelledAt)
