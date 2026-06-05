@@ -3135,6 +3135,8 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		}
 
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+			s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
+
 			if err := s.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
 				return err
 			}
@@ -3374,6 +3376,9 @@ func (s *subscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.
 			return ierr.WithError(err).
 				WithHintf("Failed to cascade cancel to inherited subscription %s", child.ID).
 				Mark(ierr.ErrInternal)
+		}
+		if parentSub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+			s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, child.ID)
 		}
 	}
 	return nil
@@ -4135,6 +4140,10 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
+}
+
+func (s *subscriptionService) PublishSubscriptionEvent(ctx context.Context, eventName types.WebhookEventName, subscriptionID string) {
+	s.publishSystemEvent(ctx, eventName, subscriptionID)
 }
 
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
@@ -5500,7 +5509,7 @@ func (s *subscriptionService) publishCancellationEvents(
 ) {
 	// Publish standard subscription events
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
-	if cancellationType != types.CancellationTypeScheduledDate {
+	if cancellationType == types.CancellationTypeImmediate {
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
 	}
 

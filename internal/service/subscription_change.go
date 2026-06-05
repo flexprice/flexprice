@@ -719,6 +719,7 @@ func (s *subscriptionChangeService) executeChange(
 		Reason:                    "subscription_change",
 		ProrationBehavior:         req.ProrationBehavior,
 		SkipProrationWalletCredit: true, // we always skip the wallet credit refund since we will apply it as adjustment to the new subscription 1st invoice
+		SuppressWebhook:           true,
 	})
 	if err != nil {
 		return nil, err
