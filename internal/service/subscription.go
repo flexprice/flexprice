@@ -3172,7 +3172,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	}
 
 	if isSubscriptionCancelled {
-		s.publishCancellationEvents(ctx, sub, "")
+		s.PublishCancellationEvents(ctx, sub)
 	}
 
 	return nil
@@ -4144,7 +4144,8 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 }
 
 func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
-	s.publishCancellationEvents(ctx, sub, "")
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
 }
 
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
