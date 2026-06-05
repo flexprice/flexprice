@@ -319,10 +319,6 @@ func (s *featureUsageTrackingService) RegisterHandlerReplay(router *pubsubRouter
 
 // Process a single event message for feature usage tracking
 func (s *featureUsageTrackingService) processMessage(msg *message.Message) error {
-	s.Logger.Debugw("processing event from message queue in feature usage tracking service",
-		"message_uuid", msg.UUID,
-	)
-	return nil
 	// Extract tenant ID from message metadata
 	partitionKey := msg.Metadata.Get("partition_key")
 	tenantID := msg.Metadata.Get("tenant_id")
