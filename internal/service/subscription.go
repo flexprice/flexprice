@@ -3169,6 +3169,14 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return err
 	}
 
+	// Publish subscription.cancelled event after successful transaction
+	// This covers scheduled cancellations (end date reached or cancel_at_period_end)
+	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
+		s.Logger.InfowCtx(ctx, "published subscription.cancelled event for scheduled cancellation",
+			"subscription_id", sub.ID)
+	}
+
 	return nil
 }
 
@@ -4136,6 +4144,7 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
+
 
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
 func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
