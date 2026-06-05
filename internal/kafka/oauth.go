@@ -47,6 +47,13 @@ type gcpTokenProvider struct {
 // already-minted access token rather than a signature.
 var gmkJWTHeader = mustB64JSON(map[string]string{"typ": "JWT", "alg": "GOOG_OAUTH2_TOKEN"})
 
+// NewGCPTokenProvider builds a sarama.AccessTokenProvider that emits GMK-format
+// OAUTHBEARER tokens (see gcpTokenProvider). Exported so the separate
+// internal/pubsub/kafka client can reuse the exact same token logic.
+func NewGCPTokenProvider(ctx context.Context, scopes []string) (sarama.AccessTokenProvider, error) {
+	return newGCPTokenProvider(ctx, scopes)
+}
+
 func newGCPTokenProvider(ctx context.Context, scopes []string) (*gcpTokenProvider, error) {
 	if len(scopes) == 0 {
 		scopes = []string{"https://www.googleapis.com/auth/cloud-platform"}
