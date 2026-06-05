@@ -322,11 +322,21 @@ All service addresses are resolved via named templates above so this block stays
   value: {{ .Values.kafkaConfig.saslMechanism | quote }}
 - name: FLEXPRICE_KAFKA_SASL_USER
   value: {{ .Values.kafkaConfig.saslUser | quote }}
+{{- /*
+  OAUTHBEARER (e.g. GCP Managed Kafka) carries no static password — the token
+  comes from a sarama AccessTokenProvider (Application Default Credentials under
+  Workload Identity). Only wire the password secretKeyRef for password-based
+  mechanisms (PLAIN / SCRAM); otherwise the env references a kafka-sasl-password
+  key that secret.yaml never renders (it gates on .saslPassword), which fails
+  the pod with CreateContainerConfigError.
+*/}}
+{{- if ne .Values.kafkaConfig.saslMechanism "OAUTHBEARER" }}
 - name: FLEXPRICE_KAFKA_SASL_PASSWORD
   valueFrom:
     secretKeyRef:
       name: {{ include "flexprice.secretName" . }}
       key: kafka-sasl-password
+{{- end }}
 {{- end }}
 {{- /* ---- Redis ---- */}}
 - name: FLEXPRICE_REDIS_HOST
