@@ -34,6 +34,74 @@ func TracingMiddleware(cfg *config.Configuration) []gin.HandlerFunc {
 	return handlers
 }
 
+// Gin context keys used to propagate OTel trace context from SpanEnrichmentMiddleware
+// to LoggingMiddleware. otelgin's deferred context-restore fires between the two
+// post-phases, so we stash the span IDs and the pre-restore request context here.
+const (
+	ginKeyTraceID  = "_otel_trace_id"
+	ginKeySpanID   = "_otel_span_id"
+	ginKeySpanCtx  = "_otel_span_ctx" // full context.Context with active span
+)
+
+// SpanEnrichmentMiddleware runs after otelgin (which creates the span) and
+// before the handler chain. It:
+//  1. Pre-request: stamps app.request_id on the span for cross-signal searching.
+//  2. Post-request: stashes trace_id/span_id and the full span-carrying context
+//     into gin's key-value store while the span is still present, before
+//     otelgin's deferred context-restore fires. LoggingMiddleware (post-phase
+//     runs after otelgin fully returns) reads these to inject trace_id/span_id
+//     into log fields and the OTLP log record — enabling SigNoz trace-log
+//     correlation in the Span Details "Logs" tab.
+//
+// Note: otelgin v0.69.0 already handles 5xx span status marking and gin error
+// recording. This middleware intentionally does NOT duplicate those operations.
+//
+// Middleware execution order:
+//
+//	Registration: [LoggingMW, otelgin, SpanEnrichmentMW, ...]
+//	Pre-phase:    LoggingMW.pre → otelgin.pre (span created) → SpanEnrichment.pre
+//	Post-phase:   SpanEnrichment.post → otelgin.post+defer (span ended, ctx restored) → LoggingMW.post
+func SpanEnrichmentMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		span := trace.SpanFromContext(ctx)
+
+		// Pre-request: attach request_id to the span for cross-signal searching.
+		if span.SpanContext().IsValid() {
+			if rid := types.GetRequestID(ctx); rid != "" {
+				span.SetAttributes(attribute.String("app.request_id", rid))
+			}
+		}
+
+		c.Next()
+
+		// Post-request: the span is still in c.Request.Context() here because
+		// otelgin's deferred restore hasn't fired yet (it fires when otelgin's
+		// function returns, which is after our post-phase completes).
+		sc := trace.SpanFromContext(c.Request.Context()).SpanContext()
+		if sc.IsValid() {
+			// Stash IDs and the full span-carrying context in gin's key-value store.
+			// After otelgin's deferred restore fires (which removes the span from
+			// c.Request.Context()), LoggingMiddleware reads these to:
+			//   1. Inject trace_id/span_id as string log fields (stdout + OTLP attributes).
+			//   2. Pass ginKeySpanCtx to logger.WithContext so the otelzap bridge can set
+			//      the OTLP log record's record-level TraceId/SpanId — the fields SigNoz
+			//      uses to link logs to their trace in the Span Details "Logs" tab.
+			c.Set(ginKeyTraceID, sc.TraceID().String())
+			c.Set(ginKeySpanID, sc.SpanID().String())
+			c.Set(ginKeySpanCtx, c.Request.Context()) // save ctx BEFORE otelgin restores it
+		}
+
+		// Note: otelgin v0.69.0 already:
+		//   - calls span.SetStatus(sc.Status(status)) which marks 5xx as codes.Error
+		//   - iterates c.Errors and calls span.RecordError for each
+		// We intentionally do NOT duplicate those here to avoid double span events.
+		// SpanEnrichmentMiddleware's sole additional responsibility is:
+		//   1. app.request_id attribute (set in the pre-phase above)
+		//   2. Stashing the span context for LoggingMiddleware (done above)
+	}
+}
+
 // TenantContextMiddleware enriches the active OTel span and Sentry scope with
 // tenant_id, environment_id, and user_id. Mount this after AuthenticateMiddleware
 // and EnvAccessMiddleware so the request context already has these set.
@@ -44,16 +112,23 @@ func TenantContextMiddleware(c *gin.Context) {
 	environmentID := types.GetEnvironmentID(ctx)
 	userID := types.GetUserID(ctx)
 
-	// Attach to OTel span (visible in SigNoz)
+	// Attach tenant / user attributes to the OTel span.
+	// Note: app.request_id is intentionally omitted here — SpanEnrichmentMiddleware
+	// (which runs on all routes, including unauthenticated ones) already sets it in
+	// its pre-phase, before this middleware runs.
 	if span := trace.SpanFromContext(ctx); span != nil && span.SpanContext().IsValid() {
+		attrs := make([]attribute.KeyValue, 0, 3)
 		if tenantID != "" {
-			span.SetAttributes(attribute.String("tenant_id", tenantID))
+			attrs = append(attrs, attribute.String("app.tenant_id", tenantID))
 		}
 		if environmentID != "" {
-			span.SetAttributes(attribute.String("environment_id", environmentID))
+			attrs = append(attrs, attribute.String("app.environment_id", environmentID))
 		}
 		if userID != "" {
-			span.SetAttributes(attribute.String("user_id", userID))
+			attrs = append(attrs, attribute.String("app.user_id", userID))
+		}
+		if len(attrs) > 0 {
+			span.SetAttributes(attrs...)
 		}
 	}
 
