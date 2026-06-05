@@ -32,6 +32,19 @@ LOG_DIR="${LOG_DIR:-./logs/optimize_partitions}"
 mkdir -p "$LOG_DIR"
 
 # ---------------------------
+# GNU DATE DETECTION
+# (macOS `date` is BSD and lacks `-d`/`-Iseconds`; prefer gdate, fall back to GNU date.)
+# ---------------------------
+if command -v gdate >/dev/null 2>&1; then
+  DATE_BIN="gdate"
+elif date --version 2>/dev/null | grep -q GNU; then
+  DATE_BIN="date"
+else
+  echo "Error: GNU date is required. On macOS install via: brew install coreutils" >&2
+  exit 1
+fi
+
+# ---------------------------
 # CLICKHOUSE CLIENT WRAPPER
 # ---------------------------
 ch() {
@@ -50,7 +63,7 @@ ch() {
 # ---------------------------
 # HELPERS
 # ---------------------------
-date_add() { gdate -d "$1 +1 day" +"%Y-%m-%d"; }
+date_add() { "$DATE_BIN" -d "$1 +1 day" +"%Y-%m-%d"; }
 
 # Convert YYYY-MM-DD to YYYYMMDD partition format
 date_to_partition() {
@@ -62,11 +75,11 @@ optimize_partition() {
   local partition="$(date_to_partition "$day")"
   local log="$LOG_DIR/${day}.log"
 
-  echo "[$(gdate -Iseconds)] Starting OPTIMIZE for ${day} (partition ${partition})" | tee -a "$log"
+  echo "[$("$DATE_BIN" -Iseconds)] Starting OPTIMIZE for ${day} (partition ${partition})" | tee -a "$log"
 
   local attempt=1
   while (( attempt <= MAX_RETRIES )); do
-    echo "[$(gdate -Iseconds)] Attempt ${attempt}/${MAX_RETRIES} for ${day}" | tee -a "$log"
+    echo "[$("$DATE_BIN" -Iseconds)] Attempt ${attempt}/${MAX_RETRIES} for ${day}" | tee -a "$log"
 
     # Run OPTIMIZE TABLE for the specific partition
     if ch --query "
@@ -76,18 +89,18 @@ optimize_partition() {
       SETTINGS
         max_execution_time = ${MAX_EXEC_TIME}
     " >>"$log" 2>&1; then
-      echo "[$(gdate -Iseconds)] DONE ${day} (partition ${partition})" | tee -a "$log"
+      echo "[$("$DATE_BIN" -Iseconds)] DONE ${day} (partition ${partition})" | tee -a "$log"
       return 0
     fi
 
     # failed: backoff + retry
     local sleep_for=$(( BASE_BACKOFF_SEC * attempt ))
-    echo "[$(gdate -Iseconds)] FAIL ${day} attempt ${attempt}. Sleeping ${sleep_for}s then retry..." | tee -a "$log"
+    echo "[$("$DATE_BIN" -Iseconds)] FAIL ${day} attempt ${attempt}. Sleeping ${sleep_for}s then retry..." | tee -a "$log"
     sleep "$sleep_for"
     attempt=$(( attempt + 1 ))
   done
 
-  echo "[$(gdate -Iseconds)] ERROR: Giving up on ${day} after ${MAX_RETRIES} attempts" | tee -a "$log"
+  echo "[$("$DATE_BIN" -Iseconds)] ERROR: Giving up on ${day} after ${MAX_RETRIES} attempts" | tee -a "$log"
   return 1
 }
 export -f optimize_partition
@@ -106,7 +119,7 @@ while [[ "$d" != "$END_DATE_EXCL" ]]; do
 done
 
 echo "Will optimize ${#days[@]} partitions for table ${TABLE_NAME}"
-echo "Date range: ${START_DATE} to $(gdate -d "${END_DATE_EXCL} -1 day" +%Y-%m-%d 2>/dev/null || echo "${END_DATE_EXCL}(exclusive)")"
+echo "Date range: ${START_DATE} to $("$DATE_BIN" -d "${END_DATE_EXCL} -1 day" +%Y-%m-%d 2>/dev/null || echo "${END_DATE_EXCL}(exclusive)")"
 echo "Parallelism: ${PARALLEL}"
 echo "Logs: ${LOG_DIR}"
 
@@ -117,6 +130,7 @@ export TABLE_NAME PARTITION_COL
 export MAX_RETRIES BASE_BACKOFF_SEC
 export CONNECT_TIMEOUT_SEC SEND_TIMEOUT_SEC RECEIVE_TIMEOUT_SEC MAX_EXEC_TIME
 export LOG_DIR
+export DATE_BIN
 
 # Run up to PARALLEL jobs at a time
 if command -v parallel &> /dev/null; then

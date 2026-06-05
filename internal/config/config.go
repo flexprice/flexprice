@@ -518,6 +518,7 @@ type FeatureFlagConfig struct {
 	ForceV1ForTenant                  string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
 	EnableMeterUsageForPreviewInvoice bool   `mapstructure:"enable_meter_usage_for_preview_invoice" validate:"omitempty"`
 	EnableMeterUsageForAnalytics      bool   `mapstructure:"enable_meter_usage_for_analytics" validate:"omitempty"`
+	EnableUsageBenchmark              bool   `mapstructure:"enable_usage_benchmark" validate:"omitempty"`
 
 	// Per-tenant overrides for the meter-usage rollout. Resolution order:
 	//   1. disabled_tenants — tenant force-disabled (highest priority)
@@ -527,6 +528,8 @@ type FeatureFlagConfig struct {
 	MeterUsageForPreviewInvoiceDisabledTenants []string `mapstructure:"meter_usage_for_preview_invoice_disabled_tenants" validate:"omitempty"`
 	MeterUsageForAnalyticsEnabledTenants       []string `mapstructure:"meter_usage_for_analytics_enabled_tenants" validate:"omitempty"`
 	MeterUsageForAnalyticsDisabledTenants      []string `mapstructure:"meter_usage_for_analytics_disabled_tenants" validate:"omitempty"`
+	UsageBenchmarkEnabledTenants               []string `mapstructure:"usage_benchmark_enabled_tenants" validate:"omitempty"`
+	UsageBenchmarkDisabledTenants              []string `mapstructure:"usage_benchmark_disabled_tenants" validate:"omitempty"`
 }
 
 // IsMeterUsageEnabledForPreviewInvoice resolves the meter-usage rollout for the
@@ -550,6 +553,19 @@ func (c *FeatureFlagConfig) IsMeterUsageEnabledForAnalytics(tenantID string) boo
 		c.EnableMeterUsageForAnalytics,
 		c.MeterUsageForAnalyticsEnabledTenants,
 		c.MeterUsageForAnalyticsDisabledTenants,
+	)
+}
+
+// IsUsageBenchmarkEnabled resolves the usage-benchmark publish gate for a
+// specific tenant. Gates publishBenchmarkEvent in the wallet billing path so
+// the feature-usage / meter-usage comparison runs only for selected tenants.
+// See FeatureFlagConfig for the resolution order.
+func (c *FeatureFlagConfig) IsUsageBenchmarkEnabled(tenantID string) bool {
+	return resolveTenantRollout(
+		tenantID,
+		c.EnableUsageBenchmark,
+		c.UsageBenchmarkEnabledTenants,
+		c.UsageBenchmarkDisabledTenants,
 	)
 }
 

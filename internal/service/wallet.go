@@ -2678,7 +2678,9 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			if err != nil {
 				return nil, err
 			}
-			// s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
+			if s.Config != nil && s.Config.FeatureFlag.IsUsageBenchmarkEnabled(types.GetTenantID(ctx)) {
+				s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
+			}
 
 			// Calculate usage charges for feature/meter usage data
 			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
@@ -2862,7 +2864,9 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 			if err != nil {
 				return nil, err
 			}
-			// s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
+			if s.Config != nil && s.Config.FeatureFlag.IsUsageBenchmarkEnabled(types.GetTenantID(ctx)) {
+				s.publishBenchmarkEvent(ctx, sub.ID, periodStart, periodEnd)
+			}
 			// Calculate usage charges for the resolved usage data
 			featureUsageResult, err := billingService.CalculateFeatureUsageCharges(ctx, &dto.CalculateFeatureUsageChargesParams{
 				Subscription: sub,

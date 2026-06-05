@@ -727,10 +727,28 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		if billingAnchor == nil {
 			billingAnchor = &sub.BillingAnchor
 		}
+
+		// Clamp the query window by CancelledAt for cancelled subs. meter_usage
+		// has no per-event subscription linkage — the per-line-item date bound
+		// (lineItem.GetPeriodEnd) falls back to the request EndTime when the
+		// line item has no EndDate, which is the common case after a cancel.
+		// Without this clamp, a cancelled sub's line items would re-attribute
+		// post-cancellation events from whichever sub is now active for the
+		// same meter. Skip entirely when the clamped window has no overlap.
+		subEndTime := params.EndTime
+		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled && sub.CancelledAt != nil {
+			if sub.CancelledAt.Before(subEndTime) {
+				subEndTime = *sub.CancelledAt
+			}
+		}
+		if !subEndTime.After(params.StartTime) {
+			continue
+		}
+
 		usage, err := s.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
 			SubscriptionID:  sub.ID,
 			StartTime:       params.StartTime,
-			EndTime:         params.EndTime,
+			EndTime:         subEndTime,
 			WindowSize:      params.WindowSize,
 			BillingAnchor:   billingAnchor,
 			UseFinal:        params.UseFinal,
@@ -1533,6 +1551,33 @@ func (s *meterUsageService) resolveCustomerAndSubscriptions(ctx context.Context,
 	subsList, err := subService.ListSubscriptions(ctx, filter)
 	if err != nil {
 		return cust, nil, err
+	}
+
+	// when any child sub is SubscriptionTypeInherited, additionally load its parent
+	// so parent-scoped line items / commitments are visible to analytics.
+	parentSubIDs := make([]string, 0)
+	for _, subResp := range subsList.Items {
+		if subResp.Subscription.SubscriptionType == types.SubscriptionTypeInherited &&
+			subResp.Subscription.ParentSubscriptionID != nil {
+			parentSubIDs = append(parentSubIDs, lo.FromPtr(subResp.Subscription.ParentSubscriptionID))
+		}
+	}
+	if len(parentSubIDs) > 0 {
+		parentFilter := types.NewNoLimitSubscriptionFilter()
+		parentFilter.WithLineItems = true
+		parentFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
+		parentFilter.SubscriptionIDs = parentSubIDs
+		parentFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+			types.SubscriptionStatusPaused,
+			types.SubscriptionStatusCancelled,
+		}
+		parentsList, err := subService.ListSubscriptions(ctx, parentFilter)
+		if err != nil {
+			return cust, nil, err
+		}
+		subsList.Items = append(subsList.Items, parentsList.Items...)
 	}
 
 	subscriptions := make([]*subscription.Subscription, len(subsList.Items))
