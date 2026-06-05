@@ -4145,13 +4145,6 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	}
 }
 
-// PublishSubscriptionCancelledEvent publishes the subscription.cancelled webhook event.
-// Used by Temporal workflows when subscription cancellation occurs at end date or period end.
-func (s *subscriptionService) PublishSubscriptionCancelledEvent(ctx context.Context, subscriptionID string) {
-	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, subscriptionID)
-	s.Logger.InfowCtx(ctx, "published subscription.cancelled event",
-		"subscription_id", subscriptionID)
-}
 
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
 func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {

@@ -916,8 +916,6 @@ func (m *mockSubscriptionService) CascadeCancelToInheritedSubscriptions(ctx cont
 func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
 	return nil, nil
 }
-func (m *mockSubscriptionService) PublishSubscriptionCancelledEvent(ctx context.Context, subscriptionID string) {
-}
 
 // --- ProcessSubscriptionActivatedWebhook tests ---
 

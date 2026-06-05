@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"time"
@@ -14,6 +15,7 @@ import (
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
 
@@ -337,8 +339,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 
 		// Publish subscription.cancelled event after successful transaction
 		// This covers scheduled cancellations (end date reached or cancel_at_period_end)
-		subscriptionService := service.NewSubscriptionService(s.serviceParams)
-		subscriptionService.PublishSubscriptionCancelledEvent(ctx, sub.ID)
+		s.publishSubscriptionCancelledEvent(ctx, sub.ID)
 
 		s.logger.Infow("subscription cancelled successfully",
 			"subscription_id", sub.ID,
@@ -541,4 +542,40 @@ func (s *BillingActivities) executeScheduledPlanChange(
 	}
 
 	return nil
+}
+
+// publishSubscriptionCancelledEvent publishes the subscription.cancelled webhook event
+func (s *BillingActivities) publishSubscriptionCancelledEvent(ctx context.Context, subscriptionID string) {
+	eventPayload := webhookDto.InternalSubscriptionEvent{
+		SubscriptionID: subscriptionID,
+		TenantID:       types.GetTenantID(ctx),
+	}
+
+	webhookPayload, err := json.Marshal(eventPayload)
+	if err != nil {
+		s.logger.Errorw("failed to marshal webhook payload", "error", err)
+		return
+	}
+
+	webhookEvent := &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     types.WebhookEventSubscriptionCancelled,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     time.Now().UTC(),
+		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypeSubscription,
+		EntityID:      subscriptionID,
+	}
+
+	if err := s.serviceParams.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
+		s.logger.Errorw("failed to publish subscription.cancelled event",
+			"subscription_id", subscriptionID,
+			"error", err)
+		return
+	}
+
+	s.logger.Infow("published subscription.cancelled event",
+		"subscription_id", subscriptionID)
 }
