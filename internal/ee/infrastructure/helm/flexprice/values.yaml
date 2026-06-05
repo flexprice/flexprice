@@ -730,17 +730,23 @@ redisExtended:
   poolSize: 10          # connection pool size
 
 # Event processing configuration
+# `enabled` gates whether the consumer subscribes to each topic. The Go struct
+# defaults are true, but viper ignores Go `default` tags on Unmarshal, so they
+# must be set here or the events→ClickHouse consumers never start.
 eventProcessing:
+  enabled: true
   topic: "events"
   rateLimit: 12
   consumerGroup: "flexprice-consumer"
 
 eventProcessingLazy:
+  enabled: true
   topic: "events_lazy"
   rateLimit: 12
   consumerGroup: "v1_event_processing_lazy"
 
 eventPostProcessing:
+  enabled: true
   topic: "events_post_processing"
   rateLimit: 12
   consumerGroup: "v1_events_post_processing"
@@ -749,6 +755,7 @@ eventPostProcessing:
   consumerGroupBackfill: "v1_events_post_processing_backfill"
 
 featureUsageTracking:
+  enabled: true
   topic: "events"
   rateLimit: 1
   consumerGroup: "v1_feature_tracking_service"
@@ -757,6 +764,7 @@ featureUsageTracking:
   consumerGroupBackfill: "v1_feature_tracking_service_backfill"
 
 featureUsageTrackingLazy:
+  enabled: true
   topic: "events_lazy"
   rateLimit: 1
   consumerGroup: "v1_feature_tracking_service_lazy"
