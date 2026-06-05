@@ -100,9 +100,9 @@ func NewRouter(
 		router.Use(h)
 	}
 	// SpanEnrichmentMiddleware runs after otelgin (span created) and before handlers.
-	// Post-phase executes before otelgin's post-phase (LIFO), so it can set span
-	// status / record errors before the span is ended and exported.
-	router.Use(middleware.SpanEnrichmentMiddleware())
+	// Post-phase executes before otelgin's post-phase (LIFO), so it can stash span
+	// context for LoggingMiddleware. Also captures request bodies when enabled.
+	router.Use(middleware.SpanEnrichmentMiddleware(cfg))
 	router.Use(middleware.PyroscopeMiddleware(cfg)) // Add Pyroscope middleware
 
 	// Initialize permission middleware

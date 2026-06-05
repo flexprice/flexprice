@@ -97,6 +97,7 @@ otel:
     auth_header: "signoz-ingestion-key"  # Set auth_value via FLEXPRICE_OTEL_TRACES_AUTH_VALUE
     auth_value: ""
     sample_rate: 1.0
+    capture_request_body: true  # Attach request body to HTTP spans (truncated at 8KB, auth/secret paths excluded). Set FLEXPRICE_OTEL_TRACES_CAPTURE_REQUEST_BODY=false to disable.
 
   logs:
     enabled: false

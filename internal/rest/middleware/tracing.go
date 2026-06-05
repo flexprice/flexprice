@@ -1,7 +1,11 @@
 package middleware
 
 import (
+	"bytes"
+	"io"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/types"
@@ -43,10 +47,33 @@ const (
 	ginKeySpanCtx  = "_otel_span_ctx" // full context.Context with active span
 )
 
+// maxRequestBodyBytes is the maximum number of bytes captured from the request
+// body and attached to the span. Bodies larger than this are truncated.
+const maxRequestBodyBytes = 8 * 1024 // 8 KB
+
+// sensitivePathSegments lists URL path segments whose request bodies are never
+// captured. These routes handle credentials, tokens, or other secrets.
+var sensitivePathSegments = []string{
+	"/auth/", "/login", "/signup", "/password", "/secret", "/token",
+}
+
+// captureableContentTypes lists content-type prefixes eligible for body capture.
+// Binary, multipart, and streaming types are excluded because they are either
+// unreadable as text or very large.
+var captureableContentTypes = []string{
+	"application/json",
+	"application/x-www-form-urlencoded",
+	"text/",
+}
+
 // SpanEnrichmentMiddleware runs after otelgin (which creates the span) and
 // before the handler chain. It:
 //  1. Pre-request: stamps app.request_id on the span for cross-signal searching.
-//  2. Post-request: stashes trace_id/span_id and the full span-carrying context
+//  2. Pre-request (optional): reads and re-buffers the request body, attaches
+//     it as http.request.body on the span (truncated at 8 KB). Controlled by
+//     cfg.Otel.Traces.CaptureRequestBody; skips auth/secret paths and
+//     non-text content types.
+//  3. Post-request: stashes trace_id/span_id and the full span-carrying context
 //     into gin's key-value store while the span is still present, before
 //     otelgin's deferred context-restore fires. LoggingMiddleware (post-phase
 //     runs after otelgin fully returns) reads these to inject trace_id/span_id
@@ -61,15 +88,20 @@ const (
 //	Registration: [LoggingMW, otelgin, SpanEnrichmentMW, ...]
 //	Pre-phase:    LoggingMW.pre → otelgin.pre (span created) → SpanEnrichment.pre
 //	Post-phase:   SpanEnrichment.post → otelgin.post+defer (span ended, ctx restored) → LoggingMW.post
-func SpanEnrichmentMiddleware() gin.HandlerFunc {
+func SpanEnrichmentMiddleware(cfg *config.Configuration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		span := trace.SpanFromContext(ctx)
 
-		// Pre-request: attach request_id to the span for cross-signal searching.
 		if span.SpanContext().IsValid() {
+			// Pre-request: stamp request_id for cross-signal searching.
 			if rid := types.GetRequestID(ctx); rid != "" {
 				span.SetAttributes(attribute.String("app.request_id", rid))
+			}
+
+			// Pre-request: capture request body when enabled.
+			if cfg.Otel.Traces.CaptureRequestBody {
+				captureBody(c, span)
 			}
 		}
 
@@ -92,14 +124,84 @@ func SpanEnrichmentMiddleware() gin.HandlerFunc {
 			c.Set(ginKeySpanCtx, c.Request.Context()) // save ctx BEFORE otelgin restores it
 		}
 
-		// Note: otelgin v0.69.0 already:
-		//   - calls span.SetStatus(sc.Status(status)) which marks 5xx as codes.Error
-		//   - iterates c.Errors and calls span.RecordError for each
-		// We intentionally do NOT duplicate those here to avoid double span events.
-		// SpanEnrichmentMiddleware's sole additional responsibility is:
-		//   1. app.request_id attribute (set in the pre-phase above)
-		//   2. Stashing the span context for LoggingMiddleware (done above)
+		// Note: otelgin v0.69.0 already handles 5xx status marking and gin error
+		// recording. We do NOT duplicate those here to avoid double span events.
 	}
+}
+
+// captureBody reads the request body, re-buffers it so the handler can still
+// read it, and attaches it as http.request.body on the active span.
+// Bodies larger than maxRequestBodyBytes are truncated. Sensitive paths and
+// non-text content types are skipped.
+func captureBody(c *gin.Context, span trace.Span) {
+	path := c.Request.URL.Path
+
+	// Skip sensitive paths — these carry credentials or tokens.
+	for _, seg := range sensitivePathSegments {
+		if strings.Contains(path, seg) {
+			return
+		}
+	}
+
+	// Skip when there is definitely no body.
+	// ContentLength -1 means "unknown" (chunked/streaming) — still attempt capture.
+	// ContentLength 0 means explicitly empty body.
+	if c.Request.Body == nil || c.Request.ContentLength == 0 {
+		return
+	}
+	if c.Request.ContentLength > int64(maxRequestBodyBytes)*10 {
+		// Body is very large (>80KB) — skip to avoid significant memory overhead.
+		span.SetAttributes(attribute.String("http.request.body", "[body too large to capture]"))
+		return
+	}
+
+	// Only capture text-friendly content types.
+	ct := strings.ToLower(c.Request.Header.Get("Content-Type"))
+	// Empty content-type: assume JSON (common for API clients that omit it).
+	if ct != "" {
+		eligible := false
+		for _, prefix := range captureableContentTypes {
+			if strings.HasPrefix(ct, prefix) {
+				eligible = true
+				break
+			}
+		}
+		if !eligible {
+			return
+		}
+	}
+
+	// Read at most maxRequestBodyBytes+1 bytes. The extra byte lets us detect
+	// whether the body was truncated without reading the entire payload.
+	limited := io.LimitReader(c.Request.Body, int64(maxRequestBodyBytes)+1)
+	body, err := io.ReadAll(limited)
+	if err != nil {
+		return
+	}
+
+	// Restore the body so downstream handlers can still read it.
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
+
+	if len(body) == 0 {
+		return
+	}
+
+	truncated := len(body) > maxRequestBodyBytes
+	if truncated {
+		body = body[:maxRequestBodyBytes]
+	}
+
+	// Validate UTF-8 — OTel attributes must be valid strings.
+	if !utf8.Valid(body) {
+		span.SetAttributes(attribute.String("http.request.body", "[binary body omitted]"))
+		return
+	}
+
+	bodyStr := string(body)
+	if truncated {
+		bodyStr += " …[truncated]"
+	}
+	span.SetAttributes(attribute.String("http.request.body", bodyStr))
 }
 
 // TenantContextMiddleware enriches the active OTel span and Sentry scope with
