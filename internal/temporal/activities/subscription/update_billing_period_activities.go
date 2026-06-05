@@ -279,6 +279,16 @@ func (s *BillingActivities) CheckCancellationActivity(
 		return nil, err
 	}
 
+	// Skip if subscription is already cancelled (prevents duplicate webhooks on activity retry)
+	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+		s.logger.Infow("subscription already cancelled, skipping",
+			"subscription_id", sub.ID)
+		return &subscriptionModels.CheckSubscriptionCancellationActivityOutput{
+			IsCancelled: true,
+			Success:     true,
+		}, nil
+	}
+
 	shouldCancel := false
 	var cancelledAt *time.Time
 
