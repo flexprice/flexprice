@@ -5510,15 +5510,8 @@ func (s *subscriptionService) publishCancellationEvents(
 ) {
 	// Publish standard subscription events
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
-	children, err := s.getInheritedSubscriptions(ctx, sub.ID)
-	if err != nil {
-		return
-	}
 	if cancellationType == types.CancellationTypeImmediate {
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
-		for _, child := range children {
-			s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, child.ID)
-		}
 	}
 	s.Logger.Debugw("subscription cancellation events published",
 		"subscription_id", sub.ID)
