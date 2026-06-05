@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/pubsub"
-	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -34,27 +33,20 @@ type usageBenchmarkService struct {
 	benchRepo events.UsageBenchmarkRepository
 }
 
-// NewUsageBenchmarkService is the production constructor wired by FX.
+// NewUsageBenchmarkService is the production constructor wired by FX. It uses
+// the FX-singleton UsageBenchmarkPubSub from ServiceParams instead of opening
+// its own Kafka client — the previous behavior leaked a producer + consumer on
+// every call (publishBenchmarkEvent in walletService re-invokes this constructor
+// per billing iteration).
 func NewUsageBenchmarkService(
 	params ServiceParams,
 	benchRepo events.UsageBenchmarkRepository,
 ) UsageBenchmarkService {
-	svc := &usageBenchmarkService{
+	return &usageBenchmarkService{
 		ServiceParams: params,
 		benchRepo:     benchRepo,
+		pubSub:        params.UsageBenchmarkPubSub.PubSub,
 	}
-
-	ps, err := kafka.NewPubSubFromConfig(
-		params.Config,
-		params.Logger,
-		params.Config.UsageBenchmark.ConsumerGroup,
-	)
-	if err != nil {
-		params.Logger.Warnw("usage benchmark: kafka unavailable, benchmark event publishing disabled", "error", err)
-		return svc
-	}
-	svc.pubSub = ps
-	return svc
 }
 
 // NewUsageBenchmarkServiceForTest builds a minimal service using injected deps (test only).
@@ -139,9 +131,30 @@ func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) erro
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 
-	featureAmt, currency := s.callFeatureUsagePipeline(ctx, &evt)
-	// TODO: replace with s.callMeterUsagePipeline(ctx, &evt) when GetMeterUsageBySubscription is ready.
-	meterAmt := featureAmt
+	featureAmt, featureCurrency := s.callFeatureUsagePipeline(ctx, &evt)
+	meterAmt, meterCurrency := s.callMeterUsagePipeline(ctx, &evt)
+
+	// Prefer feature pipeline's currency (source of truth); fall back to meter
+	// pipeline's currency if the feature call returned no result.
+	currency := featureCurrency
+	if currency == "" {
+		currency = meterCurrency
+	}
+
+	diff := featureAmt.Sub(meterAmt)
+	if !diff.IsZero() && s.Logger != nil {
+		s.Logger.Warnw("usage benchmark: feature/meter pipelines disagree",
+			"subscription_id", evt.SubscriptionID,
+			"tenant_id", tenantID,
+			"environment_id", environmentID,
+			"start_time", evt.StartTime,
+			"end_time", evt.EndTime,
+			"feature_amount", featureAmt,
+			"meter_amount", meterAmt,
+			"diff", diff,
+			"currency", currency,
+		)
+	}
 
 	record := &events.UsageBenchmarkRecord{
 		TenantID:           tenantID,
@@ -151,7 +164,7 @@ func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) erro
 		EndTime:            evt.EndTime,
 		FeatureUsageAmount: featureAmt,
 		MeterUsageAmount:   meterAmt,
-		Diff:               featureAmt.Sub(meterAmt),
+		Diff:               diff,
 		Currency:           currency,
 		CreatedAt:          time.Now().UTC(),
 	}
@@ -183,6 +196,33 @@ func (s *usageBenchmarkService) callFeatureUsagePipeline(ctx context.Context, ev
 	if err != nil {
 		if s.Logger != nil {
 			s.Logger.Warnw("usage benchmark: feature pipeline call failed",
+				"subscription_id", evt.SubscriptionID,
+				"error", err,
+			)
+		}
+		return decimal.Zero, ""
+	}
+	return decimal.NewFromFloat(resp.Amount), resp.Currency
+}
+
+// callMeterUsagePipeline calls GetMeterUsageBySubscription. Returns (0, "") on
+// error so the benchmark insert still succeeds with a recorded diff. The
+// shared subscription service is constructed per call to avoid holding stale
+// references; this matches the feature-pipeline path.
+func (s *usageBenchmarkService) callMeterUsagePipeline(ctx context.Context, evt *events.UsageBenchmarkEvent) (decimal.Decimal, string) {
+	if s.MeterUsageRepo == nil {
+		return decimal.Zero, ""
+	}
+	subSvc := NewSubscriptionService(s.ServiceParams)
+	resp, err := subSvc.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+		SubscriptionID: evt.SubscriptionID,
+		StartTime:      evt.StartTime,
+		EndTime:        evt.EndTime,
+		Source:         string(types.UsageSourceAnalytics),
+	})
+	if err != nil {
+		if s.Logger != nil {
+			s.Logger.Warnw("usage benchmark: meter pipeline call failed",
 				"subscription_id", evt.SubscriptionID,
 				"error", err,
 			)

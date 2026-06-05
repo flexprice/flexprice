@@ -329,6 +329,9 @@ feature_flag:
   meter_usage_for_preview_invoice_disabled_tenants: []
   meter_usage_for_analytics_enabled_tenants: []
   meter_usage_for_analytics_disabled_tenants: []
+  enable_usage_benchmark: false
+  usage_benchmark_enabled_tenants: []
+  usage_benchmark_disabled_tenants: []
 
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:

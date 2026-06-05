@@ -765,6 +765,7 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
 				SetCommitmentWindowed(item.CommitmentWindowed).
 				SetNillableCommitmentDuration(item.CommitmentDuration).
+				SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 				SetMetadata(item.Metadata).
 				SetTenantID(item.TenantID).
 				SetEnvironmentID(item.EnvironmentID).
