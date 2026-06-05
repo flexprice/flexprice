@@ -336,7 +336,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 		}
 
 		subscriptionSvc := service.NewSubscriptionService(s.serviceParams)
-		subscriptionSvc.PublishSubscriptionEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
+		subscriptionSvc.PublishCancellationEvents(ctx, sub)
 
 		s.logger.Infow("subscription cancelled successfully",
 			"subscription_id", sub.ID,

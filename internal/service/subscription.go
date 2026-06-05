@@ -3018,6 +3018,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return s.SubRepo.Update(ctx, sub)
 	}
 
+	isSubscriptionCancelled := false
 	// Use db's WithTx for atomic operations
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Process all periods except the last one (which becomes the new current period)
@@ -3135,8 +3136,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		}
 
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
-			s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
-
+			isSubscriptionCancelled = true
 			if err := s.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
 				return err
 			}
@@ -3169,6 +3169,10 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			"subscription_id", sub.ID,
 			"error", err)
 		return err
+	}
+
+	if isSubscriptionCancelled {
+		s.publishCancellationEvents(ctx, sub, "")
 	}
 
 	return nil
@@ -3376,9 +3380,6 @@ func (s *subscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.
 			return ierr.WithError(err).
 				WithHintf("Failed to cascade cancel to inherited subscription %s", child.ID).
 				Mark(ierr.ErrInternal)
-		}
-		if parentSub.SubscriptionStatus == types.SubscriptionStatusCancelled {
-			s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, child.ID)
 		}
 	}
 	return nil
@@ -4142,8 +4143,8 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	}
 }
 
-func (s *subscriptionService) PublishSubscriptionEvent(ctx context.Context, eventName types.WebhookEventName, subscriptionID string) {
-	s.publishSystemEvent(ctx, eventName, subscriptionID)
+func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
+	s.publishCancellationEvents(ctx, sub, "")
 }
 
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
@@ -5509,10 +5510,16 @@ func (s *subscriptionService) publishCancellationEvents(
 ) {
 	// Publish standard subscription events
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
+	children, err := s.getInheritedSubscriptions(ctx, sub.ID)
+	if err != nil {
+		return
+	}
 	if cancellationType == types.CancellationTypeImmediate {
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
+		for _, child := range children {
+			s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, child.ID)
+		}
 	}
-
 	s.Logger.Debugw("subscription cancellation events published",
 		"subscription_id", sub.ID)
 }
