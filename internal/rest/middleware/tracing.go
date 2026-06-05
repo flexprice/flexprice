@@ -47,9 +47,18 @@ const (
 	ginKeySpanCtx  = "_otel_span_ctx" // full context.Context with active span
 )
 
-// maxRequestBodyBytes is the maximum number of bytes captured from the request
-// body and attached to the span. Bodies larger than this are truncated.
-const maxRequestBodyBytes = 8 * 1024 // 8 KB
+const (
+	// maxRequestBodyBytes is the upper bound on the http.request.body span
+	// attribute. Bodies larger than this are truncated in the attribute, but the
+	// handler always receives the complete body (up to maxBodyReadBytes).
+	maxRequestBodyBytes = 8 * 1024 // 8 KB span attribute limit
+
+	// maxBodyReadBytes is the maximum we buffer in memory per request. We read
+	// up to this limit, restore the full bytes for the handler, and truncate only
+	// the span attribute at maxRequestBodyBytes. Keeping a separate ceiling avoids
+	// breaking handler body parsing when the body is between 8 KB and 80 KB.
+	maxBodyReadBytes = 80 * 1024 // 80 KB read-buffer limit
+)
 
 // sensitivePathSegments lists URL path segments whose request bodies are never
 // captured. These routes handle credentials, tokens, or other secrets.
@@ -149,8 +158,8 @@ func captureBody(c *gin.Context, span trace.Span) {
 	if c.Request.Body == nil || c.Request.ContentLength == 0 {
 		return
 	}
-	if c.Request.ContentLength > int64(maxRequestBodyBytes)*10 {
-		// Body is very large (>80KB) — skip to avoid significant memory overhead.
+	if c.Request.ContentLength > int64(maxBodyReadBytes) {
+		// Body is very large — skip to avoid significant memory overhead.
 		span.SetAttributes(attribute.String("http.request.body", "[body too large to capture]"))
 		return
 	}
@@ -171,33 +180,39 @@ func captureBody(c *gin.Context, span trace.Span) {
 		}
 	}
 
-	// Read at most maxRequestBodyBytes+1 bytes. The extra byte lets us detect
-	// whether the body was truncated without reading the entire payload.
-	limited := io.LimitReader(c.Request.Body, int64(maxRequestBodyBytes)+1)
-	body, err := io.ReadAll(limited)
+	// Read up to maxBodyReadBytes. We restore ALL read bytes to the handler so
+	// body parsing is never broken, even when the span attribute is truncated.
+	// Without this, a LimitReader at 8 KB would feed only 8 KB back to the
+	// handler for bodies between 8 KB and 80 KB, corrupting JSON parsing.
+	body, err := io.ReadAll(io.LimitReader(c.Request.Body, int64(maxBodyReadBytes)+1))
+
+	// Always restore whatever bytes were read, even on partial-read errors, so
+	// the handler never receives an unexpectedly empty body.
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
+
 	if err != nil {
+		// Partial read — skip setting the span attribute, body is restored above.
 		return
 	}
-
-	// Restore the body so downstream handlers can still read it.
-	c.Request.Body = io.NopCloser(bytes.NewReader(body))
 
 	if len(body) == 0 {
 		return
 	}
 
-	truncated := len(body) > maxRequestBodyBytes
+	// Truncate only the span attribute, not the body the handler receives.
+	attrBody := body
+	truncated := len(attrBody) > maxRequestBodyBytes
 	if truncated {
-		body = body[:maxRequestBodyBytes]
+		attrBody = attrBody[:maxRequestBodyBytes]
 	}
 
-	// Validate UTF-8 — OTel attributes must be valid strings.
-	if !utf8.Valid(body) {
+	// Validate UTF-8 — OTel span attributes must be valid strings.
+	if !utf8.Valid(attrBody) {
 		span.SetAttributes(attribute.String("http.request.body", "[binary body omitted]"))
 		return
 	}
 
-	bodyStr := string(body)
+	bodyStr := string(attrBody)
 	if truncated {
 		bodyStr += " …[truncated]"
 	}
