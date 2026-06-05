@@ -3335,14 +3335,6 @@ func (s *walletService) publishBenchmarkEvent(ctx context.Context, subscriptionI
 	}
 }
 
-// ConvertToPostpaid converts a prepaid wallet to a postpaid wallet.
-// The operation is atomic and follows these steps:
-// 1. Lock the wallet to prevent concurrent operations
-// 2. Pick current balance from DB
-// 3. Terminate the wallet (debit remaining balance, set status to closed)
-// 4. Create a new postpaid wallet with AllowedPriceTypes set to ALL (fixed + usage)
-// 5. Top up the credits from the prepaid wallet if any
-// 6. All within a single database transaction
 func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertToPostpaidRequest) (*dto.ConvertToPostpaidResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
@@ -3355,21 +3347,18 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 	var creditsTransferred decimal.Decimal
 
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Step 1: Acquire advisory lock for the wallet
 		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: req.WalletID}); err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to acquire wallet lock").
 				Mark(ierr.ErrInternal)
 		}
 
-		// Step 2: Get wallet inside transaction (after acquiring lock)
 		var err error
 		originalWallet, err = s.WalletRepo.GetWalletByID(ctx, req.WalletID)
 		if err != nil {
 			return err
 		}
 
-		// Validate wallet is prepaid and active
 		if originalWallet.WalletType != types.WalletTypePrePaid {
 			return ierr.NewError("wallet is not a prepaid wallet").
 				WithHint("Only prepaid wallets can be converted to postpaid").
@@ -3390,10 +3379,8 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 				Mark(ierr.ErrInvalidOperation)
 		}
 
-		// Step 3: Store the current credit balance before termination
 		creditsTransferred = originalWallet.CreditBalance
 
-		// Step 4: Terminate the wallet (debit remaining balance and close)
 		if originalWallet.CreditBalance.GreaterThan(decimal.Zero) {
 			debitReq := &wallet.WalletOperation{
 				WalletID:          req.WalletID,
@@ -3413,19 +3400,16 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 			}
 		}
 
-		// Update wallet status to closed
 		if err := s.WalletRepo.UpdateWalletStatus(ctx, req.WalletID, types.WalletStatusClosed); err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to close prepaid wallet").
 				Mark(ierr.ErrDatabase)
 		}
 
-		// Update local state to reflect termination
 		originalWallet.WalletStatus = types.WalletStatusClosed
 		originalWallet.CreditBalance = decimal.Zero
 		originalWallet.Balance = decimal.Zero
 
-		// Step 5: Check for existing active postpaid wallet before creating
 		existingWallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, originalWallet.CustomerID)
 		if err != nil {
 			return ierr.WithError(err).
@@ -3447,7 +3431,6 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 			}
 		}
 
-		// Step 6: Create a new postpaid wallet
 		newWallet = &wallet.Wallet{
 			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
 			CustomerID:          originalWallet.CustomerID,
@@ -3481,7 +3464,6 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 			"customer_id", originalWallet.CustomerID,
 		)
 
-		// Step 7: Top up the new wallet with credits from the prepaid wallet
 		if creditsTransferred.GreaterThan(decimal.Zero) {
 			idempotencyKey := s.idempGen.GenerateKey(idempotency.ScopeCreditGrant, map[string]interface{}{
 				"wallet_id":           newWallet.ID,
@@ -3508,7 +3490,6 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 					Mark(ierr.ErrInternal)
 			}
 
-			// Update local state to reflect credit transfer
 			newWallet.CreditBalance = newWallet.CreditBalance.Add(creditsTransferred)
 			newWallet.Balance = newWallet.Balance.Add(creditsTransferred)
 
@@ -3526,7 +3507,6 @@ func (s *walletService) ConvertToPostpaid(ctx context.Context, req *dto.ConvertT
 		return nil, err
 	}
 
-	// Publish webhook events outside the transaction
 	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletTerminated, originalWallet.ID)
 	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, newWallet.ID)
 
