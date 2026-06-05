@@ -15,8 +15,8 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/svix"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
 	"github.com/samber/lo"
@@ -37,7 +37,7 @@ type handler struct {
 	factory         payload.PayloadBuilderFactory
 	client          httpclient.Client
 	logger          *logger.Logger
-	sentry          *sentry.Service
+	tracing         *tracing.Service
 	svixClient      *svix.Client
 	systemEventRepo *repoent.SystemEventRepository
 }
@@ -49,7 +49,7 @@ func NewHandler(
 	factory payload.PayloadBuilderFactory,
 	client httpclient.Client,
 	logger *logger.Logger,
-	sentry *sentry.Service,
+	tracingSvc *tracing.Service,
 	svixClient *svix.Client,
 	systemEventRepo *repoent.SystemEventRepository,
 ) (Handler, error) {
@@ -59,7 +59,7 @@ func NewHandler(
 		factory:         factory,
 		client:          client,
 		logger:          logger,
-		sentry:          sentry,
+		tracing:         tracingSvc,
 		svixClient:      svixClient,
 		systemEventRepo: systemEventRepo,
 	}, nil

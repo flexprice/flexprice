@@ -25,7 +25,6 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
-	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
@@ -34,6 +33,7 @@ import (
 	"github.com/flexprice/flexprice/internal/temporal/queries"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -96,7 +96,7 @@ func main() {
 			s3.NewService,
 
 			// Monitoring
-			sentry.NewSentryService,
+			tracing.NewService,
 			pyroscope.NewPyroscopeService,
 
 			// Cache
@@ -298,7 +298,7 @@ func main() {
 			provideRouter,
 		),
 		fx.Invoke(
-			sentry.RegisterHooks,
+			tracing.RegisterHooks,
 			pyroscope.RegisterHooks,
 			initIntegrationFactory,
 			startServer,
@@ -488,9 +488,9 @@ func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *log
 	return worker.NewTemporalWorkerManager(temporalClient, log)
 }
 
-func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger, sentryService *sentry.Service, cfg *config.TemporalConfig) temporalservice.TemporalService {
-	// Initialize the global Temporal service instance with Sentry
-	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log, sentryService, cfg)
+func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger, tracingSvc *tracing.Service, cfg *config.TemporalConfig) temporalservice.TemporalService {
+	// Initialize the global Temporal service instance with tracing
+	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log, tracingSvc, cfg)
 
 	// Get the global instance and start it
 	service := temporalservice.GetGlobalTemporalService()

@@ -90,6 +90,30 @@ func (r *UpdateWalletRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
 
+type WalletModificationType string
+
+const (
+	WalletModificationTypePrepaidToPostpaid WalletModificationType = "prepaid_to_postpaid"
+)
+
+// ModifyWalletRequest represents the request to modify a wallet
+type ModifyWalletRequest struct {
+	ModificationType WalletModificationType `json:"modification_type" binding:"required"`
+}
+
+func (r *ModifyWalletRequest) Validate() error {
+	if r.ModificationType != WalletModificationTypePrepaidToPostpaid {
+		return ierr.NewError("modification_type must be 'prepaid_to_postpaid'").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+type WalletModificationResponse struct {
+	OriginalWallet *WalletResponse `json:"original_wallet"`
+	NewWallet      *WalletResponse `json:"new_wallet"`
+}
+
 // ToWallet converts a create wallet request to a wallet
 func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	if r.ConversionRate.IsZero() {

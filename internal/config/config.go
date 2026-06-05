@@ -27,6 +27,7 @@ type Configuration struct {
 	Logging                    LoggingConfig                    `validate:"required"`
 	Postgres                   PostgresConfig                   `validate:"required"`
 	Sentry                     SentryConfig                     `validate:"required"`
+	Otel                       OtelConfig                       `validate:"omitempty"`
 	Pyroscope                  PyroscopeConfig                  `validate:"required"`
 	Event                      EventConfig                      `validate:"required"`
 	DynamoDB                   DynamoDBConfig                   `validate:"required"`
@@ -210,6 +211,114 @@ type SentryConfig struct {
 	DSN         string  `mapstructure:"dsn"`
 	Environment string  `mapstructure:"environment"`
 	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
+}
+
+// OtelConfig is the unified OTLP exporter configuration. Each signal (traces,
+// logs) can target a different backend with its own headers — useful when you
+// want, for example, logs to SigNoz and traces to Sentry. Top-level fields act
+// as defaults; per-signal fields override when non-empty.
+type OtelConfig struct {
+	Enabled     bool              `mapstructure:"enabled" default:"false"`
+	ServiceName string            `mapstructure:"service_name" validate:"omitempty"` // falls back to logging.service_name, then deployment.mode
+	Protocol    string            `mapstructure:"protocol" default:"grpc"`           // grpc (default) or http
+	Insecure    bool              `mapstructure:"insecure" default:"false"`          // true for local collector without TLS
+	Headers     map[string]string `mapstructure:"headers" validate:"omitempty"`      // applied to every signal unless that signal supplies its own non-empty map
+
+	Traces OtelTracesConfig `mapstructure:"traces"`
+	Logs   OtelLogsConfig   `mapstructure:"logs"`
+}
+
+// OtelTracesConfig configures OTLP span export.
+//
+// For backends that need a single auth header (Sentry's OTLP gateway, SigNoz
+// Cloud, Grafana Cloud, etc.) prefer the AuthHeader/AuthValue pair — these are
+// env-var friendly. Use Headers when you need to send more than one header.
+// AuthHeader/AuthValue are merged into the resolved header set at startup.
+type OtelTracesConfig struct {
+	Enabled             bool              `mapstructure:"enabled" default:"false"`
+	Endpoint            string            `mapstructure:"endpoint" validate:"omitempty"` // host:port (grpc) or full URL (http)
+	Protocol            string            `mapstructure:"protocol" validate:"omitempty"` // overrides otel.protocol when non-empty
+	AuthHeader          string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue           string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"` // overrides otel.headers when non-empty
+	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`    // 0.0 - 1.0
+	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+}
+
+// OtelLogsConfig configures OTLP log export. See OtelTracesConfig for the
+// AuthHeader/AuthValue convenience pair.
+type OtelLogsConfig struct {
+	Enabled    bool              `mapstructure:"enabled" default:"false"`
+	Endpoint   string            `mapstructure:"endpoint" validate:"omitempty"`
+	Protocol   string            `mapstructure:"protocol" validate:"omitempty"`
+	AuthHeader string            `mapstructure:"auth_header" validate:"omitempty"`
+	AuthValue  string            `mapstructure:"auth_value" validate:"omitempty"`
+	Headers    map[string]string `mapstructure:"headers" validate:"omitempty"`
+}
+
+// MergedHeaders returns the effective header set, merging the AuthHeader/
+// AuthValue convenience pair into the explicit Headers map. The pair wins on
+// conflict so single-header env-var configs take precedence over YAML defaults.
+func (c OtelTracesConfig) MergedHeaders() map[string]string {
+	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
+}
+
+// MergedHeaders — see OtelTracesConfig.MergedHeaders.
+func (c OtelLogsConfig) MergedHeaders() map[string]string {
+	return mergeAuthHeader(c.Headers, c.AuthHeader, c.AuthValue)
+}
+
+func mergeAuthHeader(headers map[string]string, authHeader, authValue string) map[string]string {
+	if authHeader == "" || authValue == "" {
+		return headers
+	}
+	out := make(map[string]string, len(headers)+1)
+	for k, v := range headers {
+		out[k] = v
+	}
+	out[authHeader] = authValue
+	return out
+}
+
+// ResolveServiceName returns the service name for the OTel resource.
+// Precedence: otel.service_name → logging.service_name → deployment.mode.
+func (c OtelConfig) ResolveServiceName(cfg *Configuration) string {
+	if c.ServiceName != "" {
+		return c.ServiceName
+	}
+	if cfg.Logging.ServiceName != "" {
+		return cfg.Logging.ServiceName
+	}
+	return string(cfg.Deployment.Mode)
+}
+
+// ResolveProtocol picks a per-signal protocol, falling back to otel.protocol,
+// then to "grpc". The result is normalized to a canonical transport value:
+// "http" for any HTTP variant (the OTel-standard "http/protobuf", "http/json",
+// or a bare "http") and "grpc" otherwise. Normalizing here prevents the
+// exporter-selection bug where a config value of "http/protobuf" failed an
+// exact `protocol == "http"` check and silently fell back to the gRPC exporter.
+func (c OtelConfig) ResolveProtocol(signalProtocol string) string {
+	raw := signalProtocol
+	if raw == "" {
+		raw = c.Protocol
+	}
+	if raw == "" {
+		return "grpc"
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "http") {
+		return "http"
+	}
+	return "grpc"
+}
+
+// ResolveHeaders picks per-signal headers, falling back to otel.headers when
+// the signal hasn't supplied its own.
+func (c OtelConfig) ResolveHeaders(signalHeaders map[string]string) map[string]string {
+	if len(signalHeaders) > 0 {
+		return signalHeaders
+	}
+	return c.Headers
 }
 
 type PyroscopeConfig struct {
@@ -540,6 +649,25 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("clickhouse.username", "FLEXPRICE_CLICKHOUSE_USERNAME")
 	_ = v.BindEnv("clickhouse.address", "FLEXPRICE_CLICKHOUSE_ADDRESS")
 	_ = v.BindEnv("clickhouse.database", "FLEXPRICE_CLICKHOUSE_DATABASE")
+
+	// Explicitly bind unified OTel config vars — AutomaticEnv misses nested keys with underscores
+	_ = v.BindEnv("otel.enabled", "FLEXPRICE_OTEL_ENABLED")
+	_ = v.BindEnv("otel.service_name", "FLEXPRICE_OTEL_SERVICE_NAME")
+	_ = v.BindEnv("otel.protocol", "FLEXPRICE_OTEL_PROTOCOL")
+	_ = v.BindEnv("otel.insecure", "FLEXPRICE_OTEL_INSECURE")
+	_ = v.BindEnv("otel.traces.enabled", "FLEXPRICE_OTEL_TRACES_ENABLED")
+	_ = v.BindEnv("otel.traces.endpoint", "FLEXPRICE_OTEL_TRACES_ENDPOINT")
+	_ = v.BindEnv("otel.traces.protocol", "FLEXPRICE_OTEL_TRACES_PROTOCOL")
+	_ = v.BindEnv("otel.traces.auth_header", "FLEXPRICE_OTEL_TRACES_AUTH_HEADER")
+	_ = v.BindEnv("otel.traces.auth_value", "FLEXPRICE_OTEL_TRACES_AUTH_VALUE")
+	_ = v.BindEnv("otel.traces.sample_rate", "FLEXPRICE_OTEL_TRACES_SAMPLE_RATE")
+	_ = v.BindEnv("otel.traces.storage_spans_enabled", "FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED")
+	_ = v.BindEnv("otel.logs.enabled", "FLEXPRICE_OTEL_LOGS_ENABLED")
+	_ = v.BindEnv("otel.logs.endpoint", "FLEXPRICE_OTEL_LOGS_ENDPOINT")
+	_ = v.BindEnv("otel.logs.protocol", "FLEXPRICE_OTEL_LOGS_PROTOCOL")
+	_ = v.BindEnv("otel.logs.insecure", "FLEXPRICE_OTEL_LOGS_INSECURE")
+	_ = v.BindEnv("otel.logs.auth_header", "FLEXPRICE_OTEL_LOGS_AUTH_HEADER")
+	_ = v.BindEnv("otel.logs.auth_value", "FLEXPRICE_OTEL_LOGS_AUTH_VALUE")
 
 	// Explicitly bind OTel logging vars — AutomaticEnv can miss nested keys with underscores
 	_ = v.BindEnv("logging.otel_enabled", "FLEXPRICE_LOGGING_OTEL_ENABLED")

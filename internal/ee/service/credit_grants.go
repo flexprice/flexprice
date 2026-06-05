@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
-	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -389,8 +388,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 
 func (s *creditGrantService) handleCreditGrantFailure(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication, err error, hint string) error {
 	s.Logger.Errorw("Credit grant application failed", "cga_id", cga.ID, "grant_id", cga.CreditGrantID, "hint", hint, "error", err)
-	sentrySvc := sentry.NewSentryService(s.Config, s.Logger)
-	sentrySvc.CaptureException(err)
+	s.TracingSvc.CaptureException(err)
 	cga.ApplicationStatus = types.ApplicationStatusFailed
 	cga.FailureReason = lo.ToPtr(fmt.Sprintf("%s: %s", hint, err.Error()))
 	if updateErr := s.CreditGrantApplicationRepo.Update(ctx, cga); updateErr != nil {

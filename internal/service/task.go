@@ -212,6 +212,7 @@ func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) e
 			s.EventPublisher,
 			s.Logger,
 			s.Config,
+			s.TracingSvc,
 		)
 		processor = &EventsChunkProcessor{
 			eventService: eventSvc,

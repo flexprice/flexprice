@@ -334,7 +334,6 @@ func IsBillingPeriodMultiple(longer, shorter BillingPeriod) bool {
 	return lm%sm == 0
 }
 
-
 func (b BillingTier) Validate() error {
 	allowed := []BillingTier{
 		BILLING_TIER_VOLUME,

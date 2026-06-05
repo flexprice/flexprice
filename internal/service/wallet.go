@@ -60,6 +60,9 @@ type WalletService interface {
 	// UpdateWallet updates a wallet
 	UpdateWallet(ctx context.Context, id string, req *dto.UpdateWalletRequest) (*wallet.Wallet, error)
 
+	// ModifyWallet modifies a wallet
+	ModifyWallet(ctx context.Context, id string, req *dto.ModifyWalletRequest) (*dto.WalletModificationResponse, error)
+
 	// DebitWallet processes a debit operation on a wallet
 	DebitWallet(ctx context.Context, req *wallet.WalletOperation) error
 
@@ -1402,6 +1405,224 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 	return existing, nil
 }
 
+func (s *walletService) ModifyWallet(ctx context.Context, id string, req *dto.ModifyWalletRequest) (*dto.WalletModificationResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid wallet modification request").
+			Mark(ierr.ErrValidation)
+	}
+
+	switch req.ModificationType {
+	case dto.WalletModificationTypePrepaidToPostpaid:
+		return s.convertToPostpaid(ctx, id)
+	default:
+		return nil, ierr.NewError("invalid modification type").
+			WithHint("Invalid modification type").
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// ConvertToPostpaid converts a prepaid wallet to a postpaid wallet.
+// The operation is atomic and follows these steps:
+// 1. Lock the wallet to prevent concurrent operations
+// 2. Pick current balance from DB
+// 3. Terminate the wallet (debit remaining balance, set status to closed)
+// 4. Create a new postpaid wallet with AllowedPriceTypes set to ALL (fixed + usage)
+// 5. Top up the credits from the prepaid wallet if any
+// 6. All within a single database transaction
+func (s *walletService) convertToPostpaid(ctx context.Context, id string) (*dto.WalletModificationResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	var originalWallet *wallet.Wallet
+	var newWallet *wallet.Wallet
+	var creditsTransferred decimal.Decimal
+
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Step 1: Acquire advisory lock for the wallet
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: id}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire wallet lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Step 2: Get wallet inside transaction (after acquiring lock)
+		var err error
+		originalWallet, err = s.WalletRepo.GetWalletByID(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		// Validation: wallet is prepaid and active
+		if originalWallet.WalletType != types.WalletTypePrePaid {
+			return ierr.NewError("wallet is not a prepaid wallet").
+				WithHint("Only prepaid wallets can be converted to postpaid").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_id":   id,
+					"wallet_type": originalWallet.WalletType,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		if originalWallet.WalletStatus != types.WalletStatusActive {
+			return ierr.NewError("wallet is not active").
+				WithHint("Only active wallets can be converted").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_id":     id,
+					"wallet_status": originalWallet.WalletStatus,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+
+		// Validation: customer does not have an active postpaid wallet with the same currency
+		existingWallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, originalWallet.CustomerID)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to check existing wallets before conversion").
+				Mark(ierr.ErrDatabase)
+		}
+		for _, existing := range existingWallets {
+			if existing.WalletStatus == types.WalletStatusActive &&
+				existing.WalletType == types.WalletTypePostPaid &&
+				existing.Currency == originalWallet.Currency {
+				return ierr.NewError("customer already has an active postpaid wallet with the same currency").
+					WithHint("A customer can only have one active postpaid wallet per currency").
+					WithReportableDetails(map[string]interface{}{
+						"customer_id": originalWallet.CustomerID,
+						"wallet_id":   existing.ID,
+						"currency":    originalWallet.Currency,
+					}).
+					Mark(ierr.ErrAlreadyExists)
+			}
+		}
+
+		// Step 3: Store the current credit balance before termination
+		creditsTransferred = originalWallet.CreditBalance
+
+		// Step 4: Terminate the wallet (debit remaining balance and close)
+		if originalWallet.CreditBalance.GreaterThan(decimal.Zero) {
+			debitReq := &wallet.WalletOperation{
+				WalletID:          id,
+				CreditAmount:      originalWallet.CreditBalance,
+				Type:              types.TransactionTypeDebit,
+				Description:       "Wallet conversion - prepaid to postpaid",
+				TransactionReason: types.TransactionReasonWalletTermination,
+				ReferenceType:     types.WalletTxReferenceTypeRequest,
+				IdempotencyKey:    id + "_conversion_debit",
+				ReferenceID:       types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+			}
+
+			if err := s.DebitWallet(ctx, debitReq); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to debit prepaid wallet during conversion").
+					Mark(ierr.ErrInternal)
+			}
+		}
+
+		// Update wallet status to closed
+		if err := s.WalletRepo.UpdateWalletStatus(ctx, id, types.WalletStatusClosed); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to close prepaid wallet").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Update local state to reflect termination
+		originalWallet.WalletStatus = types.WalletStatusClosed
+		originalWallet.CreditBalance = decimal.Zero
+		originalWallet.Balance = decimal.Zero
+
+		// Step 6: Create a new postpaid wallet
+		newWallet = &wallet.Wallet{
+			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
+			CustomerID:          originalWallet.CustomerID,
+			Name:                "Postpaid Wallet - " + strings.ToUpper(originalWallet.Currency),
+			Currency:            originalWallet.Currency,
+			Description:         "Converted from prepaid wallet " + originalWallet.ID,
+			Metadata:            types.Metadata{"converted_from": originalWallet.ID},
+			Balance:             decimal.Zero,
+			CreditBalance:       decimal.Zero,
+			WalletStatus:        types.WalletStatusActive,
+			WalletType:          types.WalletTypePostPaid,
+			Config:              types.WalletConfig{AllowedPriceTypes: []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}},
+			ConversionRate:      originalWallet.ConversionRate,
+			TopupConversionRate: originalWallet.TopupConversionRate,
+			AlertSettings:       originalWallet.AlertSettings,
+			AlertState:          types.AlertStateOk,
+			AutoTopup:           originalWallet.AutoTopup,
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			BaseModel:           types.GetDefaultBaseModel(ctx),
+		}
+
+		if err := s.WalletRepo.CreateWallet(ctx, newWallet); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to create postpaid wallet").
+				Mark(ierr.ErrDatabase)
+		}
+
+		s.Logger.InfowCtx(ctx, "created postpaid wallet during conversion",
+			"new_wallet_id", newWallet.ID,
+			"original_wallet_id", originalWallet.ID,
+			"customer_id", originalWallet.CustomerID,
+		)
+
+		// Step 7: Top up the new wallet with credits from the prepaid wallet
+		if creditsTransferred.GreaterThan(decimal.Zero) {
+			idempotencyKey := s.idempGen.GenerateKey(idempotency.ScopeCreditGrant, map[string]interface{}{
+				"wallet_id":           newWallet.ID,
+				"source_wallet_id":    originalWallet.ID,
+				"credits_to_add":      creditsTransferred,
+				"transaction_reason":  types.TransactionReasonFreeCredit,
+				"conversion_transfer": true,
+			})
+
+			creditReq := &wallet.WalletOperation{
+				WalletID:          newWallet.ID,
+				CreditAmount:      creditsTransferred,
+				Type:              types.TransactionTypeCredit,
+				Description:       "Credits transferred from prepaid wallet " + originalWallet.ID,
+				TransactionReason: types.TransactionReasonFreeCredit,
+				ReferenceType:     types.WalletTxReferenceTypeRequest,
+				IdempotencyKey:    idempotencyKey,
+				ReferenceID:       types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+			}
+
+			if err := s.CreditWallet(ctx, creditReq); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to transfer credits to postpaid wallet").
+					Mark(ierr.ErrInternal)
+			}
+
+			// Update local state to reflect credit transfer
+			newWallet.CreditBalance = newWallet.CreditBalance.Add(creditsTransferred)
+			newWallet.Balance = s.GetCurrencyAmountFromCredits(newWallet.CreditBalance, newWallet.ConversionRate)
+
+			s.Logger.InfowCtx(ctx, "transferred credits during wallet conversion",
+				"new_wallet_id", newWallet.ID,
+				"original_wallet_id", originalWallet.ID,
+				"credits_transferred", creditsTransferred,
+			)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Publish webhook events outside the transaction
+	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletTerminated, originalWallet.ID)
+	s.publishInternalWalletWebhookEvent(ctx, types.WebhookEventWalletCreated, newWallet.ID)
+
+	return &dto.WalletModificationResponse{
+		OriginalWallet: dto.FromWallet(originalWallet),
+		NewWallet:      dto.FromWallet(newWallet),
+	}, nil
+}
+
 // DebitWallet processes a debit operation on a wallet
 func (s *walletService) DebitWallet(ctx context.Context, req *wallet.WalletOperation) error {
 	if req.Type != types.TransactionTypeDebit {
@@ -1478,7 +1699,7 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 }
 
 // processDebitOperation handles the debit operation with credit selection and consumption
-func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) error {
+func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) ([]*wallet.Transaction, error) {
 	// Find eligible credits with pagination
 	credits := []*wallet.Transaction{}
 	var err error
@@ -1486,7 +1707,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		// Get the parent debit transaction
 		parentCreditTx, err := s.WalletRepo.GetTransactionByID(ctx, req.ParentCreditTxID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		credits = append(credits, parentCreditTx)
 
@@ -1497,7 +1718,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 			// Use invoice's period end as the time reference
 			invoice, err := s.InvoiceRepo.Get(ctx, *req.InvoiceID)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if invoice.PeriodEnd != nil {
 				timeReference = lo.FromPtr(invoice.PeriodEnd)
@@ -1505,7 +1726,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 		}
 		credits, err = s.WalletRepo.FindEligibleCredits(ctx, req.WalletID, req.CreditAmount, 100, timeReference)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -1521,7 +1742,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	if totalAvailable.LessThan(req.CreditAmount) {
 		// if not manual debit, return error
 		if req.TransactionReason != types.TransactionReasonManualBalanceDebit {
-			return ierr.NewError("insufficient balance").
+			return nil, ierr.NewError("insufficient balance").
 				WithHint("Insufficient balance to process debit operation").
 				WithReportableDetails(map[string]interface{}{
 					"wallet_id": req.WalletID,
@@ -1532,11 +1753,12 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	}
 
 	// Process debit across credits
-	if err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount); err != nil {
-		return err
+	consumedCredits, err := s.WalletRepo.ConsumeCredits(ctx, credits, req.CreditAmount)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	return consumedCredits, nil
 }
 
 // processWalletOperation handles both credit and debit operations
@@ -1547,6 +1769,11 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	var tx *wallet.Transaction
 	var newCreditBalance decimal.Decimal
 	var finalBalance decimal.Decimal
+
+	metadata := make(types.Metadata)
+	if req.Metadata != nil {
+		metadata = req.Metadata
+	}
 
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Step 1: Acquire advisory lock for the wallet
@@ -1574,8 +1801,18 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		if req.Type == types.TransactionTypeDebit {
 			newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
 			// Process debit operation (credit selection and consumption)
-			if err := s.processDebitOperation(ctx, req); err != nil {
+			consumedCredits, err := s.processDebitOperation(ctx, req)
+			if err != nil {
 				return err
+			}
+
+			if len(consumedCredits) > 0 {
+				consumedCreditsIDs := make([]string, 0)
+				for _, c := range consumedCredits {
+					consumedCreditsIDs = append(consumedCreditsIDs, c.ID)
+				}
+
+				metadata["consumed_credit_tx_ids"] = strings.Join(consumedCreditsIDs, ",")
 			}
 		} else {
 			// Process credit operation
@@ -1595,7 +1832,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			ReferenceType:       req.ReferenceType,
 			ReferenceID:         req.ReferenceID,
 			Description:         req.Description,
-			Metadata:            req.Metadata,
+			Metadata:            metadata,
 			TxStatus:            types.TransactionStatusCompleted,
 			TransactionReason:   req.TransactionReason,
 			ExpiryDate:          req.ResolvedExpiryDate(),

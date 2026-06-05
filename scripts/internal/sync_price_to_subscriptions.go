@@ -16,7 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -240,7 +240,7 @@ func newSyncPriceToSubscriptionsScript() (*syncPriceToSubscriptionsScript, error
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}
-	client := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
+	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
 
 	// Create repositories

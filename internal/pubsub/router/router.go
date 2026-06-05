@@ -12,19 +12,19 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 )
 
 // Router manages all message routing
 type Router struct {
-	router *message.Router
-	logger *logger.Logger
-	sentry *sentry.Service
-	config *config.Webhook
+	router  *message.Router
+	logger  *logger.Logger
+	tracing *tracing.Service
+	config  *config.Webhook
 }
 
 // NewRouter creates a new message router
-func NewRouter(cfg *config.Configuration, logger *logger.Logger, sentry *sentry.Service) (*Router, error) {
+func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*Router, error) {
 	router, err := message.NewRouter(
 		message.RouterConfig{},
 		watermill.NewStdLogger(true, false),
@@ -83,10 +83,10 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, sentry *sentry.
 	)
 
 	return &Router{
-		router: router,
-		logger: logger,
-		sentry: sentry,
-		config: &cfg.Webhook,
+		router:  router,
+		logger:  logger,
+		tracing: tracingSvc,
+		config:  &cfg.Webhook,
 	}, nil
 }
 
@@ -129,7 +129,7 @@ func (r *Router) AddNoPublishHandler(
 		func(msg *message.Message) error {
 			err := handlerFunc(msg)
 			if err != nil {
-				r.sentry.CaptureException(err)
+				r.tracing.CaptureException(err)
 				r.logger.Errorw("handler failed",
 					"error", err,
 					"correlation_id", middleware.MessageCorrelationID(msg),

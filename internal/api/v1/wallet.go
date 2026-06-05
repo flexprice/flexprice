@@ -498,6 +498,34 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.FromWallet(updated))
 }
 
+func (h *WalletHandler) ModifyWallet(c *gin.Context) {
+	walletID := c.Param("id")
+	if walletID == "" {
+		c.Error(ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ModifyWalletRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	modified, err := h.walletService.ModifyWallet(c.Request.Context(), walletID, &req)
+	if err != nil {
+		h.logger.Error("Failed to modify wallet", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, modified)
+}
+
 func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {

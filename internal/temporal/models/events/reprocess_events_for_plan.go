@@ -15,10 +15,10 @@ type MissingPair struct {
 
 // ReprocessEventsForPlanWorkflowInput represents the input for the reprocess events for plan workflow.
 type ReprocessEventsForPlanWorkflowInput struct {
-	MissingPairs   []MissingPair `json:"missing_pairs"`
-	TenantID       string        `json:"tenant_id"`
-	EnvironmentID  string        `json:"environment_id"`
-	UserID         string        `json:"user_id"`
+	MissingPairs  []MissingPair `json:"missing_pairs"`
+	TenantID      string        `json:"tenant_id"`
+	EnvironmentID string        `json:"environment_id"`
+	UserID        string        `json:"user_id"`
 }
 
 // Validate validates the reprocess events for plan workflow input.

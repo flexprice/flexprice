@@ -174,7 +174,7 @@ func (s *PaymentServiceSuite) TestPaymentProcessor_PaymentLinkFlow() {
 	s.Equal(types.PaymentStatusInitiated, payment.PaymentStatus)
 	s.Equal(types.PaymentMethodTypePaymentLink, payment.PaymentMethodType)
 	s.Equal(string(types.PaymentGatewayTypeStripe), *payment.PaymentGateway)
-	
+
 	// Verify that the payment is in a state that would be accepted by the processor
 	s.True(payment.PaymentStatus == types.PaymentStatusInitiated || payment.PaymentStatus == types.PaymentStatusPending)
 }

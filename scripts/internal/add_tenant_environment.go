@@ -14,7 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/repository"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -40,7 +40,7 @@ func newAddEnvironmentScript() (*addEnvironmentScript, error) {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}
 
-	client := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
+	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 	repoParams := repository.RepositoryParams{
 		EntClient: client,
 		Logger:    log,

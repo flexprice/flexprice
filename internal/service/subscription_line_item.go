@@ -124,9 +124,9 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		subCopy.CurrentPeriodEnd = period.End
 
 		prorationReq := LineItemProrationRequest{
-			Subscription:  &subCopy,
-			EffectiveDate: effectiveDate,
-			Behavior:      req.ProrationBehavior,
+			Subscription:   &subCopy,
+			EffectiveDate:  effectiveDate,
+			Behavior:       req.ProrationBehavior,
 			IdempotencyKey: types.GenerateUUIDWithPrefix("proration_add"),
 			Entries: []LineItemProrationEntry{
 				{

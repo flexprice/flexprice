@@ -318,7 +318,7 @@ func (c *Client) CreateTransaction(ctx context.Context, req *paddle.CreateTransa
 		c.logger.Errorw("failed to create transaction in Paddle",
 			"error", err,
 			"paddle_error_detail", err.Error())
-		return nil, ierr.NewError("failed to create transaction in Paddle: "+err.Error()).
+		return nil, ierr.NewError("failed to create transaction in Paddle: " + err.Error()).
 			WithHint("Unable to create transaction in Paddle").
 			WithReportableDetails(map[string]interface{}{
 				"error": err.Error(),

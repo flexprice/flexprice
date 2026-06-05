@@ -92,9 +92,14 @@ func NewRouter(
 		middleware.RequestIDMiddleware,       // Generate/extract request ID first
 		middleware.LoggingMiddleware(logger), // Use our standard logger for HTTP logging
 		middleware.CORSMiddleware,
-		middleware.SentryMiddleware(cfg),    // Add Sentry middleware
-		middleware.PyroscopeMiddleware(cfg), // Add Pyroscope middleware
 	)
+	// Tracing middleware fans out into otelgin (SigNoz / OTLP) and sentrygin
+	// (panic recovery + Sentry scope binding). Each handler is added separately
+	// because gin's Use signature is variadic and the slice may be empty.
+	for _, h := range middleware.TracingMiddleware(cfg) {
+		router.Use(h)
+	}
+	router.Use(middleware.PyroscopeMiddleware(cfg)) // Add Pyroscope middleware
 
 	// Initialize permission middleware
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
@@ -127,7 +132,7 @@ func NewRouter(
 	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, logger))
 	private.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	private.Use(middleware.EnvAccessMiddleware(envAccessService, logger))
-	private.Use(middleware.SentryTenantContextMiddleware)
+	private.Use(middleware.TenantContextMiddleware)
 
 	v1Private := private.Group("/v1")
 	v1Private.Use(middleware.ErrorHandler())
@@ -341,6 +346,7 @@ func NewRouter(
 			wallet.POST("/:id/top-up", write("wallet", types.ActionWrite), handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", write("wallet", types.ActionWrite), handlers.Wallet.TerminateWallet)
 			wallet.POST("/:id/convert-to-postpaid", write("wallet", types.ActionWrite), handlers.Wallet.ConvertToPostpaid)
+			wallet.POST("/:id/modify", write("wallet", types.ActionWrite), handlers.Wallet.ModifyWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
 			wallet.GET("/:id/balance/real-time-cached", handlers.Wallet.GetWalletBalanceForceCached)
 			wallet.PUT("/:id", write("wallet", types.ActionWrite), handlers.Wallet.UpdateWallet)
@@ -520,10 +526,10 @@ func NewRouter(
 			integrations.POST("/sync", handlers.Integration.Sync)
 			integrations.GET("/mappings", handlers.Integration.GetMappings)
 			integrations.GET("/config", handlers.Integration.GetConfig)
-			// 			paddleGroup := integrations.Group("/paddle")
-			// 			{
-			// 				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
-			// 			}
+			// paddleGroup := integrations.Group("/paddle")
+			// {
+			// 	paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
+			// }
 		}
 
 		// Coupon routes
