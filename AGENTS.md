@@ -495,3 +495,41 @@ Docker Compose demonstrates this pattern with separate services: `flexprice-api`
 - Core is AGPLv3 licensed
 - Enterprise features (`internal/ee/`) require commercial license
 - See LICENSE file for details
+
+## Cursor Cloud specific instructions
+
+### Toolchain (not in the update script)
+
+- **Go 1.25+** is required (`go.mod` declares `go 1.25.0`). Cloud VMs may ship an older system Go; install to `/usr/local/go` and use `export PATH=/usr/local/go/bin:$PATH` in your shell before `go run` / `make test`.
+- **Docker** is required for local infrastructure. If `docker` is missing or the daemon is not running, start it once per VM session (after install): configure `fuse-overlayfs` storage driver, legacy iptables, then `sudo dockerd` in the background. Ensure `/var/run/docker.sock` is writable (`sudo chmod 666 /var/run/docker.sock` if needed).
+
+### Recommended hybrid dev flow (fastest on Cloud Agents)
+
+Full `make dev-setup` builds a Docker image for the app; for day-to-day dev, prefer:
+
+1. **Infrastructure** (from `flexprice/`): `docker compose up -d postgres kafka clickhouse temporal temporal-ui`
+2. **One-time / after schema changes**: `make migrate-postgres migrate-clickhouse migrate-ent seed-db init-kafka`
+3. **Backend app** (single process, all modes): `make run-local` — uses committed `.env.local` overrides; equivalent to API + consumer + Temporal worker.
+4. **Frontend** (separate repo `flexprice-front/`): `cp .env.example .env && npm install && npm run dev` → http://localhost:3000
+
+Use **tmux** for long-running `make run-local` and `npm run dev` sessions.
+
+### Smoke-test API (no UI auth required)
+
+Pre-seeded local credentials are documented in `.env.local`:
+
+```bash
+curl -s http://localhost:8080/health
+curl -s http://localhost:8080/v1/customers \
+  -H "x-api-key: sk_local_flexprice_test_key" \
+  -H "x-environment-id: 00000000-0000-0000-0000-000000000000"
+```
+
+### Frontend auth note
+
+With default `VITE_AUTH_ENABLED=false`, the dashboard still gates routes behind auth middleware. API-level verification (curl/SDK) is the reliable smoke test for backend+infra. Full UI E2E may require Supabase or self-hosted auth configuration beyond `.env.example`.
+
+### Lint / test caveats
+
+- `go vet ./...` may fail on `api/custom/go` until SDK artifacts are generated (`make go-sdk`); vet/test `internal/...` for routine backend checks.
+- Frontend ESLint reports many pre-existing warnings; `npx vitest run` is the primary frontend test command.
