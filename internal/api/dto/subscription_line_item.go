@@ -104,7 +104,7 @@ type CreateSubscriptionLineItemRequest struct {
 	CommitmentTrueUpEnabled bool                   `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      bool                   `json:"commitment_windowed,omitempty"`
 	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
-	CommitmentTimeBuckets   types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	CommitmentTimeBuckets   []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -145,7 +145,7 @@ type UpdateSubscriptionLineItemRequest struct {
 	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
 	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
-	CommitmentTimeBuckets *types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	CommitmentTimeBuckets *[]CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -585,11 +585,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		lineItem.CommitmentDuration = r.CommitmentDuration
 	}
 	if len(r.CommitmentTimeBuckets) > 0 {
-		// Copy to avoid aliasing the request's backing array — mutations to r
-		// after validation must not bleed into the domain object.
-		commitmentTimeBuckets := make(types.TimeOfDayBuckets, len(r.CommitmentTimeBuckets))
-		copy(commitmentTimeBuckets, r.CommitmentTimeBuckets)
-		lineItem.CommitmentTimeBuckets = commitmentTimeBuckets
+		// TODO(Task 6): materialize via resolveBucketPrices — for now produce an empty
+		// domain slice; the real wiring lands in Tasks 6–9.
+		lineItem.CommitmentTimeBuckets = types.TimeOfDayBuckets{}
 	}
 
 	return lineItem
@@ -648,14 +646,51 @@ func (r *UpdateSubscriptionLineItemRequest) validateCommitmentFields() error {
 	return nil
 }
 
+// CommitmentBucketRequest is the inline shape for one time-of-day commitment
+// bucket on a subscription line item. The service creates a SUBSCRIPTION-scoped
+// Price from r.Price and stores the resulting price_id on the materialized
+// types.TimeOfDayBucket.
+type CommitmentBucketRequest struct {
+	Start           types.Bucket         `json:"start"`
+	End             types.Bucket         `json:"end"`
+	Price           CreatePriceRequest   `json:"price"`
+	CommitmentType  types.CommitmentType `json:"commitment_type"`
+	CommitmentValue decimal.Decimal      `json:"commitment_value" swaggertype:"string"`
+	OverageFactor   *decimal.Decimal     `json:"overage_factor,omitempty" swaggertype:"string"`
+	TrueUpEnabled   bool                 `json:"true_up_enabled,omitempty"`
+}
+
+// Validate runs per-bucket field validation. Array invariants (overlap,
+// window alignment) live on TimeOfDayBuckets and are applied by the service
+// after materialization (and after prices are loaded so we know windowMin).
+func (r CommitmentBucketRequest) Validate() error {
+	if err := validateBucketPoint(r.Start, 0); err != nil {
+		return err
+	}
+	if err := validateBucketPoint(r.End, 0); err != nil {
+		return err
+	}
+	if r.Price.EntityType != "" && r.Price.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION {
+		return ierr.NewError("bucket price entity_type must be SUBSCRIPTION").
+			WithHint("Use entity_type=SUBSCRIPTION on inline bucket prices").
+			Mark(ierr.ErrValidation)
+	}
+	tmp := types.TimeOfDayBucket{
+		Start:           r.Start,
+		End:             r.End,
+		CommitmentType:  r.CommitmentType,
+		CommitmentValue: r.CommitmentValue,
+		OverageFactor:   r.OverageFactor,
+		TrueUpEnabled:   r.TrueUpEnabled,
+	}
+	return tmp.Validate()
+}
+
 // validateTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59],
 // rejecting Hour=24 combined with Minute>0 (only 24:00 is a meaningful end-of-day).
-func validateTimeOfDayBuckets(buckets types.TimeOfDayBuckets) error {
-	for i, b := range buckets {
-		if err := validateBucketPoint(b.Start, i); err != nil {
-			return err
-		}
-		if err := validateBucketPoint(b.End, i); err != nil {
+func validateTimeOfDayBuckets(buckets []CommitmentBucketRequest) error {
+	for _, b := range buckets {
+		if err := b.Validate(); err != nil {
 			return err
 		}
 	}
@@ -784,9 +819,9 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	}
 
 	if r.CommitmentTimeBuckets != nil {
-		commitmentTimeBuckets := make(types.TimeOfDayBuckets, len(*r.CommitmentTimeBuckets))
-		copy(commitmentTimeBuckets, *r.CommitmentTimeBuckets)
-		newLineItem.CommitmentTimeBuckets = commitmentTimeBuckets
+		// TODO(Task 6): materialize via resolveBucketPrices — for now produce an empty
+		// domain slice; the real wiring lands in Tasks 6–9.
+		newLineItem.CommitmentTimeBuckets = types.TimeOfDayBuckets{}
 	} else {
 		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets
 	}

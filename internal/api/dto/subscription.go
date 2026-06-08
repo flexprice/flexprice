@@ -107,6 +107,26 @@ type LineItemCommitmentConfig struct {
 	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
+// validateDomainTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59]
+// for domain-level types.TimeOfDayBuckets (used by LineItemCommitmentConfig which
+// references prices by ID rather than inline). For the DTO-level []CommitmentBucketRequest
+// variant, see validateTimeOfDayBuckets in subscription_line_item.go.
+func validateDomainTimeOfDayBuckets(buckets types.TimeOfDayBuckets) error {
+	for _, b := range buckets {
+		if b.Start.Hour < 0 || b.Start.Hour > 24 {
+			return ierr.NewError("commitment_time_buckets: hour out of range").
+				WithHint("Hour must be in [0, 24]").
+				Mark(ierr.ErrValidation)
+		}
+		if b.End.Hour < 0 || b.End.Hour > 24 {
+			return ierr.NewError("commitment_time_buckets: hour out of range").
+				WithHint("Hour must be in [0, 24]").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.
 func validateLineItemCommitments(commitments map[string]*LineItemCommitmentConfig) error {
 	if len(commitments) == 0 {
@@ -248,7 +268,7 @@ func (c *LineItemCommitmentConfig) Validate() error {
 				WithHint("Set is_window_commitment=true to apply commitment only during the configured hours").
 				Mark(ierr.ErrValidation)
 		}
-		if err := validateTimeOfDayBuckets(c.CommitmentTimeBuckets); err != nil {
+		if err := validateDomainTimeOfDayBuckets(c.CommitmentTimeBuckets); err != nil {
 			return err
 		}
 	}
