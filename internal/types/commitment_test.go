@@ -226,6 +226,88 @@ func TestTimeOfDayBuckets_ContainsTime_EmptySlice(t *testing.T) {
 	assert.False(t, buckets.ContainsTime(time.Date(2026, time.June, 2, 12, 0, 0, 0, time.UTC)))
 }
 
+func TestTimeOfDayBucket_Validate(t *testing.T) {
+	posOne := decimal.NewFromInt(1)
+	negOne := decimal.NewFromInt(-1)
+	tests := []struct {
+		name    string
+		bucket  TimeOfDayBucket
+		wantErr bool
+		errSub  string
+	}{
+		{
+			name: "valid amount commitment",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(100),
+				OverageFactor: &posOne,
+			},
+			wantErr: false,
+		},
+		{
+			name: "start equals end",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{9, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
+			},
+			wantErr: true, errSub: "start must differ from end",
+		},
+		{
+			name: "invalid commitment type",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: CommitmentType("bogus"), CommitmentValue: decimal.NewFromInt(1),
+			},
+			wantErr: true, errSub: "commitment_type",
+		},
+		{
+			name: "negative commitment value",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: negOne,
+			},
+			wantErr: true, errSub: "commitment_value",
+		},
+		{
+			name: "negative overage factor",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
+				OverageFactor: &negOne,
+			},
+			wantErr: true, errSub: "overage_factor",
+		},
+		{
+			name: "true-up without commitment value",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.Zero,
+				TrueUpEnabled: true,
+			},
+			wantErr: true, errSub: "true_up_enabled",
+		},
+		{
+			name: "midnight-wrapping valid",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{22, 0}, End: Bucket{6, 0},
+				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.bucket.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errSub)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestTimeOfDayBucket_HasCommitment(t *testing.T) {
 	tests := []struct {
 		name   string

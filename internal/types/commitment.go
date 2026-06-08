@@ -3,6 +3,7 @@ package types
 import (
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/shopspring/decimal"
 )
 
@@ -104,6 +105,37 @@ func (bs TimeOfDayBuckets) ContainsTime(t time.Time) bool {
 		}
 	}
 	return false
+}
+
+// Validate reports per-field issues with the bucket. It does NOT enforce
+// array-level invariants (overlap, window alignment) — those live in the
+// commitment_bucket_validation file and require external context.
+func (b TimeOfDayBucket) Validate() error {
+	// Start/End point sanity is enforced by the DTO layer (validateBucketPoint),
+	// but we still need start != end at the type level.
+	if b.Start.Hour == b.End.Hour && b.Start.Minute == b.End.Minute {
+		return ierr.NewError("bucket start must differ from end").
+			WithHint("Empty buckets are not allowed").
+			Mark(ierr.ErrValidation)
+	}
+	if b.CommitmentType != "" && !b.CommitmentType.Validate() {
+		return ierr.NewError("invalid commitment_type").
+			WithHint(`commitment_type must be "amount" or "quantity"`).
+			Mark(ierr.ErrValidation)
+	}
+	if b.CommitmentValue.LessThan(decimal.Zero) {
+		return ierr.NewError("commitment_value must be >= 0").
+			Mark(ierr.ErrValidation)
+	}
+	if b.OverageFactor != nil && b.OverageFactor.LessThan(decimal.Zero) {
+		return ierr.NewError("overage_factor must be >= 0").
+			Mark(ierr.ErrValidation)
+	}
+	if b.TrueUpEnabled && !b.CommitmentValue.GreaterThan(decimal.Zero) {
+		return ierr.NewError("true_up_enabled requires commitment_value > 0").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // CommitmentInfo holds information about a commitment
