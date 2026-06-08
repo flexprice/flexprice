@@ -257,6 +257,25 @@ func TestTimeOfDayBucket_HasCommitment(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "type set but value zero",
+			bucket: TimeOfDayBucket{
+				Start:           Bucket{9, 0},
+				End:             Bucket{10, 0},
+				CommitmentType:  COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.Zero,
+			},
+			want: false,
+		},
+		{
+			name: "type empty but value positive",
+			bucket: TimeOfDayBucket{
+				Start:           Bucket{9, 0},
+				End:             Bucket{10, 0},
+				CommitmentValue: decimal.NewFromInt(50),
+			},
+			want: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
