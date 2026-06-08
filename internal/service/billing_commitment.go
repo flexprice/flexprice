@@ -461,3 +461,26 @@ func getSubscriptionCommitmentPeriodBounds(
 func isLastPeriodOfCommitmentPeriod(periodEnd, commitmentEnd time.Time) bool {
 	return !periodEnd.Before(commitmentEnd)
 }
+
+// chargeAtQty returns the tiered evaluation of priceObj at quantity q.
+// Thin wrapper around priceService.CalculateCost; exists so per-bucket
+// commitment math reads naturally and tests can stub a single method.
+func (c *commitmentCalculator) chargeAtQty(
+	ctx context.Context,
+	priceObj *price.Price,
+	q decimal.Decimal,
+) decimal.Decimal {
+	return c.priceService.CalculateCost(ctx, priceObj, q)
+}
+
+// bucketIndexAtWindowStart returns the index of the bucket containing
+// windowStart's time-of-day, or -1 when no bucket matches. Used by per-bucket
+// dispatch in applyWindowCommitmentToLineItem (Task 16).
+func bucketIndexAtWindowStart(buckets types.TimeOfDayBuckets, windowStart time.Time) int {
+	for i, b := range buckets {
+		if b.ContainsTime(windowStart) {
+			return i
+		}
+	}
+	return -1
+}

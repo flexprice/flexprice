@@ -321,6 +321,29 @@ func TestApplyWindowCommitment_LegacyBucketShape(t *testing.T) {
 	assert.True(t, info.IsWindowed)
 }
 
+func TestChargeAtQty_FlatFee(t *testing.T) {
+	ctx := testutil.SetupContext()
+	calc := newCommitmentCalculatorForTest(t)
+
+	p := flatFeePrice(decimal.NewFromInt(2))
+	got := calc.chargeAtQty(ctx, p, decimal.NewFromInt(5))
+	assert.True(t, got.Equal(decimal.NewFromInt(10)), "expected 10 got %s", got.String())
+}
+
+func TestBucketIndexAtWindowStart(t *testing.T) {
+	buckets := types.TimeOfDayBuckets{
+		{Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 17}},
+		{Start: types.Bucket{Hour: 22}, End: types.Bucket{Hour: 6}}, // midnight wrap
+	}
+	at := func(h, m int) time.Time {
+		return time.Date(2026, 1, 1, h, m, 0, 0, time.UTC)
+	}
+	assert.Equal(t, 0, bucketIndexAtWindowStart(buckets, at(10, 0)))
+	assert.Equal(t, 1, bucketIndexAtWindowStart(buckets, at(23, 0)))
+	assert.Equal(t, 1, bucketIndexAtWindowStart(buckets, at(2, 0)))
+	assert.Equal(t, -1, bucketIndexAtWindowStart(buckets, at(7, 0)))
+}
+
 // TestApplyWindowCommitment_TimeBuckets_LengthMismatch verifies the defensive
 // guard rejects misaligned slices instead of producing wrong charges silently.
 func TestApplyWindowCommitment_TimeBuckets_LengthMismatch(t *testing.T) {
