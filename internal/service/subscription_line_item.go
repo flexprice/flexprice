@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -831,6 +832,50 @@ func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscriptio
 	}
 
 	return nil
+}
+
+// resolveBucketPrices creates a SUBSCRIPTION-scoped price for each bucket and
+// returns the materialized types.TimeOfDayBuckets ready to persist on the line
+// item. Each bucket gets a stable UUID id.
+//
+// On error, callers must rely on the surrounding transaction to roll back any
+// prices already created.
+func (s *subscriptionService) resolveBucketPrices(
+	ctx context.Context,
+	subscriptionID string,
+	reqs []dto.CommitmentBucketRequest,
+) (types.TimeOfDayBuckets, error) {
+	if len(reqs) == 0 {
+		return nil, nil
+	}
+	priceService := NewPriceService(s.ServiceParams)
+	out := make(types.TimeOfDayBuckets, 0, len(reqs))
+	for i, r := range reqs {
+		priceReq := r.Price
+		priceReq.EntityType = types.PRICE_ENTITY_TYPE_SUBSCRIPTION
+		priceReq.EntityID = subscriptionID
+		priceReq.SkipEntityValidation = true
+
+		resp, err := priceService.CreatePrice(ctx, priceReq)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Inline bucket price creation failed").
+				WithReportableDetails(map[string]interface{}{"bucket_index": i}).
+				Mark(ierr.ErrSystem)
+		}
+
+		out = append(out, types.TimeOfDayBucket{
+			ID:              uuid.NewString(),
+			Start:           r.Start,
+			End:             r.End,
+			PriceID:         resp.ID,
+			CommitmentType:  r.CommitmentType,
+			CommitmentValue: r.CommitmentValue,
+			OverageFactor:   r.OverageFactor,
+			TrueUpEnabled:   r.TrueUpEnabled,
+		})
+	}
+	return out, nil
 }
 
 // validateSubscriptionLevelCommitment validates that subscription and line items don't both have commitment

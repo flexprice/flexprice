@@ -780,3 +780,130 @@ func (s *SubscriptionLineItemServiceSuite) TestListSubscriptionLineItems_ExpandP
 	s.Require().NotNil(target.Price)
 	s.Equal(s.testData.price.ID, target.Price.ID)
 }
+
+// TestResolveBucketPrices_CreatesSubscriptionPriceAndAssignsID verifies that
+// resolveBucketPrices creates a SUBSCRIPTION-scoped Price for each bucket and
+// populates the resulting TimeOfDayBuckets with the created price's ID.
+func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_CreatesSubscriptionPriceAndAssignsID() {
+	ctx := s.GetContext()
+
+	// Access the concrete *subscriptionService so we can call the unexported helper.
+	concreteSvc := s.service.(*subscriptionService)
+
+	reqs := []dto.CommitmentBucketRequest{
+		{
+			Start: types.Bucket{Hour: 9, Minute: 0},
+			End:   types.Bucket{Hour: 17, Minute: 0},
+			Price: dto.CreatePriceRequest{
+				Amount:             lo.ToPtr(decimal.NewFromInt(10)),
+				Currency:           "usd",
+				EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+				EntityID:           s.testData.subscription.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				SkipEntityValidation: true,
+			},
+			CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+			CommitmentValue: decimal.NewFromInt(100),
+			OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+			TrueUpEnabled:   true,
+		},
+	}
+
+	out, err := concreteSvc.resolveBucketPrices(ctx, s.testData.subscription.ID, reqs)
+	s.NoError(err)
+	s.Require().Len(out, 1)
+
+	bucket := out[0]
+
+	// ID should be a non-empty UUID assigned by the helper.
+	s.NotEmpty(bucket.ID)
+
+	// PriceID should reference the newly created price.
+	s.NotEmpty(bucket.PriceID)
+
+	// Verify the price actually exists in the repo with SUBSCRIPTION entity type.
+	createdPrice, getErr := s.GetStores().PriceRepo.Get(ctx, bucket.PriceID)
+	s.NoError(getErr)
+	s.Equal(types.PRICE_ENTITY_TYPE_SUBSCRIPTION, createdPrice.EntityType)
+	s.Equal(s.testData.subscription.ID, createdPrice.EntityID)
+
+	// Other bucket fields should be copied verbatim from the request.
+	s.Equal(types.Bucket{Hour: 9, Minute: 0}, bucket.Start)
+	s.Equal(types.Bucket{Hour: 17, Minute: 0}, bucket.End)
+	s.Equal(types.COMMITMENT_TYPE_AMOUNT, bucket.CommitmentType)
+	s.True(bucket.CommitmentValue.Equal(decimal.NewFromInt(100)))
+	s.Require().NotNil(bucket.OverageFactor)
+	s.True(bucket.OverageFactor.Equal(decimal.NewFromFloat(1.5)))
+	s.True(bucket.TrueUpEnabled)
+}
+
+// TestResolveBucketPrices_EmptySlice returns nil, nil without error.
+func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_EmptySlice() {
+	ctx := s.GetContext()
+	concreteSvc := s.service.(*subscriptionService)
+
+	out, err := concreteSvc.resolveBucketPrices(ctx, s.testData.subscription.ID, nil)
+	s.NoError(err)
+	s.Nil(out)
+
+	out2, err2 := concreteSvc.resolveBucketPrices(ctx, s.testData.subscription.ID, []dto.CommitmentBucketRequest{})
+	s.NoError(err2)
+	s.Nil(out2)
+}
+
+// TestResolveBucketPrices_MultipleBuckets verifies that each bucket gets its own price and a distinct UUID.
+func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_MultipleBuckets() {
+	ctx := s.GetContext()
+	concreteSvc := s.service.(*subscriptionService)
+
+	makeBucketReq := func(startH, endH int, lookupKey string) dto.CommitmentBucketRequest {
+		return dto.CommitmentBucketRequest{
+			Start: types.Bucket{Hour: startH, Minute: 0},
+			End:   types.Bucket{Hour: endH, Minute: 0},
+			Price: dto.CreatePriceRequest{
+				Amount:               lo.ToPtr(decimal.NewFromInt(5)),
+				Currency:             "usd",
+				EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+				EntityID:             s.testData.subscription.ID,
+				Type:                 types.PRICE_TYPE_FIXED,
+				PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+				BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount:   1,
+				BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+				InvoiceCadence:       types.InvoiceCadenceAdvance,
+				LookupKey:            lookupKey,
+				SkipEntityValidation: true,
+			},
+			CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+			CommitmentValue: decimal.NewFromInt(50),
+			OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.2)),
+		}
+	}
+
+	reqs := []dto.CommitmentBucketRequest{
+		makeBucketReq(0, 8, "bucket_multi_test_1"),
+		makeBucketReq(8, 16, "bucket_multi_test_2"),
+		makeBucketReq(16, 24, "bucket_multi_test_3"),
+	}
+
+	out, err := concreteSvc.resolveBucketPrices(ctx, s.testData.subscription.ID, reqs)
+	s.NoError(err)
+	s.Require().Len(out, 3)
+
+	// All bucket IDs must be distinct.
+	ids := map[string]bool{}
+	priceIDs := map[string]bool{}
+	for _, b := range out {
+		s.NotEmpty(b.ID)
+		s.NotEmpty(b.PriceID)
+		s.False(ids[b.ID], "bucket ID must be unique: %s", b.ID)
+		s.False(priceIDs[b.PriceID], "price ID must be unique: %s", b.PriceID)
+		ids[b.ID] = true
+		priceIDs[b.PriceID] = true
+	}
+}
