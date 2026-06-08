@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -25,11 +26,12 @@ type EventsHandler struct {
 	rawEventsReprocessingService service.RawEventsReprocessingService
 	rawEventConsumptionService   service.RawEventConsumptionService
 	meterUsageService            service.MeterUsageService
+	usageBenchmarkService        service.UsageBenchmarkService
 	config                       *config.Configuration
 	log                          *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, rawEventConsumptionService service.RawEventConsumptionService, meterUsageService service.MeterUsageService, usageBenchmarkService service.UsageBenchmarkService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                 eventService,
 		eventPostProcessingService:   eventPostProcessingService,
@@ -37,6 +39,7 @@ func NewEventsHandler(eventService service.EventService, eventPostProcessingServ
 		rawEventsReprocessingService: rawEventsReprocessingService,
 		rawEventConsumptionService:   rawEventConsumptionService,
 		meterUsageService:            meterUsageService,
+		usageBenchmarkService:        usageBenchmarkService,
 		config:                       config,
 		log:                          log,
 	}
@@ -423,6 +426,8 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 		return
 	}
 
+	h.publishAnalyticsBenchmark(ctx, &req)
+
 	c.JSON(http.StatusOK, response)
 }
 
@@ -453,7 +458,27 @@ func (h *EventsHandler) GetUsageAnalyticsV2(c *gin.Context) {
 		return
 	}
 
+	h.publishAnalyticsBenchmark(ctx, &req)
+
 	c.JSON(http.StatusOK, response)
+}
+
+// publishAnalyticsBenchmark fires a benchmark trigger to Kafka after the live
+// analytics response is produced. Strict fire-and-forget: gated on the per-tenant
+// feature flag, never blocks or fails the live response, errors are logged only.
+func (h *EventsHandler) publishAnalyticsBenchmark(ctx context.Context, req *dto.GetUsageAnalyticsRequest) {
+	if h.usageBenchmarkService == nil || h.config == nil {
+		return
+	}
+	if !h.config.FeatureFlag.IsUsageBenchmarkEnabled(types.GetTenantID(ctx)) {
+		return
+	}
+	if err := h.usageBenchmarkService.PublishAnalyticsEvent(ctx, req); err != nil {
+		h.log.Warnw("analytics benchmark: failed to publish event",
+			"tenant_id", types.GetTenantID(ctx),
+			"error", err,
+		)
+	}
 }
 
 func parseStartAndEndTime(startTimeStr, endTimeStr string) (time.Time, time.Time, error) {

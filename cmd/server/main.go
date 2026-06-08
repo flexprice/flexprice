@@ -138,6 +138,7 @@ func main() {
 			repository.NewCostSheetUsageRepository,
 			repository.NewMeterUsageRepository,
 			repository.NewUsageBenchmarkRepository,
+			repository.NewAnalyticsBenchmarkRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
 			repository.NewAuthRepository,
@@ -366,9 +367,10 @@ func provideHandlers(
 	meterUsageService service.MeterUsageService,
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
+	usageBenchmarkService service.UsageBenchmarkService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, usageBenchmarkService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
