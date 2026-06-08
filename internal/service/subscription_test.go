@@ -1813,6 +1813,138 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Validatio
 	}
 }
 
+// TestCreateSubscription_LineItemWithBuckets_MaterializesPrices verifies that when
+// CreateSubscription is called with a LineItems entry that carries CommitmentTimeBuckets,
+// the bucket prices are materialized (PriceID and ID populated) on the resulting
+// subscription line item. This exercises the path:
+//
+//	CreateSubscription → AddSubscriptionLineItem → resolveBucketPrices
+func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemWithBuckets_MaterializesPrices() {
+	ctx := s.GetContext()
+
+	// Create a meter with BucketSize set; CommitmentWindowed=true requires it.
+	bucketMeter := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Meter For Sub Create",
+		EventName: "bucket_sub_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketMeter))
+
+	// Create a SUBSCRIPTION-scoped usage price that will be used as the line item's base price.
+	// The line item must reference an existing price_id when CommitmentWindowed=true so that
+	// the service can derive MeterID from it.
+	// NOTE: We create it as PLAN-scoped under s.testData.plan so the plan price lookup works.
+	usagePriceForBucketSub := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            bucketMeter.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePriceForBucketSub))
+
+	overageFactor := decimal.NewFromFloat(1.5)
+	commitmentAmount := decimal.NewFromInt(500)
+	bucketPriceAmount := decimal.NewFromInt(20)
+
+	start := s.testData.now
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          &start,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		// Add a line item with CommitmentTimeBuckets — this goes through AddSubscriptionLineItem
+		// which calls resolveBucketPrices inside the transaction.
+		LineItems: []dto.CreateSubscriptionLineItemRequest{
+			{
+				PriceID:                 usagePriceForBucketSub.ID,
+				SkipEntitlementCheck:    true,
+				CommitmentAmount:        &commitmentAmount,
+				CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentOverageFactor: &overageFactor,
+				CommitmentWindowed:      true,
+				CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
+					{
+						Start: types.Bucket{Hour: 9, Minute: 0},
+						End:   types.Bucket{Hour: 17, Minute: 0},
+						Price: dto.CreatePriceRequest{
+							Amount:               lo.ToPtr(bucketPriceAmount),
+							Currency:             "usd",
+							EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+							Type:                 types.PRICE_TYPE_FIXED,
+							PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+							BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+							BillingPeriodCount:   1,
+							BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+							InvoiceCadence:       types.InvoiceCadenceAdvance,
+							LookupKey:            "sub_create_bucket_price",
+							SkipEntityValidation: true,
+						},
+						CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+						CommitmentValue: decimal.NewFromInt(300),
+						OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+						TrueUpEnabled:   true,
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	s.NotEmpty(resp.ID)
+
+	// Fetch the subscription with line items expanded.
+	got, err := s.service.GetSubscription(ctx, resp.ID)
+	s.NoError(err)
+	s.Require().NotNil(got)
+
+	// Find the line item that has CommitmentTimeBuckets (the one added via req.LineItems,
+	// not the plan-scoped line item for the same price which has no buckets).
+	var bucketLineItem *subscription.SubscriptionLineItem
+	for _, li := range got.Subscription.LineItems {
+		if li.PriceID == usagePriceForBucketSub.ID && len(li.CommitmentTimeBuckets) > 0 {
+			bucketLineItem = li
+			break
+		}
+	}
+	s.Require().NotNil(bucketLineItem, "line item with CommitmentTimeBuckets must exist after CreateSubscription")
+
+	// The line item must carry exactly one materialized bucket.
+	s.Require().Len(bucketLineItem.CommitmentTimeBuckets, 1, "expected 1 materialized bucket on the line item")
+
+	bucket := bucketLineItem.CommitmentTimeBuckets[0]
+
+	// PriceID and ID must be non-empty after resolveBucketPrices ran.
+	s.NotEmpty(bucket.PriceID, "bucket.PriceID must be set by resolveBucketPrices")
+	s.NotEmpty(bucket.ID, "bucket.ID must be set by resolveBucketPrices")
+
+	// The created price must be stored and scoped to the subscription.
+	createdPrice, getErr := s.GetStores().PriceRepo.Get(ctx, bucket.PriceID)
+	s.NoError(getErr)
+	s.Equal(types.PRICE_ENTITY_TYPE_SUBSCRIPTION, createdPrice.EntityType)
+	s.Equal(resp.ID, createdPrice.EntityID, "bucket price must be scoped to the new subscription")
+	s.True(createdPrice.Amount.Equal(bucketPriceAmount), "bucket price amount must match request")
+}
+
 // Helper function to create invoice service for testing
 func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 	return NewInvoiceService(ServiceParams{

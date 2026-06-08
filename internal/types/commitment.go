@@ -125,14 +125,17 @@ func (b TimeOfDayBucket) Validate() error {
 	}
 	if b.CommitmentValue.LessThan(decimal.Zero) {
 		return ierr.NewError("commitment_value must be >= 0").
+			WithHint("Provide a non-negative decimal value for commitment_value").
 			Mark(ierr.ErrValidation)
 	}
 	if b.OverageFactor != nil && b.OverageFactor.LessThan(decimal.Zero) {
 		return ierr.NewError("overage_factor must be >= 0").
+			WithHint("Provide a non-negative decimal value for overage_factor").
 			Mark(ierr.ErrValidation)
 	}
 	if b.TrueUpEnabled && !b.CommitmentValue.GreaterThan(decimal.Zero) {
 		return ierr.NewError("true_up_enabled requires commitment_value > 0").
+			WithHint("Enable true-up only when commitment_value > 0").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
