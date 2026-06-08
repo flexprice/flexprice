@@ -4125,18 +4125,27 @@ func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 		s.T().Logf("✅ scheduled_date: missing cancel_at rejected")
 	})
 
-	s.Run("validation rejects past cancel_at", func() {
+	s.Run("backdated past cancel_at is accepted", func() {
 		sub := newActiveSub("sub_sched_past_date")
 		pastDate := s.testData.now.Add(-24 * time.Hour)
 
-		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		resp, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
 			CancellationType: types.CancellationTypeScheduledDate,
 			CancelAt:         &pastDate,
+			Reason:           "backdated_cancel",
 		})
-		s.Error(err)
-		s.True(ierr.IsValidation(err), "expected validation error")
-		s.Contains(err.Error(), "future")
-		s.T().Logf("✅ scheduled_date: past cancel_at rejected")
+		s.NoError(err)
+		s.True(resp.EffectiveDate.Equal(pastDate), "effective date should match cancel_at")
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		s.NotNil(updated.CancelAt)
+		s.WithinDuration(pastDate, *updated.CancelAt, time.Second)
+		s.NotNil(updated.EndDate, "end_date must be set to the backdated cancellation date")
+		s.WithinDuration(pastDate, *updated.EndDate, time.Second)
+		s.True(updated.CancelAtPeriodEnd, "cancel_at_period_end must be true")
+		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus, "status stays active until schedule fires")
+		s.T().Logf("✅ scheduled_date: past cancel_at accepted for backdated cancellation")
 	})
 
 	s.Run("errors if subscription is already scheduled to cancel via end_of_period", func() {

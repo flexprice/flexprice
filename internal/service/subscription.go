@@ -1872,7 +1872,7 @@ func (s *subscriptionService) CancelSubscription(
 	}
 
 	// Step 3b: Guard against double-scheduling
-	// Both end_of_period and scheduled_date schedule a future cancellation via cancel_at.
+	// Both end_of_period and scheduled_date use cancel_at to set the cancellation date.
 	// Reject if one is already in place to prevent silent overwrites.
 	if req.CancellationType == types.CancellationTypeScheduledDate ||
 		req.CancellationType == types.CancellationTypeEndOfPeriod {
@@ -5340,7 +5340,7 @@ func (s *subscriptionService) determineEffectiveDate(
 	case types.CancellationTypeScheduledDate:
 		if customDate == nil {
 			return time.Time{}, ierr.NewError("cancel_at is required for scheduled_date").
-				WithHint("Provide a future date in cancel_at").
+				WithHint("Provide a cancel_at date (past for backdated cancellation, future for scheduled cancellation)").
 				Mark(ierr.ErrValidation)
 		}
 		return customDate.UTC(), nil
