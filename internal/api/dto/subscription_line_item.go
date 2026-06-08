@@ -585,8 +585,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		lineItem.CommitmentDuration = r.CommitmentDuration
 	}
 	if len(r.CommitmentTimeBuckets) > 0 {
-		// TODO(Task 6): materialize via resolveBucketPrices — for now produce an empty
-		// domain slice; the real wiring lands in Tasks 6–9.
+		// CommitmentTimeBuckets is intentionally left empty here; the service layer
+		// materializes buckets via resolveBucketPrices and assigns the result on
+		// the constructed line item.
 		lineItem.CommitmentTimeBuckets = types.TimeOfDayBuckets{}
 	}
 
@@ -819,8 +820,9 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	}
 
 	if r.CommitmentTimeBuckets != nil {
-		// TODO(Task 6): materialize via resolveBucketPrices — for now produce an empty
-		// domain slice; the real wiring lands in Tasks 6–9.
+		// CommitmentTimeBuckets is intentionally left empty here; the service layer
+		// materializes buckets via resolveBucketPrices and assigns the result on
+		// the constructed line item. Task 10 will wire the update flow.
 		newLineItem.CommitmentTimeBuckets = types.TimeOfDayBuckets{}
 	} else {
 		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets

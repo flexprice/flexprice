@@ -64,6 +64,18 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
 
+		// Materialize bucket prices: create a SUBSCRIPTION-scoped Price for each
+		// CommitmentTimeBuckets entry and assign the resulting slice (with PriceIDs
+		// and stable UUIDs) onto the line item. This must happen inside the
+		// transaction so that any created prices are rolled back on failure.
+		if len(resolvedReq.CommitmentTimeBuckets) > 0 {
+			buckets, bucketErr := s.resolveBucketPrices(txCtx, subscriptionID, resolvedReq.CommitmentTimeBuckets)
+			if bucketErr != nil {
+				return bucketErr
+			}
+			lineItem.CommitmentTimeBuckets = buckets
+		}
+
 		if types.BillingPeriodGreaterThan(sub.BillingPeriod, lineItem.BillingPeriod) {
 			return ierr.NewError("line item billing period cannot be shorter than subscription billing period").
 				WithHint("The line item's billing period must be equal to or longer than the subscription").
@@ -223,6 +235,7 @@ func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context,
 			CommitmentTrueUpEnabled: req.CommitmentTrueUpEnabled,
 			CommitmentWindowed:      req.CommitmentWindowed,
 			CommitmentDuration:      req.CommitmentDuration,
+			CommitmentTimeBuckets:   req.CommitmentTimeBuckets,
 		}
 		return nil, params, resolvedReq, true, &createPriceReq, nil
 	}
