@@ -553,6 +553,131 @@ func TestApplyWindowCommitment_PerBucketDispatch_QuantityTrueUp(t *testing.T) {
 	assert.True(t, info.IsWindowed)
 }
 
+// TestApplyWindowCommitment_PerBucket_SumInvariant pins the invariant:
+//
+//	totalCharge == sum(per_bucket_subcharge) + out_of_bucket_subcharge
+//	where each subcharge == utilized + overage + true_up
+//
+// Two buckets are configured in the same line item plus out-of-bucket usage.
+// Bucket A (09:00–12:00, $2/unit, commitment=$10) has overage: 3 windows × 5
+// units = 15 units × $2 = $30 > $10.
+// Bucket B (18:00–22:00, $1/unit, commitment=$20, true-up) has under-usage:
+// 4 windows × 2 units = 8 units × $1 = $8 < $20 → true-up fires.
+// Out-of-bucket windows pay the line-item base rate ($1/unit) with no commitment.
+//
+// The invariant must hold by construction; this test locks it in to guard
+// future refactors against sum-drift.
+func TestApplyWindowCommitment_PerBucket_SumInvariant(t *testing.T) {
+	ctx := testutil.SetupContext()
+	calc, priceStore := newCommitmentCalculatorWithPriceStore(t)
+
+	// Bucket A price: $2/unit flat-fee
+	bucketPriceA := &price.Price{
+		ID:           "price_buc_a_2_per_unit",
+		Amount:       decimal.NewFromInt(2),
+		Currency:     "usd",
+		Type:         types.PRICE_TYPE_USAGE,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, bucketPriceA))
+
+	// Bucket B price: $1/unit flat-fee
+	bucketPriceB := &price.Price{
+		ID:           "price_buc_b_1_per_unit",
+		Amount:       decimal.NewFromInt(1),
+		Currency:     "usd",
+		Type:         types.PRICE_TYPE_USAGE,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, bucketPriceB))
+
+	overageFactor := decimal.NewFromInt(1)
+
+	// Line item: zero top-level commitment so out-of-bucket pays only base rate.
+	liCommitmentAmount := decimal.Zero
+	liOverageFactor := decimal.NewFromFloat(1.0)
+	lineItem := &subscription.SubscriptionLineItem{
+		ID:                      "li_sum",
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentAmount:        &liCommitmentAmount,
+		CommitmentOverageFactor: &liOverageFactor,
+		CommitmentTrueUpEnabled: false,
+		CommitmentWindowed:      true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{
+				ID:              "buc_a",
+				Start:           types.Bucket{Hour: 9},
+				End:             types.Bucket{Hour: 12},
+				PriceID:         bucketPriceA.ID,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(10), // overage: actual $30 > $10
+				OverageFactor:   &overageFactor,
+				TrueUpEnabled:   false,
+			},
+			{
+				ID:              "buc_b",
+				Start:           types.Bucket{Hour: 18},
+				End:             types.Bucket{Hour: 22},
+				PriceID:         bucketPriceB.ID,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(20), // true-up: actual $8 < $20
+				OverageFactor:   &overageFactor,
+				TrueUpEnabled:   true,
+			},
+		},
+	}
+
+	// Line item price: $1/unit used for out-of-bucket windows.
+	lineItemPrice := flatFeePrice(decimal.NewFromInt(1))
+
+	// 24 hourly windows; usage chosen to push bucket A over its commitment
+	// (overage) and bucket B under its commitment (true-up).
+	at := func(h int) time.Time { return time.Date(2026, 1, 1, h, 0, 0, 0, time.UTC) }
+	starts := make([]time.Time, 24)
+	values := make([]decimal.Decimal, 24)
+	for h := 0; h < 24; h++ {
+		starts[h] = at(h)
+		switch {
+		case h >= 9 && h < 12: // bucket A: 3 windows × 5 units = 15 units × $2 = $30 > $10 ⇒ overage
+			values[h] = decimal.NewFromInt(5)
+		case h >= 18 && h < 22: // bucket B: 4 windows × 2 units = 8 units × $1 = $8 < $20 ⇒ true-up
+			values[h] = decimal.NewFromInt(2)
+		default: // out-of-bucket: 17 windows × 1 unit × $1/unit = $17
+			values[h] = decimal.NewFromInt(1)
+		}
+	}
+
+	total, info, err := calc.applyWindowCommitmentToLineItem(ctx, lineItem, values, starts, lineItemPrice)
+	require.NoError(t, err)
+	require.NotNil(t, info)
+
+	// In applyWindowCommitmentPerBucket, out-of-bucket usage with zero line-item
+	// commitment is charged at base rate and added to totalUtilized (not a separate
+	// bucket). Therefore, the full invariant is:
+	//
+	//   total == ComputedCommitmentUtilizedAmount + ComputedOverageAmount + ComputedTrueUpAmount
+	//
+	// Arithmetic:
+	//   Bucket A: 15 units × $2 = $30 > $10 → charge=$30, util=$10, overage=$20, trueUp=0
+	//   Bucket B:  8 units × $1 = $8  < $20 → charge=$20, util=$8,  overage=0,  trueUp=$12
+	//   Out-of-bucket: 17 units × $1 = $17  → charge=$17, util=$17 (zero commitment path)
+	//   total = $30 + $20 + $17 = $67
+	//   sum   = ($10+$8+$17) + $20 + $12 = $35 + $20 + $12 = $67 ✓
+	expectedSum := info.ComputedCommitmentUtilizedAmount.
+		Add(info.ComputedOverageAmount).
+		Add(info.ComputedTrueUpAmount)
+
+	assert.True(t,
+		total.Equal(expectedSum),
+		"sum invariant violated: total=%s expected (utilized+overage+trueup)=%s "+
+			"(utilized=%s overage=%s trueup=%s)",
+		total.String(), expectedSum.String(),
+		info.ComputedCommitmentUtilizedAmount.String(),
+		info.ComputedOverageAmount.String(),
+		info.ComputedTrueUpAmount.String(),
+	)
+}
+
 // TestApplyWindowCommitment_TimeBuckets_LengthMismatch verifies the defensive
 // guard rejects misaligned slices instead of producing wrong charges silently.
 func TestApplyWindowCommitment_TimeBuckets_LengthMismatch(t *testing.T) {
