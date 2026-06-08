@@ -259,6 +259,10 @@ func NewUsageBenchmarkRepository(p RepositoryParams) events.UsageBenchmarkReposi
 	return clickhouseRepo.NewUsageBenchmarkRepository(p.ClickHouseDB, p.Logger)
 }
 
+func NewAnalyticsBenchmarkRepository(p RepositoryParams) events.AnalyticsBenchmarkRepository {
+	return clickhouseRepo.NewAnalyticsBenchmarkRepository(p.ClickHouseDB, p.Logger)
+}
+
 func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {
 	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger, p.Cache)
 }
