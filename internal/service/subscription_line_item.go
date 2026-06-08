@@ -73,6 +73,9 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			if bucketErr != nil {
 				return bucketErr
 			}
+			if err := s.validateBucketArray(txCtx, lineItem.MeterID, buckets); err != nil {
+				return err
+			}
 			lineItem.CommitmentTimeBuckets = buckets
 		}
 
@@ -513,6 +516,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				if buckets == nil {
 					buckets = types.TimeOfDayBuckets{}
 				}
+				if err := s.validateBucketArray(ctx, newLineItem.MeterID, buckets); err != nil {
+					return err
+				}
 				newLineItem.CommitmentTimeBuckets = buckets
 			}
 
@@ -866,6 +872,33 @@ func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscriptio
 	}
 
 	return nil
+}
+
+// validateBucketArray runs array-level validation on a materialised bucket
+// slice — overlap detection + meter-window alignment. Called from create and
+// update flows after resolveBucketPrices.
+//
+// When meterID is empty (e.g. line items not tied to a meter), the alignment
+// check is skipped — overlap still runs.
+func (s *subscriptionService) validateBucketArray(
+	ctx context.Context,
+	meterID string,
+	buckets types.TimeOfDayBuckets,
+) error {
+	if len(buckets) == 0 {
+		return nil
+	}
+	if err := buckets.ValidateNoOverlap(); err != nil {
+		return err
+	}
+	if meterID == "" {
+		return nil
+	}
+	m, err := s.MeterRepo.GetMeter(ctx, meterID)
+	if err != nil {
+		return err
+	}
+	return buckets.ValidateWindowAlignment(windowSizeMinutes(m.Aggregation.BucketSize))
 }
 
 // resolveBucketPrices creates a SUBSCRIPTION-scoped price for each bucket and

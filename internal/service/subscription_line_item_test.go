@@ -1277,3 +1277,257 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_NilBuc
 	s.Equal(origBucketPriceID, newLI.CommitmentTimeBuckets[0].PriceID,
 		"inherited bucket PriceID must match original")
 }
+
+// TestAddSubscriptionLineItem_RejectsOverlappingBuckets verifies that two
+// buckets whose time ranges overlap (09:00-12:00 and 11:00-14:00) are rejected
+// before persistence with an error mentioning "overlap".
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsOverlappingBuckets() {
+	ctx := s.GetContext()
+
+	// Meter with HOUR bucket size — alignment is fine for these buckets individually.
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Overlap Validation Meter",
+		EventName: "overlap_val_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:           s.testData.subscription.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            m.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	overage := decimal.NewFromFloat(1.5)
+	commitment := decimal.NewFromInt(500)
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:                 usagePrice.ID,
+		SkipEntitlementCheck:    true,
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overage,
+		CommitmentWindowed:      true,
+		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
+			{
+				// 09:00-12:00
+				Start: types.Bucket{Hour: 9, Minute: 0},
+				End:   types.Bucket{Hour: 12, Minute: 0},
+				Price: dto.CreatePriceRequest{
+					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
+					Currency:             "usd",
+					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+					EntityID:             s.testData.subscription.ID,
+					Type:                 types.PRICE_TYPE_FIXED,
+					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+					InvoiceCadence:       types.InvoiceCadenceAdvance,
+					LookupKey:            "overlap_bucket_a",
+					SkipEntityValidation: true,
+				},
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(200),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+			},
+			{
+				// 11:00-14:00 — overlaps with the first bucket
+				Start: types.Bucket{Hour: 11, Minute: 0},
+				End:   types.Bucket{Hour: 14, Minute: 0},
+				Price: dto.CreatePriceRequest{
+					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
+					Currency:             "usd",
+					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+					EntityID:             s.testData.subscription.ID,
+					Type:                 types.PRICE_TYPE_FIXED,
+					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+					InvoiceCadence:       types.InvoiceCadenceAdvance,
+					LookupKey:            "overlap_bucket_b",
+					SkipEntityValidation: true,
+				},
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(200),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+			},
+		},
+	}
+
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "overlap", "error should mention 'overlap'")
+}
+
+// TestAddSubscriptionLineItem_RejectsMisalignedBuckets verifies that a bucket
+// starting at 09:30 is rejected when the meter's window is 1 hour (start must
+// be aligned to the 60-minute grid). Error must mention "alignment".
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsMisalignedBuckets() {
+	ctx := s.GetContext()
+
+	// Meter with HOUR bucket size — 09:30 start is not on the 60-minute grid.
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Alignment Validation Meter",
+		EventName: "align_val_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:           s.testData.subscription.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            m.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	overage := decimal.NewFromFloat(1.5)
+	commitment := decimal.NewFromInt(500)
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:                 usagePrice.ID,
+		SkipEntitlementCheck:    true,
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overage,
+		CommitmentWindowed:      true,
+		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
+			{
+				// 09:30-10:30 — start (09:30 = 570 min) is not aligned to 60-minute grid.
+				Start: types.Bucket{Hour: 9, Minute: 30},
+				End:   types.Bucket{Hour: 10, Minute: 30},
+				Price: dto.CreatePriceRequest{
+					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
+					Currency:             "usd",
+					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+					EntityID:             s.testData.subscription.ID,
+					Type:                 types.PRICE_TYPE_FIXED,
+					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+					InvoiceCadence:       types.InvoiceCadenceAdvance,
+					LookupKey:            "misalign_bucket",
+					SkipEntityValidation: true,
+				},
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(200),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+			},
+		},
+	}
+
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "alignment", "error should mention 'alignment'")
+}
+
+// TestAddSubscriptionLineItem_RejectsBucketsOnNonWindowedMeter verifies that
+// buckets are rejected when the meter has no BucketSize (not a windowed meter).
+// The alignment check returns "windowed meter" in the error.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsBucketsOnNonWindowedMeter() {
+	ctx := s.GetContext()
+
+	// Meter WITHOUT a BucketSize — not windowed.
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Non-Windowed Meter",
+		EventName: "non_windowed_event",
+		Aggregation: meter.Aggregation{
+			Type:  types.AggregationSum,
+			Field: "value",
+			// BucketSize intentionally empty — windowSizeMinutes returns 0
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:           s.testData.subscription.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            m.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	overage := decimal.NewFromFloat(1.5)
+	commitment := decimal.NewFromInt(500)
+	// CommitmentWindowed=false to bypass validateLineItemCommitment's bucket-size check;
+	// we want validateBucketArray to fire instead.
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:                 usagePrice.ID,
+		SkipEntitlementCheck:    true,
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overage,
+		CommitmentWindowed:      false,
+		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
+			{
+				Start: types.Bucket{Hour: 9, Minute: 0},
+				End:   types.Bucket{Hour: 17, Minute: 0},
+				Price: dto.CreatePriceRequest{
+					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
+					Currency:             "usd",
+					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+					EntityID:             s.testData.subscription.ID,
+					Type:                 types.PRICE_TYPE_FIXED,
+					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+					InvoiceCadence:       types.InvoiceCadenceAdvance,
+					LookupKey:            "non_windowed_bucket",
+					SkipEntityValidation: true,
+				},
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(200),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+			},
+		},
+	}
+
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "windowed", "error should mention 'windowed'")
+}

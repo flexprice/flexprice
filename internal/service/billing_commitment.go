@@ -112,6 +112,25 @@ func nextBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *ti
 	}
 }
 
+// windowSizeMinutes converts a meter aggregation BucketSize to minutes for
+// bucket alignment validation. Returns 0 for window sizes larger than 1 hour,
+// which causes ValidateWindowAlignment to reject any buckets (because buckets
+// require a sub-hourly or hourly meter).
+func windowSizeMinutes(w types.WindowSize) int {
+	switch w {
+	case types.WindowSizeMinute:
+		return 1
+	case types.WindowSize15Min:
+		return 15
+	case types.WindowSize30Min:
+		return 30
+	case types.WindowSizeHour:
+		return 60
+	default:
+		return 0
+	}
+}
+
 // commitmentCalculator handles commitment-based pricing calculations for line items
 type commitmentCalculator struct {
 	logger       *logger.Logger
