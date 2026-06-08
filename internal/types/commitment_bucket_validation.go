@@ -61,3 +61,58 @@ func (bs TimeOfDayBuckets) ValidateNoOverlap() error {
 	}
 	return nil
 }
+
+// ValidateWindowAlignment enforces the meter-window constraints required for
+// per-bucket pricing:
+//   - meter must be windowed (windowMin > 0)
+//   - meter window size must be <= 60 minutes
+//   - each bucket's (End-Start) must be an integer multiple of windowMin
+//   - each bucket's Start must be aligned to the window grid
+//
+// Pass 0 for windowMin only when the line item has NO buckets — if buckets
+// exist and windowMin == 0 we reject.
+func (bs TimeOfDayBuckets) ValidateWindowAlignment(windowMin int) error {
+	if len(bs) == 0 {
+		return nil
+	}
+	if windowMin <= 0 {
+		return ierr.NewError("buckets require a windowed meter").
+			WithHint("Configure the meter with a window size before using time-of-day buckets").
+			Mark(ierr.ErrValidation)
+	}
+	if windowMin > 60 {
+		return ierr.NewError("meter window must be <= 60 minutes when using buckets").
+			WithHint("Reduce the meter window size to 60 minutes or less").
+			WithReportableDetails(map[string]interface{}{"window_minutes": windowMin}).
+			Mark(ierr.ErrValidation)
+	}
+	for i, b := range bs {
+		startMin := b.Start.MinuteOfDay()
+		endMin := b.End.MinuteOfDay()
+		duration := endMin - startMin
+		if duration <= 0 {
+			duration = (1440 - startMin) + endMin
+		}
+		if duration%windowMin != 0 {
+			return ierr.NewError("bucket duration must be a multiple of the meter window").
+				WithHint("Adjust the bucket so End-Start is an integer multiple of the meter window size").
+				WithReportableDetails(map[string]interface{}{
+					"bucket_index": i,
+					"duration_min": duration,
+					"window_min":   windowMin,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		if startMin%windowMin != 0 {
+			return ierr.NewError("bucket start alignment error: start must be on the meter window grid").
+				WithHint("Adjust the bucket Start so its minute-of-day is divisible by the meter window size").
+				WithReportableDetails(map[string]interface{}{
+					"bucket_index": i,
+					"start_min":    startMin,
+					"window_min":   windowMin,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
