@@ -344,6 +344,215 @@ func TestBucketIndexAtWindowStart(t *testing.T) {
 	assert.Equal(t, -1, bucketIndexAtWindowStart(buckets, at(7, 0)))
 }
 
+// newCommitmentCalculatorWithPriceStore is like newCommitmentCalculatorForTest but
+// also returns the in-memory price store so tests can pre-populate bucket prices.
+func newCommitmentCalculatorWithPriceStore(t *testing.T) (*commitmentCalculator, *testutil.InMemoryPriceStore) {
+	t.Helper()
+	log := logger.GetLogger()
+	priceStore := testutil.NewInMemoryPriceStore()
+	params := ServiceParams{
+		Logger:        log,
+		DB:            testutil.NewMockPostgresClient(log),
+		PriceRepo:     priceStore,
+		MeterRepo:     testutil.NewInMemoryMeterStore(),
+		PlanRepo:      testutil.NewInMemoryPlanStore(),
+		PriceUnitRepo: testutil.NewInMemoryPriceUnitStore(),
+		AddonRepo:     testutil.NewInMemoryAddonStore(),
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+	}
+	return newCommitmentCalculator(log, NewPriceService(params)), priceStore
+}
+
+// TestApplyWindowCommitment_PerBucketDispatch_FlatFee verifies that when a bucket
+// has per-bucket pricing (PriceID + HasCommitment()), windows are grouped by bucket,
+// aggregated across the cycle, and the bucket's own commitment math is applied.
+//
+// Setup:
+//
+//	line item:  top-level commitment=0 (no out-of-bucket commitment)
+//	bucket:     [09:00, 17:00), FLAT_FEE $2/unit, commitment_type=amount,
+//	            commitment_value=$100, true_up_enabled=true, overage_factor=1
+//	24 hourly windows:
+//	  - hours 9..16 (8 windows) in-bucket, usage=10 each  → 80 units in-bucket total
+//	  - remaining 16 windows out-of-bucket, usage=5 each  → 80 units out-of-bucket total
+//
+// In-bucket:
+//
+//	80 units × $2/unit = $160 actual > $100 commitment
+//	overage = ($160 − $100) × 1 = $60
+//	charge  = $100 + $60 = $160
+//
+// Out-of-bucket:
+//
+//	line item has 0 commitment → actual charge only = 80 × $1 (line item flat $1) = $80
+//
+// Total = $160 + $80 = $240
+func TestApplyWindowCommitment_PerBucketDispatch_FlatFee(t *testing.T) {
+	ctx := testutil.SetupContext()
+	calc, priceStore := newCommitmentCalculatorWithPriceStore(t)
+
+	// Bucket price: $2/unit flat-fee
+	bucketPriceID := "price_bucket_2_per_unit"
+	bucketPriceObj := &price.Price{
+		ID:           bucketPriceID,
+		Amount:       decimal.NewFromInt(2),
+		Currency:     "usd",
+		Type:         types.PRICE_TYPE_USAGE,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, bucketPriceObj))
+
+	commitmentVal := decimal.NewFromInt(100)
+	overageFactorBucket := decimal.NewFromFloat(1.0)
+
+	// Line item: out-of-bucket uses $1/unit flat (no commitment at line-item level).
+	liCommitmentAmount := decimal.Zero
+	liOverageFactor := decimal.NewFromFloat(1.0)
+	lineItem := &subscription.SubscriptionLineItem{
+		ID:                      "li_per_bucket_flat",
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentAmount:        &liCommitmentAmount,
+		CommitmentOverageFactor: &liOverageFactor,
+		CommitmentTrueUpEnabled: false,
+		CommitmentWindowed:      true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{
+				Start:           types.Bucket{Hour: 9, Minute: 0},
+				End:             types.Bucket{Hour: 17, Minute: 0},
+				PriceID:         bucketPriceID,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: commitmentVal,
+				OverageFactor:   &overageFactorBucket,
+				TrueUpEnabled:   true,
+			},
+		},
+	}
+
+	// Line item price: $1/unit (used for out-of-bucket windows)
+	lineItemPrice := flatFeePrice(decimal.NewFromInt(1))
+
+	// Build 24 hourly windows: hours 0..23, usage=10 in-bucket (9..16), usage=5 outside.
+	day := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	bucketStarts := make([]time.Time, 24)
+	bucketedValues := make([]decimal.Decimal, 24)
+	for h := 0; h < 24; h++ {
+		bucketStarts[h] = day.Add(time.Duration(h) * time.Hour)
+		if h >= 9 && h < 17 {
+			bucketedValues[h] = decimal.NewFromInt(10) // in-bucket: 8 windows × 10 = 80 units
+		} else {
+			bucketedValues[h] = decimal.NewFromInt(5) // out-of-bucket: 16 windows × 5 = 80 units
+		}
+	}
+
+	total, info, err := calc.applyWindowCommitmentToLineItem(ctx, lineItem, bucketedValues, bucketStarts, lineItemPrice)
+	require.NoError(t, err)
+	require.NotNil(t, info)
+
+	// In-bucket: 80 units × $2 = $160 > $100 → charge = $100 + ($60 × 1) = $160
+	// Out-of-bucket: 80 units × $1 = $80, commitment=0 → charge = $80 (actual ≥ 0)
+	// Total = $240
+	assert.True(t, decimal.NewFromInt(240).Equal(total),
+		"expected $240 total (per-bucket dispatch flat fee), got %s", total)
+	assert.True(t, info.IsWindowed)
+
+	// In-bucket overage: $60; out-of-bucket overage: 0 (since commitment=0, entire charge is "committed")
+	assert.True(t, decimal.NewFromInt(60).Equal(info.ComputedOverageAmount),
+		"expected in-bucket overage $60, got %s", info.ComputedOverageAmount)
+
+	// No true-up should fire: in-bucket exceeded commitment; out-of-bucket has no true-up.
+	assert.True(t, info.ComputedTrueUpAmount.Equal(decimal.Zero),
+		"expected zero true-up, got %s", info.ComputedTrueUpAmount)
+}
+
+// TestApplyWindowCommitment_PerBucketDispatch_QuantityTrueUp verifies the
+// QUANTITY-typed commitment path in applyWindowCommitmentPerBucket.
+//
+// Setup:
+//
+//	bucket: [09:00, 17:00), FLAT_FEE $0.80/unit,
+//	        commitment_type=quantity, commitment_value=1000, true_up_enabled=true, overage_factor=1
+//	actual in-bucket usage: 600 units
+//
+// Math:
+//
+//	usage charge   = 600 × $0.80 = $480
+//	commit charge  = 1000 × $0.80 = $800
+//	usage < commit → true-up = $800 − $480 = $320
+//	total charge   = $800 (commit_charge, which includes true-up)
+func TestApplyWindowCommitment_PerBucketDispatch_QuantityTrueUp(t *testing.T) {
+	ctx := testutil.SetupContext()
+	calc, priceStore := newCommitmentCalculatorWithPriceStore(t)
+
+	// Bucket price: $0.80/unit flat-fee
+	bucketPriceID := "price_bucket_080"
+	bucketPriceObj := &price.Price{
+		ID:           bucketPriceID,
+		Amount:       decimal.NewFromFloat(0.80),
+		Currency:     "usd",
+		Type:         types.PRICE_TYPE_USAGE,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, bucketPriceObj))
+
+	commitmentQty := decimal.NewFromInt(1000)
+	overageFactor := decimal.NewFromFloat(1.0)
+
+	liCommitmentAmount := decimal.Zero
+	liOverageFactor := decimal.NewFromFloat(1.0)
+	lineItem := &subscription.SubscriptionLineItem{
+		ID:                      "li_per_bucket_qty_trueup",
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentAmount:        &liCommitmentAmount,
+		CommitmentOverageFactor: &liOverageFactor,
+		CommitmentTrueUpEnabled: false,
+		CommitmentWindowed:      true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{
+				Start:           types.Bucket{Hour: 9, Minute: 0},
+				End:             types.Bucket{Hour: 17, Minute: 0},
+				PriceID:         bucketPriceID,
+				CommitmentType:  types.COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: commitmentQty,
+				OverageFactor:   &overageFactor,
+				TrueUpEnabled:   true,
+			},
+		},
+	}
+
+	// Line item price: doesn't matter for this test (no out-of-bucket usage)
+	lineItemPrice := flatFeePrice(decimal.NewFromInt(1))
+
+	// 8 in-bucket hourly windows (hours 9..16), 75 units each → 600 total
+	day := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	bucketStarts := make([]time.Time, 8)
+	bucketedValues := make([]decimal.Decimal, 8)
+	for i := 0; i < 8; i++ {
+		bucketStarts[i] = day.Add(time.Duration(9+i) * time.Hour)
+		bucketedValues[i] = decimal.NewFromInt(75) // 8 × 75 = 600 in-bucket units
+	}
+
+	total, info, err := calc.applyWindowCommitmentToLineItem(ctx, lineItem, bucketedValues, bucketStarts, lineItemPrice)
+	require.NoError(t, err)
+	require.NotNil(t, info)
+
+	// usage charge = 600 × $0.80 = $480
+	// commit charge = 1000 × $0.80 = $800
+	// true-up = $800 − $480 = $320
+	// total charge = $800
+	expectedTotal := decimal.NewFromInt(800)
+	assert.True(t, expectedTotal.Equal(total),
+		"expected $800 total (quantity commitment true-up), got %s", total)
+
+	expectedTrueUp := decimal.NewFromInt(320)
+	assert.True(t, expectedTrueUp.Equal(info.ComputedTrueUpAmount),
+		"expected true-up $320, got %s", info.ComputedTrueUpAmount)
+
+	assert.True(t, info.ComputedOverageAmount.Equal(decimal.Zero),
+		"expected zero overage, got %s", info.ComputedOverageAmount)
+
+	assert.True(t, info.IsWindowed)
+}
+
 // TestApplyWindowCommitment_TimeBuckets_LengthMismatch verifies the defensive
 // guard rejects misaligned slices instead of producing wrong charges silently.
 func TestApplyWindowCommitment_TimeBuckets_LengthMismatch(t *testing.T) {
