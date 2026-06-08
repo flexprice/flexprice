@@ -3437,8 +3437,9 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 
 	if entityType == types.PRICE_ENTITY_TYPE_PLAN {
 		pricesResponse, err = priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
-			PlanID:       entityID,
-			AllowExpired: false,
+			PlanID:         entityID,
+			AllowExpired:   false,
+			BillingPeriods: []types.BillingPeriod{subscription.BillingPeriod},
 		})
 	} else if entityType == types.PRICE_ENTITY_TYPE_ADDON {
 		pricesResponse, err = priceService.GetPricesByAddonID(ctx, entityID)
