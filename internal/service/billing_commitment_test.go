@@ -252,6 +252,75 @@ func TestApplyWindowCommitment_TimeBuckets_NoBucketsConfigured(t *testing.T) {
 		"expected $20 total when no time buckets configured, got %s", total)
 }
 
+// TestApplyWindowCommitment_LegacyBucketShape pins the pre-refactor billing
+// contract for line items whose CommitmentTimeBuckets carry ONLY Start/End
+// (legacy shape — no PriceID, no CommitmentType, no CommitmentValue).
+//
+// Arithmetic:
+//   price:       $1/unit (flat-fee)
+//   usage/window: 5 units → cost $5
+//   commitment:  $10/window, TrueUpEnabled=true, OverageFactor=2
+//   bucket:      [09:00, 17:00) UTC
+//
+//   window 08:00 — OUT of bucket → billed at base rate = $5
+//   window 10:00 — IN  bucket   → cost $5 < $10 → true-up to $10
+//   window 14:00 — IN  bucket   → cost $5 < $10 → true-up to $10
+//   window 18:00 — OUT of bucket → billed at base rate = $5
+//
+//   total: $5 + $10 + $10 + $5 = $30
+func TestApplyWindowCommitment_LegacyBucketShape(t *testing.T) {
+	ctx := testutil.SetupContext()
+	calc := newCommitmentCalculatorForTest(t)
+
+	commitmentAmount := decimal.NewFromInt(10)
+	overageFactor := decimal.NewFromInt(2)
+
+	// Legacy shape: only Start/End are set; no PriceID, CommitmentType, or CommitmentValue.
+	lineItem := &subscription.SubscriptionLineItem{
+		ID:                      "li_legacy_bucket",
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentAmount:        &commitmentAmount,
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentTrueUpEnabled: true,
+		CommitmentWindowed:      true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{Start: types.Bucket{Hour: 9, Minute: 0}, End: types.Bucket{Hour: 17, Minute: 0}},
+		},
+	}
+
+	p := flatFeePrice(decimal.NewFromInt(1)) // $1/unit
+
+	day := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	bucketStarts := []time.Time{
+		day.Add(8 * time.Hour),  // 08:00 — OUT of bucket
+		day.Add(10 * time.Hour), // 10:00 — IN  bucket
+		day.Add(14 * time.Hour), // 14:00 — IN  bucket
+		day.Add(18 * time.Hour), // 18:00 — OUT of bucket
+	}
+	usage := decimal.NewFromInt(5)
+	bucketedValues := []decimal.Decimal{usage, usage, usage, usage}
+
+	total, info, err := calc.applyWindowCommitmentToLineItem(ctx, lineItem, bucketedValues, bucketStarts, p)
+	require.NoError(t, err)
+	require.NotNil(t, info)
+
+	// Out-of-bucket (2 windows): $5 each = $10
+	// In-bucket (2 windows): true-up to $10 each = $20
+	// Grand total: $30
+	assert.True(t, decimal.NewFromInt(30).Equal(total),
+		"expected $30 total (legacy bucket shape), got %s", total)
+
+	// True-up fires (in-bucket windows had usage < commitment)
+	assert.True(t, info.ComputedTrueUpAmount.GreaterThan(decimal.Zero),
+		"expected positive true-up, got %s", info.ComputedTrueUpAmount)
+
+	// No overage (no window exceeded the commitment amount)
+	assert.True(t, info.ComputedOverageAmount.Equal(decimal.Zero),
+		"expected zero overage, got %s", info.ComputedOverageAmount)
+
+	assert.True(t, info.IsWindowed)
+}
+
 // TestApplyWindowCommitment_TimeBuckets_LengthMismatch verifies the defensive
 // guard rejects misaligned slices instead of producing wrong charges silently.
 func TestApplyWindowCommitment_TimeBuckets_LengthMismatch(t *testing.T) {
