@@ -2935,6 +2935,123 @@ func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflowInternal(ctx
 	}, nil
 }
 
+// buildBucketSummaries constructs per-bucket rollup rows from already-stamped
+// time-series points (where BucketID was set by the caller). One summary is
+// produced for each CommitmentTimeBucket on the line item, plus one aggregate
+// entry for out-of-bucket windows (BucketID == ""). The commitment math reuses
+// computeCommitmentMathAmount / computeCommitmentMathQty from billing_commitment.go.
+func (s *featureUsageTrackingService) buildBucketSummaries(
+	ctx context.Context,
+	priceService PriceService,
+	points []dto.UsageAnalyticPoint,
+	lineItem *subscription.SubscriptionLineItem,
+	data *AnalyticsData,
+) []dto.BucketSummary {
+	buckets := lineItem.CommitmentTimeBuckets
+	summaries := make([]dto.BucketSummary, 0, len(buckets)+1)
+
+	for _, b := range buckets {
+		// Aggregate usage for this bucket from already-stamped points.
+		bucketUsage := decimal.Zero
+		for _, p := range points {
+			if p.BucketID == b.ID {
+				bucketUsage = bucketUsage.Add(p.Usage)
+			}
+		}
+
+		// Resolve the bucket-scoped price (may be missing if PriceID is empty).
+		baseCharge := decimal.Zero
+		if b.PriceID != "" {
+			if priceObj, ok := data.Prices[b.PriceID]; ok {
+				baseCharge = priceService.CalculateCost(ctx, priceObj, bucketUsage)
+			}
+		}
+
+		// Commitment math for this bucket.
+		var utilized, overage, trueUp decimal.Decimal
+		if b.HasCommitment() {
+			of := decimal.Zero
+			if b.OverageFactor != nil {
+				of = *b.OverageFactor
+			}
+			switch b.CommitmentType {
+			case types.COMMITMENT_TYPE_AMOUNT:
+				_, utilized, overage, trueUp = computeCommitmentMathAmount(baseCharge, b.CommitmentValue, of, b.TrueUpEnabled)
+			case types.COMMITMENT_TYPE_QUANTITY:
+				commitCharge := decimal.Zero
+				if b.PriceID != "" {
+					if priceObj, ok := data.Prices[b.PriceID]; ok {
+						commitCharge = priceService.CalculateCost(ctx, priceObj, b.CommitmentValue)
+					}
+				}
+				_, utilized, overage, trueUp = computeCommitmentMathQty(baseCharge, commitCharge, of, b.TrueUpEnabled)
+			}
+		}
+
+		summaries = append(summaries, dto.BucketSummary{
+			BucketID:         b.ID,
+			CommitmentType:   string(b.CommitmentType),
+			CommitmentValue:  b.CommitmentValue,
+			TotalUsage:       bucketUsage,
+			BaseCharge:       baseCharge,
+			ComputedUtilized: utilized,
+			ComputedOverage:  overage,
+			ComputedTrueUp:   trueUp,
+		})
+	}
+
+	// Out-of-bucket aggregate (uses the line item's own price + commitment).
+	outUsage := decimal.Zero
+	for _, p := range points {
+		if p.BucketID == "" {
+			outUsage = outUsage.Add(p.Usage)
+		}
+	}
+	outBaseCharge := decimal.Zero
+	if lineItem.PriceID != "" {
+		if priceObj, ok := data.Prices[lineItem.PriceID]; ok {
+			outBaseCharge = priceService.CalculateCost(ctx, priceObj, outUsage)
+		}
+	}
+	var outUtilized, outOverage, outTrueUp decimal.Decimal
+	if lineItem.HasCommitment() {
+		of := decimal.Zero
+		if lineItem.CommitmentOverageFactor != nil {
+			of = *lineItem.CommitmentOverageFactor
+		}
+		switch lineItem.CommitmentType {
+		case types.COMMITMENT_TYPE_AMOUNT:
+			commitAmt := decimal.Zero
+			if lineItem.CommitmentAmount != nil {
+				commitAmt = *lineItem.CommitmentAmount
+			}
+			_, outUtilized, outOverage, outTrueUp = computeCommitmentMathAmount(outBaseCharge, commitAmt, of, lineItem.CommitmentTrueUpEnabled)
+		case types.COMMITMENT_TYPE_QUANTITY:
+			commitCharge := decimal.Zero
+			if lineItem.PriceID != "" {
+				if priceObj, ok := data.Prices[lineItem.PriceID]; ok {
+					commitQty := decimal.Zero
+					if lineItem.CommitmentQuantity != nil {
+						commitQty = *lineItem.CommitmentQuantity
+					}
+					commitCharge = priceService.CalculateCost(ctx, priceObj, commitQty)
+				}
+			}
+			_, outUtilized, outOverage, outTrueUp = computeCommitmentMathQty(outBaseCharge, commitCharge, of, lineItem.CommitmentTrueUpEnabled)
+		}
+	}
+	summaries = append(summaries, dto.BucketSummary{
+		BucketID:         "",
+		TotalUsage:       outUsage,
+		BaseCharge:       outBaseCharge,
+		ComputedUtilized: outUtilized,
+		ComputedOverage:  outOverage,
+		ComputedTrueUp:   outTrueUp,
+	})
+
+	return summaries
+}
+
 func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, data *AnalyticsData, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	response := &dto.GetUsageAnalyticsResponse{
 		TotalCost: decimal.Zero,
@@ -3082,10 +3199,19 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 
 		// Map time-series points if available
 		if req.WindowSize != "" {
+			// Resolve the line item for bucket attribution (may be nil when no buckets).
+			var lineItemForBucket *subscription.SubscriptionLineItem
+			if req.BreakdownBucket && analytic.SubLineItemID != "" {
+				lineItemForBucket = data.SubscriptionLineItems[analytic.SubLineItemID]
+				if lineItemForBucket != nil && !lineItemForBucket.HasCommitmentTimeBuckets() {
+					lineItemForBucket = nil
+				}
+			}
+
 			for _, point := range analytic.Points {
 				// Use the correct usage value based on aggregation type
 				correctUsage := s.getCorrectUsageValueForPoint(point, analytic.AggregationType)
-				item.Points = append(item.Points, dto.UsageAnalyticPoint{
+				dtoPoint := dto.UsageAnalyticPoint{
 					Timestamp:                        point.Timestamp,
 					Usage:                            correctUsage,
 					Cost:                             point.Cost,
@@ -3093,7 +3219,22 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
 					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
-				})
+				}
+				// Per-point bucket identity (Task 18).
+				if lineItemForBucket != nil {
+					idx := bucketIndexAtWindowStart(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp)
+					if idx >= 0 {
+						dtoPoint.BucketID = lineItemForBucket.CommitmentTimeBuckets[idx].ID
+						dtoPoint.PriceID = lineItemForBucket.CommitmentTimeBuckets[idx].PriceID
+					}
+				}
+				item.Points = append(item.Points, dtoPoint)
+			}
+
+			// Bucket-level summaries (Task 19).
+			if lineItemForBucket != nil {
+				priceService := NewPriceService(s.ServiceParams)
+				item.BucketSummaries = s.buildBucketSummaries(ctx, priceService, item.Points, lineItemForBucket, data)
 			}
 		}
 

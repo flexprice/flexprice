@@ -339,6 +339,11 @@ type GetUsageAnalyticsRequest struct {
 	// IncludeChildren when true folds child customers' usage into the single aggregated total.
 	// Default: false.
 	IncludeChildren bool `json:"include_children,omitempty"`
+	// BreakdownBucket when true augments each time-series point with BucketID/PriceID
+	// and appends a BucketSummaries rollup to each item. Requires WindowSize to be set
+	// and the item to be linked to a subscription line item that has CommitmentTimeBuckets.
+	// Default: false (opt-in, backward compatible).
+	BreakdownBucket bool `json:"breakdown_bucket,omitempty" form:"breakdown_bucket"`
 }
 
 // GetUsageAnalyticsResponse represents the response for the usage analytics API
@@ -382,6 +387,9 @@ type UsageAnalyticItem struct {
 	PlanID               string                             `json:"plan_id,omitempty"`
 	WindowSize           types.WindowSize                   `json:"window_size,omitempty"` // Window size for bucketed meters (only set if meter is bucketed)
 	Group                *group.Group                       `json:"group,omitempty"`       // Group when the feature belongs to a group (object includes id)
+	// BucketSummaries is populated only when BreakdownBucket=true. Contains one
+	// entry per defined CommitmentTimeBucket plus one for out-of-bucket usage.
+	BucketSummaries []BucketSummary `json:"bucket_summaries,omitempty"`
 }
 
 // CustomAnalyticItem represents a custom analytics calculation result
@@ -404,6 +412,25 @@ type UsageAnalyticPoint struct {
 	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitempty" swaggertype:"string"`
 	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitempty" swaggertype:"string"`
 	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitempty" swaggertype:"string"`
+
+	// Bucket identity (only populated when BreakdownBucket=true and the line item
+	// has CommitmentTimeBuckets). Empty strings indicate out-of-bucket windows.
+	BucketID string `json:"bucket_id,omitempty"`
+	PriceID  string `json:"bucket_price_id,omitempty"`
+}
+
+// BucketSummary holds per-bucket aggregated usage and commitment math for
+// a single CommitmentTimeBucket on a subscription line item. Appended to
+// UsageAnalyticItem when BreakdownBucket=true.
+type BucketSummary struct {
+	BucketID         string          `json:"bucket_id"`
+	CommitmentType   string          `json:"commitment_type,omitempty"`
+	CommitmentValue  decimal.Decimal `json:"commitment_value,omitempty" swaggertype:"string"`
+	TotalUsage       decimal.Decimal `json:"total_usage" swaggertype:"string"`
+	BaseCharge       decimal.Decimal `json:"base_charge" swaggertype:"string"`
+	ComputedUtilized decimal.Decimal `json:"computed_utilized" swaggertype:"string"`
+	ComputedOverage  decimal.Decimal `json:"computed_overage" swaggertype:"string"`
+	ComputedTrueUp   decimal.Decimal `json:"computed_true_up" swaggertype:"string"`
 }
 
 type GetMonitoringDataRequest struct {
