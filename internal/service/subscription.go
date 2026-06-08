@@ -926,6 +926,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		filter.EntityType = types.TaxRateEntityTypeCustomer
 		filter.EntityID = sub.CustomerID
 		filter.AutoApply = lo.ToPtr(true)
+		filter.Status = lo.ToPtr(types.StatusPublished)
 		tenantTaxAssociations, err := taxService.ListTaxAssociations(ctx, filter)
 		if err != nil {
 			return err
