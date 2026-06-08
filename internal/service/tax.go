@@ -283,6 +283,29 @@ func (s *taxService) DeleteTaxRate(ctx context.Context, id string) error {
 		return err
 	}
 
+	// Block delete when the tax rate has any active association
+	taxAssociationFilter := types.NewTaxAssociationFilter()
+	taxAssociationFilter.TaxRateIDs = []string{id}
+	taxAssociationFilter.Status = lo.ToPtr(types.StatusPublished)
+	taxAssociationFilter.Limit = lo.ToPtr(1)
+	taxAssociations, err := s.TaxAssociationRepo.List(ctx, taxAssociationFilter)
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to get tax associations for tax rate",
+			"error", err,
+			"tax_rate_id", id,
+		)
+		return err
+	}
+
+	if len(taxAssociations) > 0 {
+		s.Logger.WarnwCtx(ctx, "tax rate has active associations, cannot delete",
+			"tax_rate_id", id,
+		)
+		return ierr.NewError("tax rate has active associations, cannot delete").
+			WithHint("This tax rate has active associations. Please remove all associations before deleting it.").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Call the repository's Delete method which handles archiving
 	if err := s.TaxRateRepo.Delete(ctx, taxRate); err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to delete tax rate",
