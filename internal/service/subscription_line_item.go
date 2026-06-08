@@ -73,7 +73,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			if bucketErr != nil {
 				return bucketErr
 			}
-			if err := s.validateBucketArray(txCtx, lineItem.MeterID, buckets); err != nil {
+			if err := s.validateBucketArray(txCtx, subscriptionID, lineItem.MeterID, buckets); err != nil {
 				return err
 			}
 			lineItem.CommitmentTimeBuckets = buckets
@@ -516,7 +516,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				if buckets == nil {
 					buckets = types.TimeOfDayBuckets{}
 				}
-				if err := s.validateBucketArray(ctx, newLineItem.MeterID, buckets); err != nil {
+				if err := s.validateBucketArray(ctx, existingLineItem.SubscriptionID, newLineItem.MeterID, buckets); err != nil {
 					return err
 				}
 				newLineItem.CommitmentTimeBuckets = buckets
@@ -875,13 +875,18 @@ func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscriptio
 }
 
 // validateBucketArray runs array-level validation on a materialised bucket
-// slice — overlap detection + meter-window alignment. Called from create and
-// update flows after resolveBucketPrices.
+// slice — overlap detection, meter-window alignment, and cumulative-commitment
+// guard. Called from create and update flows after resolveBucketPrices.
 //
 // When meterID is empty (e.g. line items not tied to a meter), the alignment
 // check is skipped — overlap still runs.
+//
+// When the parent subscription has a cumulative commitment (CommitmentDuration
+// != nil and != BillingPeriod), per-bucket commitments are rejected because the
+// two models are incompatible.
 func (s *subscriptionService) validateBucketArray(
 	ctx context.Context,
+	subscriptionID string,
 	meterID string,
 	buckets types.TimeOfDayBuckets,
 ) error {
@@ -891,14 +896,27 @@ func (s *subscriptionService) validateBucketArray(
 	if err := buckets.ValidateNoOverlap(); err != nil {
 		return err
 	}
-	if meterID == "" {
-		return nil
+	if meterID != "" {
+		m, err := s.MeterRepo.GetMeter(ctx, meterID)
+		if err != nil {
+			return err
+		}
+		if err := buckets.ValidateWindowAlignment(windowSizeMinutes(m.Aggregation.BucketSize)); err != nil {
+			return err
+		}
 	}
-	m, err := s.MeterRepo.GetMeter(ctx, meterID)
+	// Cumulative-subscription-commitment guard: per-bucket commitments cannot
+	// coexist with a cumulative subscription commitment.
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return err
 	}
-	return buckets.ValidateWindowAlignment(windowSizeMinutes(m.Aggregation.BucketSize))
+	if _, _, ok := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart); ok {
+		return ierr.NewError("per-bucket commitment cannot be combined with cumulative subscription commitment").
+			WithHint("Pick one model: per-bucket OR cumulative.").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // resolveBucketPrices creates a SUBSCRIPTION-scoped price for each bucket and

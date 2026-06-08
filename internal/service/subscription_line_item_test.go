@@ -1531,3 +1531,89 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsBu
 	s.Require().Error(err)
 	s.Contains(err.Error(), "windowed", "error should mention 'windowed'")
 }
+
+// TestAddSubscriptionLineItem_RejectsBucketsWithCumulativeCommitment verifies
+// that per-bucket commitments are rejected when the parent subscription has a
+// cumulative commitment configured (CommitmentDuration != BillingPeriod).
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsBucketsWithCumulativeCommitment() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+
+	// Build a subscription with ANNUAL commitment on a MONTHLY billing period.
+	// getSubscriptionCommitmentPeriodBounds will return ok=true for this combo.
+	annualDuration := types.BILLING_PERIOD_ANNUAL
+	commitmentAmount := decimal.NewFromInt(12000)
+	cumulativeSub := &subscription.Subscription{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart: now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+		BillingAnchor:      now.Add(-30 * 24 * time.Hour),
+		Currency:           "usd",
+		BillingCycle:       types.BillingCycleAnniversary,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		// Cumulative commitment: ANNUAL window on a MONTHLY billed subscription.
+		CommitmentDuration: &annualDuration,
+		CommitmentAmount:   &commitmentAmount,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, cumulativeSub))
+
+	// Create a usage price tied to the cumulative subscription.
+	usagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:           cumulativeSub.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePrice))
+
+	bucketCommitment := decimal.NewFromInt(500)
+	bucketOverage := decimal.NewFromFloat(1.5)
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              usagePrice.ID,
+		SkipEntitlementCheck: true,
+		// CommitmentWindowed=true is required by DTO validation when CommitmentTimeBuckets
+		// is non-empty. The price has no MeterID so the alignment check is skipped;
+		// the cumulative-commitment guard fires next.
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
+			{
+				Start: types.Bucket{Hour: 9, Minute: 0},
+				End:   types.Bucket{Hour: 17, Minute: 0},
+				Price: dto.CreatePriceRequest{
+					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
+					Currency:             "usd",
+					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+					EntityID:             cumulativeSub.ID,
+					Type:                 types.PRICE_TYPE_FIXED,
+					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+					InvoiceCadence:       types.InvoiceCadenceAdvance,
+					LookupKey:            "cumulative_bucket",
+					SkipEntityValidation: true,
+				},
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: bucketCommitment,
+				OverageFactor:   &bucketOverage,
+			},
+		},
+	}
+
+	_, err := s.service.AddSubscriptionLineItem(ctx, cumulativeSub.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "cumulative", "error should mention 'cumulative'")
+}
