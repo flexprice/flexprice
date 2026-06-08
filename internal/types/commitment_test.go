@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -223,4 +224,43 @@ func TestTimeOfDayBuckets_ContainsTime(t *testing.T) {
 func TestTimeOfDayBuckets_ContainsTime_EmptySlice(t *testing.T) {
 	var buckets TimeOfDayBuckets
 	assert.False(t, buckets.ContainsTime(time.Date(2026, time.June, 2, 12, 0, 0, 0, time.UTC)))
+}
+
+func TestTimeOfDayBucket_HasCommitment(t *testing.T) {
+	tests := []struct {
+		name   string
+		bucket TimeOfDayBucket
+		want   bool
+	}{
+		{
+			name:   "no commitment value",
+			bucket: TimeOfDayBucket{Start: Bucket{9, 0}, End: Bucket{10, 0}},
+			want:   false,
+		},
+		{
+			name: "amount commitment",
+			bucket: TimeOfDayBucket{
+				Start:           Bucket{9, 0},
+				End:             Bucket{10, 0},
+				CommitmentType:  COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(100),
+			},
+			want: true,
+		},
+		{
+			name: "quantity commitment",
+			bucket: TimeOfDayBucket{
+				Start:           Bucket{9, 0},
+				End:             Bucket{10, 0},
+				CommitmentType:  COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(1000),
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.bucket.HasCommitment())
+		})
+	}
 }

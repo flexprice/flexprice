@@ -45,13 +45,34 @@ func (b Bucket) MinuteOfDay() int {
 	return b.Hour*60 + b.Minute
 }
 
-// TimeOfDayBucket defines a [Start, End) half-open range within a UTC day.
-// When Start.MinuteOfDay() < End.MinuteOfDay(): normal range (e.g. 09:00-17:00).
-// When Start.MinuteOfDay() > End.MinuteOfDay(): wraps midnight (e.g. 22:00-06:00).
-// When equal: empty range — matches nothing.
+// TimeOfDayBucket defines a [Start, End) half-open range within a UTC day and,
+// optionally, a per-bucket commitment + base price.
+//
+// When ID + PriceID + CommitmentValue are set the bucket overrides the line
+// item's price/commitment for any window whose start falls inside [Start, End).
+// When unset (legacy shape) the bucket is treated as a time-of-day filter only
+// and the line item's price/commitment apply.
 type TimeOfDayBucket struct {
+	// ID is server-assigned. Stable for the lifetime of the line item;
+	// invoice breakdown and analytics responses reference this ID.
+	ID    string `json:"id,omitempty"`
 	Start Bucket `json:"start"`
 	End   Bucket `json:"end"`
+
+	// PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
+	// Immutable post-create; changing pricing requires a successor line item.
+	PriceID string `json:"price_id,omitempty"`
+
+	CommitmentType  CommitmentType   `json:"commitment_type,omitempty"`
+	CommitmentValue decimal.Decimal  `json:"commitment_value,omitempty"`
+	OverageFactor   *decimal.Decimal `json:"overage_factor,omitempty"`
+	TrueUpEnabled   bool             `json:"true_up_enabled,omitempty"`
+}
+
+// HasCommitment reports whether the bucket carries its own commitment config
+// (as opposed to a legacy time-of-day-filter-only bucket).
+func (b TimeOfDayBucket) HasCommitment() bool {
+	return b.CommitmentType != "" && b.CommitmentValue.GreaterThan(decimal.Zero)
 }
 
 // ContainsTime reports whether t falls within this bucket. The check uses the
