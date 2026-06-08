@@ -495,6 +495,27 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			newLineItem = req.ToSubscriptionLineItem(ctx, existingLineItem, newPriceID)
 			newLineItem.StartDate = endDate // Start where the old one ends
 
+			// Materialize bucket prices when the update request carries
+			// commitment_time_buckets. Because CommitmentBucketRequest carries no
+			// stable identifier, we use replace-all semantics: every bucket in the
+			// request gets a fresh SUBSCRIPTION-scoped Price and a new UUID. The
+			// old bucket prices (from the terminated line item) are left intact in
+			// the price table — they may still be referenced by historical invoices.
+			//
+			// Omitting commitment_time_buckets (nil pointer) inherits the existing
+			// line item's buckets (copied by ToSubscriptionLineItem); supplying an
+			// explicit empty slice clears them.
+			if req.CommitmentTimeBuckets != nil {
+				buckets, bucketErr := s.resolveBucketPrices(ctx, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets)
+				if bucketErr != nil {
+					return bucketErr
+				}
+				if buckets == nil {
+					buckets = types.TimeOfDayBuckets{}
+				}
+				newLineItem.CommitmentTimeBuckets = buckets
+			}
+
 			// Validate line item commitment if configured
 			if err := s.validateLineItemCommitment(ctx, newLineItem); err != nil {
 				return err

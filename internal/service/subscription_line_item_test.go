@@ -1012,3 +1012,268 @@ func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_MultipleBucke
 		priceIDs[b.PriceID] = true
 	}
 }
+
+// ─── Bucket update semantics (Task 10) ───────────────────────────────────────
+
+// makeBucketLineItem is a helper that creates a windowed-commitment usage line
+// item with one materialized bucket on the given subscription, returning the
+// persisted line item and the ID of the bucket price so callers can assert
+// against it.
+func (s *SubscriptionLineItemServiceSuite) makeBucketLineItem(subID string, meterID string, lookupKey string) *subscription.SubscriptionLineItem {
+	ctx := s.GetContext()
+
+	// Subscription-scoped usage price referencing the meter.
+	usagePr := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:           subID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            meterID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePr))
+
+	overage := decimal.NewFromFloat(1.5)
+	commitment := decimal.NewFromInt(300)
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:                 usagePr.ID,
+		SkipEntitlementCheck:    true,
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overage,
+		CommitmentWindowed:      true,
+		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
+			{
+				Start: types.Bucket{Hour: 9, Minute: 0},
+				End:   types.Bucket{Hour: 17, Minute: 0},
+				Price: dto.CreatePriceRequest{
+					Amount:               lo.ToPtr(decimal.NewFromInt(20)),
+					Currency:             "usd",
+					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+					EntityID:             subID,
+					Type:                 types.PRICE_TYPE_FIXED,
+					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+					InvoiceCadence:       types.InvoiceCadenceAdvance,
+					LookupKey:            lookupKey,
+					SkipEntityValidation: true,
+				},
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(150),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+				TrueUpEnabled:   true,
+			},
+		},
+	}
+
+	resp, err := s.service.AddSubscriptionLineItem(ctx, subID, req)
+	s.Require().NoError(err)
+	s.Require().Len(resp.CommitmentTimeBuckets, 1)
+	return resp.SubscriptionLineItem
+}
+
+// TestUpdateSubscriptionLineItem_ReplaceAllBuckets verifies that when
+// UpdateSubscriptionLineItem is called with a new commitment_time_buckets list,
+// the update creates a successor line item whose buckets are freshly
+// materialized (new PriceIDs / IDs), replacing the old ones. This is the
+// "replace-all" semantic: CommitmentBucketRequest has no stable ID field, so
+// the entire bucket set is replaced atomically.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_ReplaceAllBuckets() {
+	ctx := s.GetContext()
+
+	// Create a meter with BucketSize for windowed commitment validation.
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Update Meter",
+		EventName: "bucket_update_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	// Create a line item with one bucket (9:00–17:00 @ $20).
+	original := s.makeBucketLineItem(s.testData.subscription.ID, m.ID, "update_bucket_orig")
+	oldBucketPriceID := original.CommitmentTimeBuckets[0].PriceID
+	oldBucketID := original.CommitmentTimeBuckets[0].ID
+
+	// Update: replace the single bucket with a different time window (0:00–8:00 @ $12).
+	overage := decimal.NewFromFloat(1.2)
+	commitment := decimal.NewFromInt(400)
+	req := dto.UpdateSubscriptionLineItemRequest{
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overage,
+		CommitmentWindowed:      lo.ToPtr(true),
+		CommitmentTimeBuckets: lo.ToPtr([]dto.CommitmentBucketRequest{
+			{
+				Start: types.Bucket{Hour: 0, Minute: 0},
+				End:   types.Bucket{Hour: 8, Minute: 0},
+				Price: dto.CreatePriceRequest{
+					Amount:               lo.ToPtr(decimal.NewFromInt(12)),
+					Currency:             "usd",
+					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+					EntityID:             s.testData.subscription.ID,
+					Type:                 types.PRICE_TYPE_FIXED,
+					PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+					InvoiceCadence:       types.InvoiceCadenceAdvance,
+					LookupKey:            "update_bucket_new",
+					SkipEntityValidation: true,
+				},
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(200),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.2)),
+				TrueUpEnabled:   false,
+			},
+		}),
+	}
+
+	resp, err := s.service.UpdateSubscriptionLineItem(ctx, original.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	newLI := resp.SubscriptionLineItem
+
+	// A new line item must have been created (different ID).
+	s.NotEqual(original.ID, newLI.ID, "successor line item must have a new ID")
+
+	// New line item must have exactly one materialized bucket.
+	s.Require().Len(newLI.CommitmentTimeBuckets, 1, "successor must have 1 bucket")
+
+	newBucket := newLI.CommitmentTimeBuckets[0]
+
+	// The new bucket must have fresh IDs (not inherited from the original).
+	s.NotEmpty(newBucket.PriceID, "new bucket must have a PriceID")
+	s.NotEmpty(newBucket.ID, "new bucket must have an ID")
+	s.NotEqual(oldBucketPriceID, newBucket.PriceID, "new bucket PriceID must differ from old")
+	s.NotEqual(oldBucketID, newBucket.ID, "new bucket ID must differ from old")
+
+	// The new bucket time window must match the request (0:00–8:00).
+	s.Equal(types.Bucket{Hour: 0, Minute: 0}, newBucket.Start)
+	s.Equal(types.Bucket{Hour: 8, Minute: 0}, newBucket.End)
+
+	// The new price must exist in the repo.
+	newPrice, getErr := s.GetStores().PriceRepo.Get(ctx, newBucket.PriceID)
+	s.NoError(getErr)
+	s.Equal(types.PRICE_ENTITY_TYPE_SUBSCRIPTION, newPrice.EntityType)
+
+	// Original line item must now be terminated.
+	oldLI, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, original.ID)
+	s.NoError(getErr)
+	s.False(oldLI.EndDate.IsZero(), "original line item must be terminated after update")
+}
+
+// TestUpdateSubscriptionLineItem_ClearBuckets verifies that passing an explicit
+// empty slice for commitment_time_buckets clears all buckets on the successor
+// line item.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_ClearBuckets() {
+	ctx := s.GetContext()
+
+	// Create a meter with BucketSize.
+	m2 := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Clear Meter",
+		EventName: "bucket_clear_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m2))
+
+	// Create a line item with one bucket.
+	original := s.makeBucketLineItem(s.testData.subscription.ID, m2.ID, "clear_bucket_orig")
+	s.Require().Len(original.CommitmentTimeBuckets, 1, "precondition: original has 1 bucket")
+
+	// Update with an explicit empty slice — this should clear buckets.
+	// We must also change a critical field to trigger ShouldCreateNewLineItem.
+	// Providing an explicit empty CommitmentTimeBuckets alone is sufficient because
+	// CommitmentTimeBuckets != nil triggers ShouldCreateNewLineItem.
+	overage := decimal.NewFromFloat(1.3)
+	commitment := decimal.NewFromInt(250)
+	req := dto.UpdateSubscriptionLineItemRequest{
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overage,
+		CommitmentWindowed:      lo.ToPtr(false),
+		CommitmentTimeBuckets:   lo.ToPtr([]dto.CommitmentBucketRequest{}), // explicit empty
+	}
+
+	resp, err := s.service.UpdateSubscriptionLineItem(ctx, original.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	newLI := resp.SubscriptionLineItem
+	s.NotEqual(original.ID, newLI.ID, "successor line item must have a new ID")
+	s.Empty(newLI.CommitmentTimeBuckets, "successor must have no buckets when empty slice is passed")
+}
+
+// TestUpdateSubscriptionLineItem_NilBuckets_InheritsExisting verifies that
+// when CommitmentTimeBuckets is omitted (nil pointer) in the update request,
+// the successor line item inherits the existing buckets verbatim.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_NilBuckets_InheritsExisting() {
+	ctx := s.GetContext()
+
+	// Create a meter with BucketSize.
+	m3 := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Inherit Meter",
+		EventName: "bucket_inherit_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m3))
+
+	// Create a line item with one bucket.
+	original := s.makeBucketLineItem(s.testData.subscription.ID, m3.ID, "inherit_bucket_orig")
+	s.Require().Len(original.CommitmentTimeBuckets, 1, "precondition: original has 1 bucket")
+	origBucketPriceID := original.CommitmentTimeBuckets[0].PriceID
+
+	// Update without providing CommitmentTimeBuckets (nil pointer) —
+	// the update changes the overage factor, which triggers ShouldCreateNewLineItem
+	// via CommitmentOverageFactor.
+	newOverage := decimal.NewFromFloat(1.8)
+	commitment := decimal.NewFromInt(300)
+	req := dto.UpdateSubscriptionLineItemRequest{
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &newOverage,
+		CommitmentWindowed:      lo.ToPtr(true),
+		// CommitmentTimeBuckets is nil — should inherit original buckets
+	}
+
+	resp, err := s.service.UpdateSubscriptionLineItem(ctx, original.ID, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+
+	newLI := resp.SubscriptionLineItem
+	s.NotEqual(original.ID, newLI.ID, "successor must have new ID")
+
+	// Successor must carry the original bucket (same PriceID — inherited, not re-created).
+	s.Require().Len(newLI.CommitmentTimeBuckets, 1, "successor must inherit 1 bucket")
+	s.Equal(origBucketPriceID, newLI.CommitmentTimeBuckets[0].PriceID,
+		"inherited bucket PriceID must match original")
+}
