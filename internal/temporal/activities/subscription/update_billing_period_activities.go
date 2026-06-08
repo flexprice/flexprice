@@ -304,14 +304,13 @@ func (s *BillingActivities) CheckCancellationActivity(
 	if shouldCancel {
 		sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		sub.CancelledAt = cancelledAt
+		subscriptionService := service.NewSubscriptionService(s.serviceParams)
 
 		err := s.serviceParams.DB.WithTx(ctx, func(ctx context.Context) error {
 			// Update subscription
 			if err := s.serviceParams.SubRepo.Update(ctx, sub); err != nil {
 				return err
 			}
-
-			subscriptionService := service.NewSubscriptionService(s.serviceParams)
 
 			// Update the cancellation schedule status to executed
 			if err := subscriptionService.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
@@ -334,6 +333,8 @@ func (s *BillingActivities) CheckCancellationActivity(
 				"error", err)
 			return nil, err
 		}
+
+		subscriptionService.PublishCancellationEvents(ctx, sub)
 
 		s.logger.Infow("subscription cancelled successfully",
 			"subscription_id", sub.ID,

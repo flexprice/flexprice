@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/tracing"
 	svix "github.com/svix/svix-webhooks/go"
 	"github.com/svix/svix-webhooks/go/models"
 )
@@ -16,13 +17,15 @@ type Client struct {
 	client  *svix.Svix
 	baseURL string
 	enabled bool
+	sentry  *tracing.Service
 }
 
 // NewClient creates a new Svix client
-func NewClient(config *config.Configuration) (*Client, error) {
+func NewClient(config *config.Configuration, sentry *tracing.Service) (*Client, error) {
 	if !config.Webhook.Svix.Enabled {
 		return &Client{
 			enabled: false,
+			sentry:  sentry,
 		}, nil
 	}
 
@@ -42,13 +45,22 @@ func NewClient(config *config.Configuration) (*Client, error) {
 		client:  svixClient,
 		baseURL: config.Webhook.Svix.BaseURL,
 		enabled: true,
+		sentry:  sentry,
 	}, nil
 }
 
 // GetOrCreateApplication gets or creates a Svix application for the given tenant and environment
 func (c *Client) GetOrCreateApplication(ctx context.Context, tenantID, environmentID string) (string, error) {
 	if !c.enabled || c.client == nil {
-		return "", nil // Return nil if Svix is not enabled
+		return "", nil
+	}
+
+	span, ctx := c.startSpan(ctx, "get_or_create_application", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+	})
+	if span != nil {
+		defer span.Finish()
 	}
 
 	appID := fmt.Sprintf("%s_%s", tenantID, environmentID)
@@ -56,10 +68,16 @@ func (c *Client) GetOrCreateApplication(ctx context.Context, tenantID, environme
 	// Try to get existing application
 	_, err := c.client.Application.Get(ctx, appID)
 	if err == nil {
+		if span != nil {
+			span.Span.SetTag("svix.app_action", "get")
+		}
 		return appID, nil
 	}
 
 	// Create new application if it doesn't exist
+	if span != nil {
+		span.Span.SetTag("svix.app_action", "create")
+	}
 	app, err := c.client.Application.Create(ctx, models.ApplicationIn{
 		Name: appID,
 		Uid:  &appID,
@@ -74,10 +92,16 @@ func (c *Client) GetOrCreateApplication(ctx context.Context, tenantID, environme
 // GetDashboardURL gets the dashboard URL for the given application
 func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (string, error) {
 	if !c.enabled || c.client == nil {
-		return "", nil // Return nil if Svix is not enabled
+		return "", nil
 	}
 
-	// Get dashboard access URL
+	span, ctx := c.startSpan(ctx, "get_dashboard_url", map[string]interface{}{
+		"application_id": applicationID,
+	})
+	if span != nil {
+		defer span.Finish()
+	}
+
 	dashboard, err := c.client.Authentication.AppPortalAccess(ctx, applicationID, models.AppPortalAccessIn{}, &svix.AuthenticationAppPortalAccessOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get dashboard access: %w", err)
@@ -93,12 +117,19 @@ func (c *Client) SendMessage(ctx context.Context, applicationID string, eventTyp
 		return "", nil
 	}
 
+	span, ctx := c.startSpan(ctx, "send_message", map[string]interface{}{
+		"application_id": applicationID,
+		"event_type":     eventType,
+	})
+	if span != nil {
+		defer span.Finish()
+	}
+
 	var payloadMap map[string]interface{}
 
 	// Handle different payload types
 	switch p := payload.(type) {
 	case map[string]interface{}:
-		// If it's already a map, use it directly
 		payloadMap = p
 	case []byte:
 		if err := json.Unmarshal(p, &payloadMap); err != nil {
@@ -127,10 +158,28 @@ func (c *Client) SendMessage(ctx context.Context, applicationID string, eventTyp
 		if err.Error() == "application not found" {
 			return "", nil
 		}
+		c.captureException(err)
 		return "", fmt.Errorf("failed to send message: %w", err)
 	}
 	if out == nil {
 		return "", nil
 	}
 	return out.Id, nil
+}
+
+func (c *Client) startSpan(ctx context.Context, operation string, params map[string]interface{}) (*tracing.SpanFinisher, context.Context) {
+	if c.sentry == nil {
+		return nil, ctx
+	}
+	span, ctx := c.sentry.StartSvixSpan(ctx, operation, params)
+	if span == nil {
+		return nil, ctx
+	}
+	return &tracing.SpanFinisher{Span: span}, ctx
+}
+
+func (c *Client) captureException(err error) {
+	if c.sentry != nil {
+		c.sentry.CaptureException(err)
+	}
 }

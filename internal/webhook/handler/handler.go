@@ -198,6 +198,17 @@ func (h *handler) processMessage(msg *message.Message) error {
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
+		// Track the failure in the DB so the event doesn't stay as a zombie
+		// (published_at=NULL, failure_count=0) forever. msg.UUID equals the
+		// system_event ID because the publisher sets it from event.ID.
+		if h.systemEventRepo != nil && msg.UUID != "" {
+			if dbErr := h.systemEventRepo.OnFailed(ctx, msg.UUID, "unmarshal failed: "+err.Error()); dbErr != nil {
+				h.logger.Warnw("failed to persist webhook failure_reason on unmarshal error",
+					"error", dbErr,
+					"message_uuid", msg.UUID,
+				)
+			}
+		}
 		return nil // Don't retry on unmarshal errors
 	}
 

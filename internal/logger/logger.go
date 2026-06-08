@@ -30,16 +30,76 @@ import (
 //   - Fluentd (optional, via FluentdEnabled config)
 //   - OTLP logs (optional, via OtelEnabled config; goes to SigNoz / any OTLP backend)
 //
-// When a context carrying an OTel span is bound via WithContext / Ctx, the
-// active trace_id and span_id are added as structured fields so logs can be
-// correlated to traces in SigNoz. Error capture into Sentry is NOT done here —
+// Trace-log correlation: call WithContext(ctx) / Ctx(ctx) to bind a request
+// context. This injects trace_id and span_id as string fields (visible in stdout
+// and OTLP attributes) AND sets the OTLP log record-level TraceId/SpanId fields
+// via the otelzap bridge so SigNoz can link logs to their trace in the Span
+// Details "Logs" tab. Error capture into Sentry is NOT done here —
 // callers use tracing.Service.CaptureException explicitly.
 type Logger struct {
 	*zap.SugaredLogger
 	fluentdLogger   *fluent.Fluent
 	otelLogProvider *sdklog.LoggerProvider
 	serviceName     string
+	// ctxBound is true once WithContext has wrapped the core with otelCtxCore.
+	// Guards against repeated WithContext calls accumulating nested wrappers,
+	// which would append multiple _span_ctx fields on every Write.
+	ctxBound bool
 }
+
+// ---------------------------------------------------------------------------
+// Trace-log correlation helpers
+// ---------------------------------------------------------------------------
+
+// otelCtxCore wraps a zapcore.Core and injects the request context into every
+// Write call. The otelzap bridge detects context.Context values in fields and
+// extracts the active span's TraceId/SpanId into the OTLP log record's
+// record-level fields (not attributes). Without this, SigNoz cannot auto-link
+// logs to their trace in the Span Details "Logs" tab.
+//
+// The context is wrapped in noopJSONContext so the stdout JSON encoder emits
+// "_span_ctx":null rather than attempting to reflect-encode the context.
+// The otelzap bridge removes the field from OTLP attributes after extraction,
+// so OTLP log records are clean.
+type otelCtxCore struct {
+	zapcore.Core
+	ctx context.Context
+}
+
+func (c *otelCtxCore) Enabled(level zapcore.Level) bool {
+	return c.Core.Enabled(level)
+}
+
+func (c *otelCtxCore) With(fields []zapcore.Field) zapcore.Core {
+	return &otelCtxCore{Core: c.Core.With(fields), ctx: c.ctx}
+}
+
+func (c *otelCtxCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
+	// Append the span context field last so otelzap can extract TraceId/SpanId.
+	// noopJSONContext satisfies context.Context (detected by otelzap) and
+	// marshals to null so stdout JSON output is not polluted with raw Go context values.
+	return c.Core.Write(entry, append(fields, zap.Any("_span_ctx", noopJSONContext{c.ctx})))
+}
+
+// Check adds otelCtxCore itself to the CheckedEntry instead of delegating to the
+// inner core directly. This is critical: if we delegate (c.Core.Check), the inner
+// tee adds its own constituent cores (jsonCore, otelTeeCore) to the CE. Their Write
+// methods are then called WITHOUT going through otelCtxCore.Write — so _span_ctx
+// is never injected and the OTLP log record never gets TraceId/SpanId set.
+// By adding ourselves (ce.AddCore(entry, c)), ce.Write calls our Write, which
+// appends _span_ctx and then calls c.Core.Write for all inner cores.
+func (c *otelCtxCore) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if c.Core.Enabled(entry.Level) {
+		return ce.AddCore(entry, c)
+	}
+	return ce
+}
+
+// noopJSONContext embeds context.Context so otelzap detects it via type assertion,
+// but marshals to JSON null so stdout logs don't contain a raw context dump.
+type noopJSONContext struct{ context.Context }
+
+func (noopJSONContext) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
 
 // Global logger for convenience
 var L *Logger
@@ -408,28 +468,59 @@ func (l *Logger) sprintf(template string, args ...interface{}) string {
 
 // WithContext binds request-scoped fields and (if present) the active OTel
 // span's trace_id / span_id so logs correlate to traces in SigNoz.
+//
+// Two correlation mechanisms are applied:
+//  1. trace_id / span_id are injected as string fields — visible in stdout JSON
+//     and as OTLP log attributes for human-readable inspection.
+//  2. The context is injected via otelCtxCore so the otelzap bridge sets the
+//     OTLP log record's record-level TraceId and SpanId fields — these are what
+//     SigNoz uses to link logs to their trace in the Span Details "Logs" tab.
 func (l *Logger) WithContext(ctx context.Context) *Logger {
+	// Guard against nil ctx: noopJSONContext embeds context.Context as an
+	// interface, so noopJSONContext{nil}.Value(...) panics deep in the OTel SDK.
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	fields := []interface{}{
 		"request_id", types.GetRequestID(ctx),
 		"tenant_id", types.GetTenantID(ctx),
 		"user_id", types.GetUserID(ctx),
 	}
 
-	if span := trace.SpanFromContext(ctx); span != nil {
-		sc := span.SpanContext()
-		if sc.IsValid() {
-			fields = append(fields,
-				"trace_id", sc.TraceID().String(),
-				"span_id", sc.SpanID().String(),
-			)
-		}
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	if sc.IsValid() {
+		fields = append(fields,
+			"trace_id", sc.TraceID().String(),
+			"span_id", sc.SpanID().String(),
+		)
+	}
+
+	newSugared := l.SugaredLogger.With(fields...)
+
+	// Inject ctx into the otelzap bridge so it can populate the OTLP log record's
+	// record-level TraceId/SpanId (not just string attributes). This enables
+	// SigNoz's native trace-log correlation. We do this even for ended spans —
+	// the span context (TraceId, SpanId) remains valid after span.End().
+	//
+	// Guard: only wrap once. Repeated WithContext calls (e.g. middleware chains
+	// calling Ctx(ctx) on an already-context-bound logger) would otherwise
+	// accumulate nested otelCtxCore layers, producing duplicate _span_ctx fields
+	// on every Write. ctxBound is set on the returned Logger to prevent this.
+	ctxBound := l.ctxBound
+	if sc.IsValid() && !l.ctxBound {
+		newSugared = newSugared.WithOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
+			return &otelCtxCore{Core: c, ctx: ctx}
+		}))
+		ctxBound = true
 	}
 
 	return &Logger{
-		SugaredLogger:   l.SugaredLogger.With(fields...),
+		SugaredLogger:   newSugared,
 		fluentdLogger:   l.fluentdLogger,
 		otelLogProvider: l.otelLogProvider,
 		serviceName:     l.serviceName,
+		ctxBound:        ctxBound,
 	}
 }
 

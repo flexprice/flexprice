@@ -926,6 +926,7 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		filter.EntityType = types.TaxRateEntityTypeCustomer
 		filter.EntityID = sub.CustomerID
 		filter.AutoApply = lo.ToPtr(true)
+		filter.Status = lo.ToPtr(types.StatusPublished)
 		tenantTaxAssociations, err := taxService.ListTaxAssociations(ctx, filter)
 		if err != nil {
 			return err
@@ -3018,6 +3019,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return s.SubRepo.Update(ctx, sub)
 	}
 
+	isSubscriptionCancelled := false
 	// Use db's WithTx for atomic operations
 	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Process all periods except the last one (which becomes the new current period)
@@ -3135,6 +3137,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		}
 
 		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+			isSubscriptionCancelled = true
 			if err := s.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
 				return err
 			}
@@ -3167,6 +3170,10 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			"subscription_id", sub.ID,
 			"error", err)
 		return err
+	}
+
+	if isSubscriptionCancelled {
+		s.PublishCancellationEvents(ctx, sub)
 	}
 
 	return nil
@@ -4135,6 +4142,11 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
+}
+
+func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
 }
 
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
@@ -5500,10 +5512,9 @@ func (s *subscriptionService) publishCancellationEvents(
 ) {
 	// Publish standard subscription events
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, sub.ID)
-	if cancellationType != types.CancellationTypeScheduledDate {
+	if cancellationType == types.CancellationTypeImmediate {
 		s.publishSystemEvent(ctx, types.WebhookEventSubscriptionCancelled, sub.ID)
 	}
-
 	s.Logger.Debugw("subscription cancellation events published",
 		"subscription_id", sub.ID)
 }

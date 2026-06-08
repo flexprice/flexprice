@@ -352,18 +352,18 @@ func (r *subscriptionRepository) ListSubscriptionsDueForRenewal(ctx context.Cont
 	now := time.Now().UTC()
 	targetTime := now.Add(24 * time.Hour)
 
-	// Create a 5-minute window around the target time
-	windowStart := targetTime.Add(-1 * time.Hour)
-	windowEnd := targetTime.Add(1 * time.Hour)
+	// Half-open window [targetTime-29m, targetTime) is slightly under 2x the
+	// 15-minute schedule interval, giving one guaranteed hit with a buffer
+	// for scheduling jitter while avoiding triple-sends.
+	windowStart := targetTime.Add(-29 * time.Minute)
 
-	// Find subscriptions ending exactly at the target time
 	subs, err := r.client.Reader(ctx).Subscription.Query().
 		Where(
 			subscription.And(
 				subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive),
 				subscription.StatusEQ(string(types.StatusPublished)),
 				subscription.CurrentPeriodEndGTE(windowStart),
-				subscription.CurrentPeriodEndLTE(windowEnd),
+				subscription.CurrentPeriodEndLT(targetTime),
 				subscription.CancelAtPeriodEndEQ(false),
 			),
 		).All(ctx)
@@ -765,6 +765,7 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
 				SetCommitmentWindowed(item.CommitmentWindowed).
 				SetNillableCommitmentDuration(item.CommitmentDuration).
+				SetCommitmentTimeBuckets(item.CommitmentTimeBuckets).
 				SetMetadata(item.Metadata).
 				SetTenantID(item.TenantID).
 				SetEnvironmentID(item.EnvironmentID).

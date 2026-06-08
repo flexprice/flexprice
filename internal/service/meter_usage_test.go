@@ -2548,3 +2548,210 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_TimeBuckets_NoBucketSizeOn
 		"expected $25 (regular meter; in-bucket overage $15 + out-of-bucket base $10); got %s",
 		item.TotalCost)
 }
+
+// TestMeterUsage_CancelledSubBeforeWindow_NotAttributed is a regression test
+// for the discrepancy where meter-usage analytics duplicated active-sub usage
+// onto cancelled-sub line items. meter_usage has no per-event subscription
+// linkage — it's keyed by (customer, meter, timestamp) — so iterating over a
+// customer's cancelled subs and asking each for its line-item period window
+// made every cancelled-sub line item swallow the active sub's events.
+//
+// The fix clamps the per-subscription query window by sub.CancelledAt in the
+// GetDetailedAnalytics loop. When CancelledAt is BEFORE the query start, the
+// clamped window has no overlap and the sub is skipped entirely.
+//
+// Setup mirrors the original prod bug: two subs for the same customer, same
+// shared meter, line items with the same StartDate and no EndDate. One sub
+// is Active, the other was Cancelled BEFORE the query window. Events exist
+// only in the query window. The cancelled sub must not appear in the
+// response; the active sub owns all events.
+func (s *MeterUsageServiceSuite) TestMeterUsage_CancelledSubBeforeWindow_NotAttributed() {
+	ctx := s.GetContext()
+
+	// Cancelled well before the query window: subscription created and
+	// cancelled in 2025; query window is January 2026.
+	cancelledStart := s.periodStart.Add(-180 * 24 * time.Hour)
+	cancelledAt := cancelledStart.Add(time.Hour)
+	cancelledSub := &subscription.Subscription{
+		ID:                 "sub_cancelled_before",
+		CustomerID:         s.customer.ID,
+		PlanID:             "plan_1",
+		Currency:           "usd",
+		SubscriptionStatus: types.SubscriptionStatusCancelled,
+		CurrentPeriodStart: cancelledStart,
+		CurrentPeriodEnd:   cancelledStart.Add(30 * 24 * time.Hour),
+		BillingAnchor:      cancelledStart,
+		StartDate:          cancelledStart,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		CancelledAt:        &cancelledAt,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, cancelledSub))
+
+	cancelledLI := &subscription.SubscriptionLineItem{
+		ID:             "li_cancelled_before",
+		SubscriptionID: cancelledSub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        s.priceAPI.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        s.meterAPI.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      cancelledStart,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, cancelledLI))
+
+	activeLI := &subscription.SubscriptionLineItem{
+		ID:             "li_active_before",
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        s.priceAPI.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        s.meterAPI.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, activeLI))
+
+	s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID,
+		s.periodStart.Add(48*time.Hour), 100)
+	s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID,
+		s.periodStart.Add(72*time.Hour), 50)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{s.meterAPI.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+
+	cancelledSeen := false
+	activeSeen := false
+	for _, item := range resp.Items {
+		if item.SubscriptionID == cancelledSub.ID || item.SubLineItemID == cancelledLI.ID {
+			cancelledSeen = true
+		}
+		if item.SubscriptionID == s.sub.ID && item.SubLineItemID == activeLI.ID {
+			activeSeen = true
+			s.True(item.TotalUsage.Equal(decimal.NewFromInt(150)),
+				"active sub should own both events (100 + 50); got usage %s", item.TotalUsage)
+		}
+	}
+	s.False(cancelledSeen, "sub cancelled before the query window must not appear in meter-usage analytics")
+	s.True(activeSeen, "active subscription's line item must be present")
+}
+
+// TestMeterUsage_CancelledSubInsideWindow_AttributesPreCancellationUsage
+// verifies the other half of the CancelledAt clamp: when a subscription was
+// cancelled INSIDE the query window, pre-cancellation usage is still
+// attributed to it, and post-cancellation events are NOT.
+//
+// Setup: cancelled sub with CancelledAt mid-window. Two events:
+//   - 24 hours after query start (pre-cancellation): must contribute to the
+//     cancelled sub's line item.
+//   - 96 hours after query start (post-cancellation): must NOT contribute to
+//     the cancelled sub's line item.
+//
+// The active sub (s.sub) sees all events; the cancelled sub sees only event 1.
+func (s *MeterUsageServiceSuite) TestMeterUsage_CancelledSubInsideWindow_AttributesPreCancellationUsage() {
+	ctx := s.GetContext()
+
+	cancelledAt := s.periodStart.Add(72 * time.Hour)
+	cancelledSub := &subscription.Subscription{
+		ID:                 "sub_cancelled_mid",
+		CustomerID:         s.customer.ID,
+		PlanID:             "plan_1",
+		Currency:           "usd",
+		SubscriptionStatus: types.SubscriptionStatusCancelled,
+		CurrentPeriodStart: s.periodStart,
+		CurrentPeriodEnd:   s.periodEnd,
+		BillingAnchor:      s.periodStart,
+		StartDate:          s.periodStart,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		CancelledAt:        &cancelledAt,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, cancelledSub))
+
+	cancelledLI := &subscription.SubscriptionLineItem{
+		ID:             "li_cancelled_mid",
+		SubscriptionID: cancelledSub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        s.priceAPI.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        s.meterAPI.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, cancelledLI))
+
+	activeLI := &subscription.SubscriptionLineItem{
+		ID:             "li_active_mid",
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        s.priceAPI.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        s.meterAPI.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate:      s.periodStart,
+		Quantity:       decimal.NewFromInt(1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, activeLI))
+
+	// Event 1: 24h after start → before cancellation at 72h. Both subs see it.
+	s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID,
+		s.periodStart.Add(24*time.Hour), 100)
+	// Event 2: 96h after start → after cancellation. Only active sub sees it.
+	s.insertMeterUsage(ctx, s.meterAPI.ID, s.customer.ExternalID,
+		s.periodStart.Add(96*time.Hour), 50)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{s.meterAPI.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+	})
+	s.NoError(err)
+
+	var cancelledUsage, activeUsage decimal.Decimal
+	cancelledSeen := false
+	activeSeen := false
+	for _, item := range resp.Items {
+		if item.SubscriptionID == cancelledSub.ID && item.SubLineItemID == cancelledLI.ID {
+			cancelledSeen = true
+			cancelledUsage = item.TotalUsage
+		}
+		if item.SubscriptionID == s.sub.ID && item.SubLineItemID == activeLI.ID {
+			activeSeen = true
+			activeUsage = item.TotalUsage
+		}
+	}
+
+	s.Require().True(cancelledSeen, "cancelled sub with pre-cancellation usage must appear")
+	s.Require().True(activeSeen, "active sub must appear")
+	s.True(cancelledUsage.Equal(decimal.NewFromInt(100)),
+		"cancelled sub should own only the pre-cancellation event (100); got %s", cancelledUsage)
+	s.True(activeUsage.Equal(decimal.NewFromInt(150)),
+		"active sub should own both events (100 + 50); got %s", activeUsage)
+}

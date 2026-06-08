@@ -73,7 +73,7 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 		},
 		{
 			ID:        types.ScheduleIDOutboundWebhookStaleRetry,
-			Interval:  15 * time.Minute,
+			Interval:  2 * time.Minute,
 			Workflow:  cronWorkflows.OutboundWebhookStaleRetryWorkflow,
 			Input:     models.OutboundWebhookStaleRetryWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
