@@ -16,6 +16,7 @@ import (
 	"github.com/chargebee/chargebee-go/v3/models/itemprice"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
@@ -281,6 +282,13 @@ func (c *Client) InitializeChargebeeSDK(ctx context.Context) error {
 
 	// Configure Chargebee SDK globally
 	chargebee.Configure(config.APIKey, config.Site)
+
+	// Instrument the global Chargebee HTTP client so outbound calls surface in
+	// SigNoz External API Monitoring. Wrap the SDK's default client transport to
+	// preserve its configured timeout.
+	cbHTTPClient := chargebee.NewDefaultHTTPClient()
+	cbHTTPClient.Transport = httpclient.OtelTransport(cbHTTPClient.Transport)
+	chargebee.WithHTTPClient(cbHTTPClient)
 
 	c.isInitialized = true
 	c.logger.Infow("initialized Chargebee SDK",

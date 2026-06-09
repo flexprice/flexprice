@@ -14,6 +14,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
@@ -821,7 +822,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := httpclient.NewOtelHTTPClient(30 * time.Second).Do(req)
 		if err != nil {
 			return "", ierr.WithError(err).WithHint("Failed to exchange Zoho auth code for tokens").Mark(ierr.ErrInternal)
 		}

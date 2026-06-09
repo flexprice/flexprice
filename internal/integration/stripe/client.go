@@ -3,9 +3,11 @@ package stripe
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
@@ -57,8 +59,11 @@ func (c *Client) GetStripeClient(ctx context.Context) (*stripe.Client, *StripeCo
 			Mark(ierr.ErrValidation)
 	}
 
-	// Initialize Stripe client
-	stripeClient := stripe.NewClient(stripeConfig.SecretKey, nil)
+	// Initialize Stripe client with an OTel-instrumented HTTP backend so that
+	// outbound Stripe API calls surface in SigNoz External API Monitoring.
+	// 80s mirrors the Stripe SDK's default HTTP timeout.
+	backends := stripe.NewBackends(httpclient.NewOtelHTTPClient(80 * time.Second))
+	stripeClient := stripe.NewClient(stripeConfig.SecretKey, stripe.WithBackends(backends))
 
 	return stripeClient, stripeConfig, nil
 }
