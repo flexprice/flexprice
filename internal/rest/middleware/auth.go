@@ -130,7 +130,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		}
 
 		// JWT users have empty roles = full access
-		setContextValues(c, claims.TenantID, claims.UserID, environmentID, []string{})
+		setContextValues(c, claims.TenantID, claims.UserID, claims.EnvironmentID, []string{})
 		c.Next()
 	}
 }

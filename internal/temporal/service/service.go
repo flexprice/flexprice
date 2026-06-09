@@ -475,6 +475,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.PaddleInvoiceSyncWorkflowInput); ok {
 			return input.InvoiceID
 		}
+	case types.TemporalPaddleInvoicePullSyncWorkflow:
+		if input, ok := params.(models.PaddleInvoicePullSyncWorkflowInput); ok {
+			return input.InvoiceID
+		}
 	case types.TemporalWhopInvoiceSyncWorkflow:
 		if input, ok := params.(models.WhopInvoiceSyncWorkflowInput); ok {
 			return input.InvoiceID
@@ -628,6 +632,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildMoyasarInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalPaddleInvoiceSyncWorkflow:
 		return s.buildPaddleInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalPaddleInvoicePullSyncWorkflow:
+		return s.buildPaddleInvoicePullSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalStripeInvoiceSyncWorkflow:
 		return s.buildStripeInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalRazorpayInvoiceSyncWorkflow:
@@ -945,6 +951,33 @@ func (s *temporalService) buildPaddleInvoiceSyncInput(_ context.Context, tenantI
 
 	return nil, errors.NewError("invalid input for Paddle invoice sync workflow").
 		WithHint("Provide PaddleInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildPaddleInvoicePullSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.PaddleInvoicePullSyncWorkflowInput); ok {
+		if input == nil {
+			return nil, errors.NewError("invalid input for Paddle invoice pull sync workflow").
+				WithHint("Provide a non-nil PaddleInvoicePullSyncWorkflowInput with invoice_id").
+				Mark(errors.ErrValidation)
+		}
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return *input, nil
+	}
+	if input, ok := params.(models.PaddleInvoicePullSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+	return nil, errors.NewError("invalid input for Paddle invoice pull sync workflow").
+		WithHint("Provide PaddleInvoicePullSyncWorkflowInput with invoice_id").
 		Mark(errors.ErrValidation)
 }
 
