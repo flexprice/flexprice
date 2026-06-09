@@ -2,6 +2,7 @@ package cron
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -65,10 +66,13 @@ func (a *SubscriptionCronActivities) ProcessTrialEndDueActivity(ctx context.Cont
 }
 
 // ProcessRenewalDueAlertsActivity runs the same work as POST /v1/cron/subscriptions/renewal-due-alerts.
-func (a *SubscriptionCronActivities) ProcessRenewalDueAlertsActivity(ctx context.Context) (*cronModels.SubscriptionRenewalDueAlertsWorkflowResult, error) {
+func (a *SubscriptionCronActivities) ProcessRenewalDueAlertsActivity(ctx context.Context, runTime time.Time) (*cronModels.SubscriptionRenewalDueAlertsWorkflowResult, error) {
 	log := activity.GetLogger(ctx)
 	log.Info("Processing subscription renewal-due alerts (cron activity)")
-	if err := a.subscriptionService.ProcessSubscriptionRenewalDueAlert(ctx); err != nil {
+	if runTime.IsZero() {
+		runTime = time.Now()
+	}
+	if err := a.subscriptionService.ProcessSubscriptionRenewalDueAlert(ctx, runTime); err != nil {
 		return nil, err
 	}
 	return &cronModels.SubscriptionRenewalDueAlertsWorkflowResult{}, nil

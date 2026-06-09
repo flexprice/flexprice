@@ -4151,8 +4151,8 @@ func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub
 }
 
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
-func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
-	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx)
+func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context, referenceTime time.Time) error {
+	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx, referenceTime)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to list subscriptions due for renewal", "error", err)
 		return err

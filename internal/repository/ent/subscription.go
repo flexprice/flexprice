@@ -348,14 +348,14 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 }
 
 // ListActiveSubscriptionsDueForRenewal retrieves all active subscriptions that are due for renewal in 24 hours
-func (r *subscriptionRepository) ListSubscriptionsDueForRenewal(ctx context.Context) ([]*domainSub.Subscription, error) {
-	now := time.Now().UTC()
-	targetTime := now.Add(24 * time.Hour)
+func (r *subscriptionRepository) ListSubscriptionsDueForRenewal(ctx context.Context, referenceTime time.Time) ([]*domainSub.Subscription, error) {
+	referenceTime = referenceTime.UTC()
+	targetTime := referenceTime.Add(24 * time.Hour)
 
-	// Half-open window [targetTime-29m, targetTime) is slightly under 2x the
-	// 15-minute schedule interval, giving one guaranteed hit with a buffer
-	// for scheduling jitter while avoiding triple-sends.
-	windowStart := targetTime.Add(-29 * time.Minute)
+	// Half-open window [targetTime-15m, targetTime) matches the 15-minute
+	// schedule interval exactly. The workflow passes its scheduled start
+	// time, so each run covers a non-overlapping 15-minute slice.
+	windowStart := targetTime.Add(-15 * time.Minute)
 
 	subs, err := r.client.Reader(ctx).Subscription.Query().
 		Where(

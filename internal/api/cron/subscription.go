@@ -2,6 +2,7 @@ package cron
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -86,7 +87,7 @@ func (h *SubscriptionHandler) ProcessAutoCancellationSubscriptions(c *gin.Contex
 func (h *SubscriptionHandler) ProcessSubscriptionRenewalDueAlerts(c *gin.Context) {
 	h.logger.Infow("starting subscription renewal due alerts cron job")
 
-	if err := h.subscriptionService.ProcessSubscriptionRenewalDueAlert(c.Request.Context()); err != nil {
+	if err := h.subscriptionService.ProcessSubscriptionRenewalDueAlert(c.Request.Context(), time.Now()); err != nil {
 		h.logger.Errorw("failed to process subscription renewal due alerts",
 			"error", err)
 		c.Error(err)
