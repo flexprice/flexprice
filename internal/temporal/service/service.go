@@ -956,13 +956,24 @@ func (s *temporalService) buildPaddleInvoiceSyncInput(_ context.Context, tenantI
 
 func (s *temporalService) buildPaddleInvoicePullSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
 	if input, ok := params.(*models.PaddleInvoicePullSyncWorkflowInput); ok {
+		if input == nil {
+			return nil, errors.NewError("invalid input for Paddle invoice pull sync workflow").
+				WithHint("Provide a non-nil PaddleInvoicePullSyncWorkflowInput with invoice_id").
+				Mark(errors.ErrValidation)
+		}
 		input.TenantID = tenantID
 		input.EnvironmentID = environmentID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
 		return *input, nil
 	}
 	if input, ok := params.(models.PaddleInvoicePullSyncWorkflowInput); ok {
 		input.TenantID = tenantID
 		input.EnvironmentID = environmentID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
 		return input, nil
 	}
 	return nil, errors.NewError("invalid input for Paddle invoice pull sync workflow").
