@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -105,9 +106,10 @@ func (TaxAssociation) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "tax_rate_id").
 			StorageKey(Idx_tax_rate_id_tenant_id_environment_id),
 
-		// Unique constraint: prevent duplicate assignments per entity
+		// Unique constraint: prevent duplicate published assignments per entity
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "tax_rate_id").
 			StorageKey(Unique_entity_tax_mapping).
-			Unique(),
+			Unique().
+			Annotations(entsql.IndexWhere("status = 'published'")),
 	}
 }
