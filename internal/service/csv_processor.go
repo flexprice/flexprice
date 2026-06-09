@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -25,7 +26,7 @@ func (cp *CSVProcessor) PrepareCSVReader(fileContent []byte) (*csv.Reader, error
 	if len(fileContent) >= 3 && fileContent[0] == 0xEF && fileContent[1] == 0xBB && fileContent[2] == 0xBF {
 		// BOM detected, remove it
 		fileContent = fileContent[3:]
-		cp.Logger.Debug("DEBUG: BOM detected and removed from file content")
+		cp.Logger.Debug(context.Background(), "DEBUG: BOM detected and removed from file content")
 	}
 
 	reader := csv.NewReader(bytes.NewReader(fileContent))

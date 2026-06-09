@@ -42,13 +42,13 @@ func NewQuoteSyncService(
 
 // SyncSubscriptionToQuote creates HubSpot quote from subscription and associates line items with it
 func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscriptionID string) error {
-	s.logger.Infow("fetching subscription for quote sync",
+	s.logger.Info(ctx, "fetching subscription for quote sync",
 		"subscription_id", subscriptionID)
 
 	// Fetch subscription with line items
 	sub, lineItems, err := s.subscriptionRepo.GetWithLineItems(ctx, subscriptionID)
 	if err != nil {
-		s.logger.Errorw("failed to fetch subscription with line items",
+		s.logger.Error(ctx, "failed to fetch subscription with line items",
 			"error", err,
 			"subscription_id", subscriptionID)
 		return ierr.WithError(err).
@@ -59,7 +59,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Assign line items to the subscription
 	sub.LineItems = lineItems
 
-	s.logger.Infow("fetching customer for quote sync",
+	s.logger.Info(ctx, "fetching customer for quote sync",
 		"customer_id", sub.CustomerID,
 		"subscription_id", subscriptionID,
 		"line_items_count", len(lineItems))
@@ -67,7 +67,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Fetch customer to get deal ID from metadata
 	cust, err := s.customerRepo.Get(ctx, sub.CustomerID)
 	if err != nil {
-		s.logger.Errorw("failed to fetch customer",
+		s.logger.Error(ctx, "failed to fetch customer",
 			"error", err,
 			"customer_id", sub.CustomerID,
 			"subscription_id", subscriptionID)
@@ -79,7 +79,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Get deal ID from customer metadata
 	dealID, ok := cust.Metadata["hubspot_deal_id"]
 	if !ok || dealID == "" {
-		s.logger.Warnw("no HubSpot deal ID found in customer metadata",
+		s.logger.Info(ctx, "no HubSpot deal ID found in customer metadata",
 			"customer_id", cust.ID,
 			"subscription_id", subscriptionID,
 			"metadata", cust.Metadata)
@@ -89,7 +89,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Get contact ID from customer metadata (optional - for quote association)
 	contactID := cust.Metadata["hubspot_contact_id"]
 
-	s.logger.Infow("found HubSpot deal ID, creating quote",
+	s.logger.Info(ctx, "found HubSpot deal ID, creating quote",
 		"deal_id", dealID,
 		"contact_id", contactID,
 		"subscription_id", subscriptionID,
@@ -115,7 +115,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 
 	quote, err := s.client.CreateQuote(ctx, quoteReq)
 	if err != nil {
-		s.logger.Errorw("failed to create quote in HubSpot",
+		s.logger.Error(ctx, "failed to create quote in HubSpot",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"deal_id", dealID)
@@ -124,25 +124,25 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Infow("created quote in HubSpot",
+	s.logger.Info(ctx, "created quote in HubSpot",
 		"quote_id", quote.ID,
 		"subscription_id", subscriptionID,
 		"deal_id", dealID)
 
 	// Associate quote with deal (REQUIRED for publishable quotes per HubSpot docs)
 	if err := s.client.AssociateQuoteToDeal(ctx, quote.ID, dealID); err != nil {
-		s.logger.Errorw("failed to associate quote with deal",
+		s.logger.Error(ctx, "failed to associate quote with deal",
 			"error", err,
 			"quote_id", quote.ID,
 			"deal_id", dealID,
 			"subscription_id", subscriptionID)
 		// Don't fail the entire sync if association fails - quote was created successfully
 		// Log warning and continue
-		s.logger.Warnw("quote created but association with deal failed",
+		s.logger.Info(ctx, "quote created but association with deal failed",
 			"quote_id", quote.ID,
 			"deal_id", dealID)
 	} else {
-		s.logger.Infow("associated quote with deal",
+		s.logger.Info(ctx, "associated quote with deal",
 			"quote_id", quote.ID,
 			"deal_id", dealID)
 	}
@@ -150,19 +150,19 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Associate quote with contact (if contact ID is available)
 	if contactID != "" {
 		if err := s.client.AssociateQuoteToContact(ctx, quote.ID, contactID); err != nil {
-			s.logger.Warnw("failed to associate quote with contact",
+			s.logger.Info(ctx, "failed to associate quote with contact",
 				"error", err,
 				"quote_id", quote.ID,
 				"contact_id", contactID,
 				"subscription_id", subscriptionID)
 			// Don't fail - contact association is optional
 		} else {
-			s.logger.Infow("associated quote with contact",
+			s.logger.Info(ctx, "associated quote with contact",
 				"quote_id", quote.ID,
 				"contact_id", contactID)
 		}
 	} else {
-		s.logger.Debugw("no HubSpot contact ID found in customer metadata, skipping contact association",
+		s.logger.Debug(ctx, "no HubSpot contact ID found in customer metadata, skipping contact association",
 			"customer_id", cust.ID,
 			"subscription_id", subscriptionID)
 	}
@@ -171,25 +171,25 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Per docs: "For a quote to be publishable, it must have an associated deal and quote template"
 	templates, err := s.client.GetQuoteTemplates(ctx)
 	if err != nil {
-		s.logger.Warnw("failed to fetch quote templates - quote will not be publishable without template",
+		s.logger.Info(ctx, "failed to fetch quote templates - quote will not be publishable without template",
 			"error", err,
 			"quote_id", quote.ID,
 			"subscription_id", subscriptionID)
 	} else if len(templates) == 0 {
-		s.logger.Warnw("no quote templates found in HubSpot - quote will not be publishable without template",
+		s.logger.Info(ctx, "no quote templates found in HubSpot - quote will not be publishable without template",
 			"quote_id", quote.ID,
 			"subscription_id", subscriptionID)
 	} else {
 		// Use the first available template (typically there's a default template)
 		templateID := templates[0].ID
 		if err := s.client.AssociateQuoteToTemplate(ctx, quote.ID, templateID); err != nil {
-			s.logger.Warnw("failed to associate quote with template - quote will not be publishable",
+			s.logger.Info(ctx, "failed to associate quote with template - quote will not be publishable",
 				"error", err,
 				"quote_id", quote.ID,
 				"template_id", templateID,
 				"subscription_id", subscriptionID)
 		} else {
-			s.logger.Infow("associated quote with template",
+			s.logger.Info(ctx, "associated quote with template",
 				"quote_id", quote.ID,
 				"template_id", templateID)
 		}
@@ -205,7 +205,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	}
 
 	if len(flatRateLineItems) == 0 {
-		s.logger.Warnw("no active flat rate line items to sync",
+		s.logger.Info(ctx, "no active flat rate line items to sync",
 			"subscription_id", subscriptionID,
 			"quote_id", quote.ID,
 			"line_items_count", len(sub.LineItems))
@@ -215,7 +215,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Create HubSpot line items for each flat rate subscription line item
 	for _, lineItem := range flatRateLineItems {
 		if err := s.createHubSpotQuoteLineItem(ctx, lineItem, sub, quote.ID); err != nil {
-			s.logger.Errorw("failed to create HubSpot quote line item",
+			s.logger.Error(ctx, "failed to create HubSpot quote line item",
 				"error", err,
 				"line_item_id", lineItem.ID,
 				"quote_id", quote.ID)
@@ -224,7 +224,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 		}
 	}
 
-	s.logger.Infow("successfully synced subscription line items to HubSpot quote",
+	s.logger.Info(ctx, "successfully synced subscription line items to HubSpot quote",
 		"subscription_id", subscriptionID,
 		"quote_id", quote.ID,
 		"synced_items", len(flatRateLineItems))
@@ -235,13 +235,13 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	if err := s.client.UpdateQuote(ctx, quote.ID, QuoteProperties{
 		Status: "DRAFT",
 	}); err != nil {
-		s.logger.Warnw("failed to set quote to DRAFT state",
+		s.logger.Info(ctx, "failed to set quote to DRAFT state",
 			"error", err,
 			"quote_id", quote.ID,
 			"subscription_id", subscriptionID)
 		// Continue - quote exists but may not be editable via API
 	} else {
-		s.logger.Infow("set quote to DRAFT state - now editable in HubSpot",
+		s.logger.Info(ctx, "set quote to DRAFT state - now editable in HubSpot",
 			"quote_id", quote.ID,
 			"subscription_id", subscriptionID)
 	}
@@ -259,7 +259,7 @@ func (s *QuoteSyncService) createHubSpotQuoteLineItem(
 	// Fetch the price to get the actual amount
 	priceObj, err := s.priceRepo.Get(ctx, lineItem.PriceID)
 	if err != nil {
-		s.logger.Errorw("failed to fetch price for line item; cannot create accurate HubSpot line item",
+		s.logger.Error(ctx, "failed to fetch price for line item; cannot create accurate HubSpot line item",
 			"error", err,
 			"price_id", lineItem.PriceID,
 			"line_item_id", lineItem.ID,
@@ -296,7 +296,7 @@ func (s *QuoteSyncService) createHubSpotQuoteLineItem(
 
 	// Log the request for debugging
 	reqJSON, _ := json.Marshal(lineItemReq)
-	s.logger.Infow("creating HubSpot line item for quote",
+	s.logger.Info(ctx, "creating HubSpot line item for quote",
 		"quote_id", quoteID,
 		"line_item_name", lineItem.DisplayName,
 		"quantity", lineItem.Quantity.String(),
@@ -314,7 +314,7 @@ func (s *QuoteSyncService) createHubSpotQuoteLineItem(
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Infow("created HubSpot line item, associating with quote",
+	s.logger.Info(ctx, "created HubSpot line item, associating with quote",
 		"line_item_id", hubspotLineItem.ID,
 		"quote_id", quoteID)
 

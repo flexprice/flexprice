@@ -30,7 +30,7 @@ func NewTenantRepository(client postgres.IClient, logger *logger.Logger, cache c
 
 // Create creates a new tenant
 func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tenant) error {
-	r.logger.Debugw("creating tenant", "tenant_id", tenant.ID, "name", tenant.Name)
+	r.logger.Debug(ctx, "creating tenant", "tenant_id", tenant.ID, "name", tenant.Name)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "tenant", "create", map[string]interface{}{

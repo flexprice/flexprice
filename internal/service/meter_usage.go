@@ -256,7 +256,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			featureFilter.MeterIDs = meterIDs
 			features, err := s.FeatureRepo.List(ctx, featureFilter)
 			if err != nil {
-				s.logger.Warnw("failed to fetch features for meter mapping", "error", err)
+				s.logger.Info(context.Background(), "failed to fetch features for meter mapping", "error", err)
 			} else {
 				for _, f := range features {
 					if f.MeterID != "" {
@@ -793,7 +793,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			Sources:         params.Sources,
 		})
 		if err != nil {
-			s.logger.Warnw("failed to get subscription meter usage, skipping",
+			s.logger.Info(ctx, "failed to get subscription meter usage, skipping",
 				"error", err,
 				"subscription_id", sub.ID,
 			)
@@ -808,7 +808,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	// Calculate costs inline (no dependency on featureUsageTrackingService)
 	if len(data.Analytics) > 0 {
 		if err := s.calculateCosts(ctx, data); err != nil {
-			s.logger.Warnw("failed to calculate costs for meter usage analytics, costs will be zero",
+			s.logger.Info(ctx, "failed to calculate costs for meter usage analytics, costs will be zero",
 				"error", err,
 			)
 		}
@@ -1005,7 +1005,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(
 		}
 		g, err := s.GroupRepo.Get(ctx, gid)
 		if err != nil {
-			s.logger.Warnw("failed to fetch group for meter usage analytics", "group_id", gid, "error", err)
+			s.logger.Info(context.Background(), "failed to fetch group for meter usage analytics", "group_id", gid, "error", err)
 			continue
 		}
 		data.Groups[gid] = g
@@ -1041,7 +1041,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(
 		parentFilter.AllowExpiredPrices = true
 		parentList, err := priceService.GetPrices(ctx, parentFilter)
 		if err != nil {
-			s.logger.Warnw("failed to fetch parent prices for meter usage analytics", "error", err)
+			s.logger.Info(context.Background(), "failed to fetch parent prices for meter usage analytics", "error", err)
 		} else {
 			for _, p := range parentList.Items {
 				data.Prices[p.ID] = p.Price
@@ -1057,7 +1057,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(
 		planFilter := types.NewNoLimitPlanFilter()
 		plans, err := s.PlanRepo.List(ctx, planFilter)
 		if err != nil {
-			s.logger.Warnw("failed to fetch plans for meter usage analytics", "error", err)
+			s.logger.Info(context.Background(), "failed to fetch plans for meter usage analytics", "error", err)
 		} else {
 			for _, p := range plans {
 				data.Plans[p.ID] = p
@@ -1070,7 +1070,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(
 		addonFilter := types.NewNoLimitAddonFilter()
 		addons, err := s.AddonRepo.List(ctx, addonFilter)
 		if err != nil {
-			s.logger.Warnw("failed to fetch addons for meter usage analytics", "error", err)
+			s.logger.Info(context.Background(), "failed to fetch addons for meter usage analytics", "error", err)
 		} else {
 			for _, a := range addons {
 				data.Addons[a.ID] = a
@@ -1205,7 +1205,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		featureFilter.MeterIDs = meterIDs
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
-			s.logger.Warnw("failed to fetch features for meter mapping", "error", err)
+			s.logger.Info(context.Background(), "failed to fetch features for meter mapping", "error", err)
 		} else {
 			for _, f := range features {
 				if f.MeterID != "" {
@@ -1496,7 +1496,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 
 	aggResult, err := s.repo.GetUsageForBucketedMeters(ctx, bucketParams)
 	if err != nil {
-		s.logger.Errorw("failed to get bucketed meter usage", "error", err, "meter_id", m.ID)
+		s.logger.Error(ctx, "failed to get bucketed meter usage", "error", err, "meter_id", m.ID)
 		return nil, err
 	}
 
@@ -1529,7 +1529,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 
 	eventCount, err := s.getEventCountForMeter(ctx, params, m.ID)
 	if err != nil {
-		s.logger.Warnw("failed to get event count for bucketed meter, defaulting to 0", "error", err, "meter_id", m.ID)
+		s.logger.Info(context.Background(), "failed to get event count for bucketed meter, defaulting to 0", "error", err, "meter_id", m.ID)
 	} else {
 		result.EventCount = eventCount
 	}
@@ -1937,7 +1937,7 @@ func (s *meterUsageService) calculatePointCosts(p *meterUsageBucketedCostParams,
 		usage := p.item.Points[i].Usage
 		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, []time.Time{p.item.Points[i].Timestamp}, p.price)
 		if err != nil {
-			s.logger.Warnw("failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
+			s.logger.Info(context.Background(), "failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
 			pointCost = p.priceService.CalculateCost(p.ctx, p.price, usage)
 		}
 		p.item.Points[i].Cost = pointCost
@@ -2114,7 +2114,7 @@ func (s *meterUsageService) applyLineItemCommitment(
 			item.CommitmentInfo = commitmentInfo
 			return cost
 		}
-		s.logger.Warnw("failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
+		s.logger.Info(context.Background(), "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
 		if defaultCost.IsZero() && len(bucketedValues) > 0 {
 			return priceService.CalculateBucketedCost(ctx, p, bucketedValues)
 		}
@@ -2135,7 +2135,7 @@ func (s *meterUsageService) applyLineItemCommitment(
 		return cost
 	}
 
-	s.logger.Warnw("failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
+	s.logger.Info(context.Background(), "failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
 	return rawCost
 }
 

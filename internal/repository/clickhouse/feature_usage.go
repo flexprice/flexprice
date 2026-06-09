@@ -780,7 +780,7 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 		aggregateQuery += " GROUP BY " + strings.Join(groupByColumns, ", ")
 	}
 
-	r.logger.Debugw("executing detailed usage analytics query",
+	r.logger.Debug(ctx, "executing detailed usage analytics query",
 		"query", aggregateQuery,
 		"params", queryParams,
 		"group_by", params.GroupBy,
@@ -1980,7 +1980,7 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 	// Group by the time window and order by time
 	query += fmt.Sprintf(" GROUP BY %s ORDER BY window_time", timeWindowExpr)
 
-	r.logger.Debugw("executing time-series query",
+	r.logger.Debug(ctx, "executing time-series query",
 		"query", query,
 		"params", queryParams,
 		"feature_id", analytics.FeatureID,
@@ -2071,7 +2071,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		tableRef = "feature_usage FINAL"
 	}
 
-	r.logger.Debugw("subscription usage query", "aggColumns", aggColumns, "tableRef", tableRef, "opts", params.Opts)
+	r.logger.Debug(ctx, "subscription usage query", "aggColumns", aggColumns, "tableRef", tableRef, "opts", params.Opts)
 
 	// Build customer_id filter using IN (...) for all cases.
 	// Guard against empty slice which would yield invalid SQL (IN ()).
@@ -2110,7 +2110,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
 	`, strings.Join(aggColumns, ",\n\t\t\t"), tableRef, customerFilter)
 
-	r.logger.Debugw("executing subscription usage query",
+	r.logger.Debug(ctx, "executing subscription usage query",
 		"subscription_id", params.SubscriptionID,
 		"customer_ids_count", len(params.CustomerIDs),
 		"environment_id", environmentID,
@@ -2118,7 +2118,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		"end_time", params.EndTime,
 	)
 
-	r.logger.Debugw("subscription usage query",
+	r.logger.Debug(ctx, "subscription usage query",
 		"subscription_id", params.SubscriptionID,
 		"customer_ids_count", len(params.CustomerIDs),
 		"agg_types_count", len(params.AggTypes),
@@ -2172,7 +2172,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 	}
 
 	SetSpanSuccess(span)
-	r.logger.Debugw("optimized subscription usage query completed",
+	r.logger.Debug(ctx, "optimized subscription usage query completed",
 		"subscription_id", params.SubscriptionID,
 		"feature_count", len(results))
 
@@ -2275,7 +2275,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 		// Parse properties JSON
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-				r.logger.Warnw("failed to parse properties JSON",
+				r.logger.Info(ctx, "failed to parse properties JSON",
 					"event_id", usage.ID,
 					"error", err)
 				usage.Properties = make(map[string]interface{})
@@ -2293,7 +2293,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 	}
 
 	SetSpanSuccess(span)
-	r.logger.Debugw("feature usage export batch query completed",
+	r.logger.Debug(ctx, "feature usage export batch query completed",
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"batch_size", batchSize,
@@ -2321,7 +2321,7 @@ func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, 
 	defer FinishSpan(span)
 
 	query := r.getWindowedQuery(ctx, params)
-	r.logger.Debugw("executing windowed usage query",
+	r.logger.Debug(ctx, "executing windowed usage query",
 		"meter_id", params.MeterID,
 		"window_size", params.WindowSize,
 	)
@@ -2618,7 +2618,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, 
 		// Parse properties
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &record.Properties); err != nil {
-				r.logger.Warnw("failed to unmarshal properties",
+				r.logger.Info(ctx, "failed to unmarshal properties",
 					"event_id", record.ID,
 					"error", err,
 				)

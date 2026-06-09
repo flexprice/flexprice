@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"github.com/flexprice/flexprice/internal/config"
 	kafkaProducerPkg "github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -67,7 +68,7 @@ func providePubSub(
 ) pubsub.PubSub {
 	pubSub, err := kafka.NewPubSubFromConfig(cfg, logger, cfg.Webhook.ConsumerGroup)
 	if err != nil {
-		logger.Fatalw("failed to create kafka pubsub for webhooks", "error", err)
+		logger.Fatal(context.Background(), "failed to create kafka pubsub for webhooks", "error", err)
 	}
 	return pubSub
 }

@@ -107,7 +107,8 @@ func (c *Client) GetChargebeeConfig(ctx context.Context) (*ChargebeeConfig, erro
 
 	// Validate required fields
 	if chargebeeConfig.Site == "" {
-		c.logger.Errorw("missing Chargebee site",
+		c.logger.Error(ctx, "missing Chargebee site",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Chargebee site").
@@ -116,7 +117,8 @@ func (c *Client) GetChargebeeConfig(ctx context.Context) (*ChargebeeConfig, erro
 	}
 
 	if chargebeeConfig.APIKey == "" {
-		c.logger.Errorw("missing Chargebee API key",
+		c.logger.Error(ctx, "missing Chargebee API key",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Chargebee API key").
@@ -158,7 +160,7 @@ func (c *Client) GetDecryptedChargebeeConfig(conn *connection.Connection) (*Char
 		chargebeeConfig.WebhookPassword = webhookPassword
 	}
 
-	c.logger.Infow("retrieved Chargebee config",
+	c.logger.Info(context.Background(), "retrieved Chargebee config",
 		"site", chargebeeConfig.Site,
 		"has_api_key", chargebeeConfig.APIKey != "",
 		"has_webhook_secret", chargebeeConfig.WebhookSecret != "",
@@ -171,14 +173,14 @@ func (c *Client) GetDecryptedChargebeeConfig(conn *connection.Connection) (*Char
 func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.Metadata, error) {
 	// Check if the connection has encrypted secret data
 	if conn.EncryptedSecretData.Chargebee == nil {
-		c.logger.Warnw("no chargebee metadata found in encrypted secret data", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no chargebee metadata found in encrypted secret data", "connection_id", conn.ID)
 		return types.Metadata{}, nil
 	}
 
 	// For Chargebee connections, decrypt the structured metadata
 	if conn.ProviderType == types.SecretProviderChargebee {
 		if conn.EncryptedSecretData.Chargebee == nil {
-			c.logger.Warnw("no chargebee metadata found", "connection_id", conn.ID)
+			c.logger.Info(context.Background(), "no chargebee metadata found", "connection_id", conn.ID)
 			return types.Metadata{}, nil
 		}
 
@@ -188,7 +190,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		// Decrypt API key
 		apiKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Chargebee.APIKey)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt API key", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt API key", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt API key").Mark(ierr.ErrInternal)
 		}
 
@@ -197,7 +199,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		if conn.EncryptedSecretData.Chargebee.WebhookSecret != "" {
 			webhookSecret, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Chargebee.WebhookSecret)
 			if err != nil {
-				c.logger.Warnw("failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
+				c.logger.Info(context.Background(), "failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
 				// Don't fail - webhook secret is optional
 				webhookSecret = ""
 			}
@@ -208,7 +210,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		if conn.EncryptedSecretData.Chargebee.WebhookUsername != "" {
 			webhookUsername, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Chargebee.WebhookUsername)
 			if err != nil {
-				c.logger.Warnw("failed to decrypt webhook username", "connection_id", conn.ID, "error", err)
+				c.logger.Info(context.Background(), "failed to decrypt webhook username", "connection_id", conn.ID, "error", err)
 				// Don't fail - webhook username is optional
 				webhookUsername = ""
 			}
@@ -219,7 +221,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		if conn.EncryptedSecretData.Chargebee.WebhookPassword != "" {
 			webhookPassword, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Chargebee.WebhookPassword)
 			if err != nil {
-				c.logger.Warnw("failed to decrypt webhook password", "connection_id", conn.ID, "error", err)
+				c.logger.Info(context.Background(), "failed to decrypt webhook password", "connection_id", conn.ID, "error", err)
 				// Don't fail - webhook password is optional
 				webhookPassword = ""
 			}
@@ -233,7 +235,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 			"webhook_password": webhookPassword,
 		}
 
-		c.logger.Infow("successfully decrypted chargebee credentials",
+		c.logger.Info(context.Background(), "successfully decrypted chargebee credentials",
 			"connection_id", conn.ID,
 			"site", site,
 			"has_api_key", apiKey != "",
@@ -291,7 +293,7 @@ func (c *Client) InitializeChargebeeSDK(ctx context.Context) error {
 	chargebee.WithHTTPClient(cbHTTPClient)
 
 	c.isInitialized = true
-	c.logger.Infow("initialized Chargebee SDK",
+	c.logger.Info(ctx, "initialized Chargebee SDK",
 		"site", config.Site)
 
 	return nil
@@ -299,7 +301,7 @@ func (c *Client) InitializeChargebeeSDK(ctx context.Context) error {
 
 // VerifyWebhookSignature verifies the Chargebee webhook signature
 func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error {
-	c.logger.Debugw("Chargebee v2 webhook signature verification skipped - not supported",
+	c.logger.Debug(ctx, "Chargebee v2 webhook signature verification skipped - not supported",
 		"note", "Use Basic Auth and IP whitelisting for security")
 	return nil
 }
@@ -309,7 +311,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 func (c *Client) VerifyWebhookBasicAuth(ctx context.Context, username, password string) error {
 	config, err := c.GetChargebeeConfig(ctx)
 	if err != nil {
-		c.logger.Errorw("failed to get Chargebee config for Basic Auth verification", "error", err)
+		c.logger.Error(ctx, "failed to get Chargebee config for Basic Auth verification", "error", err)
 		return ierr.NewError("failed to verify webhook authentication").
 			WithHint("Unable to verify Chargebee webhook Basic Auth").
 			Mark(ierr.ErrInternal)
@@ -319,21 +321,22 @@ func (c *Client) VerifyWebhookBasicAuth(ctx context.Context, username, password 
 	// Note: WebhookUsername and WebhookPassword should be stored in your Chargebee connection config
 	// These are the credentials you set in Chargebee UI: "Protect webhook URL with basic authentication"
 	if config.WebhookUsername == "" || config.WebhookPassword == "" {
-		c.logger.Warnw("webhook Basic Auth credentials not configured, skipping verification",
+		c.logger.Info(ctx, "webhook Basic Auth credentials not configured, skipping verification",
 			"note", "Configure username/password in Chargebee webhook settings for security")
 		return nil // Allow webhook without auth if not configured
 	}
 
 	// Verify credentials match what was configured
 	if username != config.WebhookUsername || password != config.WebhookPassword {
-		c.logger.Errorw("webhook Basic Auth verification failed",
+		c.logger.Error(ctx, "webhook Basic Auth verification failed",
+			"error", err,
 			"remote_addr", "masked_for_security") // Don't log credentials or usernames
 		return ierr.NewError("webhook authentication failed").
 			WithHint("Invalid Basic Auth credentials").
 			Mark(ierr.ErrValidation)
 	}
 
-	c.logger.Infow("webhook Basic Auth verified successfully")
+	c.logger.Info(ctx, "webhook Basic Auth verified successfully")
 	return nil
 }
 
@@ -346,7 +349,7 @@ func (c *Client) CreateItemFamily(ctx context.Context, params *itemfamily.Create
 
 	result, err := itemFamilyAction.Create(params).Request()
 	if err != nil {
-		c.logger.Errorw("failed to create item family in Chargebee API",
+		c.logger.Error(ctx, "failed to create item family in Chargebee API",
 			"family_id", params.Id,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -365,7 +368,7 @@ func (c *Client) ListItemFamilies(ctx context.Context, params *itemfamily.ListRe
 
 	result, err := itemFamilyAction.List(params).ListRequest()
 	if err != nil {
-		c.logger.Errorw("failed to list item families from Chargebee API", "error", err)
+		c.logger.Error(ctx, "failed to list item families from Chargebee API", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list item families from Chargebee").
 			Mark(ierr.ErrValidation)
@@ -383,7 +386,7 @@ func (c *Client) CreateItem(ctx context.Context, params *item.CreateRequestParam
 
 	result, err := itemAction.Create(params).Request()
 	if err != nil {
-		c.logger.Errorw("failed to create item in Chargebee API",
+		c.logger.Error(ctx, "failed to create item in Chargebee API",
 			"item_id", params.Id,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -402,7 +405,7 @@ func (c *Client) RetrieveItem(ctx context.Context, itemID string) (*chargebee.Re
 
 	result, err := itemAction.Retrieve(itemID).Request()
 	if err != nil {
-		c.logger.Errorw("failed to retrieve item from Chargebee API",
+		c.logger.Error(ctx, "failed to retrieve item from Chargebee API",
 			"item_id", itemID,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -422,7 +425,7 @@ func (c *Client) CreateItemPrice(ctx context.Context, params *itemprice.CreateRe
 
 	result, err := itemPriceAction.Create(params).Request()
 	if err != nil {
-		c.logger.Errorw("failed to create item price in Chargebee API",
+		c.logger.Error(ctx, "failed to create item price in Chargebee API",
 			"item_price_id", params.Id,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -441,7 +444,7 @@ func (c *Client) RetrieveItemPrice(ctx context.Context, itemPriceID string) (*ch
 
 	result, err := itemPriceAction.Retrieve(itemPriceID).Request()
 	if err != nil {
-		c.logger.Errorw("failed to retrieve item price from Chargebee API",
+		c.logger.Error(ctx, "failed to retrieve item price from Chargebee API",
 			"item_price_id", itemPriceID,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -461,7 +464,7 @@ func (c *Client) CreateCustomer(ctx context.Context, params *customer.CreateRequ
 
 	result, err := customerAction.Create(params).Request()
 	if err != nil {
-		c.logger.Errorw("failed to create customer in Chargebee API",
+		c.logger.Error(ctx, "failed to create customer in Chargebee API",
 			"customer_id", params.Id,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -480,7 +483,7 @@ func (c *Client) RetrieveCustomer(ctx context.Context, customerID string) (*char
 
 	result, err := customerAction.Retrieve(customerID).Request()
 	if err != nil {
-		c.logger.Errorw("failed to retrieve customer from Chargebee API",
+		c.logger.Error(ctx, "failed to retrieve customer from Chargebee API",
 			"customer_id", customerID,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -500,7 +503,7 @@ func (c *Client) CreateInvoice(ctx context.Context, params *chargebeeInvoice.Cre
 
 	result, err := invoiceAction.CreateForChargeItemsAndCharges(params).Request()
 	if err != nil {
-		c.logger.Errorw("failed to create invoice in Chargebee API",
+		c.logger.Error(ctx, "failed to create invoice in Chargebee API",
 			"customer_id", params.CustomerId,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -519,7 +522,7 @@ func (c *Client) RetrieveInvoice(ctx context.Context, invoiceID string, params *
 
 	result, err := invoiceAction.Retrieve(invoiceID, params).Request()
 	if err != nil {
-		c.logger.Errorw("failed to retrieve invoice from Chargebee API",
+		c.logger.Error(ctx, "failed to retrieve invoice from Chargebee API",
 			"invoice_id", invoiceID,
 			"error", err)
 		return nil, ierr.WithError(err).

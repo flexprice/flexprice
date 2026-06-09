@@ -48,7 +48,7 @@ func (s *CustomerService) EnsureCustomerSyncedToStripe(ctx context.Context, cust
 
 	// Check if customer already has Stripe ID in metadata
 	if stripeID, exists := ourCustomer.Metadata["stripe_customer_id"]; exists && stripeID != "" {
-		s.logger.Infow("customer already synced to Stripe",
+		s.logger.Info(ctx, "customer already synced to Stripe",
 			"customer_id", customerID,
 			"stripe_customer_id", stripeID)
 		return ourCustomerResp, nil
@@ -65,7 +65,7 @@ func (s *CustomerService) EnsureCustomerSyncedToStripe(ctx context.Context, cust
 		existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 		if err == nil && existingMappings != nil && len(existingMappings) > 0 {
 			existingMapping := existingMappings[0]
-			s.logger.Infow("customer already mapped to Stripe via integration mapping",
+			s.logger.Info(ctx, "customer already mapped to Stripe via integration mapping",
 				"customer_id", customerID,
 				"stripe_customer_id", existingMapping.ProviderEntityID)
 
@@ -77,7 +77,7 @@ func (s *CustomerService) EnsureCustomerSyncedToStripe(ctx context.Context, cust
 			}
 			updatedCustomerResp, err := customerService.UpdateCustomer(ctx, ourCustomer.ID, updateReq)
 			if err != nil {
-				s.logger.Warnw("failed to update customer metadata with Stripe ID",
+				s.logger.Info(ctx, "failed to update customer metadata with Stripe ID",
 					"customer_id", customerID,
 					"error", err)
 				// Return original customer info if update fails
@@ -88,7 +88,7 @@ func (s *CustomerService) EnsureCustomerSyncedToStripe(ctx context.Context, cust
 	}
 
 	// Customer is not synced, create in Stripe
-	s.logger.Infow("customer not synced to Stripe, creating in Stripe",
+	s.logger.Info(ctx, "customer not synced to Stripe, creating in Stripe",
 		"customer_id", customerID)
 	err = s.CreateCustomerInStripe(ctx, customerID, customerService)
 	if err != nil {
@@ -188,7 +188,7 @@ func (s *CustomerService) CreateCustomerInStripe(ctx context.Context, customerID
 
 		err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
 		if err != nil {
-			s.logger.Warnw("failed to create entity mapping for customer",
+			s.logger.Info(ctx, "failed to create entity mapping for customer",
 				"error", err,
 				"customer_id", ourCustomer.ID,
 				"stripe_customer_id", stripeCustomer.ID)
@@ -207,7 +207,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 	if flexpriceID, exists := stripeCustomer.Metadata["flexprice_customer_id"]; exists && flexpriceID != "" {
 		existing, err := customerService.GetCustomer(ctx, flexpriceID)
 		if err == nil && existing != nil {
-			s.logger.Infow("FlexPrice customer already exists, skipping creation",
+			s.logger.Info(ctx, "FlexPrice customer already exists, skipping creation",
 				"flexprice_customer_id", flexpriceID,
 				"stripe_customer_id", stripeCustomer.ID)
 			return nil
@@ -230,7 +230,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 			existingMapping, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 			if err == nil && len(existingMapping) > 0 {
 				// Mapping exists, just return
-				s.logger.Infow("FlexPrice customer and mapping already exist, skipping creation",
+				s.logger.Info(ctx, "FlexPrice customer and mapping already exist, skipping creation",
 					"flexprice_customer_id", existing.Customer.ID,
 					"stripe_customer_id", stripeCustomer.ID)
 				return nil
@@ -239,7 +239,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 			// Customer exists but no mapping, create mapping
 			err = s.createEntityIntegrationMapping(ctx, existing.Customer.ID, stripeCustomer)
 			if err != nil {
-				s.logger.Warnw("failed to create mapping for existing customer",
+				s.logger.Info(ctx, "failed to create mapping for existing customer",
 					"error", err,
 					"customer_id", existing.Customer.ID,
 					"stripe_customer_id", stripeCustomer.ID)
@@ -277,7 +277,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 	// Create entity mapping for new customer
 	err = s.createEntityIntegrationMapping(ctx, customerResp.ID, stripeCustomer)
 	if err != nil {
-		s.logger.Warnw("failed to create mapping for new customer",
+		s.logger.Info(ctx, "failed to create mapping for new customer",
 			"error", err,
 			"customer_id", customerResp.ID,
 			"stripe_customer_id", stripeCustomer.ID)
@@ -321,7 +321,7 @@ func (s *CustomerService) GetDefaultPaymentMethod(ctx context.Context, customerI
 				),
 			}
 			if _, err := customerService.UpdateCustomer(ctx, ourCustomer.ID, updateReq); err != nil {
-				s.logger.Warnw("failed to backfill stripe_customer_id metadata",
+				s.logger.Info(ctx, "failed to backfill stripe_customer_id metadata",
 					"customer_id", customerID,
 					"error", err)
 			} else {
@@ -338,7 +338,7 @@ func (s *CustomerService) GetDefaultPaymentMethod(ctx context.Context, customerI
 	// Get customer from Stripe to find default payment method
 	customer, err := stripeClient.V1Customers.Retrieve(ctx, stripeCustomerID, nil)
 	if err != nil {
-		s.logger.Errorw("failed to get customer from Stripe",
+		s.logger.Error(ctx, "failed to get customer from Stripe",
 			"error", err,
 			"customer_id", customerID,
 			"stripe_customer_id", stripeCustomerID,
@@ -363,7 +363,7 @@ func (s *CustomerService) GetDefaultPaymentMethod(ctx context.Context, customerI
 	// Get the payment method details
 	paymentMethod, err := stripeClient.V1PaymentMethods.Retrieve(ctx, defaultPaymentMethodID, nil)
 	if err != nil {
-		s.logger.Errorw("failed to get default payment method from Stripe",
+		s.logger.Error(ctx, "failed to get default payment method from Stripe",
 			"error", err,
 			"customer_id", customerID,
 			"payment_method_id", defaultPaymentMethodID,
@@ -398,7 +398,7 @@ func (s *CustomerService) GetDefaultPaymentMethod(ctx context.Context, customerI
 		}
 	}
 
-	s.logger.Infow("successfully retrieved default payment method",
+	s.logger.Info(ctx, "successfully retrieved default payment method",
 		"customer_id", customerID,
 		"stripe_customer_id", stripeCustomerID,
 		"payment_method_id", defaultPaymentMethodID,
@@ -448,14 +448,14 @@ func (s *CustomerService) createEntityIntegrationMapping(ctx context.Context, cu
 
 	err := s.entityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
-		s.logger.Warnw("failed to create entity mapping for customer",
+		s.logger.Info(ctx, "failed to create entity mapping for customer",
 			"error", err,
 			"customer_id", customerID,
 			"stripe_customer_id", stripeCustomer.ID)
 		return err
 	}
 
-	s.logger.Infow("Created entity integration mapping",
+	s.logger.Info(ctx, "Created entity integration mapping",
 		"flexprice_customer_id", customerID,
 		"stripe_customer_id", stripeCustomer.ID)
 
@@ -491,7 +491,7 @@ func (s *CustomerService) SyncCustomerToStripe(ctx context.Context, customer *cu
 	if customer.Email != "" {
 		existingStripeCustomer, err := s.findStripeCustomerByEmail(ctx, customer.Email)
 		if err == nil && existingStripeCustomer != nil {
-			s.logger.Infow("customer with same email already exists in Stripe",
+			s.logger.Info(ctx, "customer with same email already exists in Stripe",
 				"customer_id", customer.ID,
 				"email", customer.Email,
 				"stripe_customer_id", existingStripeCustomer.ID)
@@ -548,7 +548,7 @@ func (s *CustomerService) UpdateStripeCustomerMetadata(ctx context.Context, stri
 	// Update the Stripe customer
 	_, err = stripeClient.V1Customers.Update(ctx, stripeCustomerID, params)
 	if err != nil {
-		s.logger.Errorw("failed to update Stripe customer metadata",
+		s.logger.Error(ctx, "failed to update Stripe customer metadata",
 			"stripe_customer_id", stripeCustomerID,
 			"flexprice_customer_id", cust.ID,
 			"error", err)
@@ -557,7 +557,7 @@ func (s *CustomerService) UpdateStripeCustomerMetadata(ctx context.Context, stri
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("successfully updated Stripe customer metadata",
+	s.logger.Info(ctx, "successfully updated Stripe customer metadata",
 		"stripe_customer_id", stripeCustomerID,
 		"flexprice_customer_id", cust.ID)
 
@@ -598,7 +598,7 @@ func (s *CustomerService) HasCustomerStripeMapping(ctx context.Context, customer
 		),
 	}
 	if _, err := customerService.UpdateCustomer(ctx, customerResp.Customer.ID, updateReq); err != nil {
-		s.logger.Warnw("failed to backfill stripe_customer_id metadata",
+		s.logger.Info(ctx, "failed to backfill stripe_customer_id metadata",
 			"customer_id", customerID,
 			"error", err)
 	} else {

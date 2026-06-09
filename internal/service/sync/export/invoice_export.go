@@ -82,7 +82,7 @@ func NewInvoiceExporter(
 func (e *InvoiceExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
 	const batchSize = 500
 
-	e.logger.Infow("starting batched invoice data fetch",
+	e.logger.Info(ctx, "starting batched invoice data fetch",
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
 		"start_time", request.StartTime,
@@ -96,7 +96,7 @@ func (e *InvoiceExporter) PrepareData(ctx context.Context, request *dto.ExportRe
 
 	// Fetch and process data in batches
 	for {
-		e.logger.Debugw("fetching batch",
+		e.logger.Debug(ctx, "fetching batch",
 			"offset", offset,
 			"batch_size", batchSize)
 
@@ -124,7 +124,7 @@ func (e *InvoiceExporter) PrepareData(ctx context.Context, request *dto.ExportRe
 			break
 		}
 
-		e.logger.Debugw("fetched batch",
+		e.logger.Debug(ctx, "fetched batch",
 			"offset", offset,
 			"records_in_batch", len(invoiceData),
 			"total_so_far", totalRecords+len(invoiceData))
@@ -156,12 +156,12 @@ func (e *InvoiceExporter) PrepareData(ctx context.Context, request *dto.ExportRe
 	csvBytes := buf.Bytes()
 
 	if totalRecords == 0 {
-		e.logger.Infow("no invoice data found for export - will upload empty CSV with headers only",
+		e.logger.Info(ctx, "no invoice data found for export - will upload empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"csv_size_bytes", len(csvBytes))
 	} else {
-		e.logger.Infow("completed batched data fetch and CSV conversion",
+		e.logger.Info(ctx, "completed batched data fetch and CSV conversion",
 			"total_records", totalRecords,
 			"csv_size_bytes", len(csvBytes))
 	}
@@ -177,7 +177,7 @@ func (e *InvoiceExporter) convertToCSVRecords(invoices []*invoice.Invoice) ([]*I
 		// Convert metadata map to JSON string
 		metadataJSON, err := json.Marshal(inv.Metadata)
 		if err != nil {
-			e.logger.Warnw("failed to marshal metadata, using empty object",
+			e.logger.Info(context.Background(), "failed to marshal metadata, using empty object",
 				"invoice_id", inv.ID,
 				"error", err)
 			metadataJSON = []byte("{}")

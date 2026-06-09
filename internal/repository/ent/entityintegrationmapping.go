@@ -38,7 +38,7 @@ func NewEntityIntegrationMappingRepository(client postgres.IClient, log *logger.
 func (r *entityIntegrationMappingRepository) Create(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating entity integration mapping",
+	r.log.Debug(ctx, "creating entity integration mapping",
 		"mapping_id", mapping.ID,
 		"entity_id", mapping.EntityID,
 		"entity_type", mapping.EntityType,
@@ -122,7 +122,7 @@ func (r *entityIntegrationMappingRepository) Create(ctx context.Context, mapping
 func (r *entityIntegrationMappingRepository) Get(ctx context.Context, id string) (*domainEntityIntegrationMapping.EntityIntegrationMapping, error) {
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting entity integration mapping", "mapping_id", id)
+	r.log.Debug(ctx, "getting entity integration mapping", "mapping_id", id)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entity_integration_mapping", "get", map[string]interface{}{
@@ -174,7 +174,7 @@ func (r *entityIntegrationMappingRepository) Get(ctx context.Context, id string)
 func (r *entityIntegrationMappingRepository) List(ctx context.Context, filter *types.EntityIntegrationMappingFilter) ([]*domainEntityIntegrationMapping.EntityIntegrationMapping, error) {
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("listing entity integration mappings", "filter", filter)
+	r.log.Debug(ctx, "listing entity integration mappings", "filter", filter)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entity_integration_mapping", "list", map[string]interface{}{
@@ -208,7 +208,7 @@ func (r *entityIntegrationMappingRepository) List(ctx context.Context, filter *t
 func (r *entityIntegrationMappingRepository) Count(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (int, error) {
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("counting entity integration mappings", "filter", filter)
+	r.log.Debug(ctx, "counting entity integration mappings", "filter", filter)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entity_integration_mapping", "count", map[string]interface{}{
@@ -240,7 +240,7 @@ func (r *entityIntegrationMappingRepository) Count(ctx context.Context, filter *
 func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating entity integration mapping",
+	r.log.Debug(ctx, "updating entity integration mapping",
 		"mapping_id", mapping.ID,
 		"entity_id", mapping.EntityID,
 		"entity_type", mapping.EntityType,
@@ -310,7 +310,7 @@ func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping
 func (r *entityIntegrationMappingRepository) Delete(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting entity integration mapping", "mapping_id", mapping.ID)
+	r.log.Debug(ctx, "deleting entity integration mapping", "mapping_id", mapping.ID)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entity_integration_mapping", "delete", map[string]interface{}{
@@ -495,7 +495,7 @@ func (r *entityIntegrationMappingRepository) SetCache(ctx context.Context, mappi
 	key := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, tenantID, environmentID, mapping.ID)
 	r.cache.Set(ctx, key, mapping, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "key", key)
+	r.log.Debug(ctx, "cache set", "key", key)
 }
 
 func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, key string) *domainEntityIntegrationMapping.EntityIntegrationMapping {
@@ -510,12 +510,12 @@ func (r *entityIntegrationMappingRepository) GetCache(ctx context.Context, key s
 	cacheKey := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, tenantID, environmentID, key)
 	if cached, found := r.cache.Get(ctx, cacheKey); found {
 		if mapping, ok := cached.(*domainEntityIntegrationMapping.EntityIntegrationMapping); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return mapping
 		}
 	}
 
-	r.log.Debugw("cache miss", "key", cacheKey)
+	r.log.Debug(ctx, "cache miss", "key", cacheKey)
 	return nil
 }
 
@@ -531,5 +531,5 @@ func (r *entityIntegrationMappingRepository) DeleteCache(ctx context.Context, ma
 	key := cache.GenerateKey(cache.PrefixEntityIntegrationMapping, tenantID, environmentID, mapping.ID)
 	r.cache.Delete(ctx, key)
 
-	r.log.Debugw("cache deleted", "key", key)
+	r.log.Debug(ctx, "cache deleted", "key", key)
 }

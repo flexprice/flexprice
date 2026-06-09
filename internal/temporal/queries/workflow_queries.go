@@ -61,11 +61,11 @@ type TimelineEvent struct {
 
 // DescribeWorkflow retrieves workflow execution details
 func (q *WorkflowQuerier) DescribeWorkflow(ctx context.Context, workflowID, runID string) (*WorkflowExecutionInfo, error) {
-	q.logger.Info("Describing workflow execution", "workflow_id", workflowID, "run_id", runID)
+	q.logger.Info(ctx, "Describing workflow execution", "workflow_id", workflowID, "run_id", runID)
 
 	resp, err := q.client.DescribeWorkflowExecution(ctx, workflowID, runID)
 	if err != nil {
-		q.logger.Error("Failed to describe workflow execution", "error", err, "workflow_id", workflowID, "run_id", runID)
+		q.logger.Error(ctx, "Failed to describe workflow execution", "error", err, "workflow_id", workflowID, "run_id", runID)
 		return nil, fmt.Errorf("failed to describe workflow: %w", err)
 	}
 
@@ -92,7 +92,7 @@ func (q *WorkflowQuerier) DescribeWorkflow(ctx context.Context, workflowID, runI
 
 // GetWorkflowHistory retrieves the workflow execution history
 func (q *WorkflowQuerier) GetWorkflowHistory(ctx context.Context, workflowID, runID string) (client.HistoryEventIterator, error) {
-	q.logger.Info("Getting workflow history", "workflow_id", workflowID, "run_id", runID)
+	q.logger.Info(ctx, "Getting workflow history", "workflow_id", workflowID, "run_id", runID)
 
 	iter := q.client.GetWorkflowHistory(ctx, workflowID, runID, false, enums.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
 	return iter, nil
@@ -111,7 +111,7 @@ func (q *WorkflowQuerier) ParseActivitiesFromHistory(ctx context.Context, workfl
 	for iter.HasNext() {
 		event, err := iter.Next()
 		if err != nil {
-			q.logger.Error("Error iterating history events", "error", err)
+			q.logger.Error(ctx, "Error iterating history events", "error", err)
 			return nil, fmt.Errorf("failed to iterate history: %w", err)
 		}
 
@@ -302,7 +302,7 @@ func (q *WorkflowQuerier) DescribeWorkflowBatch(ctx context.Context, executions 
 	for i := 0; i < len(executions); i++ {
 		res := <-results
 		if res.err != nil {
-			q.logger.Error("Failed to describe workflow in batch", "error", res.err, "index", res.idx)
+			q.logger.Error(ctx, "Failed to describe workflow in batch", "error", res.err, "index", res.idx)
 			// Continue collecting other results, don't fail the entire batch
 			continue
 		}

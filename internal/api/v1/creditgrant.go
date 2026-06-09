@@ -35,7 +35,7 @@ func NewCreditGrantHandler(service service.CreditGrantService, log *logger.Logge
 func (h *CreditGrantHandler) CreateCreditGrant(c *gin.Context) {
 	var req dto.CreateCreditGrantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -44,7 +44,7 @@ func (h *CreditGrantHandler) CreateCreditGrant(c *gin.Context) {
 
 	resp, err := h.service.CreateCreditGrant(c.Request.Context(), req)
 	if err != nil {
-		h.log.Error("Failed to create credit grant", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to create credit grant", "error", err)
 		c.Error(err)
 		return
 	}
@@ -74,7 +74,7 @@ func (h *CreditGrantHandler) GetCreditGrant(c *gin.Context) {
 
 	resp, err := h.service.GetCreditGrant(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get credit grant", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get credit grant", "error", err)
 		c.Error(err)
 		return
 	}
@@ -85,7 +85,7 @@ func (h *CreditGrantHandler) GetCreditGrant(c *gin.Context) {
 func (h *CreditGrantHandler) ListCreditGrants(c *gin.Context) {
 	var filter types.CreditGrantFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.log.Error("Failed to bind query", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -99,7 +99,7 @@ func (h *CreditGrantHandler) ListCreditGrants(c *gin.Context) {
 
 	resp, err := h.service.ListCreditGrants(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list credit grants", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list credit grants", "error", err)
 		c.Error(err)
 		return
 	}
@@ -131,7 +131,7 @@ func (h *CreditGrantHandler) UpdateCreditGrant(c *gin.Context) {
 
 	var req dto.UpdateCreditGrantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -140,7 +140,7 @@ func (h *CreditGrantHandler) UpdateCreditGrant(c *gin.Context) {
 
 	resp, err := h.service.UpdateCreditGrant(c.Request.Context(), id, req)
 	if err != nil {
-		h.log.Error("Failed to update credit grant", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to update credit grant", "error", err)
 		c.Error(err)
 		return
 	}
@@ -173,7 +173,7 @@ func (h *CreditGrantHandler) DeleteCreditGrant(c *gin.Context) {
 	req := dto.DeleteCreditGrantRequest{CreditGrantID: id}
 	if c.Request.ContentLength > 0 {
 		if err := c.ShouldBindJSON(&req); err != nil {
-			h.log.Error("Failed to bind JSON", "error", err)
+			h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 			c.Error(ierr.WithError(err).
 				WithHint("Invalid request format").
 				Mark(ierr.ErrValidation))
@@ -183,7 +183,7 @@ func (h *CreditGrantHandler) DeleteCreditGrant(c *gin.Context) {
 	}
 
 	if err := h.service.DeleteCreditGrant(c.Request.Context(), req); err != nil {
-		h.log.Error("Failed to delete credit grant", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to delete credit grant", "error", err)
 		c.Error(err)
 		return
 	}

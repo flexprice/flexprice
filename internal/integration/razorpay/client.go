@@ -69,7 +69,8 @@ func (c *Client) GetRazorpayConfig(ctx context.Context) (*RazorpayConfig, error)
 
 	// Validate required fields
 	if razorpayConfig.KeyID == "" {
-		c.logger.Errorw("missing Razorpay key ID",
+		c.logger.Error(ctx, "missing Razorpay key ID",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Razorpay key ID").
@@ -78,7 +79,8 @@ func (c *Client) GetRazorpayConfig(ctx context.Context) (*RazorpayConfig, error)
 	}
 
 	if razorpayConfig.SecretKey == "" {
-		c.logger.Errorw("missing Razorpay secret key",
+		c.logger.Error(ctx, "missing Razorpay secret key",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Razorpay secret key").
@@ -119,27 +121,27 @@ func (c *Client) GetDecryptedRazorpayConfig(conn *connection.Connection) (*Razor
 func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.Metadata, error) {
 	// Check if the connection has encrypted secret data
 	if conn.EncryptedSecretData.Razorpay == nil {
-		c.logger.Warnw("no razorpay metadata found in encrypted secret data", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no razorpay metadata found in encrypted secret data", "connection_id", conn.ID)
 		return types.Metadata{}, nil
 	}
 
 	// For Razorpay connections, decrypt the structured metadata
 	if conn.ProviderType == types.SecretProviderRazorpay {
 		if conn.EncryptedSecretData.Razorpay == nil {
-			c.logger.Warnw("no razorpay metadata found", "connection_id", conn.ID)
+			c.logger.Info(context.Background(), "no razorpay metadata found", "connection_id", conn.ID)
 			return types.Metadata{}, nil
 		}
 
 		// Decrypt each field
 		keyID, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Razorpay.KeyID)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt key ID", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt key ID", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt key ID").Mark(ierr.ErrInternal)
 		}
 
 		secretKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Razorpay.SecretKey)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt secret key", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt secret key", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt secret key").Mark(ierr.ErrInternal)
 		}
 
@@ -148,7 +150,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		if conn.EncryptedSecretData.Razorpay.WebhookSecret != "" {
 			webhookSecret, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Razorpay.WebhookSecret)
 			if err != nil {
-				c.logger.Warnw("failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
+				c.logger.Info(context.Background(), "failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
 				// Don't fail - webhook secret is optional
 				webhookSecret = ""
 			}
@@ -160,7 +162,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 			"webhook_secret": webhookSecret,
 		}
 
-		c.logger.Infow("successfully decrypted razorpay credentials",
+		c.logger.Info(context.Background(), "successfully decrypted razorpay credentials",
 			"connection_id", conn.ID,
 			"has_key_id", keyID != "",
 			"has_secret_key", secretKey != "",
@@ -219,7 +221,7 @@ func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, err
 func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]interface{}) (map[string]interface{}, error) {
 	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
 	if err != nil {
-		c.logger.Errorw("failed to get Razorpay client", "error", err)
+		c.logger.Error(ctx, "failed to get Razorpay client", "error", err)
 		return nil, ierr.NewError("failed to initialize Razorpay client").
 			WithHint("Unable to connect to Razorpay").
 			Mark(ierr.ErrInternal)
@@ -227,7 +229,7 @@ func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]int
 
 	razorpayCustomer, err := razorpayClient.Customer.Create(customerData, nil)
 	if err != nil {
-		c.logger.Errorw("failed to create customer in Razorpay", "error", err)
+		c.logger.Error(ctx, "failed to create customer in Razorpay", "error", err)
 		return nil, ierr.NewError("failed to create customer in Razorpay").
 			WithHint("Unable to create customer in Razorpay").
 			WithReportableDetails(map[string]interface{}{
@@ -236,7 +238,7 @@ func (c *Client) CreateCustomer(ctx context.Context, customerData map[string]int
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created customer in Razorpay", "customer_id", razorpayCustomer["id"])
+	c.logger.Info(ctx, "successfully created customer in Razorpay", "customer_id", razorpayCustomer["id"])
 	return razorpayCustomer, nil
 }
 
@@ -265,7 +267,7 @@ func (c *Client) UpdateCustomer(ctx context.Context, customerID string, customer
 func (c *Client) CreatePaymentLink(ctx context.Context, paymentLinkData map[string]interface{}) (map[string]interface{}, error) {
 	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
 	if err != nil {
-		c.logger.Errorw("failed to get Razorpay client", "error", err)
+		c.logger.Error(ctx, "failed to get Razorpay client", "error", err)
 		return nil, ierr.NewError("failed to initialize Razorpay client").
 			WithHint("Unable to connect to Razorpay").
 			Mark(ierr.ErrInternal)
@@ -275,7 +277,7 @@ func (c *Client) CreatePaymentLink(ctx context.Context, paymentLinkData map[stri
 	// todo
 	// lets make a struct from here
 	if err != nil {
-		c.logger.Errorw("failed to create payment link in Razorpay", "error", err)
+		c.logger.Error(ctx, "failed to create payment link in Razorpay", "error", err)
 		return nil, ierr.NewError("failed to create payment link in Razorpay").
 			WithHint("Unable to create payment link in Razorpay").
 			WithReportableDetails(map[string]interface{}{
@@ -284,7 +286,7 @@ func (c *Client) CreatePaymentLink(ctx context.Context, paymentLinkData map[stri
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created payment link in Razorpay", "payment_link_id", razorpayPaymentLink["id"])
+	c.logger.Info(ctx, "successfully created payment link in Razorpay", "payment_link_id", razorpayPaymentLink["id"])
 	return razorpayPaymentLink, nil
 }
 
@@ -292,7 +294,7 @@ func (c *Client) CreatePaymentLink(ctx context.Context, paymentLinkData map[stri
 func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error {
 	config, err := c.GetRazorpayConfig(ctx)
 	if err != nil {
-		c.logger.Errorw("failed to get Razorpay config for signature verification", "error", err)
+		c.logger.Error(ctx, "failed to get Razorpay config for signature verification", "error", err)
 		return ierr.NewError("failed to verify webhook signature").
 			WithHint("Unable to verify Razorpay webhook signature").
 			Mark(ierr.ErrInternal)
@@ -302,7 +304,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	// According to Razorpay docs, webhooks should use webhook secret
 	secretForVerification := config.WebhookSecret
 	if secretForVerification == "" {
-		c.logger.Warnw("webhook secret not configured, using API secret key as fallback")
+		c.logger.Info(ctx, "webhook secret not configured, using API secret key as fallback")
 		secretForVerification = config.SecretKey
 	}
 
@@ -313,7 +315,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	expectedSignature := hex.EncodeToString(mac.Sum(nil))
 
 	if expectedSignature != signature {
-		c.logger.Errorw("webhook signature mismatch",
+		c.logger.Info(ctx, "webhook signature mismatch",
 			"expected_signature_length", len(expectedSignature),
 			"received_signature_length", len(signature),
 			"payload_length", len(payload),
@@ -323,7 +325,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 			Mark(ierr.ErrValidation)
 	}
 
-	c.logger.Infow("webhook signature verified successfully",
+	c.logger.Info(ctx, "webhook signature verified successfully",
 		"using_webhook_secret", config.WebhookSecret != "")
 	return nil
 }
@@ -332,7 +334,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 func (c *Client) CreateInvoice(ctx context.Context, invoiceData map[string]interface{}) (map[string]interface{}, error) {
 	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
 	if err != nil {
-		c.logger.Errorw("failed to get Razorpay client", "error", err)
+		c.logger.Error(ctx, "failed to get Razorpay client", "error", err)
 		return nil, ierr.NewError("failed to initialize Razorpay client").
 			WithHint("Unable to connect to Razorpay").
 			Mark(ierr.ErrInternal)
@@ -340,7 +342,7 @@ func (c *Client) CreateInvoice(ctx context.Context, invoiceData map[string]inter
 
 	razorpayInvoice, err := razorpayClient.Invoice.Create(invoiceData, nil)
 	if err != nil {
-		c.logger.Errorw("failed to create invoice in Razorpay", "error", err)
+		c.logger.Error(ctx, "failed to create invoice in Razorpay", "error", err)
 		return nil, ierr.NewError("failed to create invoice in Razorpay").
 			WithHint("Unable to create invoice in Razorpay").
 			WithReportableDetails(map[string]interface{}{
@@ -349,7 +351,7 @@ func (c *Client) CreateInvoice(ctx context.Context, invoiceData map[string]inter
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created invoice in Razorpay",
+	c.logger.Info(ctx, "successfully created invoice in Razorpay",
 		"invoice_id", razorpayInvoice["id"],
 		"status", razorpayInvoice["status"])
 	return razorpayInvoice, nil
@@ -359,7 +361,7 @@ func (c *Client) CreateInvoice(ctx context.Context, invoiceData map[string]inter
 func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]interface{}, error) {
 	razorpayClient, _, err := c.GetRazorpaySDKClient(ctx)
 	if err != nil {
-		c.logger.Errorw("failed to get Razorpay client", "error", err)
+		c.logger.Error(ctx, "failed to get Razorpay client", "error", err)
 		return nil, ierr.NewError("failed to initialize Razorpay client").
 			WithHint("Unable to connect to Razorpay").
 			Mark(ierr.ErrInternal)
@@ -367,7 +369,7 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]i
 
 	razorpayInvoice, err := razorpayClient.Invoice.Fetch(invoiceID, nil, nil)
 	if err != nil {
-		c.logger.Errorw("failed to fetch invoice from Razorpay",
+		c.logger.Error(ctx, "failed to fetch invoice from Razorpay",
 			"error", err,
 			"invoice_id", invoiceID)
 		return nil, ierr.NewError("failed to fetch invoice from Razorpay").
@@ -379,7 +381,7 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (map[string]i
 			Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully fetched invoice from Razorpay",
+	c.logger.Info(ctx, "successfully fetched invoice from Razorpay",
 		"invoice_id", invoiceID,
 		"status", razorpayInvoice["status"])
 	return razorpayInvoice, nil

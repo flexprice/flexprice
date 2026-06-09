@@ -43,7 +43,7 @@ func (r *taskRepository) Create(ctx context.Context, t *domainTask.Task) error {
 		t.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	r.logger.Infow("saving task to database",
+	r.logger.Info(ctx, "saving task to database",
 		"task_id", t.ID,
 		"created_by", t.CreatedBy,
 		"updated_by", t.UpdatedBy,
@@ -79,7 +79,7 @@ func (r *taskRepository) Create(ctx context.Context, t *domainTask.Task) error {
 
 	if err != nil {
 		SetSpanError(span, err)
-		r.logger.Error("failed to create task", "error", err)
+		r.logger.Error(ctx, "failed to create task", "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to create task").
 			WithReportableDetails(map[string]interface{}{
@@ -92,7 +92,7 @@ func (r *taskRepository) Create(ctx context.Context, t *domainTask.Task) error {
 
 	SetSpanSuccess(span)
 
-	r.logger.Infow("task saved to database successfully",
+	r.logger.Info(ctx, "task saved to database successfully",
 		"task_id", task.ID,
 		"created_by", task.CreatedBy,
 		"updated_by", task.UpdatedBy,

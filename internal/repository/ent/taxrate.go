@@ -47,7 +47,7 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating taxrate",
+	r.log.Debug(ctx, "creating taxrate",
 		"taxrate_id", t.ID,
 		"taxrate_name", t.Name,
 		"taxrate_code", t.Code,
@@ -78,7 +78,7 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Errorw("error creating taxrate", "error", err)
+		r.log.Error(ctx, "error creating taxrate", "error", err)
 		if ent.IsConstraintError(err) {
 			var pqErr *pq.Error
 			if errors.As(err, &pqErr) {
@@ -122,7 +122,7 @@ func (r *taxrateRepository) Get(ctx context.Context, id string) (*domainTaxRate.
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting taxrate",
+	r.log.Debug(ctx, "getting taxrate",
 		"id", id,
 	)
 
@@ -193,7 +193,7 @@ func (r *taxrateRepository) List(ctx context.Context, filter *types.TaxRateFilte
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.log.Debugw("listing taxrates", "filter", filter)
+	r.log.Debug(ctx, "listing taxrates", "filter", filter)
 	SetSpanSuccess(span)
 	return domainTaxRate.FromEntList(taxrates), nil
 }
@@ -237,7 +237,7 @@ func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("updating taxrate", "taxrate", t)
+	r.log.Debug(ctx, "updating taxrate", "taxrate", t)
 
 	client := r.client.Writer(ctx)
 
@@ -261,7 +261,7 @@ func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate
 
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Errorw("error updating taxrate", "error", err)
+		r.log.Error(ctx, "error updating taxrate", "error", err)
 		if ent.IsNotFound(err) {
 			return ierr.WithError(err).
 				WithHintf("Taxrate with ID %s was not found", t.ID).
@@ -308,7 +308,7 @@ func (r *taxrateRepository) Delete(ctx context.Context, t *domainTaxRate.TaxRate
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("deleting taxrate",
+	r.log.Debug(ctx, "deleting taxrate",
 		"taxrate_id", t.ID,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
@@ -344,7 +344,7 @@ func (r *taxrateRepository) GetByCode(ctx context.Context, code string) (*domain
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("getting taxrate by code", "code", code)
+	r.log.Debug(ctx, "getting taxrate by code", "code", code)
 	client := r.client.Reader(ctx)
 	taxrateEnt, err := client.TaxRate.Query().
 		Where(
@@ -525,7 +525,7 @@ func (r *taxrateRepository) SetCache(ctx context.Context, taxrate *domainTaxRate
 	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, tenantID, environmentID, taxrate.ID)
 	r.cache.Set(ctx, cacheKey, taxrate, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "id_key", cacheKey)
+	r.log.Debug(ctx, "cache set", "id_key", cacheKey)
 }
 
 func (r *taxrateRepository) GetCache(ctx context.Context, key string) *domainTaxRate.TaxRate {
@@ -538,11 +538,11 @@ func (r *taxrateRepository) GetCache(ctx context.Context, key string) *domainTax
 	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if taxrate, ok := value.(*domainTaxRate.TaxRate); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return taxrate
 		}
 	}
-	r.log.Debugw("cache miss", "key", cacheKey)
+	r.log.Debug(ctx, "cache miss", "key", cacheKey)
 	return nil
 }
 
@@ -558,5 +558,5 @@ func (r *taxrateRepository) DeleteCache(ctx context.Context, taxrate *domainTaxR
 	// Delete ID-based cache first
 	cacheKey := cache.GenerateKey(cache.PrefixTaxRate, tenantID, environmentID, taxrate.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debugw("cache deleted", "key", cacheKey)
+	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

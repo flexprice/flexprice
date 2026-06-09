@@ -35,7 +35,7 @@ func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger,
 // Create creates a new tax config
 func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Writer(ctx)
-	r.logger.Debugw("creating tax association", "tax_association_id", t.ID, "tax_rate_id", t.TaxRateID, "entity_type", t.EntityType, "entity_id", t.EntityID)
+	r.logger.Debug(ctx, "creating tax association", "tax_association_id", t.ID, "tax_rate_id", t.TaxRateID, "entity_type", t.EntityType, "entity_id", t.EntityID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "create", map[string]interface{}{
 		"tax_association_id": t.ID,
@@ -106,7 +106,7 @@ func (r *taxAssociationRepository) Get(ctx context.Context, id string) (*domainT
 	}
 
 	client := r.client.Reader(ctx)
-	r.logger.Debugw("getting tax association", "tax_association_id", id)
+	r.logger.Debug(ctx, "getting tax association", "tax_association_id", id)
 
 	tc, err := client.TaxAssociation.Query().
 		Where(
@@ -138,7 +138,7 @@ func (r *taxAssociationRepository) Get(ctx context.Context, id string) (*domainT
 // Update updates a tax association
 func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Writer(ctx)
-	r.logger.Debugw("updating tax association", "tax_association_id", t.ID)
+	r.logger.Debug(ctx, "updating tax association", "tax_association_id", t.ID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "update", map[string]interface{}{
 		"tax_association_id": t.ID,
@@ -180,7 +180,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 // Delete deletes a tax association by ID
 func (r *taxAssociationRepository) Delete(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
 	client := r.client.Writer(ctx)
-	r.logger.Debugw("deleting tax association", "tax_association_id", t.ID)
+	r.logger.Debug(ctx, "deleting tax association", "tax_association_id", t.ID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "delete", map[string]interface{}{
 		"tax_association_id": t.ID,

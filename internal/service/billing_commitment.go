@@ -188,7 +188,7 @@ func (c *commitmentCalculator) applyCommitmentToLineItem(
 		info.ComputedOverageAmount = overageCharge
 		info.ComputedTrueUpAmount = decimal.Zero
 
-		c.logger.Debugw("usage exceeds commitment, applying overage",
+		c.logger.Debug(ctx, "usage exceeds commitment, applying overage",
 			"line_item_id", lineItem.ID,
 			"usage_cost", usageCost,
 			"commitment_amount", commitmentAmount,
@@ -204,7 +204,7 @@ func (c *commitmentCalculator) applyCommitmentToLineItem(
 			info.ComputedOverageAmount = decimal.Zero
 			info.ComputedTrueUpAmount = commitmentAmount.Sub(usageCost)
 
-			c.logger.Debugw("usage below commitment, applying true-up",
+			c.logger.Debug(ctx, "usage below commitment, applying true-up",
 				"line_item_id", lineItem.ID,
 				"usage_cost", usageCost,
 				"commitment_amount", commitmentAmount,
@@ -217,7 +217,7 @@ func (c *commitmentCalculator) applyCommitmentToLineItem(
 			info.ComputedOverageAmount = decimal.Zero
 			info.ComputedTrueUpAmount = decimal.Zero
 
-			c.logger.Debugw("usage below commitment, no true-up",
+			c.logger.Debug(ctx, "usage below commitment, no true-up",
 				"line_item_id", lineItem.ID,
 				"usage_cost", usageCost,
 				"commitment_amount", commitmentAmount,
@@ -374,7 +374,7 @@ func applyCumulativeSubscriptionCommitment(
 		}
 	}
 
-	logger.Debugw("applied cumulative subscription commitment",
+	logger.Debug(context.Background(), "applied cumulative subscription commitment",
 		"commitment_amount", commitmentAmount,
 		"total_prior_base", totalPriorBase,
 		"total_current_base", totalCurrentBase,

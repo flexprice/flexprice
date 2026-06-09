@@ -108,7 +108,7 @@ func (s *workflowService) GetWorkflowSummary(ctx context.Context, workflowID, ru
 	}
 	activities, err := s.querier.ParseActivitiesFromHistory(ctx, workflowID, runID)
 	if err != nil {
-		s.log.Error("Failed to parse activities for summary", "error", err)
+		s.log.Error(ctx, "Failed to parse activities for summary", "error", err)
 		activities = []*queries.ActivityExecutionInfo{}
 	}
 	failedCount := 0
@@ -152,7 +152,7 @@ func (s *workflowService) GetWorkflowDetails(ctx context.Context, workflowID, ru
 	}
 	timelineEvents, err := s.querier.ParseTimelineFromHistory(ctx, workflowID, runID)
 	if err != nil {
-		s.log.Error("Failed to parse timeline", "error", err)
+		s.log.Error(ctx, "Failed to parse timeline", "error", err)
 		timelineEvents = []*queries.TimelineEvent{}
 	}
 	activityDTOs := activityInfosToDTOs(activities)
@@ -255,7 +255,7 @@ func (s *workflowService) GetWorkflowsBatch(ctx context.Context, req *dto.BatchW
 	workflowDetails := make([]*dto.WorkflowDetailsResponse, 0, len(infos))
 	for i, info := range infos {
 		if info == nil {
-			s.log.Warn("Skipping nil workflow info in batch", "index", i)
+			s.log.Info(ctx, "Skipping nil workflow info in batch", "index", i)
 			continue
 		}
 		totalDuration := formatDuration(info.StartTime, info.CloseTime)
@@ -276,7 +276,7 @@ func (s *workflowService) GetWorkflowsBatch(ctx context.Context, req *dto.BatchW
 		if req.IncludeActivities {
 			activities, err := s.querier.ParseActivitiesFromHistory(ctx, info.WorkflowID, info.RunID)
 			if err != nil {
-				s.log.Error("Failed to parse activities for workflow in batch",
+				s.log.Error(ctx, "Failed to parse activities for workflow in batch",
 					"workflow_id", info.WorkflowID, "run_id", info.RunID, "error", err)
 			} else {
 				detail.Activities = activityInfosToDTOs(activities)

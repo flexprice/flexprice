@@ -55,7 +55,7 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 	behavior types.PaymentBehavior,
 	flowType types.InvoiceFlowType,
 ) error {
-	s.Logger.Infow("handling payment behavior",
+	s.Logger.Info(ctx, "handling payment behavior",
 		"subscription_id", sub.ID,
 		"invoice_id", inv.ID,
 		"amount_due", inv.AmountDue,
@@ -65,14 +65,14 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 
 	// For manual flows, attempt payment and update subscription status based on result
 	if flowType == types.InvoiceFlowManual {
-		s.Logger.Infow("manual flow - attempting payment",
+		s.Logger.Info(ctx, "manual flow - attempting payment",
 			"subscription_id", sub.ID,
 			"invoice_id", inv.ID,
 			"amount_due", inv.AmountDue,
 		)
 
 		result := s.processPayment(ctx, sub, inv, behavior, flowType)
-		s.Logger.Infow("manual flow payment result",
+		s.Logger.Info(ctx, "manual flow payment result",
 			"subscription_id", sub.ID,
 			"success", result.Success,
 			"amount_paid", result.AmountPaid,
@@ -80,7 +80,7 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 
 		// If payment succeeded completely, mark subscription as active
 		if result.Success {
-			s.Logger.Infow("manual flow payment successful - activating subscription",
+			s.Logger.Info(ctx, "manual flow payment successful - activating subscription",
 				"subscription_id", sub.ID,
 				"amount_paid", result.AmountPaid,
 			)
@@ -89,7 +89,7 @@ func (s *subscriptionPaymentProcessor) HandlePaymentBehavior(
 		}
 
 		// If payment failed or partial, keep subscription status unchanged
-		s.Logger.Infow("manual flow payment failed or partial - keeping subscription status unchanged",
+		s.Logger.Info(ctx, "manual flow payment failed or partial - keeping subscription status unchanged",
 			"subscription_id", sub.ID,
 			"current_status", sub.SubscriptionStatus,
 			"amount_paid", result.AmountPaid,
@@ -123,7 +123,7 @@ func (s *subscriptionPaymentProcessor) handleSendInvoiceMethod(
 	switch behavior {
 	case types.PaymentBehaviorDefaultActive:
 		// Default active behavior - always create active subscription without payment attempt
-		s.Logger.Infow("send_invoice with default_active - activating subscription immediately",
+		s.Logger.Info(ctx, "send_invoice with default_active - activating subscription immediately",
 			"subscription_id", sub.ID,
 			"invoice_id", inv.ID,
 			"amount_due", inv.AmountDue,
@@ -133,7 +133,7 @@ func (s *subscriptionPaymentProcessor) handleSendInvoiceMethod(
 
 	case types.PaymentBehaviorDefaultIncomplete:
 		// Default incomplete behavior - set subscription to incomplete without payment attempt
-		s.Logger.Infow("send_invoice with default_incomplete - setting subscription to incomplete",
+		s.Logger.Info(ctx, "send_invoice with default_incomplete - setting subscription to incomplete",
 			"subscription_id", sub.ID,
 			"invoice_id", inv.ID,
 			"amount_due", inv.AmountDue,
@@ -204,7 +204,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentAllowIncomplete(
 	// triggers subscription activation through payment service)
 	latestSub, err := s.SubRepo.Get(ctx, sub.ID)
 	if err != nil {
-		s.Logger.Errorw("failed to get latest subscription status",
+		s.Logger.Error(ctx, "failed to get latest subscription status",
 			"error", err,
 			"subscription_id", sub.ID,
 		)
@@ -220,7 +220,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentAllowIncomplete(
 		targetStatus = types.SubscriptionStatusIncomplete
 	}
 
-	s.Logger.Infow("allow_incomplete payment result",
+	s.Logger.Info(ctx, "allow_incomplete payment result",
 		"subscription_id", sub.ID,
 		"success", result.Success,
 		"amount_paid", result.AmountPaid,
@@ -240,7 +240,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentAllowIncomplete(
 		return nil
 	}
 
-	s.Logger.Infow("subscription status already matches target, skipping update",
+	s.Logger.Info(ctx, "subscription status already matches target, skipping update",
 		"subscription_id", sub.ID,
 		"status", latestSub.SubscriptionStatus,
 	)
@@ -281,7 +281,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentErrorIfIncomplete(
 	}
 
 	// For renewal flows, don't return error - let invoice remain in pending state
-	s.Logger.Infow("payment failed for renewal flow, marking invoice as pending",
+	s.Logger.Info(ctx, "payment failed for renewal flow, marking invoice as pending",
 		"subscription_id", sub.ID,
 		"invoice_id", inv.ID,
 		"amount_due", inv.AmountDue,
@@ -305,7 +305,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentDefaultActive(
 	// triggers subscription activation through payment service)
 	latestSub, err := s.SubRepo.Get(ctx, sub.ID)
 	if err != nil {
-		s.Logger.Errorw("failed to get latest subscription status",
+		s.Logger.Error(ctx, "failed to get latest subscription status",
 			"error", err,
 			"subscription_id", sub.ID,
 		)
@@ -316,7 +316,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentDefaultActive(
 	// For default_active behavior, always set to active regardless of payment result
 	targetStatus := types.SubscriptionStatusActive
 
-	s.Logger.Infow("default_active payment result",
+	s.Logger.Info(ctx, "default_active payment result",
 		"subscription_id", sub.ID,
 		"payment_success", result.Success,
 		"amount_paid", result.AmountPaid,
@@ -331,7 +331,7 @@ func (s *subscriptionPaymentProcessor) attemptPaymentDefaultActive(
 		return s.SubRepo.Update(ctx, latestSub)
 	}
 
-	s.Logger.Infow("subscription status already matches target, skipping update",
+	s.Logger.Info(ctx, "subscription status already matches target, skipping update",
 		"subscription_id", sub.ID,
 		"status", latestSub.SubscriptionStatus,
 	)
@@ -359,7 +359,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 		PaymentMethods:  []PaymentMethodUsed{},
 	}
 
-	s.Logger.Infow("processing payment with card-first logic",
+	s.Logger.Info(ctx, "processing payment with card-first logic",
 		"subscription_id", sub.ID,
 		"amount_due", inv.AmountDue,
 		"amount_remaining", remainingAmount,
@@ -373,7 +373,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 	// Step 1: Get the full invoice with line items to analyze price types
 	fullInvoice, err := s.InvoiceRepo.Get(ctx, inv.ID)
 	if err != nil {
-		s.Logger.Errorw("failed to get invoice with line items for payment analysis",
+		s.Logger.Error(ctx, "failed to get invoice with line items for payment analysis",
 			"error", err,
 			"invoice_id", inv.ID)
 		result.Success = false
@@ -383,7 +383,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 	// Step 2: Calculate price type breakdown
 	walletPaymentService := &walletPaymentService{ServiceParams: *s.ServiceParams}
 	priceTypeAmounts := walletPaymentService.calculatePriceTypeAmounts(fullInvoice.LineItems)
-	s.Logger.Infow("calculated price type breakdown for payment split",
+	s.Logger.Info(ctx, "calculated price type breakdown for payment split",
 		"subscription_id", sub.ID,
 		"invoice_id", inv.ID,
 		"price_type_amounts", priceTypeAmounts)
@@ -395,7 +395,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 	availableCredits := s.checkAvailableCredits(ctx, sub, inv)
 	walletPayableAmount := s.calculateWalletPayableAmount(ctx, invoicingCustomerID, priceTypeAmounts, availableCredits)
 
-	s.Logger.Infow("wallet payment analysis",
+	s.Logger.Info(ctx, "wallet payment analysis",
 		"subscription_id", sub.ID,
 		"available_credits", availableCredits,
 		"wallet_payable_amount", walletPayableAmount,
@@ -408,15 +408,15 @@ func (s *subscriptionPaymentProcessor) processPayment(
 	walletAmount = walletPayableAmount
 
 	if walletAmount.IsZero() {
-		s.Logger.Infow("wallet cannot pay any amount due to price type restrictions, paying entirely with card",
+		s.Logger.Info(ctx, "wallet cannot pay any amount due to price type restrictions, paying entirely with card",
 			"subscription_id", sub.ID,
 			"card_amount", cardAmount)
 	} else if cardAmount.IsZero() {
-		s.Logger.Infow("wallet can pay entire amount, paying entirely with wallet",
+		s.Logger.Info(ctx, "wallet can pay entire amount, paying entirely with wallet",
 			"subscription_id", sub.ID,
 			"wallet_amount", walletAmount)
 	} else {
-		s.Logger.Infow("splitting payment between card and wallet based on price types",
+		s.Logger.Info(ctx, "splitting payment between card and wallet based on price types",
 			"subscription_id", sub.ID,
 			"card_amount", cardAmount,
 			"wallet_amount", walletAmount)
@@ -424,7 +424,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 
 	// Step 3: Process card payment first (if needed)
 	if cardAmount.GreaterThan(decimal.Zero) {
-		s.Logger.Infow("attempting card payment",
+		s.Logger.Info(ctx, "attempting card payment",
 			"subscription_id", sub.ID,
 			"card_amount", cardAmount,
 		)
@@ -438,7 +438,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				Amount: cardAmountPaid,
 			})
 
-			s.Logger.Infow("card payment successful",
+			s.Logger.Info(ctx, "card payment successful",
 				"subscription_id", sub.ID,
 				"card_amount_paid", cardAmountPaid,
 				"remaining_amount", result.RemainingAmount,
@@ -454,7 +454,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 			stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 			if err == nil {
 				if stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
-					s.Logger.Warnw("card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
+					s.Logger.Info(context.Background(), "card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
 						"subscription_id", sub.ID,
 						"invoice_id", inv.ID,
 						"attempted_card_amount", cardAmount,
@@ -467,7 +467,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 			if !allowPartialWallet {
 				// Card payment failed - do not attempt wallet payment
 				// The invoice cannot be fully paid, so we stop here
-				s.Logger.Warnw("card payment failed, not attempting wallet payment",
+				s.Logger.Info(context.Background(), "card payment failed, not attempting wallet payment",
 					"subscription_id", sub.ID,
 					"attempted_card_amount", cardAmount,
 					"wallet_amount_available", walletAmount,
@@ -480,7 +480,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				return result
 			} else {
 				// Card payment failed but we allow partial wallet payment
-				s.Logger.Warnw("card payment failed, but allowing partial wallet payment",
+				s.Logger.Info(context.Background(), "card payment failed, but allowing partial wallet payment",
 					"subscription_id", sub.ID,
 					"attempted_card_amount", cardAmount,
 					"wallet_amount_available", walletAmount,
@@ -494,7 +494,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 
 	// Step 4: Process wallet payment (only if card payment succeeded or not needed)
 	if walletAmount.GreaterThan(decimal.Zero) {
-		s.Logger.Infow("attempting wallet payment",
+		s.Logger.Info(ctx, "attempting wallet payment",
 			"subscription_id", sub.ID,
 			"wallet_amount", walletAmount,
 		)
@@ -508,13 +508,13 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				Amount: creditsUsed,
 			})
 
-			s.Logger.Infow("wallet payment successful",
+			s.Logger.Info(ctx, "wallet payment successful",
 				"subscription_id", sub.ID,
 				"credits_used", creditsUsed,
 				"remaining_amount", result.RemainingAmount,
 			)
 		} else {
-			s.Logger.Warnw("wallet payment failed",
+			s.Logger.Info(context.Background(), "wallet payment failed",
 				"subscription_id", sub.ID,
 				"attempted_wallet_amount", walletAmount,
 			)
@@ -524,7 +524,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 	// Step 5: Determine final success
 	result.Success = result.RemainingAmount.IsZero()
 
-	s.Logger.Infow("payment processing completed",
+	s.Logger.Info(ctx, "payment processing completed",
 		"subscription_id", sub.ID,
 		"success", result.Success,
 		"total_paid", result.AmountPaid,
@@ -545,7 +545,7 @@ func (s *subscriptionPaymentProcessor) processCreditsPayment(
 	if sub != nil {
 		subscriptionID = sub.ID
 	}
-	s.Logger.Infow("processing credits payment",
+	s.Logger.Info(ctx, "processing credits payment",
 		"subscription_id", subscriptionID,
 		"invoice_id", inv.ID,
 		"amount_due", inv.AmountDue,
@@ -554,7 +554,7 @@ func (s *subscriptionPaymentProcessor) processCreditsPayment(
 	// Get the full invoice with line items from the repository
 	fullInvoice, err := s.InvoiceRepo.Get(ctx, inv.ID)
 	if err != nil {
-		s.Logger.Errorw("failed to get invoice with line items for wallet payment",
+		s.Logger.Error(ctx, "failed to get invoice with line items for wallet payment",
 			"error", err,
 			"invoice_id", inv.ID)
 		return decimal.Zero
@@ -579,7 +579,7 @@ func (s *subscriptionPaymentProcessor) processCreditsPayment(
 	})
 
 	if err != nil {
-		s.Logger.Errorw("credits payment failed",
+		s.Logger.Error(ctx, "credits payment failed",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"invoice_id", inv.ID,
@@ -587,7 +587,7 @@ func (s *subscriptionPaymentProcessor) processCreditsPayment(
 		return decimal.Zero
 	}
 
-	s.Logger.Infow("credits payment completed",
+	s.Logger.Info(ctx, "credits payment completed",
 		"subscription_id", subscriptionID,
 		"invoice_id", inv.ID,
 		"amount_paid", amountPaid,
@@ -619,7 +619,7 @@ func (s *subscriptionPaymentProcessor) calculateWalletPayableAmount(
 	// Get customer's wallets to check their configurations
 	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, customerID)
 	if err != nil {
-		s.Logger.Errorw("failed to get wallets for payment analysis",
+		s.Logger.Error(ctx, "failed to get wallets for payment analysis",
 			"error", err,
 			"customer_id", customerID)
 		return decimal.Zero
@@ -654,7 +654,7 @@ func (s *subscriptionPaymentProcessor) calculateWalletPayableAmount(
 		totalPayableAmount = totalPayableAmount.Add(actualPayableAmount)
 		remainingCredits = remainingCredits.Sub(actualPayableAmount)
 
-		s.Logger.Debugw("wallet payment analysis",
+		s.Logger.Debug(ctx, "wallet payment analysis",
 			"wallet_id", wallet.ID,
 			"wallet_config", wallet.Config,
 			"wallet_balance", wallet.Balance,
@@ -705,7 +705,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	inv *dto.InvoiceResponse,
 	amount decimal.Decimal,
 ) decimal.Decimal {
-	s.Logger.Infow("processing payment method charge",
+	s.Logger.Info(ctx, "processing payment method charge",
 		"subscription_id", sub.ID,
 		"invoice_id", inv.ID,
 		"amount", amount,
@@ -713,7 +713,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 
 	// Check if tenant has Stripe connection
 	if !s.hasStripeConnection(ctx) {
-		s.Logger.Warnw("no Stripe connection available for payment method charge",
+		s.Logger.Info(context.Background(), "no Stripe connection available for payment method charge",
 			"subscription_id", sub.ID,
 		)
 		return decimal.Zero
@@ -722,7 +722,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	// Get Stripe integration
 	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		s.Logger.Warnw("failed to get Stripe integration",
+		s.Logger.Info(context.Background(), "failed to get Stripe integration",
 			"subscription_id", sub.ID,
 			"error", err,
 		)
@@ -734,7 +734,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	customerService := NewCustomerService(*s.ServiceParams)
 	if !stripeIntegration.CustomerSvc.HasCustomerStripeMapping(ctx, invoicingCustomerID, customerService) {
-		s.Logger.Warnw("no Stripe entity mapping found for invoicing customer",
+		s.Logger.Info(context.Background(), "no Stripe entity mapping found for invoicing customer",
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
 			"invoicing_customer_id", invoicingCustomerID,
@@ -745,7 +745,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	// Get payment method ID - use invoicing customer's payment methods
 	paymentMethodID := s.getPaymentMethodID(ctx, sub, invoicingCustomerID)
 	if paymentMethodID == "" {
-		s.Logger.Warnw("no payment method available for automatic charging",
+		s.Logger.Info(context.Background(), "no payment method available for automatic charging",
 			"subscription_id", sub.ID,
 		)
 		return decimal.Zero
@@ -771,7 +771,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 
 	paymentResp, err := paymentService.CreatePayment(ctx, paymentReq)
 	if err != nil {
-		s.Logger.Errorw("failed to create payment record for card charge",
+		s.Logger.Error(ctx, "failed to create payment record for card charge",
 			"error", err,
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
@@ -782,7 +782,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		return decimal.Zero
 	}
 
-	s.Logger.Infow("created payment record for card charge",
+	s.Logger.Info(ctx, "created payment record for card charge",
 		"subscription_id", sub.ID,
 		"payment_id", paymentResp.ID,
 		"amount", amount,
@@ -790,7 +790,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 
 	// Check if payment was successful
 	if paymentResp.PaymentStatus == types.PaymentStatusSucceeded {
-		s.Logger.Infow("payment method charge successful",
+		s.Logger.Info(ctx, "payment method charge successful",
 			"subscription_id", sub.ID,
 			"payment_id", paymentResp.ID,
 			"amount", amount,
@@ -798,7 +798,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		return amount
 	}
 
-	s.Logger.Warnw("payment method charge not successful",
+	s.Logger.Info(context.Background(), "payment method charge not successful",
 		"subscription_id", sub.ID,
 		"payment_id", paymentResp.ID,
 		"status", paymentResp.PaymentStatus,
@@ -811,7 +811,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, sub *subscription.Subscription, invoicingCustomerID string) string {
 	// Use subscription's payment method if set
 	if sub.GatewayPaymentMethodID != nil && *sub.GatewayPaymentMethodID != "" {
-		s.Logger.InfowCtx(ctx, "using subscription gateway payment method",
+		s.Logger.Info(ctx, "using subscription gateway payment method",
 			"subscription_id", sub.ID,
 			"gateway_payment_method_id", *sub.GatewayPaymentMethodID,
 		)
@@ -821,7 +821,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	// Get invoicing customer's default payment method from Stripe
 	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		s.Logger.WarnwCtx(ctx, "failed to get Stripe integration",
+		s.Logger.Info(ctx, "failed to get Stripe integration",
 			"error", err,
 			"subscription_id", sub.ID,
 		)
@@ -831,7 +831,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	customerService := NewCustomerService(*s.ServiceParams)
 	defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, invoicingCustomerID, customerService)
 	if err != nil {
-		s.Logger.WarnwCtx(ctx, "failed to get default payment method for invoicing customer",
+		s.Logger.Info(ctx, "failed to get default payment method for invoicing customer",
 			"error", err,
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
@@ -841,7 +841,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	}
 
 	if defaultPaymentMethod == nil {
-		s.Logger.WarnwCtx(ctx, "invoicing customer has no default payment method",
+		s.Logger.Info(ctx, "invoicing customer has no default payment method",
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
 			"invoicing_customer_id", invoicingCustomerID,
@@ -849,7 +849,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 		return ""
 	}
 
-	s.Logger.InfowCtx(ctx, "using invoicing customer default payment method",
+	s.Logger.Info(ctx, "using invoicing customer default payment method",
 		"subscription_id", sub.ID,
 		"subscription_customer_id", sub.CustomerID,
 		"invoicing_customer_id", invoicingCustomerID,
@@ -863,18 +863,18 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 func (s *subscriptionPaymentProcessor) hasStripeConnection(ctx context.Context) bool {
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
 	if err != nil {
-		s.Logger.DebugwCtx(ctx, "no Stripe connection found",
+		s.Logger.Debug(ctx, "no Stripe connection found",
 			"error", err,
 		)
 		return false
 	}
 
 	if conn == nil {
-		s.Logger.DebugwCtx(ctx, "Stripe connection is nil")
+		s.Logger.Debug(ctx, "Stripe connection is nil")
 		return false
 	}
 
-	s.Logger.DebugwCtx(ctx, "Stripe connection found",
+	s.Logger.Debug(ctx, "Stripe connection found",
 		"connection_id", conn.ID,
 		"provider", conn.ProviderType,
 	)
@@ -907,7 +907,7 @@ func (s *subscriptionPaymentProcessor) checkAvailableCredits(
 	sub *subscription.Subscription,
 	inv *dto.InvoiceResponse,
 ) decimal.Decimal {
-	s.Logger.Infow("checking available credits",
+	s.Logger.Info(ctx, "checking available credits",
 		"subscription_id", sub.ID,
 		"invoice_id", inv.ID,
 	)
@@ -924,7 +924,7 @@ func (s *subscriptionPaymentProcessor) checkAvailableCredits(
 		MaxWalletsToUse: 5,
 	})
 	if err != nil {
-		s.Logger.Errorw("failed to get wallets for payment",
+		s.Logger.Error(ctx, "failed to get wallets for payment",
 			"error", err,
 			"subscription_customer_id", sub.CustomerID,
 			"invoicing_customer_id", invoicingCustomerID,
@@ -937,14 +937,14 @@ func (s *subscriptionPaymentProcessor) checkAvailableCredits(
 	totalAvailable := decimal.Zero
 	for _, w := range wallets {
 		totalAvailable = totalAvailable.Add(w.Balance)
-		s.Logger.Debugw("wallet balance",
+		s.Logger.Debug(ctx, "wallet balance",
 			"wallet_id", w.ID,
 			"wallet_type", w.WalletType,
 			"balance", w.Balance,
 		)
 	}
 
-	s.Logger.Infow("total available credits calculated",
+	s.Logger.Info(ctx, "total available credits calculated",
 		"subscription_id", sub.ID,
 		"subscription_customer_id", sub.CustomerID,
 		"invoicing_customer_id", invoicingCustomerID,

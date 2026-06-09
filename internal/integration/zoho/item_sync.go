@@ -80,7 +80,7 @@ func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSy
 
 		zohoItemID, errCreate := s.createAndSaveItem(ctx, in, taxRes)
 		if errCreate != nil {
-			s.Logger.Errorw("failed to create Zoho item, line item will fall back to name+rate",
+			s.Logger.Error(ctx, "failed to create Zoho item, line item will fall back to name+rate",
 				"price_id", in.PriceID,
 				"item_name", in.Name,
 				"error", errCreate)
@@ -115,7 +115,7 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 				Mark(ierr.ErrInternal)
 		}
 
-		s.Logger.Infow("item already exists in Zoho Books, searching by name",
+		s.Logger.Info(ctx, "item already exists in Zoho Books, searching by name",
 			"price_id", in.PriceID,
 			"item_name", in.Name)
 
@@ -149,7 +149,7 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Infow("resolved item in Zoho Books",
+	s.Logger.Info(ctx, "resolved item in Zoho Books",
 		"price_id", in.PriceID,
 		"zoho_item_id", itemResp.ItemID,
 		"item_name", itemResp.Name)

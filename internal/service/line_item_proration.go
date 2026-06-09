@@ -156,7 +156,7 @@ func (s *lineItemProrationService) Apply(ctx context.Context, req LineItemProrat
 		if _, err := walletSvc.TopUpWalletForProratedCharge(
 			ctx, billingCustomer, summary.TotalCreditAmount, sub.Currency, req.IdempotencyKey,
 		); err != nil {
-			s.params.Logger.ErrorwCtx(ctx, "failed to issue wallet credit for proration", "error", err)
+			s.params.Logger.Error(ctx, "failed to issue wallet credit for proration", "error", err)
 			return err
 		}
 	}
@@ -286,12 +286,12 @@ func (s *lineItemProrationService) settleCharge(
 		LineItems:      summary.ChargeLineItems,
 	})
 	if err != nil {
-		s.params.Logger.ErrorwCtx(ctx, "failed to create proration charge invoice", "error", err)
+		s.params.Logger.Error(ctx, "failed to create proration charge invoice", "error", err)
 		return err
 	}
 
 	if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
-		s.params.Logger.WarnwCtx(ctx, "failed to attempt payment for proration charge invoice",
+		s.params.Logger.Info(ctx, "failed to attempt payment for proration charge invoice",
 			"error", err, "invoice_id", inv.ID)
 	}
 

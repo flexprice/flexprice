@@ -82,7 +82,7 @@ func (c *Client) GetS3Client(ctx context.Context, jobConfig *types.S3JobConfig, 
 	var credProvider aws.CredentialsProvider
 	if s3Config.AWSSessionToken != "" {
 		// Use temporary credentials with session token
-		c.logger.Infow("using temporary AWS credentials with session token")
+		c.logger.Info(ctx, "using temporary AWS credentials with session token")
 		credProvider = credentials.NewStaticCredentialsProvider(
 			s3Config.AWSAccessKeyID,
 			s3Config.AWSSecretAccessKey,
@@ -90,7 +90,7 @@ func (c *Client) GetS3Client(ctx context.Context, jobConfig *types.S3JobConfig, 
 		)
 	} else {
 		// Use permanent credentials (access key + secret key only)
-		c.logger.Infow("using permanent AWS credentials (access key + secret key)")
+		c.logger.Info(ctx, "using permanent AWS credentials (access key + secret key)")
 		credProvider = credentials.NewStaticCredentialsProvider(
 			s3Config.AWSAccessKeyID,
 			s3Config.AWSSecretAccessKey,
@@ -115,14 +115,14 @@ func (c *Client) GetS3Client(ctx context.Context, jobConfig *types.S3JobConfig, 
 			// Configure custom endpoint if provided (for MinIO or other S3-compatible services)
 			if s3Config.EndpointURL != "" {
 				o.BaseEndpoint = aws.String(s3Config.EndpointURL)
-				c.logger.Infow("configuring custom S3 endpoint", "endpoint_url", s3Config.EndpointURL)
+				c.logger.Info(ctx, "configuring custom S3 endpoint", "endpoint_url", s3Config.EndpointURL)
 			}
 			// Use path-style addressing if VirtualHostStyle is false (required for MinIO)
 			// Path-style: http://endpoint/bucket/key
 			// Virtual-hosted-style: http://bucket.endpoint/key
 			if !s3Config.VirtualHostStyle {
 				o.UsePathStyle = true
-				c.logger.Infow("using path-style S3 addressing")
+				c.logger.Info(ctx, "using path-style S3 addressing")
 			}
 		},
 	}
@@ -130,7 +130,7 @@ func (c *Client) GetS3Client(ctx context.Context, jobConfig *types.S3JobConfig, 
 	// Create S3 client
 	awsS3Client := s3.NewFromConfig(awsCfg, s3Options...)
 
-	c.logger.Infow("S3 client created successfully",
+	c.logger.Info(ctx, "S3 client created successfully",
 		"bucket", s3Config.Bucket,
 		"region", s3Config.Region,
 		"key_prefix", s3Config.KeyPrefix,
@@ -156,17 +156,17 @@ func (c *Client) GetDecryptedS3Config(conn *connection.Connection, jobConfig *ty
 	}
 
 	// Decrypt credentials
-	c.logger.Infow("Decrypting S3 credentials", "connection_id", conn.ID)
+	c.logger.Info(context.Background(), "Decrypting S3 credentials", "connection_id", conn.ID)
 
 	accessKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSAccessKeyID)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt AWS access key", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt AWS access key", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt AWS access key").Mark(ierr.ErrInternal)
 	}
 
 	secretKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSecretAccessKey)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt AWS secret key", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt AWS secret key", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt AWS secret key").Mark(ierr.ErrInternal)
 	}
 
@@ -175,12 +175,12 @@ func (c *Client) GetDecryptedS3Config(conn *connection.Connection, jobConfig *ty
 	if conn.EncryptedSecretData.S3.AWSSessionToken != "" {
 		sessionToken, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.S3.AWSSessionToken)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt AWS session token", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt AWS session token", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt AWS session token").Mark(ierr.ErrInternal)
 		}
 	}
 
-	c.logger.Infow("Decrypted S3 credentials",
+	c.logger.Info(context.Background(), "Decrypted S3 credentials",
 		"connection_id", conn.ID,
 		"has_session_token", sessionToken != "",
 	)
@@ -206,7 +206,7 @@ func (c *Client) GetDecryptedS3Config(conn *connection.Connection, jobConfig *ty
 		VirtualHostStyle:   !jobConfig.UsePathStyle, // VirtualHostStyle is opposite of UsePathStyle
 	}
 
-	c.logger.Infow("successfully created S3 configuration",
+	c.logger.Info(context.Background(), "successfully created S3 configuration",
 		"connection_id", conn.ID,
 		"bucket", s3Config.Bucket,
 		"region", s3Config.Region,
@@ -242,7 +242,7 @@ func (c *s3Client) ValidateConnection(ctx context.Context) error {
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	c.logger.Infow("S3 connection validated successfully",
+	c.logger.Info(ctx, "S3 connection validated successfully",
 		"bucket", c.config.Bucket,
 		"region", c.config.Region,
 	)

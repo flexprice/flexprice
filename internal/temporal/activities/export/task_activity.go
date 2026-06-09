@@ -44,7 +44,7 @@ type CreateTaskOutput struct {
 
 // CreateTask creates a new export task
 func (a *TaskActivity) CreateTask(ctx context.Context, input CreateTaskInput) (*CreateTaskOutput, error) {
-	a.logger.Infow("creating export task",
+	a.logger.Info(ctx, "creating export task",
 		"task_id", input.TaskID,
 		"workflow_id", input.WorkflowID,
 		"scheduled_task_id", input.ScheduledTaskID,
@@ -66,7 +66,7 @@ func (a *TaskActivity) CreateTask(ctx context.Context, input CreateTaskInput) (*
 	now := time.Now()
 	baseModel := types.GetDefaultBaseModel(ctx)
 
-	a.logger.Infow("creating task with base model",
+	a.logger.Info(ctx, "creating task with base model",
 		"task_id", input.TaskID,
 		"created_by", baseModel.CreatedBy,
 		"updated_by", baseModel.UpdatedBy,
@@ -93,13 +93,13 @@ func (a *TaskActivity) CreateTask(ctx context.Context, input CreateTaskInput) (*
 
 	err := a.taskRepo.Create(ctx, newTask)
 	if err != nil {
-		a.logger.Errorw("failed to create task", "error", err)
+		a.logger.Error(ctx, "failed to create task", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create export task").
 			Mark(ierr.ErrDatabase)
 	}
 
-	a.logger.Infow("export task created", "task_id", newTask.ID)
+	a.logger.Info(ctx, "export task created", "task_id", newTask.ID)
 
 	return &CreateTaskOutput{
 		TaskID: newTask.ID,
@@ -127,7 +127,7 @@ type RecordInfo struct {
 
 // UpdateTaskStatus updates the status of a task
 func (a *TaskActivity) UpdateTaskStatus(ctx context.Context, input UpdateTaskStatusInput) error {
-	a.logger.Infow("updating task status",
+	a.logger.Info(ctx, "updating task status",
 		"task_id", input.TaskID,
 		"status", input.Status)
 
@@ -185,13 +185,13 @@ func (a *TaskActivity) UpdateTaskStatus(ctx context.Context, input UpdateTaskSta
 
 	err = a.taskRepo.Update(ctx, existingTask)
 	if err != nil {
-		a.logger.Errorw("failed to update task status", "error", err)
+		a.logger.Error(ctx, "failed to update task status", "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to update task status").
 			Mark(ierr.ErrDatabase)
 	}
 
-	a.logger.Infow("task status updated", "task_id", input.TaskID, "status", input.Status)
+	a.logger.Info(ctx, "task status updated", "task_id", input.TaskID, "status", input.Status)
 	return nil
 }
 
@@ -208,7 +208,7 @@ type CompleteTaskInput struct {
 
 // CompleteTask marks a task as completed with final details
 func (a *TaskActivity) CompleteTask(ctx context.Context, input CompleteTaskInput) error {
-	a.logger.Infow("completing task",
+	a.logger.Info(ctx, "completing task",
 		"task_id", input.TaskID,
 		"record_count", input.RecordCount)
 
@@ -255,12 +255,12 @@ func (a *TaskActivity) CompleteTask(ctx context.Context, input CompleteTaskInput
 
 	err = a.taskRepo.Update(ctx, existingTask)
 	if err != nil {
-		a.logger.Errorw("failed to complete task", "error", err)
+		a.logger.Error(ctx, "failed to complete task", "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to complete task").
 			Mark(ierr.ErrDatabase)
 	}
 
-	a.logger.Infow("task completed successfully", "task_id", input.TaskID)
+	a.logger.Info(ctx, "task completed successfully", "task_id", input.TaskID)
 	return nil
 }

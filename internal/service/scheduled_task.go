@@ -75,7 +75,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
 
-	s.logger.Infow("creating scheduled task",
+	s.logger.Info(ctx, "creating scheduled task",
 		"tenant_id", tenantID,
 		"environment_id", envID,
 		"entity_type", req.EntityType,
@@ -84,7 +84,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	// Fetch the connection to check if it's Flexprice-managed
 	conn, err := s.connectionRepo.Get(ctx, req.ConnectionID)
 	if err != nil {
-		s.logger.Errorw("failed to get connection", "connection_id", req.ConnectionID, "error", err)
+		s.logger.Error(ctx, "failed to get connection", "connection_id", req.ConnectionID, "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Connection not found").
 			Mark(ierr.ErrNotFound)
@@ -93,7 +93,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	// Check if this is a Flexprice-managed S3 connection
 	jobConfig := req.JobConfig
 	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
-		s.logger.Infow("handling flexprice-managed S3 connection for scheduled task",
+		s.logger.Info(ctx, "handling flexprice-managed S3 connection for scheduled task",
 			"connection_id", req.ConnectionID,
 			"tenant_id", tenantID)
 
@@ -105,7 +105,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		}
 
 		if err := req.JobConfig.ValidateForFlexpriceManaged(); err != nil {
-			s.logger.Errorw("invalid job config for flexprice-managed S3", "error", err)
+			s.logger.Error(ctx, "invalid job config for flexprice-managed S3", "error", err)
 			return nil, err
 		}
 
@@ -127,7 +127,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 			jobConfig.Encryption = types.S3EncryptionTypeAES256
 		}
 
-		s.logger.Infow("populated job config for flexprice-managed S3",
+		s.logger.Info(ctx, "populated job config for flexprice-managed S3",
 			"bucket", jobConfig.Bucket,
 			"region", jobConfig.Region,
 			"key_prefix", jobConfig.KeyPrefix,
@@ -138,7 +138,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 
 		// Final validation after population
 		if err := jobConfig.Validate(); err != nil {
-			s.logger.Errorw("invalid populated job config for flexprice-managed S3", "error", err)
+			s.logger.Error(ctx, "invalid populated job config for flexprice-managed S3", "error", err)
 			return nil, err
 		}
 		if err := jobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
@@ -147,7 +147,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	} else {
 		// For non-managed connections: full validation required
 		if err := req.JobConfig.Validate(); err != nil {
-			s.logger.Errorw("invalid job config for custom S3 connection", "error", err)
+			s.logger.Error(ctx, "invalid job config for custom S3 connection", "error", err)
 			return nil, err
 		}
 		if err := req.JobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
@@ -185,13 +185,13 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	// Save to database
 	err = s.repo.Create(ctx, task)
 	if err != nil {
-		s.logger.Errorw("failed to create scheduled task", "error", err)
+		s.logger.Error(ctx, "failed to create scheduled task", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create scheduled task").
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.logger.Infow("scheduled task created successfully",
+	s.logger.Info(ctx, "scheduled task created successfully",
 		"id", task.ID,
 		"entity_type", task.EntityType,
 		"interval", task.Interval)
@@ -200,7 +200,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 	if task.Enabled && s.temporalClient != nil {
 		err = s.startScheduledTask(ctx, task)
 		if err != nil {
-			s.logger.Errorw("failed to start temporal schedule", "error", err)
+			s.logger.Error(ctx, "failed to start temporal schedule", "error", err)
 			// Rollback: delete the created task
 			_ = s.repo.Delete(ctx, task.ID)
 			return nil, ierr.WithError(err).
@@ -216,7 +216,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 func (s *scheduledTaskService) GetScheduledTask(ctx context.Context, id string) (*dto.ScheduledTaskResponse, error) {
 	task, err := s.repo.Get(ctx, id)
 	if err != nil {
-		s.logger.Errorw("failed to get scheduled task", "id", id, "error", err)
+		s.logger.Error(ctx, "failed to get scheduled task", "id", id, "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Scheduled task not found").
 			Mark(ierr.ErrNotFound)
@@ -255,7 +255,7 @@ func (s *scheduledTaskService) ListScheduledTasks(ctx context.Context, filter *t
 
 	tasks, err := s.repo.List(ctx, listFilters)
 	if err != nil {
-		s.logger.Errorw("failed to list scheduled tasks", "error", err)
+		s.logger.Error(ctx, "failed to list scheduled tasks", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve scheduled tasks").
 			Mark(ierr.ErrDatabase)
@@ -286,7 +286,7 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 	// Get existing task
 	task, err := s.repo.Get(ctx, id)
 	if err != nil {
-		s.logger.Errorw("failed to get scheduled task for update", "id", id, "error", err)
+		s.logger.Error(ctx, "failed to get scheduled task for update", "id", id, "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Scheduled task not found").
 			Mark(ierr.ErrNotFound)
@@ -309,7 +309,7 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 
 	// Check if there's actually a change
 	if wasEnabled == newEnabled {
-		s.logger.Infow("no change in enabled status", "id", id, "enabled", newEnabled)
+		s.logger.Info(ctx, "no change in enabled status", "id", id, "enabled", newEnabled)
 		return dto.ToScheduledTaskResponse(task), nil
 	}
 
@@ -321,7 +321,7 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 	// Save updated task
 	err = s.repo.Update(ctx, task)
 	if err != nil {
-		s.logger.Errorw("failed to update scheduled task", "id", id, "error", err)
+		s.logger.Error(ctx, "failed to update scheduled task", "id", id, "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to update scheduled task").
 			Mark(ierr.ErrDatabase)
@@ -331,10 +331,10 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 	if s.temporalClient != nil {
 		if newEnabled {
 			// Resume/Start the schedule
-			s.logger.Infow("resuming temporal schedule", "task_id", id)
+			s.logger.Info(ctx, "resuming temporal schedule", "task_id", id)
 			err = s.resumeScheduledTask(ctx, task)
 			if err != nil {
-				s.logger.Errorw("failed to resume temporal schedule", "task_id", id, "error", err)
+				s.logger.Error(ctx, "failed to resume temporal schedule", "task_id", id, "error", err)
 				// Rollback the database change
 				task.Enabled = wasEnabled
 				_ = s.repo.Update(ctx, task)
@@ -342,13 +342,13 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 					WithHint("Failed to resume schedule in Temporal").
 					Mark(ierr.ErrInternal)
 			}
-			s.logger.Infow("temporal schedule resumed successfully", "task_id", id)
+			s.logger.Info(ctx, "temporal schedule resumed successfully", "task_id", id)
 		} else {
 			// Pause the schedule
-			s.logger.Infow("pausing temporal schedule", "task_id", id)
+			s.logger.Info(ctx, "pausing temporal schedule", "task_id", id)
 			err = s.pauseScheduledTask(ctx, task)
 			if err != nil {
-				s.logger.Errorw("failed to pause temporal schedule", "task_id", id, "error", err)
+				s.logger.Error(ctx, "failed to pause temporal schedule", "task_id", id, "error", err)
 				// Rollback the database change
 				task.Enabled = wasEnabled
 				_ = s.repo.Update(ctx, task)
@@ -356,7 +356,7 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 					WithHint("Failed to pause schedule in Temporal").
 					Mark(ierr.ErrInternal)
 			}
-			s.logger.Infow("temporal schedule paused successfully", "task_id", id)
+			s.logger.Info(ctx, "temporal schedule paused successfully", "task_id", id)
 		}
 	}
 
@@ -364,7 +364,7 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 	if newEnabled {
 		action = "resumed"
 	}
-	s.logger.Infow("scheduled task updated successfully",
+	s.logger.Info(ctx, "scheduled task updated successfully",
 		"id", task.ID,
 		"action", action,
 		"enabled", newEnabled)
@@ -377,7 +377,7 @@ func (s *scheduledTaskService) DeleteScheduledTask(ctx context.Context, id strin
 	// Get existing task
 	task, err := s.repo.Get(ctx, id)
 	if err != nil {
-		s.logger.Errorw("failed to get scheduled task for deletion", "id", id, "error", err)
+		s.logger.Error(ctx, "failed to get scheduled task for deletion", "id", id, "error", err)
 		return ierr.WithError(err).
 			WithHint("Scheduled task not found").
 			Mark(ierr.ErrNotFound)
@@ -385,7 +385,7 @@ func (s *scheduledTaskService) DeleteScheduledTask(ctx context.Context, id strin
 
 	// Check if already archived
 	if task.Status == types.StatusArchived {
-		s.logger.Infow("scheduled task already archived", "id", id)
+		s.logger.Info(ctx, "scheduled task already archived", "id", id)
 		return ierr.NewError("scheduled task is already archived").
 			WithHint("This scheduled task has already been deleted").
 			WithReportableDetails(map[string]interface{}{
@@ -397,15 +397,15 @@ func (s *scheduledTaskService) DeleteScheduledTask(ctx context.Context, id strin
 
 	// Delete the Temporal schedule first
 	if s.temporalClient != nil {
-		s.logger.Infow("deleting temporal schedule", "task_id", id)
+		s.logger.Info(ctx, "deleting temporal schedule", "task_id", id)
 		err = s.deleteTemporalSchedule(ctx, task)
 		if err != nil {
-			s.logger.Errorw("failed to delete temporal schedule", "task_id", id, "error", err)
+			s.logger.Error(ctx, "failed to delete temporal schedule", "task_id", id, "error", err)
 			return ierr.WithError(err).
 				WithHint("Failed to delete Temporal schedule").
 				Mark(ierr.ErrInternal)
 		}
-		s.logger.Infow("temporal schedule deleted successfully", "task_id", id)
+		s.logger.Info(ctx, "temporal schedule deleted successfully", "task_id", id)
 	}
 
 	// Mark the task as deleted
@@ -417,13 +417,13 @@ func (s *scheduledTaskService) DeleteScheduledTask(ctx context.Context, id strin
 	// Save the deleted task
 	err = s.repo.Update(ctx, task)
 	if err != nil {
-		s.logger.Errorw("failed to mark scheduled task as deleted", "id", id, "error", err)
+		s.logger.Error(ctx, "failed to mark scheduled task as deleted", "id", id, "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to delete scheduled task").
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.logger.Infow("scheduled task deleted successfully",
+	s.logger.Info(ctx, "scheduled task deleted successfully",
 		"id", id,
 		"status", task.Status)
 	return nil
@@ -439,11 +439,11 @@ func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, r
 
 	workflowID, startTime, endTime, mode, err := s.triggerForceRun(ctx, id, req.StartTime, req.EndTime)
 	if err != nil {
-		s.logger.Errorw("failed to trigger force run", "id", id, "error", err)
+		s.logger.Error(ctx, "failed to trigger force run", "id", id, "error", err)
 		return nil, err
 	}
 
-	s.logger.Infow("force run triggered",
+	s.logger.Info(ctx, "force run triggered",
 		"id", id,
 		"workflow_id", workflowID,
 		"start_time", startTime,
@@ -464,7 +464,7 @@ func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, r
 // startScheduledTask creates a new Temporal schedule for the task (used during creation)
 // This function should only be called when creating a new scheduled task
 func (s *scheduledTaskService) startScheduledTask(ctx context.Context, task *scheduledtask.ScheduledTask) error {
-	s.logger.Infow("creating new temporal schedule", "task_id", task.ID)
+	s.logger.Info(ctx, "creating new temporal schedule", "task_id", task.ID)
 
 	scheduleID := task.ID
 	cronExpr := s.getCronExpression(types.ScheduledTaskInterval(task.Interval))
@@ -498,13 +498,13 @@ func (s *scheduledTaskService) startScheduledTask(ctx context.Context, task *sch
 
 	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
 	if err != nil {
-		s.logger.Errorw("failed to create temporal schedule", "error", err)
+		s.logger.Error(ctx, "failed to create temporal schedule", "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to create Temporal schedule").
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("temporal schedule created successfully",
+	s.logger.Info(ctx, "temporal schedule created successfully",
 		"task_id", task.ID,
 		"schedule_id", scheduleID,
 		"cron", cronExpr)
@@ -516,20 +516,20 @@ func (s *scheduledTaskService) startScheduledTask(ctx context.Context, task *sch
 // This function safely handles cases where the schedule doesn't exist
 func (s *scheduledTaskService) pauseScheduledTask(ctx context.Context, task *scheduledtask.ScheduledTask) error {
 	if task.TemporalScheduleID == "" {
-		s.logger.Infow("no temporal schedule to pause", "task_id", task.ID)
+		s.logger.Info(ctx, "no temporal schedule to pause", "task_id", task.ID)
 		return nil
 	}
 
 	handle := s.temporalClient.GetScheduleHandle(ctx, task.TemporalScheduleID)
 	err := handle.Pause(ctx, client.SchedulePauseOptions{})
 	if err != nil {
-		s.logger.Errorw("failed to pause schedule", "error", err)
+		s.logger.Error(ctx, "failed to pause schedule", "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to pause Temporal schedule").
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("temporal schedule paused successfully", "task_id", task.ID)
+	s.logger.Info(ctx, "temporal schedule paused successfully", "task_id", task.ID)
 	return nil
 }
 
@@ -540,7 +540,7 @@ func (s *scheduledTaskService) pauseScheduledTask(ctx context.Context, task *sch
 // - Handling schedules that are already running
 func (s *scheduledTaskService) resumeScheduledTask(ctx context.Context, task *scheduledtask.ScheduledTask) error {
 	if task.TemporalScheduleID == "" {
-		s.logger.Infow("no temporal schedule ID, creating new schedule", "task_id", task.ID)
+		s.logger.Info(ctx, "no temporal schedule ID, creating new schedule", "task_id", task.ID)
 		err := s.startScheduledTask(ctx, task)
 		if err != nil {
 			return err
@@ -560,33 +560,33 @@ func (s *scheduledTaskService) resumeScheduledTask(ctx context.Context, task *sc
 	schedule, err := handle.Describe(ctx)
 	if err != nil {
 		// Schedule doesn't exist, create a new one
-		s.logger.Infow("schedule not found, creating new one", "task_id", task.ID, "schedule_id", scheduleID)
+		s.logger.Info(ctx, "schedule not found, creating new one", "task_id", task.ID, "schedule_id", scheduleID)
 		return s.startScheduledTask(ctx, task)
 	}
 
 	// Check if schedule is paused
 	if schedule.Schedule.State.Paused {
-		s.logger.Infow("resuming paused schedule", "task_id", task.ID, "schedule_id", scheduleID)
+		s.logger.Info(ctx, "resuming paused schedule", "task_id", task.ID, "schedule_id", scheduleID)
 		err = handle.Unpause(ctx, client.ScheduleUnpauseOptions{})
 		if err != nil {
-			s.logger.Errorw("failed to unpause schedule", "error", err)
+			s.logger.Error(ctx, "failed to unpause schedule", "error", err)
 			return ierr.WithError(err).
 				WithHint("Failed to resume Temporal schedule").
 				Mark(ierr.ErrInternal)
 		}
-		s.logger.Infow("temporal schedule resumed successfully", "task_id", task.ID)
+		s.logger.Info(ctx, "temporal schedule resumed successfully", "task_id", task.ID)
 		return nil
 	}
 
 	// Schedule exists and is not paused
-	s.logger.Infow("temporal schedule already running", "task_id", task.ID, "schedule_id", scheduleID)
+	s.logger.Info(ctx, "temporal schedule already running", "task_id", task.ID, "schedule_id", scheduleID)
 	return nil
 }
 
 // deleteTemporalSchedule deletes the Temporal schedule for the task
 func (s *scheduledTaskService) deleteTemporalSchedule(ctx context.Context, task *scheduledtask.ScheduledTask) error {
 	if task.TemporalScheduleID == "" {
-		s.logger.Infow("no temporal schedule to delete", "task_id", task.ID)
+		s.logger.Info(ctx, "no temporal schedule to delete", "task_id", task.ID)
 		return nil
 	}
 
@@ -596,17 +596,17 @@ func (s *scheduledTaskService) deleteTemporalSchedule(ctx context.Context, task 
 		// Deleting a schedule is allowed to be idempotent. If it's already gone, treat it as success.
 		var notFound *serviceerror.NotFound
 		if errors.As(err, &notFound) {
-			s.logger.Infow("temporal schedule not found; treating as deleted", "task_id", task.ID, "schedule_id", task.TemporalScheduleID)
+			s.logger.Info(ctx, "temporal schedule not found; treating as deleted", "task_id", task.ID, "schedule_id", task.TemporalScheduleID)
 			return nil
 		}
 
-		s.logger.Errorw("failed to delete temporal schedule", "schedule_id", task.TemporalScheduleID, "error", err)
+		s.logger.Error(ctx, "failed to delete temporal schedule", "schedule_id", task.TemporalScheduleID, "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to delete Temporal schedule").
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("temporal schedule deleted successfully",
+	s.logger.Info(ctx, "temporal schedule deleted successfully",
 		"task_id", task.ID,
 		"schedule_id", task.TemporalScheduleID)
 	return nil
@@ -616,7 +616,7 @@ func (s *scheduledTaskService) deleteTemporalSchedule(ctx context.Context, task 
 // If customStart and customEnd are provided, uses those times. Otherwise, calculates automatically.
 // Returns: workflowID, startTime, endTime, mode, error
 func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID string, customStart, customEnd *time.Time) (string, time.Time, time.Time, string, error) {
-	s.logger.Infow("triggering force run", "task_id", taskID, "custom_start", customStart, "custom_end", customEnd)
+	s.logger.Info(ctx, "triggering force run", "task_id", taskID, "custom_start", customStart, "custom_end", customEnd)
 
 	// Get the task
 	task, err := s.repo.Get(ctx, taskID)
@@ -635,7 +635,7 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		startTime = *customStart
 		endTime = *customEnd
 		mode = "custom"
-		s.logger.Infow("using custom time range",
+		s.logger.Info(ctx, "using custom time range",
 			"start_time", startTime,
 			"end_time", endTime,
 			"duration", endTime.Sub(startTime))
@@ -648,7 +648,7 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		startTime, endTime = s.CalculateIntervalBoundaries(currentTime, interval)
 		mode = "force run"
 
-		s.logger.Infow("using automatic time range based on interval boundaries",
+		s.logger.Info(ctx, "using automatic time range based on interval boundaries",
 			"start_time", startTime,
 			"end_time", endTime,
 			"current_time", currentTime,
@@ -661,7 +661,7 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 	exportTaskID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TASK)
 	workflowID := exportTaskID
 
-	s.logger.Infow("triggering force run export",
+	s.logger.Info(ctx, "triggering force run export",
 		"workflow_id", workflowID,
 		"export_task_id", exportTaskID,
 		"scheduled_task_id", taskID,
@@ -686,13 +686,13 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 
 	workflowRun, err := s.temporalClient.StartWorkflow(ctx, workflowOptions, exportWorkflows.ExecuteExportWorkflow, input)
 	if err != nil {
-		s.logger.Errorw("failed to start export workflow", "error", err)
+		s.logger.Error(ctx, "failed to start export workflow", "error", err)
 		return "", time.Time{}, time.Time{}, "", ierr.WithError(err).
 			WithHint("Failed to start export workflow").
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("force run triggered",
+	s.logger.Info(ctx, "force run triggered",
 		"scheduled_task_id", taskID,
 		"workflow_id", workflowRun.GetID(),
 		"run_id", workflowRun.GetRunID(),
@@ -814,7 +814,7 @@ func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) 
 
 	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
 	if err != nil {
-		s.logger.Errorw("failed to create temporal schedule", "error", err)
+		s.logger.Error(ctx, "failed to create temporal schedule", "error", err)
 		return "", ierr.WithError(err).
 			WithHint("Failed to create Temporal schedule").
 			Mark(ierr.ErrInternal)
@@ -856,7 +856,7 @@ func (s *scheduledTaskService) ScheduleDraftFinalization(ctx context.Context) (s
 
 	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
 	if err != nil {
-		s.logger.Errorw("failed to create draft finalization schedule", "error", err)
+		s.logger.Error(ctx, "failed to create draft finalization schedule", "error", err)
 		return "", ierr.WithError(err).
 			WithHint("Failed to create draft finalization schedule").
 			Mark(ierr.ErrInternal)

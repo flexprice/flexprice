@@ -43,7 +43,7 @@ func NewCostsheetHandler(service service.CostsheetService, log *logger.Logger) *
 func (h *CostsheetHandler) CreateCostsheet(c *gin.Context) {
 	var req dto.CreateCostsheetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -52,7 +52,7 @@ func (h *CostsheetHandler) CreateCostsheet(c *gin.Context) {
 
 	resp, err := h.service.CreateCostsheet(c.Request.Context(), req)
 	if err != nil {
-		h.log.Error("Failed to create costsheet", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to create costsheet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -84,7 +84,7 @@ func (h *CostsheetHandler) GetCostsheet(c *gin.Context) {
 
 	resp, err := h.service.GetCostsheet(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get costsheet", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get costsheet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -118,7 +118,7 @@ func (h *CostsheetHandler) UpdateCostsheet(c *gin.Context) {
 
 	var req dto.UpdateCostsheetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -127,7 +127,7 @@ func (h *CostsheetHandler) UpdateCostsheet(c *gin.Context) {
 
 	resp, err := h.service.UpdateCostsheet(c.Request.Context(), id, req)
 	if err != nil {
-		h.log.Error("Failed to update costsheet", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to update costsheet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -159,7 +159,7 @@ func (h *CostsheetHandler) DeleteCostsheet(c *gin.Context) {
 
 	resp, err := h.service.DeleteCostsheet(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to delete costsheet", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to delete costsheet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -220,7 +220,7 @@ func (h *CostsheetHandler) QueryCostsheets(c *gin.Context) {
 func (h *CostsheetHandler) GetActiveCostsheetForTenant(c *gin.Context) {
 	resp, err := h.service.GetActiveCostsheetForTenant(c.Request.Context())
 	if err != nil {
-		h.log.Error("Failed to get active costsheet", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get active costsheet", "error", err)
 		c.Error(err)
 		return
 	}

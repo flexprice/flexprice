@@ -81,7 +81,7 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 	if err != nil {
 		SetSpanError(span, err)
 
-		r.log.Error("failed to create credit note", "error", err)
+		r.log.Error(ctx, "failed to create credit note", "error", err)
 		if ent.IsConstraintError(err) {
 			var pqErr *pq.Error
 			if errors.As(err, &pqErr) {
@@ -116,7 +116,7 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 
 // CreateWithLineItems creates a credit note with its line items in a single transaction
 func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *domainCreditNote.CreditNote) error {
-	r.log.Debugw("creating credit note with line items",
+	r.log.Debug(ctx, "creating credit note with line items",
 		"id", cn.ID,
 		"line_items_count", len(cn.LineItems))
 
@@ -181,7 +181,7 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 					}).
 					Mark(ierr.ErrAlreadyExists)
 			}
-			r.log.Errorw("failed to create credit note", "error", err, "creditnote_id", cn.ID)
+			r.log.Error(ctx, "failed to create credit note", "error", err, "creditnote_id", cn.ID)
 			return ierr.WithError(err).
 				WithHint("credit note creation failed").
 				WithReportableDetails(map[string]any{
@@ -213,7 +213,7 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 			}
 
 			if err := r.client.Writer(ctx).CreditNoteLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-				r.log.Errorw("failed to create line items", "error", err, "creditnote_id", cn.ID)
+				r.log.Error(ctx, "failed to create line items", "error", err, "creditnote_id", cn.ID)
 				return ierr.WithError(err).WithHint("line item creation failed").Mark(ierr.ErrDatabase)
 			}
 		}
@@ -235,7 +235,7 @@ func (r *creditnoteRepository) AddLineItems(ctx context.Context, creditNoteID st
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("adding line items", "creditnote_id", creditNoteID, "count", len(items))
+	r.log.Debug(ctx, "adding line items", "creditnote_id", creditNoteID, "count", len(items))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify credit note exists
@@ -267,7 +267,7 @@ func (r *creditnoteRepository) AddLineItems(ctx context.Context, creditNoteID st
 		}
 
 		if err := r.client.Writer(ctx).CreditNoteLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-			r.log.Errorw("failed to add line items", "error", err, "creditnote_id", creditNoteID)
+			r.log.Error(ctx, "failed to add line items", "error", err, "creditnote_id", creditNoteID)
 			return ierr.WithError(err).WithHint("line item addition failed").Mark(ierr.ErrDatabase)
 		}
 
@@ -284,7 +284,7 @@ func (r *creditnoteRepository) RemoveLineItems(ctx context.Context, creditNoteID
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("removing line items", "creditnote_id", creditNoteID, "items_count", len(itemIDs))
+	r.log.Debug(ctx, "removing line items", "creditnote_id", creditNoteID, "items_count", len(itemIDs))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify credit note exists
@@ -325,7 +325,7 @@ func (r *creditnoteRepository) Get(ctx context.Context, id string) (*domainCredi
 		return cachedCreditNote, nil
 	}
 
-	r.log.Debugw("getting credit note", "creditnote_id", id)
+	r.log.Debug(ctx, "getting credit note", "creditnote_id", id)
 
 	creditNote, err := r.client.Reader(ctx).CreditNote.Query().
 		Where(creditnote.ID(id),
@@ -423,7 +423,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	r.log.Info("deleting credit note", "creditnote_id", id)
+	r.log.Info(ctx, "deleting credit note", "creditnote_id", id)
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Delete line items first
@@ -641,7 +641,7 @@ func (r *creditnoteRepository) SetCache(ctx context.Context, cn *domainCreditNot
 	cacheKey := cache.GenerateKey(cache.PrefixCreditNote, tenantID, environmentID, cn.ID)
 	r.cache.Set(ctx, cacheKey, cn, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("set credit note in cache", "id", cn.ID, "cache_key", cacheKey)
+	r.log.Debug(ctx, "set credit note in cache", "id", cn.ID, "cache_key", cacheKey)
 }
 
 func (r *creditnoteRepository) GetCache(ctx context.Context, key string) *domainCreditNote.CreditNote {

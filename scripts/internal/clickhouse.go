@@ -200,7 +200,7 @@ func SeedEventsClickhouse() error {
 		log.Fatalf("Error creating logger: %v", err)
 	}
 
-	logger.Info("Starting load test...")
+	logger.Info(context.Background(), "Starting load test...")
 	logger.Infof("Sending %d events in batches of %d with rate limit of %d req/s",
 		NUM_EVENTS, BATCH_SIZE, REQUESTS_PER_SEC)
 
@@ -283,8 +283,8 @@ func SeedEventsClickhouse() error {
 	totalTime := time.Since(start)
 	avgDuration := totalDuration / time.Duration(successCount)
 
-	logger.Info("Load test completed!")
-	logger.Info("Results:")
+	logger.Info(context.Background(), "Load test completed!")
+	logger.Info(context.Background(), "Results:")
 	logger.Infof("Total Time: %v", totalTime)
 	logger.Infof("Successful Requests: %d", successCount)
 	logger.Infof("Failed Requests: %d", errorCount)
@@ -294,7 +294,7 @@ func SeedEventsClickhouse() error {
 	logger.Infof("Requests per Second: %.2f", float64(successCount)/totalTime.Seconds())
 
 	// Print batch information
-	logger.Info("\nBatch Details:")
+	logger.Info(context.Background(), "\nBatch Details:")
 	for _, batch := range batches {
 		logger.Infof("Batch %d: Events=%d, Duration=%v, Last Event ID=%s",
 			batch.BatchNumber,

@@ -38,7 +38,7 @@ func NewCustomerRepository(client postgres.IClient, log *logger.Logger, cache ca
 func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Customer) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating customer",
+	r.log.Debug(ctx, "creating customer",
 		"customer_id", c.ID,
 		"tenant_id", c.TenantID,
 		"external_id", c.ExternalID,
@@ -125,7 +125,7 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 	}
 
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting customer", "customer_id", id)
+	r.log.Debug(ctx, "getting customer", "customer_id", id)
 
 	c, err := client.Customer.Query().
 		Where(
@@ -174,7 +174,7 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting customer by lookup key", "lookup_key", lookupKey)
+	r.log.Debug(ctx, "getting customer by lookup key", "lookup_key", lookupKey)
 
 	c, err := client.Customer.Query().
 		Where(
@@ -316,7 +316,7 @@ func (r *customerRepository) ListAll(ctx context.Context, filter *types.Customer
 func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Customer) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating customer",
+	r.log.Debug(ctx, "updating customer",
 		"customer_id", c.ID,
 		"tenant_id", c.TenantID,
 		"external_id", c.ExternalID,
@@ -381,7 +381,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 
 func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainCustomer.Customer) error {
 
-	r.log.Debugw("deleting customer",
+	r.log.Debug(ctx, "deleting customer",
 		"customer_id", domainCustomer.ID,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
@@ -565,7 +565,7 @@ func (r *customerRepository) SetCache(ctx context.Context, customer *domainCusto
 	r.cache.Set(ctx, custIdKey, customer, cache.ExpiryDefaultInMemory)
 	r.cache.Set(ctx, extIDKey, customer, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "id_key", custIdKey, "ext_key", extIDKey)
+	r.log.Debug(ctx, "cache set", "id_key", custIdKey, "ext_key", extIDKey)
 }
 
 func (r *customerRepository) GetCache(ctx context.Context, key string) *domainCustomer.Customer {
@@ -578,7 +578,7 @@ func (r *customerRepository) GetCache(ctx context.Context, key string) *domainCu
 	cacheKey := cache.GenerateKey(cache.PrefixCustomer, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if customer, ok := value.(*domainCustomer.Customer); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return customer
 		}
 	}
@@ -599,5 +599,5 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 	extIDKey := cache.GenerateKey(cache.PrefixCustomer, tenantID, environmentID, customer.ExternalID)
 	r.cache.Delete(ctx, custIdKey)
 	r.cache.Delete(ctx, extIDKey)
-	r.log.Debugw("cache deleted", "ext_key", extIDKey)
+	r.log.Debug(ctx, "cache deleted", "ext_key", extIDKey)
 }

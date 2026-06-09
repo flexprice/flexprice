@@ -45,7 +45,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 
 	authResponse, err := h.authService.SignUp(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to sign up", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to sign up", "error", err)
 		c.Error(err)
 		return
 	}
@@ -69,7 +69,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	authResponse, err := h.authService.Login(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to login", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to login", "error", err)
 		c.Error(err)
 		return
 	}

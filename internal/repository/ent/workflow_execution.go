@@ -43,7 +43,7 @@ func (r *workflowExecutionRepository) Create(ctx context.Context, exec *domainWo
 	defer FinishSpan(span)
 
 	client := r.client.Writer(ctx)
-	r.log.Debugw("creating workflow execution",
+	r.log.Debug(ctx, "creating workflow execution",
 		"workflow_id", exec.WorkflowID,
 		"run_id", exec.RunID,
 		"workflow_type", exec.WorkflowType,
@@ -222,7 +222,7 @@ func (r *workflowExecutionRepository) Delete(ctx context.Context, id string) err
 	defer FinishSpan(span)
 
 	client := r.client.Writer(ctx)
-	r.log.Debugw("deleting workflow execution", "id", id)
+	r.log.Debug(ctx, "deleting workflow execution", "id", id)
 	err := client.WorkflowExecution.DeleteOneID(id).Exec(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -254,7 +254,7 @@ func (r *workflowExecutionRepository) UpdateStatus(
 	defer FinishSpan(span)
 
 	client := r.client.Writer(ctx)
-	r.log.Debugw("updating workflow execution status",
+	r.log.Debug(context.Background(), "updating workflow execution status",
 		"workflow_id", workflowID,
 		"run_id", runID,
 		"status", status,

@@ -8,7 +8,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 // SubscriptionChangeHandler handles API requests for subscription plan changes
@@ -45,7 +44,7 @@ func NewSubscriptionChangeHandler(
 func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 	subscriptionID := c.Param("id")
 	if subscriptionID == "" {
-		h.log.Error("subscription ID is required")
+		h.log.Info(c.Request.Context(), "subscription ID is required")
 		c.Error(ierr.NewError("subscription ID is required").
 			WithHint("Please provide a valid subscription ID").
 			Mark(ierr.ErrValidation))
@@ -54,7 +53,7 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 
 	var req dto.SubscriptionChangeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("failed to bind JSON", zap.Error(err))
+		h.log.Error(c.Request.Context(), "failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -62,12 +61,12 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 	}
 
 	logger := h.log.With(
-		zap.String("subscription_id", subscriptionID),
-		zap.String("target_plan_id", req.TargetPlanID),
-		zap.String("operation", "preview_subscription_change"),
+		"subscription_id", subscriptionID,
+		"target_plan_id", req.TargetPlanID,
+		"operation", "preview_subscription_change",
 	)
 
-	logger.Info("processing subscription change preview request")
+	logger.Info(c.Request.Context(), "processing subscription change preview request")
 
 	resp, err := h.subscriptionChangeService.PreviewSubscriptionChange(
 		c.Request.Context(),
@@ -75,12 +74,12 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 		req,
 	)
 	if err != nil {
-		logger.Error("failed to preview subscription change", zap.Error(err))
+		logger.Error(c.Request.Context(), "failed to preview subscription change", "error", err)
 		c.Error(err)
 		return
 	}
 
-	logger.Info("subscription change preview completed successfully")
+	logger.Info(c.Request.Context(), "subscription change preview completed successfully")
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -101,7 +100,7 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 func (h *SubscriptionChangeHandler) ExecuteSubscriptionChange(c *gin.Context) {
 	subscriptionID := c.Param("id")
 	if subscriptionID == "" {
-		h.log.Error("subscription ID is required")
+		h.log.Info(c.Request.Context(), "subscription ID is required")
 		c.Error(ierr.NewError("subscription ID is required").
 			WithHint("Please provide a valid subscription ID").
 			Mark(ierr.ErrValidation))
@@ -110,7 +109,7 @@ func (h *SubscriptionChangeHandler) ExecuteSubscriptionChange(c *gin.Context) {
 
 	var req dto.SubscriptionChangeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("failed to bind JSON", zap.Error(err))
+		h.log.Error(c.Request.Context(), "failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -118,12 +117,12 @@ func (h *SubscriptionChangeHandler) ExecuteSubscriptionChange(c *gin.Context) {
 	}
 
 	logger := h.log.With(
-		zap.String("subscription_id", subscriptionID),
-		zap.String("target_plan_id", req.TargetPlanID),
-		zap.String("operation", "execute_subscription_change"),
+		"subscription_id", subscriptionID,
+		"target_plan_id", req.TargetPlanID,
+		"operation", "execute_subscription_change",
 	)
 
-	logger.Info("processing subscription change execution request")
+	logger.Info(c.Request.Context(), "processing subscription change execution request")
 
 	resp, err := h.subscriptionChangeService.ExecuteSubscriptionChange(
 		c.Request.Context(),
@@ -131,15 +130,15 @@ func (h *SubscriptionChangeHandler) ExecuteSubscriptionChange(c *gin.Context) {
 		req,
 	)
 	if err != nil {
-		logger.Error("failed to execute subscription change", zap.Error(err))
+		logger.Error(c.Request.Context(), "failed to execute subscription change", "error", err)
 		c.Error(err)
 		return
 	}
 
-	logger.Info("subscription change executed successfully",
-		zap.String("old_subscription_id", resp.OldSubscription.ID),
-		zap.String("new_subscription_id", resp.NewSubscription.ID),
-		zap.String("change_type", string(resp.ChangeType)),
+	logger.Info(c.Request.Context(), "subscription change executed successfully",
+		"old_subscription_id", resp.OldSubscription.ID,
+		"new_subscription_id", resp.NewSubscription.ID,
+		"change_type", string(resp.ChangeType),
 	)
 
 	c.JSON(http.StatusOK, resp)

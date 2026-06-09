@@ -40,7 +40,7 @@ func NewAddonHandler(service service.AddonService, entitlementService service.En
 func (h *AddonHandler) CreateAddon(c *gin.Context) {
 	var req dto.CreateAddonRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -49,7 +49,7 @@ func (h *AddonHandler) CreateAddon(c *gin.Context) {
 
 	resp, err := h.service.CreateAddon(c.Request.Context(), req)
 	if err != nil {
-		h.log.Error("Failed to create addon", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to create addon", "error", err)
 		c.Error(err)
 		return
 	}
@@ -79,7 +79,7 @@ func (h *AddonHandler) GetAddon(c *gin.Context) {
 
 	resp, err := h.service.GetAddon(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get addon", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get addon", "error", err)
 		c.Error(err)
 		return
 	}
@@ -109,7 +109,7 @@ func (h *AddonHandler) GetAddonByLookupKey(c *gin.Context) {
 
 	resp, err := h.service.GetAddonByLookupKey(c.Request.Context(), lookupKey)
 	if err != nil {
-		h.log.Error("Failed to get addon by lookup key", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get addon by lookup key", "error", err)
 		c.Error(err)
 		return
 	}
@@ -120,7 +120,7 @@ func (h *AddonHandler) GetAddonByLookupKey(c *gin.Context) {
 func (h *AddonHandler) ListAddons(c *gin.Context) {
 	var filter types.AddonFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.log.Error("Failed to bind query", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -129,7 +129,7 @@ func (h *AddonHandler) ListAddons(c *gin.Context) {
 
 	resp, err := h.service.GetAddons(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list addons", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list addons", "error", err)
 		c.Error(err)
 		return
 	}
@@ -161,7 +161,7 @@ func (h *AddonHandler) UpdateAddon(c *gin.Context) {
 
 	var req dto.UpdateAddonRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -170,7 +170,7 @@ func (h *AddonHandler) UpdateAddon(c *gin.Context) {
 
 	resp, err := h.service.UpdateAddon(c.Request.Context(), id, req)
 	if err != nil {
-		h.log.Error("Failed to update addon", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to update addon", "error", err)
 		c.Error(err)
 		return
 	}
@@ -199,7 +199,7 @@ func (h *AddonHandler) DeleteAddon(c *gin.Context) {
 	}
 
 	if err := h.service.DeleteAddon(c.Request.Context(), id); err != nil {
-		h.log.Error("Failed to delete addon", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to delete addon", "error", err)
 		c.Error(err)
 		return
 	}
@@ -222,7 +222,7 @@ func (h *AddonHandler) DeleteAddon(c *gin.Context) {
 func (h *AddonHandler) QueryAddons(c *gin.Context) {
 	var filter types.AddonFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -230,7 +230,7 @@ func (h *AddonHandler) QueryAddons(c *gin.Context) {
 	}
 
 	if err := filter.Validate(); err != nil {
-		h.log.Error("Invalid filter parameters", "error", err)
+		h.log.Error(c.Request.Context(), "Invalid filter parameters", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Please provide valid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -239,7 +239,7 @@ func (h *AddonHandler) QueryAddons(c *gin.Context) {
 
 	resp, err := h.service.GetAddons(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list addons", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list addons", "error", err)
 		c.Error(err)
 		return
 	}
@@ -270,7 +270,7 @@ func (h *AddonHandler) GetAddonEntitlements(c *gin.Context) {
 
 	resp, err := h.entitlementService.GetAddonEntitlements(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get addon entitlements", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get addon entitlements", "error", err)
 		c.Error(err)
 		return
 	}

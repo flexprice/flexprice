@@ -2,6 +2,7 @@ package typst
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -132,7 +133,7 @@ func (c *compiler) Compile(opts CompileOpts) (string, error) {
 	// Add input and output files
 	args = append(args, opts.InputFile, outputFile)
 
-	c.logger.Debugf("Executing command to compile typst document: %s %v", c.binaryPath, args)
+	c.logger.Debug(context.Background(), "Executing command to compile typst document", "binary", c.binaryPath, "args", args)
 
 	cmd := exec.Command(c.binaryPath, args...)
 
@@ -140,7 +141,7 @@ func (c *compiler) Compile(opts CompileOpts) (string, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		c.logger.Errorf("Typst compilation failed: %s", stderr.String())
+		c.logger.Error(context.Background(), "Typst compilation failed", "stderr", stderr.String(), "error", err)
 		return "", ierr.WithError(err).
 			WithMessage("typst compilation failed").
 			WithHint("typst error").

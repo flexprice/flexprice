@@ -72,7 +72,7 @@ func (fp *FileProcessor) DownloadFile(ctx context.Context, t *task.Task) ([]byte
 	// Get the actual download URL from the provider
 	downloadURL, err := provider.GetDownloadURL(ctx, t.FileURL)
 	if err != nil {
-		fp.Logger.Error("failed to get download URL", "error", err, "url", t.FileURL, "provider", provider.GetProviderName())
+		fp.Logger.Error(ctx, "failed to get download URL", "error", err, "url", t.FileURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to get download URL: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.WithError(err).
@@ -83,7 +83,7 @@ func (fp *FileProcessor) DownloadFile(ctx context.Context, t *task.Task) ([]byte
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	fp.Logger.DebugwCtx(ctx, "using file provider", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
+	fp.Logger.Debug(ctx, "using file provider", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
 
 	// Download file
 	req := &httpclient.Request{
@@ -93,7 +93,7 @@ func (fp *FileProcessor) DownloadFile(ctx context.Context, t *task.Task) ([]byte
 
 	resp, err := fp.Client.Send(ctx, req)
 	if err != nil {
-		fp.Logger.Error("failed to download file", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Error(ctx, "failed to download file", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.WithError(err).
@@ -105,7 +105,7 @@ func (fp *FileProcessor) DownloadFile(ctx context.Context, t *task.Task) ([]byte
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		fp.Logger.Error("failed to download file", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Info(ctx, "failed to download file", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: HTTP %d", resp.StatusCode)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.NewErrorf("failed to download file: HTTP %d", resp.StatusCode).
@@ -122,7 +122,7 @@ func (fp *FileProcessor) DownloadFile(ctx context.Context, t *task.Task) ([]byte
 	if len(resp.Body) < previewLen {
 		previewLen = len(resp.Body)
 	}
-	fp.Logger.DebugwCtx(ctx, "received file content preview",
+	fp.Logger.Debug(ctx, "received file content preview",
 		"preview", string(resp.Body[:previewLen]),
 		"content_type", resp.Headers["Content-Type"],
 		"content_length", len(resp.Body),
@@ -141,7 +141,7 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 	// Get the actual download URL from the provider
 	downloadURL, err := provider.GetDownloadURL(ctx, t.FileURL)
 	if err != nil {
-		fp.Logger.Error("failed to get download URL for streaming", "error", err, "url", t.FileURL, "provider", provider.GetProviderName())
+		fp.Logger.Error(ctx, "failed to get download URL for streaming", "error", err, "url", t.FileURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to get download URL: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.WithError(err).
@@ -152,12 +152,12 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	fp.Logger.DebugwCtx(ctx, "using file provider for streaming", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
+	fp.Logger.Debug(ctx, "using file provider for streaming", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
 
 	// Create HTTP request directly for streaming
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
 	if err != nil {
-		fp.Logger.Error("failed to create HTTP request for streaming", "error", err, "url", downloadURL)
+		fp.Logger.Error(ctx, "failed to create HTTP request for streaming", "error", err, "url", downloadURL)
 		errorSummary := fmt.Sprintf("Failed to create HTTP request: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.WithError(err).
@@ -175,7 +175,7 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 	}
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
-		fp.Logger.Error("failed to download file stream", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Error(ctx, "failed to download file stream", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.WithError(err).
@@ -188,7 +188,7 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close() // Close the response body on error
-		fp.Logger.Error("failed to download file stream", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Info(ctx, "failed to download file stream", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: HTTP %d", resp.StatusCode)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.NewErrorf("failed to download file: HTTP %d", resp.StatusCode).
@@ -200,7 +200,7 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	fp.Logger.DebugwCtx(ctx, "successfully opened file stream",
+	fp.Logger.Debug(ctx, "successfully opened file stream",
 		"content_type", resp.Header.Get("Content-Type"),
 		"content_length", resp.Header.Get("Content-Length"),
 		"provider", provider.GetProviderName())
@@ -217,7 +217,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 	// Get the actual download URL from the provider
 	downloadURL, err := provider.GetDownloadURL(ctx, t.FileURL)
 	if err != nil {
-		fp.Logger.Error("failed to get download URL for size check", "error", err, "url", t.FileURL, "provider", provider.GetProviderName())
+		fp.Logger.Error(ctx, "failed to get download URL for size check", "error", err, "url", t.FileURL, "provider", provider.GetProviderName())
 		return 0, ierr.WithError(err).
 			WithHint("Failed to get download URL for size check").
 			WithReportableDetails(map[string]interface{}{
@@ -229,7 +229,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 	// Create HEAD request to get file size without downloading
 	httpReq, err := http.NewRequestWithContext(ctx, "HEAD", downloadURL, nil)
 	if err != nil {
-		fp.Logger.Error("failed to create HEAD request", "error", err, "url", downloadURL)
+		fp.Logger.Error(ctx, "failed to create HEAD request", "error", err, "url", downloadURL)
 		return 0, ierr.WithError(err).
 			WithHint("Failed to create HEAD request").
 			Mark(ierr.ErrHTTPClient)
@@ -241,7 +241,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 	}
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
-		fp.Logger.Error("failed to get file size", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Error(ctx, "failed to get file size", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
 		return 0, ierr.WithError(err).
 			WithHint("Failed to get file size").
 			WithReportableDetails(map[string]interface{}{
@@ -252,7 +252,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fp.Logger.Error("failed to get file size", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Info(ctx, "failed to get file size", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
 		return 0, ierr.NewErrorf("failed to get file size: HTTP %d", resp.StatusCode).
 			WithHint("Failed to get file size").
 			WithReportableDetails(map[string]interface{}{
@@ -265,7 +265,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 	// Parse Content-Length header
 	contentLength := resp.Header.Get("Content-Length")
 	if contentLength == "" {
-		fp.Logger.Warn("Content-Length header not available", "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Info(ctx, "Content-Length header not available", "url", downloadURL, "provider", provider.GetProviderName())
 		return 0, ierr.NewError("Content-Length header not available").
 			WithHint("File size cannot be determined").
 			WithReportableDetails(map[string]interface{}{
@@ -276,7 +276,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 
 	fileSize, err := strconv.ParseInt(contentLength, 10, 64)
 	if err != nil {
-		fp.Logger.Error("failed to parse Content-Length", "error", err, "content_length", contentLength, "url", downloadURL)
+		fp.Logger.Error(ctx, "failed to parse Content-Length", "error", err, "content_length", contentLength, "url", downloadURL)
 		return 0, ierr.WithError(err).
 			WithHint("Failed to parse file size").
 			WithReportableDetails(map[string]interface{}{
@@ -286,7 +286,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 			Mark(ierr.ErrValidation)
 	}
 
-	fp.Logger.DebugwCtx(ctx, "retrieved file size", "size", fileSize, "url", downloadURL, "provider", provider.GetProviderName())
+	fp.Logger.Debug(ctx, "retrieved file size", "size", fileSize, "url", downloadURL, "provider", provider.GetProviderName())
 	return fileSize, nil
 }
 

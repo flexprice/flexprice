@@ -84,7 +84,7 @@ func (s *temporalService) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start temporal client: %w", err)
 	}
 
-	s.logger.Info("Temporal service started successfully")
+	s.logger.Info(ctx, "Temporal service started successfully")
 	return nil
 }
 
@@ -92,7 +92,7 @@ func (s *temporalService) Start(ctx context.Context) error {
 func (s *temporalService) Stop(ctx context.Context) error {
 	// Stop all workers first
 	if err := s.workerManager.StopAllWorkers(); err != nil {
-		s.logger.Error("Failed to stop all workers", "error", err)
+		s.logger.Error(ctx, "Failed to stop all workers", "error", err)
 	}
 
 	// Stop client
@@ -100,7 +100,7 @@ func (s *temporalService) Stop(ctx context.Context) error {
 		return fmt.Errorf("failed to stop temporal client: %w", err)
 	}
 
-	s.logger.Info("Temporal service stopped successfully")
+	s.logger.Info(ctx, "Temporal service stopped successfully")
 	return nil
 }
 

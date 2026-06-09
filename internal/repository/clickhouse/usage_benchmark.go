@@ -65,7 +65,7 @@ func (r *UsageBenchmarkRepository) Insert(ctx context.Context, record *events.Us
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debugw("inserted usage_benchmark row",
+	r.logger.Debug(ctx, "inserted usage_benchmark row",
 		"subscription_id", record.SubscriptionID,
 		"tenant_id", record.TenantID,
 	)

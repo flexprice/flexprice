@@ -108,13 +108,13 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 	if config.Logging.DBLevel == types.LogLevelDebug {
 		writerOpts = append(writerOpts,
 			ent.Debug(),
-			ent.Log(logger.GetEntLogger()),
+			ent.Log(logger.GetEntLogger(context.Background())),
 		)
 	}
 
 	writerClient := ent.NewClient(writerOpts...)
 
-	logger.Debugw("connected to postgres writer",
+	logger.Debug(context.Background(), "connected to postgres writer",
 		"host", config.Postgres.Host,
 		"port", config.Postgres.Port,
 		"auto_migrate", config.Postgres.AutoMigrate,
@@ -149,25 +149,25 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 		if config.Logging.DBLevel == types.LogLevelDebug {
 			readerOpts = append(readerOpts,
 				ent.Debug(),
-				ent.Log(logger.GetEntLogger()),
+				ent.Log(logger.GetEntLogger(context.Background())),
 			)
 		}
 
 		readerClient = ent.NewClient(readerOpts...)
 
-		logger.Debugw("connected to postgres reader",
+		logger.Debug(context.Background(), "connected to postgres reader",
 			"host", config.Postgres.ReaderHost,
 			"port", config.Postgres.ReaderPort,
 		)
 	} else {
 		// Use writer client as reader if no separate reader is configured
 		readerClient = writerClient
-		logger.Debugw("no separate reader configured, using writer for reads")
+		logger.Debug(context.Background(), "no separate reader configured, using writer for reads")
 	}
 
 	// Run the auto migration tool if enabled (only on writer)
 	if config.Postgres.AutoMigrate {
-		logger.Debugw("running auto migration")
+		logger.Debug(context.Background(), "running auto migration")
 		if err := writerClient.Schema.Create(context.Background()); err != nil {
 			return nil, fmt.Errorf("failed creating schema resources: %w", err)
 		}
@@ -214,7 +214,8 @@ func (c *Client) WithTx(ctx context.Context, fn func(ctx context.Context) error)
 	// Ensure transaction is rolled back on panic
 	defer func() {
 		if v := recover(); v != nil {
-			c.logger.Errorw("rolling back transaction due to panic",
+			c.logger.Error(ctx, "rolling back transaction due to panic",
+				"error", fmt.Errorf("%v", v),
 				"panic", v,
 			)
 			_ = tx.Rollback()
@@ -233,20 +234,20 @@ func (c *Client) WithTx(ctx context.Context, fn func(ctx context.Context) error)
 		if rerr := tx.Rollback(); rerr != nil {
 			err = fmt.Errorf("rolling back transaction: %v (original error: %w)", rerr, err)
 		}
-		c.logger.Errorw("rolling back transaction due to error",
+		c.logger.Error(ctx, "rolling back transaction due to error",
 			"error", err,
 		)
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.logger.Errorw("committing transaction",
+		c.logger.Error(ctx, "committing transaction",
 			"error", err,
 		)
 		return fmt.Errorf("committing transaction: %w", err)
 	}
 
-	c.logger.Debugw("committed transaction")
+	c.logger.Debug(ctx, "committed transaction")
 	return nil
 }
 

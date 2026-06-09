@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
-	"go.uber.org/zap"
 )
 
 // SubscriptionScheduleService handles subscription schedule operations
@@ -74,8 +73,8 @@ func (s *subscriptionScheduleService) SchedulePlanChange(
 	config *subscription.PlanChangeConfiguration,
 ) (*subscription.SubscriptionSchedule, error) {
 	logger := s.Logger.With(
-		zap.String("subscription_id", subscriptionID),
-		zap.String("target_plan_id", config.TargetPlanID),
+		"subscription_id", subscriptionID,
+		"target_plan_id", config.TargetPlanID,
 	)
 
 	// Get subscription to calculate period end
@@ -128,9 +127,9 @@ func (s *subscriptionScheduleService) SchedulePlanChange(
 		return nil, fmt.Errorf("failed to create schedule: %w", err)
 	}
 
-	logger.Info("plan change scheduled in database",
-		zap.String("schedule_id", schedule.ID),
-		zap.Time("scheduled_at", schedule.ScheduledAt),
+	logger.Info(ctx, "plan change scheduled in database",
+		"schedule_id", schedule.ID,
+		"scheduled_at", schedule.ScheduledAt,
 	)
 
 	return schedule, nil
@@ -151,9 +150,9 @@ func (s *subscriptionScheduleService) Cancel(ctx context.Context, scheduleID str
 
 		// Restore subscription state based on schedule type
 		if err := s.restoreSubscriptionState(txCtx, schedule); err != nil {
-			s.Logger.Error("failed to restore subscription state",
-				zap.String("schedule_id", scheduleID),
-				zap.Error(err),
+			s.Logger.Error(ctx, "failed to restore subscription state",
+				"schedule_id", scheduleID,
+				"error", err,
 			)
 			return fmt.Errorf("failed to restore subscription state: %w", err)
 		}
@@ -168,10 +167,10 @@ func (s *subscriptionScheduleService) Cancel(ctx context.Context, scheduleID str
 			return fmt.Errorf("failed to cancel schedule: %w", err)
 		}
 
-		s.Logger.Info("schedule cancelled in database",
-			zap.String("schedule_id", scheduleID),
-			zap.String("subscription_id", schedule.SubscriptionID),
-			zap.String("schedule_type", string(schedule.ScheduleType)),
+		s.Logger.Info(ctx, "schedule cancelled in database",
+			"schedule_id", scheduleID,
+			"subscription_id", schedule.SubscriptionID,
+			"schedule_type", string(schedule.ScheduleType),
 		)
 
 		return nil
@@ -208,9 +207,9 @@ func (s *subscriptionScheduleService) CancelPendingForSubscription(ctx context.C
 	for _, schedule := range schedules {
 		if schedule.CanBeCancelled() {
 			if err := s.Cancel(ctx, schedule.ID); err != nil {
-				s.Logger.Warn("failed to cancel schedule",
-					zap.String("schedule_id", schedule.ID),
-					zap.Error(err),
+				s.Logger.Info(ctx, "failed to cancel schedule",
+					"schedule_id", schedule.ID,
+					"error", err,
 				)
 			}
 		}
@@ -321,11 +320,11 @@ func (s *subscriptionScheduleService) executePlanChange(
 		return nil, fmt.Errorf("subscription is already on target plan %s", config.TargetPlanID)
 	}
 
-	s.Logger.Info("executing plan change",
-		zap.String("schedule_id", schedule.ID),
-		zap.String("subscription_id", schedule.SubscriptionID),
-		zap.String("from_plan", sub.PlanID),
-		zap.String("to_plan", config.TargetPlanID),
+	s.Logger.Info(ctx, "executing plan change",
+		"schedule_id", schedule.ID,
+		"subscription_id", schedule.SubscriptionID,
+		"from_plan", sub.PlanID,
+		"to_plan", config.TargetPlanID,
 	)
 
 	// Build change request from configuration
@@ -342,10 +341,10 @@ func (s *subscriptionScheduleService) executePlanChange(
 	// Execute the change using the injected change service
 	changeResponse, err := s.changeService.ExecuteSubscriptionChangeInternal(ctx, schedule.SubscriptionID, changeRequest)
 	if err != nil {
-		s.Logger.Error("failed to execute subscription change",
-			zap.String("schedule_id", schedule.ID),
-			zap.String("subscription_id", schedule.SubscriptionID),
-			zap.Error(err),
+		s.Logger.Error(ctx, "failed to execute subscription change",
+			"schedule_id", schedule.ID,
+			"subscription_id", schedule.SubscriptionID,
+			"error", err,
 		)
 		return nil, fmt.Errorf("failed to execute subscription change: %w", err)
 	}
@@ -358,9 +357,9 @@ func (s *subscriptionScheduleService) executePlanChange(
 		EffectiveDate:     time.Now(),
 	}
 
-	s.Logger.Info("plan change executed successfully",
-		zap.String("schedule_id", schedule.ID),
-		zap.String("subscription_id", schedule.SubscriptionID),
+	s.Logger.Info(ctx, "plan change executed successfully",
+		"schedule_id", schedule.ID,
+		"subscription_id", schedule.SubscriptionID,
 	)
 
 	return result, nil
@@ -399,7 +398,7 @@ func (s *subscriptionScheduleService) MarkAsExecuted(ctx context.Context, schedu
 	if schedule.ScheduleType == types.SubscriptionScheduleChangeTypePlanChange {
 		if planResult, ok := result.(*subscription.PlanChangeResult); ok {
 			if err := schedule.SetPlanChangeResult(planResult); err != nil {
-				s.Logger.Warn("failed to store execution result", zap.Error(err))
+				s.Logger.Info(ctx, "failed to store execution result", "error", err)
 			}
 		}
 	}
@@ -441,8 +440,8 @@ func (s *subscriptionScheduleService) restoreSubscriptionState(
 	switch schedule.ScheduleType {
 	case types.SubscriptionScheduleChangeTypePlanChange:
 		// For plan change: just cancel schedule, subscription remains unchanged
-		s.Logger.Info("plan change schedule cancelled, no state restoration needed",
-			zap.String("schedule_id", schedule.ID),
+		s.Logger.Info(ctx, "plan change schedule cancelled, no state restoration needed",
+			"schedule_id", schedule.ID,
 		)
 		return nil
 
@@ -477,10 +476,10 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 		return fmt.Errorf("failed to get subscription: %w", err)
 	}
 
-	s.Logger.Info("restoring subscription state after cancellation schedule cancellation",
-		zap.String("schedule_id", schedule.ID),
-		zap.String("subscription_id", sub.ID),
-		zap.Bool("current_cancel_at_period_end", sub.CancelAtPeriodEnd),
+	s.Logger.Info(ctx, "restoring subscription state after cancellation schedule cancellation",
+		"schedule_id", schedule.ID,
+		"subscription_id", sub.ID,
+		"current_cancel_at_period_end", sub.CancelAtPeriodEnd,
 	)
 
 	// Restore the original state
@@ -498,10 +497,10 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 		return fmt.Errorf("failed to restore subscription state: %w", err)
 	}
 
-	s.Logger.Info("subscription state restored successfully",
-		zap.String("schedule_id", schedule.ID),
-		zap.String("subscription_id", sub.ID),
-		zap.Bool("restored_cancel_at_period_end", sub.CancelAtPeriodEnd),
+	s.Logger.Info(ctx, "subscription state restored successfully",
+		"schedule_id", schedule.ID,
+		"subscription_id", sub.ID,
+		"restored_cancel_at_period_end", sub.CancelAtPeriodEnd,
 	)
 
 	return nil

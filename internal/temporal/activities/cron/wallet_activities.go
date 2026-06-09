@@ -40,11 +40,11 @@ func NewWalletCreditExpiryActivities(
 func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context) (*cronModels.WalletCreditExpiryWorkflowResult, error) {
 	log := activity.GetLogger(ctx)
 	log.Info("Starting wallet credit expiry activity")
-	a.logger.Infow("starting credit expiry cron job", "time", time.Now().UTC().Format(time.RFC3339))
+	a.logger.Info(ctx, "starting credit expiry cron job", "time", time.Now().UTC().Format(time.RFC3339))
 
 	tenants, err := a.tenantService.GetAllTenants(ctx)
 	if err != nil {
-		a.logger.Errorw("failed to get all tenants", "error", err)
+		a.logger.Error(ctx, "failed to get all tenants", "error", err)
 		return nil, err
 	}
 
@@ -63,7 +63,7 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		envFilter.Limit = 1000
 		environments, err := a.environmentService.GetEnvironments(tenantCtx, envFilter)
 		if err != nil {
-			a.logger.Errorw("failed to get all environments", "error", err)
+			a.logger.Error(ctx, "failed to get all environments", "error", err)
 			return nil, err
 		}
 
@@ -72,11 +72,11 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 
 			transactions, err := a.walletService.ListWalletTransactionsByFilter(envCtx, filter)
 			if err != nil {
-				a.logger.Errorw("failed to list expired credits", "error", err)
+				a.logger.Error(ctx, "failed to list expired credits", "error", err)
 				return nil, err
 			}
 
-			a.logger.Infow("found expired credits", "count", len(transactions.Items))
+			a.logger.Info(ctx, "found expired credits", "count", len(transactions.Items))
 
 			for i, tx := range transactions.Items {
 				if i%100 == 0 {
@@ -87,13 +87,13 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 				txCtx := context.WithValue(envCtx, types.CtxUserID, tx.CreatedBy)
 				expireResult, err := a.walletService.ExpireCredits(txCtx, tx.ID)
 				if err != nil {
-					a.logger.Errorw("failed to expire credits", "transaction_id", tx.ID, "error", err)
+					a.logger.Error(ctx, "failed to expire credits", "transaction_id", tx.ID, "error", err)
 					result.Failed++
 					continue
 				}
 				if expireResult.Expired {
 					result.Succeeded++
-					a.logger.Infow("expired credits successfully",
+					a.logger.Info(ctx, "expired credits successfully",
 						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable)
 					continue
 				}
@@ -107,7 +107,7 @@ func (a *WalletCreditExpiryActivities) ExpireCreditsActivity(ctx context.Context
 		}
 	}
 
-	a.logger.Infow("completed credit expiry cron job")
+	a.logger.Info(ctx, "completed credit expiry cron job")
 	log.Info("Completed wallet credit expiry activity",
 		"total", result.Total,
 		"succeeded", result.Succeeded,

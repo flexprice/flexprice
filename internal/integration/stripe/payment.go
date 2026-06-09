@@ -51,7 +51,7 @@ func NewPaymentService(
 
 // CreatePaymentLink creates a Stripe checkout session for payment
 func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateStripePaymentLinkRequest, customerService interfaces.CustomerService, invoiceService interfaces.InvoiceService) (*dto.StripePaymentLinkResponse, error) {
-	s.logger.Infow("creating stripe payment link",
+	s.logger.Info(ctx, "creating stripe payment link",
 		"invoice_id", req.InvoiceID,
 		"customer_id", req.CustomerID,
 		"amount", req.Amount.String(),
@@ -231,11 +231,11 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 	// Try to get Stripe invoice ID for attachment tracking
 	if stripeInvoiceID, err := s.invoiceSyncSvc.GetStripeInvoiceID(ctx, req.InvoiceID); err == nil && stripeInvoiceID != "" {
 		metadata["stripe_invoice_id"] = stripeInvoiceID
-		s.logger.Infow("payment link will be tracked for Stripe invoice attachment",
+		s.logger.Info(ctx, "payment link will be tracked for Stripe invoice attachment",
 			"flexprice_invoice_id", req.InvoiceID,
 			"stripe_invoice_id", stripeInvoiceID)
 	} else {
-		s.logger.Debugw("no Stripe invoice found for payment link",
+		s.logger.Debug(ctx, "no Stripe invoice found for payment link",
 			"flexprice_invoice_id", req.InvoiceID,
 			"error", err)
 	}
@@ -276,12 +276,12 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 			SetupFutureUsage: stripe.String("off_session"),
 			Metadata:         metadata,
 		}
-		s.logger.Infow("payment link configured to save card and make default",
+		s.logger.Info(ctx, "payment link configured to save card and make default",
 			"invoice_id", req.InvoiceID,
 			"customer_id", req.CustomerID,
 		)
 	} else {
-		s.logger.Infow("payment link configured for one-time payment only",
+		s.logger.Info(ctx, "payment link configured for one-time payment only",
 			"invoice_id", req.InvoiceID,
 			"customer_id", req.CustomerID,
 		)
@@ -290,7 +290,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 	// Create the checkout session
 	session, err := stripeClient.V1CheckoutSessions.Create(ctx, params)
 	if err != nil {
-		s.logger.Errorw("failed to create Stripe checkout session",
+		s.logger.Error(ctx, "failed to create Stripe checkout session",
 			"error", err,
 			"invoice_id", req.InvoiceID)
 		return nil, ierr.NewError("failed to create payment link").
@@ -318,7 +318,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 		PaymentID: "", // Payment ID will be set by the calling code
 	}
 
-	s.logger.Infow("successfully created stripe payment link",
+	s.logger.Info(ctx, "successfully created stripe payment link",
 		"payment_id", response.PaymentID,
 		"session_id", session.ID,
 		"payment_url", session.URL,
@@ -406,12 +406,12 @@ func (s *PaymentService) ChargeSavedPaymentMethod(ctx context.Context, req *dto.
 	// Try to get Stripe invoice ID for later attachment
 	stripeInvoiceID, err := s.invoiceSyncSvc.GetStripeInvoiceID(ctx, req.InvoiceID)
 	if err != nil {
-		s.logger.Debugw("no Stripe invoice found, creating standalone payment",
+		s.logger.Debug(ctx, "no Stripe invoice found, creating standalone payment",
 			"flexprice_invoice_id", req.InvoiceID,
 			"error", err)
 		stripeInvoiceID = "" // Clear any partial value
 	} else {
-		s.logger.Infow("will attach payment to Stripe invoice after successful payment",
+		s.logger.Info(ctx, "will attach payment to Stripe invoice after successful payment",
 			"flexprice_invoice_id", req.InvoiceID,
 			"stripe_invoice_id", stripeInvoiceID,
 			"payment_method_id", req.PaymentMethodID)
@@ -448,7 +448,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(ctx context.Context, req *dto.
 			}
 		}
 
-		s.logger.Errorw("failed to create PaymentIntent with saved payment method",
+		s.logger.Error(ctx, "failed to create PaymentIntent with saved payment method",
 			"error", err,
 			"customer_id", req.CustomerID,
 			"payment_method_id", req.PaymentMethodID,
@@ -467,7 +467,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(ctx context.Context, req *dto.
 	// If payment succeeded and we have a Stripe invoice, attach the payment to the invoice
 	if paymentIntent.Status == stripe.PaymentIntentStatusSucceeded && stripeInvoiceID != "" {
 		if err := s.AttachPaymentToStripeInvoice(ctx, stripeClient, paymentIntent.ID, stripeInvoiceID); err != nil {
-			s.logger.Errorw("failed to attach payment to Stripe invoice",
+			s.logger.Error(ctx, "failed to attach payment to Stripe invoice",
 				"error", err,
 				"payment_intent_id", paymentIntent.ID,
 				"stripe_invoice_id", stripeInvoiceID)
@@ -486,7 +486,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(ctx context.Context, req *dto.
 		CreatedAt:     paymentIntent.Created,
 	}
 
-	s.logger.Infow("successfully charged saved payment method",
+	s.logger.Info(ctx, "successfully charged saved payment method",
 		"payment_intent_id", paymentIntent.ID,
 		"customer_id", req.CustomerID,
 		"payment_method_id", req.PaymentMethodID,
@@ -517,7 +517,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 	}
 	session, err := stripeClient.V1CheckoutSessions.Retrieve(ctx, sessionID, params)
 	if err != nil {
-		s.logger.Errorw("failed to get Stripe checkout session",
+		s.logger.Error(ctx, "failed to get Stripe checkout session",
 			"error", err,
 			"session_id", sessionID)
 		return nil, ierr.NewError("failed to get payment status").
@@ -530,7 +530,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 	}
 
 	// Log session details for debugging
-	s.logger.Debugw("retrieved Stripe checkout session",
+	s.logger.Debug(ctx, "retrieved Stripe checkout session",
 		"session_id", session.ID,
 		"status", session.Status,
 		"has_payment_intent", session.PaymentIntent != nil,
@@ -566,7 +566,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 		if paymentIntentID != "" {
 			paymentIntent, err := stripeClient.V1PaymentIntents.Retrieve(ctx, paymentIntentID, nil)
 			if err != nil {
-				s.logger.Warnw("failed to get payment intent details",
+				s.logger.Info(context.Background(), "failed to get payment intent details",
 					"error", err,
 					"payment_intent_id", paymentIntentID)
 				// Don't fail the entire request if we can't get payment intent details
@@ -610,7 +610,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 	}
 
 	// Log extracted values for debugging
-	s.logger.Debugw("extracted payment status values",
+	s.logger.Debug(ctx, "extracted payment status values",
 		"session_id", session.ID,
 		"payment_intent_id", paymentIntentID,
 		"status", paymentStatus,
@@ -660,7 +660,7 @@ func (s *PaymentService) GetPaymentStatusByPaymentIntent(ctx context.Context, pa
 	}
 	paymentIntent, err := stripeClient.V1PaymentIntents.Retrieve(ctx, paymentIntentID, params)
 	if err != nil {
-		s.logger.Errorw("failed to get Stripe payment intent",
+		s.logger.Error(ctx, "failed to get Stripe payment intent",
 			"error", err,
 			"payment_intent_id", paymentIntentID)
 		return nil, ierr.NewError("failed to get payment status").
@@ -673,7 +673,7 @@ func (s *PaymentService) GetPaymentStatusByPaymentIntent(ctx context.Context, pa
 	}
 
 	// Log payment intent details for debugging
-	s.logger.Debugw("retrieved Stripe payment intent",
+	s.logger.Debug(ctx, "retrieved Stripe payment intent",
 		"payment_intent_id", paymentIntent.ID,
 		"status", paymentIntent.Status,
 		"has_payment_method", paymentIntent.PaymentMethod != nil,
@@ -699,7 +699,7 @@ func (s *PaymentService) GetPaymentStatusByPaymentIntent(ctx context.Context, pa
 	}
 
 	// Log extracted values for debugging
-	s.logger.Debugw("extracted payment intent status values",
+	s.logger.Debug(ctx, "extracted payment intent status values",
 		"payment_intent_id", paymentIntent.ID,
 		"status", string(paymentIntent.Status),
 		"amount", amount.String(),
@@ -747,7 +747,7 @@ func (s *PaymentService) GetPaymentIntent(ctx context.Context, paymentIntentID s
 	params.AddExpand("customer")
 	paymentIntent, err := stripeClient.V1PaymentIntents.Retrieve(ctx, paymentIntentID, params)
 	if err != nil {
-		s.logger.Errorw("failed to get Stripe payment intent",
+		s.logger.Error(ctx, "failed to get Stripe payment intent",
 			"error", err,
 			"payment_intent_id", paymentIntentID)
 		return nil, ierr.NewError("failed to get payment intent").
@@ -771,7 +771,7 @@ func (s *PaymentService) ParseWebhookEvent(payload []byte, signature string, web
 	event, err := webhook.ConstructEventWithOptions(payload, signature, webhookSecret, options)
 	if err != nil {
 		// Log the error using structured logging
-		s.logger.Errorw("Stripe webhook verification failed", "error", err)
+		s.logger.Error(context.Background(), "Stripe webhook verification failed", "error", err)
 		return nil, ierr.NewError("failed to verify webhook signature").
 			WithHint("Invalid webhook signature or payload").
 			Mark(ierr.ErrValidation)
@@ -797,14 +797,14 @@ func (s *PaymentService) GetCustomerPaymentMethods(ctx context.Context, req *dto
 	stripeCustomerID, exists := ourCustomer.Metadata["stripe_customer_id"]
 	if !exists || stripeCustomerID == "" {
 		// No Stripe customer ID means no saved payment methods
-		s.logger.Warnw("customer has no stripe_customer_id in metadata",
+		s.logger.Info(ctx, "customer has no stripe_customer_id in metadata",
 			"customer_id", req.CustomerID,
 			"customer_metadata", ourCustomer.Metadata,
 		)
 		return []*dto.PaymentMethodResponse{}, nil
 	}
 
-	s.logger.Infow("retrieving payment methods for stripe customer",
+	s.logger.Info(ctx, "retrieving payment methods for stripe customer",
 		"customer_id", req.CustomerID,
 		"stripe_customer_id", stripeCustomerID,
 	)
@@ -820,7 +820,7 @@ func (s *PaymentService) GetCustomerPaymentMethods(ctx context.Context, req *dto
 
 	for pm, err := range paymentMethods {
 		if err != nil {
-			s.logger.Errorw("failed to list payment methods",
+			s.logger.Error(ctx, "failed to list payment methods",
 				"error", err,
 				"customer_id", req.CustomerID,
 				"stripe_customer_id", stripeCustomerID)
@@ -854,13 +854,13 @@ func (s *PaymentService) GetCustomerPaymentMethods(ctx context.Context, req *dto
 	}
 
 	if len(responses) == 0 {
-		s.logger.Warnw("no payment methods found for customer",
+		s.logger.Info(ctx, "no payment methods found for customer",
 			"customer_id", req.CustomerID,
 			"stripe_customer_id", stripeCustomerID)
 		return responses, nil // Return empty list instead of error
 	}
 
-	s.logger.Infow("successfully retrieved payment methods",
+	s.logger.Info(ctx, "successfully retrieved payment methods",
 		"customer_id", req.CustomerID,
 		"stripe_customer_id", stripeCustomerID,
 		"payment_methods_count", len(responses),
@@ -891,7 +891,7 @@ func (s *PaymentService) SetDefaultPaymentMethod(ctx context.Context, customerID
 			Mark(ierr.ErrNotFound)
 	}
 
-	s.logger.Infow("setting default payment method in Stripe",
+	s.logger.Info(ctx, "setting default payment method in Stripe",
 		"customer_id", customerID,
 		"stripe_customer_id", stripeCustomerID,
 		"payment_method_id", paymentMethodID,
@@ -906,7 +906,7 @@ func (s *PaymentService) SetDefaultPaymentMethod(ctx context.Context, customerID
 
 	_, err = stripeClient.V1Customers.Update(ctx, stripeCustomerID, params)
 	if err != nil {
-		s.logger.Errorw("failed to set default payment method in Stripe",
+		s.logger.Error(ctx, "failed to set default payment method in Stripe",
 			"error", err,
 			"customer_id", customerID,
 			"stripe_customer_id", stripeCustomerID,
@@ -921,7 +921,7 @@ func (s *PaymentService) SetDefaultPaymentMethod(ctx context.Context, customerID
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("successfully set default payment method in Stripe",
+	s.logger.Info(ctx, "successfully set default payment method in Stripe",
 		"customer_id", customerID,
 		"stripe_customer_id", stripeCustomerID,
 		"payment_method_id", paymentMethodID,
@@ -946,7 +946,7 @@ func (s *PaymentService) HasSavedPaymentMethods(ctx context.Context, customerID 
 
 // ReconcilePaymentWithInvoice updates the invoice payment status and amounts when a payment succeeds
 func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymentID string, paymentAmount decimal.Decimal, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) error {
-	s.logger.Infow("starting payment reconciliation with invoice",
+	s.logger.Info(ctx, "starting payment reconciliation with invoice",
 		"payment_id", paymentID,
 		"payment_amount", paymentAmount.String(),
 	)
@@ -954,14 +954,14 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 	// Get the payment record
 	payment, err := paymentService.GetPayment(ctx, paymentID)
 	if err != nil {
-		s.logger.Errorw("failed to get payment record for reconciliation",
+		s.logger.Error(ctx, "failed to get payment record for reconciliation",
 			"error", err,
 			"payment_id", paymentID,
 		)
 		return err
 	}
 
-	s.logger.Infow("got payment record for reconciliation",
+	s.logger.Info(ctx, "got payment record for reconciliation",
 		"payment_id", paymentID,
 		"invoice_id", payment.DestinationID,
 		"payment_amount", payment.Amount.String(),
@@ -970,7 +970,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 	// Get the invoice
 	invoiceResp, err := invoiceService.GetInvoice(ctx, payment.DestinationID)
 	if err != nil {
-		s.logger.Errorw("failed to get invoice for payment reconciliation",
+		s.logger.Error(ctx, "failed to get invoice for payment reconciliation",
 			"error", err,
 			"payment_id", paymentID,
 			"invoice_id", payment.DestinationID,
@@ -984,7 +984,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("got invoice for reconciliation",
+	s.logger.Info(ctx, "got invoice for reconciliation",
 		"payment_id", paymentID,
 		"invoice_id", payment.DestinationID,
 		"invoice_amount_due", invoiceResp.AmountDue.String(),
@@ -1011,7 +1011,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 		newPaymentStatus = types.PaymentStatusPending
 	}
 
-	s.logger.Infow("calculated new amounts for reconciliation",
+	s.logger.Info(ctx, "calculated new amounts for reconciliation",
 		"payment_id", paymentID,
 		"invoice_id", payment.DestinationID,
 		"payment_amount", paymentAmount.String(),
@@ -1021,7 +1021,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 	)
 
 	// Update invoice payment status and amounts using reconciliation method
-	s.logger.Infow("calling invoice reconciliation",
+	s.logger.Info(ctx, "calling invoice reconciliation",
 		"payment_id", paymentID,
 		"invoice_id", payment.DestinationID,
 		"payment_amount", paymentAmount.String(),
@@ -1030,7 +1030,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 
 	err = invoiceService.ReconcilePaymentStatus(ctx, payment.DestinationID, newPaymentStatus, &paymentAmount)
 	if err != nil {
-		s.logger.Errorw("failed to update invoice payment status during reconciliation",
+		s.logger.Error(ctx, "failed to update invoice payment status during reconciliation",
 			"error", err,
 			"payment_id", paymentID,
 			"invoice_id", payment.DestinationID,
@@ -1048,7 +1048,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("successfully reconciled payment with invoice",
+	s.logger.Info(ctx, "successfully reconciled payment with invoice",
 		"payment_id", paymentID,
 		"invoice_id", payment.DestinationID,
 		"payment_amount", paymentAmount.String(),
@@ -1062,7 +1062,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 
 // AttachPaymentToStripeInvoice attaches a successful PaymentIntent to a Stripe invoice
 func (s *PaymentService) AttachPaymentToStripeInvoice(ctx context.Context, stripeClient *stripe.Client, paymentIntentID, stripeInvoiceID string) error {
-	s.logger.Infow("attaching payment to Stripe invoice",
+	s.logger.Info(ctx, "attaching payment to Stripe invoice",
 		"payment_intent_id", paymentIntentID,
 		"stripe_invoice_id", stripeInvoiceID)
 
@@ -1083,7 +1083,7 @@ func (s *PaymentService) AttachPaymentToStripeInvoice(ctx context.Context, strip
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("successfully attached payment to Stripe invoice",
+	s.logger.Info(ctx, "successfully attached payment to Stripe invoice",
 		"payment_intent_id", paymentIntentID,
 		"stripe_invoice_id", stripeInvoiceID)
 
@@ -1120,7 +1120,7 @@ func (s *PaymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, ga
 
 // SetupIntent creates a Setup Intent with Stripe for saving payment methods
 func (s *PaymentService) SetupIntent(ctx context.Context, customerID string, req *dto.CreateSetupIntentRequest, customerService interfaces.CustomerService) (*dto.SetupIntentResponse, error) {
-	s.logger.Infow("creating stripe setup intent",
+	s.logger.Info(ctx, "creating stripe setup intent",
 		"customer_id", customerID,
 		"usage", req.Usage,
 		"payment_method_types", req.PaymentMethodTypes,
@@ -1135,7 +1135,7 @@ func (s *PaymentService) SetupIntent(ctx context.Context, customerID string, req
 	// Ensure customer is synced to Stripe before creating setup intent
 	customerResp, err := s.customerSvc.EnsureCustomerSyncedToStripe(ctx, customerID, customerService)
 	if err != nil {
-		s.logger.Errorw("failed to sync customer to Stripe",
+		s.logger.Error(ctx, "failed to sync customer to Stripe",
 			"error", err,
 			"customer_id", customerID)
 		return nil, ierr.WithError(err).
@@ -1187,7 +1187,7 @@ func (s *PaymentService) SetupIntent(ctx context.Context, customerID string, req
 	// Add set_default flag to metadata if requested
 	if req.SetDefault {
 		metadata["set_default"] = "true"
-		s.logger.Infow("setup intent will be set as default when succeeded",
+		s.logger.Info(ctx, "setup intent will be set as default when succeeded",
 			"customer_id", customerID,
 			"set_default", "true",
 			"metadata", metadata)
@@ -1209,7 +1209,7 @@ func (s *PaymentService) SetupIntent(ctx context.Context, customerID string, req
 
 	setupIntent, err := stripeClient.V1SetupIntents.Create(ctx, setupIntentParams)
 	if err != nil {
-		s.logger.Errorw("failed to create Stripe setup intent",
+		s.logger.Error(ctx, "failed to create Stripe setup intent",
 			"error", err,
 			"customer_id", customerID)
 		return nil, ierr.NewError("failed to create setup intent").
@@ -1221,7 +1221,7 @@ func (s *PaymentService) SetupIntent(ctx context.Context, customerID string, req
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("created stripe setup intent",
+	s.logger.Info(ctx, "created stripe setup intent",
 		"setup_intent_id", setupIntent.ID,
 		"customer_id", customerID,
 		"usage", usage,
@@ -1253,7 +1253,7 @@ func (s *PaymentService) SetupIntent(ctx context.Context, customerID string, req
 
 	checkoutSession, err := stripeClient.V1CheckoutSessions.Create(ctx, checkoutParams)
 	if err != nil {
-		s.logger.Errorw("failed to create Stripe checkout session for setup intent",
+		s.logger.Error(ctx, "failed to create Stripe checkout session for setup intent",
 			"error", err,
 			"setup_intent_id", setupIntent.ID,
 			"customer_id", customerID)
@@ -1279,7 +1279,7 @@ func (s *PaymentService) SetupIntent(ctx context.Context, customerID string, req
 		ExpiresAt:         checkoutSession.ExpiresAt,
 	}
 
-	s.logger.Infow("successfully created stripe setup intent with checkout session",
+	s.logger.Info(ctx, "successfully created stripe setup intent with checkout session",
 		"setup_intent_id", setupIntent.ID,
 		"checkout_session_id", checkoutSession.ID,
 		"checkout_url", checkoutSession.URL,
@@ -1296,7 +1296,7 @@ func (s *PaymentService) ListCustomerPaymentMethods(ctx context.Context, custome
 
 	stripePaymentMethods, err := s.listStripeCustomerPaymentMethods(ctx, customerID, req, customerService)
 	if err != nil {
-		s.logger.Errorw("failed to get Stripe payment methods", "error", err, "customer_id", customerID)
+		s.logger.Error(ctx, "failed to get Stripe payment methods", "error", err, "customer_id", customerID)
 		return nil, err
 	}
 	response.Stripe = stripePaymentMethods.Data
@@ -1306,7 +1306,7 @@ func (s *PaymentService) ListCustomerPaymentMethods(ctx context.Context, custome
 
 // listStripeCustomerPaymentMethods lists only successfully saved payment methods using Stripe's Customer.ListPaymentMethods
 func (s *PaymentService) listStripeCustomerPaymentMethods(ctx context.Context, customerID string, req *dto.ListPaymentMethodsRequest, customerService interfaces.CustomerService) (*dto.ListSetupIntentsResponse, error) {
-	s.logger.Infow("listing stripe customer payment methods",
+	s.logger.Info(ctx, "listing stripe customer payment methods",
 		"customer_id", customerID,
 		"limit", req.Limit,
 	)
@@ -1320,7 +1320,7 @@ func (s *PaymentService) listStripeCustomerPaymentMethods(ctx context.Context, c
 	// Ensure customer is synced to Stripe
 	customerResp, err := s.customerSvc.EnsureCustomerSyncedToStripe(ctx, customerID, customerService)
 	if err != nil {
-		s.logger.Errorw("failed to sync customer to Stripe",
+		s.logger.Error(ctx, "failed to sync customer to Stripe",
 			"error", err,
 			"customer_id", customerID,
 		)
@@ -1348,7 +1348,7 @@ func (s *PaymentService) listStripeCustomerPaymentMethods(ctx context.Context, c
 	customer, err := stripeClient.V1Customers.Retrieve(ctx, stripeCustomerID, nil)
 	if err == nil && customer.InvoiceSettings != nil && customer.InvoiceSettings.DefaultPaymentMethod != nil {
 		defaultPaymentMethodID = customer.InvoiceSettings.DefaultPaymentMethod.ID
-		s.logger.Infow("found default payment method for customer",
+		s.logger.Info(ctx, "found default payment method for customer",
 			"customer_id", customerID,
 			"default_payment_method_id", defaultPaymentMethodID)
 	}
@@ -1387,7 +1387,7 @@ func (s *PaymentService) listStripeCustomerPaymentMethods(ctx context.Context, c
 	// Iterate through the payment methods
 	for pm, err := range paymentMethodsList {
 		if err != nil {
-			s.logger.Errorw("failed to list payment methods",
+			s.logger.Error(ctx, "failed to list payment methods",
 				"error", err,
 				"customer_id", customerID,
 				"stripe_customer_id", stripeCustomerID)
@@ -1427,7 +1427,7 @@ func (s *PaymentService) listStripeCustomerPaymentMethods(ctx context.Context, c
 		TotalCount: totalCount,
 	}
 
-	s.logger.Infow("successfully listed stripe customer payment methods",
+	s.logger.Info(ctx, "successfully listed stripe customer payment methods",
 		"customer_id", customerID,
 		"stripe_customer_id", stripeCustomerID,
 		"payment_methods_count", len(setupIntents),
@@ -1488,21 +1488,21 @@ func (s *PaymentService) GetPaymentMethodDetails(ctx context.Context, paymentMet
 
 // HandleExternalStripePaymentFromWebhook handles external Stripe payment from webhook event
 func (s *PaymentService) HandleExternalStripePaymentFromWebhook(ctx context.Context, paymentIntent *stripe.PaymentIntent, webhookRawData []byte, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) error {
-	s.logger.Infow("no FlexPrice payment ID found, processing as external Stripe payment",
+	s.logger.Info(ctx, "no FlexPrice payment ID found, processing as external Stripe payment",
 		"payment_intent_id", paymentIntent.ID,
 		"metadata", paymentIntent.Metadata)
 
 	// Check if invoice sync is enabled for this connection
 	conn, err := s.client.connectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
 	if err != nil {
-		s.logger.Errorw("failed to get connection for invoice sync check, skipping external payment",
+		s.logger.Error(ctx, "failed to get connection for invoice sync check, skipping external payment",
 			"error", err,
 			"payment_intent_id", paymentIntent.ID)
 		return nil
 	}
 
 	if !conn.IsInvoiceOutboundEnabled() {
-		s.logger.Infow("invoice outbound sync disabled, skipping external payment",
+		s.logger.Info(ctx, "invoice outbound sync disabled, skipping external payment",
 			"payment_intent_id", paymentIntent.ID,
 			"connection_id", conn.ID)
 		return nil
@@ -1514,24 +1514,24 @@ func (s *PaymentService) HandleExternalStripePaymentFromWebhook(ctx context.Cont
 	}
 	err = json.Unmarshal(webhookRawData, &webhookData)
 	if err != nil {
-		s.logger.Errorw("failed to parse webhook data for invoice ID", "error", err)
+		s.logger.Error(ctx, "failed to parse webhook data for invoice ID", "error", err)
 		return ierr.WithError(err).Mark(ierr.ErrValidation)
 	}
 
 	stripeInvoiceID := webhookData.Invoice
 	if stripeInvoiceID == "" {
-		s.logger.Warnw("no Stripe invoice ID found in external payment",
+		s.logger.Info(ctx, "no Stripe invoice ID found in external payment",
 			"payment_intent_id", paymentIntent.ID)
 		return nil
 	}
 
-	s.logger.Infow("found Stripe invoice ID from webhook data",
+	s.logger.Info(ctx, "found Stripe invoice ID from webhook data",
 		"payment_intent_id", paymentIntent.ID,
 		"stripe_invoice_id", stripeInvoiceID)
 
 	// Process external Stripe payment
 	if err := s.ProcessExternalStripePayment(ctx, paymentIntent, stripeInvoiceID, paymentService, invoiceService); err != nil {
-		s.logger.Errorw("failed to process external Stripe payment",
+		s.logger.Error(ctx, "failed to process external Stripe payment",
 			"error", err,
 			"payment_intent_id", paymentIntent.ID,
 			"stripe_invoice_id", stripeInvoiceID)
@@ -1540,7 +1540,7 @@ func (s *PaymentService) HandleExternalStripePaymentFromWebhook(ctx context.Cont
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("successfully processed external Stripe payment",
+	s.logger.Info(ctx, "successfully processed external Stripe payment",
 		"payment_intent_id", paymentIntent.ID,
 		"stripe_invoice_id", stripeInvoiceID)
 	return nil
@@ -1551,7 +1551,7 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 	// Get FlexPrice invoice ID from Stripe invoice
 	flexpriceInvoiceID, err := s.getFlexPriceInvoiceID(ctx, stripeInvoiceID)
 	if err != nil {
-		s.logger.Errorw("failed to get FlexPrice invoice ID",
+		s.logger.Error(ctx, "failed to get FlexPrice invoice ID",
 			"error", err,
 			"stripe_invoice_id", stripeInvoiceID)
 		return err
@@ -1560,7 +1560,7 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 	// Create external payment record
 	err = s.createExternalPaymentRecord(ctx, paymentIntent, flexpriceInvoiceID, paymentService)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"payment_intent_id", paymentIntent.ID)
 		return err
@@ -1570,7 +1570,7 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 	amount := decimal.NewFromInt(paymentIntent.Amount).Div(decimal.NewFromInt(100))
 	err = s.reconcileInvoiceWithExternalPayment(ctx, flexpriceInvoiceID, amount, invoiceService)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile invoice with external payment",
+		s.logger.Error(ctx, "failed to reconcile invoice with external payment",
 			"error", err,
 			"invoice_id", flexpriceInvoiceID,
 			"payment_amount", amount)
@@ -1619,7 +1619,7 @@ func (s *PaymentService) createExternalPaymentRecord(ctx context.Context, paymen
 
 	paymentResp, err := paymentService.CreatePayment(ctx, createReq)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"payment_intent_id", paymentIntent.ID,
 			"invoice_id", invoiceID)
@@ -1642,14 +1642,14 @@ func (s *PaymentService) createExternalPaymentRecord(ctx context.Context, paymen
 
 	_, err = paymentService.UpdatePayment(ctx, paymentResp.ID, updateReq)
 	if err != nil {
-		s.logger.Errorw("failed to update external payment status",
+		s.logger.Error(ctx, "failed to update external payment status",
 			"error", err,
 			"payment_id", paymentResp.ID,
 			"payment_intent_id", paymentIntent.ID)
 		return err
 	}
 
-	s.logger.Infow("successfully created external payment record",
+	s.logger.Info(ctx, "successfully created external payment record",
 		"payment_id", paymentResp.ID,
 		"payment_intent_id", paymentIntent.ID,
 		"invoice_id", invoiceID,
@@ -1663,7 +1663,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 	// Get invoice to calculate new payment status
 	invoiceResp, err := invoiceService.GetInvoice(ctx, invoiceID)
 	if err != nil {
-		s.logger.Errorw("failed to get invoice for external payment reconciliation",
+		s.logger.Error(ctx, "failed to get invoice for external payment reconciliation",
 			"error", err,
 			"invoice_id", invoiceID)
 		return err
@@ -1683,7 +1683,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 		newPaymentStatus = types.PaymentStatusPending // Partial payment
 	}
 
-	s.logger.Infow("calculated payment status for external payment",
+	s.logger.Info(ctx, "calculated payment status for external payment",
 		"invoice_id", invoiceID,
 		"payment_amount", paymentAmount,
 		"current_amount_paid", invoiceResp.AmountPaid,
@@ -1695,7 +1695,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 	// Use the existing ReconcilePaymentStatus method with calculated status
 	err = invoiceService.ReconcilePaymentStatus(ctx, invoiceID, newPaymentStatus, &paymentAmount)
 	if err != nil {
-		s.logger.Errorw("failed to update invoice payment status",
+		s.logger.Error(ctx, "failed to update invoice payment status",
 			"error", err,
 			"invoice_id", invoiceID,
 			"payment_amount", paymentAmount,
@@ -1703,7 +1703,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 		return err
 	}
 
-	s.logger.Infow("successfully reconciled invoice with external payment",
+	s.logger.Info(ctx, "successfully reconciled invoice with external payment",
 		"invoice_id", invoiceID,
 		"payment_amount", paymentAmount,
 		"payment_status", newPaymentStatus)
@@ -1715,7 +1715,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 func (s *PaymentService) VerifyWebhookSignature(payload []byte, signature string, webhookSecret string) error {
 	_, err := webhook.ConstructEvent(payload, signature, webhookSecret)
 	if err != nil {
-		s.logger.Errorw("Stripe webhook verification failed", "error", err)
+		s.logger.Error(context.Background(), "Stripe webhook verification failed", "error", err)
 		return ierr.NewError("failed to verify webhook signature").
 			WithHint("Invalid webhook signature or payload").
 			Mark(ierr.ErrValidation)
@@ -1733,7 +1733,7 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 	invoiceService interfaces.InvoiceService,
 	paymentService interfaces.PaymentService,
 ) error {
-	s.logger.Infow("processing FlexPrice checkout payment",
+	s.logger.Info(ctx, "processing FlexPrice checkout payment",
 		"flexprice_payment_id", payment.ID,
 		"has_payment_intent", paymentIntent != nil)
 
@@ -1747,7 +1747,7 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 
 	// If payment intent exists, extract payment method and gateway payment ID
 	if paymentIntent != nil {
-		s.logger.Infow("processing with payment intent",
+		s.logger.Info(ctx, "processing with payment intent",
 			"payment_intent_id", paymentIntent.ID,
 			"amount", paymentIntent.Amount,
 			"currency", paymentIntent.Currency)
@@ -1759,7 +1759,7 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 			paymentMethodID := paymentIntent.PaymentMethod.ID
 			updateReq.PaymentMethodID = &paymentMethodID
 
-			s.logger.Infow("extracted payment method from payment intent",
+			s.logger.Info(ctx, "extracted payment method from payment intent",
 				"payment_intent_id", paymentIntent.ID,
 				"payment_method_id", paymentMethodID)
 
@@ -1769,26 +1769,26 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 					// Get customer ID from invoice
 					invoiceResp, err := invoiceService.GetInvoice(ctx, payment.DestinationID)
 					if err != nil {
-						s.logger.Errorw("failed to get invoice for customer ID",
+						s.logger.Error(ctx, "failed to get invoice for customer ID",
 							"error", err,
 							"payment_id", payment.ID,
 							"invoice_id", payment.DestinationID)
 					} else {
-						s.logger.Infow("setting payment method as default for customer",
+						s.logger.Info(ctx, "setting payment method as default for customer",
 							"payment_id", payment.ID,
 							"customer_id", invoiceResp.CustomerID,
 							"payment_method_id", paymentMethodID)
 
 						err := s.SetDefaultPaymentMethod(ctx, invoiceResp.CustomerID, paymentMethodID, customerService)
 						if err != nil {
-							s.logger.Errorw("failed to set default payment method",
+							s.logger.Error(ctx, "failed to set default payment method",
 								"error", err,
 								"payment_id", payment.ID,
 								"customer_id", invoiceResp.CustomerID,
 								"payment_method_id", paymentMethodID)
 							// Don't fail the entire webhook processing
 						} else {
-							s.logger.Infow("successfully set default payment method",
+							s.logger.Info(ctx, "successfully set default payment method",
 								"payment_id", payment.ID,
 								"customer_id", invoiceResp.CustomerID,
 								"payment_method_id", paymentMethodID)
@@ -1801,7 +1801,7 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 
 	_, err := paymentService.UpdatePayment(ctx, payment.ID, updateReq)
 	if err != nil {
-		s.logger.Errorw("failed to update payment record",
+		s.logger.Error(ctx, "failed to update payment record",
 			"error", err,
 			"payment_id", payment.ID,
 			"new_status", paymentStatus)
@@ -1810,7 +1810,7 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("successfully updated payment record",
+	s.logger.Info(ctx, "successfully updated payment record",
 		"payment_id", payment.ID,
 		"new_status", paymentStatus)
 
@@ -1818,13 +1818,13 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 	amount := payment.Amount
 	err = s.ReconcilePaymentWithInvoice(ctx, payment.ID, amount, paymentService, invoiceService)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile payment with invoice",
+		s.logger.Error(ctx, "failed to reconcile payment with invoice",
 			"error", err,
 			"payment_id", payment.ID,
 			"amount", amount.String())
 		// Don't fail the entire webhook processing
 	} else {
-		s.logger.Infow("successfully reconciled payment with invoice",
+		s.logger.Info(ctx, "successfully reconciled payment with invoice",
 			"payment_id", payment.ID,
 			"amount", amount.String())
 	}
@@ -1833,7 +1833,7 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 	if paymentIntent != nil {
 		s.AttachPaymentToStripeInvoiceAndReconcile(ctx, payment, paymentIntent, paymentService, invoiceService)
 	} else {
-		s.logger.Infow("no payment intent available, skipping Stripe invoice attachment and reconciliation",
+		s.logger.Info(ctx, "no payment intent available, skipping Stripe invoice attachment and reconciliation",
 			"payment_id", payment.ID)
 	}
 
@@ -1851,13 +1851,13 @@ func (s *PaymentService) AttachPaymentToStripeInvoiceAndReconcile(
 	// Find Stripe invoice ID using invoice sync service
 	stripeInvoiceID, err := s.invoiceSyncSvc.GetStripeInvoiceID(ctx, payment.DestinationID)
 	if err != nil {
-		s.logger.Debugw("no Stripe invoice found for FlexPrice invoice, skipping attachment",
+		s.logger.Debug(ctx, "no Stripe invoice found for FlexPrice invoice, skipping attachment",
 			"flexprice_invoice_id", payment.DestinationID,
 			"payment_id", payment.ID,
 			"error", err)
 	}
 
-	s.logger.Infow("attempting to attach payment to Stripe invoice",
+	s.logger.Info(ctx, "attempting to attach payment to Stripe invoice",
 		"payment_id", payment.ID,
 		"payment_intent_id", paymentIntent.ID,
 		"stripe_invoice_id", stripeInvoiceID)
@@ -1865,7 +1865,7 @@ func (s *PaymentService) AttachPaymentToStripeInvoiceAndReconcile(
 	// Get Stripe client
 	stripeClient, _, err := s.client.GetStripeClient(ctx)
 	if err != nil {
-		s.logger.Errorw("failed to get Stripe client for invoice attachment",
+		s.logger.Error(ctx, "failed to get Stripe client for invoice attachment",
 			"error", err,
 			"payment_id", payment.ID)
 		return
@@ -1874,21 +1874,21 @@ func (s *PaymentService) AttachPaymentToStripeInvoiceAndReconcile(
 	if stripeInvoiceID != "" {
 		err = s.AttachPaymentToStripeInvoice(ctx, stripeClient, paymentIntent.ID, stripeInvoiceID)
 	} else {
-		s.logger.Warnw("no Stripe invoice ID found, skipping Stripe invoice attachment",
+		s.logger.Info(context.Background(), "no Stripe invoice ID found, skipping Stripe invoice attachment",
 			"payment_intent_id", paymentIntent.ID,
 			"stripe_invoice_id", stripeInvoiceID)
 		err = nil
 	}
 
 	if err != nil {
-		s.logger.Errorw("failed to attach payment to Stripe invoice",
+		s.logger.Error(ctx, "failed to attach payment to Stripe invoice",
 			"error", err,
 			"payment_id", payment.ID,
 			"payment_intent_id", paymentIntent.ID,
 			"stripe_invoice_id", stripeInvoiceID)
 		// Don't fail the entire webhook processing
 	} else {
-		s.logger.Infow("successfully attached payment to Stripe invoice",
+		s.logger.Info(ctx, "successfully attached payment to Stripe invoice",
 			"payment_id", payment.ID,
 			"payment_intent_id", paymentIntent.ID,
 			"stripe_invoice_id", stripeInvoiceID)

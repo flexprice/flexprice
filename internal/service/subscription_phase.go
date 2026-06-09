@@ -195,7 +195,7 @@ func (s *subscriptionPhaseService) publishSystemEvent(ctx context.Context, event
 		TenantID: types.GetTenantID(ctx),
 	})
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -211,6 +211,6 @@ func (s *subscriptionPhaseService) publishSystemEvent(ctx context.Context, event
 		EntityID:      phaseID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }

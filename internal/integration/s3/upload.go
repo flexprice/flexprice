@@ -73,7 +73,7 @@ func (c *s3Client) UploadFile(ctx context.Context, request *UploadRequest) (*Upl
 		}
 		data = compressedData
 		compressedSize = int64(len(data))
-		c.logger.Info("Data compressed",
+		c.logger.Info(ctx, "Data compressed",
 			"original_size", originalSize,
 			"compressed_size", compressedSize,
 			"compression_ratio", fmt.Sprintf("%.2f%%", float64(compressedSize)/float64(originalSize)*100),
@@ -115,7 +115,7 @@ func (c *s3Client) UploadFile(ctx context.Context, request *UploadRequest) (*Upl
 	// Generate file URL
 	fileURL := c.generateFileURL(key)
 
-	c.logger.Info("File uploaded to S3 successfully",
+	c.logger.Info(ctx, "File uploaded to S3 successfully",
 		"bucket", c.config.Bucket,
 		"key", key,
 		"file_size", compressedSize,

@@ -28,7 +28,7 @@ func NewUserRepository(client postgres.IClient, logger *logger.Logger) domainUse
 
 // Create creates a new user
 func (r *userRepository) Create(ctx context.Context, user *domainUser.User) error {
-	r.logger.Debugw("creating user", "user_id", user.ID, "email", user.Email, "tenant_id", user.TenantID)
+	r.logger.Debug(ctx, "creating user", "user_id", user.ID, "email", user.Email, "tenant_id", user.TenantID)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "user", "create", map[string]interface{}{

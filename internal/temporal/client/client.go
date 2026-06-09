@@ -37,7 +37,7 @@ type temporalClient struct {
 
 // NewTemporalClient creates a new temporal client instance
 func NewTemporalClient(options *models.ClientOptions, logger *logger.Logger) (TemporalClient, error) {
-	logger.Info("Creating new temporal client", "namespace", options.Namespace)
+	logger.Info(context.Background(), "Creating new temporal client", "namespace", options.Namespace)
 
 	// Convert our options to SDK options
 	sdkOptions := client.Options{
@@ -62,7 +62,7 @@ func NewTemporalClient(options *models.ClientOptions, logger *logger.Logger) (Te
 	// Create the temporal client
 	c, err := client.Dial(sdkOptions)
 	if err != nil {
-		logger.Error("Failed to create temporal client", "error", err)
+		logger.Error(context.Background(), "Failed to create temporal client", "error", err)
 		return nil, err
 	}
 
@@ -83,12 +83,12 @@ func (c *temporalClient) Start(ctx context.Context) error {
 
 	// Check health to ensure connection is working
 	if _, err := c.client.CheckHealth(ctx, &client.CheckHealthRequest{}); err != nil {
-		c.logger.Error("Failed to check client health during start", "error", err)
+		c.logger.Error(ctx, "Failed to check client health during start", "error", err)
 		return err
 	}
 
 	c.isStarted = true
-	c.logger.Info("Temporal client started")
+	c.logger.Info(ctx, "Temporal client started")
 	return nil
 }
 
@@ -103,7 +103,7 @@ func (c *temporalClient) Stop(ctx context.Context) error {
 
 	c.client.Close()
 	c.isStarted = false
-	c.logger.Info("Temporal client stopped successfully")
+	c.logger.Info(ctx, "Temporal client stopped successfully")
 	return nil
 }
 
