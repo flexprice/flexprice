@@ -474,19 +474,26 @@ func (s *InMemorySubscriptionStore) GetWithPauses(ctx context.Context, id string
 }
 
 // ListSubscriptionsDueForRenewal retrieves all active subscriptions that are due for renewal in 24 hours
-func (s *InMemorySubscriptionStore) ListSubscriptionsDueForRenewal(ctx context.Context, now time.Time) ([]*subscription.Subscription, error) {
-	// Create a filter for active subscriptions
+func (s *InMemorySubscriptionStore) ListSubscriptionsDueForRenewal(ctx context.Context, referenceTime time.Time) ([]*subscription.Subscription, error) {
+	referenceTime = referenceTime.UTC()
+	targetTime := referenceTime.Add(24 * time.Hour)
+	windowStart := targetTime.Add(-15 * time.Minute)
+
 	filter := &types.SubscriptionFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		SubscriptionStatus: []types.SubscriptionStatus{
 			types.SubscriptionStatusActive,
 		},
-		TimeRangeFilter: &types.TimeRangeFilter{
-			EndTime: lo.ToPtr(now.UTC().Add(24 * time.Hour)),
-		},
 	}
 
-	return s.ListAll(ctx, filter)
+	allSubs, err := s.ListAll(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return lo.Filter(allSubs, func(sub *subscription.Subscription, _ int) bool {
+		return !sub.CurrentPeriodEnd.Before(windowStart) && sub.CurrentPeriodEnd.Before(targetTime) && !sub.CancelAtPeriodEnd
+	}), nil
 }
 
 // GetRecentSubscriptionsByPlan returns subscription counts grouped by plan for last 7 days

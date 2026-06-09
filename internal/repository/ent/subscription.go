@@ -348,9 +348,9 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 }
 
 // ListActiveSubscriptionsDueForRenewal retrieves all active subscriptions that are due for renewal in 24 hours
-func (r *subscriptionRepository) ListSubscriptionsDueForRenewal(ctx context.Context, now time.Time) ([]*domainSub.Subscription, error) {
-	now = now.UTC()
-	targetTime := now.Add(24 * time.Hour)
+func (r *subscriptionRepository) ListSubscriptionsDueForRenewal(ctx context.Context, referenceTime time.Time) ([]*domainSub.Subscription, error) {
+	referenceTime = referenceTime.UTC()
+	targetTime := referenceTime.Add(24 * time.Hour)
 
 	// Half-open window [targetTime-15m, targetTime) matches the 15-minute
 	// schedule interval exactly. The workflow passes its scheduled start

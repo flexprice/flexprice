@@ -117,7 +117,7 @@ type SubscriptionService interface {
 	// Auto-cancellation methods
 	ProcessAutoCancellationSubscriptions(ctx context.Context) error
 	// Renewal due alert methods
-	ProcessSubscriptionRenewalDueAlert(ctx context.Context, now time.Time) error
+	ProcessSubscriptionRenewalDueAlert(ctx context.Context, referenceTime time.Time) error
 
 	// ProcessAutoInvoiceThresholdBilling checks subscriptions with subscription-level auto_invoice_threshold
 	// set and runs auto invoice threshold billing (mid-period invoices when usage crosses that threshold).

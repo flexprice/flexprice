@@ -28,7 +28,7 @@ type Repository interface {
 	GetWithPauses(ctx context.Context, id string) (*Subscription, []*SubscriptionPause, error)
 
 	// Renewal due alert methods
-	ListSubscriptionsDueForRenewal(ctx context.Context, now time.Time) ([]*Subscription, error)
+	ListSubscriptionsDueForRenewal(ctx context.Context, referenceTime time.Time) ([]*Subscription, error)
 
 	// Dashboard methods
 	GetRecentSubscriptionsByPlan(ctx context.Context) ([]types.SubscriptionPlanCount, error)
