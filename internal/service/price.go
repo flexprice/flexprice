@@ -433,7 +433,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		meterService := NewMeterService(s.MeterRepo)
 		meter, err := meterService.GetMeter(ctx, price.MeterID)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch meter", "meter_id", price.MeterID, "error", err)
+			s.Logger.Info(ctx, "failed to fetch meter", "meter_id", price.MeterID, "error", err)
 			return nil, err
 		}
 		response.Meter = dto.ToMeterResponse(meter)
@@ -443,7 +443,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		groupService := NewGroupService(s.ServiceParams)
 		group, err := groupService.GetGroup(ctx, price.GroupID)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch group", "group_id", price.GroupID, "error", err)
+			s.Logger.Info(ctx, "failed to fetch group", "group_id", price.GroupID, "error", err)
 			// Don't fail the request if group fetch fails, just continue
 		} else {
 			response.Group = group
@@ -454,7 +454,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		priceUnitService := NewPriceUnitService(s.ServiceParams)
 		priceUnit, err := priceUnitService.GetPriceUnit(ctx, lo.FromPtr(price.PriceUnitID))
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch price unit", "price_unit", *price.PriceUnit, "error", err)
+			s.Logger.Info(ctx, "failed to fetch price unit", "price_unit", *price.PriceUnit, "error", err)
 		} else {
 			response.PricingUnit = priceUnit
 		}
@@ -685,7 +685,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 
 		groupsResponse, err := groupService.ListGroups(ctx, groupFilter)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch groups in bulk", "error", err)
+			s.Logger.Info(ctx, "failed to fetch groups in bulk", "error", err)
 			// Don't fail the request, just continue without groups
 			groupsByID = make(map[string]*dto.GroupResponse)
 		} else {
@@ -709,7 +709,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 
 		priceUnitsResponse, err := priceUnitService.ListPriceUnits(ctx, priceUnitFilter)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch price units in bulk", "error", err)
+			s.Logger.Info(ctx, "failed to fetch price units in bulk", "error", err)
 			// Don't fail the request, just continue without price units
 			priceUnitsByID = make(map[string]*dto.PriceUnitResponse)
 		} else {
@@ -1083,7 +1083,7 @@ func (s *priceService) CalculateCostFromUsageResults(ctx context.Context, price 
 func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
 	cost := decimal.Zero
 	if len(price.Tiers) == 0 {
-		s.Logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
+		s.Logger.Info(ctx, "no tiers found for price", "price_id", price.ID)
 		return cost
 	}
 
@@ -1119,12 +1119,11 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 		// Calculate tier cost with full precision and handling of flat amount
 		tierCost := selectedTier.CalculateTierAmount(quantity, price.Currency)
 
-		s.Logger.WithContext(ctx).Debugf(
-			"volume tier total cost for quantity %s: %s price: %s tier : %+v",
-			quantity.String(),
-			tierCost.String(),
-			price.ID,
-			selectedTier,
+		s.Logger.Debug(ctx, "volume tier total cost",
+			"quantity", quantity.String(),
+			"cost", tierCost.String(),
+			"price_id", price.ID,
+			"tier", selectedTier,
 		)
 
 		cost = cost.Add(tierCost)
@@ -1152,12 +1151,11 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 			cost = cost.Add(tierCost)
 			remainingQuantity = remainingQuantity.Sub(tierQuantity)
 
-			s.Logger.WithContext(ctx).Debugf(
-				"slab tier total cost for quantity %s: %s price: %s tier : %+v",
-				quantity.String(),
-				tierCost.String(),
-				price.ID,
-				tier,
+			s.Logger.Debug(ctx, "slab tier total cost",
+				"quantity", quantity.String(),
+				"cost", tierCost.String(),
+				"price_id", price.ID,
+				"tier", tier,
 			)
 
 			if remainingQuantity.LessThanOrEqual(decimal.Zero) {
@@ -1165,7 +1163,7 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 			}
 		}
 	default:
-		s.Logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
+		s.Logger.Info(ctx, "invalid tier mode", "tier_mode", price.TierMode)
 		return decimal.Zero
 	}
 
@@ -1245,7 +1243,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 	}
 
 	if len(price.Tiers) == 0 {
-		s.Logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
+		s.Logger.Info(ctx, "no tiers found for price", "price_id", price.ID)
 		return result
 	}
 
@@ -1287,12 +1285,11 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			result.EffectiveUnitCost = decimal.Zero
 		}
 
-		s.Logger.WithContext(ctx).Debugf(
-			"volume tier total cost for quantity %s: %s price: %s tier : %+v",
-			quantity.String(),
-			result.FinalCost.String(),
-			price.ID,
-			selectedTier,
+		s.Logger.Debug(ctx, "volume tier total cost",
+			"quantity", quantity.String(),
+			"cost", result.FinalCost.String(),
+			"price_id", price.ID,
+			"tier", selectedTier,
 		)
 
 	case types.BILLING_TIER_SLAB:
@@ -1325,12 +1322,11 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 
 			remainingQuantity = remainingQuantity.Sub(tierQuantity)
 
-			s.Logger.WithContext(ctx).Debugf(
-				"slab tier total cost for quantity %s: %s price: %s tier : %+v",
-				quantity.String(),
-				tierCost.String(),
-				price.ID,
-				tier,
+			s.Logger.Debug(ctx, "slab tier total cost",
+				"quantity", quantity.String(),
+				"cost", tierCost.String(),
+				"price_id", price.ID,
+				"tier", tier,
 			)
 
 			if remainingQuantity.LessThanOrEqual(decimal.Zero) {
@@ -1345,7 +1341,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			result.EffectiveUnitCost = decimal.Zero
 		}
 	default:
-		s.Logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
+		s.Logger.Info(ctx, "invalid tier mode", "tier_mode", price.TierMode)
 	}
 
 	return result

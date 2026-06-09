@@ -96,7 +96,7 @@ func NewMeterUsageTrackingService(
 		params.Config.MeterUsageTracking.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create pubsub for meter usage tracking", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create pubsub for meter usage tracking", "error", err)
 		return nil
 	}
 	svc.pubSub = ps
@@ -107,7 +107,7 @@ func NewMeterUsageTrackingService(
 		params.Config.MeterUsageTrackingLazy.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create lazy pubsub for meter usage tracking", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create lazy pubsub for meter usage tracking", "error", err)
 		return nil
 	}
 	svc.lazyPubSub = lazyPS
@@ -145,7 +145,7 @@ func (s *meterUsageTrackingService) PublishEvent(ctx context.Context, event *eve
 // RegisterHandler registers the consumer with throttle middleware
 func (s *meterUsageTrackingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.MeterUsageTracking.Enabled {
-		s.Logger.Infow("meter usage tracking handler disabled by configuration")
+		s.Logger.Info(context.Background(), "meter usage tracking handler disabled by configuration")
 		return
 	}
 
@@ -159,7 +159,7 @@ func (s *meterUsageTrackingService) RegisterHandler(router *pubsubRouter.Router,
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered meter usage tracking handler",
+	s.Logger.Info(context.Background(), "registered meter usage tracking handler",
 		"topic", cfg.MeterUsageTracking.Topic,
 		"rate_limit", cfg.MeterUsageTracking.RateLimit,
 	)
@@ -172,7 +172,7 @@ func (s *meterUsageTrackingService) RegisterHandler(router *pubsubRouter.Router,
 // FeatureUsageTrackingService and CostSheetUsageTrackingService.
 func (s *meterUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.MeterUsageTrackingLazy.Enabled {
-		s.Logger.Infow("meter usage tracking lazy handler disabled by configuration")
+		s.Logger.Info(context.Background(), "meter usage tracking lazy handler disabled by configuration")
 		return
 	}
 
@@ -186,7 +186,7 @@ func (s *meterUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Rou
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered meter usage tracking lazy handler",
+	s.Logger.Info(context.Background(), "registered meter usage tracking lazy handler",
 		"topic", cfg.MeterUsageTrackingLazy.Topic,
 		"rate_limit", cfg.MeterUsageTrackingLazy.RateLimit,
 	)
@@ -199,7 +199,7 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Errorw("failed to unmarshal event for meter usage tracking",
+		s.Logger.Error(context.Background(), "failed to unmarshal event for meter usage tracking",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -216,7 +216,7 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 	event.EventName = strings.TrimSpace(event.EventName)
 
 	if tenantID == "" || environmentID == "" {
-		s.Logger.Errorw("tenant_id and environment_id are required for meter usage tracking",
+		s.Logger.Info(context.Background(), "tenant_id and environment_id are required for meter usage tracking",
 			"event_id", event.ID,
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -229,7 +229,7 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 
 	if err := s.processEvent(ctx, &event); err != nil {
-		s.Logger.Errorw("failed to process event for meter usage tracking",
+		s.Logger.Error(context.Background(), "failed to process event for meter usage tracking",
 			"error", err,
 			"event_id", event.ID,
 		)
@@ -316,7 +316,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		}
 
 		if qty.IsNegative() {
-			s.Logger.Warnw("negative quantity, setting to zero",
+			s.Logger.Info(ctx, "negative quantity, setting to zero",
 				"event_id", event.ID,
 				"meter_id", m.ID,
 			)
@@ -456,7 +456,7 @@ func (s *meterUsageTrackingService) extractQuantity(event *events.Event, m *mete
 		return s.convertToDecimal(val), nil
 
 	default:
-		s.Logger.Warnw("unsupported aggregation type for meter usage",
+		s.Logger.Info(context.Background(), "unsupported aggregation type for meter usage",
 			"meter_id", m.ID,
 			"aggregation_type", m.Aggregation.Type,
 		)

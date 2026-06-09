@@ -207,7 +207,7 @@ func (s *subscriptionScheduleService) CancelPendingForSubscription(ctx context.C
 	for _, schedule := range schedules {
 		if schedule.CanBeCancelled() {
 			if err := s.Cancel(ctx, schedule.ID); err != nil {
-				s.Logger.Warn(ctx, "failed to cancel schedule",
+				s.Logger.Info(ctx, "failed to cancel schedule",
 					"schedule_id", schedule.ID,
 					"error", err,
 				)
@@ -398,7 +398,7 @@ func (s *subscriptionScheduleService) MarkAsExecuted(ctx context.Context, schedu
 	if schedule.ScheduleType == types.SubscriptionScheduleChangeTypePlanChange {
 		if planResult, ok := result.(*subscription.PlanChangeResult); ok {
 			if err := schedule.SetPlanChangeResult(planResult); err != nil {
-				s.Logger.Warn(ctx, "failed to store execution result", "error", err)
+				s.Logger.Info(ctx, "failed to store execution result", "error", err)
 			}
 		}
 	}

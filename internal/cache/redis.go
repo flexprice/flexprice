@@ -151,7 +151,7 @@ func (c *RedisCache) Delete(ctx context.Context, key string) {
 	redisKey := c.GetRedisKey(key)
 	err := c.delete(ctx, redisKey)
 	if err != nil {
-		c.log.Warn(ctx, "Redis DELETE failed, retrying...", "key", redisKey, "error", err)
+		c.log.Info(ctx, "Redis DELETE failed, retrying...", "key", redisKey, "error", err)
 
 		// Create a new context with timeout for the retry
 		retryCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

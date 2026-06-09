@@ -110,7 +110,7 @@ func NewFeatureUsageTrackingService(
 	)
 
 	if err != nil {
-		params.Logger.Fatalw("failed to create pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create pubsub", "error", err)
 		return nil
 	}
 	ev.pubSub = pubSub
@@ -121,7 +121,7 @@ func NewFeatureUsageTrackingService(
 		params.Config.FeatureUsageTracking.ConsumerGroupBackfill,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create backfill pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create backfill pubsub", "error", err)
 		return nil
 	}
 	ev.backfillPubSub = backfillPubSub
@@ -133,7 +133,7 @@ func NewFeatureUsageTrackingService(
 	)
 
 	if err != nil {
-		params.Logger.Fatalw("failed to create lazy pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create lazy pubsub", "error", err)
 		return nil
 	}
 	ev.lazyPubSub = lazyPubSub
@@ -144,7 +144,7 @@ func NewFeatureUsageTrackingService(
 		params.Config.FeatureUsageTrackingReplay.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create replay pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create replay pubsub", "error", err)
 		return nil
 	}
 	ev.replayPubSub = replayPubSub
@@ -212,7 +212,7 @@ func (s *featureUsageTrackingService) PublishEvent(ctx context.Context, event *e
 // RegisterHandler registers a handler for the feature usage tracking topic with rate limiting
 func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.FeatureUsageTracking.Enabled {
-		s.Logger.Infow("feature usage tracking handler disabled by configuration")
+		s.Logger.Info(context.Background(), "feature usage tracking handler disabled by configuration")
 		return
 	}
 
@@ -228,19 +228,19 @@ func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Route
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered event feature usage tracking handler",
+	s.Logger.Info(context.Background(), "registered event feature usage tracking handler",
 		"topic", cfg.FeatureUsageTracking.Topic,
 		"rate_limit", cfg.FeatureUsageTracking.RateLimit,
 	)
 
 	if !cfg.FeatureUsageTracking.BackfillEnabled {
-		s.Logger.Infow("feature usage tracking backfill handler disabled by configuration")
+		s.Logger.Info(context.Background(), "feature usage tracking backfill handler disabled by configuration")
 		return
 	}
 
 	// Add backfill handler
 	if cfg.FeatureUsageTracking.TopicBackfill == "" {
-		s.Logger.Warnw("backfill topic not set, skipping backfill handler")
+		s.Logger.Info(context.Background(), "backfill topic not set, skipping backfill handler")
 		return
 	}
 
@@ -253,7 +253,7 @@ func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Route
 		backfillThrottle.Middleware,
 	)
 
-	s.Logger.Infow("registered event feature usage tracking backfill handler",
+	s.Logger.Info(context.Background(), "registered event feature usage tracking backfill handler",
 		"topic", cfg.FeatureUsageTracking.TopicBackfill,
 		"rate_limit", cfg.FeatureUsageTracking.RateLimitBackfill,
 		"pubsub_type", "kafka",
@@ -263,7 +263,7 @@ func (s *featureUsageTrackingService) RegisterHandler(router *pubsubRouter.Route
 // RegisterHandler registers a handler for the feature usage tracking topic with rate limiting
 func (s *featureUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.FeatureUsageTrackingLazy.Enabled {
-		s.Logger.Infow("feature usage tracking lazy handler disabled by configuration")
+		s.Logger.Info(context.Background(), "feature usage tracking lazy handler disabled by configuration")
 		return
 	}
 
@@ -279,7 +279,7 @@ func (s *featureUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.R
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered event feature usage tracking lazy handler",
+	s.Logger.Info(context.Background(), "registered event feature usage tracking lazy handler",
 		"topic", cfg.FeatureUsageTrackingLazy.Topic,
 		"rate_limit", cfg.FeatureUsageTrackingLazy.RateLimit,
 	)
@@ -288,13 +288,13 @@ func (s *featureUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.R
 // RegisterHandlerReplay registers a handler for the feature usage tracking replay topic with rate limiting
 func (s *featureUsageTrackingService) RegisterHandlerReplay(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.FeatureUsageTrackingReplay.Enabled {
-		s.Logger.Infow("feature usage tracking replay handler disabled by configuration")
+		s.Logger.Info(context.Background(), "feature usage tracking replay handler disabled by configuration")
 		return
 	}
 
 	// Check if replay topic is configured
 	if cfg.FeatureUsageTrackingReplay.Topic == "" {
-		s.Logger.Warnw("replay topic not set, skipping replay handler")
+		s.Logger.Info(context.Background(), "replay topic not set, skipping replay handler")
 		return
 	}
 
@@ -310,7 +310,7 @@ func (s *featureUsageTrackingService) RegisterHandlerReplay(router *pubsubRouter
 		replayThrottle.Middleware,
 	)
 
-	s.Logger.Infow("registered event feature usage tracking replay handler",
+	s.Logger.Info(context.Background(), "registered event feature usage tracking replay handler",
 		"topic", cfg.FeatureUsageTrackingReplay.Topic,
 		"rate_limit", cfg.FeatureUsageTrackingReplay.RateLimit,
 		"pubsub_type", "kafka",
@@ -324,7 +324,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
-	s.Logger.Debugw("processing event from message queue in feature usage tracking service",
+	s.Logger.Debug(context.Background(), "processing event from message queue in feature usage tracking service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -334,7 +334,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Errorw("failed to unmarshal event for feature usage tracking",
+		s.Logger.Error(context.Background(), "failed to unmarshal event for feature usage tracking",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -343,7 +343,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 
 	// validate tenant id (todo commenting for now)
 	// if event.TenantID != tenantID {
-	// 	s.Logger.Errorw("invalid tenant id",
+	// 	s.Logger.Error(context.Background(), "invalid tenant id",
 	// 		"expected", tenantID,
 	// 		"actual", event.TenantID,
 	// 		"message_uuid", msg.UUID,
@@ -372,7 +372,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	}
 
 	if tenantID == "" {
-		s.Logger.Errorw("tenant id is required for feature usage tracking: event_id", event.ID,
+		s.Logger.Info(context.Background(), "tenant id is required for feature usage tracking: event_id", event.ID,
 			"event_name", event.EventName,
 			"message_uuid", msg.UUID,
 		)
@@ -380,7 +380,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	}
 
 	if environmentID == "" {
-		s.Logger.Errorw("environment id is required for feature usage tracking: event_id", event.ID,
+		s.Logger.Info(context.Background(), "environment id is required for feature usage tracking: event_id", event.ID,
 			"event_name", event.EventName,
 			"message_uuid", msg.UUID,
 		)
@@ -389,7 +389,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 
 	// Process the event
 	if err := s.processEvent(ctx, &event); err != nil {
-		s.Logger.Errorw("failed to process event for feature usage tracking",
+		s.Logger.Error(context.Background(), "failed to process event for feature usage tracking",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -397,7 +397,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 		return err // Return error for retry
 	}
 
-	s.Logger.Infow("event for feature usage tracking processed successfully",
+	s.Logger.Info(context.Background(), "event for feature usage tracking processed successfully",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", tenantID,
@@ -499,7 +499,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	// STEP 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Warn(ctx, "customer not found for event",
+		s.Logger.Info(ctx, "customer not found for event",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -715,7 +715,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		// Get meter for this line item
 		m, ok := meterMap[lineItem.MeterID]
 		if !ok {
-			s.Logger.Warn(ctx, "meter not found for line item",
+			s.Logger.Info(ctx, "meter not found for line item",
 				"event_id", event.ID,
 				"line_item_id", lineItem.ID,
 				"meter_id", lineItem.MeterID,
@@ -726,7 +726,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		// Get feature for this meter
 		f, ok := featureMeterMap[lineItem.MeterID]
 		if !ok {
-			s.Logger.Warn(ctx, "feature not found for meter",
+			s.Logger.Info(ctx, "feature not found for meter",
 				"event_id", event.ID,
 				"meter_id", lineItem.MeterID,
 			)
@@ -777,7 +777,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 
 		// Validate the quantity is positive
 		if quantity.IsNegative() {
-			s.Logger.Warn(ctx, "negative quantity calculated, setting to zero",
+			s.Logger.Info(ctx, "negative quantity calculated, setting to zero",
 				"event_id", event.ID,
 				"meter_id", m.ID,
 				"calculated_quantity", quantity.String(),
@@ -1043,7 +1043,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 		// Expression is not supported with COUNT_UNIQUE
 		if meter.Aggregation.Type == types.AggregationCountUnique {
 			err := fmt.Errorf("expression is not supported with aggregation type COUNT_UNIQUE")
-			s.Logger.Errorw("unsupported meter configuration: expression with count_unique",
+			s.Logger.Error(context.Background(), "unsupported meter configuration: expression with count_unique",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"expression", meter.Aggregation.Expression,
@@ -1054,7 +1054,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 		qty, err := s.expressionEvaluator.EvaluateQuantity(meter.Aggregation.Expression, event.Properties)
 		if err != nil {
-			s.Logger.Errorw("CEL evaluation failed, event rejected",
+			s.Logger.Error(context.Background(), "CEL evaluation failed, event rejected",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"expression", meter.Aggregation.Expression,
@@ -1075,7 +1075,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 	case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("aggregation with empty field name",
+			s.Logger.Info(context.Background(), "aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"aggregation_type", meter.Aggregation.Type,
@@ -1085,7 +1085,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for aggregation",
+			s.Logger.Info(context.Background(), "property not found for aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -1100,7 +1100,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 	case types.AggregationSumWithMultiplier:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("sum_with_multiplier aggregation with empty field name",
+			s.Logger.Info(context.Background(), "sum_with_multiplier aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -1108,7 +1108,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 		}
 
 		if meter.Aggregation.Multiplier == nil {
-			s.Logger.Warnw("sum_with_multiplier aggregation without multiplier",
+			s.Logger.Info(context.Background(), "sum_with_multiplier aggregation without multiplier",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -1117,7 +1117,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for sum_with_multiplier aggregation",
+			s.Logger.Info(context.Background(), "property not found for sum_with_multiplier aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -1137,7 +1137,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 	case types.AggregationCountUnique:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("count_unique aggregation with empty field name",
+			s.Logger.Info(context.Background(), "count_unique aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -1146,7 +1146,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for count_unique aggregation",
+			s.Logger.Info(context.Background(), "property not found for count_unique aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -1160,7 +1160,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 		return decimal.NewFromInt(1), stringValue, nil
 	case types.AggregationWeightedSum:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("weighted_sum aggregation with empty field name",
+			s.Logger.Info(context.Background(), "weighted_sum aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -1169,7 +1169,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for weighted_sum aggregation",
+			s.Logger.Info(context.Background(), "property not found for weighted_sum aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -1190,7 +1190,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 		}
 		return result, stringValue, nil
 	default:
-		s.Logger.Warnw("unsupported aggregation type",
+		s.Logger.Info(context.Background(), "unsupported aggregation type",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"aggregation_type", meter.Aggregation.Type,
@@ -1236,7 +1236,7 @@ func (s *featureUsageTrackingService) convertValueToDecimal(val interface{}, eve
 		var err error
 		decimalValue, err = decimal.NewFromString(str)
 		if err != nil {
-			s.Logger.Warnw("failed to parse uint64 as decimal",
+			s.Logger.Info(context.Background(), "failed to parse uint64 as decimal",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"value", v,
@@ -1250,7 +1250,7 @@ func (s *featureUsageTrackingService) convertValueToDecimal(val interface{}, eve
 		var err error
 		decimalValue, err = decimal.NewFromString(v)
 		if err != nil {
-			s.Logger.Warnw("failed to parse string as decimal",
+			s.Logger.Info(context.Background(), "failed to parse string as decimal",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"value", v,
@@ -1264,7 +1264,7 @@ func (s *featureUsageTrackingService) convertValueToDecimal(val interface{}, eve
 		var err error
 		decimalValue, err = decimal.NewFromString(string(v))
 		if err != nil {
-			s.Logger.Warnw("failed to parse json.Number as decimal",
+			s.Logger.Info(context.Background(), "failed to parse json.Number as decimal",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"value", v,
@@ -1277,7 +1277,7 @@ func (s *featureUsageTrackingService) convertValueToDecimal(val interface{}, eve
 	default:
 		// Try to convert to string representation
 		stringValue = fmt.Sprintf("%v", v)
-		s.Logger.Warnw("unknown type for aggregation - cannot convert to decimal",
+		s.Logger.Info(context.Background(), "unknown type for aggregation - cannot convert to decimal",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"field", meter.Aggregation.Field,
@@ -1370,7 +1370,7 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Co
 		// Fetch analytics data for this customer
 		data, err := s.fetchAnalyticsData(ctx, &customerReq)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch analytics data for customer, skipping",
+			s.Logger.Info(ctx, "failed to fetch analytics data for customer, skipping",
 				"customer_id", customer.ID,
 				"external_customer_id", customer.ExternalID,
 				"error", err,
@@ -1548,7 +1548,7 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 		featureFilter.MeterIDs = meterIDList
 		missingFeatures, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch features for committed line items with zero usage",
+			s.Logger.Info(ctx, "failed to fetch features for committed line items with zero usage",
 				"error", err,
 				"meter_ids", meterIDList,
 			)
@@ -1594,7 +1594,7 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 	// 7. Enrich with metadata if we have analytics data
 	if len(data.Analytics) > 0 {
 		if err := s.enrichWithMetadata(ctx, data, req); err != nil {
-			s.Logger.Warn(ctx, "failed to enrich analytics with metadata",
+			s.Logger.Info(ctx, "failed to enrich analytics with metadata",
 				"error", err,
 				"analytics_count", len(data.Analytics),
 			)
@@ -1614,7 +1614,7 @@ func (s *featureUsageTrackingService) buildAnalyticsResponse(ctx context.Context
 
 	// Calculate costs
 	if err := s.calculateCosts(ctx, data); err != nil {
-		s.Logger.Warn(ctx, "failed to calculate costs",
+		s.Logger.Info(ctx, "failed to calculate costs",
 			"error", err,
 			"analytics_count", len(data.Analytics),
 		)
@@ -1907,7 +1907,7 @@ func (s *featureUsageTrackingService) enrichWithMetadata(ctx context.Context, da
 	for groupID := range groupIDSet {
 		grp, err := s.GroupRepo.Get(ctx, groupID)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch group for analytics", "group_id", groupID, "error", err)
+			s.Logger.Info(ctx, "failed to fetch group for analytics", "group_id", groupID, "error", err)
 			continue
 		}
 		data.Groups[groupID] = grp
@@ -2251,7 +2251,7 @@ func (s *featureUsageTrackingService) calculatePointCosts(p *bucketedCostParams,
 		usage := s.getCorrectUsageValueForPoint(p.item.Points[i], p.aggType)
 		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, []time.Time{p.item.Points[i].Timestamp}, p.price)
 		if err != nil {
-			s.Logger.Warnw("failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
+			s.Logger.Info(context.Background(), "failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
 			pointCost = p.priceService.CalculateCost(p.ctx, p.price, usage)
 		}
 		p.item.Points[i].Cost = pointCost
@@ -3110,7 +3110,7 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 	// Build custom analytics if configured
 	customAnalytics, err := s.buildCustomAnalytics(ctx, response)
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to build custom analytics",
+		s.Logger.Info(ctx, "failed to build custom analytics",
 			"error", err,
 		)
 		// Continue without custom analytics rather than failing
@@ -3386,7 +3386,7 @@ func (s *featureUsageTrackingService) GetHuggingFaceBillingData(ctx context.Cont
 		// Get price for this record
 		p, ok := priceMap[record.PriceID]
 		if !ok {
-			s.Logger.Warn(ctx, "price not found for feature_usage record",
+			s.Logger.Info(ctx, "price not found for feature_usage record",
 				"request_id", record.ID,
 				"price_id", record.PriceID,
 			)
@@ -3437,7 +3437,7 @@ func (s *featureUsageTrackingService) applyLineItemCommitment(
 			item.CommitmentInfo = commitmentInfo
 			return cost
 		}
-		s.Logger.Warnw("failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
+		s.Logger.Info(context.Background(), "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
 		if defaultCost.IsZero() && len(bucketedValues) > 0 {
 			// If default cost wasn't provided, calculate it
 			return priceService.CalculateBucketedCost(ctx, price, bucketedValues)
@@ -3459,7 +3459,7 @@ func (s *featureUsageTrackingService) applyLineItemCommitment(
 		return cost
 	}
 
-	s.Logger.Warnw("failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
+	s.Logger.Info(context.Background(), "failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
 	return rawCost
 }
 
@@ -3983,7 +3983,7 @@ func (s *featureUsageTrackingService) getCustomAnalyticsConfig(ctx context.Conte
 
 	config, err := utils.ToStruct[types.CustomAnalyticsConfig](setting.Value)
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to parse custom analytics config",
+		s.Logger.Info(ctx, "failed to parse custom analytics config",
 			"error", err,
 			"setting_id", setting.ID,
 		)
@@ -4041,7 +4041,7 @@ func (s *featureUsageTrackingService) matchMetersWithFeatureCreationSupport(
 		}
 		meterMap, meterIDs, _ = s.matchMetersForEvent(meters, event, required)
 		if len(meterIDs) == 0 {
-			s.Logger.Warnw("no meters found even after auto-creation, skipping", "event_id", event.ID, "event_name", event.EventName)
+			s.Logger.Info(context.Background(), "no meters found even after auto-creation, skipping", "event_id", event.ID, "event_name", event.EventName)
 			return nil, nil, nil
 		}
 	} else if len(missing) > 0 {

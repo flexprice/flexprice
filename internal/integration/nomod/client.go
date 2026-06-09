@@ -69,6 +69,7 @@ func (c *Client) GetNomodConfig(ctx context.Context) (*NomodConfig, error) {
 	// Validate required fields
 	if nomodConfig.APIKey == "" {
 		c.logger.Error(ctx, "missing Nomod API key",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Nomod API key").
@@ -106,14 +107,14 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 	// For Nomod connections, decrypt the structured metadata
 	if conn.ProviderType == types.SecretProviderNomod {
 		if conn.EncryptedSecretData.Nomod == nil {
-			c.logger.Warnw("no nomod metadata found", "connection_id", conn.ID)
+			c.logger.Info(context.Background(), "no nomod metadata found", "connection_id", conn.ID)
 			return types.Metadata{}, nil
 		}
 
 		// Decrypt API key
 		apiKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Nomod.APIKey)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt API key", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt API key", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt API key").Mark(ierr.ErrInternal)
 		}
 
@@ -125,14 +126,14 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		if conn.EncryptedSecretData.Nomod.WebhookSecret != "" {
 			webhookSecret, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Nomod.WebhookSecret)
 			if err != nil {
-				c.logger.Errorw("failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
+				c.logger.Error(context.Background(), "failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
 				// Don't fail completely, just skip webhook secret
 			} else {
 				decryptedMetadata["webhook_secret"] = webhookSecret
 			}
 		}
 
-		c.logger.Infow("successfully decrypted nomod credentials",
+		c.logger.Info(context.Background(), "successfully decrypted nomod credentials",
 			"connection_id", conn.ID,
 			"has_api_key", apiKey != "",
 			"has_webhook_secret", decryptedMetadata["webhook_secret"] != "")
@@ -221,6 +222,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	// Check for successful status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		c.logger.Error(ctx, "nomod API returned error",
+			"error", err,
 			"status_code", resp.StatusCode,
 			"method", method,
 			"endpoint", endpoint,
@@ -348,7 +350,7 @@ func (c *Client) VerifyWebhookAuth(ctx context.Context, providedAPIKey string) e
 
 	// Verify the provided API key matches the webhook secret
 	if providedAPIKey != config.WebhookSecret {
-		c.logger.Warnw("webhook authentication failed - invalid X-API-KEY")
+		c.logger.Info(ctx, "webhook authentication failed - invalid X-API-KEY")
 		return ierr.NewError("invalid webhook API key").
 			WithHint("X-API-KEY header does not match configured webhook secret").
 			Mark(ierr.ErrValidation)

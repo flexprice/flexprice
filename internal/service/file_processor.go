@@ -103,7 +103,7 @@ func (fp *FileProcessor) DownloadFile(ctx context.Context, t *task.Task) ([]byte
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		fp.Logger.Error(ctx, "failed to download file", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Info(ctx, "failed to download file", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: HTTP %d", resp.StatusCode)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.NewErrorf("failed to download file: HTTP %d", resp.StatusCode).
@@ -185,7 +185,7 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close() // Close the response body on error
-		fp.Logger.Error(ctx, "failed to download file stream", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Info(ctx, "failed to download file stream", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: HTTP %d", resp.StatusCode)
 		t.ErrorSummary = &errorSummary
 		return nil, ierr.NewErrorf("failed to download file: HTTP %d", resp.StatusCode).
@@ -248,7 +248,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fp.Logger.Error(ctx, "failed to get file size", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Info(ctx, "failed to get file size", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
 		return 0, ierr.NewErrorf("failed to get file size: HTTP %d", resp.StatusCode).
 			WithHint("Failed to get file size").
 			WithReportableDetails(map[string]interface{}{
@@ -261,7 +261,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 	// Parse Content-Length header
 	contentLength := resp.Header.Get("Content-Length")
 	if contentLength == "" {
-		fp.Logger.Warn(ctx, "Content-Length header not available", "url", downloadURL, "provider", provider.GetProviderName())
+		fp.Logger.Info(ctx, "Content-Length header not available", "url", downloadURL, "provider", provider.GetProviderName())
 		return 0, ierr.NewError("Content-Length header not available").
 			WithHint("File size cannot be determined").
 			WithReportableDetails(map[string]interface{}{

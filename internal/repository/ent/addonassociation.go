@@ -82,7 +82,7 @@ func (o *AddonAssociationQueryOptions) applyActiveAddonAssociationFilter(query *
 func (r *addonAssociationRepository) Create(ctx context.Context, a *domainAddonAssociation.AddonAssociation) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating addon association",
+	r.log.Debug(ctx, "creating addon association",
 		"addon_association_id", a.ID,
 		"addon_id", a.AddonID,
 		"entity_id", a.EntityID,
@@ -163,7 +163,7 @@ func (r *addonAssociationRepository) GetByID(ctx context.Context, id string) (*d
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting addon association",
+	r.log.Debug(ctx, "getting addon association",
 		"addon_association_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -273,7 +273,7 @@ func (r *addonAssociationRepository) Count(ctx context.Context, filter *types.Ad
 func (r *addonAssociationRepository) Update(ctx context.Context, a *domainAddonAssociation.AddonAssociation) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating addon association",
+	r.log.Debug(ctx, "updating addon association",
 		"addon_association_id", a.ID,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -324,7 +324,7 @@ func (r *addonAssociationRepository) Update(ctx context.Context, a *domainAddonA
 func (r *addonAssociationRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting addon association",
+	r.log.Debug(ctx, "deleting addon association",
 		"addon_association_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)

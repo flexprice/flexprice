@@ -102,6 +102,7 @@ func (c *Client) GetHubSpotConfig(ctx context.Context) (*HubSpotConfig, error) {
 	// Validate required fields - CRITICAL for preventing API call failures
 	if hubspotConfig.AccessToken == "" {
 		c.logger.Error(ctx, "missing HubSpot access token",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing HubSpot access token").
@@ -110,7 +111,7 @@ func (c *Client) GetHubSpotConfig(ctx context.Context) (*HubSpotConfig, error) {
 	}
 
 	if hubspotConfig.ClientSecret == "" {
-		c.logger.Warnw("missing HubSpot client secret (required for webhook verification)",
+		c.logger.Info(ctx, "missing HubSpot client secret (required for webhook verification)",
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		// Don't fail - client secret is only needed for webhooks, not API calls
@@ -161,13 +162,13 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		// Decrypt each field
 		accessToken, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.HubSpot.AccessToken)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt access token", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt access token", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt access token").Mark(ierr.ErrInternal)
 		}
 
 		clientSecret, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.HubSpot.ClientSecret)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt client secret", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt client secret", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt client secret").Mark(ierr.ErrInternal)
 		}
 
@@ -205,7 +206,7 @@ func (c *Client) VerifyWebhookSignatureV3(method string, uri string, requestBody
 	isValid := hmac.Equal([]byte(computedSignature), []byte(signature))
 
 	if !isValid {
-		c.logger.Warnw("webhook signature verification failed",
+		c.logger.Info(context.Background(), "webhook signature verification failed",
 			"source_string_length", len(sourceString))
 	}
 
@@ -239,6 +240,7 @@ func (c *Client) GetDeal(ctx context.Context, dealID string) (*DealResponse, err
 
 	if resp.StatusCode != http.StatusOK {
 		c.logger.Error(ctx, "hubspot api error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"deal_id", dealID)
@@ -282,6 +284,7 @@ func (c *Client) GetContact(ctx context.Context, contactID string) (*ContactResp
 
 	if resp.StatusCode != http.StatusOK {
 		c.logger.Error(ctx, "hubspot api error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"contact_id", contactID)
@@ -325,6 +328,7 @@ func (c *Client) GetDealAssociations(ctx context.Context, dealID string) (*Assoc
 
 	if resp.StatusCode != http.StatusOK {
 		c.logger.Error(ctx, "hubspot api error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"deal_id", dealID)
@@ -370,6 +374,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 		// Check if it's an HTTP error with status code and response body
 		if httpErr, ok := httpclient.IsHTTPError(err); ok {
 			c.logger.Error(ctx, "HubSpot API error creating invoice",
+				"error", err,
 				"status_code", httpErr.StatusCode,
 				"url", url)
 			return nil, ierr.NewError("failed to create invoice in HubSpot").
@@ -386,7 +391,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		c.logger.Error(ctx, "hubspot create invoice error",
+		c.logger.Info(ctx, "hubspot create invoice error",
 			"status", resp.StatusCode,
 			"url", url)
 		return nil, ierr.NewError("failed to create invoice in HubSpot").
@@ -433,6 +438,7 @@ func (c *Client) UpdateInvoice(ctx context.Context, invoiceID string, properties
 		// Check if it's an HTTP error with status code
 		if httpErr, ok := httpclient.IsHTTPError(err); ok {
 			c.logger.Error(ctx, "HubSpot API error updating invoice",
+				"error", err,
 				"status_code", httpErr.StatusCode,
 				"url", url,
 				"invoice_id", invoiceID)
@@ -452,7 +458,7 @@ func (c *Client) UpdateInvoice(ctx context.Context, invoiceID string, properties
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		c.logger.Error(ctx, "hubspot update invoice error",
+		c.logger.Info(ctx, "hubspot update invoice error",
 			"status", resp.StatusCode,
 			"url", url,
 			"invoice_id", invoiceID)
@@ -499,6 +505,7 @@ func (c *Client) UpdateDeal(ctx context.Context, dealID string, properties map[s
 	if err != nil {
 		if httpErr, ok := httpclient.IsHTTPError(err); ok {
 			c.logger.Error(ctx, "HubSpot API error updating deal",
+				"error", err,
 				"status_code", httpErr.StatusCode,
 				"url", url,
 				"deal_id", dealID)
@@ -517,7 +524,7 @@ func (c *Client) UpdateDeal(ctx context.Context, dealID string, properties map[s
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		c.logger.Error(ctx, "hubspot update deal error",
+		c.logger.Info(ctx, "hubspot update deal error",
 			"status", resp.StatusCode,
 			"url", url,
 			"deal_id", dealID)
@@ -570,6 +577,7 @@ func (c *Client) CreateLineItem(ctx context.Context, req *LineItemCreateRequest)
 
 	if resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot create line item error",
+			"error", err,
 			"status", resp.StatusCode,
 			"url", url)
 		return nil, ierr.NewError("failed to create line item in HubSpot").
@@ -612,6 +620,7 @@ func (c *Client) AssociateLineItemToInvoice(ctx context.Context, lineItemID, inv
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot associate line item error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"line_item_id", lineItemID,
@@ -651,6 +660,7 @@ func (c *Client) AssociateInvoiceToContact(ctx context.Context, invoiceID, conta
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot associate invoice error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"invoice_id", invoiceID,
@@ -697,6 +707,7 @@ func (c *Client) CreateDealLineItem(ctx context.Context, req *DealLineItemCreate
 	if err != nil {
 		if httpErr, ok := httpclient.IsHTTPError(err); ok {
 			c.logger.Error(ctx, "HubSpot API error creating line item",
+				"error", err,
 				"status_code", httpErr.StatusCode,
 				"url", url)
 			return nil, ierr.NewError("failed to create line item in HubSpot").
@@ -714,6 +725,7 @@ func (c *Client) CreateDealLineItem(ctx context.Context, req *DealLineItemCreate
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot create line item error",
+			"error", err,
 			"status", resp.StatusCode,
 			"url", url)
 		return nil, ierr.NewError("failed to create line item in HubSpot").
@@ -762,6 +774,7 @@ func (c *Client) CreateQuote(ctx context.Context, req *QuoteCreateRequest) (*Quo
 				responseBody = string(resp.Body)
 			}
 			c.logger.Error(ctx, "HubSpot API error creating quote",
+				"error", err,
 				"url", url,
 				"status_code", httpErr.StatusCode)
 			return nil, ierr.NewError("failed to create quote in HubSpot").
@@ -782,7 +795,7 @@ func (c *Client) CreateQuote(ctx context.Context, req *QuoteCreateRequest) (*Quo
 		if resp.Body != nil {
 			responseBody = string(resp.Body)
 		}
-		c.logger.Error(ctx, "hubspot create quote error",
+		c.logger.Info(ctx, "hubspot create quote error",
 			"status", resp.StatusCode,
 			"url", url)
 		return nil, ierr.NewError("failed to create quote in HubSpot").
@@ -850,6 +863,7 @@ func (c *Client) UpdateQuote(ctx context.Context, quoteID string, properties Quo
 				responseBody = string(resp.Body)
 			}
 			c.logger.Error(ctx, "HubSpot API error updating quote",
+				"error", err,
 				"status_code", httpErr.StatusCode,
 				"url", url)
 			return ierr.NewError("failed to update quote in HubSpot").
@@ -870,7 +884,7 @@ func (c *Client) UpdateQuote(ctx context.Context, quoteID string, properties Quo
 		if resp.Body != nil {
 			responseBody = string(resp.Body)
 		}
-		c.logger.Error(ctx, "hubspot update quote error",
+		c.logger.Info(ctx, "hubspot update quote error",
 			"status", resp.StatusCode,
 			"url", url)
 		return ierr.NewError("failed to update quote in HubSpot").
@@ -909,6 +923,7 @@ func (c *Client) CreateQuoteLineItem(ctx context.Context, req *QuoteLineItemCrea
 	if err != nil {
 		if httpErr, ok := httpclient.IsHTTPError(err); ok {
 			c.logger.Error(ctx, "HubSpot API error creating quote line item",
+				"error", err,
 				"status_code", httpErr.StatusCode,
 				"url", url)
 			return nil, ierr.NewError("failed to create quote line item in HubSpot").
@@ -926,6 +941,7 @@ func (c *Client) CreateQuoteLineItem(ctx context.Context, req *QuoteLineItemCrea
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot create quote line item error",
+			"error", err,
 			"status", resp.StatusCode,
 			"url", url)
 		return nil, ierr.NewError("failed to create quote line item in HubSpot").
@@ -969,6 +985,7 @@ func (c *Client) AssociateQuoteToDeal(ctx context.Context, quoteID, dealID strin
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot associate quote error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"quote_id", quoteID,
@@ -1009,6 +1026,7 @@ func (c *Client) AssociateQuoteToContact(ctx context.Context, quoteID, contactID
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot associate quote to contact error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"quote_id", quoteID,
@@ -1049,6 +1067,7 @@ func (c *Client) AssociateLineItemToQuote(ctx context.Context, lineItemID, quote
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot associate line item to quote error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"line_item_id", lineItemID,
@@ -1088,6 +1107,7 @@ func (c *Client) GetQuoteTemplates(ctx context.Context) ([]QuoteTemplate, error)
 
 	if resp.StatusCode != http.StatusOK {
 		c.logger.Error(ctx, "hubspot get quote templates error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body))
 		return nil, ierr.NewError("failed to fetch quote templates").
@@ -1133,6 +1153,7 @@ func (c *Client) AssociateQuoteToTemplate(ctx context.Context, quoteID, template
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Error(ctx, "hubspot associate quote to template error",
+			"error", err,
 			"status", resp.StatusCode,
 			"body", string(resp.Body),
 			"quote_id", quoteID,

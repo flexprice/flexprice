@@ -2020,7 +2020,7 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 		return types.CreditExpirySkipReasonNone, err
 	}
 	if len(subscriptions) > 0 {
-		s.Logger.Warn(ctx, "there is a subscription for this customer with current_period_end < now and credits available to expire",
+		s.Logger.Info(ctx, "there is a subscription for this customer with current_period_end < now and credits available to expire",
 			"transaction_id", tx.ID,
 			"subscription_id", subscriptions[0].ID,
 			"credits_available", tx.CreditsAvailable,
@@ -2046,7 +2046,7 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 		return types.CreditExpirySkipReasonNone, err
 	}
 	if len(invoices) > 0 {
-		s.Logger.Warn(ctx, "there is an invoice for this customer with current_period_end < now and credits available to expire",
+		s.Logger.Info(ctx, "there is an invoice for this customer with current_period_end < now and credits available to expire",
 			"transaction_id", tx.ID,
 			"invoice_id", invoices[0].ID,
 		)
@@ -2081,7 +2081,7 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 		EntityID:      walletID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 
@@ -2117,7 +2117,7 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 		EntityID:      transactionID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 
@@ -2230,7 +2230,7 @@ func (s *walletService) UpdateWalletAlertState(ctx context.Context, walletID str
 // PublishEvent publishes a webhook event for a wallet
 func (s *walletService) PublishEvent(ctx context.Context, eventName types.WebhookEventName, w *wallet.Wallet) error {
 	if s.WebhookPublisher == nil {
-		s.Logger.Warn(ctx, "webhook publisher not initialized", "event", eventName)
+		s.Logger.Info(ctx, "webhook publisher not initialized", "event", eventName)
 		return nil
 	}
 
@@ -3564,7 +3564,7 @@ func (s *walletService) publishBenchmarkEvent(ctx context.Context, subscriptionI
 		EnvironmentID:  types.GetEnvironmentID(ctx),
 	}
 	if err := benchSvc.PublishEvent(ctx, evt); err != nil {
-		s.Logger.Warn(ctx, "usage benchmark: failed to publish event",
+		s.Logger.Info(ctx, "usage benchmark: failed to publish event",
 			"subscription_id", subscriptionID,
 			"error", err,
 		)

@@ -143,7 +143,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 
 // CreateWithLineItems creates an invoice with its line items in a single transaction
 func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domainInvoice.Invoice) error {
-	r.logger.Debugw("creating invoice with line items",
+	r.logger.Debug(ctx, "creating invoice with line items",
 		"id", inv.ID,
 		"line_items_count", len(inv.LineItems))
 
@@ -209,8 +209,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			if ent.IsConstraintError(err) {
 				var pqErr *pq.Error
 				if errors.As(err, &pqErr) {
-					// Log or print the exact constraint name
-					fmt.Printf("Violated constraint: %s\n", pqErr.Constraint)
+					r.logger.Debug(ctx, "constraint violation", "constraint", pqErr.Constraint)
 					if pqErr.Constraint == schema.Idx_tenant_environment_invoice_number_unique {
 						return ierr.WithError(err).
 							WithHint("Invoice with same invoice number already exists").
@@ -307,7 +306,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("adding line items", "invoice_id", invoiceID, "count", len(items))
+	r.logger.Debug(ctx, "adding line items", "invoice_id", invoiceID, "count", len(items))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify invoice exists
@@ -375,7 +374,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("removing line items", "invoice_id", invoiceID, "count", len(itemIDs))
+	r.logger.Debug(ctx, "removing line items", "invoice_id", invoiceID, "count", len(itemIDs))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify invoice exists
@@ -416,7 +415,7 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 		return cachedInvoice, nil
 	}
 
-	r.logger.Debugw("getting invoice", "id", id)
+	r.logger.Debug(ctx, "getting invoice", "id", id)
 
 	invoice, err := r.client.Writer(ctx).Invoice.Query().
 		Where(invoice.ID(id),
@@ -949,7 +948,7 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 		return "", ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("generated invoice number",
+	r.logger.Info(ctx, "generated invoice number",
 		"tenant_id", tenantID,
 		"year_month", yearMonth,
 		"sequence", lastValue)
@@ -996,7 +995,7 @@ func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscrip
 		return 0, ierr.WithError(err).WithHint("billing sequence generation failed").Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("generated billing sequence",
+	r.logger.Info(ctx, "generated billing sequence",
 		"tenant_id", tenantID,
 		"subscription_id", subscriptionID,
 		"sequence", lastSequence)
@@ -1175,7 +1174,7 @@ func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Inv
 	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, inv.IdempotencyKey)
 	r.cache.Set(ctx, idempotencyKey, inv, cache.ExpiryDefaultInMemory)
 
-	r.logger.Debugw("set invoice in cache", "id", inv.ID, "cache_key", cacheKey)
+	r.logger.Debug(ctx, "set invoice in cache", "id", inv.ID, "cache_key", cacheKey)
 }
 
 func (r *invoiceRepository) GetCache(ctx context.Context, key string) *domainInvoice.Invoice {
@@ -1207,7 +1206,7 @@ func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
 	// get idempotency key
 	invoice, err := r.Get(ctx, key)
 	if err != nil {
-		r.logger.Errorw("failed to get invoice by idempotency key", "error", err)
+		r.logger.Error(ctx, "failed to get invoice by idempotency key", "error", err)
 		return
 	}
 	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, invoice.IdempotencyKey)
@@ -1226,7 +1225,7 @@ func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, 
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("fetching invoices for export",
+	r.logger.Debug(ctx, "fetching invoices for export",
 		"tenant_id", tenantID,
 		"env_id", envID,
 		"start_time", startTime,

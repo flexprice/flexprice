@@ -88,7 +88,7 @@ func (s *CustomerService) EnsureCustomerSyncedToNomod(ctx context.Context, custo
 			}
 			updatedCustomerResp, err := customerService.UpdateCustomer(ctx, flexpriceCustomer.ID, updateReq)
 			if err != nil {
-				s.logger.Warnw("failed to update customer metadata with Nomod customer ID",
+				s.logger.Info(ctx, "failed to update customer metadata with Nomod customer ID",
 					"customer_id", customerID,
 					"error", err)
 				// Return original customer info if update fails

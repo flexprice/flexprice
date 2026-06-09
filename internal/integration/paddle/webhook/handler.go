@@ -75,7 +75,7 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 
 func (h *Handler) handleCustomerCreated(ctx context.Context, payload []byte, services *ServiceDependencies) error {
 	if services == nil || services.CustomerService == nil {
-		h.logger.Error(ctx, "customer service not available for customer.created webhook")
+		h.logger.Info(ctx, "customer service not available for customer.created webhook")
 		return nil
 	}
 	var event paddlenotification.CustomerCreated
@@ -94,7 +94,7 @@ func (h *Handler) handleCustomerCreated(ctx context.Context, payload []byte, ser
 
 func (h *Handler) handleSubscriptionActivated(ctx context.Context, payload []byte, services *ServiceDependencies) error {
 	if services == nil || services.SubscriptionService == nil {
-		h.logger.Error(ctx, "subscription service not available for subscription.activated webhook")
+		h.logger.Info(ctx, "subscription service not available for subscription.activated webhook")
 		return nil
 	}
 	var event paddlenotification.SubscriptionActivated
@@ -113,7 +113,7 @@ func (h *Handler) handleSubscriptionActivated(ctx context.Context, payload []byt
 
 func (h *Handler) handleAddressCreated(ctx context.Context, payload []byte, services *ServiceDependencies) error {
 	if services == nil || services.CustomerService == nil {
-		h.logger.Error(ctx, "customer service not available for address.created webhook")
+		h.logger.Info(ctx, "customer service not available for address.created webhook")
 		return nil
 	}
 	var event paddlenotification.AddressCreated

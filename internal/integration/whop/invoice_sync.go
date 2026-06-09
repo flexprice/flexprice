@@ -137,7 +137,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 	if whopInvoice.CurrentPlan.ID != "" {
 		plan, planErr := s.client.GetPlan(ctx, whopInvoice.CurrentPlan.ID)
 		if planErr != nil {
-			s.logger.Warnw("failed to fetch Whop plan for purchase_url",
+			s.logger.Info(context.Background(), "failed to fetch Whop plan for purchase_url",
 				"plan_id", whopInvoice.CurrentPlan.ID, "error", planErr)
 		} else if plan.PurchaseURL != "" {
 			if flexInvoice.Metadata == nil {
@@ -145,7 +145,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 			}
 			flexInvoice.Metadata["whop_checkout_url"] = plan.PurchaseURL
 			if updateErr := s.invoiceRepo.Update(ctx, flexInvoice); updateErr != nil {
-				s.logger.Warnw("failed to store whop_checkout_url on invoice",
+				s.logger.Info(context.Background(), "failed to store whop_checkout_url on invoice",
 					"invoice_id", req.InvoiceID, "error", updateErr)
 			}
 		}
@@ -219,7 +219,7 @@ func (s *InvoiceSyncService) ensureProduct(ctx context.Context) (string, error) 
 		if _, err := s.client.GetProduct(ctx, cfg.ProductID); err == nil {
 			return cfg.ProductID, nil
 		}
-		s.logger.Warnw("configured Whop product not found, creating a new one",
+		s.logger.Info(ctx, "configured Whop product not found, creating a new one",
 			"product_id", cfg.ProductID)
 	}
 
@@ -256,7 +256,7 @@ func (s *InvoiceSyncService) resolveCustomer(
 
 	cust, custErr := customerService.GetCustomer(ctx, flexInvoice.CustomerID)
 	if custErr != nil {
-		s.logger.Warnw("failed to fetch customer for Whop invoice sync",
+		s.logger.Info(context.Background(), "failed to fetch customer for Whop invoice sync",
 			"customer_id", flexInvoice.CustomerID, "error", custErr)
 		return "", "", ierr.WithError(custErr).
 			WithHint("Failed to fetch customer for Whop invoice sync").

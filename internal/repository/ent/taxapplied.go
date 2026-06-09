@@ -47,7 +47,7 @@ func (r *taxappliedRepository) Create(ctx context.Context, ta *domainTaxApplied.
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating taxapplied",
+	r.log.Debug(ctx, "creating taxapplied",
 		"taxapplied_id", ta.ID,
 		"tax_rate_id", ta.TaxRateID,
 		"entity_type", ta.EntityType,
@@ -83,7 +83,7 @@ func (r *taxappliedRepository) Create(ctx context.Context, ta *domainTaxApplied.
 
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Errorw("error creating taxapplied", "error", err)
+		r.log.Error(ctx, "error creating taxapplied", "error", err)
 		if ent.IsConstraintError(err) {
 			var pqErr *pq.Error
 			if errors.As(err, &pqErr) {
@@ -126,7 +126,7 @@ func (r *taxappliedRepository) Get(ctx context.Context, id string) (*domainTaxAp
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting taxapplied",
+	r.log.Debug(ctx, "getting taxapplied",
 		"id", id,
 	)
 
@@ -171,7 +171,7 @@ func (r *taxappliedRepository) Update(ctx context.Context, ta *domainTaxApplied.
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("updating taxapplied",
+	r.log.Debug(ctx, "updating taxapplied",
 		"taxapplied_id", ta.ID,
 		"tax_rate_id", ta.TaxRateID,
 		"entity_id", ta.EntityID,
@@ -198,7 +198,7 @@ func (r *taxappliedRepository) Update(ctx context.Context, ta *domainTaxApplied.
 
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Errorw("error updating taxapplied", "error", err)
+		r.log.Error(ctx, "error updating taxapplied", "error", err)
 		if ent.IsNotFound(err) {
 			return ierr.WithError(err).
 				WithHintf("Tax applied record with ID %s was not found", ta.ID).
@@ -230,7 +230,7 @@ func (r *taxappliedRepository) Delete(ctx context.Context, id string) error {
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting taxapplied",
+	r.log.Debug(ctx, "deleting taxapplied",
 		"id", id,
 	)
 
@@ -254,7 +254,7 @@ func (r *taxappliedRepository) Delete(ctx context.Context, id string) error {
 
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Errorw("error deleting taxapplied", "error", err)
+		r.log.Error(ctx, "error deleting taxapplied", "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to delete tax applied record").
 			WithReportableDetails(map[string]any{
@@ -304,7 +304,7 @@ func (r *taxappliedRepository) List(ctx context.Context, filter *types.TaxApplie
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.log.Debugw("listing taxapplieds",
+	r.log.Debug(ctx, "listing taxapplieds",
 		"filter", filter,
 		"count", len(taxapplieds),
 		"filter_status", filter.GetStatus())
@@ -452,7 +452,7 @@ func (r *taxappliedRepository) SetCache(ctx context.Context, taxapplied *domainT
 	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, tenantID, environmentID, taxapplied.ID)
 	r.cache.Set(ctx, cacheKey, taxapplied, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "id_key", cacheKey)
+	r.log.Debug(ctx, "cache set", "id_key", cacheKey)
 }
 
 func (r *taxappliedRepository) GetCache(ctx context.Context, key string) *domainTaxApplied.TaxApplied {
@@ -464,11 +464,11 @@ func (r *taxappliedRepository) GetCache(ctx context.Context, key string) *domain
 	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if taxapplied, ok := value.(*domainTaxApplied.TaxApplied); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return taxapplied
 		}
 	}
-	r.log.Debugw("cache miss", "key", cacheKey)
+	r.log.Debug(ctx, "cache miss", "key", cacheKey)
 	return nil
 }
 
@@ -484,7 +484,7 @@ func (r *taxappliedRepository) DeleteCache(ctx context.Context, taxapplied *doma
 	// Delete ID-based cache first
 	cacheKey := cache.GenerateKey(cache.PrefixTaxApplied, tenantID, environmentID, taxapplied.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debugw("cache deleted", "key", cacheKey)
+	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }
 
 func (r *taxappliedRepository) GetByIdempotencyKey(ctx context.Context, idempotencyKey string) (*domainTaxApplied.TaxApplied, error) {

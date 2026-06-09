@@ -594,7 +594,7 @@ func (s *invoiceService) getBulkUsageAnalyticsForInvoice(ctx context.Context, us
 	for _, lineItem := range usageBasedLineItems {
 		// Skip if essential fields are missing
 		if lineItem.PriceID == nil || lineItem.MeterID == nil {
-			s.Logger.Warn(ctx, "skipping line item with missing price_id or meter_id",
+			s.Logger.Info(ctx, "skipping line item with missing price_id or meter_id",
 				"line_item_id", lineItem.ID,
 				"price_id", lineItem.PriceID,
 				"meter_id", lineItem.MeterID)
@@ -606,7 +606,7 @@ func (s *invoiceService) getBulkUsageAnalyticsForInvoice(ctx context.Context, us
 		featureFilter.MeterIDs = []string{*lineItem.MeterID}
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil || len(features) == 0 {
-			s.Logger.Warn(ctx, "no feature found for meter",
+			s.Logger.Info(ctx, "no feature found for meter",
 				"meter_id", *lineItem.MeterID,
 				"line_item_id", lineItem.ID)
 			continue
@@ -619,7 +619,7 @@ func (s *invoiceService) getBulkUsageAnalyticsForInvoice(ctx context.Context, us
 	}
 
 	if len(featureIDs) == 0 {
-		s.Logger.Warn(ctx, "no valid feature IDs found for any line items")
+		s.Logger.Info(ctx, "no valid feature IDs found for any line items")
 		return make(map[string][]dto.SourceUsageItem), nil
 	}
 
@@ -637,7 +637,7 @@ func (s *invoiceService) getBulkUsageAnalyticsForInvoice(ctx context.Context, us
 	periodEnd := inv.PeriodEnd
 
 	if periodStart == nil || periodEnd == nil {
-		s.Logger.Warn(ctx, "missing period information in invoice",
+		s.Logger.Info(ctx, "missing period information in invoice",
 			"invoice_id", inv.ID,
 			"period_start", periodStart,
 			"period_end", periodEnd)
@@ -1377,7 +1377,7 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 
 		_, err = s.UpdateInvoice(ctx, inv.ID, updateReq)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to update invoice metadata with Razorpay URLs",
+			s.Logger.Info(ctx, "failed to update invoice metadata with Razorpay URLs",
 				"error", err,
 				"invoice_id", inv.ID)
 			// Don't fail the sync, just log the warning
@@ -2802,7 +2802,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 	// Get applied taxes for detailed breakdown
 	appliedTaxes, err := s.getAppliedTaxesForPDF(ctx, inv.ID)
 	if err != nil {
-		s.Logger.Warnw("failed to get applied taxes for PDF", "error", err, "invoice_id", inv.ID)
+		s.Logger.Info(context.Background(), "failed to get applied taxes for PDF", "error", err, "invoice_id", inv.ID)
 		// Don't fail PDF generation, just skip applied taxes section
 		appliedTaxes = []pdf.AppliedTaxData{}
 	}
@@ -2812,7 +2812,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 
 	appliedDiscounts, err := s.getAppliedDiscountsForPDF(ctx, inv)
 	if err != nil {
-		s.Logger.Warnw("failed to get applied discounts for PDF", "error", err, "invoice_id", inv.ID)
+		s.Logger.Info(context.Background(), "failed to get applied discounts for PDF", "error", err, "invoice_id", inv.ID)
 		// Don't fail PDF generation, just skip applied discounts section
 		appliedDiscounts = []pdf.AppliedDiscountData{}
 	}
@@ -3668,7 +3668,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 	for _, lineItem := range usageBasedLineItems {
 		// Skip if essential fields are missing
 		if lineItem.PriceID == nil || lineItem.MeterID == nil {
-			s.Logger.Warn(ctx, "skipping line item with missing price_id or meter_id",
+			s.Logger.Info(ctx, "skipping line item with missing price_id or meter_id",
 				"line_item_id", lineItem.ID,
 				"price_id", lineItem.PriceID,
 				"meter_id", lineItem.MeterID)
@@ -3687,7 +3687,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 	}
 
 	if len(meterIDs) == 0 {
-		s.Logger.Warn(ctx, "no valid meter IDs found")
+		s.Logger.Info(ctx, "no valid meter IDs found")
 		return make(map[string][]dto.UsageBreakdownItem), nil
 	}
 
@@ -3730,7 +3730,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 
 		featureID, exists := meterToFeatureMap[*lineItem.MeterID]
 		if !exists {
-			s.Logger.Warn(ctx, "no feature found for meter",
+			s.Logger.Info(ctx, "no feature found for meter",
 				"meter_id", *lineItem.MeterID,
 				"line_item_id", lineItem.ID)
 			continue
@@ -3750,7 +3750,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 			periodStart = *inv.PeriodStart
 			periodEnd = *inv.PeriodEnd
 		} else {
-			s.Logger.Warn(ctx, "missing period information for line item",
+			s.Logger.Info(ctx, "missing period information for line item",
 				"line_item_id", lineItem.ID,
 				"invoice_id", inv.ID)
 			continue
@@ -3764,7 +3764,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 	}
 
 	if len(periodGroups) == 0 {
-		s.Logger.Warn(ctx, "no valid line items found with periods")
+		s.Logger.Info(ctx, "no valid line items found with periods")
 		return make(map[string][]dto.UsageBreakdownItem), nil
 	}
 
@@ -3861,7 +3861,7 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(analyticsResponse *dto.
 
 		if !exists || len(analyticsItems) == 0 {
 			// No usage data for this line item
-			s.Logger.Debugw("no usage analytics found for line item",
+			s.Logger.Debug(context.Background(), "no usage analytics found for line item",
 				"line_item_id", lineItemID,
 				"feature_id", featureID)
 			usageBreakdownResponse[lineItemID] = []dto.UsageBreakdownItem{}
@@ -3926,7 +3926,7 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(analyticsResponse *dto.
 		// Assign to response
 		usageBreakdownResponse[lineItemID] = lineItemUsageBreakdown
 
-		s.Logger.Debugw("mapped flexible usage breakdown for line item",
+		s.Logger.Debug(context.Background(), "mapped flexible usage breakdown for line item",
 			"line_item_id", lineItemID,
 			"feature_id", featureID,
 			"groups_count", len(lineItemUsageBreakdown),
@@ -3996,7 +3996,7 @@ func (s *invoiceService) recalculateInvoiceTotals(inv *dto.InvoiceResponse) {
 		inv.AmountRemaining = decimal.Zero
 	}
 
-	s.Logger.Debugw("recalculated invoice totals after usage breakdown",
+	s.Logger.Debug(context.Background(), "recalculated invoice totals after usage breakdown",
 		"invoice_id", inv.ID,
 		"new_subtotal", newSubtotal.StringFixed(2),
 		"new_total", newTotal.StringFixed(2),
@@ -4054,7 +4054,7 @@ func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID st
 			}
 		} else {
 			// Fallback if tax rate not expanded - this should not happen if expand works
-			s.Logger.Error(ctx, "Tax rate expand failed - falling back to basic info", "tax_rate_id", appliedTax.TaxRateID)
+			s.Logger.Info(ctx, "Tax rate expand failed - falling back to basic info", "tax_rate_id", appliedTax.TaxRateID)
 			taxName = "Tax Rate " + appliedTax.TaxRateID[len(appliedTax.TaxRateID)-6:] // Show last 6 chars
 			taxCode = appliedTax.TaxRateID
 			taxType = "Unknown"

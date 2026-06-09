@@ -454,7 +454,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 			stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 			if err == nil {
 				if stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
-					s.Logger.Warnw("card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
+					s.Logger.Info(context.Background(), "card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
 						"subscription_id", sub.ID,
 						"invoice_id", inv.ID,
 						"attempted_card_amount", cardAmount,
@@ -467,7 +467,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 			if !allowPartialWallet {
 				// Card payment failed - do not attempt wallet payment
 				// The invoice cannot be fully paid, so we stop here
-				s.Logger.Warnw("card payment failed, not attempting wallet payment",
+				s.Logger.Info(context.Background(), "card payment failed, not attempting wallet payment",
 					"subscription_id", sub.ID,
 					"attempted_card_amount", cardAmount,
 					"wallet_amount_available", walletAmount,
@@ -480,7 +480,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				return result
 			} else {
 				// Card payment failed but we allow partial wallet payment
-				s.Logger.Warnw("card payment failed, but allowing partial wallet payment",
+				s.Logger.Info(context.Background(), "card payment failed, but allowing partial wallet payment",
 					"subscription_id", sub.ID,
 					"attempted_card_amount", cardAmount,
 					"wallet_amount_available", walletAmount,
@@ -514,7 +514,7 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				"remaining_amount", result.RemainingAmount,
 			)
 		} else {
-			s.Logger.Warnw("wallet payment failed",
+			s.Logger.Info(context.Background(), "wallet payment failed",
 				"subscription_id", sub.ID,
 				"attempted_wallet_amount", walletAmount,
 			)
@@ -713,7 +713,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 
 	// Check if tenant has Stripe connection
 	if !s.hasStripeConnection(ctx) {
-		s.Logger.Warnw("no Stripe connection available for payment method charge",
+		s.Logger.Info(context.Background(), "no Stripe connection available for payment method charge",
 			"subscription_id", sub.ID,
 		)
 		return decimal.Zero
@@ -722,7 +722,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	// Get Stripe integration
 	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		s.Logger.Warnw("failed to get Stripe integration",
+		s.Logger.Info(context.Background(), "failed to get Stripe integration",
 			"subscription_id", sub.ID,
 			"error", err,
 		)
@@ -734,7 +734,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	customerService := NewCustomerService(*s.ServiceParams)
 	if !stripeIntegration.CustomerSvc.HasCustomerStripeMapping(ctx, invoicingCustomerID, customerService) {
-		s.Logger.Warnw("no Stripe entity mapping found for invoicing customer",
+		s.Logger.Info(context.Background(), "no Stripe entity mapping found for invoicing customer",
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
 			"invoicing_customer_id", invoicingCustomerID,
@@ -745,7 +745,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	// Get payment method ID - use invoicing customer's payment methods
 	paymentMethodID := s.getPaymentMethodID(ctx, sub, invoicingCustomerID)
 	if paymentMethodID == "" {
-		s.Logger.Warnw("no payment method available for automatic charging",
+		s.Logger.Info(context.Background(), "no payment method available for automatic charging",
 			"subscription_id", sub.ID,
 		)
 		return decimal.Zero
@@ -798,7 +798,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		return amount
 	}
 
-	s.Logger.Warnw("payment method charge not successful",
+	s.Logger.Info(context.Background(), "payment method charge not successful",
 		"subscription_id", sub.ID,
 		"payment_id", paymentResp.ID,
 		"status", paymentResp.PaymentStatus,
@@ -821,7 +821,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	// Get invoicing customer's default payment method from Stripe
 	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to get Stripe integration",
+		s.Logger.Info(ctx, "failed to get Stripe integration",
 			"error", err,
 			"subscription_id", sub.ID,
 		)
@@ -831,7 +831,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	customerService := NewCustomerService(*s.ServiceParams)
 	defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, invoicingCustomerID, customerService)
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to get default payment method for invoicing customer",
+		s.Logger.Info(ctx, "failed to get default payment method for invoicing customer",
 			"error", err,
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
@@ -841,7 +841,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	}
 
 	if defaultPaymentMethod == nil {
-		s.Logger.Warn(ctx, "invoicing customer has no default payment method",
+		s.Logger.Info(ctx, "invoicing customer has no default payment method",
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
 			"invoicing_customer_id", invoicingCustomerID,

@@ -87,6 +87,7 @@ func (c *Client) GetPaddleConfig(ctx context.Context) (*PaddleConfig, error) {
 
 	if config.APIKey == "" {
 		c.logger.Error(ctx, "missing Paddle API key",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Paddle API key").
@@ -121,13 +122,13 @@ func (c *Client) GetDecryptedPaddleConfig(conn *connection.Connection) (*PaddleC
 // decryptConnectionMetadata decrypts the connection encrypted secret data
 func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.Metadata, error) {
 	if conn.ProviderType != types.SecretProviderPaddle || conn.EncryptedSecretData.Paddle == nil {
-		c.logger.Warnw("no paddle metadata found", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no paddle metadata found", "connection_id", conn.ID)
 		return types.Metadata{}, nil
 	}
 
 	apiKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Paddle.APIKey)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt Paddle API key", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt Paddle API key", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt Paddle API key").Mark(ierr.ErrInternal)
 	}
 
@@ -135,7 +136,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 	if conn.EncryptedSecretData.Paddle.WebhookSecret != "" {
 		webhookSecret, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Paddle.WebhookSecret)
 		if err != nil {
-			c.logger.Warnw("failed to decrypt Paddle webhook secret", "connection_id", conn.ID, "error", err)
+			c.logger.Info(context.Background(), "failed to decrypt Paddle webhook secret", "connection_id", conn.ID, "error", err)
 		}
 	}
 
@@ -143,7 +144,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 	if conn.EncryptedSecretData.Paddle.ClientSideToken != "" {
 		clientSideToken, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Paddle.ClientSideToken)
 		if err != nil {
-			c.logger.Warnw("failed to decrypt Paddle client_side_token", "connection_id", conn.ID, "error", err)
+			c.logger.Info(context.Background(), "failed to decrypt Paddle client_side_token", "connection_id", conn.ID, "error", err)
 		}
 	}
 

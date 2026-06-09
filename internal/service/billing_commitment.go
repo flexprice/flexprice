@@ -374,7 +374,7 @@ func applyCumulativeSubscriptionCommitment(
 		}
 	}
 
-	logger.Debugw("applied cumulative subscription commitment",
+	logger.Debug(context.Background(), "applied cumulative subscription commitment",
 		"commitment_amount", commitmentAmount,
 		"total_prior_base", totalPriorBase,
 		"total_current_base", totalCurrentBase,

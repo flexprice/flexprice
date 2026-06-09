@@ -207,7 +207,7 @@ func (s *InvoiceSyncService) buildLineItems(flexInvoice *invoice.Invoice) ([]Lin
 	for _, item := range flexInvoice.LineItems {
 		// Skip zero-amount items
 		if item.Amount.IsZero() {
-			s.logger.Debugw("skipping zero-amount line item",
+			s.logger.Debug(context.Background(), "skipping zero-amount line item",
 				"invoice_id", flexInvoice.ID)
 			continue
 		}
@@ -287,7 +287,7 @@ func (s *InvoiceSyncService) buildSyncResponse(nomodInvoice *InvoiceResponse) *N
 	// Parse amount with error handling
 	amount, err := decimal.NewFromString(nomodInvoice.Amount)
 	if err != nil {
-		s.logger.Errorw("failed to parse Nomod invoice amount",
+		s.logger.Error(context.Background(), "failed to parse Nomod invoice amount",
 			"raw_amount", nomodInvoice.Amount,
 			"invoice_id", nomodInvoice.ID,
 			"error", err)
@@ -362,7 +362,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
 		// If duplicate key error, invoice is already tracked (race condition)
-		s.logger.Warnw("failed to create entity integration mapping (may already exist)",
+		s.logger.Info(context.Background(), "failed to create entity integration mapping (may already exist)",
 			"error", err,
 			"invoice_id", flexInvoiceID,
 			"nomod_invoice_id", nomodInvoice.ID)

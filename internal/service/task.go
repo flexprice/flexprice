@@ -1241,7 +1241,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	// For Flexprice-managed, verify bucket matches config
 	if isFlexpriceManaged {
 		if bucket != s.Config.FlexpriceS3Exports.Bucket {
-			s.Logger.Warn(ctx, "bucket mismatch for Flexprice-managed export",
+			s.Logger.Info(ctx, "bucket mismatch for Flexprice-managed export",
 				"expected_bucket", s.Config.FlexpriceS3Exports.Bucket,
 				"actual_bucket", bucket,
 				"task_id", id)

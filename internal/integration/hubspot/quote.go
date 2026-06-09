@@ -79,7 +79,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Get deal ID from customer metadata
 	dealID, ok := cust.Metadata["hubspot_deal_id"]
 	if !ok || dealID == "" {
-		s.logger.Warnw("no HubSpot deal ID found in customer metadata",
+		s.logger.Info(ctx, "no HubSpot deal ID found in customer metadata",
 			"customer_id", cust.ID,
 			"subscription_id", subscriptionID,
 			"metadata", cust.Metadata)
@@ -138,7 +138,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 			"subscription_id", subscriptionID)
 		// Don't fail the entire sync if association fails - quote was created successfully
 		// Log warning and continue
-		s.logger.Warnw("quote created but association with deal failed",
+		s.logger.Info(ctx, "quote created but association with deal failed",
 			"quote_id", quote.ID,
 			"deal_id", dealID)
 	} else {
@@ -150,7 +150,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Associate quote with contact (if contact ID is available)
 	if contactID != "" {
 		if err := s.client.AssociateQuoteToContact(ctx, quote.ID, contactID); err != nil {
-			s.logger.Warnw("failed to associate quote with contact",
+			s.logger.Info(ctx, "failed to associate quote with contact",
 				"error", err,
 				"quote_id", quote.ID,
 				"contact_id", contactID,
@@ -171,19 +171,19 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	// Per docs: "For a quote to be publishable, it must have an associated deal and quote template"
 	templates, err := s.client.GetQuoteTemplates(ctx)
 	if err != nil {
-		s.logger.Warnw("failed to fetch quote templates - quote will not be publishable without template",
+		s.logger.Info(ctx, "failed to fetch quote templates - quote will not be publishable without template",
 			"error", err,
 			"quote_id", quote.ID,
 			"subscription_id", subscriptionID)
 	} else if len(templates) == 0 {
-		s.logger.Warnw("no quote templates found in HubSpot - quote will not be publishable without template",
+		s.logger.Info(ctx, "no quote templates found in HubSpot - quote will not be publishable without template",
 			"quote_id", quote.ID,
 			"subscription_id", subscriptionID)
 	} else {
 		// Use the first available template (typically there's a default template)
 		templateID := templates[0].ID
 		if err := s.client.AssociateQuoteToTemplate(ctx, quote.ID, templateID); err != nil {
-			s.logger.Warnw("failed to associate quote with template - quote will not be publishable",
+			s.logger.Info(ctx, "failed to associate quote with template - quote will not be publishable",
 				"error", err,
 				"quote_id", quote.ID,
 				"template_id", templateID,
@@ -205,7 +205,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	}
 
 	if len(flatRateLineItems) == 0 {
-		s.logger.Warnw("no active flat rate line items to sync",
+		s.logger.Info(ctx, "no active flat rate line items to sync",
 			"subscription_id", subscriptionID,
 			"quote_id", quote.ID,
 			"line_items_count", len(sub.LineItems))
@@ -235,7 +235,7 @@ func (s *QuoteSyncService) SyncSubscriptionToQuote(ctx context.Context, subscrip
 	if err := s.client.UpdateQuote(ctx, quote.ID, QuoteProperties{
 		Status: "DRAFT",
 	}); err != nil {
-		s.logger.Warnw("failed to set quote to DRAFT state",
+		s.logger.Info(ctx, "failed to set quote to DRAFT state",
 			"error", err,
 			"quote_id", quote.ID,
 			"subscription_id", subscriptionID)

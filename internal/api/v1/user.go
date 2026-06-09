@@ -56,7 +56,7 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("invalid request body", "error", err)
+		h.logger.Error(c.Request.Context(), "invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request. For user: type and email required. For service_account: type and roles required.").
 			Mark(ierr.ErrValidation))
@@ -65,7 +65,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 	resp, err := h.userService.CreateUser(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to create user", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to create user", "error", err)
 		c.Error(err)
 		return
 	}
@@ -88,7 +88,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("invalid request body", "error", err)
+		h.logger.Error(c.Request.Context(), "invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request. Provide metadata object.").
 			Mark(ierr.ErrValidation))
@@ -97,7 +97,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 	resp, err := h.userService.UpdateUser(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to update user", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to update user", "error", err)
 		c.Error(err)
 		return
 	}
@@ -139,7 +139,7 @@ func (h *UserHandler) QueryUsers(c *gin.Context) {
 
 	users, err := h.userService.ListUsersByFilter(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Errorw("failed to list service accounts", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to list service accounts", "error", err)
 		c.Error(err)
 		return
 	}

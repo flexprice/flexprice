@@ -75,7 +75,7 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, event *MoyasarWebhookEv
 		return h.handleInvoicePayment(ctx, payment, services)
 	}
 
-	h.logger.Warnw("webhook payment has no invoice_id, skipping",
+	h.logger.Info(ctx, "webhook payment has no invoice_id, skipping",
 		"moyasar_payment_id", payment.ID)
 	return nil
 }
@@ -103,7 +103,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment PaymentEvent
 	}
 
 	if len(mappings) == 0 {
-		h.logger.Warnw("no FlexPrice invoice found for Moyasar invoice, skipping",
+		h.logger.Info(ctx, "no FlexPrice invoice found for Moyasar invoice, skipping",
 			"moyasar_invoice_id", moyasarInvoiceID)
 		return nil
 	}

@@ -100,7 +100,7 @@ func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfi
 			Mark(ierr.ErrValidation)
 	}
 	if conn.EncryptedSecretData.Whop == nil {
-		c.logger.Warnw("no whop metadata found", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no whop metadata found", "connection_id", conn.ID)
 		return &WhopConfig{}, nil
 	}
 
@@ -108,13 +108,13 @@ func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfi
 
 	apiKey, err := c.encryptionService.Decrypt(w.APIKey)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt Whop API key", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt Whop API key", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt Whop API key").Mark(ierr.ErrInternal)
 	}
 
 	companyID, err := c.encryptionService.Decrypt(w.CompanyID)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt Whop company ID", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt Whop company ID", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt Whop company ID").Mark(ierr.ErrInternal)
 	}
 
@@ -219,7 +219,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.logger.Error(ctx, "whop API returned error",
+		c.logger.Info(ctx, "whop API returned error",
 			"status_code", resp.StatusCode,
 			"method", method,
 			"endpoint", endpoint,

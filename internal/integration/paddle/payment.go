@@ -214,12 +214,12 @@ func (s *PaymentService) reconcileInvoice(
 // Paddle stores amounts as strings in smallest denomination.
 func (s *PaymentService) convertFromSmallestUnit(totalStr string, currency string) decimal.Decimal {
 	if totalStr == "" {
-		s.logger.Warnw("empty Paddle total, using zero", "currency", currency)
+		s.logger.Info(context.Background(), "empty Paddle total, using zero", "currency", currency)
 		return decimal.Zero
 	}
 	amountInt, err := strconv.ParseInt(totalStr, 10, 64)
 	if err != nil {
-		s.logger.Warnw("failed to parse Paddle total, using zero",
+		s.logger.Info(context.Background(), "failed to parse Paddle total, using zero",
 			"currency", currency,
 			"error", err)
 		return decimal.Zero

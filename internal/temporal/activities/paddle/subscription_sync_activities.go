@@ -135,7 +135,7 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			// No Paddle connection — treat as activated (no sub sync needed).
-			a.logger.Warnw("Paddle connection not configured, treating subscription as activated",
+			a.logger.Info(context.Background(), "Paddle connection not configured, treating subscription as activated",
 				"invoice_id", input.InvoiceID)
 			return &models.SubscriptionSyncStatusResult{Status: "activated"}, nil
 		}

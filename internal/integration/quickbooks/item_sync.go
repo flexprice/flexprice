@@ -69,7 +69,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 	if priceToSync.MeterID != "" {
 		meterItem, err = s.MeterRepo.GetMeter(ctx, priceToSync.MeterID)
 		if err != nil {
-			s.Logger.Warnw("failed to find meter for price, continuing without meter name",
+			s.Logger.Info(ctx, "failed to find meter for price, continuing without meter name",
 				"price_id", priceToSync.ID,
 				"meter_id", priceToSync.MeterID,
 				"error", err)
@@ -144,7 +144,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 		itemReq.UnitPrice = &unitPrice
 		s.Logger.Info(ctx, "set UnitPrice on ItemCreateRequest", "unit_price", unitPrice)
 	} else {
-		s.Logger.Warnw("unit price is zero, not setting UnitPrice on ItemCreateRequest",
+		s.Logger.Info(ctx, "unit price is zero, not setting UnitPrice on ItemCreateRequest",
 			"price_id", priceToSync.ID,
 			"price_type", priceToSync.Type)
 	}

@@ -63,7 +63,7 @@ func NewRawEventConsumptionService(
 		params.Config.RawEventConsumption.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create pubsub for raw event consumption", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create pubsub for raw event consumption", "error", err)
 		return nil
 	}
 	ev.pubSub = pubSub
@@ -75,7 +75,7 @@ func NewRawEventConsumptionService(
 		"raw-event-consumption-producer",
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create output pubsub for raw event consumption", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create output pubsub for raw event consumption", "error", err)
 		return nil
 	}
 	ev.outputPubSub = outputPubSub
@@ -89,7 +89,7 @@ func (s *rawEventConsumptionService) RegisterHandler(
 	cfg *config.Configuration,
 ) {
 	if !cfg.RawEventConsumption.Enabled {
-		s.Logger.Infow("raw event consumption handler disabled by configuration")
+		s.Logger.Info(context.Background(), "raw event consumption handler disabled by configuration")
 		return
 	}
 
@@ -105,7 +105,7 @@ func (s *rawEventConsumptionService) RegisterHandler(
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered raw event consumption handler",
+	s.Logger.Info(context.Background(), "registered raw event consumption handler",
 		"topic", cfg.RawEventConsumption.Topic,
 		"rate_limit", cfg.RawEventConsumption.RateLimit,
 	)
@@ -152,14 +152,14 @@ func (s *rawEventConsumptionService) loadIngestionFilter(ctx context.Context) (e
 
 // processMessage processes a batch of raw events from Kafka
 func (s *rawEventConsumptionService) processMessage(msg *message.Message) error {
-	s.Logger.Debugw("processing raw event batch from message queue",
+	s.Logger.Debug(context.Background(), "processing raw event batch from message queue",
 		"message_uuid", msg.UUID,
 	)
 
 	// Unmarshal the batch first so we have tenant/environment IDs.
 	var batch RawEventBatch
 	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
-		s.Logger.Errorw("failed to unmarshal raw event batch",
+		s.Logger.Error(context.Background(), "failed to unmarshal raw event batch",
 			"error", err,
 			"payload", string(msg.Payload),
 		)
@@ -167,7 +167,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		return fmt.Errorf("non-retriable unmarshal error: %w", err)
 	}
 
-	s.Logger.Infow("processing raw event batch",
+	s.Logger.Info(context.Background(), "processing raw event batch",
 		"batch_size", len(batch.Data),
 		"message_uuid", msg.UUID,
 	)
@@ -184,7 +184,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		environmentID = s.Config.Billing.EnvironmentID
 	}
 
-	s.Logger.Debugw("using tenant and environment context",
+	s.Logger.Debug(context.Background(), "using tenant and environment context",
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"source", func() string {
@@ -204,7 +204,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 	// On a real settings-store error (not ErrNotFound) we fail the batch so Kafka retries it.
 	filterEnabled, allowlist, err := s.loadIngestionFilter(ctx)
 	if err != nil {
-		s.Logger.Errorw("failed to load ingestion filter, failing batch for retry",
+		s.Logger.Error(context.Background(), "failed to load ingestion filter, failing batch for retry",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"error", err,
@@ -229,7 +229,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		if err != nil {
 			// Transformation error
 			errorCount++
-			s.Logger.Warnw("transformation error - event skipped",
+			s.Logger.Info(context.Background(), "transformation error - event skipped",
 				"batch_position", i+1,
 				"error", err.Error(),
 			)
@@ -239,7 +239,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		if transformedEvent == nil {
 			// Event failed validation and was dropped
 			skipCount++
-			s.Logger.Debugw("validation failed - event dropped",
+			s.Logger.Debug(context.Background(), "validation failed - event dropped",
 				"batch_position", i+1,
 			)
 			continue
@@ -250,7 +250,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		if filterEnabled {
 			if _, ok := allowlist[transformedEvent.ExternalCustomerID]; !ok {
 				skipCount++
-				s.Logger.Debugw("event filtered by ingestion allowlist - skipped",
+				s.Logger.Debug(context.Background(), "event filtered by ingestion allowlist - skipped",
 					"batch_position", i+1,
 				)
 				continue
@@ -260,7 +260,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		// Publish the transformed event to events topic
 		if err := s.publishTransformedEvent(ctx, transformedEvent); err != nil {
 			errorCount++
-			s.Logger.Errorw("failed to publish transformed event",
+			s.Logger.Error(context.Background(), "failed to publish transformed event",
 				"event_id", transformedEvent.ID,
 				"event_name", transformedEvent.EventName,
 				"external_customer_id", transformedEvent.ExternalCustomerID,
@@ -272,14 +272,14 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		}
 
 		successCount++
-		s.Logger.Debugw("successfully transformed and published event",
+		s.Logger.Debug(context.Background(), "successfully transformed and published event",
 			"event_id", transformedEvent.ID,
 			"event_name", transformedEvent.EventName,
 			"batch_position", i+1,
 		)
 	}
 
-	s.Logger.Infow("completed raw event batch processing",
+	s.Logger.Info(context.Background(), "completed raw event batch processing",
 		"batch_size", len(batch.Data),
 		"success_count", successCount,
 		"skip_count", skipCount,

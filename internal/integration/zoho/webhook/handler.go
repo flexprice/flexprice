@@ -72,7 +72,7 @@ func (h *Handler) Handle(ctx context.Context, conn *domainconn.Connection, parse
 		return ierr.WithError(err).Mark(ierr.ErrValidation)
 	}
 	if org := p.OrganizationID.String(); org != "" && zb.OrganizationID != "" && org != zb.OrganizationID {
-		h.logger.Warnw("zoho webhook organization_id mismatch",
+		h.logger.Info(ctx, "zoho webhook organization_id mismatch",
 			"payload_org", org,
 			"connection_org", zb.OrganizationID)
 		return ierr.NewError("organization_id does not match connection").Mark(ierr.ErrValidation)
@@ -173,7 +173,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, zohoInvID string, inv *
 
 	amount, ok := resolvePaidAmount(inv, invResp)
 	if !ok || amount.IsZero() {
-		h.logger.Warnw("zoho webhook: could not resolve paid amount",
+		h.logger.Info(ctx, "zoho webhook: could not resolve paid amount",
 			"zoho_invoice_id", zohoInvID,
 			"flex_invoice_id", mapping.EntityID)
 		return nil

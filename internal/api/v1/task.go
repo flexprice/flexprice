@@ -239,7 +239,7 @@ func (h *TaskHandler) DownloadTaskFile(c *gin.Context) {
 
 	downloadURL, err := h.service.GenerateDownloadURL(c.Request.Context(), id)
 	if err != nil {
-		h.log.Errorw("failed to generate download URL",
+		h.log.Error(c.Request.Context(), "failed to generate download URL",
 			"error", err,
 			"task_id", id)
 		c.Error(err)

@@ -52,7 +52,7 @@ func NewOnboardingService(
 		params.Config.OnboardingEvents.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Warnw("failed to create pubsub for onboarding events, event generation will be unavailable", "error", err)
+		params.Logger.Info(context.Background(), "failed to create pubsub for onboarding events, event generation will be unavailable", "error", err)
 	} else {
 		svc.pubSub = pubSub
 	}
@@ -207,11 +207,11 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 		return
 	}
 	if s.pubSub == nil {
-		s.Logger.Errorw("onboarding events pubsub is nil, skipping handler registration — check Kafka connectivity at startup")
+		s.Logger.Info(context.Background(), "onboarding events pubsub is nil, skipping handler registration — check Kafka connectivity at startup")
 	}
 	rateLimit := cfg.OnboardingEvents.RateLimit
 	if rateLimit <= 0 {
-		s.Logger.Errorw("onboarding events rate limit is invalid", "rate_limit", rateLimit)
+		s.Logger.Info(context.Background(), "onboarding events rate limit is invalid", "rate_limit", rateLimit)
 		return
 	}
 	throttle := middleware.NewThrottle(rateLimit, time.Second)
@@ -224,7 +224,7 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 		throttle.Middleware,
 	)
 
-	s.Logger.Debugw("registered onboarding events handler",
+	s.Logger.Debug(context.Background(), "registered onboarding events handler",
 		"topic", cfg.OnboardingEvents.Topic,
 		"consumer_group", cfg.OnboardingEvents.ConsumerGroup,
 		"rate_limit", rateLimit,
@@ -235,19 +235,19 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 func (s *onboardingService) processMessage(msg *message.Message) error {
 	// We don't need the message context anymore since we're using a background context
 	// Just log the message UUID for tracing
-	s.Logger.Debugw("received onboarding event message", "message_uuid", msg.UUID)
+	s.Logger.Debug(context.Background(), "received onboarding event message", "message_uuid", msg.UUID)
 
 	// Unmarshal the message
 	var eventMsg types.OnboardingEventsMessage
 	if err := eventMsg.Unmarshal(msg.Payload); err != nil {
-		s.Logger.Errorw("failed to unmarshal onboarding event message",
+		s.Logger.Error(context.Background(), "failed to unmarshal onboarding event message",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on unmarshal errors
 	}
 
-	s.Logger.Infow("processing onboarding events",
+	s.Logger.Info(context.Background(), "processing onboarding events",
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"subscription_id", eventMsg.SubscriptionID,
@@ -281,7 +281,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 	numMeters := len(eventMsg.Meters)
 
 	if numMeters == 0 {
-		s.Logger.Warn(ctx, "no meters found, skipping event generation",
+		s.Logger.Info(ctx, "no meters found, skipping event generation",
 			"customer_id", eventMsg.CustomerID,
 			"feature_id", eventMsg.FeatureID,
 		)
@@ -355,7 +355,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 					"total_events_for_meter", eventsForThisMeter,
 				)
 			case <-ctx.Done():
-				s.Logger.Warn(ctx, "context cancelled, stopping event generation",
+				s.Logger.Info(ctx, "context cancelled, stopping event generation",
 					"customer_id", eventMsg.CustomerID,
 					"feature_id", eventMsg.FeatureID,
 					"events_generated", successCount,
@@ -918,7 +918,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 
 	// Check response
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.Logger.Error(ctx, "Zapier webhook request failed with non-2xx status",
+		s.Logger.Info(ctx, "Zapier webhook request failed with non-2xx status",
 			"status_code", resp.StatusCode,
 			"response_body", string(resp.Body),
 			"email", email,

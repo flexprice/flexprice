@@ -473,7 +473,7 @@ func (s *walletPaymentService) deductFromPriceTypes(
 	// If there are no price type amounts (e.g., invoice with no line items),
 	// don't try to deduct from specific price types - this is valid for ALL wallets
 	if totalPriceTypeAmount.IsZero() {
-		s.Logger.Debugw("no price type amounts to deduct from - invoice may have no line items",
+		s.Logger.Debug(context.Background(), "no price type amounts to deduct from - invoice may have no line items",
 			"payment_amount", paymentAmount,
 			"can_pay_usage", canPayUsage,
 			"can_pay_fixed", canPayFixed)
@@ -488,7 +488,7 @@ func (s *walletPaymentService) deductFromPriceTypes(
 			priceTypeAmounts[string(types.PRICE_TYPE_USAGE)] = usageAmount.Sub(deductAmount)
 			remainingPayment = remainingPayment.Sub(deductAmount)
 
-			s.Logger.Debugw("deducted from usage price type",
+			s.Logger.Debug(context.Background(), "deducted from usage price type",
 				"deduct_amount", deductAmount,
 				"remaining_usage", priceTypeAmounts[string(types.PRICE_TYPE_USAGE)],
 				"remaining_payment", remainingPayment)
@@ -503,7 +503,7 @@ func (s *walletPaymentService) deductFromPriceTypes(
 			priceTypeAmounts[string(types.PRICE_TYPE_FIXED)] = fixedAmount.Sub(deductAmount)
 			remainingPayment = remainingPayment.Sub(deductAmount)
 
-			s.Logger.Debugw("deducted from fixed price type",
+			s.Logger.Debug(context.Background(), "deducted from fixed price type",
 				"deduct_amount", deductAmount,
 				"remaining_fixed", priceTypeAmounts[string(types.PRICE_TYPE_FIXED)],
 				"remaining_payment", remainingPayment)
@@ -512,7 +512,7 @@ func (s *walletPaymentService) deductFromPriceTypes(
 
 	// Log if there's still remaining payment (shouldn't happen with correct logic)
 	if remainingPayment.GreaterThan(decimal.Zero) {
-		s.Logger.Warnw("payment amount not fully deducted from price types",
+		s.Logger.Info(context.Background(), "payment amount not fully deducted from price types",
 			"remaining_payment", remainingPayment,
 			"can_pay_usage", canPayUsage,
 			"can_pay_fixed", canPayFixed,

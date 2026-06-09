@@ -129,7 +129,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 	}
 
 	if paymentRecord == nil {
-		h.logger.Warnw("no payment record found",
+		h.logger.Info(ctx, "no payment record found",
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
 		return nil
@@ -228,7 +228,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 	// Get FlexPrice payment ID from notes
 	flexpricePaymentID, ok := payment.Notes["flexprice_payment_id"].(string)
 	if !ok || flexpricePaymentID == "" {
-		h.logger.Warnw("no flexprice_payment_id found in payment notes",
+		h.logger.Info(ctx, "no flexprice_payment_id found in payment notes",
 			"razorpay_payment_id", payment.ID,
 			"notes", payment.Notes)
 		return nil // Not a FlexPrice-initiated payment
@@ -249,7 +249,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 	}
 
 	if paymentRecord == nil {
-		h.logger.Warnw("no payment record found",
+		h.logger.Info(ctx, "no payment record found",
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
 		return nil

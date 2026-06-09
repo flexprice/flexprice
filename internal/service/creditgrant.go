@@ -749,7 +749,7 @@ func (s *creditGrantService) handleCreditGrantFailure(
 		s.Logger.Error(ctx, "Failed to update CGA after failure",
 			"cga_id", cga.ID,
 			"original_error", err.Error(),
-			"update_error", updateErr.Error())
+			"error", updateErr)
 		return err // Preserve original context
 	}
 
@@ -914,7 +914,7 @@ func (s *creditGrantService) processCatchUpApplications(
 		if err != nil {
 			// CGA already marked Failed in DB by handleCreditGrantFailure.
 			// Cron will retry on next tick.
-			s.Logger.Warn(ctx, "catch-up loop stopping due to failure",
+			s.Logger.Info(ctx, "catch-up loop stopping due to failure",
 				"cga_id", currentCGA.ID,
 				"grant_id", currentCGA.CreditGrantID,
 				"subscription_id", currentCGA.SubscriptionID,

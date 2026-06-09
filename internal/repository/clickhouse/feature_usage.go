@@ -2275,7 +2275,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 		// Parse properties JSON
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-				r.logger.Warnw("failed to parse properties JSON",
+				r.logger.Info(ctx, "failed to parse properties JSON",
 					"event_id", usage.ID,
 					"error", err)
 				usage.Properties = make(map[string]interface{})
@@ -2618,7 +2618,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, 
 		// Parse properties
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &record.Properties); err != nil {
-				r.logger.Warnw("failed to unmarshal properties",
+				r.logger.Info(ctx, "failed to unmarshal properties",
 					"event_id", record.ID,
 					"error", err,
 				)

@@ -191,7 +191,7 @@ func DispatchCustomerVendorSync(
 	}
 
 	if payload.CustomerID == "" {
-		log.Warnw("integration_events: customer payload missing customer_id, dropping",
+		log.Info(context.Background(), "integration_events: customer payload missing customer_id, dropping",
 			"message_uuid", msgUUID,
 		)
 		return nil
@@ -265,7 +265,7 @@ func DispatchSubscriptionVendorSync(
 		CustomerID     string `json:"customer_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.SubscriptionID == "" {
-		log.Warnw("integration_events: invalid subscription.created payload, skipping",
+		log.Info(context.Background(), "integration_events: invalid subscription.created payload, skipping",
 			"message_uuid", msgUUID, "error", err)
 		return nil
 	}

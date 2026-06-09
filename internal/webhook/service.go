@@ -180,7 +180,7 @@ func (s *WebhookService) Stop() error {
 
 	// Close publisher only when using in-memory pubsub (Kafka producer is shared and closed)
 	if err := s.publisher.Close(); err != nil {
-		s.logger.Errorw("failed to close webhook publisher", "error", err)
+		s.logger.Error(context.Background(), "failed to close webhook publisher", "error", err)
 		return fmt.Errorf("failed to close webhook publisher: %w", err)
 	}
 

@@ -59,7 +59,7 @@ func (h *AIPricingHandler) ParseGeminiPricing(c *gin.Context) {
 	payload, err := h.geminiPricing.ParsePricing(c.Request.Context(), &req)
 	if err != nil {
 		if ierr.IsTooManyRequests(err) {
-			h.log.Warn(c.Request.Context(), "parse gemini pricing rate limited", "error", err)
+			h.log.Info(c.Request.Context(), "parse gemini pricing rate limited", "error", err)
 		} else {
 			h.log.Error(c.Request.Context(), "parse gemini pricing failed", "error", err)
 		}

@@ -479,6 +479,7 @@ func (s *BillingActivities) executeScheduledPlanChange(
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
 			s.logger.Error(ctx, "failed to update schedule status to failed",
+				"error", err,
 				"schedule_id", schedule.ID,
 				"subscription_id", schedule.SubscriptionID,
 				"original_error", err,
@@ -495,6 +496,7 @@ func (s *BillingActivities) executeScheduledPlanChange(
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
 			s.logger.Error(ctx, "failed to update schedule status to failed",
+				"error", err,
 				"schedule_id", schedule.ID,
 				"subscription_id", schedule.SubscriptionID,
 				"update_error", updateErr)
@@ -509,6 +511,7 @@ func (s *BillingActivities) executeScheduledPlanChange(
 		schedule.ErrorMessage = lo.ToPtr(err.Error())
 		if updateErr := s.serviceParams.SubScheduleRepo.Update(ctx, schedule); updateErr != nil {
 			s.logger.Error(ctx, "failed to update schedule status to failed",
+				"error", err,
 				"schedule_id", schedule.ID,
 				"subscription_id", schedule.SubscriptionID,
 				"update_error", updateErr)

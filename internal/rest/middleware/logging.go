@@ -64,9 +64,9 @@ func LoggingMiddleware(log *logger.Logger) gin.HandlerFunc {
 
 		switch {
 		case statusCode >= 500:
-			log.Error(spanCtx, "HTTP_REQUEST_ERROR", fields...)
+			log.Info(spanCtx, "HTTP_REQUEST_ERROR", fields...)
 		case statusCode >= 400:
-			log.Warn(spanCtx, "HTTP_REQUEST_WARNING", fields...)
+			log.Info(spanCtx, "HTTP_REQUEST_WARNING", fields...)
 		default:
 			log.Info(spanCtx, "HTTP_REQUEST_INFO", fields...)
 		}

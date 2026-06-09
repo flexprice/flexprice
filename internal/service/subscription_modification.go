@@ -676,7 +676,7 @@ func (s *subscriptionModificationService) previewQuantityChange(
 			}
 			inv, err := s.previewQuantityChangeProration(ctx, sub, lineItem, previewNewItem, effectiveDate)
 			if err != nil {
-				sp.Logger.Warnw("failed to preview proration for quantity change", "error", err, "line_item_id", lineItem.ID)
+				sp.Logger.Info(context.Background(), "failed to preview proration for quantity change", "error", err, "line_item_id", lineItem.ID)
 			} else if inv != nil {
 				changedInvoices = append(changedInvoices, *inv)
 			}
@@ -808,7 +808,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 		// CreateInvoice with InvoiceTypeOneOff already finalizes the invoice internally.
 		// Attempt payment (credits + payment method charge).
 		if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
-			sp.Logger.Warnw("failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
+			sp.Logger.Info(context.Background(), "failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
 		}
 		// Re-fetch to get latest payment status after finalize+payment attempt.
 		latest, fetchErr := invoiceSvc.GetInvoice(ctx, inv.ID)
@@ -1185,6 +1185,6 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 		EntityID:      subscriptionID,
 	}
 	if err := s.serviceParams.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.serviceParams.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.serviceParams.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }

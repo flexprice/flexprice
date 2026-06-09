@@ -87,7 +87,7 @@ func (s *PaddleSyncService) upsertCustomerPaddleMetadata(ctx context.Context, c 
 	}
 	c.Metadata[MetaKeyPaddleCustomerID] = paddleCustomerID
 	if err := s.customerRepo.Update(ctx, c); err != nil {
-		s.logger.Warnw("failed to update customer metadata with paddle_customer_id",
+		s.logger.Info(ctx, "failed to update customer metadata with paddle_customer_id",
 			"customer_id", c.ID, "paddle_customer_id", paddleCustomerID, "error", err)
 	}
 }
@@ -162,7 +162,7 @@ func (s *PaddleSyncService) EnsureCustomerSynced(ctx context.Context, req Ensure
 	if flexCustomer.AddressCountry != "" {
 		addr, addrErr := s.client.CreateAddress(ctx, paddleCustomerID, buildCreateAddressRequest(flexCustomer))
 		if addrErr != nil {
-			s.logger.Warnw("failed to create Paddle address after customer creation — proceeding",
+			s.logger.Info(ctx, "failed to create Paddle address after customer creation — proceeding",
 				"customer_id", req.CustomerID, "error", addrErr)
 		} else {
 			paddleAddressID = addr.ID
@@ -475,7 +475,7 @@ func (s *PaddleSyncService) syncAddressForMapping(
 			updateReq.Region = paddlesdk.NewPtrPatchField(c.AddressState)
 		}
 		if _, err := s.client.UpdateAddress(ctx, paddleCustomerID, paddleAddressID, updateReq); err != nil {
-			s.logger.Warnw("failed to update Paddle address — using existing",
+			s.logger.Info(context.Background(), "failed to update Paddle address — using existing",
 				"error", err, "customer_id", c.ID, "paddle_address_id", paddleAddressID)
 		}
 		return paddleAddressID, nil
@@ -494,7 +494,7 @@ func (s *PaddleSyncService) syncAddressForMapping(
 			},
 		})
 		if err != nil {
-			s.logger.Warnw("failed to update mapping with new Paddle address ID", "error", err)
+			s.logger.Info(context.Background(), "failed to update mapping with new Paddle address ID", "error", err)
 		}
 	}
 	return addr.ID, nil
@@ -543,13 +543,13 @@ func (s *PaddleSyncService) appendCheckoutToken(ctx context.Context, checkoutURL
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString([]byte(s.authSecret))
 	if err != nil {
-		s.logger.Warnw("failed to sign Paddle checkout token", "error", err)
+		s.logger.Info(ctx, "failed to sign Paddle checkout token", "error", err)
 		return checkoutURL
 	}
 
 	parsed, err := url.Parse(checkoutURL)
 	if err != nil {
-		s.logger.Warnw("failed to parse Paddle checkout URL for token append",
+		s.logger.Info(ctx, "failed to parse Paddle checkout URL for token append",
 			"error", err, "checkout_url", checkoutURL)
 		return checkoutURL
 	}
@@ -746,7 +746,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 		flexInvoice.Metadata[MetaKeyPaddleCheckoutURL] = checkoutURL
 	}
 	if err := s.invoiceRepo.Update(ctx, flexInvoice); err != nil {
-		s.logger.Warnw("failed to write Paddle transaction ID to invoice metadata", "error", err, "invoice_id", req.InvoiceID)
+		s.logger.Info(ctx, "failed to write Paddle transaction ID to invoice metadata", "error", err, "invoice_id", req.InvoiceID)
 	}
 
 	invoiceMeta := map[string]interface{}{
@@ -891,7 +891,7 @@ func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, p
 				},
 			})
 			if err != nil {
-				s.logger.Warnw("failed to create mapping for existing customer",
+				s.logger.Info(ctx, "failed to create mapping for existing customer",
 					"error", err,
 					"customer_id", existingCustomer.ID,
 					MetaKeyPaddleCustomerID, paddleCustomerID)
@@ -936,7 +936,7 @@ func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, p
 		},
 	})
 	if err != nil {
-		s.logger.Warnw("failed to create mapping for new customer",
+		s.logger.Info(ctx, "failed to create mapping for new customer",
 			"error", err,
 			"customer_id", customerResp.ID,
 			MetaKeyPaddleCustomerID, paddleCustomerID)
@@ -982,7 +982,7 @@ func (s *PaddleSyncService) ProcessAddressCreatedWebhook(
 		Metadata: map[string]interface{}{MetaKeyPaddleAddressID: addr.ID},
 	})
 	if err != nil {
-		s.logger.Warnw("failed to update customer mapping with paddle_address_id",
+		s.logger.Info(context.Background(), "failed to update customer mapping with paddle_address_id",
 			"error", err, "flexprice_customer_id", flexCustomerID, "paddle_address_id", addr.ID)
 	}
 	return nil
@@ -1000,7 +1000,7 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			// No mapping — this transaction may not be one we created, skip.
-			s.logger.Warnw("no FlexPrice invoice found for Paddle transaction, skipping",
+			s.logger.Info(context.Background(), "no FlexPrice invoice found for Paddle transaction, skipping",
 				"paddle_transaction_id", txnID)
 		}
 		return err
@@ -1061,7 +1061,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 
 	flexSubID := extractFlexSubIDFromCustomData(data.CustomData)
 	if flexSubID == "" {
-		s.logger.Warnw("subscription.activated: no flexprice_subscription_id in custom_data — skipping",
+		s.logger.Info(context.Background(), "subscription.activated: no flexprice_subscription_id in custom_data — skipping",
 			"paddle_sub_id", paddleSubID)
 		return nil
 	}
@@ -1097,7 +1097,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 	}
 	sub.Metadata[MetaKeyPaddleSubscriptionID] = paddleSubID
 	if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
-		s.logger.Warnw("failed to update sub metadata with paddle_subscription_id",
+		s.logger.Info(context.Background(), "failed to update sub metadata with paddle_subscription_id",
 			"sub_id", flexSubID, "error", err)
 	}
 
@@ -1109,7 +1109,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 	//		if err := s.subscriptionRepo.Update(ctx, sub); err != nil {
 	//			return fmt.Errorf("setting subscription to trialing: %w", err)
 	//		}
-	//		s.logger.Infow("subscription.activated: set incomplete→trialing",
+	//		s.logger.Info(context.Background(), "subscription.activated: set incomplete→trialing",
 	//			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	//	} else {
 	//		if subscriptionService == nil {
@@ -1118,7 +1118,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 	//		if err := subscriptionService.ActivateIncompleteSubscription(ctx, flexSubID); err != nil {
 	//			return fmt.Errorf("activating incomplete subscription: %w", err)
 	//		}
-	//		s.logger.Infow("subscription.activated: set incomplete→active",
+	//		s.logger.Info(context.Background(), "subscription.activated: set incomplete→active",
 	//			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	//	}
 	case types.SubscriptionStatusDraft:
@@ -1156,7 +1156,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 // If TemporalService is nil (e.g. in unit-test environments), the method returns silently.
 func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
 	if s.temporalSvc == nil {
-		s.logger.Error(ctx, "temporal service is nil, skipping resync pending invoices for subscription",
+		s.logger.Info(ctx, "temporal service is nil, skipping resync pending invoices for subscription",
 			"subscription_id", subscriptionID)
 		return
 	}
@@ -1173,7 +1173,7 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 
 	invoices, err := s.invoiceRepo.List(ctx, filter)
 	if err != nil {
-		s.logger.Warnw("failed to list invoices for post-activation resync",
+		s.logger.Info(ctx, "failed to list invoices for post-activation resync",
 			"subscription_id", subscriptionID, "error", err)
 		return
 	}

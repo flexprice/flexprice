@@ -250,7 +250,7 @@ func (s *InvoiceService) SyncInvoiceToChargebee(
 	// Step 5: Check if customer has payment method and set auto_collection accordingly
 	hasPaymentMethod, err := s.customerHasPaymentMethod(ctx, chargebeeCustomerID)
 	if err != nil {
-		s.Logger.Warnw("failed to check customer payment method, defaulting to auto_collection off",
+		s.Logger.Info(context.Background(), "failed to check customer payment method, defaulting to auto_collection off",
 			"error", err,
 			"chargebee_customer_id", chargebeeCustomerID)
 		hasPaymentMethod = false
@@ -503,7 +503,7 @@ func (s *InvoiceService) getChargebeeItemPriceIDAndCheckTiered(ctx context.Conte
 	// Fetch the item price from Chargebee to check its pricing model
 	result, err := s.Client.RetrieveItemPrice(ctx, chargebeeItemPriceID)
 	if err != nil {
-		s.Logger.Warnw("failed to retrieve item price from Chargebee, assuming flat_fee",
+		s.Logger.Info(ctx, "failed to retrieve item price from Chargebee, assuming flat_fee",
 			"item_price_id", chargebeeItemPriceID,
 			"error", err)
 		// Fallback: assume flat_fee if we can't fetch

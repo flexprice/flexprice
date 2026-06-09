@@ -302,13 +302,13 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 					failureCount++
 					countMu.Unlock()
 
-					s.logger.With(
+					s.logger.Info(ctx, "failed to get meter usage",
 						"meter_id", meterID,
 						"price_id", r.PriceID,
 						"meter_index", meterIdx,
 						"error", err,
 						"processing_time_ms", processingDuration.Milliseconds(),
-					).Warn("failed to get meter usage")
+					)
 
 					// Capture the error in Sentry if enabled
 					if sentrySvc != nil && sentrySvc.IsEnabled() {
@@ -348,11 +348,11 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 		// Wait for this batch to complete
 		err := p.Wait()
 		if err != nil {
-			s.logger.With(
+			s.logger.Info(ctx, "batch processing failed",
 				"batch_start", batchStart,
 				"batch_end", batchEnd,
 				"error", err,
-			).Warn("batch processing failed")
+			)
 			// Continue to process remaining batches even if one fails
 		}
 
@@ -427,13 +427,13 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 		}
 
 		if err != nil {
-			s.logger.With(
+			s.logger.Info(ctx, "failed to get meter usage",
 				"meter_id", meterID,
 				"price_id", r.PriceID,
 				"meter_index", i,
 				"error", err,
 				"processing_time_ms", processingDuration.Milliseconds(),
-			).Warn("failed to get meter usage")
+			)
 
 			if sentrySvc != nil && sentrySvc.IsEnabled() {
 				sentrySvc.CaptureException(err)
@@ -709,7 +709,7 @@ func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
 		eventConsumptionConsumerGroup,
 		"kafka.lag.event_consumption",
 	); err != nil {
-		s.logger.Warnw("failed to monitor event consumption lag",
+		s.logger.Info(ctx, "failed to monitor event consumption lag",
 			"error", err,
 			"topic", eventConsumptionTopic,
 			"consumer_group", eventConsumptionConsumerGroup)
@@ -724,7 +724,7 @@ func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
 		eventPostProcessingConsumerGroup,
 		"kafka.lag.event_post_processing",
 	); err != nil {
-		s.logger.Warnw("failed to monitor event post-processing lag",
+		s.logger.Info(ctx, "failed to monitor event post-processing lag",
 			"error", err,
 			"topic", eventPostProcessingTopic,
 			"consumer_group", eventPostProcessingConsumerGroup)
@@ -784,7 +784,7 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 	// Get total event count with optional windowed time-series data
 	eventCountResult, err := s.eventRepo.GetTotalEventCount(ctx, req.StartTime, req.EndTime, req.WindowSize)
 	if err != nil {
-		s.logger.Warnw("failed to get total event count",
+		s.logger.Info(ctx, "failed to get total event count",
 			"error", err,
 			"start_time", req.StartTime,
 			"end_time", req.EndTime,
@@ -813,7 +813,7 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 		eventConsumptionTopic,
 		eventConsumptionConsumerGroup)
 	if err != nil {
-		s.logger.Warnw("failed to get event consumption consumer lag",
+		s.logger.Info(ctx, "failed to get event consumption consumer lag",
 			"error", err,
 			"topic", eventConsumptionTopic,
 			"consumer_group", eventConsumptionConsumerGroup)
@@ -826,7 +826,7 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 		eventPostProcessingTopic,
 		eventPostProcessingConsumerGroup)
 	if err != nil {
-		s.logger.Warnw("failed to get event post processing consumer lag",
+		s.logger.Info(ctx, "failed to get event post processing consumer lag",
 			"error", err,
 			"topic", eventPostProcessingTopic,
 			"consumer_group", eventPostProcessingConsumerGroup)

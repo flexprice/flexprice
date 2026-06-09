@@ -270,7 +270,7 @@ func (s *couponValidationService) validateOnceCadence(ctx context.Context, coupo
 
 // validateForeverCadence validates "forever" cadence - coupon is always applied
 func (s *couponValidationService) validateForeverCadence(coupon coupon.Coupon, subscription *subscription.Subscription) error {
-	s.Logger.Debugw("validating forever cadence for invoice",
+	s.Logger.Debug(context.Background(), "validating forever cadence for invoice",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscription.ID)
 	// Forever cadence coupons are always valid for application
@@ -306,7 +306,7 @@ func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, c
 	filter.CouponIDs = []string{coupon.ID}
 	existingApplicationCount, err := s.CouponApplicationRepo.Count(ctx, filter)
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to count existing applications for repeated cadence validation",
+		s.Logger.Info(ctx, "failed to count existing applications for repeated cadence validation",
 			"coupon_id", coupon.ID,
 			"subscription_id", subscription.ID,
 			"error", err)

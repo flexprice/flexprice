@@ -95,7 +95,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 		// Get the latest offset (high water mark) for this partition
 		latestOffset, err := client.GetOffset(topic, partition, sarama.OffsetNewest)
 		if err != nil {
-			m.logger.Warn(ctx, "failed to get latest offset for partition",
+			m.logger.Info(ctx, "failed to get latest offset for partition",
 				"error", err,
 				"topic", topic,
 				"partition", partition)
@@ -105,7 +105,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 		// Get consumer's current offset for this partition from the response
 		block := offsetFetchResponse.GetBlock(topic, partition)
 		if block == nil {
-			m.logger.Warn(ctx, "no offset block found for partition",
+			m.logger.Info(ctx, "no offset block found for partition",
 				"topic", topic,
 				"partition", partition,
 				"consumer_group", consumerGroup)
@@ -187,7 +187,7 @@ func (m *MonitoringService) GetMultipleConsumerLags(ctx context.Context, configs
 		key := fmt.Sprintf("%s:%s", cfg.Topic, cfg.ConsumerGroup)
 		lag, err := m.GetConsumerLag(ctx, cfg.Topic, cfg.ConsumerGroup)
 		if err != nil {
-			m.logger.Warn(ctx, "failed to get consumer lag",
+			m.logger.Info(ctx, "failed to get consumer lag",
 				"error", err,
 				"topic", cfg.Topic,
 				"consumer_group", cfg.ConsumerGroup)

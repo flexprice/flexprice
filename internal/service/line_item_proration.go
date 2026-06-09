@@ -291,7 +291,7 @@ func (s *lineItemProrationService) settleCharge(
 	}
 
 	if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
-		s.params.Logger.Warn(ctx, "failed to attempt payment for proration charge invoice",
+		s.params.Logger.Info(ctx, "failed to attempt payment for proration charge invoice",
 			"error", err, "invoice_id", inv.ID)
 	}
 

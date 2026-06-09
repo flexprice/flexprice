@@ -2,6 +2,7 @@ package pyroscope
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -93,11 +94,11 @@ func (s *Service) Debugf(format string, args ...interface{}) {
 }
 
 func (s *Service) Infof(format string, args ...interface{}) {
-	s.logger.Debugf("[Pyroscope] "+format, args...)
+	s.logger.Debug(context.Background(), fmt.Sprintf("[Pyroscope] "+format, args...))
 }
 
 func (s *Service) Errorf(format string, args ...interface{}) {
-	s.logger.Debugf("[Pyroscope] "+format, args...)
+	s.logger.Debug(context.Background(), fmt.Sprintf("[Pyroscope] "+format, args...))
 }
 
 // NewPyroscopeService creates a new Pyroscope service
@@ -151,7 +152,7 @@ func (s *Service) getProfileTypes() []pyroscope.ProfileType {
 		case "block_duration":
 			types = append(types, pyroscope.ProfileBlockDuration)
 		default:
-			s.logger.Warnw("Unknown profile type", "type", profileType)
+			s.logger.Info(context.Background(), "Unknown profile type", "type", profileType)
 		}
 	}
 

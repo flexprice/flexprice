@@ -111,7 +111,7 @@ func (a *EnvironmentActivities) CloneEnvironmentFeatures(ctx context.Context, in
 
 		newFeatureID, err := a.cloneFeat(sourceCtx, targetCtx, srcFeat, input.TargetEnvironmentID)
 		if err != nil {
-			log.Warnw("env_clone_feature_failed", "feature_id", srcFeat.ID, "name", srcFeat.Name, "error", err)
+			log.Info(ctx, "env_clone_feature_failed", "feature_id", srcFeat.ID, "name", srcFeat.Name, "error", err)
 			result.Errors = append(result.Errors, temporalmodels.CloneError{
 				EntityType: "feature",
 				EntityID:   srcFeat.ID,
@@ -295,7 +295,7 @@ func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input
 		newPlanID, err := a.clonePlan(sourceCtx, targetCtx, srcPlan, input.TargetEnvironmentID,
 			featureIDMap, meterIDMap, groupIDMap)
 		if err != nil {
-			log.Warnw("env_clone_plan_failed",
+			log.Info(ctx, "env_clone_plan_failed",
 				"plan_id", srcPlan.ID, "name", srcPlan.Name, "error", err)
 			result.Errors = append(result.Errors, temporalmodels.CloneError{
 				EntityType: "plan",

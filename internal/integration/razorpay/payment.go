@@ -282,7 +282,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 			"invoice_id", req.InvoiceID,
 			"callback_url", req.SuccessURL)
 	} else {
-		s.logger.Warnw("no callback URL provided - customer will not be redirected after payment",
+		s.logger.Info(ctx, "no callback URL provided - customer will not be redirected after payment",
 			"invoice_id", req.InvoiceID)
 	}
 	// Note: CancelURL is not supported by Razorpay - callback_url is used for both success and cancel
@@ -307,6 +307,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	paymentLinkID, ok := razorpayPaymentLink["id"].(string)
 	if !ok || paymentLinkID == "" {
 		s.logger.Error(ctx, "missing payment link id in Razorpay response",
+			"error", err,
 			"invoice_id", req.InvoiceID)
 		return nil, ierr.NewError("razorpay payment link id missing in response").
 			WithHint("Check Razorpay CreatePaymentLink response payload").
@@ -316,6 +317,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	paymentLinkURL, ok := razorpayPaymentLink["short_url"].(string)
 	if !ok || paymentLinkURL == "" {
 		s.logger.Error(ctx, "missing payment link URL in Razorpay response",
+			"error", err,
 			"invoice_id", req.InvoiceID,
 			"payment_link_id", paymentLinkID)
 		return nil, ierr.NewError("razorpay payment link URL missing in response").
@@ -327,7 +329,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	if !ok {
 		// Default to "created" if status is missing
 		status = "created"
-		s.logger.Warnw("missing status in Razorpay payment link response, using default",
+		s.logger.Info(ctx, "missing status in Razorpay payment link response, using default",
 			"invoice_id", req.InvoiceID,
 			"payment_link_id", paymentLinkID)
 	}
@@ -339,7 +341,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreatePayme
 	} else {
 		// Fallback to current time if created_at is missing
 		createdAt = time.Now().Unix()
-		s.logger.Warnw("missing created_at in Razorpay payment link response, using current time",
+		s.logger.Info(ctx, "missing created_at in Razorpay payment link response, using current time",
 			"invoice_id", req.InvoiceID,
 			"payment_link_id", paymentLinkID)
 	}

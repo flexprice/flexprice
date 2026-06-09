@@ -179,7 +179,7 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 
 	case types.SecretProviderQuickBooks:
 		if encryptedSecretData.QuickBooks == nil {
-			s.Logger.Warnw("QuickBooks metadata is nil, cannot encrypt", "provider_type", providerType)
+			s.Logger.Info(context.Background(), "QuickBooks metadata is nil, cannot encrypt", "provider_type", providerType)
 			return types.ConnectionMetadata{}, ierr.NewError("QuickBooks metadata is required").
 				WithHint("QuickBooks connection requires encrypted_secret_data with client_id, client_secret, realm_id, and environment").
 				Mark(ierr.ErrValidation)
@@ -242,7 +242,7 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 
 	case types.SecretProviderNomod:
 		if encryptedSecretData.Nomod == nil {
-			s.Logger.Warnw("Nomod metadata is nil, cannot encrypt", "provider_type", providerType)
+			s.Logger.Info(context.Background(), "Nomod metadata is nil, cannot encrypt", "provider_type", providerType)
 			return types.ConnectionMetadata{}, ierr.NewError("Nomod metadata is required").
 				WithHint("Nomod connection requires encrypted_secret_data with api_key").
 				Mark(ierr.ErrValidation)
@@ -270,7 +270,7 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 
 	case types.SecretProviderMoyasar:
 		if encryptedSecretData.Moyasar == nil {
-			s.Logger.Warnw("Moyasar metadata is nil, cannot encrypt", "provider_type", providerType)
+			s.Logger.Info(context.Background(), "Moyasar metadata is nil, cannot encrypt", "provider_type", providerType)
 			return types.ConnectionMetadata{}, ierr.NewError("Moyasar metadata is required").
 				WithHint("Moyasar connection requires encrypted_secret_data with secret_key").
 				Mark(ierr.ErrValidation)
@@ -307,7 +307,7 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 
 	case types.SecretProviderPaddle:
 		if encryptedSecretData.Paddle == nil {
-			s.Logger.Warnw("Paddle metadata is nil, cannot encrypt", "provider_type", providerType)
+			s.Logger.Info(context.Background(), "Paddle metadata is nil, cannot encrypt", "provider_type", providerType)
 			return types.ConnectionMetadata{}, ierr.NewError("Paddle metadata is required").
 				WithHint("Paddle connection requires encrypted_secret_data with api_key and webhook_secret").
 				Mark(ierr.ErrValidation)
@@ -334,7 +334,7 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 
 	case types.SecretProviderWhop:
 		if encryptedSecretData.Whop == nil {
-			s.Logger.Warnw("Whop metadata is nil, cannot encrypt", "provider_type", providerType)
+			s.Logger.Info(context.Background(), "Whop metadata is nil, cannot encrypt", "provider_type", providerType)
 			return types.ConnectionMetadata{}, ierr.NewError("Whop metadata is required").
 				WithHint("Whop connection requires encrypted_secret_data with api_key and company_id").
 				Mark(ierr.ErrValidation)
@@ -355,7 +355,7 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 
 	case types.SecretProviderZohoBooks:
 		if encryptedSecretData.ZohoBooks == nil {
-			s.Logger.Warnw("Zoho Books metadata is nil, cannot encrypt", "provider_type", providerType)
+			s.Logger.Info(context.Background(), "Zoho Books metadata is nil, cannot encrypt", "provider_type", providerType)
 			return types.ConnectionMetadata{}, ierr.NewError("Zoho Books metadata is required").
 				WithHint("Zoho Books connection requires encrypted_secret_data with zoho_books fields").
 				Mark(ierr.ErrValidation)

@@ -33,7 +33,7 @@ func NewGroupService(params ServiceParams) GroupService {
 func (s *groupService) CreateGroup(ctx context.Context, req dto.CreateGroupRequest) (*dto.GroupResponse, error) {
 
 	if err := req.Validate(); err != nil {
-		s.Logger.Warn(ctx, "invalid group creation request",
+		s.Logger.Info(ctx, "invalid group creation request",
 			"error", err,
 			"name", req.Name,
 		)

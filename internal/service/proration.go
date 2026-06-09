@@ -303,7 +303,7 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 		}
 
 		if price == nil {
-			logger.Warnw("price not found for line item - skipping",
+			logger.Info(context.Background(), "price not found for line item - skipping",
 				"line_item_id", lineItem.ID,
 				"price_id", lineItem.PriceID)
 			continue
@@ -367,7 +367,7 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 				Mark(ierr.ErrSystem)
 		} else {
 			// Some succeeded, some failed - log warnings but continue
-			logger.Warnw("some line items failed proration calculation",
+			logger.Info(context.Background(), "some line items failed proration calculation",
 				"failed_count", len(processingErrors),
 				"succeeded_count", processedCount,
 				"errors", processingErrors)
@@ -417,7 +417,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 		// Use provided cancellation date, but ensure it's not before period start
 		if cancellationDate.Before(periodStart) {
 			effectiveDate = periodStart
-			logger.Warnw("cancellation date before period start, using period start",
+			logger.Info(context.Background(), "cancellation date before period start, using period start",
 				"requested_date", cancellationDate,
 				"period_start", periodStart)
 		}
@@ -441,7 +441,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 	// TODO: Get original amount paid for this line item in current period
 	// originalAmountPaid, err := s.getOriginalAmountPaidForLineItem(ctx, subscription.ID, item.ID, periodStart)
 	// if err != nil {
-	//     logger.Warnw("failed to get original amount paid, using calculated amount",
+	//     logger.Info(context.Background(), "failed to get original amount paid, using calculated amount",
 	//         "error", err,
 	//         "line_item_id", item.ID)
 	//     // Fallback to calculated amount based on current price and quantity
@@ -454,7 +454,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 	// TODO: Get any previous credits issued for this line item in current period
 	// previousCredits, err := s.getPreviousCreditsForLineItem(ctx, subscription.ID, item.ID, periodStart, effectiveDate)
 	// if err != nil {
-	//     logger.Warnw("failed to get previous credits, assuming zero",
+	//     logger.Info(context.Background(), "failed to get previous credits, assuming zero",
 	//         "error", err,
 	//         "line_item_id", item.ID)
 	//     previousCredits = decimal.Zero
@@ -540,7 +540,7 @@ func (s *prorationService) CreateProrationParamsForLineItem(
 		)
 		if err != nil {
 			// Fallback to current period start if calculation fails
-			s.serviceParams.Logger.Warnw("failed to calculate period start for proration, using fallback",
+			s.serviceParams.Logger.Info(context.Background(), "failed to calculate period start for proration, using fallback",
 				"error", err,
 				"subscription_id", subscription.ID,
 				"billing_anchor", subscription.BillingAnchor,
@@ -600,7 +600,7 @@ func (s *prorationService) isRefundEligible(
 		if price.InvoiceCadence == types.InvoiceCadenceAdvance {
 			remainingTime := subscription.CurrentPeriodEnd.Sub(effectiveDate)
 			eligible := remainingTime > 0
-			logger.Debugw("immediate cancellation eligibility check",
+			logger.Debug(context.Background(), "immediate cancellation eligibility check",
 				"pay_in_advance", true,
 				"remaining_time", remainingTime.String(),
 				"eligible", eligible)
@@ -612,7 +612,7 @@ func (s *prorationService) isRefundEligible(
 		return false
 
 	default:
-		logger.Warnw("unknown cancellation type", "type", cancellationType)
+		logger.Info(context.Background(), "unknown cancellation type", "type", cancellationType)
 		return false
 	}
 }
@@ -940,7 +940,7 @@ func (s *prorationService) CreateProratedEntitlements(
 	}
 
 	if len(errors) > 0 {
-		logger.Warnw("some prorated entitlements failed to create",
+		logger.Info(context.Background(), "some prorated entitlements failed to create",
 			"created", createdCount,
 			"failed", len(errors))
 		// Return error if all failed

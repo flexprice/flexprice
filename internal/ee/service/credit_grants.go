@@ -392,7 +392,7 @@ func (s *creditGrantService) handleCreditGrantFailure(ctx context.Context, cga *
 	cga.ApplicationStatus = types.ApplicationStatusFailed
 	cga.FailureReason = lo.ToPtr(fmt.Sprintf("%s: %s", hint, err.Error()))
 	if updateErr := s.CreditGrantApplicationRepo.Update(ctx, cga); updateErr != nil {
-		s.Logger.Error(ctx, "Failed to update CGA after failure", "cga_id", cga.ID, "original_error", err.Error())
+		s.Logger.Error(ctx, "Failed to update CGA after failure", "cga_id", cga.ID, "original_error", err.Error(), "error", err)
 		return err
 	}
 	return err
@@ -476,7 +476,7 @@ func (s *creditGrantService) processCatchUpApplications(
 	for i := 0; i < maxCatchUpIterations; i++ {
 		nextCGA, err := s.processScheduledApplication(ctx, currentCGA)
 		if err != nil {
-			s.Logger.Warn(ctx, "catch-up loop stopping due to failure",
+			s.Logger.Error(ctx, "catch-up loop stopping due to failure",
 				"cga_id", currentCGA.ID,
 				"grant_id", currentCGA.CreditGrantID,
 				"subscription_id", currentCGA.SubscriptionID,

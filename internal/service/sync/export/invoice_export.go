@@ -177,7 +177,7 @@ func (e *InvoiceExporter) convertToCSVRecords(invoices []*invoice.Invoice) ([]*I
 		// Convert metadata map to JSON string
 		metadataJSON, err := json.Marshal(inv.Metadata)
 		if err != nil {
-			e.logger.Warnw("failed to marshal metadata, using empty object",
+			e.logger.Info(context.Background(), "failed to marshal metadata, using empty object",
 				"invoice_id", inv.ID,
 				"error", err)
 			metadataJSON = []byte("{}")

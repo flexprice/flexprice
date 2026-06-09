@@ -268,7 +268,7 @@ func (r *MeterUsageRepository) marshalProperties(record *events.MeterUsage) stri
 	}
 	propsJSON, err := json.Marshal(record.Properties)
 	if err != nil {
-		r.logger.Errorw("failed to marshal properties for meter_usage",
+		r.logger.Error(context.Background(), "failed to marshal properties for meter_usage",
 			"event_id", record.ID,
 			"error", err,
 		)
@@ -728,7 +728,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-				r.logger.Warnw("failed to parse properties JSON",
+				r.logger.Info(ctx, "failed to parse properties JSON",
 					"event_id", usage.ID,
 					"error", err)
 				usage.Properties = make(map[string]interface{})

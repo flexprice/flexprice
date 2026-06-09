@@ -87,6 +87,7 @@ func (c *Client) GetMoyasarConfig(ctx context.Context) (*MoyasarConfig, error) {
 	// Validate required fields
 	if moyasarConfig.SecretKey == "" {
 		c.logger.Error(ctx, "missing Moyasar secret key",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Moyasar secret key").
@@ -101,7 +102,7 @@ func (c *Client) GetMoyasarConfig(ctx context.Context) (*MoyasarConfig, error) {
 func (c *Client) GetDecryptedMoyasarConfig(conn *connection.Connection) (*MoyasarConfig, error) {
 	// Check if the connection has encrypted secret data for Moyasar
 	if conn.EncryptedSecretData.Moyasar == nil {
-		c.logger.Warnw("no moyasar metadata found in encrypted secret data", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no moyasar metadata found in encrypted secret data", "connection_id", conn.ID)
 		return nil, ierr.NewError("no moyasar configuration found").
 			WithHint("Moyasar credentials not configured").
 			Mark(ierr.ErrNotFound)
@@ -110,7 +111,7 @@ func (c *Client) GetDecryptedMoyasarConfig(conn *connection.Connection) (*Moyasa
 	// Decrypt each field
 	secretKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Moyasar.SecretKey)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt secret key", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt secret key", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt secret key").Mark(ierr.ErrInternal)
 	}
 
@@ -119,7 +120,7 @@ func (c *Client) GetDecryptedMoyasarConfig(conn *connection.Connection) (*Moyasa
 	if conn.EncryptedSecretData.Moyasar.PublishableKey != "" {
 		publishableKey, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Moyasar.PublishableKey)
 		if err != nil {
-			c.logger.Warnw("failed to decrypt publishable key", "connection_id", conn.ID, "error", err)
+			c.logger.Info(context.Background(), "failed to decrypt publishable key", "connection_id", conn.ID, "error", err)
 			// Don't fail - publishable key is optional
 			publishableKey = ""
 		}
@@ -130,7 +131,7 @@ func (c *Client) GetDecryptedMoyasarConfig(conn *connection.Connection) (*Moyasa
 	if conn.EncryptedSecretData.Moyasar.WebhookSecret != "" {
 		webhookSecret, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Moyasar.WebhookSecret)
 		if err != nil {
-			c.logger.Warnw("failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
+			c.logger.Info(context.Background(), "failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
 			// Don't fail - webhook secret is optional
 			webhookSecret = ""
 		}
@@ -142,7 +143,7 @@ func (c *Client) GetDecryptedMoyasarConfig(conn *connection.Connection) (*Moyasa
 		WebhookSecret:  webhookSecret,
 	}
 
-	c.logger.Infow("successfully decrypted moyasar credentials",
+	c.logger.Info(context.Background(), "successfully decrypted moyasar credentials",
 		"connection_id", conn.ID,
 		"has_publishable_key", publishableKey != "",
 		"has_secret_key", secretKey != "",
@@ -311,7 +312,7 @@ func (c *Client) CreatePayment(ctx context.Context, req *CreatePaymentRequest) (
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "type", errResp.Type, "errors", errResp.Errors)
+			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "type", errResp.Type, "errors", errResp.Errors, "error", err)
 			return nil, ierr.NewError(errResp.Message).
 				WithHint("Moyasar payment creation failed").
 				WithReportableDetails(map[string]interface{}{
@@ -394,7 +395,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req *CreateInvoiceRequest) (
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "type", errResp.Type, "errors", errResp.Errors)
+			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "type", errResp.Type, "errors", errResp.Errors, "error", err)
 			return nil, ierr.NewError(errResp.Message).
 				WithHint("Moyasar invoice creation failed").
 				WithReportableDetails(map[string]interface{}{
@@ -625,7 +626,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	// Use webhook secret for verification
 	secretForVerification := config.WebhookSecret
 	if secretForVerification == "" {
-		c.logger.Error(ctx, "webhook secret not configured")
+		c.logger.Error(ctx, "webhook secret not configured", "error", err)
 		return ierr.NewError("webhook secret not configured").
 			WithHint("Configure Moyasar webhook secret").
 			Mark(ierr.ErrValidation)
@@ -651,6 +652,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	// Use constant-time comparison to prevent timing attacks
 	if !hmac.Equal(expectedMAC, decodedSignature) {
 		c.logger.Error(ctx, "webhook signature mismatch",
+			"error", err,
 			"expected_mac_length", len(expectedMAC),
 			"received_signature_length", len(decodedSignature),
 			"payload_length", len(payload),
@@ -714,7 +716,7 @@ func (c *Client) CreateToken(ctx context.Context, req *CreateTokenRequest) (*Cre
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message)
+			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "error", err)
 			return nil, ierr.NewError(errResp.Message).
 				WithHint("Moyasar token creation failed").
 				Mark(ierr.ErrInternal)

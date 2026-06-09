@@ -246,7 +246,7 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 	}
 
 	if flexpricePaymentID == "" {
-		h.logger.Warnw("no flexprice_payment_id found in payment intent metadata",
+		h.logger.Info(ctx, "no flexprice_payment_id found in payment intent metadata",
 			"payment_intent_id", paymentIntentID)
 		return nil
 	}
@@ -267,7 +267,7 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 	}
 
 	if payment == nil {
-		h.logger.Warnw("no payment record found", "flexprice_payment_id", flexpricePaymentID, "payment_intent_id", paymentIntentID)
+		h.logger.Info(ctx, "no payment record found", "flexprice_payment_id", flexpricePaymentID, "payment_intent_id", paymentIntentID)
 		return nil
 	}
 
@@ -358,7 +358,7 @@ func (h *Handler) handleSetupIntentSucceeded(ctx context.Context, event *stripea
 	// Get customer ID from metadata
 	customerID, exists := setupIntent.Metadata["customer_id"]
 	if !exists {
-		h.logger.Error(ctx, "customer_id not found in setup intent metadata, skipping event",
+		h.logger.Info(ctx, "customer_id not found in setup intent metadata, skipping event",
 			"setup_intent_id", setupIntent.ID,
 			"event_id", event.ID)
 		return nil
@@ -460,7 +460,7 @@ func (h *Handler) handleInvoicePaymentPaid(ctx context.Context, event *stripeapi
 		"environment_id", environmentID)
 
 	if stripeInvoiceID == "" || paymentIntentID == "" {
-		h.logger.Warnw("missing invoice ID or payment intent ID in invoice.paid webhook",
+		h.logger.Info(ctx, "missing invoice ID or payment intent ID in invoice.paid webhook",
 			"stripe_invoice_id", stripeInvoiceID,
 			"payment_intent_id", paymentIntentID)
 		return nil
@@ -804,7 +804,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	// get flexprice_payment_id from metadata
 	flexpricePaymentID := checkoutSession.Metadata["flexprice_payment_id"]
 	if flexpricePaymentID == "" {
-		h.logger.Warnw("no flexprice_payment_id found in checkout session metadata", "event_id", event.ID)
+		h.logger.Info(ctx, "no flexprice_payment_id found in checkout session metadata", "event_id", event.ID)
 		return nil
 	}
 

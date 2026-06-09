@@ -159,7 +159,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		return nil, nil
 	}
 	if sub.TrialStart == nil || sub.TrialEnd == nil {
-		s.Logger.Warn(ctx, "trialing subscription missing trial bounds, skipping",
+		s.Logger.Info(ctx, "trialing subscription missing trial bounds, skipping",
 			"subscription_id", sub.ID)
 		return nil, nil
 	}

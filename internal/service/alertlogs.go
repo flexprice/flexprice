@@ -280,7 +280,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			}
 		}
 	default:
-		s.Logger.Warn(ctx, "webhook event not published for alert log:",
+		s.Logger.Info(ctx, "webhook event not published for alert log:",
 			"entity_type", req.EntityType,
 			"alert_log_id", alertLog.ID,
 		)
@@ -406,7 +406,7 @@ func (s *alertLogsService) publishSystemEvent(ctx context.Context, eventName typ
 	}
 
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 		return err
 	}
 

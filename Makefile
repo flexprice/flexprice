@@ -625,3 +625,21 @@ test-suite:
 	@cd integration-testing-suite/go && go run .
 
 .PHONY: sdk-all test-sdk test-sdks test-suite
+
+# -----------------------------------------------------------------------
+# Loglint — ctx-first logger enforcement
+# -----------------------------------------------------------------------
+
+.PHONY: build-loglint lint lint-ci
+
+## build-loglint: compile the loglint vettool binary into tools/bin/
+build-loglint:
+	cd tools/loglint && go mod download && go build -o ../bin/loglint ./main.go
+
+## lint: run loglint on internal/ (warnings + errors, non-blocking)
+lint: build-loglint
+	go vet -vettool=./tools/bin/loglint ./internal/... ; echo "Loglint complete"
+
+## lint-ci: run loglint on internal/ (errors only — LL008 warnings ignored)
+lint-ci: build-loglint
+	@out=$$(go vet -vettool=./tools/bin/loglint ./internal/... 2>&1 | grep -v "^#" | grep -v "warning:"); if [ -n "$$out" ]; then echo "$$out"; exit 1; fi

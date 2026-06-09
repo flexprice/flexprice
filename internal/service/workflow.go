@@ -255,7 +255,7 @@ func (s *workflowService) GetWorkflowsBatch(ctx context.Context, req *dto.BatchW
 	workflowDetails := make([]*dto.WorkflowDetailsResponse, 0, len(infos))
 	for i, info := range infos {
 		if info == nil {
-			s.log.Warn(ctx, "Skipping nil workflow info in batch", "index", i)
+			s.log.Info(ctx, "Skipping nil workflow info in batch", "index", i)
 			continue
 		}
 		totalDuration := formatDuration(info.StartTime, info.CloseTime)

@@ -41,7 +41,7 @@ func NewScheduledTaskHandler(
 func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 	var req dto.CreateScheduledTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("failed to bind request", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to bind request", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -50,7 +50,7 @@ func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 
 	resp, err := h.service.CreateScheduledTask(c.Request.Context(), req)
 	if err != nil {
-		h.logger.Errorw("failed to create scheduled task", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to create scheduled task", "error", err)
 		c.Error(err)
 		return
 	}
@@ -76,7 +76,7 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 
 	resp, err := h.service.GetScheduledTask(c.Request.Context(), id)
 	if err != nil {
-		h.logger.Errorw("failed to get scheduled task", "id", id, "error", err)
+		h.logger.Error(c.Request.Context(), "failed to get scheduled task", "id", id, "error", err)
 		c.Error(err)
 		return
 	}
@@ -129,7 +129,7 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 
 	resp, err := h.service.ListScheduledTasks(c.Request.Context(), &filter, connectionID, entityType, interval, enabledStr)
 	if err != nil {
-		h.logger.Errorw("failed to list scheduled tasks", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to list scheduled tasks", "error", err)
 		c.Error(err)
 		return
 	}
@@ -156,7 +156,7 @@ func (h *ScheduledTaskHandler) UpdateScheduledTask(c *gin.Context) {
 
 	var req dto.UpdateScheduledTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("failed to bind request", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to bind request", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -165,7 +165,7 @@ func (h *ScheduledTaskHandler) UpdateScheduledTask(c *gin.Context) {
 
 	resp, err := h.service.UpdateScheduledTask(c.Request.Context(), id, req)
 	if err != nil {
-		h.logger.Errorw("failed to update scheduled task", "id", id, "error", err)
+		h.logger.Error(c.Request.Context(), "failed to update scheduled task", "id", id, "error", err)
 		c.Error(err)
 		return
 	}
@@ -191,7 +191,7 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 
 	err := h.service.DeleteScheduledTask(c.Request.Context(), id)
 	if err != nil {
-		h.logger.Errorw("failed to delete scheduled task", "id", id, "error", err)
+		h.logger.Error(c.Request.Context(), "failed to delete scheduled task", "id", id, "error", err)
 		c.Error(err)
 		return
 	}
@@ -232,16 +232,16 @@ func (h *ScheduledTaskHandler) TriggerForceRun(c *gin.Context) {
 	// Try to bind JSON - if empty body or no JSON, continue with automatic time calculation
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Empty body or invalid JSON - use automatic calculation
-		h.logger.Debugw("no custom time range provided, using automatic calculation", "id", id)
+		h.logger.Debug(c.Request.Context(), "no custom time range provided, using automatic calculation", "id", id)
 		req = dto.TriggerForceRunRequest{} // Empty request for automatic
 	} else {
 		// Validate the request
 		if err := req.Validate(); err != nil {
-			h.logger.Errorw("invalid force run request", "id", id, "error", err)
+			h.logger.Error(c.Request.Context(), "invalid force run request", "id", id, "error", err)
 			c.Error(err)
 			return
 		}
-		h.logger.Infow("force run with custom time range",
+		h.logger.Info(c.Request.Context(), "force run with custom time range",
 			"id", id,
 			"start_time", req.StartTime,
 			"end_time", req.EndTime)
@@ -249,7 +249,7 @@ func (h *ScheduledTaskHandler) TriggerForceRun(c *gin.Context) {
 
 	response, err := h.service.TriggerForceRun(c.Request.Context(), id, req)
 	if err != nil {
-		h.logger.Errorw("failed to trigger force run", "id", id, "error", err)
+		h.logger.Error(c.Request.Context(), "failed to trigger force run", "id", id, "error", err)
 		c.Error(err)
 		return
 	}
@@ -273,7 +273,7 @@ func (h *ScheduledTaskHandler) ScheduleUpdateBillingPeriod(c *gin.Context) {
 
 	response, err := h.service.ScheduleUpdateBillingPeriod(c.Request.Context())
 	if err != nil {
-		h.logger.Errorw("failed to schedule update billing period", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to schedule update billing period", "error", err)
 		c.Error(err)
 		return
 	}
@@ -298,7 +298,7 @@ func (h *ScheduledTaskHandler) ScheduleDraftFinalization(c *gin.Context) {
 
 	response, err := h.service.ScheduleDraftFinalization(c.Request.Context())
 	if err != nil {
-		h.logger.Errorw("failed to schedule draft finalization", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to schedule draft finalization", "error", err)
 		c.Error(err)
 		return
 	}

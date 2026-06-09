@@ -132,7 +132,7 @@ func (h *Handler) processDealContacts(
 	}
 
 	if len(associations.Results) == 0 {
-		h.logger.Warnw("no contacts associated with deal", "deal_id", dealID)
+		h.logger.Info(context.Background(), "no contacts associated with deal", "deal_id", dealID)
 		return nil
 	}
 
@@ -213,7 +213,7 @@ func (h *Handler) handleDealCreated(
 func (h *Handler) ParseWebhookPayload(body []byte) ([]hubspot.WebhookEvent, error) {
 	var events []hubspot.WebhookEvent
 	if err := json.Unmarshal(body, &events); err != nil {
-		h.logger.Errorw("failed to parse webhook payload", "error", err)
+		h.logger.Error(context.Background(), "failed to parse webhook payload", "error", err)
 		return nil, ierr.NewError("failed to parse webhook payload").
 			WithHint("Invalid webhook payload format").
 			Mark(ierr.ErrValidation)

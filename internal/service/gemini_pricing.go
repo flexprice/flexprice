@@ -150,17 +150,17 @@ func (s *geminiPricingService) ParsePricing(ctx context.Context, req *dto.ParseG
 		})
 		if err != nil {
 			if httpErr, ok := httpclient.IsHTTPError(err); ok {
-				s.log.Warn(ctx, "gemini non-success status", "status", httpErr.StatusCode)
+				s.log.Info(ctx, "gemini non-success status", "status", httpErr.StatusCode)
 				return nil, mapGeminiUpstreamHTTPError(err, httpErr.StatusCode)
 			}
-			s.log.Warn(ctx, "gemini request failed", "error", err)
+			s.log.Info(ctx, "gemini request failed", "error", err)
 			return nil, ierr.WithError(err).
 				WithHint("AI service temporarily unavailable").
 				Mark(ierr.ErrHTTPClient)
 		}
 
 		if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
-			s.log.Warn(ctx, "gemini non-success status",
+			s.log.Info(ctx, "gemini non-success status",
 				"status", httpResp.StatusCode,
 				"body_len", len(httpResp.Body),
 			)
@@ -171,14 +171,14 @@ func (s *geminiPricingService) ParsePricing(ctx context.Context, req *dto.ParseG
 
 		var genResp geminiGenerateResponse
 		if err := json.Unmarshal(httpResp.Body, &genResp); err != nil {
-			s.log.Warn(ctx, "gemini response not json", "error", err)
+			s.log.Info(ctx, "gemini response not json", "error", err)
 			return nil, ierr.NewError("invalid response from AI service").
 				WithHint("AI service returned an unexpected response").
 				Mark(ierr.ErrHTTPClient)
 		}
 
 		if genResp.Error != nil && genResp.Error.Message != "" {
-			s.log.Warn(ctx, "gemini error object present",
+			s.log.Info(ctx, "gemini error object present",
 				"code", genResp.Error.Code,
 				"status", genResp.Error.Status,
 			)
@@ -209,7 +209,7 @@ func (s *geminiPricingService) ParsePricing(ctx context.Context, req *dto.ParseG
 		text := normalizeGeminiJSONText(cand.Content.Parts[0].Text)
 		if text == "" {
 			if attempt < maxGeminiParseAttempts {
-				s.log.Warn(ctx, "gemini returned non-json text, retrying", "attempt", attempt)
+				s.log.Info(ctx, "gemini returned non-json text, retrying", "attempt", attempt)
 				continue
 			}
 			return nil, ierr.NewError("AI output is not valid JSON").
@@ -220,7 +220,7 @@ func (s *geminiPricingService) ParsePricing(ctx context.Context, req *dto.ParseG
 		var rawObj json.RawMessage
 		if err := json.Unmarshal([]byte(text), &rawObj); err != nil {
 			if attempt < maxGeminiParseAttempts {
-				s.log.Warn(ctx, "gemini invalid json payload, retrying", "attempt", attempt)
+				s.log.Info(ctx, "gemini invalid json payload, retrying", "attempt", attempt)
 				continue
 			}
 			return nil, ierr.WithError(err).
@@ -232,7 +232,7 @@ func (s *geminiPricingService) ParsePricing(ctx context.Context, req *dto.ParseG
 		var typeCheck map[string]json.RawMessage
 		if err := json.Unmarshal(rawObj, &typeCheck); err != nil {
 			if attempt < maxGeminiParseAttempts {
-				s.log.Warn(ctx, "gemini non-object json payload, retrying", "attempt", attempt)
+				s.log.Info(ctx, "gemini non-object json payload, retrying", "attempt", attempt)
 				continue
 			}
 			return nil, ierr.WithError(err).

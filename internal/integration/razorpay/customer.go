@@ -89,7 +89,7 @@ func (s *CustomerService) EnsureCustomerSyncedToRazorpay(ctx context.Context, cu
 			}
 			updatedCustomerResp, err := customerService.UpdateCustomer(ctx, flexpriceCustomer.ID, updateReq)
 			if err != nil {
-				s.logger.Warnw("failed to update customer metadata with Razorpay customer ID",
+				s.logger.Info(ctx, "failed to update customer metadata with Razorpay customer ID",
 					"customer_id", customerID,
 					"error", err)
 				// Return original customer info if update fails
@@ -192,6 +192,7 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 	rawID, ok := razorpayCustomer["id"].(string)
 	if !ok || rawID == "" {
 		s.logger.Error(ctx, "missing Razorpay customer id in response",
+			"error", err,
 			"customer_id", flexpriceCustomer.ID)
 		return "", ierr.NewError("razorpay customer id missing in response").
 			WithHint("Check Razorpay CreateCustomer response payload").

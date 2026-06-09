@@ -166,7 +166,7 @@ func (h *EnvironmentHandler) CloneEnvironment(c *gin.Context) {
 
 	ts := temporalservice.GetGlobalTemporalService()
 	if ts == nil {
-		h.log.Error(c.Request.Context(), "temporal service not available")
+		h.log.Info(c.Request.Context(), "temporal service not available")
 		c.Error(ierr.NewError("temporal service not available").
 			WithHint("Workflow engine is not configured").
 			Mark(ierr.ErrSystem))

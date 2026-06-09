@@ -228,7 +228,7 @@ func (s *billingService) CalculateFixedCharges(
 				// Full-period line item: apply existing proration logic (first-period, cancellation, etc.)
 				proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, amount, &periodStart, &periodEnd)
 				if err != nil {
-					s.Logger.Warnw("failed to apply proration to line item, using original amount",
+					s.Logger.Info(context.Background(), "failed to apply proration to line item, using original amount",
 						"error", err,
 						"subscription_id", sub.ID,
 						"line_item_id", item.ID,
@@ -245,7 +245,7 @@ func (s *billingService) CalculateFixedCharges(
 		if item.PriceUnit != nil {
 			priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
 			if err != nil {
-				s.Logger.Warnw("failed to get price unit",
+				s.Logger.Info(context.Background(), "failed to get price unit",
 					"error", err,
 					"price_unit", lo.ToPtr(item.PriceUnit),
 					"subscription_id", sub.ID,
@@ -254,7 +254,7 @@ func (s *billingService) CalculateFixedCharges(
 			}
 			priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 			if err != nil {
-				s.Logger.Warnw("failed to convert amount to price unit",
+				s.Logger.Info(context.Background(), "failed to convert amount to price unit",
 					"error", err,
 					"price_unit", lo.FromPtr(item.PriceUnit),
 					"subscription_id", sub.ID,
@@ -868,7 +868,7 @@ func (s *billingService) CalculateUsageCharges(
 			if item.PriceUnit != nil {
 				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
 				if err != nil {
-					s.Logger.Warnw("failed to get price unit",
+					s.Logger.Info(context.Background(), "failed to get price unit",
 						"error", err,
 						"price_unit", lo.FromPtr(item.PriceUnit),
 						"amount", lineItemAmount)
@@ -876,7 +876,7 @@ func (s *billingService) CalculateUsageCharges(
 				}
 				convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 				if err != nil {
-					s.Logger.Warnw("failed to convert amount to price unit",
+					s.Logger.Info(context.Background(), "failed to convert amount to price unit",
 						"error", err,
 						"price_unit", lo.FromPtr(item.PriceUnit),
 						"amount", lineItemAmount)
@@ -1690,7 +1690,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				// Get the price unit by code
 				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
 				if err != nil {
-					s.Logger.Warnw("failed to get price unit",
+					s.Logger.Info(context.Background(), "failed to get price unit",
 						"error", err,
 						"price_unit", lo.FromPtr(item.PriceUnit))
 					return nil, err
@@ -1699,7 +1699,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				// Convert fiat currency amount to price unit amount
 				convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 				if err != nil {
-					s.Logger.Warnw("failed to convert amount to price unit",
+					s.Logger.Info(context.Background(), "failed to convert amount to price unit",
 						"error", err,
 						"price_unit", lo.FromPtr(item.PriceUnit),
 						"amount", lineItemAmount)
@@ -3275,7 +3275,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		// Get all entitlements for this subscription (plan + addons)
 		subEntitlements, err := subscriptionService.GetSubscriptionEntitlements(ctx, sub.ID)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to get subscription entitlements, skipping",
+			s.Logger.Info(ctx, "failed to get subscription entitlements, skipping",
 				"subscription_id", sub.ID,
 				"error", err)
 			continue
@@ -3388,7 +3388,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	for _, subscriptionID := range subscriptionIDs {
 		sub, err := s.SubRepo.Get(ctx, subscriptionID)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to get subscription", "subscription_id", subscriptionID, "error", err)
+			s.Logger.Info(ctx, "failed to get subscription", "subscription_id", subscriptionID, "error", err)
 			continue
 		}
 		subscriptionMap[subscriptionID] = sub
@@ -3423,7 +3423,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 		usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to get usage for subscription", "subscription_id", subscriptionID, "error", err)
+			s.Logger.Info(ctx, "failed to get usage for subscription", "subscription_id", subscriptionID, "error", err)
 			continue
 		}
 
@@ -3449,7 +3449,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// Get usage data with daily windows
 					usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
 					if err != nil {
-						s.Logger.Warn(ctx, "failed to get daily usage for feature",
+						s.Logger.Info(ctx, "failed to get daily usage for feature",
 							"feature_id", featureID,
 							"meter_id", meterID,
 							"subscription_id", subscriptionID,
@@ -3501,7 +3501,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// Get usage data for current month
 					usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
 					if err != nil {
-						s.Logger.Warn(ctx, "failed to get monthly usage for feature",
+						s.Logger.Info(ctx, "failed to get monthly usage for feature",
 							"feature_id", featureID,
 							"meter_id", meterID,
 							"subscription_id", subscriptionID,
@@ -3556,7 +3556,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 					totalUsageResult, err := eventService.GetUsageByMeter(ctx, totalUsageRequest)
 					if err != nil {
-						s.Logger.Warn(ctx, "failed to get total usage for never reset feature",
+						s.Logger.Info(ctx, "failed to get total usage for never reset feature",
 							"feature_id", featureID,
 							"meter_id", meterID,
 							"subscription_id", subscriptionID,
@@ -3599,7 +3599,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			}
 			nextUsageResetAt, err := types.GetNextUsageResetAt(currentTime, sub.StartDate, sub.EndDate, sub.BillingAnchor, resetPeriod)
 			if err != nil {
-				s.Logger.Warn(ctx, "failed to get next usage reset at for feature",
+				s.Logger.Info(ctx, "failed to get next usage reset at for feature",
 					"feature_id", featureID,
 					"subscription_id", sub.ID,
 					"error", err)

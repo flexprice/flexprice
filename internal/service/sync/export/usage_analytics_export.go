@@ -170,7 +170,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 		})
 		if err != nil {
 			failedCount++
-			e.logger.Warnw("failed to fetch usage analytics for customer, skipping",
+			e.logger.Info(ctx, "failed to fetch usage analytics for customer, skipping",
 				"customer_id", c.ID,
 				"external_id", c.ExternalID,
 				"error", err)
@@ -223,7 +223,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 			"env_id", request.EnvID,
 			"csv_size_bytes", len(csvBytes))
 	} else if failedCount > 0 {
-		e.logger.Warnw("usage analytics export completed with partial data",
+		e.logger.Info(ctx, "usage analytics export completed with partial data",
 			"total_customers", len(customers),
 			"failed_customers", failedCount,
 			"exported_records", recordCount,

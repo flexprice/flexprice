@@ -964,7 +964,7 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 		EntityID:      walletID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 
@@ -991,7 +991,7 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 		EntityID:      transactionID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 

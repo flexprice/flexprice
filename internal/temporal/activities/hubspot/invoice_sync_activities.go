@@ -68,7 +68,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 	// Get HubSpot contact ID for the customer
 	hubspotContactID, err := hubspotIntegration.InvoiceSyncSvc.GetHubSpotContactID(ctx, input.CustomerID)
 	if err != nil {
-		a.logger.Warnw("customer not synced to HubSpot",
+		a.logger.Info(context.Background(), "customer not synced to HubSpot",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)

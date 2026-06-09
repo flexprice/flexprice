@@ -249,7 +249,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		if conn.EncryptedSecretData.QuickBooks.WebhookVerifierToken != "" {
 			webhookVerifierToken, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.QuickBooks.WebhookVerifierToken)
 			if err != nil {
-				c.logger.Warnw("failed to decrypt webhook verifier token", "connection_id", conn.ID, "error", err)
+				c.logger.Info(context.Background(), "failed to decrypt webhook verifier token", "connection_id", conn.ID, "error", err)
 				// Don't fail - webhook verifier token is optional
 			} else {
 				decryptedMetadata[types.OAuthCredentialWebhookVerifierToken] = webhookVerifierToken

@@ -199,7 +199,7 @@ func (c *EntitlementProrationCalculator) calculateProrationCoefficient(
 		)
 		if err != nil {
 			// Fallback to subscription period start if calculation fails
-			c.logger.Warn(context.Background(), "failed to calculate previous billing date for calendar proration, using fallback",
+			c.logger.Info(context.Background(), "failed to calculate previous billing date for calendar proration, using fallback",
 				"error", err,
 				"billing_anchor", params.BillingAnchor,
 				"billing_period", params.BillingPeriod,

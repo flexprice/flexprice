@@ -49,7 +49,7 @@ func NewWalletBalanceAlertService(
 
 	svc.pubSub = params.WalletBalanceAlertPubSub.PubSub
 
-	params.Logger.Infow("wallet alert pubsub initialized successfully",
+	params.Logger.Info(context.Background(), "wallet alert pubsub initialized successfully",
 		"consumer_group", params.Config.WalletBalanceAlert.ConsumerGroup,
 		"topic", params.Config.WalletBalanceAlert.Topic,
 	)
@@ -158,7 +158,7 @@ func (s *walletBalanceAlertService) PublishEvent(ctx context.Context, event *wal
 // RegisterHandler registers a Kafka consumer handler with rate limiting
 func (s *walletBalanceAlertService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.WalletBalanceAlert.Enabled {
-		s.Logger.Infow("wallet balance alert handler disabled by configuration")
+		s.Logger.Info(context.Background(), "wallet balance alert handler disabled by configuration")
 		return
 	}
 
@@ -174,7 +174,7 @@ func (s *walletBalanceAlertService) RegisterHandler(router *pubsubRouter.Router,
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered wallet balance alert handler",
+	s.Logger.Info(context.Background(), "registered wallet balance alert handler",
 		"handler_name", "wallet_balance_alert_handler",
 		"topic", cfg.WalletBalanceAlert.Topic,
 		"consumer_group", cfg.WalletBalanceAlert.ConsumerGroup,
@@ -186,14 +186,14 @@ func (s *walletBalanceAlertService) RegisterHandler(router *pubsubRouter.Router,
 func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 	var event wallet.WalletBalanceAlertEvent
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Errorw("failed to unmarshal wallet balance alert event",
+		s.Logger.Error(context.Background(), "failed to unmarshal wallet balance alert event",
 			"error", err,
 			"message_uuid", msg.UUID,
 			"payload_size", len(msg.Payload),
 		)
 		return nil
 	}
-	s.Logger.Infow("processing wallet balance alert message",
+	s.Logger.Info(context.Background(), "processing wallet balance alert message",
 		"message_uuid", msg.UUID,
 		"tenant_id", event.TenantID,
 		"environment_id", event.EnvironmentID,
@@ -214,7 +214,7 @@ func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 	// Process the event
 	if err := s.processEvent(ctx, event); err != nil {
 		// Return error to trigger retry with backoff
-		s.Logger.Errorw("failed to process wallet balance alert event",
+		s.Logger.Error(context.Background(), "failed to process wallet balance alert event",
 			"error", err,
 			"event_id", event.ID,
 			"customer_id", event.CustomerID,
@@ -290,7 +290,7 @@ func (s *walletBalanceAlertService) processEvent(ctx context.Context, event wall
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 	config, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to get wallet balance alert config, skipping",
+		s.Logger.Info(ctx, "failed to get wallet balance alert config, skipping",
 			"error", err,
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,

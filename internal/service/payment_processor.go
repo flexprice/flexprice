@@ -780,7 +780,7 @@ func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *pay
 func (p *paymentProcessor) dispatchWhopMarkPaid(ctx context.Context, invoiceID string) {
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		p.Logger.Warn(ctx, "temporal service unavailable, skipping Whop mark-paid", "invoice_id", invoiceID)
+		p.Logger.Info(ctx, "temporal service unavailable, skipping Whop mark-paid", "invoice_id", invoiceID)
 		return
 	}
 
@@ -817,7 +817,7 @@ func (p *paymentProcessor) publishSystemEvent(ctx context.Context, eventName typ
 		EntityID:      paymentID,
 	}
 	if err := p.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		p.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		p.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 
@@ -876,7 +876,7 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		customerService := NewCustomerService(p.ServiceParams)
 		defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, customerID, customerService)
 		if err != nil || defaultPaymentMethod == nil {
-			p.Logger.Warn(ctx, "customer has no default payment method for card payment",
+			p.Logger.Info(ctx, "customer has no default payment method for card payment",
 				"customer_id", customerID,
 				"payment_id", paymentObj.ID,
 				"error", err,

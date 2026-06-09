@@ -95,7 +95,7 @@ func (s *CustomerService) GetOrCreateQuickBooksCustomer(ctx context.Context, fle
 				"email", flexpriceCustomer.Email)
 			// Create mapping for the existing QuickBooks customer
 			if err := s.createCustomerMapping(ctx, flexpriceCustomer.ID, existingCustomer.ID, existingCustomer); err != nil {
-				s.Logger.Warnw("failed to create customer mapping",
+				s.Logger.Info(ctx, "failed to create customer mapping",
 					"error", err,
 					"flexprice_customer_id", flexpriceCustomer.ID)
 			}
@@ -200,7 +200,7 @@ func (s *CustomerService) createCustomerMapping(
 	quickBooksCustomer *CustomerResponse,
 ) error {
 	if s.EntityIntegrationMappingRepo == nil {
-		s.Logger.Warnw("EntityIntegrationMappingRepo is nil, skipping mapping creation",
+		s.Logger.Info(context.Background(), "EntityIntegrationMappingRepo is nil, skipping mapping creation",
 			"flexprice_customer_id", flexPriceCustomerID,
 			"quickbooks_customer_id", quickBooksCustomerID)
 		return nil

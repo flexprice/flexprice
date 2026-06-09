@@ -38,7 +38,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 	// CRITICAL: Panic recovery to ensure tracking failures never crash workflows
 	defer func() {
 		if r := recover(); r != nil {
-			a.logger.Error(ctx, "Panic recovered in TrackWorkflowStart - workflow will continue",
+			a.logger.Info(ctx, "Panic recovered in TrackWorkflowStart - workflow will continue",
 				"panic", r,
 				"workflow_id", input.WorkflowID,
 				"run_id", input.RunID)
@@ -96,7 +96,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowEnd(ctx context.Context, input
 	// CRITICAL: Panic recovery to ensure tracking failures never crash workflows
 	defer func() {
 		if r := recover(); r != nil {
-			a.logger.Error(ctx, "Panic recovered in TrackWorkflowEnd - workflow will continue",
+			a.logger.Info(ctx, "Panic recovered in TrackWorkflowEnd - workflow will continue",
 				"panic", r,
 				"workflow_id", input.WorkflowID,
 				"run_id", input.RunID)

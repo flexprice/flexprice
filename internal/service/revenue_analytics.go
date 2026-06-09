@@ -49,7 +49,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		costAnalytics, err = s.costsheetUsageTrackingService.GetCostSheetUsageAnalytics(ctx, req)
 	}
 	if err != nil {
-		s.Logger.Warnw("failed to fetch cost analytics", "error", err)
+		s.Logger.Info(context.Background(), "failed to fetch cost analytics", "error", err)
 		costAnalytics = nil
 	}
 
@@ -82,7 +82,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		revenueAnalytics, err = s.featureUsageTrackingService.GetDetailedUsageAnalyticsV2(ctx, revenueReq)
 	}
 	if err != nil {
-		s.Logger.Warnw("failed to fetch revenue analytics", "error", err)
+		s.Logger.Info(context.Background(), "failed to fetch revenue analytics", "error", err)
 		revenueAnalytics = nil
 	}
 

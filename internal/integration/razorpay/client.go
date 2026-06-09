@@ -69,6 +69,7 @@ func (c *Client) GetRazorpayConfig(ctx context.Context) (*RazorpayConfig, error)
 	// Validate required fields
 	if razorpayConfig.KeyID == "" {
 		c.logger.Error(ctx, "missing Razorpay key ID",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Razorpay key ID").
@@ -78,6 +79,7 @@ func (c *Client) GetRazorpayConfig(ctx context.Context) (*RazorpayConfig, error)
 
 	if razorpayConfig.SecretKey == "" {
 		c.logger.Error(ctx, "missing Razorpay secret key",
+			"error", err,
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Razorpay secret key").
@@ -118,27 +120,27 @@ func (c *Client) GetDecryptedRazorpayConfig(conn *connection.Connection) (*Razor
 func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.Metadata, error) {
 	// Check if the connection has encrypted secret data
 	if conn.EncryptedSecretData.Razorpay == nil {
-		c.logger.Warnw("no razorpay metadata found in encrypted secret data", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no razorpay metadata found in encrypted secret data", "connection_id", conn.ID)
 		return types.Metadata{}, nil
 	}
 
 	// For Razorpay connections, decrypt the structured metadata
 	if conn.ProviderType == types.SecretProviderRazorpay {
 		if conn.EncryptedSecretData.Razorpay == nil {
-			c.logger.Warnw("no razorpay metadata found", "connection_id", conn.ID)
+			c.logger.Info(context.Background(), "no razorpay metadata found", "connection_id", conn.ID)
 			return types.Metadata{}, nil
 		}
 
 		// Decrypt each field
 		keyID, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Razorpay.KeyID)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt key ID", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt key ID", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt key ID").Mark(ierr.ErrInternal)
 		}
 
 		secretKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Razorpay.SecretKey)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt secret key", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt secret key", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt secret key").Mark(ierr.ErrInternal)
 		}
 
@@ -147,7 +149,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 		if conn.EncryptedSecretData.Razorpay.WebhookSecret != "" {
 			webhookSecret, err = c.encryptionService.Decrypt(conn.EncryptedSecretData.Razorpay.WebhookSecret)
 			if err != nil {
-				c.logger.Warnw("failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
+				c.logger.Info(context.Background(), "failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
 				// Don't fail - webhook secret is optional
 				webhookSecret = ""
 			}
@@ -159,7 +161,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 			"webhook_secret": webhookSecret,
 		}
 
-		c.logger.Infow("successfully decrypted razorpay credentials",
+		c.logger.Info(context.Background(), "successfully decrypted razorpay credentials",
 			"connection_id", conn.ID,
 			"has_key_id", keyID != "",
 			"has_secret_key", secretKey != "",
@@ -294,7 +296,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	// According to Razorpay docs, webhooks should use webhook secret
 	secretForVerification := config.WebhookSecret
 	if secretForVerification == "" {
-		c.logger.Warnw("webhook secret not configured, using API secret key as fallback")
+		c.logger.Info(ctx, "webhook secret not configured, using API secret key as fallback")
 		secretForVerification = config.SecretKey
 	}
 
@@ -305,7 +307,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	expectedSignature := hex.EncodeToString(mac.Sum(nil))
 
 	if expectedSignature != signature {
-		c.logger.Error(ctx, "webhook signature mismatch",
+		c.logger.Info(ctx, "webhook signature mismatch",
 			"expected_signature_length", len(expectedSignature),
 			"received_signature_length", len(signature),
 			"payload_length", len(payload),

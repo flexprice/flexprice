@@ -162,7 +162,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 	}
 
 	if paymentRecord == nil {
-		s.logger.Warnw("payment record not found for reconciliation",
+		s.logger.Info(context.Background(), "payment record not found for reconciliation",
 			"payment_id", paymentID)
 		return ierr.NewError("payment not found").Mark(ierr.ErrNotFound)
 	}
@@ -177,7 +177,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 
 	invoiceID := paymentRecord.DestinationID
 	if invoiceID == "" {
-		s.logger.Warnw("payment has no invoice destination",
+		s.logger.Info(context.Background(), "payment has no invoice destination",
 			"payment_id", paymentID)
 		return nil
 	}
@@ -656,7 +656,7 @@ func (s *PaymentService) GetCustomerPaymentMethods(
 	for i, tokenID := range tokenIDs {
 		token, err := s.client.GetToken(ctx, tokenID)
 		if err != nil {
-			s.logger.Warnw("failed to get token from Moyasar, skipping",
+			s.logger.Info(context.Background(), "failed to get token from Moyasar, skipping",
 				"token_id", tokenID,
 				"error", err)
 			continue

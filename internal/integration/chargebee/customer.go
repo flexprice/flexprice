@@ -255,7 +255,7 @@ func (s *CustomerService) EnsureCustomerSyncedToChargebee(ctx context.Context, c
 			})
 			err = s.CustomerRepo.Update(ctx, flexpriceCustomer)
 			if err != nil {
-				s.Logger.Warnw("failed to update customer metadata with Chargebee customer ID",
+				s.Logger.Info(ctx, "failed to update customer metadata with Chargebee customer ID",
 					"customer_id", customerID,
 					"error", err)
 				// Return original customer info if update fails
@@ -305,7 +305,7 @@ func (s *CustomerService) CreateCustomerInChargebee(ctx context.Context, custome
 
 	err = s.CustomerRepo.Update(ctx, flexpriceCustomer)
 	if err != nil {
-		s.Logger.Warnw("failed to update customer metadata with Chargebee customer ID",
+		s.Logger.Info(ctx, "failed to update customer metadata with Chargebee customer ID",
 			"customer_id", customerID,
 			"chargebee_customer_id", chargebeeCustomerID,
 			"error", err)

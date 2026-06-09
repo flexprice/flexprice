@@ -48,14 +48,14 @@ func NewInvoiceHandler(invoiceService service.InvoiceService, cfg *config.Config
 func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 	var req dto.CreateInvoiceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("failed to bind request", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to bind request", "error", err)
 		c.Error(ierr.WithError(err).WithHint("invalid request").Mark(ierr.ErrValidation))
 		return
 	}
 
 	invoice, err := h.invoiceService.CreateOneOffInvoice(c.Request.Context(), req)
 	if err != nil {
-		h.logger.Errorw("failed to create invoice", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to create invoice", "error", err)
 		c.Error(err)
 		return
 	}
@@ -156,7 +156,7 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 	}
 
 	if err := h.invoiceService.FinalizeInvoice(c.Request.Context(), id); err != nil {
-		h.logger.Errorw("failed to finalize invoice", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to finalize invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -174,7 +174,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 	ctx := c.Request.Context()
 	existing, err := h.invoiceService.GetInvoice(ctx, id)
 	if err != nil {
-		h.logger.Errorw("failed to get invoice for compute", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to get invoice for compute", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -202,7 +202,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 			// Synchronous: execute workflow and wait for result
 			skipped, err := h.invoiceService.ComputeInvoice(ctx, id, nil)
 			if err != nil {
-				h.logger.Errorw("failed to compute invoice", "error", err, "invoice_id", id)
+				h.logger.Error(c.Request.Context(), "failed to compute invoice", "error", err, "invoice_id", id)
 				c.Error(err)
 				return
 			}
@@ -210,7 +210,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 			// Fetch the updated invoice to return
 			invoice, err := h.invoiceService.GetInvoice(ctx, id)
 			if err != nil {
-				h.logger.Errorw("failed to get invoice after compute", "error", err, "invoice_id", id)
+				h.logger.Error(c.Request.Context(), "failed to get invoice after compute", "error", err, "invoice_id", id)
 				c.Error(err)
 				return
 			}
@@ -225,7 +225,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 		// Async mode (default): start workflow and return workflow ID
 		workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalComputeInvoiceWorkflow, workflowInput)
 		if err != nil {
-			h.logger.Errorw("failed to start compute invoice workflow", "error", err, "invoice_id", id)
+			h.logger.Error(c.Request.Context(), "failed to start compute invoice workflow", "error", err, "invoice_id", id)
 			c.Error(err)
 			return
 		}
@@ -245,7 +245,7 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 		if errors.Is(err, io.EOF) {
 			reqPtr = nil
 		} else {
-			h.logger.Errorw("failed to bind compute request", "error", err, "invoice_id", id)
+			h.logger.Error(c.Request.Context(), "failed to bind compute request", "error", err, "invoice_id", id)
 			c.Error(ierr.WithError(err).WithHint("invalid request").Mark(ierr.ErrValidation))
 			return
 		}
@@ -255,14 +255,14 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 
 	skipped, err := h.invoiceService.ComputeInvoice(ctx, id, reqPtr)
 	if err != nil {
-		h.logger.Errorw("failed to compute invoice", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to compute invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
 
 	invoice, err := h.invoiceService.GetInvoice(ctx, id)
 	if err != nil {
-		h.logger.Errorw("failed to get invoice after compute", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to get invoice after compute", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -309,7 +309,7 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 	}
 
 	if err := h.invoiceService.VoidInvoice(c.Request.Context(), id, req); err != nil {
-		h.logger.Errorw("failed to void invoice", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to void invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -339,7 +339,7 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		h.logger.Errorw("temporal service not available for recalculate invoice", "invoice_id", id)
+		h.logger.Info(c.Request.Context(), "temporal service not available for recalculate invoice", "invoice_id", id)
 		c.Error(ierr.NewError("temporal service not available").
 			WithHint("Try again later.").
 			Mark(ierr.ErrServiceUnavailable))
@@ -356,7 +356,7 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalRecalculateInvoiceWorkflow, workflowInput)
 	if err != nil {
-		h.logger.Errorw("failed to start recalculate invoice workflow", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to start recalculate invoice workflow", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -380,7 +380,7 @@ func (h *InvoiceHandler) TriggerFinalizeDraftInvoiceWorkflow(c *gin.Context) {
 	ctx := c.Request.Context()
 	inv, err := h.invoiceService.GetInvoice(ctx, invoiceID)
 	if err != nil {
-		h.logger.Errorw("failed to load invoice for finalize draft workflow", "error", err, "invoice_id", invoiceID)
+		h.logger.Error(c.Request.Context(), "failed to load invoice for finalize draft workflow", "error", err, "invoice_id", invoiceID)
 		c.Error(err)
 		return
 	}
@@ -393,7 +393,7 @@ func (h *InvoiceHandler) TriggerFinalizeDraftInvoiceWorkflow(c *gin.Context) {
 
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		h.logger.Errorw("temporal service not available for finalize draft invoice", "invoice_id", invoiceID)
+		h.logger.Error(c.Request.Context(), "temporal service not available for finalize draft invoice", "invoice_id", invoiceID, "error", err)
 		c.Error(ierr.NewError("temporal service not available").
 			WithHint("Try again later.").
 			Mark(ierr.ErrServiceUnavailable))
@@ -409,7 +409,7 @@ func (h *InvoiceHandler) TriggerFinalizeDraftInvoiceWorkflow(c *gin.Context) {
 
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalFinalizeDraftInvoiceWorkflow, workflowInput)
 	if err != nil {
-		h.logger.Errorw("failed to start finalize draft invoice workflow", "error", err, "invoice_id", invoiceID)
+		h.logger.Error(c.Request.Context(), "failed to start finalize draft invoice workflow", "error", err, "invoice_id", invoiceID)
 		c.Error(err)
 		return
 	}
@@ -568,7 +568,7 @@ func (h *InvoiceHandler) GetCustomerInvoiceSummary(c *gin.Context) {
 
 	resp, err := h.invoiceService.GetCustomerMultiCurrencyInvoiceSummary(c.Request.Context(), id)
 	if err != nil {
-		h.logger.Errorw("failed to get customer invoice summary", "error", err, "customer_id", id)
+		h.logger.Error(c.Request.Context(), "failed to get customer invoice summary", "error", err, "customer_id", id)
 		c.Error(err)
 		return
 	}
@@ -601,7 +601,7 @@ func (h *InvoiceHandler) AttemptPayment(c *gin.Context) {
 	}
 
 	if err := h.invoiceService.AttemptPayment(c.Request.Context(), id); err != nil {
-		h.logger.Errorw("failed to attempt payment for invoice", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to attempt payment for invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -634,7 +634,7 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 		forceGenerate := c.Query("force_generate") == "true"
 		url, err := h.invoiceService.GetInvoicePDFUrl(c.Request.Context(), id, forceGenerate)
 		if err != nil {
-			h.logger.Errorw("failed to get invoice pdf url", "error", err, "invoice_id", id)
+			h.logger.Error(c.Request.Context(), "failed to get invoice pdf url", "error", err, "invoice_id", id)
 			c.Error(err)
 			return
 		}
@@ -644,7 +644,7 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 
 	pdf, err := h.invoiceService.GetInvoicePDF(c.Request.Context(), id)
 	if err != nil {
-		h.logger.Errorw("failed to generate invoice pdf", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to generate invoice pdf", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -680,7 +680,7 @@ func (h *InvoiceHandler) RecalculateInvoiceV2(c *gin.Context) {
 
 	invoice, err := h.invoiceService.RecalculateInvoiceV2(c.Request.Context(), id, finalize)
 	if err != nil {
-		h.logger.Errorw("failed to recalculate invoice v2", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to recalculate invoice v2", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -712,14 +712,14 @@ func (h *InvoiceHandler) UpdateInvoice(c *gin.Context) {
 
 	var req dto.UpdateInvoiceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("failed to bind request", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to bind request", "error", err)
 		c.Error(ierr.WithError(err).WithHint("invalid request").Mark(ierr.ErrValidation))
 		return
 	}
 
 	invoice, err := h.invoiceService.UpdateInvoice(c.Request.Context(), id, req)
 	if err != nil {
-		h.logger.Errorw("failed to update invoice", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to update invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -785,7 +785,7 @@ func (h *InvoiceHandler) TriggerCommunication(c *gin.Context) {
 	}
 
 	if err := h.invoiceService.TriggerCommunication(c.Request.Context(), id); err != nil {
-		h.logger.Errorw("failed to trigger communication", "error", err, "invoice_id", id)
+		h.logger.Error(c.Request.Context(), "failed to trigger communication", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -809,7 +809,7 @@ func (h *InvoiceHandler) TriggerWebhook(c *gin.Context) {
 	}
 
 	if err := h.invoiceService.TriggerWebhook(c.Request.Context(), id, types.WebhookEventName(eventName)); err != nil {
-		h.logger.Errorw("failed to trigger webhook", "error", err, "invoice_id", id, "event_name", eventName)
+		h.logger.Error(c.Request.Context(), "failed to trigger webhook", "error", err, "invoice_id", id, "event_name", eventName)
 		c.Error(err)
 		return
 	}

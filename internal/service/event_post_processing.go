@@ -86,7 +86,7 @@ func NewEventPostProcessingService(
 	)
 
 	if err != nil {
-		params.Logger.Fatalw("failed to create pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create pubsub", "error", err)
 		return nil
 	}
 	ev.pubSub = pubSub
@@ -97,7 +97,7 @@ func NewEventPostProcessingService(
 		params.Config.EventPostProcessing.ConsumerGroupBackfill,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create backfill pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create backfill pubsub", "error", err)
 		return nil
 	}
 	ev.backfillPubSub = backfillPubSub
@@ -166,7 +166,7 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 // RegisterHandler registers a handler for the post-processing topic with rate limiting
 func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.EventPostProcessing.Enabled {
-		s.Logger.Infow("event post-processing handler disabled by configuration")
+		s.Logger.Info(context.Background(), "event post-processing handler disabled by configuration")
 		return
 	}
 
@@ -182,14 +182,14 @@ func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered event post-processing handler",
+	s.Logger.Info(context.Background(), "registered event post-processing handler",
 		"topic", cfg.EventPostProcessing.Topic,
 		"rate_limit", cfg.EventPostProcessing.RateLimit,
 	)
 
 	// Add backfill handler
 	if cfg.EventPostProcessing.TopicBackfill == "" {
-		s.Logger.Warnw("backfill topic not set, skipping backfill handler")
+		s.Logger.Info(context.Background(), "backfill topic not set, skipping backfill handler")
 		return
 	}
 
@@ -202,7 +202,7 @@ func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router
 		backfillThrottle.Middleware,
 	)
 
-	s.Logger.Infow("registered event post-processing backfill handler",
+	s.Logger.Info(context.Background(), "registered event post-processing backfill handler",
 		"topic", cfg.EventPostProcessing.TopicBackfill,
 		"rate_limit", cfg.EventPostProcessing.RateLimitBackfill,
 		"pubsub_type", "kafka",
@@ -217,14 +217,14 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	environmentID := msg.Metadata.Get("environment_id")
 
 	if s.Config.FeatureFlag.ForceV1ForTenant != "" && tenantID != s.Config.FeatureFlag.ForceV1ForTenant {
-		s.Logger.Debugw("skipping event post-processing for tenant as its not a part of v1 pipeline",
+		s.Logger.Debug(context.Background(), "skipping event post-processing for tenant as its not a part of v1 pipeline",
 			"tenant_id", tenantID,
 			"force_v1_for_tenant", s.Config.FeatureFlag.ForceV1ForTenant,
 		)
 		return nil
 	}
 
-	s.Logger.Debugw("processing event from message queue in event post processing service",
+	s.Logger.Debug(context.Background(), "processing event from message queue in event post processing service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -244,7 +244,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Errorw("failed to unmarshal event for post-processing",
+		s.Logger.Error(context.Background(), "failed to unmarshal event for post-processing",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -263,14 +263,14 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 			ExternalCustomerID: event.ExternalCustomerID,
 		})
 		if err != nil {
-			s.Logger.Errorw("failed to update event with ingested_at",
+			s.Logger.Error(context.Background(), "failed to update event with ingested_at",
 				"error", err,
 			)
 			return err
 		}
 
 		if len(events) == 0 {
-			s.Logger.Errorw("event not found",
+			s.Logger.Info(context.Background(), "event not found",
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 			)
@@ -284,7 +284,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 
 	// validate tenant id
 	if foundEvent.TenantID != tenantID {
-		s.Logger.Errorw("invalid tenant id",
+		s.Logger.Info(context.Background(), "invalid tenant id",
 			"expected", tenantID,
 			"actual", event.TenantID,
 			"message_uuid", msg.UUID,
@@ -294,7 +294,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 
 	// Process the event
 	if err := s.processEvent(ctx, foundEvent); err != nil {
-		s.Logger.Errorw("failed to process event",
+		s.Logger.Error(context.Background(), "failed to process event",
 			"error", err,
 			"event_id", foundEvent.ID,
 			"event_name", foundEvent.EventName,
@@ -302,7 +302,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 		return err // Return error for retry
 	}
 
-	s.Logger.Infow("event processed successfully",
+	s.Logger.Info(context.Background(), "event processed successfully",
 		"event_id", foundEvent.ID,
 		"event_name", foundEvent.EventName,
 	)
@@ -367,7 +367,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 	// CASE 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Warn(ctx, "customer not found for event, skipping",
+		s.Logger.Info(ctx, "customer not found for event, skipping",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -573,7 +573,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 				}
 				prices = append(prices, price)
 			} else {
-				s.Logger.Warn(ctx, "price not found for subscription line item",
+				s.Logger.Info(ctx, "price not found for subscription line item",
 					"event_id", event.ID,
 					"subscription_id", sub.ID,
 					"line_item_id", item.ID,
@@ -600,7 +600,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			// Find the corresponding line item
 			lineItem, ok := subLineItemMap[match.Price.ID]
 			if !ok {
-				s.Logger.Warn(ctx, "line item not found for price",
+				s.Logger.Info(ctx, "line item not found for price",
 					"event_id", event.ID,
 					"subscription_id", sub.ID,
 					"price_id", match.Price.ID,
@@ -629,7 +629,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			if feature, ok := featureMeterMap[match.Meter.ID]; ok {
 				processedEventCopy.FeatureID = feature.ID
 			} else {
-				s.Logger.Warn(ctx, "feature not found for meter",
+				s.Logger.Info(ctx, "feature not found for meter",
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 				)
@@ -654,7 +654,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 			// Validate the quantity is positive and within reasonable bounds
 			if quantity.IsNegative() {
-				s.Logger.Warn(ctx, "negative quantity calculated, setting to zero",
+				s.Logger.Info(ctx, "negative quantity calculated, setting to zero",
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 					"calculated_quantity", quantity.String(),
@@ -740,7 +740,7 @@ func (s *eventPostProcessingService) findMatchingPricesForEvent(
 
 		meter, ok := meterMap[price.MeterID]
 		if !ok || meter == nil {
-			s.Logger.Warnw("post-processing: meter not found for price",
+			s.Logger.Info(context.Background(), "post-processing: meter not found for price",
 				"event_id", event.ID,
 				"price_id", price.ID,
 				"meter_id", price.MeterID,
@@ -819,7 +819,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 
 	case types.AggregationSum:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("sum aggregation with empty field name",
+			s.Logger.Info(context.Background(), "sum aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -828,7 +828,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for sum aggregation",
+			s.Logger.Info(context.Background(), "property not found for sum aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -872,7 +872,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 			var err error
 			decimalValue, err = decimal.NewFromString(str)
 			if err != nil {
-				s.Logger.Warnw("failed to parse uint64 as decimal",
+				s.Logger.Info(context.Background(), "failed to parse uint64 as decimal",
 					"event_id", event.ID,
 					"meter_id", meter.ID,
 					"value", v,
@@ -886,7 +886,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 			var err error
 			decimalValue, err = decimal.NewFromString(v)
 			if err != nil {
-				s.Logger.Warnw("failed to parse string as decimal",
+				s.Logger.Info(context.Background(), "failed to parse string as decimal",
 					"event_id", event.ID,
 					"meter_id", meter.ID,
 					"value", v,
@@ -900,7 +900,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 			var err error
 			decimalValue, err = decimal.NewFromString(string(v))
 			if err != nil {
-				s.Logger.Warnw("failed to parse json.Number as decimal",
+				s.Logger.Info(context.Background(), "failed to parse json.Number as decimal",
 					"event_id", event.ID,
 					"meter_id", meter.ID,
 					"value", v,
@@ -913,7 +913,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 		default:
 			// Try to convert to string representation
 			stringValue = fmt.Sprintf("%v", v)
-			s.Logger.Warnw("unknown type for sum aggregation - cannot convert to decimal",
+			s.Logger.Info(context.Background(), "unknown type for sum aggregation - cannot convert to decimal",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -927,7 +927,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 
 	default:
 		// We're only supporting COUNT and SUM for now
-		s.Logger.Warnw("unsupported aggregation type",
+		s.Logger.Info(context.Background(), "unsupported aggregation type",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"aggregation_type", meter.Aggregation.Type,
@@ -1050,7 +1050,7 @@ func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Conte
 	// Step 7: Enrich with feature and meter data from their respective repositories
 	featureMap, err := s.enrichAnalyticsWithFeatureAndMeterData(ctx, analytics)
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to fully enrich analytics with feature and meter data",
+		s.Logger.Info(ctx, "failed to fully enrich analytics with feature and meter data",
 			"error", err,
 			"analytics_count", len(analytics),
 		)
@@ -1121,7 +1121,7 @@ func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx 
 		}
 		grp, err := s.GroupRepo.Get(ctx, f.GroupID)
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to fetch group for analytics", "group_id", f.GroupID, "error", err)
+			s.Logger.Info(ctx, "failed to fetch group for analytics", "group_id", f.GroupID, "error", err)
 			continue
 		}
 		groupMap[f.GroupID] = grp
@@ -1280,7 +1280,7 @@ func (s *eventPostProcessingService) isSubscriptionValidForEvent(
 ) bool {
 	// Event must be after subscription start date
 	if event.Timestamp.Before(sub.StartDate) {
-		s.Logger.Debugw("event timestamp before subscription start date",
+		s.Logger.Debug(context.Background(), "event timestamp before subscription start date",
 			"event_id", event.ID,
 			"subscription_id", sub.ID,
 			"event_timestamp", event.Timestamp,
@@ -1291,7 +1291,7 @@ func (s *eventPostProcessingService) isSubscriptionValidForEvent(
 
 	// If subscription has an end date, event must be before or equal to it
 	if sub.EndDate != nil && event.Timestamp.After(*sub.EndDate) {
-		s.Logger.Debugw("event timestamp after subscription end date",
+		s.Logger.Debug(context.Background(), "event timestamp after subscription end date",
 			"event_id", event.ID,
 			"subscription_id", sub.ID,
 			"event_timestamp", event.Timestamp,
@@ -1303,7 +1303,7 @@ func (s *eventPostProcessingService) isSubscriptionValidForEvent(
 	// Additional check: if subscription is cancelled, make sure event is before cancellation
 	if sub.SubscriptionStatus == types.SubscriptionStatusCancelled && sub.CancelledAt != nil {
 		if event.Timestamp.After(*sub.CancelledAt) {
-			s.Logger.Debugw("event timestamp after subscription cancellation date",
+			s.Logger.Debug(context.Background(), "event timestamp after subscription cancellation date",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
 				"event_timestamp", event.Timestamp,

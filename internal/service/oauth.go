@@ -881,7 +881,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 			conn.EncryptedSecretData.ZohoBooks.OAuthSessionData != "" {
 			if encWS, err := zohoEncryptedWebhookSecretFromPendingOAuthSession(
 				s.encryptionService, conn.EncryptedSecretData.ZohoBooks.OAuthSessionData); err != nil {
-				s.logger.Warnw("could not read webhook_secret from pending Zoho OAuth session",
+				s.logger.Info(context.Background(), "could not read webhook_secret from pending Zoho OAuth session",
 					"error", err, "connection_id", conn.ID)
 			} else {
 				preservedWebhookSecret = encWS

@@ -61,13 +61,13 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	}
 
 	if content.Transaction == nil {
-		h.logger.Warn(ctx, "no transaction found in payment_succeeded event",
+		h.logger.Info(ctx, "no transaction found in payment_succeeded event",
 			"event_id", event.ID)
 		return nil
 	}
 
 	if content.Invoice == nil {
-		h.logger.Warn(ctx, "no invoice found in payment_succeeded event",
+		h.logger.Info(ctx, "no invoice found in payment_succeeded event",
 			"event_id", event.ID)
 		return nil
 	}

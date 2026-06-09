@@ -217,7 +217,7 @@ func (s *InvoiceSyncService) buildLineItems(flexInvoice *invoice.Invoice) (map[s
 	for _, item := range flexInvoice.LineItems {
 		// Skip zero-amount items
 		if item.Amount.IsZero() {
-			s.logger.Debugw("skipping zero-amount line item",
+			s.logger.Debug(context.Background(), "skipping zero-amount line item",
 				"invoice_id", flexInvoice.ID,
 				"line_item_index", lineItemIndex)
 			continue
@@ -369,7 +369,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
 		// If duplicate key error, invoice is already tracked (race condition)
-		s.logger.Warnw("failed to create entity integration mapping (may already exist)",
+		s.logger.Info(context.Background(), "failed to create entity integration mapping (may already exist)",
 			"error", err,
 			"invoice_id", flexInvoiceID,
 			"razorpay_invoice_id", razorpayInvoiceID)

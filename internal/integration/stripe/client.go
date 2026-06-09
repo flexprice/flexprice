@@ -84,15 +84,15 @@ func (c *Client) GetDecryptedStripeConfig(conn *connection.Connection) (*StripeC
 
 	if webhookSecret, exists := decryptedMetadata["webhook_secret"]; exists {
 		stripeConfig.WebhookSecret = webhookSecret
-		c.logger.Infow("webhook secret found in decrypted metadata",
+		c.logger.Info(context.Background(), "webhook secret found in decrypted metadata",
 			"has_webhook_secret", webhookSecret != "",
 			"webhook_secret_length", len(webhookSecret))
 	} else {
-		c.logger.Warnw("webhook_secret not found in decrypted metadata",
+		c.logger.Info(context.Background(), "webhook_secret not found in decrypted metadata",
 			"available_keys", lo.Keys(decryptedMetadata))
 	}
 
-	c.logger.Infow("final stripe config",
+	c.logger.Info(context.Background(), "final stripe config",
 		"has_secret_key", stripeConfig.SecretKey != "",
 		"has_publishable_key", stripeConfig.PublishableKey != "",
 		"has_webhook_secret", stripeConfig.WebhookSecret != "")
@@ -102,40 +102,40 @@ func (c *Client) GetDecryptedStripeConfig(conn *connection.Connection) (*StripeC
 
 // decryptConnectionMetadata decrypts the connection encrypted secret data if it's encrypted
 func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.Metadata, error) {
-	c.logger.Infow("decrypting connection metadata",
+	c.logger.Info(context.Background(), "decrypting connection metadata",
 		"connection_id", conn.ID,
 		"has_encrypted_secret_data", conn.EncryptedSecretData.Stripe != nil || conn.EncryptedSecretData.Generic != nil,
 		"metadata_keys", lo.Keys(conn.Metadata))
 
 	// Check if the connection has encrypted secret data
 	if conn.EncryptedSecretData.Stripe == nil && conn.EncryptedSecretData.Generic == nil {
-		c.logger.Warnw("no encrypted secret data found", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no encrypted secret data found", "connection_id", conn.ID)
 		return types.Metadata{}, nil
 	}
 
 	// For Stripe connections, decrypt the structured metadata
 	if conn.ProviderType == types.SecretProviderStripe {
 		if conn.EncryptedSecretData.Stripe == nil {
-			c.logger.Warnw("no stripe metadata found in encrypted secret data", "connection_id", conn.ID)
+			c.logger.Info(context.Background(), "no stripe metadata found in encrypted secret data", "connection_id", conn.ID)
 			return types.Metadata{}, nil
 		}
 
 		// Decrypt each field
 		secretKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Stripe.SecretKey)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt secret key", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt secret key", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt secret key").Mark(ierr.ErrInternal)
 		}
 
 		publishableKey, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Stripe.PublishableKey)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt publishable key", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt publishable key", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt publishable key").Mark(ierr.ErrInternal)
 		}
 
 		webhookSecret, err := c.encryptionService.Decrypt(conn.EncryptedSecretData.Stripe.WebhookSecret)
 		if err != nil {
-			c.logger.Errorw("failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
+			c.logger.Error(context.Background(), "failed to decrypt webhook secret", "connection_id", conn.ID, "error", err)
 			return nil, ierr.NewError("failed to decrypt webhook secret").Mark(ierr.ErrInternal)
 		}
 
@@ -146,7 +146,7 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 			"account_id":      conn.EncryptedSecretData.Stripe.AccountID,
 		}
 
-		c.logger.Infow("successfully decrypted connection metadata",
+		c.logger.Info(context.Background(), "successfully decrypted connection metadata",
 			"connection_id", conn.ID,
 			"decrypted_keys", lo.Keys(decryptedMetadata),
 			"has_webhook_secret", webhookSecret != "")

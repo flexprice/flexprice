@@ -262,7 +262,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		for walletID, amountToDebit := range amountsToDebitFromWallets {
 			walletToDebit, exists := walletLookupMap[walletID]
 			if !exists {
-				s.Logger.Warn(ctx, "wallet not found for debit",
+				s.Logger.Info(ctx, "wallet not found for debit",
 					"wallet_id", walletID,
 					"invoice_id", inv.ID)
 				continue

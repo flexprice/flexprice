@@ -61,7 +61,7 @@ func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRe
 // CreateTenantAsBillingCustomer creates a customer in the billing tenant using the tenant details
 func (s *tenantService) CreateTenantAsBillingCustomer(ctx context.Context, t *tenant.Tenant) error {
 	if s.Config.Billing.TenantID == "" {
-		s.Logger.Warn(ctx, "Billing tenant ID is not set, skipping customer creation",
+		s.Logger.Info(ctx, "Billing tenant ID is not set, skipping customer creation",
 			"tenant_id", t.ID)
 		return nil
 	}
@@ -133,7 +133,7 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 	}
 
 	if freePlan == nil || freePrice == nil {
-		s.Logger.Warn(ctx, "No free plan found, skipping onboarding",
+		s.Logger.Info(ctx, "No free plan found, skipping onboarding",
 			"tenant_id", t.ID)
 		return nil
 	}

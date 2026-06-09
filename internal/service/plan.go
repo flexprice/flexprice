@@ -551,7 +551,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 				}
 				workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsForPlanWorkflow, workflowInput)
 				if err != nil {
-					s.Logger.Warn(ctx, "failed to start reprocess events for plan workflow",
+					s.Logger.Info(ctx, "failed to start reprocess events for plan workflow",
 						"plan_id", planID,
 						"missing_pairs_count", len(missingPairs),
 						"error", err)
@@ -784,7 +784,7 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 				}
 				workflowRun, werr := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsForPlanWorkflow, workflowInput)
 				if werr != nil {
-					s.Logger.Warn(ctx, "failed to start v2 reprocess events for plan workflow",
+					s.Logger.Info(ctx, "failed to start v2 reprocess events for plan workflow",
 						"plan_id", planID, "missing_pairs_count", len(missingPairs), "error", werr)
 				} else {
 					s.Logger.Debug(ctx, "v2 reprocess events for plan workflow started",
@@ -920,7 +920,7 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 
 		eventName, ok := meterIDToEventName[price.MeterID]
 		if !ok || eventName == "" {
-			s.Logger.Warn(ctx, "skipping reprocess events for price due to missing meter-event mapping",
+			s.Logger.Info(ctx, "skipping reprocess events for price due to missing meter-event mapping",
 				"price_id", priceID,
 				"meter_id", price.MeterID)
 			continue
@@ -944,7 +944,7 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 				CountTotal:         false,
 			})
 			if getEventsErr != nil {
-				s.Logger.Warn(ctx, "failed to get events for plan reprocess pre-check",
+				s.Logger.Info(ctx, "failed to get events for plan reprocess pre-check",
 					"price_id", priceID,
 					"external_customer_id", extID,
 					"event_name", eventName,
@@ -970,7 +970,7 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 			}
 			workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsWorkflow, workflowInput)
 			if err != nil {
-				s.Logger.Warn(ctx, "failed to start reprocess events workflow for plan customer",
+				s.Logger.Info(ctx, "failed to start reprocess events workflow for plan customer",
 					"price_id", priceID, "external_customer_id", extID, "error", err)
 			} else {
 				s.Logger.Debug(ctx, "reprocess events workflow started for plan customer",

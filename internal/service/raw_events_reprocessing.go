@@ -65,7 +65,7 @@ func NewRawEventsReprocessingService(
 		"raw-events-reprocessing-producer",
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create pubsub for raw events reprocessing", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create pubsub for raw events reprocessing", "error", err)
 	}
 
 	return &rawEventsReprocessingService{
@@ -161,7 +161,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 				// Transformation error (parsing/processing error)
 				batchTransformErrors++
 				result.TotalTransformationErrors++
-				s.Logger.Warn(ctx, "transformation error - event skipped",
+				s.Logger.Info(ctx, "transformation error - event skipped",
 					"raw_event_id", rawEvent.ID,
 					"external_customer_id", rawEvent.ExternalCustomerID,
 					"event_name", rawEvent.EventName,

@@ -102,7 +102,7 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	}
 
 	topic := h.deps.Config.Webhook.Topic
-	h.deps.Logger.Debugw("integration_events: registering handler",
+	h.deps.Logger.Debug(context.Background(), "integration_events: registering handler",
 		"topic", topic,
 		"consumer_group", cfg.ConsumerGroup,
 	)
@@ -133,7 +133,7 @@ func (h *handler) processIntegrationError(err error, event *types.WebhookEvent, 
 	if !integrationMissingDataError(err) {
 		return err
 	}
-	h.deps.Logger.Errorw("integration_events: skipping event; referenced data not found (ack, no retry)",
+	h.deps.Logger.Error(context.Background(), "integration_events: skipping event; referenced data not found (ack, no retry)",
 		"error", err,
 		"step", step,
 		"message_uuid", messageUUID,
@@ -149,7 +149,7 @@ func (h *handler) processMessage(msg *message.Message) error {
 	ctx := msg.Context()
 	var event types.WebhookEvent
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		h.deps.Logger.Errorw("integration_events: failed to unmarshal WebhookEvent, dropping message",
+		h.deps.Logger.Error(context.Background(), "integration_events: failed to unmarshal WebhookEvent, dropping message",
 			"message_uuid", msg.UUID,
 			"error", err,
 		)
@@ -165,7 +165,7 @@ func (h *handler) processMessage(msg *message.Message) error {
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
 
-	h.deps.Logger.Debugw("integration_events: consumed webhook-shaped system event",
+	h.deps.Logger.Debug(context.Background(), "integration_events: consumed webhook-shaped system event",
 		"message_uuid", msg.UUID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,

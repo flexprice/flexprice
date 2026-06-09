@@ -63,7 +63,7 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 	defer func() {
 		redisCache := cache.GetRedisCache()
 		if redisCache == nil {
-			log.Warnw("price_sync_lock_release_skipped", "plan_id", input.PlanID, "lock_key", lockKey, "reason", "redis_cache_nil")
+			log.Info(context.Background(), "price_sync_lock_release_skipped", "plan_id", input.PlanID, "lock_key", lockKey, "reason", "redis_cache_nil")
 			return
 		}
 		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -105,7 +105,7 @@ func (a *PlanActivities) SyncPlanPricesV2(ctx context.Context, input SyncPlanPri
 	defer func() {
 		redisCache := cache.GetRedisCache()
 		if redisCache == nil {
-			log.Warnw("price_sync_lock_release_skipped", "plan_id", input.PlanID, "lock_key", lockKey, "reason", "redis_cache_nil")
+			log.Info(context.Background(), "price_sync_lock_release_skipped", "plan_id", input.PlanID, "lock_key", lockKey, "reason", "redis_cache_nil")
 			return
 		}
 		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

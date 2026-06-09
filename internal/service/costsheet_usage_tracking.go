@@ -80,7 +80,7 @@ func NewCostSheetUsageTrackingService(
 	)
 
 	if err != nil {
-		params.Logger.Fatalw("failed to create pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create pubsub", "error", err)
 		return nil
 	}
 	ev.pubSub = pubSub
@@ -91,7 +91,7 @@ func NewCostSheetUsageTrackingService(
 		params.Config.CostSheetUsageTrackingLazy.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create lazy pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create lazy pubsub", "error", err)
 		return nil
 	}
 	ev.lazyPubSub = lazyPubSub
@@ -154,7 +154,7 @@ func (s *costsheetUsageTrackingService) PublishEvent(ctx context.Context, event 
 // RegisterHandler registers a handler for the cost sheet usage tracking topic with rate limiting
 func (s *costsheetUsageTrackingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.CostSheetUsageTracking.Enabled {
-		s.Logger.Infow("cost sheet usage tracking handler disabled by configuration")
+		s.Logger.Info(context.Background(), "cost sheet usage tracking handler disabled by configuration")
 		return
 	}
 
@@ -170,7 +170,7 @@ func (s *costsheetUsageTrackingService) RegisterHandler(router *pubsubRouter.Rou
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered event costsheet usage tracking handler",
+	s.Logger.Info(context.Background(), "registered event costsheet usage tracking handler",
 		"topic", cfg.CostSheetUsageTracking.Topic,
 		"rate_limit", cfg.CostSheetUsageTracking.RateLimit,
 	)
@@ -179,7 +179,7 @@ func (s *costsheetUsageTrackingService) RegisterHandler(router *pubsubRouter.Rou
 // RegisterHandlerLazy registers a handler for the costsheet usage tracking topic with rate limiting
 func (s *costsheetUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.CostSheetUsageTrackingLazy.Enabled {
-		s.Logger.Infow("cost sheet usage tracking lazy handler disabled by configuration")
+		s.Logger.Info(context.Background(), "cost sheet usage tracking lazy handler disabled by configuration")
 		return
 	}
 
@@ -195,7 +195,7 @@ func (s *costsheetUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered event costsheet usage tracking lazy handler",
+	s.Logger.Info(context.Background(), "registered event costsheet usage tracking lazy handler",
 		"topic", cfg.CostSheetUsageTrackingLazy.Topic,
 		"rate_limit", cfg.CostSheetUsageTrackingLazy.RateLimit,
 	)
@@ -208,7 +208,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
-	s.Logger.Debugw("processing event from message queue in cost sheet usage tracking service",
+	s.Logger.Debug(context.Background(), "processing event from message queue in cost sheet usage tracking service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -228,7 +228,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Errorw("failed to unmarshal event for cost sheet usage tracking",
+		s.Logger.Error(context.Background(), "failed to unmarshal event for cost sheet usage tracking",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -237,7 +237,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 
 	// validate tenant id
 	if event.TenantID != tenantID {
-		s.Logger.Errorw("invalid tenant id",
+		s.Logger.Info(context.Background(), "invalid tenant id",
 			"expected", tenantID,
 			"actual", event.TenantID,
 			"message_uuid", msg.UUID,
@@ -247,7 +247,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 
 	// Process the event
 	if err := s.processEvent(ctx, &event); err != nil {
-		s.Logger.Errorw("failed to process event for cost sheet usage tracking",
+		s.Logger.Error(context.Background(), "failed to process event for cost sheet usage tracking",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -255,7 +255,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 		return err // Return error for retry
 	}
 
-	s.Logger.Infow("event for cost sheet usage tracking processed successfully",
+	s.Logger.Info(context.Background(), "event for cost sheet usage tracking processed successfully",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 	)
@@ -330,7 +330,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 	var cust *customer.Customer
 	cust, err = s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Warn(ctx, "customer not found for event, skipping",
+		s.Logger.Info(ctx, "customer not found for event, skipping",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -472,7 +472,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 		if feature, ok := featureMeterMap[match.Meter.ID]; ok {
 			costUsage.FeatureID = feature.ID
 		} else {
-			s.Logger.Warn(ctx, "feature not found for meter",
+			s.Logger.Info(ctx, "feature not found for meter",
 				"event_id", event.ID,
 				"meter_id", match.Meter.ID,
 			)
@@ -484,7 +484,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 
 		// Validate the quantity is positive and within reasonable bounds
 		if quantity.IsNegative() {
-			s.Logger.Warn(ctx, "negative quantity calculated, setting to zero",
+			s.Logger.Info(ctx, "negative quantity calculated, setting to zero",
 				"event_id", event.ID,
 				"meter_id", match.Meter.ID,
 				"calculated_quantity", quantity.String(),
@@ -525,7 +525,7 @@ func (s *costsheetUsageTrackingService) findMatchingPricesForEvent(
 
 		meter, ok := meterMap[price.MeterID]
 		if !ok || meter == nil {
-			s.Logger.Warnw("cost sheet usage tracking: meter not found for price",
+			s.Logger.Info(context.Background(), "cost sheet usage tracking: meter not found for price",
 				"event_id", event.ID,
 				"price_id", price.ID,
 				"meter_id", price.MeterID,
@@ -601,7 +601,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 	if meter.Aggregation.Expression != "" {
 		qty, err := s.expressionEvaluator.EvaluateQuantity(meter.Aggregation.Expression, event.Properties)
 		if err != nil {
-			s.Logger.Warnw("CEL evaluation failed",
+			s.Logger.Info(context.Background(), "CEL evaluation failed",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"expression", meter.Aggregation.Expression,
@@ -622,7 +622,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 
 	case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("aggregation with empty field name",
+			s.Logger.Info(context.Background(), "aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"aggregation_type", meter.Aggregation.Type,
@@ -632,7 +632,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for aggregation",
+			s.Logger.Info(context.Background(), "property not found for aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -647,7 +647,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 
 	case types.AggregationSumWithMultiplier:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("sum_with_multiplier aggregation with empty field name",
+			s.Logger.Info(context.Background(), "sum_with_multiplier aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -655,7 +655,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 		}
 
 		if meter.Aggregation.Multiplier == nil {
-			s.Logger.Warnw("sum_with_multiplier aggregation without multiplier",
+			s.Logger.Info(context.Background(), "sum_with_multiplier aggregation without multiplier",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -664,7 +664,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for sum_with_multiplier aggregation",
+			s.Logger.Info(context.Background(), "property not found for sum_with_multiplier aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -684,7 +684,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 
 	case types.AggregationCountUnique:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("count_unique aggregation with empty field name",
+			s.Logger.Info(context.Background(), "count_unique aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -693,7 +693,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for count_unique aggregation",
+			s.Logger.Info(context.Background(), "property not found for count_unique aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -709,7 +709,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 	case types.AggregationWeightedSum:
 		// Weighted sum requires subscription and period context which we don't have for cost sheet usage tracking
 		// For cost sheet usage tracking, we'll treat it as a regular sum
-		s.Logger.Warnw("weighted_sum aggregation not fully supported for cost sheet usage tracking, treating as sum",
+		s.Logger.Info(context.Background(), "weighted_sum aggregation not fully supported for cost sheet usage tracking, treating as sum",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 		)
@@ -719,7 +719,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for weighted_sum aggregation",
+			s.Logger.Info(context.Background(), "property not found for weighted_sum aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -731,7 +731,7 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 		return decimalValue, stringValue
 
 	default:
-		s.Logger.Warnw("unsupported aggregation type",
+		s.Logger.Info(context.Background(), "unsupported aggregation type",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"aggregation_type", meter.Aggregation.Type,
@@ -777,7 +777,7 @@ func (s *costsheetUsageTrackingService) convertValueToDecimal(val interface{}, e
 		var err error
 		decimalValue, err = decimal.NewFromString(str)
 		if err != nil {
-			s.Logger.Warnw("failed to parse uint64 as decimal",
+			s.Logger.Info(context.Background(), "failed to parse uint64 as decimal",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"value", v,
@@ -791,7 +791,7 @@ func (s *costsheetUsageTrackingService) convertValueToDecimal(val interface{}, e
 		var err error
 		decimalValue, err = decimal.NewFromString(v)
 		if err != nil {
-			s.Logger.Warnw("failed to parse string as decimal",
+			s.Logger.Info(context.Background(), "failed to parse string as decimal",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"value", v,
@@ -805,7 +805,7 @@ func (s *costsheetUsageTrackingService) convertValueToDecimal(val interface{}, e
 		var err error
 		decimalValue, err = decimal.NewFromString(string(v))
 		if err != nil {
-			s.Logger.Warnw("failed to parse json.Number as decimal",
+			s.Logger.Info(context.Background(), "failed to parse json.Number as decimal",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"value", v,
@@ -818,7 +818,7 @@ func (s *costsheetUsageTrackingService) convertValueToDecimal(val interface{}, e
 	default:
 		// Try to convert to string representation
 		stringValue = fmt.Sprintf("%v", v)
-		s.Logger.Warnw("unknown type for aggregation - cannot convert to decimal",
+		s.Logger.Info(context.Background(), "unknown type for aggregation - cannot convert to decimal",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"field", meter.Aggregation.Field,

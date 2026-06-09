@@ -198,7 +198,7 @@ func (sp *StreamingProcessor) processCSVStream(
 
 			// Check error limit
 			if len(allErrors) >= config.MaxErrors {
-				sp.Logger.Error(ctx, "maximum error limit reached, stopping processing", "max_errors", config.MaxErrors)
+				sp.Logger.Info(ctx, "maximum error limit reached, stopping processing", "max_errors", config.MaxErrors)
 				break
 			}
 			continue
@@ -226,7 +226,7 @@ func (sp *StreamingProcessor) processCSVStream(
 
 				// Check error limit
 				if len(allErrors) >= config.MaxErrors {
-					sp.Logger.Error(ctx, "maximum error limit reached, stopping processing", "max_errors", config.MaxErrors)
+					sp.Logger.Info(ctx, "maximum error limit reached, stopping processing", "max_errors", config.MaxErrors)
 					break
 				}
 			} else {
@@ -387,7 +387,7 @@ func (sp *StreamingProcessor) finalizeProcessing(
 		t.ErrorSummary = &errorSummary
 	}
 
-	sp.Logger.Infow("completed streaming processing",
+	sp.Logger.Info(context.Background(), "completed streaming processing",
 		"task_id", t.ID,
 		"total_processed", totalProcessed,
 		"successful", totalSuccessful,
@@ -421,7 +421,7 @@ func (sp *StreamingProcessor) processChunkWithRetry(
 
 	err := backoff.Retry(operation, backoffConfig)
 	if err != nil {
-		sp.Logger.Warnw("chunk processing failed after retries",
+		sp.Logger.Info(context.Background(), "chunk processing failed after retries",
 			"chunk_index", chunkIndex,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -472,7 +472,7 @@ func (sp *StreamingProcessor) downloadFileStream(ctx context.Context, t *task.Ta
 
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		sp.Logger.Error(ctx, "failed to download file", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
+		sp.Logger.Info(ctx, "failed to download file", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: HTTP %d", resp.StatusCode)
 		t.ErrorSummary = &errorSummary
 		return nil, fmt.Errorf("failed to download file from %s: HTTP %d", provider.GetProviderName(), resp.StatusCode)

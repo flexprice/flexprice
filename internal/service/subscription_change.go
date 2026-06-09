@@ -971,7 +971,7 @@ func (s *subscriptionChangeService) inheritPaddleEntityMappings(
 
 	mappings, err := s.serviceParams.EntityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
-		s.serviceParams.Logger.Warnw("failed to list paddle entity mappings for old subscription",
+		s.serviceParams.Logger.Info(context.Background(), "failed to list paddle entity mappings for old subscription",
 			"old_sub_id", oldSubID, "error", err)
 		return
 	}
@@ -981,7 +981,7 @@ func (s *subscriptionChangeService) inheritPaddleEntityMappings(
 			EntityID: &newSubID,
 		})
 		if createErr := s.serviceParams.EntityIntegrationMappingRepo.Create(ctx, newMapping); createErr != nil {
-			s.serviceParams.Logger.Warnw("failed to create paddle entity mapping for new subscription",
+			s.serviceParams.Logger.Info(context.Background(), "failed to create paddle entity mapping for new subscription",
 				"new_sub_id", newSubID, "paddle_entity_id", m.ProviderEntityID, "error", createErr)
 		}
 	}

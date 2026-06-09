@@ -63,7 +63,7 @@ func (h *Handler) VerifyWebhookSignature(ctx context.Context, payload []byte, si
 
 	// Check if webhook verifier token is configured
 	if qbConfig.WebhookVerifierToken == "" {
-		h.logger.Warnw("webhook verifier token not configured - SECURITY RISK, skipping signature verification",
+		h.logger.Info(ctx, "webhook verifier token not configured - SECURITY RISK, skipping signature verification",
 			"connection_id", conn.ID,
 			"note", "Configure webhook_verifier_token in QuickBooks connection for production security")
 		return nil // Allow webhook without verification (for development)
@@ -118,7 +118,7 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 		// Check if realm ID matches
 		if conn.EncryptedSecretData.QuickBooks != nil {
 			if conn.EncryptedSecretData.QuickBooks.RealmID != realmID {
-				h.logger.Warnw("realm ID mismatch, skipping notification",
+				h.logger.Info(ctx, "realm ID mismatch, skipping notification",
 					"expected_realm_id", conn.EncryptedSecretData.QuickBooks.RealmID,
 					"received_realm_id", realmID)
 				continue

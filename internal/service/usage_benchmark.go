@@ -89,7 +89,7 @@ func (s *usageBenchmarkService) PublishEvent(ctx context.Context, event *events.
 // RegisterHandler wires the benchmark consumer into the watermill router.
 func (s *usageBenchmarkService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.UsageBenchmark.Enabled {
-		s.Logger.Infow("usage benchmark consumer disabled by configuration")
+		s.Logger.Info(context.Background(), "usage benchmark consumer disabled by configuration")
 		return
 	}
 
@@ -103,7 +103,7 @@ func (s *usageBenchmarkService) RegisterHandler(router *pubsubRouter.Router, cfg
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered usage benchmark handler",
+	s.Logger.Info(context.Background(), "registered usage benchmark handler",
 		"topic", cfg.UsageBenchmark.Topic,
 		"rate_limit", cfg.UsageBenchmark.RateLimit,
 	)
@@ -122,7 +122,7 @@ func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) erro
 	var evt events.UsageBenchmarkEvent
 	if err := json.Unmarshal(msg.Payload, &evt); err != nil {
 		if s.Logger != nil {
-			s.Logger.Errorw("usage benchmark: failed to unmarshal event", "error", err)
+			s.Logger.Error(context.Background(), "usage benchmark: failed to unmarshal event", "error", err)
 		}
 		return nil
 	}
@@ -143,7 +143,7 @@ func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) erro
 
 	diff := featureAmt.Sub(meterAmt)
 	if !diff.IsZero() && s.Logger != nil {
-		s.Logger.Warnw("usage benchmark: feature/meter pipelines disagree",
+		s.Logger.Info(context.Background(), "usage benchmark: feature/meter pipelines disagree",
 			"subscription_id", evt.SubscriptionID,
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -171,7 +171,7 @@ func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) erro
 
 	if err := s.benchRepo.Insert(ctx, record); err != nil {
 		if s.Logger != nil {
-			s.Logger.Errorw("usage benchmark: failed to insert record",
+			s.Logger.Error(context.Background(), "usage benchmark: failed to insert record",
 				"subscription_id", evt.SubscriptionID,
 				"error", err,
 			)
@@ -195,7 +195,7 @@ func (s *usageBenchmarkService) callFeatureUsagePipeline(ctx context.Context, ev
 	})
 	if err != nil {
 		if s.Logger != nil {
-			s.Logger.Warnw("usage benchmark: feature pipeline call failed",
+			s.Logger.Info(ctx, "usage benchmark: feature pipeline call failed",
 				"subscription_id", evt.SubscriptionID,
 				"error", err,
 			)
@@ -222,7 +222,7 @@ func (s *usageBenchmarkService) callMeterUsagePipeline(ctx context.Context, evt 
 	})
 	if err != nil {
 		if s.Logger != nil {
-			s.Logger.Warnw("usage benchmark: meter pipeline call failed",
+			s.Logger.Info(ctx, "usage benchmark: meter pipeline call failed",
 				"subscription_id", evt.SubscriptionID,
 				"error", err,
 			)

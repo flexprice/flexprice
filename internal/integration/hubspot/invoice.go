@@ -136,7 +136,7 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
 		// If duplicate key (race condition), that's fine - invoice is already tracked
-		s.logger.Warnw("failed to create entity integration mapping (may already exist)",
+		s.logger.Info(ctx, "failed to create entity integration mapping (may already exist)",
 			"error", err,
 			"invoice_id", invoiceID,
 			"hubspot_invoice_id", hubspotInvoiceID)

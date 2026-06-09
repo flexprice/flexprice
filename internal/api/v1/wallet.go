@@ -105,7 +105,7 @@ func (h *WalletHandler) GetWalletsByCustomerID(c *gin.Context) {
 		for _, w := range wallets {
 			breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), w.Wallet.ID)
 			if err != nil {
-				h.logger.Errorw("failed to get credits available breakdown",
+				h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 					"error", err,
 					"wallet_id", w.Wallet.ID)
 				// Don't fail the request, just log the error and continue without breakdown
@@ -173,7 +173,7 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 			if wallet.Wallet != nil {
 				breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), wallet.Wallet.ID)
 				if err != nil {
-					h.logger.Errorw("failed to get credits available breakdown",
+					h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 						"error", err,
 						"wallet_id", wallet.Wallet.ID)
 					// Don't fail the request, just log the error and continue without breakdown
@@ -364,7 +364,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	if expand.Has(types.ExpandCreditsAvailableBreakdown) {
 		breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), walletID)
 		if err != nil {
-			h.logger.Errorw("failed to get credits available breakdown",
+			h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 				"error", err,
 				"wallet_id", walletID)
 			// Don't fail the request, just log the error and continue without breakdown
@@ -415,7 +415,7 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	if expand.Has(types.ExpandCreditsAvailableBreakdown) {
 		breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), walletID)
 		if err != nil {
-			h.logger.Errorw("failed to get credits available breakdown",
+			h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 				"error", err,
 				"wallet_id", walletID)
 			// Don't fail the request, just log the error and continue without breakdown
@@ -645,7 +645,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 		if expand.Has(types.ExpandCreditsAvailableBreakdown) {
 			breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), w.ID)
 			if err != nil {
-				h.logger.Errorw("failed to get credits available breakdown",
+				h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 					"error", err,
 					"wallet_id", w.ID)
 				// Don't fail the request, just log the error and continue without breakdown
@@ -716,7 +716,7 @@ func (h *WalletHandler) QueryWallets(c *gin.Context) {
 		if expand.Has(types.ExpandCreditsAvailableBreakdown) {
 			breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), w.ID)
 			if err != nil {
-				h.logger.Errorw("failed to get credits available breakdown",
+				h.logger.Error(c.Request.Context(), "failed to get credits available breakdown",
 					"error", err,
 					"wallet_id", w.ID)
 				// Don't fail the request, just log the error and continue without breakdown

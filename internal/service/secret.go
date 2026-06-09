@@ -51,7 +51,7 @@ func NewSecretService(
 ) SecretService {
 	encryptionService, err := security.NewEncryptionService(config, logger)
 	if err != nil {
-		logger.Fatalw("failed to create encryption service", "error", err)
+		logger.Fatal(context.Background(), "failed to create encryption service", "error", err)
 	}
 
 	return &secretService{
@@ -328,7 +328,7 @@ func (s *secretService) VerifyAPIKey(ctx context.Context, apiKey string) (*secre
 	// Update last used timestamp
 	// TODO: Uncomment this when we have a way to efficiently update the last used timestamp
 	// if err := s.repo.UpdateLastUsed(ctx, secretEntity.ID); err != nil {
-	// 	s.logger.Warnw("failed to update last used timestamp", "error", err)
+	// 	s.logger.Info(ctx, "failed to update last used timestamp", "error", err)
 	// }
 
 	return secretEntity, nil

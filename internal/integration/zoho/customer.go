@@ -99,7 +99,7 @@ func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *c
 	}
 	mapping.TenantID = customer.TenantID
 	if err := s.mappingRepo.Create(ctx, mapping); err != nil {
-		s.logger.Warn(ctx, "failed to create Zoho customer mapping",
+		s.logger.Error(ctx, "failed to create Zoho customer mapping",
 			"customer_id", customer.ID,
 			"zoho_contact_id", contact.ContactID,
 			"error", err)

@@ -114,7 +114,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 
 	writerClient := ent.NewClient(writerOpts...)
 
-	logger.Debugw("connected to postgres writer",
+	logger.Debug(context.Background(), "connected to postgres writer",
 		"host", config.Postgres.Host,
 		"port", config.Postgres.Port,
 		"auto_migrate", config.Postgres.AutoMigrate,
@@ -155,19 +155,19 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 
 		readerClient = ent.NewClient(readerOpts...)
 
-		logger.Debugw("connected to postgres reader",
+		logger.Debug(context.Background(), "connected to postgres reader",
 			"host", config.Postgres.ReaderHost,
 			"port", config.Postgres.ReaderPort,
 		)
 	} else {
 		// Use writer client as reader if no separate reader is configured
 		readerClient = writerClient
-		logger.Debugw("no separate reader configured, using writer for reads")
+		logger.Debug(context.Background(), "no separate reader configured, using writer for reads")
 	}
 
 	// Run the auto migration tool if enabled (only on writer)
 	if config.Postgres.AutoMigrate {
-		logger.Debugw("running auto migration")
+		logger.Debug(context.Background(), "running auto migration")
 		if err := writerClient.Schema.Create(context.Background()); err != nil {
 			return nil, fmt.Errorf("failed creating schema resources: %w", err)
 		}
@@ -215,6 +215,7 @@ func (c *Client) WithTx(ctx context.Context, fn func(ctx context.Context) error)
 	defer func() {
 		if v := recover(); v != nil {
 			c.logger.Error(ctx, "rolling back transaction due to panic",
+				"error", fmt.Errorf("%v", v),
 				"panic", v,
 			)
 			_ = tx.Rollback()

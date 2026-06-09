@@ -276,7 +276,7 @@ func (e *EventExporter) convertMeterUsageToCSVRecords(usageData []*events.MeterU
 	for _, usage := range usageData {
 		propertiesJSON, err := json.Marshal(usage.Properties)
 		if err != nil {
-			e.logger.Warnw("failed to marshal properties, using empty object",
+			e.logger.Info(context.Background(), "failed to marshal properties, using empty object",
 				"usage_id", usage.ID,
 				"error", err)
 			propertiesJSON = []byte("{}")
@@ -309,7 +309,7 @@ func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage, pr
 		// Convert properties map to JSON string
 		propertiesJSON, err := json.Marshal(usage.Properties)
 		if err != nil {
-			e.logger.Warnw("failed to marshal properties, using empty object",
+			e.logger.Info(context.Background(), "failed to marshal properties, using empty object",
 				"usage_id", usage.ID,
 				"error", err)
 			propertiesJSON = []byte("{}")

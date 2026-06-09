@@ -217,7 +217,7 @@ func (h *CustomerPortalHandler) GetInvoicePDF(c *gin.Context) {
 
 	url, err := h.portalService.GetInvoicePDFUrl(c.Request.Context(), invoiceID)
 	if err != nil {
-		h.log.Errorw("failed to get invoice pdf url", "error", err, "invoice_id", invoiceID)
+		h.log.Error(c.Request.Context(), "failed to get invoice pdf url", "error", err, "invoice_id", invoiceID)
 		c.Error(err)
 		return
 	}
@@ -244,7 +244,7 @@ func (h *CustomerPortalHandler) GetWalletTransactions(c *gin.Context) {
 
 	var filter types.WalletTransactionFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.log.Errorw("failed to bind query", "error", err)
+		h.log.Error(c.Request.Context(), "failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))

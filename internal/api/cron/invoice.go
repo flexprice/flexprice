@@ -73,7 +73,7 @@ type VoidOldPendingInvoicesRequest struct {
 //
 // Deprecated: use the Temporal server schedule where applicable.
 func (h *InvoiceHandler) VoidOldPendingInvoices(c *gin.Context) {
-	h.logger.Infow("starting void old pending invoices cron job", "time", time.Now().UTC().Format(time.RFC3339))
+	h.logger.Info(c.Request.Context(), "starting void old pending invoices cron job", "time", time.Now().UTC().Format(time.RFC3339))
 
 	ctx := c.Request.Context()
 
@@ -81,7 +81,7 @@ func (h *InvoiceHandler) VoidOldPendingInvoices(c *gin.Context) {
 	var req VoidOldPendingInvoicesRequest
 	if c.Request.ContentLength > 0 {
 		if err := c.ShouldBind(&req); err != nil {
-			h.logger.Errorw("failed to parse request parameters", "error", err)
+			h.logger.Error(c.Request.Context(), "failed to parse request parameters", "error", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request parameters"})
 			return
 		}
@@ -97,21 +97,21 @@ func (h *InvoiceHandler) VoidOldPendingInvoices(c *gin.Context) {
 
 	// Log filtering parameters
 	if len(req.Targets) > 0 {
-		h.logger.Infow("filtering enabled", "targets", req.Targets)
+		h.logger.Info(c.Request.Context(), "filtering enabled", "targets", req.Targets)
 	}
 
 	if len(req.Targets) == 0 {
 		// No specific targets, process all tenants and environments
 		err := h.processAllTenantsAndEnvironments(ctx, response)
 		if err != nil {
-			h.logger.Errorw("failed to process all tenants and environments", "error", err)
+			h.logger.Error(c.Request.Context(), "failed to process all tenants and environments", "error", err)
 			_ = c.Error(err)
 			return
 		}
 	} else {
 		// Process specific tenant-environment pairs
 		for _, target := range req.Targets {
-			h.logger.Infow("processing target",
+			h.logger.Info(c.Request.Context(), "processing target",
 				"tenant_id", target.TenantID,
 				"environment_id", target.EnvironmentID)
 
@@ -122,7 +122,7 @@ func (h *InvoiceHandler) VoidOldPendingInvoices(c *gin.Context) {
 			// Process incomplete subscriptions for this specific environment
 			envResponse, err := h.processIncompleteSubscriptionsForEnvironment(envCtx, target.TenantID, target.EnvironmentID)
 			if err != nil {
-				h.logger.Errorw("failed to process incomplete subscriptions for target",
+				h.logger.Error(c.Request.Context(), "failed to process incomplete subscriptions for target",
 					"tenant_id", target.TenantID,
 					"environment_id", target.EnvironmentID,
 					"error", err)
@@ -137,7 +137,7 @@ func (h *InvoiceHandler) VoidOldPendingInvoices(c *gin.Context) {
 		}
 	}
 
-	h.logger.Infow("completed void old pending invoices cron job",
+	h.logger.Info(c.Request.Context(), "completed void old pending invoices cron job",
 		"total_processed", response.Total,
 		"successful", response.Success,
 		"failed", response.Failed)
@@ -153,25 +153,25 @@ func (h *InvoiceHandler) processAllTenantsAndEnvironments(ctx context.Context, r
 		return err
 	}
 
-	h.logger.Infow("processing all tenants", "count", len(tenants))
+	h.logger.Info(ctx, "processing all tenants", "count", len(tenants))
 
 	// Process each tenant
 	for _, tenant := range tenants {
-		h.logger.Infow("processing tenant", "tenant_id", tenant.ID, "name", tenant.Name)
+		h.logger.Info(ctx, "processing tenant", "tenant_id", tenant.ID, "name", tenant.Name)
 
 		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenant.ID)
 
 		// Get all environments for this tenant
 		environments, err := h.environmentService.GetEnvironments(tenantCtx, types.GetDefaultFilter())
 		if err != nil {
-			h.logger.Errorw("failed to get environments for tenant",
+			h.logger.Error(ctx, "failed to get environments for tenant",
 				"tenant_id", tenant.ID, "error", err)
 			response.Failed++
 			continue
 		}
 
 		for _, environment := range environments.Environments {
-			h.logger.Infow("processing environment",
+			h.logger.Info(ctx, "processing environment",
 				"tenant_id", tenant.ID,
 				"environment_id", environment.ID,
 				"name", environment.Name)
@@ -181,7 +181,7 @@ func (h *InvoiceHandler) processAllTenantsAndEnvironments(ctx context.Context, r
 			// Process incomplete subscriptions for this environment
 			envResponse, err := h.processIncompleteSubscriptionsForEnvironment(envCtx, tenant.ID, environment.ID)
 			if err != nil {
-				h.logger.Errorw("failed to process incomplete subscriptions for environment",
+				h.logger.Error(ctx, "failed to process incomplete subscriptions for environment",
 					"tenant_id", tenant.ID,
 					"environment_id", environment.ID,
 					"error", err)
@@ -212,14 +212,14 @@ func (h *InvoiceHandler) processIncompleteSubscriptionsForEnvironment(
 	}
 
 	// First check if Stripe connection exists and invoice sync is enabled
-	h.logger.Infow("checking Stripe connection and invoice sync configuration",
+	h.logger.Info(context.Background(), "checking Stripe connection and invoice sync configuration",
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
 
 	// Get Stripe integration
 	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		h.logger.Infow("Stripe integration not available, skipping environment",
+		h.logger.Info(context.Background(), "Stripe integration not available, skipping environment",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
 			"error", err)
@@ -228,7 +228,7 @@ func (h *InvoiceHandler) processIncompleteSubscriptionsForEnvironment(
 
 	// Check if Stripe connection exists
 	if !stripeIntegration.Client.HasStripeConnection(ctx) {
-		h.logger.Infow("Stripe connection not available, skipping environment",
+		h.logger.Info(context.Background(), "Stripe connection not available, skipping environment",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
 		return response, nil // Not an error, just skip this environment
@@ -236,7 +236,7 @@ func (h *InvoiceHandler) processIncompleteSubscriptionsForEnvironment(
 
 	// Note: For now, we assume invoice sync is enabled if connection exists
 	// In the future, we can add a method to check if invoice sync is enabled
-	h.logger.Infow("Stripe connection available, proceeding with processing",
+	h.logger.Info(context.Background(), "Stripe connection available, proceeding with processing",
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
 
@@ -263,7 +263,7 @@ func (h *InvoiceHandler) processIncompleteSubscriptionsForEnvironment(
 		return response, err
 	}
 
-	h.logger.Infow("found old incomplete subscriptions",
+	h.logger.Info(context.Background(), "found old incomplete subscriptions",
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"count", len(subscriptions.Items),
@@ -271,13 +271,13 @@ func (h *InvoiceHandler) processIncompleteSubscriptionsForEnvironment(
 
 	// Process each old incomplete subscription
 	for _, sub := range subscriptions.Items {
-		h.logger.Infow("processing old incomplete subscription",
+		h.logger.Info(context.Background(), "processing old incomplete subscription",
 			"subscription_id", sub.ID,
 			"customer_id", sub.CustomerID,
 			"created_at", sub.CreatedAt)
 
 		if err := h.processOldIncompleteSubscription(ctx, sub); err != nil {
-			h.logger.Errorw("failed to process old incomplete subscription",
+			h.logger.Error(context.Background(), "failed to process old incomplete subscription",
 				"subscription_id", sub.ID,
 				"error", err)
 			response.Failed++
@@ -305,7 +305,7 @@ func (h *InvoiceHandler) processOldIncompleteSubscription(ctx context.Context, s
 
 	invoices, err := h.invoiceService.ListInvoices(ctx, invoiceFilter)
 	if err != nil {
-		h.logger.Errorw("failed to list invoices for subscription, but continuing",
+		h.logger.Error(ctx, "failed to list invoices for subscription, but continuing",
 			"subscription_id", sub.ID,
 			"error", err)
 		// Don't return error - treat as success to avoid incrementing failed count
@@ -320,7 +320,7 @@ func (h *InvoiceHandler) processOldIncompleteSubscription(ctx context.Context, s
 		}
 	}
 
-	h.logger.Infow("processing subscription",
+	h.logger.Info(ctx, "processing subscription",
 		"subscription_id", sub.ID,
 		"total_invoices", len(invoices.Items),
 		"old_invoices", len(oldInvoices))
@@ -329,7 +329,7 @@ func (h *InvoiceHandler) processOldIncompleteSubscription(ctx context.Context, s
 	switch len(oldInvoices) {
 	case 0:
 		// No invoices - cancel subscription in FlexPrice
-		h.logger.Infow("no old invoices found, cancelling subscription", "subscription_id", sub.ID)
+		h.logger.Info(ctx, "no old invoices found, cancelling subscription", "subscription_id", sub.ID)
 		return h.cancelIncompleteSubscription(ctx, sub)
 
 	case 1:
@@ -338,7 +338,7 @@ func (h *InvoiceHandler) processOldIncompleteSubscription(ctx context.Context, s
 
 	default:
 		// More than one invoice - skip subscription
-		h.logger.Infow("multiple old invoices found, skipping subscription",
+		h.logger.Info(ctx, "multiple old invoices found, skipping subscription",
 			"subscription_id", sub.ID,
 			"invoice_count", len(oldInvoices))
 		return nil
@@ -351,39 +351,39 @@ func (h *InvoiceHandler) processSingleInvoice(ctx context.Context, sub *dto.Subs
 	// Get Stripe integration
 	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Stripe integration", "error", err, "invoice_id", inv.ID)
+		h.logger.Error(ctx, "failed to get Stripe integration", "error", err, "invoice_id", inv.ID)
 		return nil
 	}
 
 	// Check if synced to Stripe
 	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, inv.ID)
 	if err != nil || mapping == nil {
-		h.logger.Infow("invoice not synced to Stripe, skipping", "invoice_id", inv.ID)
+		h.logger.Info(ctx, "invoice not synced to Stripe, skipping", "invoice_id", inv.ID)
 		return nil
 	}
 
 	// Check for partial payments in FlexPrice
 	if inv.AmountPaid.IsPositive() {
-		h.logger.Infow("invoice has partial payment in FlexPrice, skipping", "invoice_id", inv.ID)
+		h.logger.Info(ctx, "invoice has partial payment in FlexPrice, skipping", "invoice_id", inv.ID)
 		return nil
 	}
 
 	// Check for partial payments in Stripe
 	if hasPartial, err := h.checkStripePartialPayment(ctx, inv.ID); err != nil || hasPartial {
 		if hasPartial {
-			h.logger.Infow("invoice has partial payment in Stripe, skipping", "invoice_id", inv.ID)
+			h.logger.Info(ctx, "invoice has partial payment in Stripe, skipping", "invoice_id", inv.ID)
 		}
 		return nil
 	}
 
 	// All checks passed - void invoice and cancel subscription
-	h.logger.Infow("voiding invoice and cancelling subscription",
+	h.logger.Info(ctx, "voiding invoice and cancelling subscription",
 		"invoice_id", inv.ID,
 		"subscription_id", sub.ID)
 
 	// Void invoice in FlexPrice
 	if err := h.voidOldPendingInvoice(ctx, inv); err != nil {
-		h.logger.Errorw("failed to void invoice in FlexPrice, but continuing",
+		h.logger.Error(ctx, "failed to void invoice in FlexPrice, but continuing",
 			"invoice_id", inv.ID,
 			"error", err)
 		// Don't return error - treat as success to avoid incrementing failed count
@@ -395,7 +395,7 @@ func (h *InvoiceHandler) processSingleInvoice(ctx context.Context, sub *dto.Subs
 
 // cancelIncompleteSubscription cancels an incomplete subscription that has old pending invoices
 func (h *InvoiceHandler) cancelIncompleteSubscription(ctx context.Context, sub *dto.SubscriptionResponse) error {
-	h.logger.Infow("cancelling incomplete subscription with old pending invoices",
+	h.logger.Info(ctx, "cancelling incomplete subscription with old pending invoices",
 		"subscription_id", sub.ID,
 		"customer_id", sub.CustomerID,
 		"current_status", sub.SubscriptionStatus)
@@ -412,19 +412,19 @@ func (h *InvoiceHandler) cancelIncompleteSubscription(ctx context.Context, sub *
 	if err != nil {
 		// If subscription is not found, it's already cancelled - treat as success
 		if strings.Contains(err.Error(), "subscription not found") || strings.Contains(err.Error(), "not found") {
-			h.logger.Infow("subscription already cancelled or not found, treating as success",
+			h.logger.Info(ctx, "subscription already cancelled or not found, treating as success",
 				"subscription_id", sub.ID,
 				"customer_id", sub.CustomerID)
 			return nil
 		}
-		h.logger.Errorw("failed to cancel subscription, but continuing",
+		h.logger.Error(ctx, "failed to cancel subscription, but continuing",
 			"subscription_id", sub.ID,
 			"error", err)
 		// Don't return error - treat as success to avoid incrementing failed count
 		return nil
 	}
 
-	h.logger.Infow("successfully cancelled incomplete subscription",
+	h.logger.Info(ctx, "successfully cancelled incomplete subscription",
 		"subscription_id", sub.ID,
 		"customer_id", sub.CustomerID,
 		"reason", "old_pending_invoices_cleanup")
@@ -453,7 +453,7 @@ func (h *InvoiceHandler) voidOldPendingInvoice(
 
 	// Void invoice in Stripe if it exists
 	if err := h.voidInvoiceInStripe(ctx, inv.ID); err != nil {
-		h.logger.Errorw("failed to void invoice in Stripe",
+		h.logger.Error(context.Background(), "failed to void invoice in Stripe",
 			"invoice_id", inv.ID,
 			"error", err)
 		// Don't fail the entire operation if Stripe void fails
@@ -468,7 +468,7 @@ func (h *InvoiceHandler) checkStripePartialPayment(ctx context.Context, invoiceI
 	// Get Stripe integration
 	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Stripe integration", "error", err, "invoice_id", invoiceID)
+		h.logger.Error(ctx, "failed to get Stripe integration", "error", err, "invoice_id", invoiceID)
 		return false, err
 	}
 
@@ -476,7 +476,7 @@ func (h *InvoiceHandler) checkStripePartialPayment(ctx context.Context, invoiceI
 	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, invoiceID)
 	if err != nil {
 		// If no mapping exists, the invoice was never synced to Stripe
-		h.logger.Debugw("no Stripe mapping found for invoice, assuming no partial payments", "invoice_id", invoiceID)
+		h.logger.Debug(ctx, "no Stripe mapping found for invoice, assuming no partial payments", "invoice_id", invoiceID)
 		return false, nil
 	}
 
@@ -491,7 +491,7 @@ func (h *InvoiceHandler) checkStripePartialPayment(ctx context.Context, invoiceI
 	// Retrieve the invoice from Stripe
 	stripeInvoice, err := stripeClient.V1Invoices.Retrieve(ctx, stripeInvoiceID, nil)
 	if err != nil {
-		h.logger.Warnw("failed to retrieve invoice from Stripe",
+		h.logger.Info(ctx, "failed to retrieve invoice from Stripe",
 			"invoice_id", invoiceID,
 			"stripe_invoice_id", stripeInvoiceID,
 			"error", err)
@@ -503,7 +503,7 @@ func (h *InvoiceHandler) checkStripePartialPayment(ctx context.Context, invoiceI
 	hasPartialPayment := stripeInvoice.AmountPaid > 0 && stripeInvoice.AmountPaid < stripeInvoice.Total
 
 	if hasPartialPayment {
-		h.logger.Infow("found partial payment in Stripe",
+		h.logger.Info(ctx, "found partial payment in Stripe",
 			"invoice_id", invoiceID,
 			"stripe_invoice_id", stripeInvoiceID,
 			"amount_paid", stripeInvoice.AmountPaid,
@@ -519,7 +519,7 @@ func (h *InvoiceHandler) voidInvoiceInStripe(ctx context.Context, invoiceID stri
 	// Get Stripe integration
 	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		h.logger.Errorw("failed to get Stripe integration", "error", err, "invoice_id", invoiceID)
+		h.logger.Error(ctx, "failed to get Stripe integration", "error", err, "invoice_id", invoiceID)
 		return err
 	}
 
@@ -527,12 +527,12 @@ func (h *InvoiceHandler) voidInvoiceInStripe(ctx context.Context, invoiceID stri
 	mapping, err := stripeIntegration.InvoiceSyncSvc.GetExistingStripeMapping(ctx, invoiceID)
 	if err != nil {
 		// If no mapping exists, the invoice was never synced to Stripe
-		h.logger.Debugw("no Stripe mapping found for invoice", "invoice_id", invoiceID)
+		h.logger.Debug(ctx, "no Stripe mapping found for invoice", "invoice_id", invoiceID)
 		return nil
 	}
 
 	stripeInvoiceID := mapping.ProviderEntityID
-	h.logger.Infow("voiding invoice in Stripe",
+	h.logger.Info(ctx, "voiding invoice in Stripe",
 		"invoice_id", invoiceID,
 		"stripe_invoice_id", stripeInvoiceID)
 
@@ -548,7 +548,7 @@ func (h *InvoiceHandler) voidInvoiceInStripe(ctx context.Context, invoiceID stri
 		return err
 	}
 
-	h.logger.Infow("successfully voided invoice in Stripe",
+	h.logger.Info(ctx, "successfully voided invoice in Stripe",
 		"invoice_id", invoiceID,
 		"stripe_invoice_id", stripeInvoiceID)
 

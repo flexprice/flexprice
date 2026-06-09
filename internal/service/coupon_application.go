@@ -184,7 +184,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 		// Find the line item this coupon applies to by matching price_id
 		targetLineItem, exists := lineItemsByPriceID[lineItemCoupon.LineItemID]
 		if !exists {
-			s.Logger.Warn(ctx, "line item not found for coupon, skipping",
+			s.Logger.Info(ctx, "line item not found for coupon, skipping",
 				"price_id_used_as_line_item_id", lineItemCoupon.LineItemID,
 				"coupon_id", lineItemCoupon.CouponID)
 			continue
@@ -200,7 +200,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			Currency:      inv.Currency,
 		})
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to apply line item coupon, skipping",
+			s.Logger.Info(ctx, "failed to apply line item coupon, skipping",
 				"coupon_id", lineItemCoupon.CouponID,
 				"error", err)
 			continue
@@ -270,7 +270,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 	for _, invoiceCoupon := range invoiceCoupons {
 		// Skip if running subtotal is zero or negative (nothing to discount)
 		if runningSubTotal.LessThanOrEqual(decimal.Zero) {
-			s.Logger.Warn(ctx, "running subtotal is zero or negative, skipping remaining invoice coupons",
+			s.Logger.Info(ctx, "running subtotal is zero or negative, skipping remaining invoice coupons",
 				"running_subtotal", runningSubTotal,
 				"coupon_id", invoiceCoupon.CouponID)
 			break
@@ -286,7 +286,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			Currency:      inv.Currency,
 		})
 		if err != nil {
-			s.Logger.Warn(ctx, "failed to apply invoice coupon, skipping",
+			s.Logger.Info(ctx, "failed to apply invoice coupon, skipping",
 				"coupon_id", invoiceCoupon.CouponID,
 				"error", err)
 			continue

@@ -368,7 +368,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
 		// If duplicate key error, invoice is already tracked (race condition)
-		s.logger.Warnw("failed to create entity integration mapping (may already exist)",
+		s.logger.Info(context.Background(), "failed to create entity integration mapping (may already exist)",
 			"error", err,
 			"invoice_id", flexInvoiceID,
 			"moyasar_invoice_id", moyasarInvoice.ID)

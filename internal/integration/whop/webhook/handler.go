@@ -119,7 +119,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, 
 		return nil
 	}
 	if len(mappings) == 0 {
-		h.logger.Warnw("no Flexprice invoice found for Whop invoice, skipping",
+		h.logger.Info(ctx, "no Flexprice invoice found for Whop invoice, skipping",
 			"whop_invoice_id", data.ID)
 		return nil
 	}
@@ -165,11 +165,11 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 		"plan_id", data.Plan.ID)
 
 	if data.Plan.ID == "" {
-		h.logger.Warnw("payment.succeeded has no plan id, cannot resolve customer", "payment_id", data.ID)
+		h.logger.Info(ctx, "payment.succeeded has no plan id, cannot resolve customer", "payment_id", data.ID)
 		return nil
 	}
 	if data.Member.ID == "" {
-		h.logger.Warnw("payment.succeeded has no member id, cannot create customer mapping", "payment_id", data.ID)
+		h.logger.Info(ctx, "payment.succeeded has no member id, cannot create customer mapping", "payment_id", data.ID)
 		return nil
 	}
 
@@ -182,7 +182,7 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 	}
 	customerID := plan.InternalNotes
 	if customerID == "" {
-		h.logger.Warnw("Whop plan has no internal_notes (customer_id), skipping mapping",
+		h.logger.Info(ctx, "Whop plan has no internal_notes (customer_id), skipping mapping",
 			"plan_id", data.Plan.ID)
 		return nil
 	}

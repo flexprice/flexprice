@@ -266,7 +266,7 @@ func (s *Service) shutdown(ctx context.Context) {
 	if s.tracerProvider != nil {
 		s.logger.Info(ctx, "Shutting down OTel tracer provider")
 		if err := s.tracerProvider.Shutdown(ctx); err != nil {
-			s.logger.Warn(ctx, "OTel tracer provider shutdown error", "error", err)
+			s.logger.Error(ctx, "OTel tracer provider shutdown error", "error", err)
 		}
 	}
 	if s.sentryEnabled {

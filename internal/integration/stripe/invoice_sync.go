@@ -543,7 +543,7 @@ func (s *InvoiceSyncService) getExistingStripeMapping(ctx context.Context, invoi
 // createInvoiceMapping creates a new entity integration mapping for the invoice
 func (s *InvoiceSyncService) createInvoiceMapping(ctx context.Context, invoiceID, stripeInvoiceID string) error {
 	if s.entityIntegrationMappingRepo == nil {
-		s.logger.Warnw("entity integration mapping repository not available, skipping mapping creation")
+		s.logger.Info(ctx, "entity integration mapping repository not available, skipping mapping creation")
 		return nil
 	}
 

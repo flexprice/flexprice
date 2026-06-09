@@ -93,7 +93,7 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 
 			// Create entity mapping for existing customer
 			if err := s.createEntityIntegrationMapping(ctx, existingCustomer.ID, hubspotContact, dealID); err != nil {
-				s.logger.Warnw("failed to create mapping for existing customer",
+				s.logger.Info(context.Background(), "failed to create mapping for existing customer",
 					"error", err,
 					"customer_id", existingCustomer.ID,
 					"hubspot_contact_id", hubspotContact.ID)
@@ -149,7 +149,7 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 
 	// Create entity mapping for new customer
 	if err := s.createEntityIntegrationMapping(ctx, customerResp.ID, hubspotContact, dealID); err != nil {
-		s.logger.Warnw("failed to create mapping for new customer",
+		s.logger.Info(context.Background(), "failed to create mapping for new customer",
 			"error", err,
 			"customer_id", customerResp.ID,
 			"hubspot_contact_id", hubspotContact.ID)
@@ -186,7 +186,7 @@ func (s *CustomerService) createEntityIntegrationMapping(
 
 	err := s.entityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
-		s.logger.Warnw("failed to create entity mapping for customer",
+		s.logger.Info(context.Background(), "failed to create entity mapping for customer",
 			"error", err,
 			"customer_id", customerID,
 			"hubspot_contact_id", hubspotContact.ID)

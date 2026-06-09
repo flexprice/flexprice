@@ -84,7 +84,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, payload *NomodWebhookP
 		return h.handlePaymentLinkPayment(ctx, charge, *payload.PaymentLinkID, services)
 	}
 
-	h.logger.Warnw("webhook payload has neither invoice_id nor payment_link_id",
+	h.logger.Info(ctx, "webhook payload has neither invoice_id nor payment_link_id",
 		"charge_id", payload.ID)
 	return nil
 }
@@ -112,7 +112,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, charge *nomod.Charge
 	}
 
 	if len(mappings) == 0 {
-		h.logger.Warnw("no FlexPrice invoice found for Nomod invoice, skipping event",
+		h.logger.Info(ctx, "no FlexPrice invoice found for Nomod invoice, skipping event",
 			"nomod_invoice_id", nomodInvoiceID,
 			"charge_id", charge.ID)
 		return nil
@@ -251,7 +251,7 @@ func (h *Handler) handlePaymentLinkPayment(ctx context.Context, charge *nomod.Ch
 	}
 
 	if payment == nil {
-		h.logger.Warnw("no FlexPrice payment found for Nomod payment link, skipping event",
+		h.logger.Info(ctx, "no FlexPrice payment found for Nomod payment link, skipping event",
 			"nomod_payment_link_id", nomodPaymentLinkID,
 			"charge_id", charge.ID)
 		return nil

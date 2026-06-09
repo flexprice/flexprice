@@ -44,7 +44,7 @@ func NewSubscriptionChangeHandler(
 func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 	subscriptionID := c.Param("id")
 	if subscriptionID == "" {
-		h.log.Error(c.Request.Context(), "subscription ID is required")
+		h.log.Info(c.Request.Context(), "subscription ID is required")
 		c.Error(ierr.NewError("subscription ID is required").
 			WithHint("Please provide a valid subscription ID").
 			Mark(ierr.ErrValidation))
@@ -100,7 +100,7 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 func (h *SubscriptionChangeHandler) ExecuteSubscriptionChange(c *gin.Context) {
 	subscriptionID := c.Param("id")
 	if subscriptionID == "" {
-		h.log.Error(c.Request.Context(), "subscription ID is required")
+		h.log.Info(c.Request.Context(), "subscription ID is required")
 		c.Error(ierr.NewError("subscription ID is required").
 			WithHint("Please provide a valid subscription ID").
 			Mark(ierr.ErrValidation))

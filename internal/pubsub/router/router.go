@@ -73,7 +73,7 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 			RandomizationFactor: 0.5,
 			Logger:              watermill.NewStdLogger(true, false),
 			OnRetryHook: func(retryNum int, delay time.Duration) {
-				logger.Infow("retrying message",
+				logger.Info(context.Background(), "retrying message",
 					"retry_number", retryNum,
 					"max_retries", 3,
 					"delay", delay,
@@ -110,7 +110,7 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 		return nil, err
 	}
 
-	logger.Infow("DLQ publisher initialized", "brokers", cfg.Kafka.Brokers, "dlq_topic", cfg.Kafka.TopicDLQ)
+	logger.Info(context.Background(), "DLQ publisher initialized", "brokers", cfg.Kafka.Brokers, "dlq_topic", cfg.Kafka.TopicDLQ)
 	return publisher, nil
 }
 
@@ -130,7 +130,7 @@ func (r *Router) AddNoPublishHandler(
 			err := handlerFunc(msg)
 			if err != nil {
 				r.tracing.CaptureException(err)
-				r.logger.Errorw("handler failed",
+				r.logger.Error(context.Background(), "handler failed",
 					"error", err,
 					"correlation_id", middleware.MessageCorrelationID(msg),
 					"message_uuid", msg.UUID,

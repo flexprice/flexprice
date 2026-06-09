@@ -138,7 +138,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			},
 		}
 		if applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
-			s.Logger.Warn(ctx, "proration apply failed for line item add",
+			s.Logger.Info(ctx, "proration apply failed for line item add",
 				"line_item_id", lineItem.ID, "error", applyErr)
 		}
 	}
@@ -313,7 +313,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 
 		sub, err := s.SubRepo.Get(ctx, lineItem.SubscriptionID)
 		if err != nil {
-			s.Logger.Warn(ctx, "could not load subscription for delete proration",
+			s.Logger.Info(ctx, "could not load subscription for delete proration",
 				"line_item_id", lineItemID, "error", err)
 		} else {
 			period, err := types.FindPeriodForDate(
@@ -325,13 +325,13 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 				sub.BillingPeriod,
 			)
 			if err != nil {
-				s.Logger.Warn(ctx, "could not find period for delete proration",
+				s.Logger.Info(ctx, "could not find period for delete proration",
 					"line_item_id", lineItemID, "error", err)
 			} else {
 				priceSvc := NewPriceService(s.ServiceParams)
 				priceResp, err := priceSvc.GetPrice(ctx, lineItem.PriceID)
 				if err != nil {
-					s.Logger.Warn(ctx, "could not load price for delete proration",
+					s.Logger.Info(ctx, "could not load price for delete proration",
 						"line_item_id", lineItemID, "error", err)
 				} else {
 					subCopy := *sub
@@ -352,7 +352,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 						},
 					}
 					if applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
-						s.Logger.Warn(ctx, "proration apply failed for line item delete",
+						s.Logger.Info(ctx, "proration apply failed for line item delete",
 							"line_item_id", lineItemID, "error", applyErr)
 					}
 				}

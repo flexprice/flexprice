@@ -31,7 +31,7 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 	// Get customer ID from URL path
 	customerID := c.Param("id")
 	if customerID == "" {
-		h.log.Error(c.Request.Context(), "Missing customer_id in URL path")
+		h.log.Info(c.Request.Context(), "Missing customer_id in URL path")
 		c.Error(ierr.NewError("customer_id is required").
 			WithHint("Customer ID must be provided in the URL path").
 			Mark(ierr.ErrValidation))
@@ -80,7 +80,7 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 	// Get customer ID from URL path
 	customerID := c.Param("id")
 	if customerID == "" {
-		h.log.Error(c.Request.Context(), "Missing customer id in URL path")
+		h.log.Info(c.Request.Context(), "Missing customer id in URL path")
 		c.Error(ierr.NewError("customer id is required").
 			WithHint("Customer ID must be provided in the URL path").
 			Mark(ierr.ErrValidation))

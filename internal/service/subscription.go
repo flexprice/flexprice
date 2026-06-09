@@ -773,7 +773,7 @@ func (s *subscriptionService) triggerHubSpotDealSyncWorkflow(ctx context.Context
 	// Get global temporal service
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		s.Logger.Warn(ctx, "temporal service not available for HubSpot deal sync",
+		s.Logger.Info(ctx, "temporal service not available for HubSpot deal sync",
 			"subscription_id", subscriptionID)
 		return
 	}
@@ -876,7 +876,7 @@ func (s *subscriptionService) triggerHubSpotQuoteSyncWorkflow(ctx context.Contex
 	// Get global temporal service
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		s.Logger.Warn(ctx, "temporal service not available for HubSpot quote sync",
+		s.Logger.Info(ctx, "temporal service not available for HubSpot quote sync",
 			"subscription_id", subscriptionID)
 		return
 	}
@@ -1112,7 +1112,7 @@ func (s *subscriptionService) normalizePhaseCoupons(
 					})
 				} else {
 					// Log warning but continue processing other coupons
-					s.Logger.Warnw("phase coupon priceID not found in phase line items, skipping",
+					s.Logger.Info(context.Background(), "phase coupon priceID not found in phase line items, skipping",
 						"price_id", priceID,
 						"coupon_id", couponID,
 						"phase_id", phaseID)
@@ -2143,7 +2143,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	planIDMap := make(map[string]*dto.PlanResponse, 0)
 	for _, sub := range subscriptions {
 		if sub.PlanID == "" {
-			s.Logger.Warn(ctx, "subscription has empty plan_id", "subscription_id", sub.ID)
+			s.Logger.Info(ctx, "subscription has empty plan_id", "subscription_id", sub.ID)
 		}
 		planIDMap[sub.PlanID] = nil
 	}
@@ -2173,7 +2173,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	// Build plan map for quick lookup
 	for _, plan := range planResponse.Items {
 		if plan.Plan == nil {
-			s.Logger.Warn(ctx, "plan response has nil Plan field", "plan_response", plan)
+			s.Logger.Info(ctx, "plan response has nil Plan field", "plan_response", plan)
 			continue
 		}
 		planIDMap[plan.Plan.ID] = plan
@@ -2185,7 +2185,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		customerIDMap = make(map[string]*dto.CustomerResponse, 0)
 		for _, sub := range subscriptions {
 			if sub.CustomerID == "" {
-				s.Logger.Warn(ctx, "subscription has empty customer_id", "subscription_id", sub.ID)
+				s.Logger.Info(ctx, "subscription has empty customer_id", "subscription_id", sub.ID)
 			}
 			customerIDMap[sub.CustomerID] = nil
 		}
@@ -2212,7 +2212,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		// Build customer map for quick lookup
 		for _, customer := range customerResponse.Items {
 			if customer.Customer == nil {
-				s.Logger.Warn(ctx, "customer response has nil Customer field", "customer_response", customer)
+				s.Logger.Info(ctx, "customer response has nil Customer field", "customer_response", customer)
 				continue
 			}
 			customerIDMap[customer.Customer.ID] = customer
@@ -2225,7 +2225,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 	for i, sub := range subscriptions {
 		planResp := planIDMap[sub.PlanID]
 		if planResp == nil {
-			s.Logger.Warn(ctx, "no plan found for subscription",
+			s.Logger.Info(ctx, "no plan found for subscription",
 				"subscription_id", sub.ID,
 				"plan_id", sub.PlanID,
 				"available_plan_ids", lo.Keys(planIDMap))
@@ -2235,7 +2235,7 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 		if customerIDMap != nil {
 			customerResp = customerIDMap[sub.CustomerID]
 			if customerResp == nil {
-				s.Logger.Warn(ctx, "no customer found for subscription",
+				s.Logger.Info(ctx, "no customer found for subscription",
 					"subscription_id", sub.ID,
 					"customer_id", sub.CustomerID,
 					"available_customer_ids", lo.Keys(customerIDMap))
@@ -3262,7 +3262,7 @@ func (s *subscriptionService) executeScheduledPlanChange(
 				"schedule_id", schedule.ID,
 				"subscription_id", schedule.SubscriptionID,
 				"original_error", err,
-				"update_error", updateErr)
+				"error", updateErr)
 		}
 		return err
 	}
@@ -3337,7 +3337,7 @@ func (s *subscriptionService) MarkCancellationScheduleAsExecuted(ctx context.Con
 	}
 
 	if schedule == nil {
-		s.Logger.Warn(ctx, "no pending cancellation schedule found",
+		s.Logger.Info(ctx, "no pending cancellation schedule found",
 			"subscription_id", subscriptionID)
 		return nil
 	}
@@ -4110,7 +4110,7 @@ func (s *subscriptionService) publishSubscriptionCreatedEvent(ctx context.Contex
 		EntityID:      sub.ID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 
@@ -4140,7 +4140,7 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 		EntityID:      subscriptionID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 
@@ -4205,7 +4205,7 @@ func (s *subscriptionService) handleSubCoupons(
 					})
 				} else {
 					// Log warning but continue processing other coupons
-					s.Logger.Warnw("coupon priceID not found in subscription, skipping",
+					s.Logger.Info(context.Background(), "coupon priceID not found in subscription, skipping",
 						"price_id", priceID,
 						"coupon_id", couponID,
 						"subscription_id", sub.ID)
@@ -4417,7 +4417,7 @@ func (s *subscriptionService) addAddonToSubscription(
 
 	addProrationKey := fmt.Sprintf("addon_add_%s_%d", addonAssociation.ID, effectiveDate.Unix())
 	if err := s.applyAddonAddProration(ctx, sub, lineItems, effectiveDate, req.ProrationBehavior, addProrationKey); err != nil {
-		s.Logger.Warn(ctx, "failed to create proration invoice for addon add; addon was persisted successfully",
+		s.Logger.Info(ctx, "failed to create proration invoice for addon add; addon was persisted successfully",
 			"error", err,
 			"association_id", addonAssociation.ID,
 			"subscription_id", sub.ID,
@@ -4744,7 +4744,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 			association.ID, *effectiveEndDate,
 			req.ProrationBehavior, endReason,
 		); err != nil {
-			s.Logger.Warn(ctx, "failed to issue proration credit for addon remove; removal was persisted successfully",
+			s.Logger.Info(ctx, "failed to issue proration credit for addon remove; removal was persisted successfully",
 				"error", err,
 				"association_id", association.ID,
 				"subscription_id", sub.ID,
@@ -5207,7 +5207,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 			// Must have a valid due date
 			if inv.DueDate == nil {
-				s.Logger.Warn(ctx, "invoice has invalid due date, skipping",
+				s.Logger.Info(ctx, "invoice has invalid due date, skipping",
 					"invoice_id", inv.ID,
 					"subscription_id", *inv.SubscriptionID)
 				return false
@@ -5740,7 +5740,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	for subLineItemID, usageResult := range usageResults {
 		meterID := usageResult.MeterID
 		if meterID == "" {
-			s.Logger.Warn(ctx, "meter_id not found in usage result, skipping",
+			s.Logger.Info(ctx, "meter_id not found in usage result, skipping",
 				"sub_line_item_id", subLineItemID,
 				"subscription_id", req.SubscriptionID)
 			continue
@@ -5750,7 +5750,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		priceObj, priceExists := priceMap[priceID]
 		if !priceExists || priceObj == nil {
-			s.Logger.Warn(ctx, "price object not found, skipping",
+			s.Logger.Info(ctx, "price object not found, skipping",
 				"price_id", priceID,
 				"subscription_id", req.SubscriptionID)
 			continue
@@ -5758,7 +5758,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		meter := meterMap[meterID]
 		if meter == nil {
-			s.Logger.Warn(ctx, "meter not found, skipping",
+			s.Logger.Info(ctx, "meter not found, skipping",
 				"sub_line_item_id", subLineItemID,
 				"meter_id", meterID,
 				"subscription_id", req.SubscriptionID)
@@ -5825,7 +5825,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		priceObj, priceExists := priceMap[item.PriceID]
 		if !priceExists || priceObj == nil {
-			s.Logger.Warn(ctx, "price object not found for line item, skipping zero charge",
+			s.Logger.Info(ctx, "price object not found for line item, skipping zero charge",
 				"line_item_id", item.ID,
 				"price_id", item.PriceID,
 				"subscription_id", req.SubscriptionID)
@@ -5834,7 +5834,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		meter := meterMap[item.MeterID]
 		if meter == nil {
-			s.Logger.Warn(ctx, "meter not found for line item, skipping zero charge",
+			s.Logger.Info(ctx, "meter not found for line item, skipping zero charge",
 				"line_item_id", item.ID,
 				"meter_id", item.MeterID,
 				"subscription_id", req.SubscriptionID)
@@ -6317,9 +6317,9 @@ func (s *subscriptionService) filterOverriddenEntitlements(
 ) []*dto.EntitlementResponse {
 	// Build a map of parent_entitlement_id -> true for quick lookup
 	// Only include subscription entitlements that are currently active (time-based check)
-	s.Logger.Infow("total plan entitlements", "count", len(planEntitlements))
-	s.Logger.Infow("total addon entitlements", "count", len(addonEntitlements))
-	s.Logger.Infow("total subscription entitlements", "count", len(subscriptionEntitlements))
+	s.Logger.Info(context.Background(), "total plan entitlements", "count", len(planEntitlements))
+	s.Logger.Info(context.Background(), "total addon entitlements", "count", len(addonEntitlements))
+	s.Logger.Info(context.Background(), "total subscription entitlements", "count", len(subscriptionEntitlements))
 
 	now := time.Now().UTC()
 	overriddenIDs := make(map[string]bool)
@@ -6332,7 +6332,7 @@ func (s *subscriptionService) filterOverriddenEntitlements(
 		// Check start_date: must be <= now (or NULL)
 		if subEnt.StartDate != nil && subEnt.StartDate.After(now) {
 			isActive = false
-			s.Logger.Debugw("subscription entitlement not yet active",
+			s.Logger.Debug(context.Background(), "subscription entitlement not yet active",
 				"entitlement_id", subEnt.ID,
 				"start_date", subEnt.StartDate,
 				"now", now)
@@ -6341,7 +6341,7 @@ func (s *subscriptionService) filterOverriddenEntitlements(
 		// Check end_date: must be > now (or NULL)
 		if isActive && subEnt.EndDate != nil && !subEnt.EndDate.After(now) {
 			isActive = false
-			s.Logger.Debugw("subscription entitlement expired",
+			s.Logger.Debug(context.Background(), "subscription entitlement expired",
 				"entitlement_id", subEnt.ID,
 				"end_date", subEnt.EndDate,
 				"now", now)
@@ -6354,7 +6354,7 @@ func (s *subscriptionService) filterOverriddenEntitlements(
 				overriddenIDs[*subEnt.ParentEntitlementID] = true
 			}
 		} else {
-			s.Logger.Infow("skipping inactive subscription entitlement, will use plan entitlement instead",
+			s.Logger.Info(context.Background(), "skipping inactive subscription entitlement, will use plan entitlement instead",
 				"entitlement_id", subEnt.ID,
 				"parent_entitlement_id", subEnt.ParentEntitlementID,
 				"start_date", subEnt.StartDate,
@@ -6398,7 +6398,7 @@ func (s *subscriptionService) filterOverriddenEntitlements(
 
 	// Log override statistics
 	if planOverrideCount > 0 || addonOverrideCount > 0 {
-		s.Logger.Infow("filtered overridden entitlements",
+		s.Logger.Info(context.Background(), "filtered overridden entitlements",
 			"subscription_id", subscriptionID,
 			"plan_overrides", planOverrideCount,
 			"addon_overrides", addonOverrideCount,
@@ -6618,7 +6618,7 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 			// If parent has empty reset period, default to MONTHLY
 			if newEnt.UsageResetPeriod == "" {
 				newEnt.UsageResetPeriod = types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY
-				s.Logger.Warnw("subscription entitlement override: parent entitlement had empty usage_reset_period, defaulting to MONTHLY",
+				s.Logger.Info(context.Background(), "subscription entitlement override: parent entitlement had empty usage_reset_period, defaulting to MONTHLY",
 					"subscription_id", sub.ID,
 					"parent_entitlement_id", parentEnt.ID,
 					"feature_id", parentEnt.FeatureID)
@@ -7592,14 +7592,14 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 		if ierr.IsNotFound(err) {
 			return // Paddle not configured for this environment — skip silently
 		}
-		s.Logger.Warn(ctx, "failed to get Paddle integration for inline sync, subscription created without checkout URL",
+		s.Logger.Info(ctx, "failed to get Paddle integration for inline sync, subscription created without checkout URL",
 			"subscription_id", sub.ID, "error", err)
 		return
 	}
 
 	reloadedSub, lineItems, err := s.SubRepo.GetWithLineItems(ctx, sub.ID)
 	if err != nil {
-		s.Logger.Warn(ctx, "failed to reload subscription for paddle inline sync",
+		s.Logger.Info(ctx, "failed to reload subscription for paddle inline sync",
 			"subscription_id", sub.ID, "error", err)
 		return
 	}
@@ -7622,7 +7622,7 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 
 	productsResp, err := paddleInt.SyncSvc.EnsureBulkProductSynced(ctx, paddleint.EnsureBulkProductSyncedRequest{Items: productItems})
 	if err != nil {
-		s.Logger.Warn(ctx, "paddle product sync failed during inline subscription sync",
+		s.Logger.Info(ctx, "paddle product sync failed during inline subscription sync",
 			"subscription_id", sub.ID, "error", err)
 		return
 	}
@@ -7632,7 +7632,7 @@ func (s *subscriptionService) runPaddleSubscriptionSync(ctx context.Context, sub
 		PriceIDToProductID: productsResp.PriceIDToPaddleProductID,
 	})
 	if err != nil {
-		s.Logger.Warn(ctx, "paddle subscription sync failed during inline subscription sync",
+		s.Logger.Info(ctx, "paddle subscription sync failed during inline subscription sync",
 			"subscription_id", sub.ID, "error", err)
 		return
 	}

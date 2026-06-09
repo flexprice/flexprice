@@ -240,13 +240,13 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 		return NewInvoiceExporter(s.invoiceRepo, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeCreditTopups:
 		if s.walletRepo == nil {
-			s.logger.Errorw("wallet repository not configured for credit topup export")
+			s.logger.Info(context.Background(), "wallet repository not configured for credit topup export")
 			return nil
 		}
 		return NewCreditTopupExporter(s.walletRepo, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeCreditUsage:
 		if s.walletRepo == nil || s.walletBalanceGetter == nil || s.customerRepo == nil {
-			s.logger.Errorw("wallet or customer repository not configured for credit usage export",
+			s.logger.Info(context.Background(), "wallet or customer repository not configured for credit usage export",
 				"wallet_repo_nil", s.walletRepo == nil,
 				"wallet_balance_getter_nil", s.walletBalanceGetter == nil,
 				"customer_repo_nil", s.customerRepo == nil)
@@ -255,7 +255,7 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 		return NewCreditUsageExporter(s.walletRepo, s.customerRepo, s.walletBalanceGetter, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeUsageAnalytics:
 		if s.customerRepo == nil || s.subscriptionLineItemRepo == nil {
-			s.logger.Errorw("customer or subscription line item repository not configured for usage analytics export",
+			s.logger.Info(context.Background(), "customer or subscription line item repository not configured for usage analytics export",
 				"customer_repo_nil", s.customerRepo == nil,
 				"subscription_line_item_repo_nil", s.subscriptionLineItemRepo == nil)
 			return nil

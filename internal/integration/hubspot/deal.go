@@ -77,7 +77,7 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 	// Get deal ID from customer metadata
 	dealID, ok := cust.Metadata["hubspot_deal_id"]
 	if !ok || dealID == "" {
-		s.logger.Warnw("no HubSpot deal ID found in customer metadata",
+		s.logger.Info(ctx, "no HubSpot deal ID found in customer metadata",
 			"customer_id", cust.ID,
 			"subscription_id", subscriptionID,
 			"metadata", cust.Metadata)
@@ -99,7 +99,7 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 	}
 
 	if len(flatRateLineItems) == 0 {
-		s.logger.Warnw("no active flat rate line items to sync",
+		s.logger.Info(ctx, "no active flat rate line items to sync",
 			"subscription_id", subscriptionID,
 			"deal_id", dealID,
 			"line_items_count", len(sub.LineItems))
@@ -267,7 +267,7 @@ func (s *DealSyncService) updateDealAmountFromHubSpot(ctx context.Context, dealI
 	// Extract ACV from deal properties (already a string)
 	acv := deal.Properties.ACV
 	if acv == "" {
-		s.logger.Warnw("hs_acv property not found or empty",
+		s.logger.Info(ctx, "hs_acv property not found or empty",
 			"deal_id", dealID,
 			"deal_name", deal.Properties.DealName,
 			"current_amount", deal.Properties.Amount)

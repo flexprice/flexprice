@@ -55,7 +55,7 @@ func NewEmail(client *EmailClient, logger *zap.Logger) *Email {
 // SendEmail sends a plain text email
 func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmailResponse, error) {
 	if !s.client.IsEnabled() {
-		s.logger.Warn(ctx, "email client is disabled, skipping email send",
+		s.logger.Info(ctx, "email client is disabled, skipping email send",
 			"to", req.ToAddress,
 			"subject", req.Subject,
 		)
@@ -99,7 +99,7 @@ func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmail
 // SendEmailWithTemplate sends an email using an HTML template
 func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemplateRequest) (*SendEmailWithTemplateResponse, error) {
 	if !s.client.IsEnabled() {
-		s.logger.Warn(ctx, "email client is disabled, skipping email send",
+		s.logger.Info(ctx, "email client is disabled, skipping email send",
 			"to", req.ToAddress,
 			"subject", req.Subject,
 			"template", req.TemplatePath,

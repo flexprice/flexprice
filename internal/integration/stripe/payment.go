@@ -566,7 +566,7 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, sessionID string,
 		if paymentIntentID != "" {
 			paymentIntent, err := stripeClient.V1PaymentIntents.Retrieve(ctx, paymentIntentID, nil)
 			if err != nil {
-				s.logger.Warnw("failed to get payment intent details",
+				s.logger.Info(context.Background(), "failed to get payment intent details",
 					"error", err,
 					"payment_intent_id", paymentIntentID)
 				// Don't fail the entire request if we can't get payment intent details
@@ -771,7 +771,7 @@ func (s *PaymentService) ParseWebhookEvent(payload []byte, signature string, web
 	event, err := webhook.ConstructEventWithOptions(payload, signature, webhookSecret, options)
 	if err != nil {
 		// Log the error using structured logging
-		s.logger.Errorw("Stripe webhook verification failed", "error", err)
+		s.logger.Error(context.Background(), "Stripe webhook verification failed", "error", err)
 		return nil, ierr.NewError("failed to verify webhook signature").
 			WithHint("Invalid webhook signature or payload").
 			Mark(ierr.ErrValidation)
@@ -797,7 +797,7 @@ func (s *PaymentService) GetCustomerPaymentMethods(ctx context.Context, req *dto
 	stripeCustomerID, exists := ourCustomer.Metadata["stripe_customer_id"]
 	if !exists || stripeCustomerID == "" {
 		// No Stripe customer ID means no saved payment methods
-		s.logger.Warnw("customer has no stripe_customer_id in metadata",
+		s.logger.Info(ctx, "customer has no stripe_customer_id in metadata",
 			"customer_id", req.CustomerID,
 			"customer_metadata", ourCustomer.Metadata,
 		)
@@ -854,7 +854,7 @@ func (s *PaymentService) GetCustomerPaymentMethods(ctx context.Context, req *dto
 	}
 
 	if len(responses) == 0 {
-		s.logger.Warnw("no payment methods found for customer",
+		s.logger.Info(ctx, "no payment methods found for customer",
 			"customer_id", req.CustomerID,
 			"stripe_customer_id", stripeCustomerID)
 		return responses, nil // Return empty list instead of error
@@ -1520,7 +1520,7 @@ func (s *PaymentService) HandleExternalStripePaymentFromWebhook(ctx context.Cont
 
 	stripeInvoiceID := webhookData.Invoice
 	if stripeInvoiceID == "" {
-		s.logger.Warnw("no Stripe invoice ID found in external payment",
+		s.logger.Info(ctx, "no Stripe invoice ID found in external payment",
 			"payment_intent_id", paymentIntent.ID)
 		return nil
 	}
@@ -1715,7 +1715,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 func (s *PaymentService) VerifyWebhookSignature(payload []byte, signature string, webhookSecret string) error {
 	_, err := webhook.ConstructEvent(payload, signature, webhookSecret)
 	if err != nil {
-		s.logger.Errorw("Stripe webhook verification failed", "error", err)
+		s.logger.Error(context.Background(), "Stripe webhook verification failed", "error", err)
 		return ierr.NewError("failed to verify webhook signature").
 			WithHint("Invalid webhook signature or payload").
 			Mark(ierr.ErrValidation)
@@ -1874,7 +1874,7 @@ func (s *PaymentService) AttachPaymentToStripeInvoiceAndReconcile(
 	if stripeInvoiceID != "" {
 		err = s.AttachPaymentToStripeInvoice(ctx, stripeClient, paymentIntent.ID, stripeInvoiceID)
 	} else {
-		s.logger.Warnw("no Stripe invoice ID found, skipping Stripe invoice attachment",
+		s.logger.Info(context.Background(), "no Stripe invoice ID found, skipping Stripe invoice attachment",
 			"payment_intent_id", paymentIntent.ID,
 			"stripe_invoice_id", stripeInvoiceID)
 		err = nil

@@ -139,7 +139,7 @@ func (s *stripeSubscriptionService) CreateSubscription(ctx context.Context, stri
 			},
 		})
 		if err != nil {
-			s.logger.Warnw("failed to create entity mapping for subscription",
+			s.logger.Info(context.Background(), "failed to create entity mapping for subscription",
 				"error", err,
 				"subscription_id", subscriptionResp.ID,
 				"stripe_subscription_id", stripeSubscriptionID)
@@ -333,7 +333,7 @@ func (s *stripeSubscriptionService) createOrFindCustomer(ctx context.Context, st
 		},
 	})
 	if err != nil {
-		s.logger.Warnw("failed to create entity mapping for customer",
+		s.logger.Info(ctx, "failed to create entity mapping for customer",
 			"error", err,
 			"customer_id", customerResp.ID,
 			"stripe_customer_id", stripeCustomerID)
@@ -542,7 +542,7 @@ func (s *stripeSubscriptionService) createFlexPriceSubscriptionWithoutTx(ctx con
 		},
 	})
 	if err != nil {
-		s.logger.Warnw("failed to create entity mapping for subscription",
+		s.logger.Info(ctx, "failed to create entity mapping for subscription",
 			"error", err,
 			"subscription_id", subscriptionResp.ID,
 			"stripe_subscription_id", stripeSub.ID)
@@ -635,7 +635,7 @@ func (s *stripeSubscriptionService) handlePlanChange(ctx context.Context, existi
 	// Delete the old mapping
 	err = entityMappingService.DeleteEntityIntegrationMapping(ctx, existingMapping.ID)
 	if err != nil {
-		s.logger.Warnw("failed to delete old entity mapping for subscription",
+		s.logger.Info(ctx, "failed to delete old entity mapping for subscription",
 			"error", err,
 			"mapping_id", existingMapping.ID,
 			"old_subscription_id", existingSubscription.ID,

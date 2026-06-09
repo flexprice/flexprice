@@ -35,7 +35,7 @@ func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache c
 func (r *priceUnitRepository) Create(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) (*domainPriceUnit.PriceUnit, error) {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating price unit",
+	r.log.Debug(ctx, "creating price unit",
 		"price_unit_id", priceUnit.ID,
 		"tenant_id", priceUnit.TenantID,
 		"name", priceUnit.Name,
@@ -108,7 +108,7 @@ func (r *priceUnitRepository) Get(ctx context.Context, id string) (*domainPriceU
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting price unit",
+	r.log.Debug(ctx, "getting price unit",
 		"price_unit_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -218,7 +218,7 @@ func (r *priceUnitRepository) Count(ctx context.Context, filter *types.PriceUnit
 func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating price unit",
+	r.log.Debug(ctx, "updating price unit",
 		"price_unit_id", priceUnit.ID,
 		"tenant_id", priceUnit.TenantID,
 		"code", priceUnit.Code,
@@ -281,7 +281,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 func (r *priceUnitRepository) Delete(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting price unit",
+	r.log.Debug(ctx, "deleting price unit",
 		"price_unit_id", priceUnit.ID,
 		"tenant_id", priceUnit.TenantID,
 	)
@@ -334,7 +334,7 @@ func (r *priceUnitRepository) GetByCode(ctx context.Context, code string) (*doma
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("getting price unit by code", "code", code)
+	r.log.Debug(ctx, "getting price unit by code", "code", code)
 
 	// Try to get from cache first
 	if cachedPriceUnit := r.GetCache(ctx, code); cachedPriceUnit != nil {
