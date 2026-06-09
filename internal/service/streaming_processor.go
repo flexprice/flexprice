@@ -40,6 +40,8 @@ func NewStreamingProcessor(client httpclient.Client, logger *logger.Logger) *Str
 	retryClient.RetryWaitMin = 1 * time.Second
 	retryClient.RetryWaitMax = 30 * time.Second
 	retryClient.Logger = logger.GetRetryableHTTPLogger()
+	// Instrument outbound file downloads for SigNoz External API Monitoring.
+	retryClient.HTTPClient.Transport = httpclient.OtelTransport(retryClient.HTTPClient.Transport)
 
 	return &StreamingProcessor{
 		Client:           client,
