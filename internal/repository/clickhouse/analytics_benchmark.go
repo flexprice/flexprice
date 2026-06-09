@@ -4,18 +4,19 @@ import (
 	"context"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/clickhouse"
+	"github.com/ClickHouse/clickhouse-go/v2"
+	ich "github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 )
 
 type AnalyticsBenchmarkRepository struct {
-	store  *clickhouse.ClickHouseStore
+	store  *ich.ClickHouseStore
 	logger *logger.Logger
 }
 
-func NewAnalyticsBenchmarkRepository(store *clickhouse.ClickHouseStore, logger *logger.Logger) events.AnalyticsBenchmarkRepository {
+func NewAnalyticsBenchmarkRepository(store *ich.ClickHouseStore, logger *logger.Logger) events.AnalyticsBenchmarkRepository {
 	return &AnalyticsBenchmarkRepository{store: store, logger: logger}
 }
 
@@ -23,6 +24,11 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 	if len(records) == 0 {
 		return nil
 	}
+
+	// Attach settings to context
+	ctx = clickhouse.Context(ctx, clickhouse.WithSettings(clickhouse.Settings{
+		"max_memory_usage": 90000000000,
+	}))
 
 	stmt, err := r.store.GetConn().PrepareBatch(ctx, `
 		INSERT INTO analytics_benchmark (
@@ -43,6 +49,9 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 			WithHint("Failed to prepare analytics_benchmark insert").
 			Mark(ierr.ErrDatabase)
 	}
+
+	rowsInserted := 0
+	var firstInserted *events.AnalyticsBenchmarkRecord
 
 	now := time.Now().UTC()
 	for _, record := range records {
@@ -108,6 +117,15 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 				WithHint("Failed to append analytics_benchmark row").
 				Mark(ierr.ErrDatabase)
 		}
+
+		rowsInserted++
+		if firstInserted == nil {
+			firstInserted = record
+		}
+	}
+
+	if rowsInserted == 0 || firstInserted == nil {
+		return nil
 	}
 
 	if err := stmt.Send(); err != nil {
@@ -118,8 +136,8 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 
 	r.logger.Debugw("inserted analytics_benchmark batch",
 		"rows", len(records),
-		"event_id", records[0].EventID,
-		"tenant_id", records[0].TenantID,
+		"event_id", firstInserted.EventID,
+		"tenant_id", firstInserted.TenantID,
 	)
 
 	return nil
