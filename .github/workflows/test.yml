@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Run Tests and Lint
+    name: Run Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -26,3 +26,25 @@ jobs:
       - name: Run Tests
         run: |
           make test
+
+  lint:
+    name: Run Loglint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.0'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Build loglint
+        run: cd tools/loglint && go mod download && go build -o ../bin/loglint ./main.go
+
+      - name: Run loglint
+        run: go vet -vettool=./tools/bin/loglint ./internal/...
