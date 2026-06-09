@@ -434,6 +434,16 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	}
 
 	// 11. Query bucketed meters per line item (already uses GetPeriodStart/End)
+	//
+	// When analytics filters (PropertyFilters / Sources) are active, suppress
+	// bucketed line-item entries that have no matching events — same rationale
+	// as the gates in queryAndAppendAnalyticsEntries and the step-12 loop:
+	// surfacing them would misrepresent the filtered slice (and pin commitment
+	// cost for committed items). Without filters, empty bucketed line items
+	// continue to be surfaced as zero-usage rows (preserves the contract that
+	// committed line items can have their commitment fire on no usage).
+	skipBucketedZeros := len(req.PropertyFilters) > 0 || len(req.Sources) > 0
+
 	for meterID := range bucketedMeterIDs {
 		m := result.MeterMap[meterID]
 		if m == nil {
@@ -451,6 +461,10 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
+			}
+
+			if skipBucketedZeros && (bucketedResult == nil || len(bucketedResult.Results) == 0) {
+				continue
 			}
 
 			usage := &LineItemMeterUsage{
@@ -492,34 +506,45 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 	}
 
-	// 12. Zero-usage entries for line items that had no data
-	processedLineItemIDs := make(map[string]bool, len(result.LineItemUsages))
-	for _, lu := range result.LineItemUsages {
-		if lu.LineItem != nil {
-			processedLineItemIDs[lu.LineItem.ID] = true
-		}
-	}
+	// 12. Zero-usage entries for line items that had no data.
+	// Skip when analytics filters (PropertyFilters / Sources) are active: those
+	// filters restrict the SQL result by design, so "line item has no rows" means
+	// the filter excluded them — not that there was zero usage. Surfacing a
+	// zero-usage row for every filtered-out line item would misrepresent the
+	// filtered slice and (for committed line items) pin commitment cost regardless
+	// of the filter. Mirrors the skipSyntheticZeros gate in
+	// featureUsageTrackingService.fetchAnalyticsData.
+	skipSyntheticZeros := len(req.PropertyFilters) > 0 || len(req.Sources) > 0
 
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
-			continue
-		}
-		if meterIDSet != nil {
-			if _, ok := meterIDSet[item.MeterID]; !ok {
-				continue
+	if !skipSyntheticZeros {
+		processedLineItemIDs := make(map[string]bool, len(result.LineItemUsages))
+		for _, lu := range result.LineItemUsages {
+			if lu.LineItem != nil {
+				processedLineItemIDs[lu.LineItem.ID] = true
 			}
 		}
-		if processedLineItemIDs[item.ID] {
-			continue
+
+		for _, item := range lineItems {
+			if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
+				continue
+			}
+			if meterIDSet != nil {
+				if _, ok := meterIDSet[item.MeterID]; !ok {
+					continue
+				}
+			}
+			if processedLineItemIDs[item.ID] {
+				continue
+			}
+			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+				LineItem:    item,
+				MeterID:     item.MeterID,
+				Meter:       result.MeterMap[item.MeterID],
+				Price:       result.PriceMap[item.PriceID],
+				PeriodStart: item.GetPeriodStart(usageStartTime),
+				PeriodEnd:   item.GetPeriodEnd(usageEndTime),
+			})
 		}
-		result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
-			LineItem:    item,
-			MeterID:     item.MeterID,
-			Meter:       result.MeterMap[item.MeterID],
-			Price:       result.PriceMap[item.PriceID],
-			PeriodStart: item.GetPeriodStart(usageStartTime),
-			PeriodEnd:   item.GetPeriodEnd(usageEndTime),
-		})
 	}
 
 	return result, nil
@@ -585,9 +610,18 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 		resultsByMeter[dr.MeterID] = append(resultsByMeter[dr.MeterID], dr)
 	}
 
+	// When analytics filters are active, suppress the zero-usage entry for line
+	// items whose analytics query returned no rows — that's the filter excluding
+	// them, not zero usage. Surfacing a zero-usage row would misrepresent the
+	// filtered slice. Mirrors the step-12 skipSyntheticZeros gate.
+	skipSyntheticZeros := len(req.PropertyFilters) > 0 || len(req.Sources) > 0
+
 	for _, liw := range lis {
 		drs := resultsByMeter[liw.MeterID]
 		if len(drs) == 0 {
+			if skipSyntheticZeros {
+				continue
+			}
 			// No data — zero-usage entry; step 12 commitment check uses LineItem.HasCommitment().
 			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
 				LineItem:    liw.Item,
@@ -1378,16 +1412,20 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			}
 		}
 
-		for _, point := range analytic.Points {
-			item.Points = append(item.Points, dto.UsageAnalyticPoint{
-				Timestamp:                        point.Timestamp,
-				Usage:                            point.Usage,
-				Cost:                             point.Cost,
-				EventCount:                       point.EventCount,
-				ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
-				ComputedOverageAmount:            point.ComputedOverageAmount,
-				ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
-			})
+		// Points are computed internally for bucketed cost calc regardless of request;
+		// only expose them when the caller asked for a window_size (mirrors feature_usage).
+		if params.WindowSize != "" {
+			for _, point := range analytic.Points {
+				item.Points = append(item.Points, dto.UsageAnalyticPoint{
+					Timestamp:                        point.Timestamp,
+					Usage:                            point.Usage,
+					Cost:                             point.Cost,
+					EventCount:                       point.EventCount,
+					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
+					ComputedOverageAmount:            point.ComputedOverageAmount,
+					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
+				})
+			}
 		}
 
 		response.Items = append(response.Items, item)
@@ -1829,7 +1867,7 @@ func (s *meterUsageService) processPointsWithBuckets(
 		cost = s.fillMissingWindowsAndRecalculate(p, lineItem)
 	}
 
-	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType)
+	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
 
 	if isWindowed && !needsWindowedFill {
 		cost = s.sumPointCosts(p.item.Points)
@@ -1964,7 +2002,7 @@ func (s *meterUsageService) fillZeroUsageWindows(p *meterUsageBucketedCostParams
 	for _, t := range expectedStarts {
 		bucketPoints = append(bucketPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
 	}
-	p.item.Points = s.mergeBucketPointsByWindow(bucketPoints, p.aggType)
+	p.item.Points = s.mergeBucketPointsByWindow(bucketPoints, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
 
 	return totalCost
 }
@@ -2102,7 +2140,13 @@ func (s *meterUsageService) applyLineItemCommitment(
 }
 
 // mergeBucketPointsByWindow merges bucket-level points into request-window-level points.
-func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnalyticPoint, aggregationType types.AggregationType) []events.UsageAnalyticPoint {
+// Each input point's WindowStart is the bucket start (at the meter's bucket_size). To emit
+// points at the requested window_size, WindowStart is truncated to that window before grouping
+// — so when request window > bucket size (e.g. DAY request, MINUTE bucket), many bucket points
+// collapse into one response point per request window. When request window <= bucket size, the
+// truncation is a no-op and points stay at bucket grain (we cannot subdivide a bucket).
+// requestWindowSize == "" disables roll-up entirely.
+func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnalyticPoint, aggregationType types.AggregationType, requestWindowSize types.WindowSize, billingAnchor *time.Time) []events.UsageAnalyticPoint {
 	if len(points) == 0 {
 		return points
 	}
@@ -2113,7 +2157,11 @@ func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnaly
 
 	windowGroups := make(map[time.Time][]events.UsageAnalyticPoint)
 	for _, point := range points {
-		windowGroups[point.WindowStart] = append(windowGroups[point.WindowStart], point)
+		key := point.WindowStart
+		if requestWindowSize != "" {
+			key = truncateToBucketStart(point.WindowStart, requestWindowSize, billingAnchor)
+		}
+		windowGroups[key] = append(windowGroups[key], point)
 	}
 
 	mergedPoints := make([]events.UsageAnalyticPoint, 0, len(windowGroups))

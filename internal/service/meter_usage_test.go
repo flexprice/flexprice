@@ -2755,3 +2755,245 @@ func (s *MeterUsageServiceSuite) TestMeterUsage_CancelledSubInsideWindow_Attribu
 	s.True(activeUsage.Equal(decimal.NewFromInt(150)),
 		"active sub should own both events (100 + 50); got %s", activeUsage)
 }
+
+// ---------------------------------------------------------------------------
+// skipSyntheticZeros — suppress zero-usage line-item injection under filters.
+//
+// When PropertyFilters or Sources are present, the SQL result is a deliberate
+// subset of the customer's usage. The zero-fill loop in GetSubscriptionMeterUsage
+// must not fabricate entries for line items whose events filtered out — those
+// would misrepresent the filtered slice and (for committed line items) pin
+// commitment cost regardless of filter. Baseline (no filter) zero-fill is
+// covered by TestZeroUsageLineItem.
+// ---------------------------------------------------------------------------
+
+// setupBucketedMeterForSkipZeros creates a bucketed SUM meter (HOUR bucket) +
+// price + line item bound to the suite's subscription. Returns the line item ID.
+func (s *MeterUsageServiceSuite) setupBucketedMeterForSkipZeros(ctx context.Context, idSuffix string) string {
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_bkt_" + idSuffix,
+		Name:      "Bucketed SUM " + idSuffix,
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_bkt_"+idSuffix, bucketedMeter.ID, decimal.NewFromInt(1))
+	li := s.createLineItemForMeter(ctx, "li_bkt_"+idSuffix, bucketedMeter.ID, bucketedPrice.ID)
+	return li.ID
+}
+
+// TestSkipSyntheticZeros_PropertyFiltersSuppressZeroFill: a bucketed-meter
+// line item whose only event fails the property filter must not appear in the
+// result. Bucketed meters take the step-11 path (which unconditionally appended
+// an entry per line item before the gate) — that's the production scenario
+// where this bug actually surfaces.
+func (s *MeterUsageServiceSuite) TestSkipSyntheticZeros_PropertyFiltersSuppressZeroFill() {
+	ctx := s.GetContext()
+
+	liID := s.setupBucketedMeterForSkipZeros(ctx, "pf")
+	s.insertMeterUsageWithProps(ctx, "mtr_bkt_pf", s.customer.ExternalID, "",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 100,
+		map[string]interface{}{"model": "claude-opus"})
+
+	result, err := s.svc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID:  s.sub.ID,
+		StartTime:       s.periodStart,
+		EndTime:         s.periodEnd,
+		PropertyFilters: map[string][]string{"model": {"gpt-4"}},
+	})
+	s.NoError(err)
+	for _, lu := range result.LineItemUsages {
+		if lu.LineItem != nil && lu.LineItem.ID == liID {
+			s.Failf("zero-fill leak",
+				"bucketed line item with no filter-matching events must not surface under PropertyFilters; got entry %+v", lu)
+		}
+	}
+}
+
+// TestSkipSyntheticZeros_SourcesFilterSuppressesZeroFill: same as the property
+// filter case but for Sources. Same step-11 bucketed path.
+func (s *MeterUsageServiceSuite) TestSkipSyntheticZeros_SourcesFilterSuppressesZeroFill() {
+	ctx := s.GetContext()
+
+	liID := s.setupBucketedMeterForSkipZeros(ctx, "src")
+	s.insertMeterUsageWithProps(ctx, "mtr_bkt_src", s.customer.ExternalID, "internal",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 100, nil)
+
+	result, err := s.svc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID: s.sub.ID,
+		StartTime:      s.periodStart,
+		EndTime:        s.periodEnd,
+		Sources:        []string{"stripe"},
+	})
+	s.NoError(err)
+	for _, lu := range result.LineItemUsages {
+		if lu.LineItem != nil && lu.LineItem.ID == liID {
+			s.Failf("zero-fill leak",
+				"bucketed line item with no source-matching events must not surface under Sources; got entry %+v", lu)
+		}
+	}
+}
+
+// TestSkipSyntheticZeros_NoFilter_BucketedLineItemStillZeroFilled is the
+// counterpart regression guard: with NO filters, the bucketed step-11 path
+// must still append an entry for line items with no usage (Usage=0). This
+// preserves the existing contract that committed line items can have their
+// commitment fire on empty usage.
+func (s *MeterUsageServiceSuite) TestSkipSyntheticZeros_NoFilter_BucketedLineItemStillZeroFilled() {
+	ctx := s.GetContext()
+
+	liID := s.setupBucketedMeterForSkipZeros(ctx, "nofilter")
+	// No usage inserted at all.
+
+	result, err := s.svc.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
+		SubscriptionID: s.sub.ID,
+		StartTime:      s.periodStart,
+		EndTime:        s.periodEnd,
+		// no filters
+	})
+	s.NoError(err)
+
+	var found *LineItemMeterUsage
+	for _, lu := range result.LineItemUsages {
+		if lu.LineItem != nil && lu.LineItem.ID == liID {
+			found = lu
+			break
+		}
+	}
+	s.Require().NotNil(found, "without filters, bucketed line item with no usage must still appear (zero-usage entry)")
+	s.True(found.Usage.IsZero(), "zero-fill entry should have usage=0, got %s", found.Usage)
+}
+
+// ---------------------------------------------------------------------------
+// Bucketed-meter window roll-up
+//
+// Bucketed meters query meter_usage at the meter's bucket_size (e.g. HOUR) so
+// bucketed cost math has the values it needs. The response must surface points
+// at the caller's request window_size — bucket points are rolled up by
+// mergeBucketPointsByWindow before the response is built. When the caller
+// omits window_size, the response points are suppressed entirely (matches
+// feature_usage's response shape).
+// ---------------------------------------------------------------------------
+
+// TestBucketedMeter_RollsUpPointsToRequestWindow: HOUR-bucketed meter with
+// events spanning multiple hours on two days; request window=DAY. The response
+// must collapse the hourly internal buckets to one point per day.
+func (s *MeterUsageServiceSuite) TestBucketedMeter_RollsUpPointsToRequestWindow() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_rollup",
+		Name:      "Bucketed SUM (HOUR)",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_rollup", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_rollup", bucketedMeter.ID, bucketedPrice.ID)
+
+	// Four events: three on Jan 5 at hours 9/10/14, one on Jan 6 at hour 9.
+	// Without rollup these surface as 4 hourly points; with rollup → 2 daily points.
+	for _, ev := range []struct {
+		t   time.Time
+		qty float64
+	}{
+		{time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC), 10},
+		{time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 20},
+		{time.Date(2026, 1, 5, 14, 0, 0, 0, time.UTC), 30},
+		{time.Date(2026, 1, 6, 9, 0, 0, 0, time.UTC), 5},
+	} {
+		s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, ev.t, ev.qty)
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeDay,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_rollup" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+
+	s.Require().Len(item.Points, 2,
+		"expected 2 daily points (Jan 5 + Jan 6); got %d", len(item.Points))
+
+	byDay := map[string]decimal.Decimal{}
+	for _, pt := range item.Points {
+		byDay[pt.Timestamp.UTC().Format("2006-01-02")] = pt.Usage
+	}
+	s.True(byDay["2026-01-05"].Equal(decimal.NewFromInt(60)),
+		"Jan 5 rolled-up usage: expected 60 (10+20+30); got %s", byDay["2026-01-05"])
+	s.True(byDay["2026-01-06"].Equal(decimal.NewFromInt(5)),
+		"Jan 6 rolled-up usage: expected 5; got %s", byDay["2026-01-06"])
+}
+
+// TestBucketedMeter_OmitsPointsWhenWindowSizeUnset: when window_size is absent
+// from the request, response Points must be empty even though bucketed cost
+// calc still runs internally (TotalUsage is still populated). Mirrors
+// feature_usage's response shape.
+func (s *MeterUsageServiceSuite) TestBucketedMeter_OmitsPointsWhenWindowSizeUnset() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_nows",
+		Name:      "Bucketed SUM no window",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_nows", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_nows", bucketedMeter.ID, bucketedPrice.ID)
+
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID,
+		time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC), 10)
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID,
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 20)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		// no WindowSize
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_nows" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+
+	s.True(item.TotalUsage.Equal(decimal.NewFromInt(30)),
+		"total usage must still be computed: expected 30; got %s", item.TotalUsage)
+	s.Empty(item.Points,
+		"points must be omitted from response when window_size is not specified")
+}
