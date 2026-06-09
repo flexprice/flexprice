@@ -266,7 +266,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		subscription:          cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
 		walletCreditExpiry:    cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
 		webhookOutboundRetry:  cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
-		paddleInvoicePullSync: cronActivities.NewPaddleInvoicePullSyncActivities(params.DB, temporalService, params.Logger),
+		paddleInvoicePullSync: cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each

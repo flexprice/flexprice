@@ -274,3 +274,11 @@ func (i *Invoice) Validate() error {
 
 	return nil
 }
+
+// PendingProviderInvoice is a lightweight projection of a finalized+unpaid invoice
+// belonging to a tenant/env that has an active connection for a given provider.
+type PendingProviderInvoice struct {
+	InvoiceID     string
+	TenantID      string
+	EnvironmentID string
+}
