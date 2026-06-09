@@ -238,7 +238,9 @@ func NewLoggerWithWriter(cfg *config.Configuration, w io.Writer) (*Logger, error
 	encoderCfg.TimeKey = "time"
 	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 	level := zapcore.InfoLevel
-	_ = level.UnmarshalText([]byte(cfg.Logging.Level))
+	if err := level.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
+		level = zapcore.InfoLevel // invalid level string; default to info
+	}
 	core := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderCfg),
 		zapcore.AddSync(w),

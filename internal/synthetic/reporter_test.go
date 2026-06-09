@@ -55,7 +55,7 @@ func TestLogReporter(t *testing.T) {
 		OccurredAt: time.Now(),
 	})
 	out := buf.String()
-	for _, want := range []string{"synthetic.check.failed", "wallet-balance-probe", "probe", "customer_id"} {
+	for _, want := range []string{"synthetic.check.failed", "wallet-balance-probe", "probe", "customer_id", "503"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("log missing %q\noutput: %s", want, out)
 		}
