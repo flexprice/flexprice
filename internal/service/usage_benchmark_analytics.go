@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 		return nil
 	}
 
-	featureResp, featureErr := s.callAnalyticsFeaturePipeline(ctx, &req)
+	featureResp, featureErr := s.callAnalyticsFeaturePipeline(ctx, req)
 	meterResp, meterErr := s.callAnalyticsMeterPipeline(ctx, &req)
 
 	if featureErr != nil && s.Logger != nil {
@@ -124,13 +125,13 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 }
 
 // callAnalyticsFeaturePipeline invokes the feature-usage tracking analytics service.
-func (s *usageBenchmarkService) callAnalyticsFeaturePipeline(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+func (s *usageBenchmarkService) callAnalyticsFeaturePipeline(ctx context.Context, req dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	if s.featureUsageTrackingService == nil {
 		return nil, nil
 	}
 	// Pass-by-value copy: the live handler hands the same request to its target
 	// service, so callers may mutate downstream — keep our copy isolated.
-	reqCopy := *req
+	reqCopy := req
 	return s.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &reqCopy)
 }
 
@@ -169,13 +170,19 @@ func canonicalGroupKey(item *dto.UsageAnalyticItem) string {
 	// Source first. Prefer the singular Source (set when grouping by source);
 	// otherwise fall back to a sorted join of Sources so the key stays stable
 	// when the result type carries the multi-source variant.
+	// User-derived strings are percent-encoded so the '=', '|' and ',' delimiters
+	// can't appear in payload values and collide with structural separators.
 	if item.Source != "" {
-		parts = append(parts, "source="+item.Source)
+		parts = append(parts, "source="+url.QueryEscape(item.Source))
 	} else if len(item.Sources) > 0 {
 		sortedSources := make([]string, len(item.Sources))
 		copy(sortedSources, item.Sources)
 		sort.Strings(sortedSources)
-		parts = append(parts, "sources="+strings.Join(sortedSources, ","))
+		encoded := make([]string, len(sortedSources))
+		for i, s := range sortedSources {
+			encoded[i] = url.QueryEscape(s)
+		}
+		parts = append(parts, "sources="+strings.Join(encoded, ","))
 	}
 
 	if len(item.Properties) > 0 {
@@ -185,7 +192,7 @@ func canonicalGroupKey(item *dto.UsageAnalyticItem) string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			parts = append(parts, "properties."+k+"="+item.Properties[k])
+			parts = append(parts, "properties."+url.QueryEscape(k)+"="+url.QueryEscape(item.Properties[k]))
 		}
 	}
 
