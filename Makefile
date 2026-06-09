@@ -65,6 +65,10 @@ down:
 run-server:
 	go run cmd/server/main.go
 
+.PHONY: run-synthetic
+run-synthetic:
+	go run cmd/synthetic/main.go
+
 .PHONY: run-server-local
 run-server-local: run-server
 
