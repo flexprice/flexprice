@@ -1,0 +1,23 @@
+version: '1'
+nodes:
+- file: internal/domain/invoice/AGENTS.md
+  owns:
+  - internal/domain/invoice/**
+  synced_sha: 8a1b776e6230d469e02f453f16cc54b5d7596a1a
+  synced_at: 2026-06-09 00:00:00+00:00
+- file: internal/service/AGENTS.md
+  owns:
+  - internal/service/**
+  synced_sha: 8a1b776e6230d469e02f453f16cc54b5d7596a1a
+  synced_at: 2026-06-09 00:00:00+00:00
+- file: internal/api/v1/AGENTS.md
+  owns:
+  - internal/api/v1/**
+  synced_sha: 8a1b776e6230d469e02f453f16cc54b5d7596a1a
+  synced_at: 2026-06-09 00:00:00+00:00
+- file: internal/temporal/workflows/invoice/AGENTS.md
+  owns:
+  - internal/temporal/workflows/invoice/**
+  - internal/temporal/activities/**
+  synced_sha: 8a1b776e6230d469e02f453f16cc54b5d7596a1a
+  synced_at: 2026-06-09 00:00:00+00:00
