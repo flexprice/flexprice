@@ -48,6 +48,8 @@ func NewFileProcessor(client httpclient.Client, logger *logger.Logger) *FileProc
 	retryClient.RetryWaitMin = 1 * time.Second
 	retryClient.RetryWaitMax = 30 * time.Second
 	retryClient.Logger = logger.GetRetryableHTTPLogger()
+	// Instrument outbound file downloads for SigNoz External API Monitoring.
+	retryClient.HTTPClient.Transport = httpclient.OtelTransport(retryClient.HTTPClient.Transport)
 
 	return &FileProcessor{
 		StreamingProcessor: NewStreamingProcessor(client, logger),
@@ -168,7 +170,8 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 
 	// Make the request with extended timeout for large file downloads
 	httpClient := &http.Client{
-		Timeout: 10 * time.Minute, // Extended timeout for large file downloads
+		Timeout:   10 * time.Minute, // Extended timeout for large file downloads
+		Transport: httpclient.OtelTransport(nil),
 	}
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
@@ -233,7 +236,8 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 	}
 
 	httpClient := &http.Client{
-		Timeout: 30 * time.Second, // Shorter timeout for HEAD requests
+		Timeout:   30 * time.Second, // Shorter timeout for HEAD requests
+		Transport: httpclient.OtelTransport(nil),
 	}
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {

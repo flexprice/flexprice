@@ -140,7 +140,13 @@ func (a *InvoiceSyncActivities) PullAndUpdatePaddleInvoice(
 				err,
 			)
 		}
-		return err
+		a.logger.Errorw("failed to pull and update Paddle invoice",
+			"invoice_id", input.InvoiceID, "error", err)
+		return temporal.NewNonRetryableApplicationError(
+			err.Error(),
+			"PullAndUpdateFailed",
+			err,
+		)
 	}
 
 	a.logger.Infow("successfully pulled and updated Paddle invoice",

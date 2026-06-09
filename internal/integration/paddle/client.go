@@ -9,6 +9,7 @@ import (
 	"github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
@@ -176,6 +177,8 @@ func (c *Client) GetSDKClient(ctx context.Context) (*paddle.SDK, *PaddleConfig, 
 	client, err := paddle.New(
 		config.APIKey,
 		paddle.WithBaseURL(baseURL),
+		// Instrument outbound Paddle API calls for SigNoz External API Monitoring.
+		paddle.WithClient(httpclient.NewOtelHTTPClient(0)),
 	)
 	if err != nil {
 		c.logger.Errorw("failed to create Paddle SDK client", "error", err)

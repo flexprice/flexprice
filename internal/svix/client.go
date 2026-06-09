@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/tracing"
 	svix "github.com/svix/svix-webhooks/go"
 	"github.com/svix/svix-webhooks/go/models"
@@ -36,6 +37,8 @@ func NewClient(config *config.Configuration, sentry *tracing.Service) (*Client, 
 
 	svixClient, err := svix.New(config.Webhook.Svix.AuthToken, &svix.SvixOptions{
 		ServerUrl: serverURL,
+		// Instrument outbound Svix API calls for SigNoz External API Monitoring.
+		HTTPClient: httpclient.NewOtelHTTPClient(0),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create svix client: %w", err)
