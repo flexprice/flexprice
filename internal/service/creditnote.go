@@ -59,7 +59,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 
 	// Start transaction
 	err := s.DB.WithTx(ctx, func(tx context.Context) error {
-		s.Logger.InfowCtx(ctx, "creating credit note",
+		s.Logger.Info(ctx, "creating credit note",
 			"invoice_id", req.InvoiceID,
 			"reason", req.Reason,
 			"line_items_count", len(req.LineItems))
@@ -101,7 +101,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		// Check if idempotency key is already used
 		if existingCreditNote, err := s.CreditNoteRepo.GetByIdempotencyKey(tx, *req.IdempotencyKey); err == nil {
 			// Return existing credit note for idempotent behavior
-			s.Logger.InfowCtx(ctx, "returning existing credit note for idempotency key",
+			s.Logger.Info(ctx, "returning existing credit note for idempotency key",
 				"idempotency_key", *req.IdempotencyKey,
 				"existing_credit_note_id", existingCreditNote.ID)
 			creditNote = existingCreditNote
@@ -122,7 +122,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 			return err
 		}
 
-		s.Logger.InfowCtx(ctx,
+		s.Logger.Info(ctx,
 			"credit note created successfully",
 			"credit_note_id", cn.ID,
 			"credit_note_number", req.CreditNoteNumber,
@@ -136,7 +136,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 	})
 
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx,
+		s.Logger.Error(ctx,
 			"failed to create credit note",
 			"error", err,
 			"invoice_id", req.InvoiceID,
@@ -266,7 +266,7 @@ func (s *creditNoteService) ListCreditNotes(ctx context.Context, filter *types.C
 				invoicesByID[inv.ID] = inv
 			}
 
-			s.Logger.DebugwCtx(ctx, "fetched invoices for credit notes", "count", len(invoicesResponse.Items))
+			s.Logger.Debug(ctx, "fetched invoices for credit notes", "count", len(invoicesResponse.Items))
 		}
 	}
 
@@ -299,7 +299,7 @@ func (s *creditNoteService) ListCreditNotes(ctx context.Context, filter *types.C
 				subscriptionsByID[sub.ID] = sub
 			}
 
-			s.Logger.DebugwCtx(ctx, "fetched subscriptions for credit notes", "count", len(subscriptionsResponse.Items))
+			s.Logger.Debug(ctx, "fetched subscriptions for credit notes", "count", len(subscriptionsResponse.Items))
 		}
 	}
 
@@ -332,7 +332,7 @@ func (s *creditNoteService) ListCreditNotes(ctx context.Context, filter *types.C
 				customersByID[cust.ID] = cust
 			}
 
-			s.Logger.DebugwCtx(ctx, "fetched customers for credit notes", "count", len(customersResponse.Items))
+			s.Logger.Debug(ctx, "fetched customers for credit notes", "count", len(customersResponse.Items))
 		}
 	}
 
@@ -421,7 +421,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 	if originalStatus == types.CreditNoteStatusFinalized {
 		invoiceService := NewInvoiceService(s.ServiceParams)
 		if err := invoiceService.RecalculateInvoiceAmounts(ctx, cn.InvoiceID); err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to recalculate invoice amounts after credit note void",
+			s.Logger.Error(ctx, "failed to recalculate invoice amounts after credit note void",
 				"error", err,
 				"credit_note_id", cn.ID,
 				"invoice_id", cn.InvoiceID)
@@ -431,7 +431,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 	// Publish webhook event after successful update
 	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 
-	s.Logger.InfowCtx(ctx, "credit note voided successfully",
+	s.Logger.Info(ctx, "credit note voided successfully",
 		"credit_note_id", id,
 		"previous_status", originalStatus)
 
@@ -539,7 +539,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 		}
 
 		if err := s.RecalculateInvoiceAmountsForCreditNote(ctx, inv, cn); err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to recalculate invoice amounts after credit note finalization",
+			s.Logger.Error(ctx, "failed to recalculate invoice amounts after credit note finalization",
 				"error", err,
 				"credit_note_id", cn.ID,
 				"invoice_id", cn.InvoiceID)
@@ -555,7 +555,7 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 	// Publish webhook event after successful transaction
 	s.publishSystemEvent(ctx, types.WebhookEventCreditNoteUpdated, cn.ID)
 
-	s.Logger.InfowCtx(ctx, "credit note processed successfully",
+	s.Logger.Info(ctx, "credit note processed successfully",
 		"credit_note_id", id,
 		"total_amount", cn.TotalAmount)
 
@@ -684,7 +684,7 @@ func (s *creditNoteService) calculateMaxCreditableAmount(ctx context.Context, in
 		maxCreditableAmount = decimal.Zero
 	}
 
-	s.Logger.DebugwCtx(ctx, "calculated max creditable amount using stored fields",
+	s.Logger.Debug(ctx, "calculated max creditable amount using stored fields",
 		"invoice_id", inv.ID,
 		"credit_note_type", creditNoteType,
 		"invoice_total", inv.Total,
@@ -762,7 +762,7 @@ func (s *creditNoteService) getCreditNoteType(inv *invoice.Invoice) (types.Credi
 func (c *creditNoteService) RecalculateInvoiceAmountsForCreditNote(ctx context.Context, inv *invoice.Invoice, cn *creditnote.CreditNote) error {
 	// Validate invoice status
 	if inv.InvoiceStatus != types.InvoiceStatusFinalized {
-		c.Logger.InfowCtx(ctx, "invoice is not finalized, skipping recalculation", "invoice_id", inv.ID)
+		c.Logger.Info(ctx, "invoice is not finalized, skipping recalculation", "invoice_id", inv.ID)
 		return nil
 	}
 
@@ -795,7 +795,7 @@ func (c *creditNoteService) RecalculateInvoiceAmountsForCreditNote(ctx context.C
 	}
 
 	// Log the changes made
-	c.Logger.InfowCtx(ctx, "invoice amounts recalculated after credit note",
+	c.Logger.Info(ctx, "invoice amounts recalculated after credit note",
 		"invoice_id", inv.ID,
 		"credit_note_id", cn.ID,
 	)
@@ -809,7 +809,7 @@ func (c *creditNoteService) publishSystemEvent(ctx context.Context, eventType st
 		TenantID:     types.GetTenantID(ctx),
 	})
 	if err != nil {
-		c.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		c.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -824,7 +824,7 @@ func (c *creditNoteService) publishSystemEvent(ctx context.Context, eventType st
 		EntityType:    types.SystemEntityTypeCreditNote,
 		EntityID:      creditNoteID,
 	}
-	c.Logger.InfowCtx(ctx, "attempting to publish webhook event",
+	c.Logger.Info(ctx, "attempting to publish webhook event",
 		"webhook_id", webhookEvent.ID,
 		"event_name", eventType,
 		"credit_note_id", creditNoteID,
@@ -833,7 +833,7 @@ func (c *creditNoteService) publishSystemEvent(ctx context.Context, eventType st
 	)
 
 	if err := c.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		c.Logger.ErrorwCtx(ctx, "failed to publish webhook event",
+		c.Logger.Error(ctx, "failed to publish webhook event",
 			"error", err,
 			"webhook_id", webhookEvent.ID,
 			"event_name", eventType,
@@ -842,7 +842,7 @@ func (c *creditNoteService) publishSystemEvent(ctx context.Context, eventType st
 		return
 	}
 
-	c.Logger.InfowCtx(ctx, "webhook event published successfully",
+	c.Logger.Info(ctx, "webhook event published successfully",
 		"webhook_id", webhookEvent.ID,
 		"event_name", eventType,
 		"credit_note_id", creditNoteID,

@@ -48,7 +48,7 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 	}
 	existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err == nil && len(existingMappings) > 0 {
-		s.logger.Debugw("invoice already synced to HubSpot",
+		s.logger.Debug(ctx, "invoice already synced to HubSpot",
 			"invoice_id", invoiceID,
 			"hubspot_invoice_id", existingMappings[0].ProviderEntityID)
 		return nil

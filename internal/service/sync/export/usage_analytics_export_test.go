@@ -66,7 +66,7 @@ func newUsageAnalyticsTestEnv(t *testing.T) *usageAnalyticsTestEnv {
 	eventRepo := testutil.NewInMemoryEventStore()
 	lineItemStore := testutil.NewInMemorySubscriptionLineItemStore()
 	analyticsGetter := newInMemoryUsageAnalyticsGetter()
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 
 	exporter := NewUsageAnalyticsExporter(customerStore, eventRepo, lineItemStore, analyticsGetter, log)
 

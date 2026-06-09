@@ -199,7 +199,7 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 		}
 		response = dto.FromWallet(w)
 
-		s.Logger.DebugwCtx(ctx, "created wallet",
+		s.Logger.Debug(ctx, "created wallet",
 			"wallet_id", w.ID,
 			"customer_id", w.CustomerID,
 			"currency", w.Currency,
@@ -439,7 +439,7 @@ func (s *walletService) loadCustomersForExpansion(ctx context.Context, expand ty
 
 	customersResponse, err := customerService.GetCustomers(ctx, customerFilter)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get customers for wallet transactions",
+		s.Logger.Error(ctx, "failed to get customers for wallet transactions",
 			"error", err,
 			"customer_ids", customerIDs)
 		return nil
@@ -451,7 +451,7 @@ func (s *walletService) loadCustomersForExpansion(ctx context.Context, expand ty
 		customersByID[cust.Customer.ID] = cust
 	}
 
-	s.Logger.DebugwCtx(ctx, "fetched customers for wallet transactions", "count", len(customersResponse.Items))
+	s.Logger.Debug(ctx, "fetched customers for wallet transactions", "count", len(customersResponse.Items))
 	return customersByID
 }
 
@@ -479,7 +479,7 @@ func (s *walletService) loadUsersForExpansion(ctx context.Context, expand types.
 
 	usersResponse, err := userService.ListUsersByFilter(ctx, userFilter)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get users for wallet transactions",
+		s.Logger.Error(ctx, "failed to get users for wallet transactions",
 			"error", err,
 			"user_ids", userIDs)
 		return nil
@@ -491,7 +491,7 @@ func (s *walletService) loadUsersForExpansion(ctx context.Context, expand types.
 		usersByID[user.ID] = user
 	}
 
-	s.Logger.DebugwCtx(ctx, "fetched users for wallet transactions", "count", len(usersResponse.Items))
+	s.Logger.Debug(ctx, "fetched users for wallet transactions", "count", len(usersResponse.Items))
 	return usersByID
 }
 
@@ -518,7 +518,7 @@ func (s *walletService) loadWalletsForExpansion(ctx context.Context, expand type
 
 	walletsResponse, err := s.GetWallets(ctx, walletFilter)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get wallets for wallet transactions",
+		s.Logger.Error(ctx, "failed to get wallets for wallet transactions",
 			"error", err,
 			"wallet_ids", walletIDs)
 		return nil
@@ -530,7 +530,7 @@ func (s *walletService) loadWalletsForExpansion(ctx context.Context, expand type
 		walletsByID[w.ID] = dto.FromWallet(w)
 	}
 
-	s.Logger.DebugwCtx(ctx, "fetched wallets for wallet transactions", "count", len(walletsResponse.Items))
+	s.Logger.Debug(ctx, "fetched wallets for wallet transactions", "count", len(walletsResponse.Items))
 	return walletsByID
 }
 
@@ -583,7 +583,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 			return nil, err
 		}
 
-		s.Logger.DebugwCtx(ctx, "created pending credit purchase with invoice",
+		s.Logger.Debug(ctx, "created pending credit purchase with invoice",
 			"wallet_id", walletID,
 			"wallet_transaction_id", walletTransactionID,
 			"invoice_id", invoiceID,
@@ -684,7 +684,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 	// Check if auto-complete is enabled
 	autoCompleteEnabled := invoiceConfig.AutoCompletePurchasedCreditTransaction
 
-	s.Logger.DebugwCtx(ctx, "processing purchased credit transaction",
+	s.Logger.Debug(ctx, "processing purchased credit transaction",
 		"wallet_id", walletID,
 		"auto_complete_enabled", autoCompleteEnabled,
 		"credits", req.CreditsToAdd.String(),
@@ -760,7 +760,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 					Mark(ierr.ErrInternal)
 			}
 
-			s.Logger.InfowCtx(ctx, "auto-completed wallet credit transaction",
+			s.Logger.Info(ctx, "auto-completed wallet credit transaction",
 				"wallet_transaction_id", tx.ID,
 				"wallet_id", walletID,
 				"credits_added", req.CreditsToAdd.String(),
@@ -835,7 +835,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		invoiceID = inv.ID
 
 		if autoCompleteEnabled {
-			s.Logger.InfowCtx(ctx, "created auto-completed credit purchase",
+			s.Logger.Info(ctx, "created auto-completed credit purchase",
 				"wallet_transaction_id", walletTransactionID,
 				"invoice_id", inv.ID,
 				"wallet_id", walletID,
@@ -844,7 +844,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 				"payment_status", paymentStatus,
 			)
 		} else {
-			s.Logger.InfowCtx(ctx, "created pending credit purchase",
+			s.Logger.Info(ctx, "created pending credit purchase",
 				"wallet_transaction_id", walletTransactionID,
 				"invoice_id", inv.ID,
 				"wallet_id", walletID,
@@ -878,7 +878,7 @@ func (s *walletService) CompletePurchasedCreditTransactionWithRetry(ctx context.
 		err := s.completePurchasedCreditTransaction(ctx, walletTransactionID)
 		if err == nil {
 			if attempt > 0 {
-				s.Logger.InfowCtx(ctx, "successfully completed purchased credit transaction after retry",
+				s.Logger.Info(ctx, "successfully completed purchased credit transaction after retry",
 					"wallet_transaction_id", walletTransactionID,
 					"attempt", attempt+1,
 				)
@@ -895,7 +895,7 @@ func (s *walletService) CompletePurchasedCreditTransactionWithRetry(ctx context.
 
 		// Log retry attempt
 		if attempt < maxRetries-1 {
-			s.Logger.DebugwCtx(ctx, "failed to complete purchased credit transaction, retrying",
+			s.Logger.Debug(ctx, "failed to complete purchased credit transaction, retrying",
 				"error", err,
 				"wallet_transaction_id", walletTransactionID,
 				"attempt", attempt+1,
@@ -907,7 +907,7 @@ func (s *walletService) CompletePurchasedCreditTransactionWithRetry(ctx context.
 	}
 
 	// All retries failed
-	s.Logger.ErrorwCtx(ctx, "failed to complete purchased credit transaction after all retries",
+	s.Logger.Error(ctx, "failed to complete purchased credit transaction after all retries",
 		"error", lastErr,
 		"wallet_transaction_id", walletTransactionID,
 		"attempts", maxRetries,
@@ -927,13 +927,13 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 
 	// Validate transaction state
 	if tx.TxStatus != types.TransactionStatusPending {
-		s.Logger.DebugwCtx(ctx, "wallet transaction is not pending",
+		s.Logger.Debug(ctx, "wallet transaction is not pending",
 			"wallet_transaction_id", walletTransactionID,
 			"current_status", tx.TxStatus,
 		)
 		// If already completed (e.g., via auto-complete setting), this is idempotent - return success
 		if tx.TxStatus == types.TransactionStatusCompleted {
-			s.Logger.DebugwCtx(ctx, "wallet transaction already completed",
+			s.Logger.Debug(ctx, "wallet transaction already completed",
 				"wallet_transaction_id", walletTransactionID,
 			)
 			return nil
@@ -1000,7 +1000,7 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 				Mark(ierr.ErrInternal)
 		}
 
-		s.Logger.InfowCtx(ctx, "completed purchased credit transaction",
+		s.Logger.Info(ctx, "completed purchased credit transaction",
 			"wallet_transaction_id", walletTransactionID,
 			"wallet_id", tx.WalletID,
 			"credits_added", tx.CreditAmount.String(),
@@ -1020,7 +1020,7 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 	// Log credit balance alert after transaction completes
 	if err := s.logCreditBalanceAlert(ctx, w, w.CreditBalance.Add(tx.CreditAmount)); err != nil {
 		// Don't fail the transaction if alert logging fails
-		s.Logger.ErrorwCtx(ctx, "failed to log credit balance alert after completing purchased credit transaction",
+		s.Logger.Error(ctx, "failed to log credit balance alert after completing purchased credit transaction",
 			"error", err,
 			"wallet_id", w.ID,
 		)
@@ -1049,7 +1049,7 @@ func (s *walletService) logCreditBalanceAlert(ctx context.Context, w *wallet.Wal
 		settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 		walletAlertSettings, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to get wallet alert config from tenant settings",
+			s.Logger.Error(ctx, "failed to get wallet alert config from tenant settings",
 				"error", err,
 				"wallet_id", w.ID,
 			)
@@ -1070,7 +1070,7 @@ func (s *walletService) logCreditBalanceAlert(ctx context.Context, w *wallet.Wal
 	var err error
 	alertStatus, err = alertSettings.AlertState(newCreditBalance)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to determine alert status",
+		s.Logger.Error(ctx, "failed to determine alert status",
 			"error", err,
 			"wallet_id", w.ID,
 			"new_credit_balance", newCreditBalance,
@@ -1104,7 +1104,7 @@ func (s *walletService) logCreditBalanceAlert(ctx context.Context, w *wallet.Wal
 	}
 
 	if err := alertService.LogAlert(ctx, logAlertReq); err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to log credit balance alert",
+		s.Logger.Error(ctx, "failed to log credit balance alert",
 			"error", err,
 			"wallet_id", w.ID,
 			"new_credit_balance", newCreditBalance,
@@ -1114,7 +1114,7 @@ func (s *walletService) logCreditBalanceAlert(ctx context.Context, w *wallet.Wal
 		return err
 	}
 
-	s.Logger.InfowCtx(ctx, "credit balance alert logged successfully",
+	s.Logger.Info(ctx, "credit balance alert logged successfully",
 		"wallet_id", w.ID,
 		"new_credit_balance", newCreditBalance,
 		"alert_settings", alertSettings,
@@ -1184,11 +1184,11 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
 			if sub.Currency != w.Currency {
-				s.Logger.InfowCtx(ctx, "skipping subscription - currency mismatch")
+				s.Logger.Info(ctx, "skipping subscription - currency mismatch")
 				continue
 			}
 			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
-				s.Logger.InfowCtx(ctx, "skipping subscription - not a standalone or parent subscription")
+				s.Logger.Info(ctx, "skipping subscription - not a standalone or parent subscription")
 				continue
 			}
 
@@ -1223,7 +1223,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 				return nil, err
 			}
 
-			s.Logger.InfowCtx(ctx, "subscription charges details",
+			s.Logger.Info(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
 				"usage_total", usageResult.TotalAmount,
 				"num_usage_charges", len(usageResult.LineItems))
@@ -1251,7 +1251,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 	// Calculate real-time balance: wallet balance minus pending charges
 	realTimeBalance := w.Balance.Sub(totalPendingCharges)
 
-	s.Logger.DebugwCtx(ctx, "detailed balance calculation",
+	s.Logger.Debug(ctx, "detailed balance calculation",
 		"wallet_id", w.ID,
 		"wallet_type", w.WalletType,
 		"current_balance", w.Balance,
@@ -1557,7 +1557,7 @@ func (s *walletService) convertToPostpaid(ctx context.Context, id string) (*dto.
 				Mark(ierr.ErrDatabase)
 		}
 
-		s.Logger.InfowCtx(ctx, "created postpaid wallet during conversion",
+		s.Logger.Info(ctx, "created postpaid wallet during conversion",
 			"new_wallet_id", newWallet.ID,
 			"original_wallet_id", originalWallet.ID,
 			"customer_id", originalWallet.CustomerID,
@@ -1594,7 +1594,7 @@ func (s *walletService) convertToPostpaid(ctx context.Context, id string) (*dto.
 			newWallet.CreditBalance = newWallet.CreditBalance.Add(creditsTransferred)
 			newWallet.Balance = s.GetCurrencyAmountFromCredits(newWallet.CreditBalance, newWallet.ConversionRate)
 
-			s.Logger.InfowCtx(ctx, "transferred credits during wallet conversion",
+			s.Logger.Info(ctx, "transferred credits during wallet conversion",
 				"new_wallet_id", newWallet.ID,
 				"original_wallet_id", originalWallet.ID,
 				"credits_transferred", creditsTransferred,
@@ -1758,7 +1758,7 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 
 // processWalletOperation handles both credit and debit operations
 func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.WalletOperation) error {
-	s.Logger.DebugwCtx(ctx, "Processing wallet operation", "req", req)
+	s.Logger.Debug(ctx, "Processing wallet operation", "req", req)
 
 	var w *wallet.Wallet
 	var tx *wallet.Transaction
@@ -1865,7 +1865,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 			return err
 		}
 
-		s.Logger.DebugwCtx(ctx, "Wallet operation completed")
+		s.Logger.Debug(ctx, "Wallet operation completed")
 		return nil
 	})
 	if err != nil {
@@ -1887,7 +1887,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		WalletID:              req.WalletID,
 	}
 	if err := walletBalanceAlertSvc.PublishEvent(ctx, event); err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to publish wallet balance alert event",
+		s.Logger.Error(ctx, "failed to publish wallet balance alert event",
 			"error", err,
 			"customer_id", w.CustomerID,
 			"wallet_id", req.WalletID,
@@ -1897,14 +1897,14 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	// Log credit balance alert after wallet operation
 	if err := s.logCreditBalanceAlert(ctx, w, newCreditBalance); err != nil {
 		// Don't fail the transaction if alert logging fails
-		s.Logger.ErrorwCtx(ctx, "failed to log credit balance alert after wallet operation",
+		s.Logger.Error(ctx, "failed to log credit balance alert after wallet operation",
 			"error", err,
 			"wallet_id", w.ID,
 		)
 	}
 
 	if err := s.CheckWalletBalanceAlert(ctx, event); err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to check wallet balance alert after wallet operation",
+		s.Logger.Error(ctx, "failed to check wallet balance alert after wallet operation",
 			"error", err,
 			"wallet_id", req.WalletID,
 			"customer_id", w.CustomerID,
@@ -2020,7 +2020,7 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 		return types.CreditExpirySkipReasonNone, err
 	}
 	if len(subscriptions) > 0 {
-		s.Logger.WarnwCtx(ctx, "there is a subscription for this customer with current_period_end < now and credits available to expire",
+		s.Logger.Warn(ctx, "there is a subscription for this customer with current_period_end < now and credits available to expire",
 			"transaction_id", tx.ID,
 			"subscription_id", subscriptions[0].ID,
 			"credits_available", tx.CreditsAvailable,
@@ -2046,7 +2046,7 @@ func (s *walletService) shouldSkipCreditExpiryDueToActiveSubscriptionOrInvoice(c
 		return types.CreditExpirySkipReasonNone, err
 	}
 	if len(invoices) > 0 {
-		s.Logger.WarnwCtx(ctx, "there is an invoice for this customer with current_period_end < now and credits available to expire",
+		s.Logger.Warn(ctx, "there is an invoice for this customer with current_period_end < now and credits available to expire",
 			"transaction_id", tx.ID,
 			"invoice_id", invoices[0].ID,
 		)
@@ -2065,7 +2065,7 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 	})
 
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -2081,7 +2081,7 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 		EntityID:      walletID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
 
@@ -2101,7 +2101,7 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 	})
 
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -2117,7 +2117,7 @@ func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Conte
 		EntityID:      transactionID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
 
@@ -2230,14 +2230,14 @@ func (s *walletService) UpdateWalletAlertState(ctx context.Context, walletID str
 // PublishEvent publishes a webhook event for a wallet
 func (s *walletService) PublishEvent(ctx context.Context, eventName types.WebhookEventName, w *wallet.Wallet) error {
 	if s.WebhookPublisher == nil {
-		s.Logger.WarnwCtx(ctx, "webhook publisher not initialized", "event", eventName)
+		s.Logger.Warn(ctx, "webhook publisher not initialized", "event", eventName)
 		return nil
 	}
 
 	// Get real-time balance
 	balance, err := s.GetWalletBalanceV2(ctx, w.ID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get wallet balance for webhook",
+		s.Logger.Error(ctx, "failed to get wallet balance for webhook",
 			"wallet_id", w.ID,
 			"error", err,
 		)
@@ -2271,7 +2271,7 @@ func (s *walletService) PublishEvent(ctx context.Context, eventName types.Webhoo
 			AlertType:      getAlertType(eventName),
 		}
 
-		s.Logger.InfowCtx(ctx, "added alert info to webhook event",
+		s.Logger.Info(ctx, "added alert info to webhook event",
 			"wallet_id", w.ID,
 			"alert_state", w.AlertState,
 			"alert_type", getAlertType(eventName),
@@ -2301,7 +2301,7 @@ func (s *walletService) PublishEvent(ctx context.Context, eventName types.Webhoo
 		EntityID:      w.ID,
 	}
 
-	s.Logger.InfowCtx(ctx, "publishing webhook event",
+	s.Logger.Info(ctx, "publishing webhook event",
 		"event_id", webhookEvent.ID,
 		"event_name", eventName,
 		"wallet_id", w.ID,
@@ -2340,7 +2340,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 		creditBalance = &w.CreditBalance
 	}
 
-	s.Logger.InfowCtx(ctx, "checking balance thresholds",
+	s.Logger.Info(ctx, "checking balance thresholds",
 		"wallet_id", w.ID,
 		"alert_settings", alertSettings,
 		"current_balance", currentBalance,
@@ -2351,7 +2351,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	// Determine alert status for current balance
 	currentBalanceAlertStatus, err := alertSettings.AlertState(*currentBalance)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to determine current balance alert status",
+		s.Logger.Error(ctx, "failed to determine current balance alert status",
 			"wallet_id", w.ID,
 			"error", err,
 		)
@@ -2361,7 +2361,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	// Determine alert status for credit balance
 	creditBalanceAlertStatus, err := alertSettings.AlertState(*creditBalance)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to determine credit balance alert status",
+		s.Logger.Error(ctx, "failed to determine credit balance alert status",
 			"wallet_id", w.ID,
 			"error", err,
 		)
@@ -2375,7 +2375,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 
 	// Handle balance recovery (all balances are OK)
 	if !isAnyBalanceInAlert {
-		s.Logger.InfowCtx(ctx, "all balances OK - checking recovery",
+		s.Logger.Info(ctx, "all balances OK - checking recovery",
 			"wallet_id", w.ID,
 			"alert_settings", alertSettings,
 			"current_balance", currentBalance,
@@ -2386,13 +2386,13 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 		// If current state is alert, update to ok (recovery)
 		if w.AlertState == types.AlertStateInAlarm {
 			if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateOk); err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to update wallet alert state",
+				s.Logger.Error(ctx, "failed to update wallet alert state",
 					"wallet_id", w.ID,
 					"error", err,
 				)
 				return err
 			}
-			s.Logger.InfowCtx(ctx, "wallet recovered from alert state",
+			s.Logger.Info(ctx, "wallet recovered from alert state",
 				"wallet_id", w.ID,
 			)
 			return s.PublishEvent(ctx, types.WebhookEventWalletUpdated, w)
@@ -2402,13 +2402,13 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 
 	// Skip if already in alert state
 	if w.AlertState == types.AlertStateInAlarm {
-		s.Logger.InfowCtx(ctx, "skipping alert - already in alert state",
+		s.Logger.Info(ctx, "skipping alert - already in alert state",
 			"wallet_id", w.ID,
 		)
 		return nil
 	}
 
-	s.Logger.InfowCtx(ctx, "balance triggered alert - updating state",
+	s.Logger.Info(ctx, "balance triggered alert - updating state",
 		"wallet_id", w.ID,
 		"alert_settings", alertSettings,
 		"current_balance", currentBalance,
@@ -2419,7 +2419,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 
 	// Update wallet state to alert
 	if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateInAlarm); err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to update wallet alert state",
+		s.Logger.Error(ctx, "failed to update wallet alert state",
 			"wallet_id", w.ID,
 			"error", err,
 		)
@@ -2429,13 +2429,13 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	// Trigger alerts based on which balance triggered an alert
 	var errs []error
 	if isCreditBalanceInAlert {
-		s.Logger.InfowCtx(ctx, "triggering credit balance alert",
+		s.Logger.Info(ctx, "triggering credit balance alert",
 			"wallet_id", w.ID,
 			"credit_balance", creditBalance,
 			"alert_status", creditBalanceAlertStatus,
 		)
 		if err := s.PublishEvent(ctx, types.WebhookEventWalletCreditBalanceDropped, w); err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to publish credit balance alert",
+			s.Logger.Error(ctx, "failed to publish credit balance alert",
 				"wallet_id", w.ID,
 				"error", err,
 			)
@@ -2443,13 +2443,13 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 		}
 	}
 	if isCurrentBalanceInAlert {
-		s.Logger.InfowCtx(ctx, "triggering ongoing balance alert",
+		s.Logger.Info(ctx, "triggering ongoing balance alert",
 			"wallet_id", w.ID,
 			"balance", currentBalance,
 			"alert_status", currentBalanceAlertStatus,
 		)
 		if err := s.PublishEvent(ctx, types.WebhookEventWalletOngoingBalanceDropped, w); err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to publish ongoing balance alert",
+			s.Logger.Error(ctx, "failed to publish ongoing balance alert",
 				"wallet_id", w.ID,
 				"error", err,
 			)
@@ -2516,7 +2516,7 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 
 	// Create a new prepaid wallet if none exists
 	if selectedWallet == nil {
-		s.Logger.InfowCtx(ctx, "creating new prepaid wallet for proration credit",
+		s.Logger.Info(ctx, "creating new prepaid wallet for proration credit",
 			"customer_id", customerID,
 			"currency", currency,
 			"amount", amount.String())
@@ -2569,7 +2569,7 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.InfowCtx(ctx, "successfully topped up wallet for proration credit",
+	s.Logger.Info(ctx, "successfully topped up wallet for proration credit",
 		"customer_id", customerID,
 		"wallet_id", selectedWallet.ID,
 		"amount", amount.String(),
@@ -2641,11 +2641,11 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
 			if sub.Currency != w.Currency {
-				s.Logger.InfowCtx(ctx, "skipping subscription - currency mismatch")
+				s.Logger.Info(ctx, "skipping subscription - currency mismatch")
 				continue
 			}
 			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
-				s.Logger.InfowCtx(ctx, "skipping subscription - not a standalone or parent subscription")
+				s.Logger.Info(ctx, "skipping subscription - not a standalone or parent subscription")
 				continue
 			}
 
@@ -2693,7 +2693,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 				return nil, err
 			}
 
-			s.Logger.InfowCtx(ctx, "subscription charges details",
+			s.Logger.Info(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
 				"usage_total", featureUsageResult.TotalAmount,
 				"num_usage_charges", len(featureUsageResult.LineItems))
@@ -2721,7 +2721,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	// Calculate real-time balance: wallet balance minus pending charges
 	realTimeBalance := w.Balance.Sub(totalPendingCharges)
 
-	s.Logger.DebugwCtx(ctx, "detailed balance calculation",
+	s.Logger.Debug(ctx, "detailed balance calculation",
 		"wallet_id", w.ID,
 		"wallet_type", w.WalletType,
 		"current_balance", w.Balance,
@@ -2790,7 +2790,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 	totalPendingCharges := decimal.Zero
 	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, walletID, maxLiveSeconds)
 	if cachedBalance != nil {
-		s.Logger.InfowCtx(ctx, "using cached real-time balance",
+		s.Logger.Info(ctx, "using cached real-time balance",
 			"wallet_id", walletID,
 			"cached_balance", cachedBalance,
 		)
@@ -2816,11 +2816,11 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		filteredSubscriptions := make([]*subscription.Subscription, 0)
 		for _, sub := range subscriptions {
 			if sub.Currency != w.Currency {
-				s.Logger.InfowCtx(ctx, "skipping subscription - currency mismatch")
+				s.Logger.Info(ctx, "skipping subscription - currency mismatch")
 				continue
 			}
 			if sub.SubscriptionType != types.SubscriptionTypeStandalone && sub.SubscriptionType != types.SubscriptionTypeParent {
-				s.Logger.InfowCtx(ctx, "skipping subscription - not a standalone or parent subscription")
+				s.Logger.Info(ctx, "skipping subscription - not a standalone or parent subscription")
 				continue
 			}
 
@@ -2878,7 +2878,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 				return nil, err
 			}
 
-			s.Logger.InfowCtx(ctx, "subscription charges details",
+			s.Logger.Info(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
 				"usage_total", featureUsageResult.TotalAmount,
 				"num_usage_charges", len(featureUsageResult.LineItems))
@@ -2906,7 +2906,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 	// Calculate real-time balance
 	realTimeBalance := w.Balance.Sub(totalPendingCharges)
 
-	s.Logger.DebugwCtx(ctx, "detailed balance calculation",
+	s.Logger.Debug(ctx, "detailed balance calculation",
 		"wallet_id", w.ID,
 		"current_balance", w.Balance,
 		"pending_charges", totalPendingCharges,
@@ -3014,7 +3014,7 @@ func (s *walletService) processFeatureWalletBalanceAlert(ctx context.Context, w 
 	for _, feature := range featuresWithAlerts {
 		alertStatus, err := feature.AlertSettings.AlertState(ongoingBalance)
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to determine feature alert status",
+			s.Logger.Error(ctx, "failed to determine feature alert status",
 				"feature_id", feature.ID,
 				"feature_name", feature.Name,
 				"wallet_id", w.ID,
@@ -3024,7 +3024,7 @@ func (s *walletService) processFeatureWalletBalanceAlert(ctx context.Context, w 
 			continue
 		}
 
-		s.Logger.DebugwCtx(ctx, "feature alert status determined",
+		s.Logger.Debug(ctx, "feature alert status determined",
 			"feature_id", feature.ID,
 			"feature_name", feature.Name,
 			"wallet_id", w.ID,
@@ -3050,7 +3050,7 @@ func (s *walletService) processFeatureWalletBalanceAlert(ctx context.Context, w 
 			},
 		})
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to log feature alert",
+			s.Logger.Error(ctx, "failed to log feature alert",
 				"feature_id", feature.ID,
 				"wallet_id", w.ID,
 				"alert_status", alertStatus,
@@ -3059,7 +3059,7 @@ func (s *walletService) processFeatureWalletBalanceAlert(ctx context.Context, w 
 			continue
 		}
 
-		s.Logger.DebugwCtx(ctx, "feature alert check completed",
+		s.Logger.Debug(ctx, "feature alert check completed",
 			"feature_id", feature.ID,
 			"wallet_id", w.ID,
 			"alert_status", alertStatus,
@@ -3074,7 +3074,7 @@ func (s *walletService) processFeatureWalletBalanceAlert(ctx context.Context, w 
 func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal, alertSettings *types.AlertSettings, alertLogsService AlertLogsService, eventID string) error {
 	alertStatus, err := alertSettings.AlertState(ongoingBalance)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to determine wallet alert status",
+		s.Logger.Error(ctx, "failed to determine wallet alert status",
 			"wallet_id", w.ID,
 			"ongoing_balance", ongoingBalance,
 			"error", err,
@@ -3082,7 +3082,7 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 		return err
 	}
 
-	s.Logger.InfowCtx(ctx, "ongoing balance alert check - determined status",
+	s.Logger.Info(ctx, "ongoing balance alert check - determined status",
 		"wallet_id", w.ID,
 		"ongoing_balance", ongoingBalance,
 		"alert_settings", alertSettings,
@@ -3108,7 +3108,7 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 		},
 	})
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to log ongoing balance alert",
+		s.Logger.Error(ctx, "failed to log ongoing balance alert",
 			"error", err,
 			"wallet_id", w.ID,
 			"alert_type", types.AlertTypeLowOngoingBalance,
@@ -3120,7 +3120,7 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 		return err
 	}
 
-	s.Logger.InfowCtx(ctx, "successfully logged ongoing balance alert",
+	s.Logger.Info(ctx, "successfully logged ongoing balance alert",
 		"wallet_id", w.ID,
 		"alert_status", alertStatus,
 		"ongoing_balance", ongoingBalance,
@@ -3130,7 +3130,7 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 
 	currentWallet, err := s.WalletRepo.GetWalletByID(ctx, w.ID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get wallet for alert state update",
+		s.Logger.Error(ctx, "failed to get wallet for alert state update",
 			"error", err,
 			"wallet_id", w.ID,
 			"event_id", eventID,
@@ -3139,14 +3139,14 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 	}
 
 	if currentWallet.AlertState != alertStatus {
-		s.Logger.DebugwCtx(ctx, "updating wallet alert state",
+		s.Logger.Debug(ctx, "updating wallet alert state",
 			"wallet_id", w.ID,
 			"old_state", currentWallet.AlertState,
 			"new_state", alertStatus,
 			"event_id", eventID,
 		)
 		if err := s.UpdateWalletAlertState(ctx, w.ID, alertStatus); err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to update wallet alert state",
+			s.Logger.Error(ctx, "failed to update wallet alert state",
 				"error", err,
 				"wallet_id", w.ID,
 				"old_state", currentWallet.AlertState,
@@ -3155,21 +3155,21 @@ func (s *walletService) processWalletBalanceAlert(ctx context.Context, w *wallet
 			)
 			return err
 		}
-		s.Logger.InfowCtx(ctx, "wallet alert state updated successfully",
+		s.Logger.Info(ctx, "wallet alert state updated successfully",
 			"wallet_id", w.ID,
 			"old_state", currentWallet.AlertState,
 			"new_state", alertStatus,
 			"event_id", eventID,
 		)
 	} else {
-		s.Logger.DebugwCtx(ctx, "wallet alert state unchanged, skipping update",
+		s.Logger.Debug(ctx, "wallet alert state unchanged, skipping update",
 			"wallet_id", w.ID,
 			"current_state", currentWallet.AlertState,
 			"event_id", eventID,
 		)
 	}
 
-	s.Logger.InfowCtx(ctx, "wallet ongoing balance alert check completed",
+	s.Logger.Info(ctx, "wallet ongoing balance alert check completed",
 		"wallet_id", w.ID,
 		"alert_status", alertStatus,
 		"event_id", eventID,
@@ -3183,7 +3183,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, req.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxTenantID, req.TenantID)
 
-	s.Logger.InfowCtx(ctx, "checking wallet balance alerts",
+	s.Logger.Info(ctx, "checking wallet balance alerts",
 		"event_id", req.ID,
 		"customer_id", req.CustomerID,
 		"tenant_id", req.TenantID,
@@ -3197,7 +3197,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 	// Get active wallets for this customer
 	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, req.CustomerID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get wallets for customer",
+		s.Logger.Error(ctx, "failed to get wallets for customer",
 			"error", err,
 			"customer_id", req.CustomerID,
 			"event_id", req.ID,
@@ -3206,7 +3206,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 	}
 
 	if len(wallets) == 0 {
-		s.Logger.InfowCtx(ctx, "no wallets found for customer",
+		s.Logger.Info(ctx, "no wallets found for customer",
 			"customer_id", req.CustomerID,
 			"event_id", req.ID,
 		)
@@ -3216,7 +3216,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 	// Fetch features with alert settings
 	featuresWithAlerts, err := s.fetchFeaturesWithAlertSettings(ctx)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to fetch features with alert settings",
+		s.Logger.Error(ctx, "failed to fetch features with alert settings",
 			"error", err,
 		)
 	}
@@ -3228,7 +3228,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 
 	// Process each wallet
 	for _, w := range wallets {
-		s.Logger.DebugwCtx(ctx, "processing wallet for alert check",
+		s.Logger.Debug(ctx, "processing wallet for alert check",
 			"wallet_id", w.ID,
 			"customer_id", w.CustomerID,
 			"has_wallet_alert_settings", w.AlertSettings != nil,
@@ -3239,7 +3239,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		walletAlertsEnabled := false
 		alertSettings, err := s.resolveWalletAlertSettings(ctx, w, settingsSvc)
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to resolve wallet alert settings, alert checks will be skipped",
+			s.Logger.Error(ctx, "failed to resolve wallet alert settings, alert checks will be skipped",
 				"error", err,
 				"wallet_id", w.ID,
 				"event_id", req.ID,
@@ -3253,7 +3253,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 
 		// Skip wallet if neither wallet alert, feature alert, nor auto top-up are enabled
 		if !walletAlertsEnabled && !featureAlertsEnabled && !autoTopupEnabled {
-			s.Logger.DebugwCtx(ctx, "skipping balance alert check for wallet — wallet alerts, feature alerts, and auto top-up are all disabled; no action required",
+			s.Logger.Debug(ctx, "skipping balance alert check for wallet — wallet alerts, feature alerts, and auto top-up are all disabled; no action required",
 				"wallet_id", w.ID,
 				"customer_id", w.CustomerID,
 				"event_id", req.ID,
@@ -3270,7 +3270,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			balance, err = s.GetWalletBalanceV2(ctx, w.ID)
 		}
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to get wallet balance, skipping wallet",
+			s.Logger.Error(ctx, "failed to get wallet balance, skipping wallet",
 				"error", err,
 				"wallet_id", w.ID,
 				"event_id", req.ID,
@@ -3286,7 +3286,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		// CheckWalletBalanceAlert call that fires inside processWalletOperation
 		// during the top-up credit will then log the post-topup state (ok).
 		if walletAlertsEnabled {
-			s.Logger.InfowCtx(ctx, "wallet balance details for alert check",
+			s.Logger.Info(ctx, "wallet balance details for alert check",
 				"wallet_id", w.ID,
 				"real_time_balance", balance.RealTimeBalance,
 				"wallet_current_balance", balance.Wallet.Balance,
@@ -3297,7 +3297,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			)
 
 			if err := s.processWalletBalanceAlert(ctx, w, ongoingBalance, alertSettings, alertLogsService, req.ID); err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to process wallet balance alert",
+				s.Logger.Error(ctx, "failed to process wallet balance alert",
 					"error", err,
 					"wallet_id", w.ID,
 					"event_id", req.ID,
@@ -3308,7 +3308,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		// Process feature-level alerts if enabled
 		if featureAlertsEnabled {
 			if err := s.processFeatureWalletBalanceAlert(ctx, w, ongoingBalance, featuresWithAlerts, alertLogsService); err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to process feature wallet balance alerts",
+				s.Logger.Error(ctx, "failed to process feature wallet balance alerts",
 					"error", err,
 					"wallet_id", w.ID,
 					"event_id", req.ID,
@@ -3321,7 +3321,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		// the top-up credit will record the recovered (ok) state automatically.
 		if autoTopupEnabled {
 			if err := s.triggerAutoTopup(ctx, w, ongoingBalance); err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to trigger auto top-up",
+				s.Logger.Error(ctx, "failed to trigger auto top-up",
 					"error", err,
 					"wallet_id", w.ID,
 				)
@@ -3329,7 +3329,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		}
 	}
 
-	s.Logger.InfowCtx(ctx, "completed wallet balance alert check for customer",
+	s.Logger.Info(ctx, "completed wallet balance alert check for customer",
 		"customer_id", req.CustomerID,
 		"wallets_processed", len(wallets),
 		"event_id", req.ID,
@@ -3355,7 +3355,7 @@ func (s *walletService) PublishWalletBalanceAlertEvent(ctx context.Context, cust
 
 	err := walletBalanceAlertService.PublishEvent(ctx, event)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to publish wallet balance alert event",
+		s.Logger.Error(ctx, "failed to publish wallet balance alert event",
 			"error", err,
 			"customer_id", customerID,
 			"force_calculate_balance", forceCalculateBalance,
@@ -3391,7 +3391,7 @@ func (s *walletService) hasPendingAutoTopupInvoice(ctx context.Context, customer
 func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
 
 	if w.AutoTopup == nil || w.AutoTopup.Enabled == nil || !*w.AutoTopup.Enabled {
-		s.Logger.DebugwCtx(ctx, "auto top-up not enabled, skipping",
+		s.Logger.Debug(ctx, "auto top-up not enabled, skipping",
 			"wallet_id", w.ID,
 		)
 		return nil
@@ -3407,7 +3407,7 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 		if isInvoiced {
 			hasPending, err := s.hasPendingAutoTopupInvoice(ctx, w.CustomerID)
 			if err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to check for pending auto-topup invoice",
+				s.Logger.Error(ctx, "failed to check for pending auto-topup invoice",
 					"error", err,
 					"wallet_id", w.ID,
 					"customer_id", w.CustomerID,
@@ -3415,7 +3415,7 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 				return err
 			}
 			if hasPending {
-				s.Logger.InfowCtx(ctx, "pending auto-topup invoice exists, skipping",
+				s.Logger.Info(ctx, "pending auto-topup invoice exists, skipping",
 					"wallet_id", w.ID,
 					"customer_id", w.CustomerID,
 					"auto_topup_threshold", *w.AutoTopup.Threshold,
@@ -3443,7 +3443,7 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			Metadata:          types.Metadata{"auto_topup": "true"},
 		})
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to top up wallet for auto top-up",
+			s.Logger.Error(ctx, "failed to top up wallet for auto top-up",
 				"error", err,
 				"wallet_id", w.ID,
 				"auto_topup_threshold", *w.AutoTopup.Threshold,
@@ -3451,7 +3451,7 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 			)
 			return err
 		}
-		s.Logger.DebugwCtx(ctx, "auto top-up triggered",
+		s.Logger.Debug(ctx, "auto top-up triggered",
 			"wallet_id", w.ID,
 			"auto_topup_threshold", *w.AutoTopup.Threshold,
 			"auto_topup_amount", *w.AutoTopup.Amount,
@@ -3459,7 +3459,7 @@ func (s *walletService) triggerAutoTopup(ctx context.Context, w *wallet.Wallet, 
 		)
 	}
 
-	s.Logger.InfowCtx(ctx, "auto top-up check completed",
+	s.Logger.Info(ctx, "auto top-up check completed",
 		"wallet_id", w.ID,
 		"ongoing_balance", ongoingBalance,
 		"auto_topup_threshold", *w.AutoTopup.Threshold,
@@ -3523,7 +3523,7 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 
 		if cacheAge > maxAge {
 			// Cache entry is too old, treat as miss
-			s.Logger.InfowCtx(ctx, "cache entry exceeds max-live, treating as miss",
+			s.Logger.Info(ctx, "cache entry exceeds max-live, treating as miss",
 				"wallet_id", walletID,
 				"cache_age_seconds", cacheAge.Seconds(),
 				"max_live_seconds", *maxLiveSeconds,
@@ -3564,7 +3564,7 @@ func (s *walletService) publishBenchmarkEvent(ctx context.Context, subscriptionI
 		EnvironmentID:  types.GetEnvironmentID(ctx),
 	}
 	if err := benchSvc.PublishEvent(ctx, evt); err != nil {
-		s.Logger.WarnwCtx(ctx, "usage benchmark: failed to publish event",
+		s.Logger.Warn(ctx, "usage benchmark: failed to publish event",
 			"subscription_id", subscriptionID,
 			"error", err,
 		)

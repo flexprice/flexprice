@@ -30,13 +30,13 @@ type Exporter interface {
 
 // ExportService handles export operations for different entity types
 type ExportService struct {
-	featureUsageRepo     events.FeatureUsageRepository
-	meterUsageRepo       events.MeterUsageRepository
-	priceRepo            price.Repository
-	invoiceRepo          invoice.Repository
-	walletRepo           wallet.Repository
-	walletBalanceGetter  WalletBalanceGetter
-	customerRepo         customer.Repository
+	featureUsageRepo         events.FeatureUsageRepository
+	meterUsageRepo           events.MeterUsageRepository
+	priceRepo                price.Repository
+	invoiceRepo              invoice.Repository
+	walletRepo               wallet.Repository
+	walletBalanceGetter      WalletBalanceGetter
+	customerRepo             customer.Repository
 	usageAnalyticsGetter     UsageAnalyticsGetter
 	connectionRepo           connection.Repository
 	integrationFactory       *integration.Factory
@@ -109,7 +109,7 @@ func NewExportServiceWithWallet(
 
 // Export routes the export request to the appropriate entity exporter
 func (s *ExportService) Export(ctx context.Context, request *dto.ExportRequest) (*dto.ExportResponse, error) {
-	s.logger.Infow("starting export",
+	s.logger.Info(ctx, "starting export",
 		"entity_type", request.EntityType,
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
@@ -183,7 +183,7 @@ func (s *ExportService) uploadToS3(ctx context.Context, request *dto.ExportReque
 			Mark(ierr.ErrValidation)
 	}
 
-	s.logger.Infow("uploading to S3",
+	s.logger.Info(ctx, "uploading to S3",
 		"connection_id", request.ConnectionID,
 		"bucket", request.JobConfig.Bucket,
 		"region", request.JobConfig.Region)
@@ -218,7 +218,7 @@ func (s *ExportService) uploadToS3(ctx context.Context, request *dto.ExportReque
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Infow("successfully uploaded to S3",
+	s.logger.Info(ctx, "successfully uploaded to S3",
 		"file_url", uploadResponse.FileURL,
 		"file_size_bytes", uploadResponse.FileSizeBytes)
 

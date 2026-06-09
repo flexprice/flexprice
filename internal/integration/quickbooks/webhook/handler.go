@@ -53,7 +53,7 @@ func (h *Handler) VerifyWebhookSignature(ctx context.Context, payload []byte, si
 	// Get the decrypted QuickBooks config (which includes webhook verifier token)
 	qbConfig, err := h.client.GetDecryptedQuickBooksConfig(conn)
 	if err != nil {
-		h.logger.Errorw("failed to decrypt QuickBooks config",
+		h.logger.Error(ctx, "failed to decrypt QuickBooks config",
 			"error", err,
 			"connection_id", conn.ID)
 		return ierr.NewError("failed to get QuickBooks configuration").
@@ -81,7 +81,7 @@ func (h *Handler) VerifyWebhookSignature(ctx context.Context, payload []byte, si
 			Mark(ierr.ErrPermissionDenied)
 	}
 
-	h.logger.Infow("webhook signature verified successfully", "connection_id", conn.ID)
+	h.logger.Info(ctx, "webhook signature verified successfully", "connection_id", conn.ID)
 
 	return nil
 }
@@ -91,7 +91,7 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 	// Parse webhook payload
 	var webhookPayload QuickBooksWebhookPayload
 	if err := json.Unmarshal(payload, &webhookPayload); err != nil {
-		h.logger.Errorw("failed to parse webhook payload",
+		h.logger.Error(ctx, "failed to parse webhook payload",
 			"error", err)
 		return ierr.WithError(err).
 			WithHint("Invalid webhook payload format").
@@ -102,14 +102,14 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 	for _, notification := range webhookPayload.EventNotifications {
 		realmID := notification.RealmID
 
-		h.logger.Debugw("processing webhook notification",
+		h.logger.Debug(ctx, "processing webhook notification",
 			"realm_id", realmID,
 			"entities_count", len(notification.DataChangeEvent.Entities))
 
 		// Verify realm ID matches our connection
 		conn, err := h.connectionRepo.GetByProvider(ctx, types.SecretProviderQuickBooks)
 		if err != nil {
-			h.logger.Errorw("failed to get QuickBooks connection",
+			h.logger.Error(ctx, "failed to get QuickBooks connection",
 				"error", err,
 				"realm_id", realmID)
 			continue
@@ -127,7 +127,7 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 
 		// Check if payment sync is enabled (inbound)
 		if !conn.IsPaymentInboundEnabled() {
-			h.logger.Debugw("payment inbound sync disabled, skipping webhook",
+			h.logger.Debug(ctx, "payment inbound sync disabled, skipping webhook",
 				"connection_id", conn.ID)
 			continue
 		}
@@ -135,7 +135,7 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 		// Process each entity change
 		for _, entity := range notification.DataChangeEvent.Entities {
 			if err := h.processEntityChange(ctx, &entity, services); err != nil {
-				h.logger.Errorw("failed to process entity change",
+				h.logger.Error(ctx, "failed to process entity change",
 					"error", err,
 					"entity_name", entity.Name,
 					"entity_id", entity.ID,
@@ -150,21 +150,21 @@ func (h *Handler) HandleWebhook(ctx context.Context, payload []byte, services *S
 
 // processEntityChange processes a single entity change event
 func (h *Handler) processEntityChange(ctx context.Context, entity *EntityChange, services *ServiceDependencies) error {
-	h.logger.Debugw("processing entity change",
+	h.logger.Debug(ctx, "processing entity change",
 		"entity_name", entity.Name,
 		"entity_id", entity.ID,
 		"operation", entity.Operation)
 
 	// Only process Payment events for now
 	if !entity.IsPaymentEvent() {
-		h.logger.Debugw("skipping non-payment entity",
+		h.logger.Debug(ctx, "skipping non-payment entity",
 			"entity_name", entity.Name)
 		return nil
 	}
 
 	// Only process Create and Update operations
 	if !entity.IsCreateOperation() && !entity.IsUpdateOperation() {
-		h.logger.Debugw("skipping non-create/update operation",
+		h.logger.Debug(ctx, "skipping non-create/update operation",
 			"operation", entity.Operation)
 		return nil
 	}
@@ -186,7 +186,7 @@ func (h *Handler) processEntityChange(ctx context.Context, entity *EntityChange,
 
 // handlePaymentEvent processes a Payment entity change
 func (h *Handler) handlePaymentEvent(ctx context.Context, paymentID string, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) error {
-	h.logger.Infow("handling QuickBooks payment event",
+	h.logger.Info(ctx, "handling QuickBooks payment event",
 		"quickbooks_payment_id", paymentID)
 
 	// Delegate to payment service

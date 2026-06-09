@@ -12,7 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"go.uber.org/zap"
 )
 
 type EventPublisher struct {
@@ -38,9 +37,9 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 	}
 
 	p.logger.With(
-		zap.String("event_id", event.ID),
-		zap.String("event_name", event.EventName),
-		zap.String("tenant_id", event.TenantID),
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"tenant_id", event.TenantID,
 	).Debug("publishing event to kafka")
 
 	if event.ID == "" {

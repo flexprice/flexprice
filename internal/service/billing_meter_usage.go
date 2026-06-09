@@ -236,7 +236,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 			displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
 		}
 
-		s.Logger.Debugw("meter usage charges for line item",
+		s.Logger.Debug(ctx, "meter usage charges for line item",
 			"amount", matchingCharge.Amount, "quantity", matchingCharge.Quantity,
 			"is_overage", matchingCharge.IsOverage,
 			"subscription_id", sub.ID, "line_item_id", item.ID, "price_id", item.PriceID)

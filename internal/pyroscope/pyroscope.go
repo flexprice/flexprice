@@ -29,14 +29,14 @@ func RegisterHooks(lc fx.Lifecycle, svc *Service) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if !svc.cfg.Pyroscope.Enabled {
-				svc.logger.Info("Pyroscope profiling is disabled")
+				svc.logger.Info(ctx, "Pyroscope profiling is disabled")
 				return nil
 			}
 
 			profileTypes := svc.getProfileTypes()
 
 			// Log configuration details for debugging
-			svc.logger.Infow("Starting Pyroscope with configuration",
+			svc.logger.Info(ctx, "Starting Pyroscope with configuration",
 				"server_address", svc.cfg.Pyroscope.ServerAddress,
 				"application_name", svc.cfg.Pyroscope.ApplicationName,
 				"has_basic_auth", svc.cfg.Pyroscope.BasicAuthUser != "",
@@ -57,15 +57,15 @@ func RegisterHooks(lc fx.Lifecycle, svc *Service) {
 			if svc.cfg.Pyroscope.BasicAuthUser != "" {
 				pyroscopeConfig.BasicAuthUser = svc.cfg.Pyroscope.BasicAuthUser
 				pyroscopeConfig.BasicAuthPassword = svc.cfg.Pyroscope.BasicAuthPass
-				svc.logger.Infow("Using basic authentication for Pyroscope")
+				svc.logger.Info(ctx, "Using basic authentication for Pyroscope")
 			}
 
 			profiler, err := pyroscope.Start(pyroscopeConfig)
 			if err != nil {
-				svc.logger.Errorw("Failed to initialize Pyroscope", "error", err)
+				svc.logger.Error(ctx, "Failed to initialize Pyroscope", "error", err)
 				return err
 			}
-			svc.logger.Infow("Pyroscope profiling initialized successfully",
+			svc.logger.Info(ctx, "Pyroscope profiling initialized successfully",
 				"application_name", svc.cfg.Pyroscope.ApplicationName,
 				"server_address", svc.cfg.Pyroscope.ServerAddress,
 				"profile_types", profileTypes,
@@ -79,7 +79,7 @@ func RegisterHooks(lc fx.Lifecycle, svc *Service) {
 		},
 		OnStop: func(ctx context.Context) error {
 			if svc.cfg.Pyroscope.Enabled {
-				svc.logger.Info("Stopping Pyroscope profiling")
+				svc.logger.Info(ctx, "Stopping Pyroscope profiling")
 				// Pyroscope doesn't provide an explicit stop method
 				// It will automatically stop when the application exits
 			}

@@ -114,7 +114,7 @@ type usageAnalyticsRecord struct {
 // Dynamic metadata columns (customer entity only) are appended after the static columns
 // when the caller includes export_metadata_fields in the job config.
 func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
-	e.logger.Infow("starting usage analytics data fetch",
+	e.logger.Info(ctx, "starting usage analytics data fetch",
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
 		"start_time", request.StartTime,
@@ -140,7 +140,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 	}
 
 	if len(customers) == 0 {
-		e.logger.Infow("no customers found for usage analytics export, uploading empty CSV with headers only",
+		e.logger.Info(ctx, "no customers found for usage analytics export, uploading empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"start_time", request.StartTime,
@@ -154,7 +154,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 		return buf.Bytes(), 0, nil
 	}
 
-	e.logger.Infow("found customers to process",
+	e.logger.Info(ctx, "found customers to process",
 		"customer_count", len(customers),
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID)
@@ -218,7 +218,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 	csvBytes := buf.Bytes()
 
 	if recordCount == 0 {
-		e.logger.Infow("no usage analytics data found for export - uploading empty CSV with headers only",
+		e.logger.Info(ctx, "no usage analytics data found for export - uploading empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"csv_size_bytes", len(csvBytes))
@@ -230,7 +230,7 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID)
 	} else {
-		e.logger.Infow("completed usage analytics export",
+		e.logger.Info(ctx, "completed usage analytics export",
 			"total_records", recordCount,
 			"csv_size_bytes", len(csvBytes))
 	}

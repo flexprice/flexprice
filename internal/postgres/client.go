@@ -108,7 +108,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 	if config.Logging.DBLevel == types.LogLevelDebug {
 		writerOpts = append(writerOpts,
 			ent.Debug(),
-			ent.Log(logger.GetEntLogger()),
+			ent.Log(logger.GetEntLogger(context.Background())),
 		)
 	}
 
@@ -149,7 +149,7 @@ func NewEntClients(config *config.Configuration, logger *logger.Logger) (*EntCli
 		if config.Logging.DBLevel == types.LogLevelDebug {
 			readerOpts = append(readerOpts,
 				ent.Debug(),
-				ent.Log(logger.GetEntLogger()),
+				ent.Log(logger.GetEntLogger(context.Background())),
 			)
 		}
 
@@ -214,7 +214,7 @@ func (c *Client) WithTx(ctx context.Context, fn func(ctx context.Context) error)
 	// Ensure transaction is rolled back on panic
 	defer func() {
 		if v := recover(); v != nil {
-			c.logger.Errorw("rolling back transaction due to panic",
+			c.logger.Error(ctx, "rolling back transaction due to panic",
 				"panic", v,
 			)
 			_ = tx.Rollback()
@@ -233,20 +233,20 @@ func (c *Client) WithTx(ctx context.Context, fn func(ctx context.Context) error)
 		if rerr := tx.Rollback(); rerr != nil {
 			err = fmt.Errorf("rolling back transaction: %v (original error: %w)", rerr, err)
 		}
-		c.logger.Errorw("rolling back transaction due to error",
+		c.logger.Error(ctx, "rolling back transaction due to error",
 			"error", err,
 		)
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.logger.Errorw("committing transaction",
+		c.logger.Error(ctx, "committing transaction",
 			"error", err,
 		)
 		return fmt.Errorf("committing transaction: %w", err)
 	}
 
-	c.logger.Debugw("committed transaction")
+	c.logger.Debug(ctx, "committed transaction")
 	return nil
 }
 

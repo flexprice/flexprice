@@ -60,7 +60,7 @@ func getPaymentMethodID(payment Payment) string {
 // This function never returns errors to ensure webhooks always return 200 OK
 // All errors are logged internally to prevent Razorpay from retrying
 func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
-	h.logger.Infow("processing Razorpay webhook event",
+	h.logger.Info(ctx, "processing Razorpay webhook event",
 		"event_type", event.Event,
 		"account_id", event.AccountID,
 		"environment_id", environmentID,
@@ -75,7 +75,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 	case EventPaymentFailed:
 		return h.handlePaymentFailed(ctx, event, environmentID, services)
 	default:
-		h.logger.Infow("unhandled Razorpay webhook event type", "type", event.Event)
+		h.logger.Info(ctx, "unhandled Razorpay webhook event type", "type", event.Event)
 		return nil // Not an error, just unhandled
 	}
 }
@@ -84,7 +84,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *RazorpayWebhook
 func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
 	payment := event.Payload.Payment.Entity
 
-	h.logger.Infow("received payment.captured webhook",
+	h.logger.Info(ctx, "received payment.captured webhook",
 		"razorpay_payment_id", payment.ID,
 		"amount", payment.Amount,
 		"currency", payment.Currency,
@@ -95,7 +95,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 	// Get FlexPrice payment ID from notes
 	flexpricePaymentID, ok := payment.Notes["flexprice_payment_id"].(string)
 	if !ok || flexpricePaymentID == "" {
-		h.logger.Infow("no flexprice_payment_id found in payment notes, checking for external payment",
+		h.logger.Info(ctx, "no flexprice_payment_id found in payment notes, checking for external payment",
 			"razorpay_payment_id", payment.ID,
 			"razorpay_invoice_id", payment.InvoiceID,
 			"notes", payment.Notes)
@@ -105,7 +105,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		paymentMap := convertPaymentToMap(payment)
 		err := h.paymentSvc.HandleExternalRazorpayPaymentFromWebhook(ctx, paymentMap, services.PaymentService, services.InvoiceService)
 		if err != nil {
-			h.logger.Errorw("failed to handle external Razorpay payment from webhook, skipping event",
+			h.logger.Error(ctx, "failed to handle external Razorpay payment from webhook, skipping event",
 				"error", err,
 				"razorpay_payment_id", payment.ID,
 				"razorpay_invoice_id", payment.InvoiceID)
@@ -114,14 +114,14 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	h.logger.Infow("processing FlexPrice payment capture",
+	h.logger.Info(ctx, "processing FlexPrice payment capture",
 		"razorpay_payment_id", payment.ID,
 		"flexprice_payment_id", flexpricePaymentID)
 
 	// Get payment record
 	paymentRecord, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
 	if err != nil {
-		h.logger.Errorw("failed to get payment record",
+		h.logger.Error(ctx, "failed to get payment record",
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
@@ -137,7 +137,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 
 	// Check if payment is already processed
 	if paymentRecord.PaymentStatus == types.PaymentStatusSucceeded {
-		h.logger.Infow("payment already processed",
+		h.logger.Info(ctx, "payment already processed",
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID,
 			"status", paymentRecord.PaymentStatus)
@@ -165,7 +165,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		updateReq.PaymentMethodID = &paymentMethodID
 	}
 
-	h.logger.Infow("updating payment with gateway details",
+	h.logger.Info(ctx, "updating payment with gateway details",
 		"flexprice_payment_id", flexpricePaymentID,
 		"razorpay_payment_id", payment.ID,
 		"payment_method", payment.Method,
@@ -174,35 +174,35 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 
 	_, err = services.PaymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq)
 	if err != nil {
-		h.logger.Errorw("failed to update payment",
+		h.logger.Error(ctx, "failed to update payment",
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
 		return nil // Don't return error - webhook should always succeed
 	}
 
-	h.logger.Infow("updated payment to succeeded",
+	h.logger.Info(ctx, "updated payment to succeeded",
 		"flexprice_payment_id", flexpricePaymentID,
 		"razorpay_payment_id", payment.ID,
 		"amount", amount.String(),
 		"currency", payment.Currency)
 
 	// Reconcile payment with invoice (update invoice payment status and amounts)
-	h.logger.Infow("reconciling payment with invoice",
+	h.logger.Info(ctx, "reconciling payment with invoice",
 		"flexprice_payment_id", flexpricePaymentID,
 		"invoice_id", paymentRecord.DestinationID,
 		"payment_amount", amount.String())
 
 	err = h.paymentSvc.ReconcilePaymentWithInvoice(ctx, flexpricePaymentID, amount, services.PaymentService, services.InvoiceService)
 	if err != nil {
-		h.logger.Errorw("failed to reconcile payment with invoice",
+		h.logger.Error(ctx, "failed to reconcile payment with invoice",
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"invoice_id", paymentRecord.DestinationID,
 			"payment_amount", amount.String())
 		// Don't fail - invoice reconciliation is not critical for webhook success
 	} else {
-		h.logger.Infow("successfully reconciled payment with invoice",
+		h.logger.Info(ctx, "successfully reconciled payment with invoice",
 			"flexprice_payment_id", flexpricePaymentID,
 			"invoice_id", paymentRecord.DestinationID,
 			"payment_amount", amount.String())
@@ -215,7 +215,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhookEvent, environmentID string, services *ServiceDependencies) error {
 	payment := event.Payload.Payment.Entity
 
-	h.logger.Infow("received payment.failed webhook",
+	h.logger.Info(ctx, "received payment.failed webhook",
 		"razorpay_payment_id", payment.ID,
 		"amount", payment.Amount,
 		"currency", payment.Currency,
@@ -234,14 +234,14 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		return nil // Not a FlexPrice-initiated payment
 	}
 
-	h.logger.Infow("processing FlexPrice payment failure",
+	h.logger.Info(ctx, "processing FlexPrice payment failure",
 		"razorpay_payment_id", payment.ID,
 		"flexprice_payment_id", flexpricePaymentID)
 
 	// Get payment record
 	paymentRecord, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
 	if err != nil {
-		h.logger.Errorw("failed to get payment record",
+		h.logger.Error(ctx, "failed to get payment record",
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
@@ -257,7 +257,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 
 	// Check if payment is already processed
 	if paymentRecord.PaymentStatus == types.PaymentStatusSucceeded {
-		h.logger.Infow("Ignoring payment.failed webhook for succeeded payment",
+		h.logger.Info(ctx, "Ignoring payment.failed webhook for succeeded payment",
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
 		return nil
@@ -288,7 +288,7 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		updateReq.PaymentMethodID = &paymentMethodID
 	}
 
-	h.logger.Infow("updating failed payment with gateway details",
+	h.logger.Info(ctx, "updating failed payment with gateway details",
 		"flexprice_payment_id", flexpricePaymentID,
 		"razorpay_payment_id", payment.ID,
 		"payment_method", payment.Method,
@@ -297,14 +297,14 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 
 	_, err = services.PaymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq)
 	if err != nil {
-		h.logger.Errorw("failed to update payment to failed",
+		h.logger.Error(ctx, "failed to update payment to failed",
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
 		return nil // Don't return error - webhook should always succeed
 	}
 
-	h.logger.Infow("updated payment to failed",
+	h.logger.Info(ctx, "updated payment to failed",
 		"flexprice_payment_id", flexpricePaymentID,
 		"razorpay_payment_id", payment.ID,
 		"error_code", payment.ErrorCode,

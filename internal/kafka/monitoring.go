@@ -40,7 +40,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 	// Create cluster admin client
 	admin, err := sarama.NewClusterAdmin(m.config.Kafka.Brokers, saramaConfig)
 	if err != nil {
-		m.logger.Errorw("failed to create Kafka admin client",
+		m.logger.Error(ctx, "failed to create Kafka admin client",
 			"error", err,
 			"brokers", m.config.Kafka.Brokers)
 		return nil, fmt.Errorf("failed to create Kafka admin client: %w", err)
@@ -50,7 +50,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 	// Create client to get partition offsets
 	client, err := sarama.NewClient(m.config.Kafka.Brokers, saramaConfig)
 	if err != nil {
-		m.logger.Errorw("failed to create Kafka client",
+		m.logger.Error(ctx, "failed to create Kafka client",
 			"error", err,
 			"brokers", m.config.Kafka.Brokers)
 		return nil, fmt.Errorf("failed to create Kafka client: %w", err)
@@ -60,13 +60,13 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 	// Get partitions for the topic
 	partitions, err := client.Partitions(topic)
 	if err != nil {
-		m.logger.Errorw("failed to get partitions for topic",
+		m.logger.Error(ctx, "failed to get partitions for topic",
 			"error", err,
 			"topic", topic)
 		return nil, fmt.Errorf("failed to get partitions for topic %s: %w", topic, err)
 	}
 
-	m.logger.Infow("fetching consumer group offsets",
+	m.logger.Info(ctx, "fetching consumer group offsets",
 		"topic", topic,
 		"consumer_group", consumerGroup,
 		"partitions", partitions)
@@ -76,7 +76,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 		topic: partitions,
 	})
 	if err != nil {
-		m.logger.Errorw("failed to list consumer group offsets",
+		m.logger.Error(ctx, "failed to list consumer group offsets",
 			"error", err,
 			"consumer_group", consumerGroup,
 			"topic", topic)
@@ -95,7 +95,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 		// Get the latest offset (high water mark) for this partition
 		latestOffset, err := client.GetOffset(topic, partition, sarama.OffsetNewest)
 		if err != nil {
-			m.logger.Warnw("failed to get latest offset for partition",
+			m.logger.Warn(ctx, "failed to get latest offset for partition",
 				"error", err,
 				"topic", topic,
 				"partition", partition)
@@ -105,7 +105,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 		// Get consumer's current offset for this partition from the response
 		block := offsetFetchResponse.GetBlock(topic, partition)
 		if block == nil {
-			m.logger.Warnw("no offset block found for partition",
+			m.logger.Warn(ctx, "no offset block found for partition",
 				"topic", topic,
 				"partition", partition,
 				"consumer_group", consumerGroup)
@@ -121,7 +121,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 
 		consumerOffset := block.Offset
 
-		m.logger.Debugw("partition offset details",
+		m.logger.Debug(ctx, "partition offset details",
 			"topic", topic,
 			"partition", partition,
 			"consumer_group", consumerGroup,
@@ -139,7 +139,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 			consumerLag.PartitionLags[partition] = partitionLag
 			consumerLag.TotalLag += partitionLag
 
-			m.logger.Infow("partition has no committed offset",
+			m.logger.Info(ctx, "partition has no committed offset",
 				"topic", topic,
 				"partition", partition,
 				"consumer_group", consumerGroup,
@@ -157,7 +157,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 		consumerLag.PartitionLags[partition] = partitionLag
 		consumerLag.TotalLag += partitionLag
 
-		m.logger.Infow("partition lag calculated",
+		m.logger.Info(ctx, "partition lag calculated",
 			"topic", topic,
 			"partition", partition,
 			"consumer_group", consumerGroup,
@@ -166,7 +166,7 @@ func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, co
 			"lag", partitionLag)
 	}
 
-	m.logger.Infow("total consumer lag calculated",
+	m.logger.Info(ctx, "total consumer lag calculated",
 		"topic", topic,
 		"consumer_group", consumerGroup,
 		"total_lag", consumerLag.TotalLag,
@@ -187,7 +187,7 @@ func (m *MonitoringService) GetMultipleConsumerLags(ctx context.Context, configs
 		key := fmt.Sprintf("%s:%s", cfg.Topic, cfg.ConsumerGroup)
 		lag, err := m.GetConsumerLag(ctx, cfg.Topic, cfg.ConsumerGroup)
 		if err != nil {
-			m.logger.Warnw("failed to get consumer lag",
+			m.logger.Warn(ctx, "failed to get consumer lag",
 				"error", err,
 				"topic", cfg.Topic,
 				"consumer_group", cfg.ConsumerGroup)

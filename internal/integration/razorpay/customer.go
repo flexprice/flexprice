@@ -60,7 +60,7 @@ func (s *CustomerService) EnsureCustomerSyncedToRazorpay(ctx context.Context, cu
 
 	// Check if customer already has Razorpay ID in metadata
 	if razorpayID, exists := flexpriceCustomer.Metadata["razorpay_customer_id"]; exists && razorpayID != "" {
-		s.logger.Infow("customer already synced to Razorpay",
+		s.logger.Info(ctx, "customer already synced to Razorpay",
 			"customer_id", customerID,
 			"razorpay_customer_id", razorpayID)
 		return flexpriceCustomer, nil
@@ -77,7 +77,7 @@ func (s *CustomerService) EnsureCustomerSyncedToRazorpay(ctx context.Context, cu
 		existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 		if err == nil && existingMappings != nil && len(existingMappings) > 0 {
 			existingMapping := existingMappings[0]
-			s.logger.Infow("customer already mapped to Razorpay via integration mapping",
+			s.logger.Info(ctx, "customer already mapped to Razorpay via integration mapping",
 				"customer_id", customerID,
 				"razorpay_customer_id", existingMapping.ProviderEntityID)
 
@@ -100,7 +100,7 @@ func (s *CustomerService) EnsureCustomerSyncedToRazorpay(ctx context.Context, cu
 	}
 
 	// Customer is not synced, create in Razorpay
-	s.logger.Infow("customer not synced to Razorpay, creating in Razorpay",
+	s.logger.Info(ctx, "customer not synced to Razorpay, creating in Razorpay",
 		"customer_id", customerID)
 	err = s.CreateCustomerInRazorpay(ctx, customerID, customerService)
 	if err != nil {
@@ -176,13 +176,13 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 		"environment_id":        types.GetEnvironmentID(ctx),
 	}
 
-	s.logger.Infow("creating customer in Razorpay",
+	s.logger.Info(ctx, "creating customer in Razorpay",
 		"customer_id", flexpriceCustomer.ID)
 
 	// Create customer in Razorpay using wrapper function
 	razorpayCustomer, err := s.client.CreateCustomer(ctx, customerData)
 	if err != nil {
-		s.logger.Errorw("failed to create customer in Razorpay",
+		s.logger.Error(ctx, "failed to create customer in Razorpay",
 			"error", err,
 			"customer_id", flexpriceCustomer.ID)
 		return "", err
@@ -191,7 +191,7 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 	// Safely extract customer ID from response
 	rawID, ok := razorpayCustomer["id"].(string)
 	if !ok || rawID == "" {
-		s.logger.Errorw("missing Razorpay customer id in response",
+		s.logger.Error(ctx, "missing Razorpay customer id in response",
 			"customer_id", flexpriceCustomer.ID)
 		return "", ierr.NewError("razorpay customer id missing in response").
 			WithHint("Check Razorpay CreateCustomer response payload").
@@ -199,7 +199,7 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 	}
 	razorpayCustomerID := rawID
 
-	s.logger.Infow("created customer in Razorpay",
+	s.logger.Info(ctx, "created customer in Razorpay",
 		"customer_id", flexpriceCustomer.ID,
 		"razorpay_customer_id", razorpayCustomerID)
 
@@ -221,14 +221,14 @@ func (s *CustomerService) SyncCustomerToRazorpay(ctx context.Context, flexpriceC
 
 	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
-		s.logger.Errorw("failed to store Razorpay customer mapping",
+		s.logger.Error(ctx, "failed to store Razorpay customer mapping",
 			"error", err,
 			"customer_id", flexpriceCustomer.ID,
 			"razorpay_customer_id", razorpayCustomerID)
 		// Don't fail the entire operation if mapping storage fails
 		// The customer was created successfully in Razorpay
 	} else {
-		s.logger.Infow("stored Razorpay customer mapping",
+		s.logger.Info(ctx, "stored Razorpay customer mapping",
 			"customer_id", flexpriceCustomer.ID,
 			"razorpay_customer_id", razorpayCustomerID)
 	}

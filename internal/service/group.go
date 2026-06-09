@@ -33,7 +33,7 @@ func NewGroupService(params ServiceParams) GroupService {
 func (s *groupService) CreateGroup(ctx context.Context, req dto.CreateGroupRequest) (*dto.GroupResponse, error) {
 
 	if err := req.Validate(); err != nil {
-		s.Logger.Warn("invalid group creation request",
+		s.Logger.Warn(ctx, "invalid group creation request",
 			"error", err,
 			"name", req.Name,
 		)
@@ -89,7 +89,7 @@ func (s *groupService) DeleteGroup(ctx context.Context, id string) error {
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		groupObj, err := s.GroupRepo.Get(txCtx, id)
 		if err != nil {
-			s.Logger.Error("failed to fetch group for deletion", "error", err, "group_id", id)
+			s.Logger.Error(context.Background(), "failed to fetch group for deletion", "error", err, "group_id", id)
 			return err
 		}
 

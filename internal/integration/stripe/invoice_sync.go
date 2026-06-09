@@ -44,7 +44,7 @@ func NewInvoiceSyncService(
 
 // SyncInvoiceToStripe syncs a FlexPrice invoice to Stripe following the complete flow
 func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req StripeInvoiceSyncRequest, customerService interfaces.CustomerService) (*StripeInvoiceSyncResponse, error) {
-	s.logger.Infow("starting Stripe invoice sync",
+	s.logger.Info(ctx, "starting Stripe invoice sync",
 		"invoice_id", req.InvoiceID,
 		"collection_method", req.CollectionMethod)
 
@@ -70,7 +70,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 	var stripeInvoiceID string
 	if existingMapping != nil {
 		stripeInvoiceID = existingMapping.ProviderEntityID
-		s.logger.Infow("invoice already synced to Stripe",
+		s.logger.Info(ctx, "invoice already synced to Stripe",
 			"invoice_id", req.InvoiceID,
 			"stripe_invoice_id", stripeInvoiceID)
 	} else {
@@ -83,7 +83,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 
 		// Step 5: Create entity integration mapping
 		if err := s.createInvoiceMapping(ctx, req.InvoiceID, stripeInvoiceID); err != nil {
-			s.logger.Errorw("failed to create invoice mapping", "error", err)
+			s.logger.Error(ctx, "failed to create invoice mapping", "error", err)
 			// Continue with sync even if mapping fails
 		}
 	}
@@ -102,7 +102,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 
 	// Step 8: Update FlexPrice invoice with Stripe data
 	if err := s.updateFlexPriceInvoiceFromStripe(ctx, flexInvoice, finalizedInvoice); err != nil {
-		s.logger.Errorw("failed to update FlexPrice invoice from Stripe", "error", err)
+		s.logger.Error(ctx, "failed to update FlexPrice invoice from Stripe", "error", err)
 		// Don't fail the entire sync for this
 	}
 
@@ -118,7 +118,7 @@ func (s *InvoiceSyncService) SyncInvoiceToStripe(ctx context.Context, req Stripe
 		UpdatedAt:       time.Now(),
 	}
 
-	s.logger.Infow("Stripe invoice sync completed successfully",
+	s.logger.Info(ctx, "Stripe invoice sync completed successfully",
 		"invoice_id", req.InvoiceID,
 		"stripe_invoice_id", finalizedInvoice.ID,
 		"status", finalizedInvoice.Status)
@@ -185,7 +185,7 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	// Create the invoice
 	stripeInvoice, err := stripeClient.V1Invoices.Create(ctx, params)
 	if err != nil {
-		s.logger.Errorw("failed to create draft invoice in Stripe",
+		s.logger.Error(ctx, "failed to create draft invoice in Stripe",
 			"error", err,
 			"invoice_id", flexInvoice.ID)
 		return "", ierr.NewError("failed to create Stripe invoice").
@@ -197,7 +197,7 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("created draft invoice in Stripe",
+	s.logger.Info(ctx, "created draft invoice in Stripe",
 		"invoice_id", flexInvoice.ID,
 		"stripe_invoice_id", stripeInvoice.ID)
 
@@ -207,7 +207,7 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 // syncLineItemsToStripe adds all line items to the Stripe invoice
 func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvoice *invoice.Invoice, stripeInvoiceID string, customerService interfaces.CustomerService) error {
 	if len(flexInvoice.LineItems) == 0 {
-		s.logger.Infow("no line items to sync", "invoice_id", flexInvoice.ID)
+		s.logger.Info(ctx, "no line items to sync", "invoice_id", flexInvoice.ID)
 		return nil
 	}
 
@@ -216,7 +216,7 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 		return err
 	}
 
-	s.logger.Infow("syncing line items to Stripe",
+	s.logger.Info(ctx, "syncing line items to Stripe",
 		"invoice_id", flexInvoice.ID,
 		"stripe_invoice_id", stripeInvoiceID,
 		"line_items_count", len(flexInvoice.LineItems))
@@ -228,7 +228,7 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 		}
 	}
 
-	s.logger.Infow("successfully synced all line items to Stripe",
+	s.logger.Info(ctx, "successfully synced all line items to Stripe",
 		"invoice_id", flexInvoice.ID,
 		"stripe_invoice_id", stripeInvoiceID)
 
@@ -243,7 +243,7 @@ func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, str
 	// Get customer ID from the invoice
 	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
 	if err != nil {
-		s.logger.Errorw("failed to get Stripe customer ID",
+		s.logger.Error(ctx, "failed to get Stripe customer ID",
 			"error", err,
 			"customer_id", flexInvoice.CustomerID,
 			"line_item_id", lineItem.ID)
@@ -275,7 +275,7 @@ func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, str
 
 	invoiceItem, err := stripeClient.V1InvoiceItems.Create(ctx, params)
 	if err != nil {
-		s.logger.Errorw("failed to add line item to Stripe invoice",
+		s.logger.Error(ctx, "failed to add line item to Stripe invoice",
 			"error", err,
 			"line_item_id", lineItem.ID,
 			"stripe_invoice_id", stripeInvoiceID)
@@ -289,7 +289,7 @@ func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, str
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Debugw("added line item to Stripe invoice",
+	s.logger.Debug(ctx, "added line item to Stripe invoice",
 		"line_item_id", lineItem.ID,
 		"stripe_invoice_id", stripeInvoiceID,
 		"stripe_item_id", invoiceItem.ID)
@@ -304,7 +304,7 @@ func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeIn
 		return nil, err
 	}
 
-	s.logger.Infow("finalizing Stripe invoice",
+	s.logger.Info(ctx, "finalizing Stripe invoice",
 		"stripe_invoice_id", stripeInvoiceID,
 		"collection_method", collectionMethod)
 
@@ -315,7 +315,7 @@ func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeIn
 
 	finalizedInvoice, err := stripeClient.V1Invoices.FinalizeInvoice(ctx, stripeInvoiceID, params)
 	if err != nil {
-		s.logger.Errorw("failed to finalize Stripe invoice",
+		s.logger.Error(ctx, "failed to finalize Stripe invoice",
 			"error", err,
 			"stripe_invoice_id", stripeInvoiceID)
 		return nil, ierr.NewError("failed to finalize Stripe invoice").
@@ -327,24 +327,24 @@ func (s *InvoiceSyncService) finalizeStripeInvoice(ctx context.Context, stripeIn
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("successfully finalized Stripe invoice",
+	s.logger.Info(ctx, "successfully finalized Stripe invoice",
 		"stripe_invoice_id", stripeInvoiceID,
 		"status", finalizedInvoice.Status,
 		"total", finalizedInvoice.Total)
 
 	if collectionMethod == types.CollectionMethodSendInvoice {
-		s.logger.Infow("sending invoice to customer via Stripe",
+		s.logger.Info(ctx, "sending invoice to customer via Stripe",
 			"stripe_invoice_id", stripeInvoiceID,
 			"collection_method", collectionMethod)
 
 		_, err = stripeClient.V1Invoices.SendInvoice(ctx, stripeInvoiceID, &stripe.InvoiceSendInvoiceParams{})
 		if err != nil {
-			s.logger.Errorw("failed to send Stripe invoice",
+			s.logger.Error(ctx, "failed to send Stripe invoice",
 				"error", err,
 				"stripe_invoice_id", stripeInvoiceID)
 			// Don't fail the entire sync if sending fails, just log the error
 		} else {
-			s.logger.Infow("successfully sent Stripe invoice to customer",
+			s.logger.Info(ctx, "successfully sent Stripe invoice to customer",
 				"stripe_invoice_id", stripeInvoiceID)
 		}
 	}
@@ -368,7 +368,7 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 	stripeInvoiceID := mapping.ProviderEntityID
 	amountCents := paymentAmount.Mul(decimal.NewFromInt(100)).IntPart()
 
-	s.logger.Infow("syncing external payment to Stripe",
+	s.logger.Info(ctx, "syncing external payment to Stripe",
 		"invoice_id", invoiceID,
 		"stripe_invoice_id", stripeInvoiceID,
 		"amount", paymentAmount,
@@ -384,7 +384,7 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 
 	// Only proceed if invoice is finalized and not fully paid
 	if stripeInvoice.Status != stripe.InvoiceStatusOpen {
-		s.logger.Infow("Stripe invoice not in open status, skipping payment sync",
+		s.logger.Info(ctx, "Stripe invoice not in open status, skipping payment sync",
 			"stripe_invoice_id", stripeInvoiceID,
 			"status", stripeInvoice.Status)
 		return nil
@@ -398,14 +398,14 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 		PaidOutOfBand: stripe.Bool(true),
 	}
 
-	s.logger.Infow("marking external payment as paid out of band in Stripe",
+	s.logger.Info(ctx, "marking external payment as paid out of band in Stripe",
 		"stripe_invoice_id", stripeInvoiceID,
 		"amount_cents", amountCents,
 		"payment_source", paymentSource)
 
 	updatedInvoice, err := stripeClient.V1Invoices.Pay(ctx, stripeInvoiceID, payParams)
 	if err != nil {
-		s.logger.Errorw("failed to mark payment as paid out of band",
+		s.logger.Error(ctx, "failed to mark payment as paid out of band",
 			"error", err,
 			"stripe_invoice_id", stripeInvoiceID,
 			"amount_cents", amountCents)
@@ -422,14 +422,14 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 	// Update Stripe invoice metadata to track FlexPrice credit payments
 	err = s.updateStripeInvoiceMetadata(ctx, stripeClient, stripeInvoiceID, paymentAmount, paymentSource, metadata)
 	if err != nil {
-		s.logger.Errorw("failed to update Stripe invoice metadata",
+		s.logger.Error(ctx, "failed to update Stripe invoice metadata",
 			"error", err,
 			"stripe_invoice_id", stripeInvoiceID,
 			"amount", paymentAmount)
 		// Don't fail the whole operation, just log the error
 	}
 
-	s.logger.Infow("successfully synced payment to Stripe",
+	s.logger.Info(ctx, "successfully synced payment to Stripe",
 		"invoice_id", invoiceID,
 		"stripe_invoice_id", stripeInvoiceID,
 		"amount", paymentAmount,
@@ -467,13 +467,13 @@ func (s *InvoiceSyncService) GetExistingStripeMapping(ctx context.Context, invoi
 func (s *InvoiceSyncService) GetStripeInvoiceID(ctx context.Context, flexpriceInvoiceID string) (string, error) {
 	mapping, err := s.getExistingStripeMapping(ctx, flexpriceInvoiceID)
 	if err != nil {
-		s.logger.Debugw("no Stripe invoice mapping found",
+		s.logger.Debug(ctx, "no Stripe invoice mapping found",
 			"invoice_id", flexpriceInvoiceID)
 		return "", ierr.WithError(err).Mark(ierr.ErrNotFound)
 	}
 
 	stripeInvoiceID := mapping.ProviderEntityID
-	s.logger.Debugw("found Stripe invoice mapping",
+	s.logger.Debug(ctx, "found Stripe invoice mapping",
 		"invoice_id", flexpriceInvoiceID,
 		"stripe_invoice_id", stripeInvoiceID)
 
@@ -495,20 +495,20 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, stripeIn
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
-		s.logger.Debugw("failed to query entity integration mapping",
+		s.logger.Debug(ctx, "failed to query entity integration mapping",
 			"error", err,
 			"stripe_invoice_id", stripeInvoiceID)
 		return "", ierr.WithError(err).Mark(ierr.ErrDatabase)
 	}
 
 	if len(mappings) == 0 {
-		s.logger.Debugw("no FlexPrice invoice mapping found",
+		s.logger.Debug(ctx, "no FlexPrice invoice mapping found",
 			"stripe_invoice_id", stripeInvoiceID)
 		return "", ierr.NewError("flexprice invoice mapping not found").Mark(ierr.ErrNotFound)
 	}
 
 	flexpriceInvoiceID := mappings[0].EntityID
-	s.logger.Debugw("found FlexPrice invoice mapping",
+	s.logger.Debug(ctx, "found FlexPrice invoice mapping",
 		"stripe_invoice_id", stripeInvoiceID,
 		"flexprice_invoice_id", flexpriceInvoiceID)
 
@@ -622,7 +622,7 @@ func (s *InvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, st
 	updateParams := &stripe.InvoiceUpdateParams{}
 	updateParams.AddMetadata(totalCreditsKey, newTotalCredits.String())
 
-	s.logger.Infow("updating Stripe invoice metadata with total credit amount",
+	s.logger.Info(ctx, "updating Stripe invoice metadata with total credit amount",
 		"stripe_invoice_id", stripeInvoiceID,
 		"payment_amount_cents", paymentAmountCents.String(),
 		"new_total_credits_cents", newTotalCredits.String())
@@ -632,7 +632,7 @@ func (s *InvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, st
 		return err
 	}
 
-	s.logger.Infow("successfully updated Stripe invoice metadata",
+	s.logger.Info(ctx, "successfully updated Stripe invoice metadata",
 		"stripe_invoice_id", stripeInvoiceID,
 		"total_credits_paid_cents", newTotalCredits.String())
 

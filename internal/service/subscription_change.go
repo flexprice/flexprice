@@ -16,7 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
-	"go.uber.org/zap"
 )
 
 // SubscriptionChangeService handles subscription plan changes (upgrades/downgrades)
@@ -49,11 +48,11 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	req dto.SubscriptionChangeRequest,
 ) (*dto.SubscriptionChangePreviewResponse, error) {
 	logger := s.serviceParams.Logger.With(
-		zap.String("subscription_id", subscriptionID),
-		zap.String("target_plan_id", req.TargetPlanID),
+		"subscription_id", subscriptionID,
+		"target_plan_id", req.TargetPlanID,
 	)
 
-	logger.Info("previewing subscription change")
+	logger.Info(ctx, "previewing subscription change")
 
 	// Validate the request
 	if err := req.Validate(); err != nil {
@@ -117,7 +116,7 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
 		prorationDetails, err = s.calculateProrationPreview(ctx, currentSub, lineItems, targetPlan, effectiveDate)
 		if err != nil {
-			logger.Error("failed to calculate proration preview", zap.Error(err))
+			logger.Error(ctx, "failed to calculate proration preview", "error", err)
 			return nil, err
 		}
 	}
@@ -125,14 +124,14 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 	// Calculate next invoice preview
 	nextInvoice, err := s.calculateNextInvoicePreview(ctx, currentSub, targetPlan, effectiveDate, prorationDetails, req.ChangeAt)
 	if err != nil {
-		logger.Error("failed to calculate next invoice preview", zap.Error(err))
+		logger.Error(ctx, "failed to calculate next invoice preview", "error", err)
 		return nil, err
 	}
 
 	// Calculate new billing cycle
 	newBillingCycle, err := s.calculateNewBillingCycle(currentSub, targetPlan, types.BillingCycleAnchorUnchanged, effectiveDate)
 	if err != nil {
-		logger.Error("failed to calculate new billing cycle", zap.Error(err))
+		logger.Error(ctx, "failed to calculate new billing cycle", "error", err)
 		return nil, err
 	}
 
@@ -162,7 +161,7 @@ func (s *subscriptionChangeService) PreviewSubscriptionChange(
 		Metadata:           req.Metadata,
 	}
 
-	logger.Info("subscription change preview completed successfully")
+	logger.Info(ctx, "subscription change preview completed successfully")
 	return response, nil
 }
 
@@ -173,11 +172,11 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChange(
 	req dto.SubscriptionChangeRequest,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
 	logger := s.serviceParams.Logger.With(
-		zap.String("subscription_id", subscriptionID),
-		zap.String("target_plan_id", req.TargetPlanID),
+		"subscription_id", subscriptionID,
+		"target_plan_id", req.TargetPlanID,
 	)
 
-	logger.Info("executing subscription change")
+	logger.Info(ctx, "executing subscription change")
 
 	// Validate the request
 	if err := req.Validate(); err != nil {
@@ -203,8 +202,8 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChangeInternal(
 	req dto.SubscriptionChangeRequest,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
 	logger := s.serviceParams.Logger.With(
-		zap.String("subscription_id", subscriptionID),
-		zap.String("target_plan_id", req.TargetPlanID),
+		"subscription_id", subscriptionID,
+		"target_plan_id", req.TargetPlanID,
 	)
 
 	var response *dto.SubscriptionChangeExecuteResponse
@@ -263,13 +262,13 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChangeInternal(
 	})
 
 	if err != nil {
-		logger.Error("failed to execute subscription change", zap.Error(err))
+		logger.Error(ctx, "failed to execute subscription change", "error", err)
 		return nil, err
 	}
 
-	logger.Info("subscription change executed successfully",
-		zap.String("old_subscription_id", response.OldSubscription.ID),
-		zap.String("new_subscription_id", response.NewSubscription.ID),
+	logger.Info(ctx, "subscription change executed successfully",
+		"old_subscription_id", response.OldSubscription.ID,
+		"new_subscription_id", response.NewSubscription.ID,
 	)
 
 	return response, nil
@@ -284,12 +283,12 @@ func (s *subscriptionChangeService) scheduleChangeForPeriodEnd(
 	req dto.SubscriptionChangeRequest,
 ) (*dto.SubscriptionChangeExecuteResponse, error) {
 	logger := s.serviceParams.Logger.With(
-		zap.String("subscription_id", subscriptionID),
-		zap.String("target_plan_id", req.TargetPlanID),
-		zap.String("change_at", string(*req.ChangeAt)),
+		"subscription_id", subscriptionID,
+		"target_plan_id", req.TargetPlanID,
+		"change_at", string(*req.ChangeAt),
 	)
 
-	logger.Info("scheduling subscription change for period end")
+	logger.Info(ctx, "scheduling subscription change for period end")
 
 	// Get subscription to calculate period end
 	sub, err := s.serviceParams.SubRepo.Get(ctx, subscriptionID)
@@ -390,9 +389,9 @@ func (s *subscriptionChangeService) scheduleChangeForPeriodEnd(
 			Mark(ierr.ErrDatabase)
 	}
 
-	logger.Info("subscription change scheduled successfully",
-		zap.String("schedule_id", schedule.ID),
-		zap.Time("scheduled_at", schedule.ScheduledAt),
+	logger.Info(ctx, "subscription change scheduled successfully",
+		"schedule_id", schedule.ID,
+		"scheduled_at", schedule.ScheduledAt,
 	)
 
 	// Return response indicating the change was scheduled
@@ -907,7 +906,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 
 	// Handle entitlement proration for subscription changes
 	// This handles both anniversary and calendar billing cycles
-	s.serviceParams.Logger.Infow("checking entitlement proration condition",
+	s.serviceParams.Logger.Info(ctx, "checking entitlement proration condition",
 		"req_proration_behavior", req.ProrationBehavior,
 		"expected_value", types.ProrationBehaviorCreateProrations,
 		"will_execute", req.ProrationBehavior == types.ProrationBehaviorCreateProrations,
@@ -923,7 +922,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 			effectiveDate,
 		); err != nil {
 			// Log error but don't fail the change
-			s.serviceParams.Logger.Errorw("failed to create prorated entitlements for plan change",
+			s.serviceParams.Logger.Error(ctx, "failed to create prorated entitlements for plan change",
 				"error", err,
 				"old_subscription_id", currentSub.ID,
 				"new_subscription_id", newSub.ID)
@@ -996,7 +995,7 @@ func (s *subscriptionChangeService) handleSubscriptionChangeEntitlementProration
 	targetPlan *plan.Plan,
 	effectiveDate time.Time,
 ) error {
-	s.serviceParams.Logger.Infow("handling entitlement proration for subscription change",
+	s.serviceParams.Logger.Info(ctx, "handling entitlement proration for subscription change",
 		"old_subscription_id", oldSub.ID,
 		"new_subscription_id", newSub.ID,
 		"target_plan_id", targetPlan.ID,
@@ -1034,7 +1033,7 @@ func (s *subscriptionChangeService) handleSubscriptionChangeEntitlementProration
 			Mark(ierr.ErrSystem)
 	}
 
-	s.serviceParams.Logger.Infow("additive entitlement proration completed for subscription change",
+	s.serviceParams.Logger.Info(ctx, "additive entitlement proration completed for subscription change",
 		"new_subscription_id", newSub.ID,
 		"prorated_count", len(prorationResult.ProratedLimits),
 		"coefficient", prorationResult.ProrationCoefficient.String(),
@@ -1157,7 +1156,7 @@ func (s *subscriptionChangeService) transferLineItemCoupons(
 		}}
 
 		if err := couponService.ApplyCouponsToSubscription(ctx, newSubscription, couponRequest); err != nil {
-			s.serviceParams.Logger.Errorw("failed to transfer coupon", "error", err)
+			s.serviceParams.Logger.Error(ctx, "failed to transfer coupon", "error", err)
 			continue
 		}
 	}

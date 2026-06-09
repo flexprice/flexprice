@@ -133,7 +133,7 @@ func (s *secretService) CreateAPIKey(ctx context.Context, req *dto.CreateAPIKeyR
 	roles := user.Roles
 	userType := string(user.Type)
 
-	s.logger.Debugw("Creating API key with roles", "user_id", userID, "roles", roles, "user_type", userType)
+	s.logger.Debug(ctx, "Creating API key with roles", "user_id", userID, "roles", roles, "user_type", userType)
 
 	// Create secret entity
 	secretEntity := &secret.Secret{
@@ -156,7 +156,7 @@ func (s *secretService) CreateAPIKey(ctx context.Context, req *dto.CreateAPIKeyR
 	}
 
 	// DEBUG: Log the final secret entity with roles
-	s.logger.Debugw("API Key created successfully",
+	s.logger.Debug(ctx, "API Key created successfully",
 		"secret_id", secretEntity.ID,
 		"roles", secretEntity.Roles,
 		"user_type", secretEntity.UserType,

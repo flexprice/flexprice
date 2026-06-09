@@ -99,7 +99,7 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 		}
 	}
 
-	r.logger.Debugw("executing find raw events query",
+	r.logger.Debug(ctx, "executing find raw events query",
 		"query", query,
 		"args", args,
 		"external_customer_ids", params.ExternalCustomerIDs,
@@ -163,7 +163,7 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debugw("fetched raw events from clickhouse",
+	r.logger.Debug(ctx, "fetched raw events from clickhouse",
 		"count", len(eventsList),
 		"expected_batch_size", params.BatchSize,
 		"offset", params.Offset,
@@ -293,7 +293,7 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(
 	stepAQuery += " ORDER BY r.timestamp DESC, r.id DESC LIMIT ?"
 	stepAArgs = append(stepAArgs, batchSize)
 
-	r.logger.Debugw("executing step A: find unprocessed IDs",
+	r.logger.Debug(ctx, "executing step A: find unprocessed IDs",
 		"tenant_id", tenantID,
 		"external_customer_ids", params.ExternalCustomerIDs,
 		"event_names", params.EventNames,
@@ -346,7 +346,7 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debugw("step A complete",
+	r.logger.Debug(ctx, "step A complete",
 		"unprocessed_id_count", len(ids),
 		"has_next_cursor", nextCursor != nil,
 	)
@@ -382,7 +382,7 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(
 	`
 	stepBArgs := []interface{}{tenantID, environmentID, ids}
 
-	r.logger.Debugw("executing step B: fetch full event rows",
+	r.logger.Debug(ctx, "executing step B: fetch full event rows",
 		"id_count", len(ids),
 	)
 
@@ -437,7 +437,7 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debugw("unprocessed raw events batch",
+	r.logger.Debug(ctx, "unprocessed raw events batch",
 		"count", len(eventsList),
 		"has_next_batch", nextCursor != nil,
 	)

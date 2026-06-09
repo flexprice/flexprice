@@ -353,14 +353,14 @@ func (s *entityIntegrationMappingService) applyRazorpayCustomerLinkSideEffects(c
 
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
-		s.Logger.WarnwCtx(ctx, "razorpay integration unavailable for customer notes update", "error", err, "customer_id", req.EntityID, "provider_entity_id", req.ProviderEntityID)
+		s.Logger.Warn(ctx, "razorpay integration unavailable for customer notes update", "error", err, "customer_id", req.EntityID, "provider_entity_id", req.ProviderEntityID)
 		return nil
 	}
 	if err := razorpayIntegration.CustomerSvc.UpdateRazorpayCustomerNotes(ctx, req.ProviderEntityID, map[string]interface{}{
 		"flexprice_customer_id": req.EntityID,
 		"environment_id":        types.GetEnvironmentID(ctx),
 	}); err != nil {
-		s.Logger.WarnwCtx(ctx, "failed to update razorpay customer notes", "error", err, "customer_id", req.EntityID, "provider_entity_id", req.ProviderEntityID)
+		s.Logger.Warn(ctx, "failed to update razorpay customer notes", "error", err, "customer_id", req.EntityID, "provider_entity_id", req.ProviderEntityID)
 		return nil
 	}
 	return nil

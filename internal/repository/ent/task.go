@@ -79,7 +79,7 @@ func (r *taskRepository) Create(ctx context.Context, t *domainTask.Task) error {
 
 	if err != nil {
 		SetSpanError(span, err)
-		r.logger.Error("failed to create task", "error", err)
+		r.logger.Error(ctx, "failed to create task", "error", err)
 		return ierr.WithError(err).
 			WithHint("Failed to create task").
 			WithReportableDetails(map[string]interface{}{

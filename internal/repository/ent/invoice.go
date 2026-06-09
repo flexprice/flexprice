@@ -103,7 +103,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 	if err != nil {
 		SetSpanError(span, err)
 
-		r.logger.Error("failed to create invoice", "error", err)
+		r.logger.Error(ctx, "failed to create invoice", "error", err)
 		if ent.IsConstraintError(err) {
 			var pqErr *pq.Error
 			if errors.As(err, &pqErr) {
@@ -237,7 +237,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					}).
 					Mark(ierr.ErrAlreadyExists)
 			}
-			r.logger.Error("failed to create invoice", "error", err)
+			r.logger.Error(ctx, "failed to create invoice", "error", err)
 			return ierr.WithError(err).WithHint("invoice creation failed").Mark(ierr.ErrDatabase)
 		}
 
@@ -283,14 +283,14 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			}
 
 			if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-				r.logger.Error("failed to create line items", "error", err)
+				r.logger.Error(ctx, "failed to create line items", "error", err)
 				return ierr.WithError(err).WithHint("line item creation failed").Mark(ierr.ErrDatabase)
 			}
 		}
 
 		invoiceWithLineItems, err := r.Get(ctx, invoice.ID)
 		if err != nil {
-			r.logger.Error("failed to get invoice with line items", "error", err)
+			r.logger.Error(ctx, "failed to get invoice with line items", "error", err)
 			return err
 		}
 		*inv = *invoiceWithLineItems
@@ -358,7 +358,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 		}
 
 		if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-			r.logger.Error("failed to add line items", "error", err)
+			r.logger.Error(ctx, "failed to add line items", "error", err)
 			return ierr.WithError(err).WithHint("line item addition failed").Mark(ierr.ErrDatabase)
 		}
 
@@ -443,7 +443,7 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
 	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
 	if err != nil {
-		r.logger.Error("failed to get invoice line items", "error", err)
+		r.logger.Error(ctx, "failed to get invoice line items", "error", err)
 		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
 	}
 	invoiceData.LineItems = items
@@ -605,7 +605,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	r.logger.Info("deleting invoice", "id", id)
+	r.logger.Info(ctx, "deleting invoice", "id", id)
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Delete line items first

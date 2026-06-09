@@ -49,7 +49,7 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 	ctx context.Context,
 	req QuickBooksInvoiceSyncRequest,
 ) (*QuickBooksInvoiceSyncResponse, error) {
-	s.Logger.Debugw("starting QuickBooks invoice sync",
+	s.Logger.Debug(ctx, "starting QuickBooks invoice sync",
 		"invoice_id", req.InvoiceID)
 
 	flexInvoice, err := s.InvoiceRepo.Get(ctx, req.InvoiceID)
@@ -66,7 +66,7 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 	}
 
 	if existingMapping != nil {
-		s.Logger.Infow("invoice already synced to QuickBooks",
+		s.Logger.Info(ctx, "invoice already synced to QuickBooks",
 			"invoice_id", req.InvoiceID,
 			"quickbooks_invoice_id", existingMapping.ProviderEntityID)
 		return &QuickBooksInvoiceSyncResponse{
@@ -123,13 +123,13 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Infow("created invoice in QuickBooks",
+	s.Logger.Info(ctx, "created invoice in QuickBooks",
 		"invoice_id", req.InvoiceID,
 		"quickbooks_invoice_id", quickBooksInvoice.ID)
 
 	// Step 4: Create mapping
 	if err := s.createInvoiceMapping(ctx, req.InvoiceID, quickBooksInvoice.ID, flexInvoice.EnvironmentID, flexInvoice.TenantID); err != nil {
-		s.Logger.Errorw("failed to create invoice mapping",
+		s.Logger.Error(ctx, "failed to create invoice mapping",
 			"invoice_id", req.InvoiceID,
 			"quickbooks_invoice_id", quickBooksInvoice.ID,
 			"error", err)
@@ -138,7 +138,7 @@ func (s *InvoiceService) SyncInvoiceToQuickBooks(
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.Infow("successfully synced invoice to QuickBooks",
+	s.Logger.Info(ctx, "successfully synced invoice to QuickBooks",
 		"invoice_id", req.InvoiceID,
 		"quickbooks_invoice_id", quickBooksInvoice.ID)
 
@@ -177,7 +177,7 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 		if err != nil {
 			// Log error but continue with other line items
 			// This allows partial invoice creation if some items can't be mapped
-			s.Logger.Errorw("failed to get QuickBooks item ID for line item",
+			s.Logger.Error(ctx, "failed to get QuickBooks item ID for line item",
 				"invoice_id", flexInvoice.ID,
 				"line_item_id", item.ID,
 				"price_id", *item.PriceID,
@@ -206,7 +206,7 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 			lineItem.Description = *item.DisplayName
 		}
 
-		s.Logger.Debugw("built QuickBooks invoice line item",
+		s.Logger.Debug(ctx, "built QuickBooks invoice line item",
 			"invoice_id", flexInvoice.ID,
 			"line_item_id", item.ID,
 			"price_id", *item.PriceID,

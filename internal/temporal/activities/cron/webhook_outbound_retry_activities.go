@@ -24,11 +24,11 @@ func NewWebhookOutboundRetryActivities(webhookService *webhook.WebhookService, l
 
 // RetryStaleOutboundWebhooksActivity delegates to WebhookService.RetryStalePendingWebhooks.
 func (a *WebhookOutboundRetryActivities) RetryStaleOutboundWebhooksActivity(ctx context.Context) (*cronModels.OutboundWebhookStaleRetryWorkflowResult, error) {
-	a.logger.Infow("starting stale outbound webhook retry cron job")
+	a.logger.Info(ctx, "starting stale outbound webhook retry cron job")
 
 	res, err := a.webhookService.RetryStalePendingWebhooks(ctx)
 	if err != nil {
-		a.logger.Errorw("stale outbound webhook retry activity failed", "error", err)
+		a.logger.Error(ctx, "stale outbound webhook retry activity failed", "error", err)
 		return nil, err
 	}
 
@@ -38,7 +38,7 @@ func (a *WebhookOutboundRetryActivities) RetryStaleOutboundWebhooksActivity(ctx 
 		Failed:    res.Failed,
 	}
 
-	a.logger.Infow("completed stale outbound webhook retry cron job",
+	a.logger.Info(ctx, "completed stale outbound webhook retry cron job",
 		"total", out.Total,
 		"succeeded", out.Succeeded,
 		"failed", out.Failed,

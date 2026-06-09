@@ -1496,7 +1496,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 
 	aggResult, err := s.repo.GetUsageForBucketedMeters(ctx, bucketParams)
 	if err != nil {
-		s.logger.Errorw("failed to get bucketed meter usage", "error", err, "meter_id", m.ID)
+		s.logger.Error(ctx, "failed to get bucketed meter usage", "error", err, "meter_id", m.ID)
 		return nil, err
 	}
 

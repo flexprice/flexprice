@@ -51,7 +51,7 @@ func NewEnvironmentActivities(params service.ServiceParams) *EnvironmentActiviti
 // to target environment. Features whose lookup_key already exists in the target are
 // skipped (idempotent). Each feature is cloned in its own DB transaction.
 func (a *EnvironmentActivities) CloneEnvironmentFeatures(ctx context.Context, input temporalmodels.CloneEnvironmentInput) (*CloneFeaturesResult, error) {
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 
 	if input.SourceEnvironmentID == "" || input.TargetEnvironmentID == "" {
 		return nil, ierr.NewError("source and target environment IDs are required").
@@ -101,7 +101,7 @@ func (a *EnvironmentActivities) CloneEnvironmentFeatures(ctx context.Context, in
 	for _, srcFeat := range sourceFeatures {
 		// Idempotency: skip if feature with same lookup_key already exists in target
 		if srcFeat.LookupKey != "" && existingByKey[srcFeat.LookupKey] {
-			log.Infow("env_clone_feature_skipped_existing",
+			log.Info(ctx, "env_clone_feature_skipped_existing",
 				"feature_id", srcFeat.ID, "lookup_key", srcFeat.LookupKey,
 				"source_env", input.SourceEnvironmentID, "target_env", input.TargetEnvironmentID)
 			result.FeaturesSkipped++
@@ -125,7 +125,7 @@ func (a *EnvironmentActivities) CloneEnvironmentFeatures(ctx context.Context, in
 		result.FeatureIDs = append(result.FeatureIDs, newFeatureID)
 	}
 
-	log.Infow("env_clone_features_completed",
+	log.Info(ctx, "env_clone_features_completed",
 		"source_env", input.SourceEnvironmentID,
 		"target_env", input.TargetEnvironmentID,
 		"features_cloned", result.FeaturesCloned,
@@ -225,7 +225,7 @@ func (a *EnvironmentActivities) cloneFeat(
 // are skipped. Each plan is cloned in its own DB transaction. If any price or entitlement
 // references a feature/meter that doesn't exist in the target env, that entire plan is failed.
 func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input temporalmodels.CloneEnvironmentInput) (*ClonePlansResult, error) {
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 
 	if input.SourceEnvironmentID == "" || input.TargetEnvironmentID == "" {
 		return nil, ierr.NewError("source and target environment IDs are required").
@@ -284,7 +284,7 @@ func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input
 	for _, srcPlan := range sourcePlans {
 		// Idempotency: skip if plan with same lookup_key already exists in target
 		if srcPlan.LookupKey != "" && existingByKey[srcPlan.LookupKey] {
-			log.Infow("env_clone_plan_skipped_existing",
+			log.Info(ctx, "env_clone_plan_skipped_existing",
 				"plan_id", srcPlan.ID, "lookup_key", srcPlan.LookupKey,
 				"source_env", input.SourceEnvironmentID, "target_env", input.TargetEnvironmentID)
 			result.PlansSkipped++
@@ -310,7 +310,7 @@ func (a *EnvironmentActivities) CloneEnvironmentPlans(ctx context.Context, input
 		result.PlanIDs = append(result.PlanIDs, newPlanID)
 	}
 
-	log.Infow("env_clone_plans_completed",
+	log.Info(ctx, "env_clone_plans_completed",
 		"source_env", input.SourceEnvironmentID,
 		"target_env", input.TargetEnvironmentID,
 		"plans_cloned", result.PlansCloned,

@@ -43,7 +43,7 @@ func NewWalletHandler(walletService service.WalletService, logger *logger.Logger
 func (h *WalletHandler) CreateWallet(c *gin.Context) {
 	var req dto.CreateWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -52,7 +52,7 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 
 	wallet, err := h.walletService.CreateWallet(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Error("Failed to create wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to create wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -95,7 +95,7 @@ func (h *WalletHandler) GetWalletsByCustomerID(c *gin.Context) {
 	// Get wallets
 	wallets, err := h.walletService.GetWalletsByCustomerID(c.Request.Context(), customerID)
 	if err != nil {
-		h.logger.Error("Failed to get wallets", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallets", "error", err)
 		c.Error(err)
 		return
 	}
@@ -136,7 +136,7 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 	var req dto.GetCustomerWalletsRequest
 	// All data is present in the query params
 	if err := c.ShouldBindQuery(&req); err != nil {
-		h.logger.Error("Failed to bind query parameters", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind query parameters", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -162,7 +162,7 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 	// Get wallets
 	wallets, err := h.walletService.GetCustomerWallets(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Error("Failed to get customer wallets", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get customer wallets", "error", err)
 		c.Error(err)
 		return
 	}
@@ -212,7 +212,7 @@ func (h *WalletHandler) GetWalletByID(c *gin.Context) {
 
 	wallet, err := h.walletService.GetWalletByID(c.Request.Context(), walletID)
 	if err != nil {
-		h.logger.Error("Failed to get wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -246,7 +246,7 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 
 	var filter types.WalletTransactionFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.logger.Error("Failed to bind query", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
@@ -259,7 +259,7 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 
 	transactions, err := h.walletService.GetWalletTransactions(c.Request.Context(), walletID, &filter)
 	if err != nil {
-		h.logger.Error("Failed to get wallet transactions", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallet transactions", "error", err)
 		c.Error(err)
 		return
 	}
@@ -293,7 +293,7 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 	var req dto.TopUpWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -302,7 +302,7 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 	wallet, err := h.walletService.TopUpWallet(c.Request.Context(), walletID, &req)
 	if err != nil {
-		h.logger.Error("Failed to top up wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to top up wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -355,7 +355,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	}
 
 	if err != nil {
-		h.logger.Error("Failed to get wallet balance", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallet balance", "error", err)
 		c.Error(err)
 		return
 	}
@@ -406,7 +406,7 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	// Get wallet balance
 	balance, err := h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID, maxLiveSeconds)
 	if err != nil {
-		h.logger.Error("Failed to get wallet balance", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get wallet balance", "error", err)
 		c.Error(err)
 		return
 	}
@@ -452,7 +452,7 @@ func (h *WalletHandler) TerminateWallet(c *gin.Context) {
 
 	err := h.walletService.TerminateWallet(c.Request.Context(), walletID)
 	if err != nil {
-		h.logger.Error("Failed to terminate wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to terminate wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -481,7 +481,7 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 
 	var req dto.UpdateWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -490,7 +490,7 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 
 	updated, err := h.walletService.UpdateWallet(ctx, id, &req)
 	if err != nil {
-		h.logger.Error("Failed to update wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to update wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -509,7 +509,7 @@ func (h *WalletHandler) ModifyWallet(c *gin.Context) {
 
 	var req dto.ModifyWalletRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -518,7 +518,7 @@ func (h *WalletHandler) ModifyWallet(c *gin.Context) {
 
 	modified, err := h.walletService.ModifyWallet(c.Request.Context(), walletID, &req)
 	if err != nil {
-		h.logger.Error("Failed to modify wallet", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to modify wallet", "error", err)
 		c.Error(err)
 		return
 	}
@@ -537,7 +537,7 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 
 	var req dto.ManualBalanceDebitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind JSON", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -546,7 +546,7 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 
 	wallet, err := h.walletService.ManualBalanceDebit(c.Request.Context(), walletID, &req)
 	if err != nil {
-		h.logger.Error("Failed to debit balance manually", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to debit balance manually", "error", err)
 		c.Error(err)
 		return
 	}
@@ -631,7 +631,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 
 	resp, err := h.walletService.GetWallets(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Error("Failed to list wallets", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to list wallets", "error", err)
 		c.Error(err)
 		return
 	}
@@ -702,7 +702,7 @@ func (h *WalletHandler) QueryWallets(c *gin.Context) {
 
 	resp, err := h.walletService.GetWallets(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Error("Failed to list wallets", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to list wallets", "error", err)
 		c.Error(err)
 		return
 	}

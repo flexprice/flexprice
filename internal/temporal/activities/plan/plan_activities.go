@@ -59,7 +59,7 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 	ctx = types.SetUserID(ctx, input.UserID)
 
 	lockKey := cache.PrefixPriceSyncLock + input.PlanID
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 	defer func() {
 		redisCache := cache.GetRedisCache()
 		if redisCache == nil {
@@ -69,7 +69,7 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		redisCache.Delete(releaseCtx, lockKey)
-		log.Infow("price_sync_lock_released", "plan_id", input.PlanID, "lock_key", lockKey)
+		log.Info(ctx, "price_sync_lock_released", "plan_id", input.PlanID, "lock_key", lockKey)
 	}()
 
 	result, err := a.planService.SyncPlanPrices(ctx, input.PlanID)
@@ -101,7 +101,7 @@ func (a *PlanActivities) SyncPlanPricesV2(ctx context.Context, input SyncPlanPri
 	ctx = types.SetUserID(ctx, input.UserID)
 
 	lockKey := cache.PrefixPriceSyncLock + input.PlanID
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 	defer func() {
 		redisCache := cache.GetRedisCache()
 		if redisCache == nil {
@@ -111,7 +111,7 @@ func (a *PlanActivities) SyncPlanPricesV2(ctx context.Context, input SyncPlanPri
 		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		redisCache.Delete(releaseCtx, lockKey)
-		log.Infow("price_sync_lock_released", "plan_id", input.PlanID, "lock_key", lockKey, "version", "v2")
+		log.Info(ctx, "price_sync_lock_released", "plan_id", input.PlanID, "lock_key", lockKey, "version", "v2")
 	}()
 
 	return a.planService.SyncPlanPricesV2(ctx, input.PlanID)

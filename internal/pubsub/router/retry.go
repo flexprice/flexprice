@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"net"
 	"net/http"
 
@@ -17,13 +18,13 @@ func shouldRetry(logger *logger.Logger, err error) bool {
 			http.StatusBadGateway,
 			http.StatusServiceUnavailable,
 			http.StatusGatewayTimeout:
-			logger.Debugw("retrying due to HTTP error",
+			logger.Debug(context.Background(), "retrying due to HTTP error",
 				"status_code", httpErr.StatusCode,
 				"error", httpErr,
 			)
 			return true
 		}
-		logger.Debugw("non-retryable HTTP error",
+		logger.Debug(context.Background(), "non-retryable HTTP error",
 			"status_code", httpErr.StatusCode,
 			"error", httpErr,
 		)
@@ -32,7 +33,7 @@ func shouldRetry(logger *logger.Logger, err error) bool {
 
 	// Network errors
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-		logger.Debugw("retrying due to network timeout", "error", netErr)
+		logger.Debug(context.Background(), "retrying due to network timeout", "error", netErr)
 		return true
 	}
 

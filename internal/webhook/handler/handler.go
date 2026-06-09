@@ -67,7 +67,7 @@ func NewHandler(
 
 func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	if !h.config.Enabled {
-		h.logger.Info("webhook handler disabled by configuration, skipping registration")
+		h.logger.Info(context.Background(), "webhook handler disabled by configuration, skipping registration")
 		return
 	}
 	rateLimit := h.config.RateLimit
@@ -107,7 +107,7 @@ func (h *handler) DeliverWebhook(ctx context.Context, event *types.WebhookEvent)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
 
 	messageUUID := types.GenerateUUID()
-	h.logger.Debugw("delivering webhook synchronously",
+	h.logger.Debug(ctx, "delivering webhook synchronously",
 		"message_uuid", messageUUID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
@@ -121,7 +121,7 @@ func (h *handler) DeliverWebhook(ctx context.Context, event *types.WebhookEvent)
 		deliveryErr = h.deliverNative(ctx, event, messageUUID)
 	}
 	if deliveryErr != nil {
-		h.logger.Errorw("failed to deliver webhook synchronously",
+		h.logger.Error(ctx, "failed to deliver webhook synchronously",
 			"error", deliveryErr,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -156,7 +156,7 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 		return
 	}
 	if webhookMissingDataError(err) {
-		h.logger.Errorw("skipping webhook; referenced data not found (ack, no retry)",
+		h.logger.Error(ctx, "skipping webhook; referenced data not found (ack, no retry)",
 			"transport", transport,
 			"error", err,
 			"message_uuid", messageUUID,
@@ -164,7 +164,7 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 			"tenant_id", event.TenantID,
 		)
 	} else {
-		h.logger.Errorw("failed to send webhook",
+		h.logger.Error(ctx, "failed to send webhook",
 			"transport", transport,
 			"error", err,
 			"message_uuid", messageUUID,
@@ -249,7 +249,7 @@ func (h *handler) deliverSvix(ctx context.Context, event *types.WebhookEvent, me
 		return err
 	}
 
-	h.logger.Debugw("building webhook payload",
+	h.logger.Debug(ctx, "building webhook payload",
 		"event_name", event.EventName,
 		"builder", builder,
 	)
@@ -279,7 +279,7 @@ func (h *handler) deliverSvix(ctx context.Context, event *types.WebhookEvent, me
 		return err
 	}
 
-	h.logger.Infow("webhook sent successfully via Svix",
+	h.logger.Info(ctx, "webhook sent successfully via Svix",
 		"message_uuid", messageUUID,
 		"tenant_id", event.TenantID,
 		"event", event.EventName,
@@ -314,7 +314,7 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 		return err
 	}
 
-	h.logger.Debugw("building webhook payload",
+	h.logger.Debug(ctx, "building webhook payload",
 		"event_name", event.EventName,
 		"builder", builder,
 	)
@@ -324,7 +324,7 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 		return err
 	}
 
-	h.logger.Debugw("built webhook payload",
+	h.logger.Debug(ctx, "built webhook payload",
 		"event_name", event.EventName,
 		"payload", string(webHookPayload),
 	)
@@ -341,7 +341,7 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 		return err
 	}
 
-	h.logger.Infow("webhook sent successfully",
+	h.logger.Info(ctx, "webhook sent successfully",
 		"message_uuid", messageUUID,
 		"tenant_id", event.TenantID,
 		"event", event.EventName,

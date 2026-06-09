@@ -43,7 +43,7 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
-	a.logger.Infow("syncing subscription to Paddle",
+	a.logger.Info(ctx, "syncing subscription to Paddle",
 		"subscription_id", input.SubscriptionID,
 		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
@@ -58,7 +58,7 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get Paddle integration for subscription sync",
+		a.logger.Error(ctx, "failed to get Paddle integration for subscription sync",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
 		return err
@@ -102,13 +102,13 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 		if ierr.IsValidation(err) {
 			return temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
 		}
-		a.logger.Errorw("failed to ensure subscription synced to Paddle",
+		a.logger.Error(ctx, "failed to ensure subscription synced to Paddle",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
 		return err
 	}
 
-	a.logger.Infow("successfully synced subscription to Paddle",
+	a.logger.Info(ctx, "successfully synced subscription to Paddle",
 		"subscription_id", input.SubscriptionID,
 		"customer_id", input.CustomerID)
 	return nil
@@ -153,7 +153,7 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 		if subID == "" {
 			if inv.SubscriptionID == nil || *inv.SubscriptionID == "" {
 				// Invoice not linked to a subscription — no sub sync needed.
-				a.logger.Infow("invoice has no subscription_id, treating as activated",
+				a.logger.Info(ctx, "invoice has no subscription_id, treating as activated",
 					"invoice_id", input.InvoiceID)
 				return &models.SubscriptionSyncStatusResult{
 					Status:     "activated",
@@ -172,7 +172,7 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 		return nil, err
 	}
 	if activated {
-		a.logger.Infow("Paddle subscription mapping exists, status: activated",
+		a.logger.Info(ctx, "Paddle subscription mapping exists, status: activated",
 			"subscription_id", subID,
 			"invoice_id", input.InvoiceID)
 		return &models.SubscriptionSyncStatusResult{
@@ -181,7 +181,7 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 			CustomerID:     customerID,
 		}, nil
 	}
-	a.logger.Infow("no Paddle subscription mapping found, status: not_synced",
+	a.logger.Info(ctx, "no Paddle subscription mapping found, status: not_synced",
 		"subscription_id", subID,
 		"invoice_id", input.InvoiceID)
 	return &models.SubscriptionSyncStatusResult{

@@ -55,7 +55,7 @@ func (s *taskService) CreateTask(ctx context.Context, req dto.CreateTaskRequest)
 	}
 
 	if err := s.TaskRepo.Create(ctx, t); err != nil {
-		s.Logger.Error("failed to create task", "error", err)
+		s.Logger.Error(ctx, "failed to create task", "error", err)
 		return nil, err
 	}
 
@@ -254,20 +254,20 @@ func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) e
 	if err != nil {
 		// Update task status to failed
 		if updateErr := s.UpdateTaskStatus(ctx, id, types.TaskStatusFailed); updateErr != nil {
-			s.Logger.Error("failed to update task status", "error", updateErr)
+			s.Logger.Error(ctx, "failed to update task status", "error", updateErr)
 		}
 		return err
 	}
 
 	// Update task with final processing results before marking as completed
 	if err := s.updateTaskWithResults(ctx, id, t); err != nil {
-		s.Logger.Error("failed to update task with results", "error", err)
+		s.Logger.Error(ctx, "failed to update task with results", "error", err)
 		return err
 	}
 
 	// Update task status to completed
 	if err := s.UpdateTaskStatus(ctx, id, types.TaskStatusCompleted); err != nil {
-		s.Logger.Error("failed to update task status", "error", err)
+		s.Logger.Error(ctx, "failed to update task status", "error", err)
 		return err
 	}
 
@@ -297,7 +297,7 @@ func (s *taskService) updateTaskWithResults(ctx context.Context, id string, t *t
 			Mark(ierr.ErrValidation)
 	}
 
-	s.Logger.InfowCtx(ctx, "updated task with processing results",
+	s.Logger.Info(ctx, "updated task with processing results",
 		"task_id", id,
 		"processed_records", currentTask.ProcessedRecords,
 		"successful_records", currentTask.SuccessfulRecords,
@@ -415,7 +415,7 @@ func (p *EventsChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 		successCount, err := p.batchCreateEvents(ctx, eventRequests)
 		if err != nil {
 			// If batch creation fails, mark all as failed
-			p.logger.Error("batch event creation failed", "error", err)
+			p.logger.Error(ctx, "batch event creation failed", "error", err)
 			failedRecords += len(eventRequests)
 			errors = append(errors, fmt.Sprintf("Batch event creation failed: %v", err))
 		} else {
@@ -478,7 +478,7 @@ func (p *EventsChunkProcessor) batchCreateEvents(ctx context.Context, events []*
 		totalFailedCount += failedCount
 
 		// Log batch progress
-		p.logger.Debugw("processed event batch",
+		p.logger.Debug(ctx, "processed event batch",
 			"batch_start", i,
 			"batch_end", end,
 			"batch_size", len(batch),
@@ -488,7 +488,7 @@ func (p *EventsChunkProcessor) batchCreateEvents(ctx context.Context, events []*
 			"total_remaining", len(events)-end)
 	}
 
-	p.logger.Infow("completed batch event creation",
+	p.logger.Info(ctx, "completed batch event creation",
 		"total_events", len(events),
 		"successful_events", totalSuccessCount,
 		"failed_events", totalFailedCount)
@@ -505,7 +505,7 @@ func (p *EventsChunkProcessor) processBatch(ctx context.Context, batch []*dto.In
 
 	// Use bulk API for better performance
 	if err := p.eventService.BulkCreateEvents(ctx, bulkRequest); err != nil {
-		p.logger.Errorw("bulk event creation failed",
+		p.logger.Error(ctx, "bulk event creation failed",
 			"batch_size", len(batch),
 			"error", err)
 		return 0, len(batch) // All events in batch failed
@@ -528,7 +528,7 @@ func (p *CustomersChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]st
 	failedRecords := 0
 	var errors []string
 
-	p.logger.Debugw("processing customer chunk",
+	p.logger.Debug(ctx, "processing customer chunk",
 		"chunk_index", chunkIndex,
 		"chunk_size", len(chunk),
 		"headers", headers)
@@ -537,7 +537,7 @@ func (p *CustomersChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]st
 	for i, record := range chunk {
 		processedRecords++
 
-		p.logger.Debugw("processing customer record",
+		p.logger.Debug(ctx, "processing customer record",
 			"record_index", i,
 			"record", record,
 			"chunk_index", chunkIndex)
@@ -625,7 +625,7 @@ func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerR
 		// Log context information for debugging
 		tenantID := types.GetTenantID(ctx)
 		environmentID := types.GetEnvironmentID(ctx)
-		p.logger.Debugw("looking up existing customer",
+		p.logger.Debug(ctx, "looking up existing customer",
 			"external_id", customerReq.ExternalID,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
@@ -634,17 +634,17 @@ func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerR
 		if err != nil {
 			// Only treat non-"not found" errors as fatal
 			if !ierr.IsNotFound(err) {
-				p.logger.Error("failed to search for existing customer", "external_id", customerReq.ExternalID, "error", err)
+				p.logger.Error(ctx, "failed to search for existing customer", "external_id", customerReq.ExternalID, "error", err)
 				return fmt.Errorf("failed to search for existing customer: %w", err)
 			}
 			// Customer not found - this is expected for new customers
-			p.logger.Debugw("customer not found in current environment, will create new",
+			p.logger.Debug(ctx, "customer not found in current environment, will create new",
 				"external_id", customerReq.ExternalID,
 				"tenant_id", tenantID,
 				"environment_id", environmentID)
 			customer = nil
 		} else {
-			p.logger.Debugw("found existing customer",
+			p.logger.Debug(ctx, "found existing customer",
 				"external_id", customerReq.ExternalID,
 				"customer_id", customer.ID,
 				"tenant_id", tenantID,
@@ -653,7 +653,7 @@ func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerR
 
 		// Additional debugging: Check if customer exists in other environments
 		if customer == nil {
-			p.logger.Debugw("checking if customer exists in other environments",
+			p.logger.Debug(ctx, "checking if customer exists in other environments",
 				"external_id", customerReq.ExternalID,
 				"current_tenant_id", tenantID,
 				"current_environment_id", environmentID)
@@ -704,11 +704,11 @@ func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerR
 			// Update the customer
 			_, err := p.customerService.UpdateCustomer(ctx, existingCustomer.ID, updateReq)
 			if err != nil {
-				p.logger.Error("failed to update customer", "customer_id", existingCustomer.ID, "error", err)
+				p.logger.Error(ctx, "failed to update customer", "customer_id", existingCustomer.ID, "error", err)
 				return fmt.Errorf("failed to update customer: %w", err)
 			}
 
-			p.logger.Info("updated existing customer", "customer_id", existingCustomer.ID, "external_id", customerReq.ExternalID)
+			p.logger.Info(ctx, "updated existing customer", "customer_id", existingCustomer.ID, "external_id", customerReq.ExternalID)
 			return nil
 		}
 	}
@@ -716,11 +716,11 @@ func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerR
 	// If no existing customer found, create a new one
 	_, err := p.customerService.CreateCustomer(ctx, *customerReq)
 	if err != nil {
-		p.logger.Error("failed to create customer", "error", err)
+		p.logger.Error(ctx, "failed to create customer", "error", err)
 		return fmt.Errorf("failed to create customer: %w", err)
 	}
 
-	p.logger.Info("created new customer", "external_id", customerReq.ExternalID)
+	p.logger.Info(ctx, "created new customer", "external_id", customerReq.ExternalID)
 	return nil
 }
 
@@ -737,7 +737,7 @@ func (p *PricesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 	failedRecords := 0
 	var errors []string
 
-	p.logger.Debugw("processing price chunk",
+	p.logger.Debug(ctx, "processing price chunk",
 		"chunk_index", chunkIndex,
 		"chunk_size", len(chunk),
 		"headers", headers)
@@ -746,7 +746,7 @@ func (p *PricesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 	for i, record := range chunk {
 		processedRecords++
 
-		p.logger.Debugw("processing price record",
+		p.logger.Debug(ctx, "processing price record",
 			"record_index", i,
 			"record", record,
 			"chunk_index", chunkIndex)
@@ -918,11 +918,11 @@ func (p *PricesChunkProcessor) processPrice(ctx context.Context, priceReq *dto.C
 	// Create the price
 	_, err := p.priceService.CreatePrice(ctx, *priceReq)
 	if err != nil {
-		p.logger.Error("failed to create price", "error", err)
+		p.logger.Error(ctx, "failed to create price", "error", err)
 		return fmt.Errorf("failed to create price: %w", err)
 	}
 
-	p.logger.Info("created new price", "entity_type", priceReq.EntityType, "entity_id", priceReq.EntityID, "lookup_key", priceReq.LookupKey)
+	p.logger.Info(ctx, "created new price", "entity_type", priceReq.EntityType, "entity_id", priceReq.EntityID, "lookup_key", priceReq.LookupKey)
 	return nil
 }
 
@@ -939,7 +939,7 @@ func (f *FeaturesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]str
 	failedRecords := 0
 	var errors []string
 
-	f.logger.Debugw("processing feature chunk",
+	f.logger.Debug(ctx, "processing feature chunk",
 		"chunk_index", chunkIndex,
 		"chunk_size", len(chunk),
 		"headers", headers)
@@ -947,7 +947,7 @@ func (f *FeaturesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]str
 	// Process each record in the chunk
 	for i, record := range chunk {
 		processedRecords++
-		f.logger.Debugw("processing feature record",
+		f.logger.Debug(ctx, "processing feature record",
 			"record_index", i,
 			"record", record,
 			"chunk_index", chunkIndex)
@@ -1027,7 +1027,7 @@ func (f *FeaturesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]str
 			featureReq.Meter.ResetUsage = types.ResetUsageBillingPeriod
 		}
 		// Log parsed feature request for debugging
-		f.logger.Debugw("parsed feature request",
+		f.logger.Debug(ctx, "parsed feature request",
 			"record_index", i,
 			"name", featureReq.Name,
 			"type", featureReq.Type,
@@ -1035,7 +1035,7 @@ func (f *FeaturesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]str
 			"has_meter", featureReq.Meter != nil)
 		// Validate the feature request
 		if err := featureReq.Validate(); err != nil {
-			f.logger.Errorw("feature validation failed",
+			f.logger.Error(ctx, "feature validation failed",
 				"record_index", i,
 				"error", err,
 				"feature_req", featureReq)
@@ -1076,7 +1076,7 @@ func (f *FeaturesChunkProcessor) processFeature(ctx context.Context, featureReq 
 		// Log context information for debugging
 		tenantID := types.GetTenantID(ctx)
 		environmentID := types.GetEnvironmentID(ctx)
-		f.logger.Debugw("looking up existing feature",
+		f.logger.Debug(ctx, "looking up existing feature",
 			"lookup_key", featureReq.LookupKey,
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
@@ -1087,18 +1087,18 @@ func (f *FeaturesChunkProcessor) processFeature(ctx context.Context, featureReq 
 		if err != nil {
 			// Only treat non-"not found" errors as fatal
 			if !ierr.IsNotFound(err) {
-				f.logger.Error("failed to search for existing feature", "lookup_key", featureReq.LookupKey, "error", err)
+				f.logger.Error(ctx, "failed to search for existing feature", "lookup_key", featureReq.LookupKey, "error", err)
 				return fmt.Errorf("failed to search for existing feature: %w", err)
 			}
 			// Feature not found - this is expected for new features
-			f.logger.Debugw("feature not found in current environment, will create new",
+			f.logger.Debug(ctx, "feature not found in current environment, will create new",
 				"lookup_key", featureReq.LookupKey,
 				"tenant_id", tenantID,
 				"environment_id", environmentID)
 			features = nil
 		} else {
 			if len(features.Items) > 0 {
-				f.logger.Debugw("found existing feature",
+				f.logger.Debug(ctx, "found existing feature",
 					"lookup_key", featureReq.LookupKey,
 					"feature_id", features.Items[0].ID,
 					"tenant_id", tenantID,
@@ -1133,11 +1133,11 @@ func (f *FeaturesChunkProcessor) processFeature(ctx context.Context, featureReq 
 			// Update the feature
 			_, err := f.featureService.UpdateFeature(ctx, existingFeature.ID, updateReq)
 			if err != nil {
-				f.logger.Error("failed to update feature", "feature_id", existingFeature.ID, "error", err)
+				f.logger.Error(ctx, "failed to update feature", "feature_id", existingFeature.ID, "error", err)
 				return fmt.Errorf("failed to update feature: %w", err)
 			}
 
-			f.logger.Info("updated existing feature", "feature_id", existingFeature.ID, "lookup_key", featureReq.LookupKey)
+			f.logger.Info(ctx, "updated existing feature", "feature_id", existingFeature.ID, "lookup_key", featureReq.LookupKey)
 			return nil
 		}
 	}
@@ -1145,11 +1145,11 @@ func (f *FeaturesChunkProcessor) processFeature(ctx context.Context, featureReq 
 	// If no existing feature found, create a new one
 	_, err := f.featureService.CreateFeature(ctx, *featureReq)
 	if err != nil {
-		f.logger.Error("failed to create feature", "error", err)
+		f.logger.Error(ctx, "failed to create feature", "error", err)
 		return fmt.Errorf("failed to create feature: %w", err)
 	}
 
-	f.logger.Info("created new feature", "lookup_key", featureReq.LookupKey)
+	f.logger.Info(ctx, "created new feature", "lookup_key", featureReq.LookupKey)
 	return nil
 }
 
@@ -1192,7 +1192,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	bucket := parts[0]
 	key := parts[1]
 
-	s.Logger.InfowCtx(ctx, "generating presigned URL for task file",
+	s.Logger.Info(ctx, "generating presigned URL for task file",
 		"task_id", id,
 		"bucket", bucket,
 		"key", key)
@@ -1210,7 +1210,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	// Get the scheduled task to find the connection
 	scheduledTask, err := s.ScheduledTaskRepo.Get(ctx, t.ScheduledTaskID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get scheduled task", "error", err, "scheduled_task_id", t.ScheduledTaskID)
+		s.Logger.Error(ctx, "failed to get scheduled task", "error", err, "scheduled_task_id", t.ScheduledTaskID)
 		return "", ierr.WithError(err).
 			WithHint("Failed to get scheduled task").
 			Mark(ierr.ErrNotFound)
@@ -1229,7 +1229,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	// Get the connection to determine if it's Flexprice-managed
 	conn, err := s.ConnectionRepo.Get(ctx, scheduledTask.ConnectionID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get connection", "error", err, "connection_id", scheduledTask.ConnectionID)
+		s.Logger.Error(ctx, "failed to get connection", "error", err, "connection_id", scheduledTask.ConnectionID)
 		return "", ierr.WithError(err).
 			WithHint("Failed to get connection").
 			Mark(ierr.ErrNotFound)
@@ -1241,7 +1241,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	// For Flexprice-managed, verify bucket matches config
 	if isFlexpriceManaged {
 		if bucket != s.Config.FlexpriceS3Exports.Bucket {
-			s.Logger.WarnwCtx(ctx, "bucket mismatch for Flexprice-managed export",
+			s.Logger.Warn(ctx, "bucket mismatch for Flexprice-managed export",
 				"expected_bucket", s.Config.FlexpriceS3Exports.Bucket,
 				"actual_bucket", bucket,
 				"task_id", id)
@@ -1256,14 +1256,14 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 		}
 	}
 
-	s.Logger.DebugwCtx(ctx, "generating presigned URL",
+	s.Logger.Debug(ctx, "generating presigned URL",
 		"connection_id", scheduledTask.ConnectionID,
 		"is_flexprice_managed", isFlexpriceManaged)
 
 	// Get the S3 integration which handles credential decryption
 	s3Integration, err := s.IntegrationFactory.GetS3Client(ctx)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get S3 integration", "error", err)
+		s.Logger.Error(ctx, "failed to get S3 integration", "error", err)
 		return "", ierr.WithError(err).
 			WithHint("Failed to initialize S3 integration").
 			Mark(ierr.ErrInternal)
@@ -1297,7 +1297,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	// Get S3 client configured with connection-specific credentials
 	s3Client, _, err := s3Integration.GetS3Client(ctx, jobConfig, scheduledTask.ConnectionID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get S3 client with connection credentials", "error", err)
+		s.Logger.Error(ctx, "failed to get S3 client with connection credentials", "error", err)
 		return "", ierr.WithError(err).
 			WithHint("Failed to get S3 client with connection credentials").
 			Mark(ierr.ErrInternal)
@@ -1313,13 +1313,13 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 	}, s3.WithPresignExpires(30*time.Minute))
 
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to generate presigned URL", "error", err)
+		s.Logger.Error(ctx, "failed to generate presigned URL", "error", err)
 		return "", ierr.WithError(err).
 			WithHint("Failed to generate presigned URL").
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.InfowCtx(ctx, "successfully generated presigned URL",
+	s.Logger.Info(ctx, "successfully generated presigned URL",
 		"task_id", id,
 		"connection_id", scheduledTask.ConnectionID,
 		"is_flexprice_managed", isFlexpriceManaged)

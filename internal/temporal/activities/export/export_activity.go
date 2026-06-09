@@ -21,17 +21,17 @@ import (
 
 // ExportActivity handles the actual export operations
 type ExportActivity struct {
-	featureUsageRepo     events.FeatureUsageRepository
-	meterUsageRepo       events.MeterUsageRepository
-	priceRepo            price.Repository
-	invoiceRepo          invoice.Repository
-	walletRepo           wallet.Repository
-	walletBalanceGetter  syncExport.WalletBalanceGetter
-	customerRepo         customer.Repository
-	connectionRepo       connection.Repository
-	integrationFactory   *integration.Factory
-	config               *config.Configuration
-	logger               *logger.Logger
+	featureUsageRepo         events.FeatureUsageRepository
+	meterUsageRepo           events.MeterUsageRepository
+	priceRepo                price.Repository
+	invoiceRepo              invoice.Repository
+	walletRepo               wallet.Repository
+	walletBalanceGetter      syncExport.WalletBalanceGetter
+	customerRepo             customer.Repository
+	connectionRepo           connection.Repository
+	integrationFactory       *integration.Factory
+	config                   *config.Configuration
+	logger                   *logger.Logger
 	usageAnalyticsGetter     syncExport.UsageAnalyticsGetter
 	eventRepo                events.Repository
 	subscriptionLineItemRepo subscription.LineItemRepository
@@ -92,7 +92,7 @@ type ExportDataOutput struct {
 
 // ExportData performs the complete export: prepare data, generate CSV, upload to provider
 func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) (*ExportDataOutput, error) {
-	a.logger.Infow("starting data export",
+	a.logger.Info(ctx, "starting data export",
 		"entity_type", input.EntityType,
 		"tenant_id", input.TenantID,
 		"env_id", input.EnvID,
@@ -118,11 +118,11 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 	exportService := syncExport.NewExportServiceWithWallet(a.featureUsageRepo, a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo)
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
-		a.logger.Errorw("export failed", "error", err, "entity_type", input.EntityType)
+		a.logger.Error(ctx, "export failed", "error", err, "entity_type", input.EntityType)
 		return nil, err
 	}
 
-	a.logger.Infow("export completed successfully",
+	a.logger.Info(ctx, "export completed successfully",
 		"entity_type", input.EntityType,
 		"file_url", response.FileURL,
 		"record_count", response.RecordCount,

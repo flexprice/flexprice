@@ -598,7 +598,7 @@ func (c *Client) CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemR
 		// QuickBooks API accepts numeric strings and will parse them without precision loss
 		unitPriceStr := req.UnitPrice.String()
 		payload["UnitPrice"] = unitPriceStr
-		c.logger.Infow("setting UnitPrice in payload",
+		c.logger.Info(ctx, "setting UnitPrice in payload",
 			"unit_price", unitPriceStr)
 	}
 
@@ -606,7 +606,7 @@ func (c *Client) CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemR
 	if req.IncomeAccountRef != nil {
 		incomeAccountID = req.IncomeAccountRef.Value
 	}
-	c.logger.Infow("creating QuickBooks item",
+	c.logger.Info(ctx, "creating QuickBooks item",
 		"item_name", req.Name,
 		"income_account_id", incomeAccountID,
 		"unit_price", req.UnitPrice)
@@ -750,7 +750,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req *InvoiceCreateRequest) (
 		payload["DueDate"] = *req.DueDate
 	}
 
-	c.logger.Debugw("sending QuickBooks Invoice create request",
+	c.logger.Debug(ctx, "sending QuickBooks Invoice create request",
 		"customer_ref", req.CustomerRef.Value,
 		"line_items_count", len(req.Line),
 		"due_date", req.DueDate)
@@ -788,7 +788,7 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceID string) (*InvoiceResp
 		return nil, err
 	}
 
-	c.logger.Debugw("fetching QuickBooks invoice",
+	c.logger.Debug(ctx, "fetching QuickBooks invoice",
 		"invoice_id", invoiceID)
 
 	endpoint := fmt.Sprintf("invoice/%s", invoiceID)
@@ -825,7 +825,7 @@ func (c *Client) GetPayment(ctx context.Context, paymentID string) (*PaymentResp
 		return nil, err
 	}
 
-	c.logger.Debugw("fetching QuickBooks payment",
+	c.logger.Debug(ctx, "fetching QuickBooks payment",
 		"payment_id", paymentID)
 
 	endpoint := fmt.Sprintf("payment/%s", paymentID)
@@ -885,7 +885,7 @@ func (c *Client) ExchangeAuthCodeForTokens(ctx context.Context) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	c.logger.Debugw("exchanging auth code for tokens",
+	c.logger.Debug(ctx, "exchanging auth code for tokens",
 		"realm_id", qbConfig.RealmID,
 		"environment", qbConfig.Environment)
 
@@ -954,7 +954,7 @@ func (c *Client) ExchangeAuthCodeForTokens(ctx context.Context) error {
 			Mark(ierr.ErrSystem)
 	}
 
-	c.logger.Debugw("successfully exchanged auth code for tokens",
+	c.logger.Debug(ctx, "successfully exchanged auth code for tokens",
 		"realm_id", qbConfig.RealmID)
 
 	// Encrypt tokens before saving
@@ -980,14 +980,14 @@ func (c *Client) ExchangeAuthCodeForTokens(ctx context.Context) error {
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	if err := c.connectionRepo.Update(ctx, conn); err != nil {
-		c.logger.Errorw("failed to update connection with tokens",
+		c.logger.Error(ctx, "failed to update connection with tokens",
 			"connection_id", conn.ID,
 			"error", err)
 		return ierr.NewError("failed to update connection with tokens").
 			Mark(ierr.ErrDatabase)
 	}
 
-	c.logger.Debugw("successfully updated connection with initial tokens",
+	c.logger.Debug(ctx, "successfully updated connection with initial tokens",
 		"connection_id", conn.ID)
 
 	return nil
@@ -1011,19 +1011,19 @@ func (c *Client) EnsureValidAccessToken(ctx context.Context) error {
 
 	// If no access token, try to get one
 	if qbConfig.AccessToken == "" {
-		c.logger.Debugw("no access token found, attempting to obtain one",
+		c.logger.Debug(ctx, "no access token found, attempting to obtain one",
 			"realm_id", qbConfig.RealmID)
 
 		// If auth_code is present, exchange it for tokens
 		if qbConfig.AuthCode != "" {
-			c.logger.Debugw("auth_code found, exchanging for tokens",
+			c.logger.Debug(ctx, "auth_code found, exchanging for tokens",
 				"realm_id", qbConfig.RealmID)
 			return c.ExchangeAuthCodeForTokens(ctx)
 		}
 
 		// If refresh_token is present, refresh access token
 		if qbConfig.RefreshToken != "" {
-			c.logger.Debugw("refresh_token found, refreshing access token",
+			c.logger.Debug(ctx, "refresh_token found, refreshing access token",
 				"realm_id", qbConfig.RealmID)
 			return c.RefreshAccessToken(ctx)
 		}
@@ -1135,7 +1135,7 @@ func (c *Client) RefreshAccessToken(ctx context.Context) error {
 			Mark(ierr.ErrSystem)
 	}
 
-	c.logger.Debugw("successfully refreshed access token",
+	c.logger.Debug(ctx, "successfully refreshed access token",
 		"realm_id", qbConfig.RealmID)
 
 	// Encrypt new tokens before saving to database
@@ -1161,14 +1161,14 @@ func (c *Client) RefreshAccessToken(ctx context.Context) error {
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	if err := c.connectionRepo.Update(ctx, conn); err != nil {
-		c.logger.Errorw("failed to update connection with new tokens",
+		c.logger.Error(ctx, "failed to update connection with new tokens",
 			"connection_id", conn.ID,
 			"error", err)
 		return ierr.NewError("failed to update connection with new tokens").
 			Mark(ierr.ErrDatabase)
 	}
 
-	c.logger.Debugw("successfully updated connection with new tokens",
+	c.logger.Debug(ctx, "successfully updated connection with new tokens",
 		"connection_id", conn.ID)
 
 	return nil

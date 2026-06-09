@@ -73,7 +73,7 @@ func NewHandler(
 // HandleWebhookEvent processes an inbound Whop webhook event.
 // Always returns nil so Whop receives 200 OK.
 func (h *Handler) HandleWebhookEvent(ctx context.Context, event *WhopWebhookEvent, services *ServiceDependencies) error {
-	h.logger.Infow("processing Whop webhook event",
+	h.logger.Info(ctx, "processing Whop webhook event",
 		"type", event.Type,
 		"msg_id", event.ID,
 		"company_id", event.CompanyID,
@@ -83,7 +83,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *WhopWebhookEven
 	case whop.WhopEventInvoicePaid:
 		var data WhopInvoiceData
 		if err := json.Unmarshal(event.Data, &data); err != nil {
-			h.logger.Errorw("failed to parse invoice.paid data", "error", err)
+			h.logger.Error(ctx, "failed to parse invoice.paid data", "error", err)
 			return nil
 		}
 		return h.handleInvoicePaid(ctx, &data, services)
@@ -91,20 +91,20 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *WhopWebhookEven
 	case whop.WhopEventPaymentSucceeded:
 		var data paymentSucceededEventData
 		if err := json.Unmarshal(event.Data, &data); err != nil {
-			h.logger.Errorw("failed to parse payment.succeeded data", "error", err)
+			h.logger.Error(ctx, "failed to parse payment.succeeded data", "error", err)
 			return nil
 		}
 		return h.handlePaymentSucceeded(ctx, &data, services)
 
 	default:
-		h.logger.Infow("unhandled Whop webhook type, skipping", "type", event.Type)
+		h.logger.Info(ctx, "unhandled Whop webhook type, skipping", "type", event.Type)
 	}
 	return nil
 }
 
 // handleInvoicePaid marks the corresponding Flexprice invoice as paid.
 func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, services *ServiceDependencies) error {
-	h.logger.Infow("handling Whop invoice.paid", "whop_invoice_id", data.ID)
+	h.logger.Info(ctx, "handling Whop invoice.paid", "whop_invoice_id", data.ID)
 
 	// Look up Flexprice invoice via entity_integration_mapping
 	filter := &types.EntityIntegrationMappingFilter{
@@ -114,7 +114,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, 
 	}
 	mappings, err := h.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
-		h.logger.Errorw("failed to look up entity mapping for Whop invoice",
+		h.logger.Error(ctx, "failed to look up entity mapping for Whop invoice",
 			"error", err, "whop_invoice_id", data.ID)
 		return nil
 	}
@@ -128,12 +128,12 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, 
 	// Idempotency: skip if already paid
 	inv, err := services.InvoiceService.GetInvoice(ctx, flexpriceInvoiceID)
 	if err != nil {
-		h.logger.Errorw("failed to get Flexprice invoice",
+		h.logger.Error(ctx, "failed to get Flexprice invoice",
 			"error", err, "invoice_id", flexpriceInvoiceID)
 		return nil
 	}
 	if inv.PaymentStatus == types.PaymentStatusSucceeded {
-		h.logger.Infow("Flexprice invoice already paid, skipping",
+		h.logger.Info(ctx, "Flexprice invoice already paid, skipping",
 			"invoice_id", flexpriceInvoiceID, "whop_invoice_id", data.ID)
 		return nil
 	}
@@ -141,12 +141,12 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, 
 	// Mark invoice as paid
 	amount := inv.AmountDue
 	if err := services.InvoiceService.ReconcilePaymentStatus(ctx, flexpriceInvoiceID, types.PaymentStatusSucceeded, &amount); err != nil {
-		h.logger.Errorw("failed to reconcile invoice payment status",
+		h.logger.Error(ctx, "failed to reconcile invoice payment status",
 			"error", err, "invoice_id", flexpriceInvoiceID, "whop_invoice_id", data.ID)
 		return nil
 	}
 
-	h.logger.Infow("successfully marked Flexprice invoice as paid from Whop",
+	h.logger.Info(ctx, "successfully marked Flexprice invoice as paid from Whop",
 		"invoice_id", flexpriceInvoiceID, "whop_invoice_id", data.ID)
 	return nil
 }
@@ -160,7 +160,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, data *WhopInvoiceData, 
 //  3. Idempotency check — skip if mapping already exists
 //  4. Create entity mapping: customer_id → member_id
 func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucceededEventData, _ *ServiceDependencies) error {
-	h.logger.Infow("handling Whop payment.succeeded",
+	h.logger.Info(ctx, "handling Whop payment.succeeded",
 		"payment_id", data.ID,
 		"plan_id", data.Plan.ID)
 
@@ -176,7 +176,7 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 	// Fetch the plan — internal_notes holds the Flexprice customer_id
 	plan, err := h.client.GetPlan(ctx, data.Plan.ID)
 	if err != nil {
-		h.logger.Errorw("failed to fetch Whop plan for customer_id resolution",
+		h.logger.Error(ctx, "failed to fetch Whop plan for customer_id resolution",
 			"error", err, "plan_id", data.Plan.ID)
 		return nil
 	}
@@ -199,22 +199,22 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, data *paymentSucce
 	}
 	existing, err := h.entityIntegrationMappingRepo.List(ctx, existingFilter)
 	if err != nil {
-		h.logger.Errorw("failed to check existing customer mapping", "error", err, "customer_id", customerID)
+		h.logger.Error(ctx, "failed to check existing customer mapping", "error", err, "customer_id", customerID)
 		return nil
 	}
 	if len(existing) > 0 {
-		h.logger.Infow("customer→Whop member mapping already exists, skipping", "customer_id", customerID)
+		h.logger.Info(ctx, "customer→Whop member mapping already exists, skipping", "customer_id", customerID)
 		return nil
 	}
 
 	// Create mapping: entity_type=customer, provider_entity_id=member_id (used to fetch payment methods)
 	if err := h.invoiceSyncService.CreateCustomerMapping(ctx, customerID, data.Member.ID); err != nil {
-		h.logger.Errorw("failed to create customer→Whop mapping",
+		h.logger.Error(ctx, "failed to create customer→Whop mapping",
 			"error", err, "customer_id", customerID)
 		return nil
 	}
 
-	h.logger.Infow("created customer→Whop member mapping from payment.succeeded",
+	h.logger.Info(ctx, "created customer→Whop member mapping from payment.succeeded",
 		"customer_id", customerID)
 	return nil
 }

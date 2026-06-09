@@ -89,7 +89,7 @@ func (s *CustomerService) GetOrCreateQuickBooksCustomer(ctx context.Context, fle
 	if flexpriceCustomer.Email != "" {
 		existingCustomer, err := s.Client.QueryCustomerByEmail(ctx, flexpriceCustomer.Email)
 		if err == nil && existingCustomer != nil && existingCustomer.ID != "" {
-			s.Logger.Debugw("found existing customer in QuickBooks by email",
+			s.Logger.Debug(ctx, "found existing customer in QuickBooks by email",
 				"flexprice_customer_id", flexpriceCustomer.ID,
 				"quickbooks_customer_id", existingCustomer.ID,
 				"email", flexpriceCustomer.Email)
@@ -153,13 +153,13 @@ func (s *CustomerService) SyncCustomerToQuickBooks(ctx context.Context, flexpric
 		// Try to find existing customer and create mapping instead of failing
 		existingCustomer, queryErr := s.Client.QueryCustomerByName(ctx, displayName)
 		if queryErr == nil && existingCustomer != nil {
-			s.Logger.Infow("found existing customer in QuickBooks by name",
+			s.Logger.Info(ctx, "found existing customer in QuickBooks by name",
 				"customer_id", flexpriceCustomer.ID,
 				"quickbooks_customer_id", existingCustomer.ID,
 				"display_name", displayName)
 			// Create mapping for existing customer to prevent future creation attempts
 			if mapErr := s.createCustomerMapping(ctx, flexpriceCustomer.ID, existingCustomer.ID, existingCustomer); mapErr != nil {
-				s.Logger.Errorw("failed to create mapping for existing customer",
+				s.Logger.Error(ctx, "failed to create mapping for existing customer",
 					"customer_id", flexpriceCustomer.ID,
 					"quickbooks_customer_id", existingCustomer.ID,
 					"error", mapErr)
@@ -172,14 +172,14 @@ func (s *CustomerService) SyncCustomerToQuickBooks(ctx context.Context, flexpric
 			Mark(ierr.ErrValidation)
 	}
 
-	s.Logger.Infow("successfully created customer in QuickBooks",
+	s.Logger.Info(ctx, "successfully created customer in QuickBooks",
 		"flexprice_customer_id", flexpriceCustomer.ID,
 		"quickbooks_customer_id", customerResp.ID,
 		"display_name", customerResp.DisplayName)
 
 	// Create entity integration mapping using the reusable method
 	if err := s.createCustomerMapping(ctx, flexpriceCustomer.ID, customerResp.ID, customerResp); err != nil {
-		s.Logger.Errorw("failed to save entity mapping",
+		s.Logger.Error(ctx, "failed to save entity mapping",
 			"customer_id", flexpriceCustomer.ID,
 			"quickbooks_customer_id", customerResp.ID,
 			"error", err)

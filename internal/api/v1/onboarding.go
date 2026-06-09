@@ -28,7 +28,7 @@ func (h *OnboardingHandler) GenerateEvents(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.OnboardingEventsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(err)
 		return
 	}

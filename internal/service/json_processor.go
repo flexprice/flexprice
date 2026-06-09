@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"bytes"
 	"encoding/json"
 	"io"
@@ -26,7 +27,7 @@ func (jp *JSONProcessor) PrepareJSONReader(fileContent []byte) (*json.Decoder, e
 	// Check for and remove BOM if present
 	if len(fileContent) >= 3 && fileContent[0] == 0xEF && fileContent[1] == 0xBB && fileContent[2] == 0xBF {
 		fileContent = fileContent[3:]
-		jp.Logger.Debug("DEBUG: BOM detected and removed from file content")
+		jp.Logger.Debug(context.Background(), "DEBUG: BOM detected and removed from file content")
 	}
 
 	// Create a decoder with strict JSON validation

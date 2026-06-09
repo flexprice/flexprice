@@ -55,7 +55,7 @@ func (s *InvoiceSyncService) SyncInvoiceToRazorpay(
 	req RazorpayInvoiceSyncRequest,
 	customerService interfaces.CustomerService,
 ) (*RazorpayInvoiceSyncResponse, error) {
-	s.logger.Infow("starting Razorpay invoice sync",
+	s.logger.Info(ctx, "starting Razorpay invoice sync",
 		"invoice_id", req.InvoiceID)
 
 	// Step 1: Check if Razorpay connection exists
@@ -81,7 +81,7 @@ func (s *InvoiceSyncService) SyncInvoiceToRazorpay(
 
 	if existingMapping != nil {
 		razorpayInvoiceID := existingMapping.ProviderEntityID
-		s.logger.Infow("invoice already synced to Razorpay",
+		s.logger.Info(ctx, "invoice already synced to Razorpay",
 			"invoice_id", req.InvoiceID,
 			"razorpay_invoice_id", razorpayInvoiceID)
 
@@ -98,7 +98,7 @@ func (s *InvoiceSyncService) SyncInvoiceToRazorpay(
 	}
 
 	razorpayCustomerID := flexpriceCustomer.Metadata["razorpay_customer_id"]
-	s.logger.Infow("customer synced to Razorpay",
+	s.logger.Info(ctx, "customer synced to Razorpay",
 		"customer_id", flexInvoice.CustomerID,
 		"razorpay_customer_id", razorpayCustomerID)
 
@@ -117,7 +117,7 @@ func (s *InvoiceSyncService) SyncInvoiceToRazorpay(
 	}
 
 	razorpayInvoiceID := razorpayInvoice["id"].(string)
-	s.logger.Infow("successfully created invoice in Razorpay",
+	s.logger.Info(ctx, "successfully created invoice in Razorpay",
 		"invoice_id", req.InvoiceID,
 		"razorpay_invoice_id", razorpayInvoiceID)
 
@@ -129,7 +129,7 @@ func (s *InvoiceSyncService) SyncInvoiceToRazorpay(
 
 	// Step 7: Create entity integration mapping with short URL
 	if err := s.createInvoiceMapping(ctx, req.InvoiceID, razorpayInvoiceID, razorpayShortURL, flexInvoice.EnvironmentID); err != nil {
-		s.logger.Errorw("failed to create invoice mapping",
+		s.logger.Error(ctx, "failed to create invoice mapping",
 			"error", err,
 			"invoice_id", req.InvoiceID,
 			"razorpay_invoice_id", razorpayInvoiceID)
@@ -200,7 +200,7 @@ func (s *InvoiceSyncService) buildInvoiceData(
 		invoiceData["expire_by"] = expireBy.Unix()
 	}
 
-	s.logger.Infow("built invoice data for Razorpay",
+	s.logger.Info(ctx, "built invoice data for Razorpay",
 		"invoice_id", flexInvoice.ID,
 		"line_items_count", len(lineItems),
 		"currency", flexInvoice.Currency,
@@ -376,7 +376,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		return err
 	}
 
-	s.logger.Infow("created invoice mapping",
+	s.logger.Info(ctx, "created invoice mapping",
 		"invoice_id", flexInvoiceID,
 		"razorpay_invoice_id", razorpayInvoiceID)
 
@@ -417,7 +417,7 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, razorpay
 			Mark(ierr.ErrNotFound)
 	}
 
-	s.logger.Debugw("looking up FlexPrice invoice ID from Razorpay invoice ID",
+	s.logger.Debug(ctx, "looking up FlexPrice invoice ID from Razorpay invoice ID",
 		"razorpay_invoice_id", razorpayInvoiceID)
 
 	filter := &types.EntityIntegrationMappingFilter{
@@ -429,7 +429,7 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, razorpay
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
-		s.logger.Debugw("failed to query entity integration mapping",
+		s.logger.Debug(ctx, "failed to query entity integration mapping",
 			"error", err,
 			"razorpay_invoice_id", razorpayInvoiceID)
 		return "", ierr.WithError(err).
@@ -438,14 +438,14 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, razorpay
 	}
 
 	if len(mappings) == 0 {
-		s.logger.Debugw("no FlexPrice invoice mapping found for Razorpay invoice",
+		s.logger.Debug(ctx, "no FlexPrice invoice mapping found for Razorpay invoice",
 			"razorpay_invoice_id", razorpayInvoiceID)
 		return "", ierr.NewError("flexprice invoice mapping not found").
 			Mark(ierr.ErrNotFound)
 	}
 
 	flexpriceInvoiceID := mappings[0].EntityID
-	s.logger.Infow("found FlexPrice invoice mapping",
+	s.logger.Info(ctx, "found FlexPrice invoice mapping",
 		"razorpay_invoice_id", razorpayInvoiceID,
 		"flexprice_invoice_id", flexpriceInvoiceID)
 

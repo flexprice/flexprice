@@ -84,7 +84,7 @@ func (h *Handler) Handle(ctx context.Context, conn *domainconn.Connection, parse
 	case p.Contact != nil:
 		return h.handleContact(ctx, conn, p.Contact, deps)
 	default:
-		h.logger.Debugw("zoho webhook: no invoice or contact in payload, ignoring")
+		h.logger.Debug(ctx, "zoho webhook: no invoice or contact in payload, ignoring")
 		return nil
 	}
 }
@@ -108,7 +108,7 @@ func (h *Handler) handleInvoice(ctx context.Context, inv *InvoicePayload, deps *
 func (h *Handler) handleInvoiceVoided(ctx context.Context, zohoInvID string, deps *ServiceDeps) error {
 	mapping, err := h.findInvoiceMapping(ctx, zohoInvID, deps)
 	if err != nil || mapping == nil {
-		h.logger.Debugw("zoho webhook: no FlexPrice invoice mapping for void",
+		h.logger.Debug(ctx, "zoho webhook: no FlexPrice invoice mapping for void",
 			"zoho_invoice_id", zohoInvID,
 			"error", err)
 		return nil
@@ -122,7 +122,7 @@ func (h *Handler) handleInvoiceVoided(ctx context.Context, zohoInvID string, dep
 		return nil
 	}
 	if invResp.InvoiceStatus == types.InvoiceStatusVoided {
-		h.logger.Debugw("zoho webhook: FlexPrice invoice already voided",
+		h.logger.Debug(ctx, "zoho webhook: FlexPrice invoice already voided",
 			"invoice_id", mapping.EntityID,
 			"zoho_invoice_id", zohoInvID)
 		return nil
@@ -135,14 +135,14 @@ func (h *Handler) handleInvoiceVoided(ctx context.Context, zohoInvID string, dep
 		},
 	}
 	if err := deps.InvoiceService.VoidInvoice(ctx, mapping.EntityID, voidReq); err != nil {
-		h.logger.Errorw("zoho webhook: VoidInvoice failed",
+		h.logger.Error(ctx, "zoho webhook: VoidInvoice failed",
 			"error", err,
 			"invoice_id", mapping.EntityID,
 			"zoho_invoice_id", zohoInvID)
 		return err
 	}
 
-	h.logger.Infow("zoho webhook: voided FlexPrice invoice from Zoho",
+	h.logger.Info(ctx, "zoho webhook: voided FlexPrice invoice from Zoho",
 		"invoice_id", mapping.EntityID,
 		"zoho_invoice_id", zohoInvID)
 	return nil
@@ -151,7 +151,7 @@ func (h *Handler) handleInvoiceVoided(ctx context.Context, zohoInvID string, dep
 func (h *Handler) handleInvoicePaid(ctx context.Context, zohoInvID string, inv *InvoicePayload, deps *ServiceDeps) error {
 	mapping, err := h.findInvoiceMapping(ctx, zohoInvID, deps)
 	if err != nil || mapping == nil {
-		h.logger.Debugw("zoho webhook: no FlexPrice invoice mapping",
+		h.logger.Debug(ctx, "zoho webhook: no FlexPrice invoice mapping",
 			"zoho_invoice_id", zohoInvID,
 			"error", err)
 		return nil
@@ -165,7 +165,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, zohoInvID string, inv *
 		return nil
 	}
 	if invResp.PaymentStatus == types.PaymentStatusSucceeded || invResp.PaymentStatus == types.PaymentStatusOverpaid {
-		h.logger.Debugw("zoho webhook: invoice already reconciled as paid",
+		h.logger.Debug(ctx, "zoho webhook: invoice already reconciled as paid",
 			"invoice_id", mapping.EntityID,
 			"payment_status", invResp.PaymentStatus)
 		return nil
@@ -184,7 +184,7 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, zohoInvID string, inv *
 	filter.GatewayPaymentID = &gatewayID
 	listResp, err := deps.PaymentService.ListPayments(ctx, filter)
 	if err == nil && listResp != nil && len(listResp.Items) > 0 {
-		h.logger.Debugw("zoho webhook: payment already exists",
+		h.logger.Debug(ctx, "zoho webhook: payment already exists",
 			"payment_id", listResp.Items[0].ID,
 			"gateway_payment_id", gatewayID)
 		return nil
@@ -222,14 +222,14 @@ func (h *Handler) handleInvoicePaid(ctx context.Context, zohoInvID string, inv *
 	}
 
 	if err := deps.InvoiceService.ReconcilePaymentStatus(ctx, mapping.EntityID, types.PaymentStatusSucceeded, &amount); err != nil {
-		h.logger.Errorw("zoho webhook: ReconcilePaymentStatus failed",
+		h.logger.Error(ctx, "zoho webhook: ReconcilePaymentStatus failed",
 			"error", err,
 			"invoice_id", mapping.EntityID,
 			"amount", amount.String())
 		return err
 	}
 
-	h.logger.Infow("zoho webhook: reconciled invoice paid from Zoho",
+	h.logger.Info(ctx, "zoho webhook: reconciled invoice paid from Zoho",
 		"invoice_id", mapping.EntityID,
 		"zoho_invoice_id", zohoInvID,
 		"amount", amount.String())
@@ -241,7 +241,7 @@ func (h *Handler) handleContact(ctx context.Context, conn *domainconn.Connection
 		return nil
 	}
 	if !conn.IsCustomerInboundEnabled() {
-		h.logger.Debugw("zoho webhook: customer inbound disabled, skipping contact",
+		h.logger.Debug(ctx, "zoho webhook: customer inbound disabled, skipping contact",
 			"zoho_contact_id", c.ContactID)
 		return nil
 	}
@@ -255,7 +255,7 @@ func (h *Handler) handleContact(ctx context.Context, conn *domainconn.Connection
 		return err
 	}
 	if existing != nil {
-		h.logger.Debugw("zoho webhook: customer mapping already exists",
+		h.logger.Debug(ctx, "zoho webhook: customer mapping already exists",
 			"zoho_contact_id", c.ContactID,
 			"entity_id", existing.EntityID)
 		return nil
@@ -263,7 +263,7 @@ func (h *Handler) handleContact(ctx context.Context, conn *domainconn.Connection
 
 	email := primaryContactEmail(c)
 	if email == "" {
-		h.logger.Debugw("zoho webhook: contact has no email, skipping customer create",
+		h.logger.Debug(ctx, "zoho webhook: contact has no email, skipping customer create",
 			"zoho_contact_id", c.ContactID)
 		return nil
 	}
@@ -275,7 +275,7 @@ func (h *Handler) handleContact(ctx context.Context, conn *domainconn.Connection
 		return err
 	}
 	if custList != nil && len(custList.Items) > 0 {
-		h.logger.Debugw("zoho webhook: FlexPrice customer with same email exists, skipping create",
+		h.logger.Debug(ctx, "zoho webhook: FlexPrice customer with same email exists, skipping create",
 			"email", email,
 			"zoho_contact_id", c.ContactID)
 		return nil
@@ -314,14 +314,14 @@ func (h *Handler) handleContact(ctx context.Context, conn *domainconn.Connection
 		},
 	})
 	if err != nil {
-		h.logger.Errorw("zoho webhook: customer created but mapping failed",
+		h.logger.Error(ctx, "zoho webhook: customer created but mapping failed",
 			"error", err,
 			"customer_id", custResp.ID,
 			"zoho_contact_id", c.ContactID)
 		return err
 	}
 
-	h.logger.Infow("zoho webhook: created FlexPrice customer from Zoho contact",
+	h.logger.Info(ctx, "zoho webhook: created FlexPrice customer from Zoho contact",
 		"customer_id", custResp.ID,
 		"zoho_contact_id", c.ContactID)
 	return nil

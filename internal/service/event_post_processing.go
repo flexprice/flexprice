@@ -147,7 +147,7 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 			Mark(ierr.ErrSystem)
 	}
 
-	s.Logger.DebugwCtx(ctx, "publishing event for post-processing",
+	s.Logger.Debug(ctx, "publishing event for post-processing",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"partition_key", partitionKey,
@@ -312,7 +312,7 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 
 // Process a single event
 func (s *eventPostProcessingService) processEvent(ctx context.Context, event *events.Event) error {
-	s.Logger.DebugwCtx(ctx, "processing event in event post processing service",
+	s.Logger.Debug(ctx, "processing event in event post processing service",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"external_customer_id", event.ExternalCustomerID,
@@ -321,7 +321,7 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 
 	processedEvents, err := s.prepareProcessedEvents(ctx, event)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to prepare processed events",
+		s.Logger.Error(ctx, "failed to prepare processed events",
 			"error", err,
 			"event_id", event.ID,
 		)
@@ -367,7 +367,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 	// CASE 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.WarnwCtx(ctx, "customer not found for event, skipping",
+		s.Logger.Warn(ctx, "customer not found for event, skipping",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -395,7 +395,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	subscriptionsList, err := subscriptionService.ListSubscriptions(ctx, filter)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get subscriptions",
+		s.Logger.Error(ctx, "failed to get subscriptions",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 			"error", err,
@@ -406,7 +406,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	subscriptions := subscriptionsList.Items
 	if len(subscriptions) == 0 {
-		s.Logger.DebugwCtx(ctx, "no active subscriptions found for customer, skipping",
+		s.Logger.Debug(ctx, "no active subscriptions found for customer, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 		)
@@ -424,7 +424,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	subscriptions = validSubscriptions
 	if len(subscriptions) == 0 {
-		s.Logger.DebugwCtx(ctx, "no subscriptions valid for event timestamp, skipping",
+		s.Logger.Debug(ctx, "no subscriptions valid for event timestamp, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 			"event_timestamp", event.Timestamp,
@@ -461,7 +461,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	prices, err := s.PriceRepo.List(ctx, priceFilter)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get prices",
+		s.Logger.Error(ctx, "failed to get prices",
 			"error", err,
 			"event_id", event.ID,
 			"price_count", len(priceIDs),
@@ -490,7 +490,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	meters, err := s.MeterRepo.List(ctx, meterFilter)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get meters",
+		s.Logger.Error(ctx, "failed to get meters",
 			"error", err,
 			"event_id", event.ID,
 			"meter_count", len(meterIDs),
@@ -513,7 +513,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 		featureFilter.MeterIDs = lo.Keys(meterMap)
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to get features",
+			s.Logger.Error(ctx, "failed to get features",
 				"error", err,
 				"event_id", event.ID,
 				"meter_count", len(meterMap),
@@ -542,7 +542,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			sub.BillingPeriod,
 		)
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to calculate period id",
+			s.Logger.Error(ctx, "failed to calculate period id",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
 				"error", err,
@@ -557,7 +557,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 		})
 
 		if len(subscriptionLineItems) == 0 {
-			s.Logger.DebugwCtx(ctx, "no active usage-based line items found for subscription",
+			s.Logger.Debug(ctx, "no active usage-based line items found for subscription",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
 			)
@@ -573,7 +573,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 				}
 				prices = append(prices, price)
 			} else {
-				s.Logger.WarnwCtx(ctx, "price not found for subscription line item",
+				s.Logger.Warn(ctx, "price not found for subscription line item",
 					"event_id", event.ID,
 					"subscription_id", sub.ID,
 					"line_item_id", item.ID,
@@ -588,7 +588,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 		matches := s.findMatchingPricesForEvent(event, prices, meterMap)
 
 		if len(matches) == 0 {
-			s.Logger.DebugwCtx(ctx, "no matching prices/meters found for subscription",
+			s.Logger.Debug(ctx, "no matching prices/meters found for subscription",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
 				"event_name", event.EventName,
@@ -600,7 +600,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			// Find the corresponding line item
 			lineItem, ok := subLineItemMap[match.Price.ID]
 			if !ok {
-				s.Logger.WarnwCtx(ctx, "line item not found for price",
+				s.Logger.Warn(ctx, "line item not found for price",
 					"event_id", event.ID,
 					"subscription_id", sub.ID,
 					"price_id", match.Price.ID,
@@ -629,7 +629,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			if feature, ok := featureMeterMap[match.Meter.ID]; ok {
 				processedEventCopy.FeatureID = feature.ID
 			} else {
-				s.Logger.WarnwCtx(ctx, "feature not found for meter",
+				s.Logger.Warn(ctx, "feature not found for meter",
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 				)
@@ -640,7 +640,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			canProcess := s.isSupportedAggregationForPostProcessing(match.Meter.Aggregation.Type, match.Price.BillingModel)
 
 			if !canProcess {
-				s.Logger.DebugwCtx(ctx, "unsupported aggregation type or billing model, skipping",
+				s.Logger.Debug(ctx, "unsupported aggregation type or billing model, skipping",
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 					"aggregation_type", match.Meter.Aggregation.Type,
@@ -654,7 +654,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 			// Validate the quantity is positive and within reasonable bounds
 			if quantity.IsNegative() {
-				s.Logger.WarnwCtx(ctx, "negative quantity calculated, setting to zero",
+				s.Logger.Warn(ctx, "negative quantity calculated, setting to zero",
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 					"calculated_quantity", quantity.String(),
@@ -693,7 +693,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 
 	// Return all processed events
 	if len(processedEventsPerSub) > 0 {
-		s.Logger.DebugwCtx(ctx, "event processing request prepared",
+		s.Logger.Debug(ctx, "event processing request prepared",
 			"event_id", event.ID,
 			"processed_events_count", len(processedEventsPerSub),
 		)
@@ -991,7 +991,7 @@ func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Conte
 
 	subscriptionsList, err := subscriptionService.ListSubscriptions(ctx, filter)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get subscriptions for currency validation",
+		s.Logger.Error(ctx, "failed to get subscriptions for currency validation",
 			"error", err,
 			"customer_id", customer.ID,
 		)
@@ -1035,7 +1035,7 @@ func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Conte
 	// Step 5: Call the repository to get base analytics data
 	analytics, err := s.processedEventRepo.GetDetailedUsageAnalytics(ctx, params)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get detailed usage analytics",
+		s.Logger.Error(ctx, "failed to get detailed usage analytics",
 			"error", err,
 			"external_customer_id", req.ExternalCustomerID,
 		)
@@ -1050,7 +1050,7 @@ func (s *eventPostProcessingService) GetDetailedUsageAnalytics(ctx context.Conte
 	// Step 7: Enrich with feature and meter data from their respective repositories
 	featureMap, err := s.enrichAnalyticsWithFeatureAndMeterData(ctx, analytics)
 	if err != nil {
-		s.Logger.WarnwCtx(ctx, "failed to fully enrich analytics with feature and meter data",
+		s.Logger.Warn(ctx, "failed to fully enrich analytics with feature and meter data",
 			"error", err,
 			"analytics_count", len(analytics),
 		)
@@ -1121,7 +1121,7 @@ func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx 
 		}
 		grp, err := s.GroupRepo.Get(ctx, f.GroupID)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to fetch group for analytics", "group_id", f.GroupID, "error", err)
+			s.Logger.Warn(ctx, "failed to fetch group for analytics", "group_id", f.GroupID, "error", err)
 			continue
 		}
 		groupMap[f.GroupID] = grp
@@ -1164,7 +1164,7 @@ func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx 
 
 // ReprocessEvents triggers reprocessing of events for a customer or with other filters
 func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error {
-	s.Logger.InfowCtx(ctx, "starting event reprocessing",
+	s.Logger.Info(ctx, "starting event reprocessing",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
 		"start_time", params.StartTime,
@@ -1216,7 +1216,7 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params
 
 		eventsCount := len(unprocessedEvents)
 		totalEventsFound += eventsCount
-		s.Logger.InfowCtx(ctx, "found unprocessed events",
+		s.Logger.Info(ctx, "found unprocessed events",
 			"batch", processedBatches,
 			"count", eventsCount,
 			"total_found", totalEventsFound,
@@ -1232,7 +1232,7 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params
 			// hardcoded delay to avoid rate limiting
 			// TODO: remove this to make it configurable
 			if err := s.PublishEvent(ctx, event, true); err != nil {
-				s.Logger.ErrorwCtx(ctx, "failed to publish event for reprocessing",
+				s.Logger.Error(ctx, "failed to publish event for reprocessing",
 					"event_id", event.ID,
 					"error", err,
 				)
@@ -1246,7 +1246,7 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params
 			lastTimestamp = event.Timestamp
 		}
 
-		s.Logger.InfowCtx(ctx, "published events for reprocessing",
+		s.Logger.Info(ctx, "published events for reprocessing",
 			"batch", processedBatches,
 			"count", eventsCount,
 			"total_published", totalEventsPublished,
@@ -1261,7 +1261,7 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params
 		}
 	}
 
-	s.Logger.InfowCtx(ctx, "completed event reprocessing",
+	s.Logger.Info(ctx, "completed event reprocessing",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
 		"batches_processed", processedBatches,

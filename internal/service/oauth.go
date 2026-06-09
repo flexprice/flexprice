@@ -157,7 +157,7 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 	encryptedCredentials := make(map[string]string)
 
 	// DEBUG: Log what credentials we received
-	s.logger.Debugw("storing OAuth session credentials",
+	s.logger.Debug(ctx, "storing OAuth session credentials",
 		"session_id", session.SessionID,
 		"credentials_count", len(session.Credentials),
 		"credentials_keys", func() []string {
@@ -286,7 +286,7 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.logger.Infow("stored OAuth session as incomplete connection",
+	s.logger.Info(ctx, "stored OAuth session as incomplete connection",
 		"session_id", session.SessionID,
 		"connection_id", incompleteConnection.ID,
 		"provider", session.Provider,
@@ -475,7 +475,7 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 		ExpiresAt:     expiresAt,
 	}
 
-	s.logger.Debugw("retrieved OAuth session from connection",
+	s.logger.Debug(ctx, "retrieved OAuth session from connection",
 		"session_id", sessionID,
 		"connection_id", conn.ID,
 		"provider", session.Provider,
@@ -525,7 +525,7 @@ func (s *oauthService) DeleteOAuthSession(ctx context.Context, sessionID string)
 						Mark(ierr.ErrDatabase)
 				}
 
-				s.logger.Debugw("deleted OAuth session connection",
+				s.logger.Debug(ctx, "deleted OAuth session connection",
 					"session_id", sessionID,
 					"connection_id", c.ID)
 
@@ -727,7 +727,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 				Mark(ierr.ErrDatabase)
 		}
 
-		s.logger.Infow("updated connection with OAuth credentials",
+		s.logger.Info(ctx, "updated connection with OAuth credentials",
 			"connection_id", conn.ID,
 			"session_id", session.SessionID,
 			"realm_id", providerAccountID)
@@ -752,7 +752,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 				Mark(ierr.ErrInternal)
 		}
 
-		s.logger.Infow("QuickBooks OAuth connection completed successfully",
+		s.logger.Info(ctx, "QuickBooks OAuth connection completed successfully",
 			"connection_id", conn.ID,
 			"realm_id", providerAccountID)
 
@@ -916,7 +916,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 				Mark(ierr.ErrDatabase)
 		}
 
-		s.logger.Infow("Zoho Books OAuth connection completed successfully",
+		s.logger.Info(ctx, "Zoho Books OAuth connection completed successfully",
 			"connection_id", conn.ID,
 			"organization_id", organizationID)
 		return conn.ID, nil

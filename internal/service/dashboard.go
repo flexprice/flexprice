@@ -47,7 +47,7 @@ func (s *dashboardService) GetRevenues(ctx context.Context, req dto.DashboardRev
 	if req.RevenueTrend != nil {
 		revenueTrend, err := s.getRevenueTrend(ctx, req.RevenueTrend)
 		if err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to get revenue trend", "error", err)
+			s.Logger.Error(ctx, "failed to get revenue trend", "error", err)
 			// Continue with other sections even if this fails
 		} else {
 			response.RevenueTrend = revenueTrend
@@ -57,7 +57,7 @@ func (s *dashboardService) GetRevenues(ctx context.Context, req dto.DashboardRev
 	// Recent Subscriptions - always fetch
 	recentSubs, err := s.getRecentSubscriptions(ctx)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get recent subscriptions", "error", err)
+		s.Logger.Error(ctx, "failed to get recent subscriptions", "error", err)
 		// Continue with other sections even if this fails
 	} else {
 		response.RecentSubscriptions = recentSubs
@@ -66,7 +66,7 @@ func (s *dashboardService) GetRevenues(ctx context.Context, req dto.DashboardRev
 	// Invoice Payment Status - always fetch
 	paymentStatus, err := s.getInvoicePaymentStatus(ctx)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get invoice payment status", "error", err)
+		s.Logger.Error(ctx, "failed to get invoice payment status", "error", err)
 		// Continue with other sections even if this fails
 	} else {
 		response.InvoicePaymentStatus = paymentStatus
@@ -257,7 +257,7 @@ func (s *dashboardService) GetRevenueDashboard(ctx context.Context, req dto.Reve
 		}
 		customers, err := s.CustomerRepo.List(ctx, custFilter)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to fetch customer details for revenue dashboard", "error", err)
+			s.Logger.Warn(ctx, "failed to fetch customer details for revenue dashboard", "error", err)
 			// Continue without customer details rather than failing the entire request
 		} else {
 			for _, c := range customers {
@@ -430,7 +430,7 @@ func (s *dashboardService) resolveVoiceMeterID(ctx context.Context) (string, boo
 
 	config, err := utils.ToStruct[types.CustomAnalyticsConfig](setting.Value)
 	if err != nil {
-		s.Logger.WarnwCtx(ctx, "failed to parse custom analytics config", "error", err)
+		s.Logger.Warn(ctx, "failed to parse custom analytics config", "error", err)
 		return "", false
 	}
 
@@ -443,14 +443,14 @@ func (s *dashboardService) resolveVoiceMeterID(ctx context.Context) (string, boo
 		if rule.TargetType == "feature" {
 			feature, err := s.FeatureRepo.Get(ctx, rule.TargetID)
 			if err != nil || feature == nil {
-				s.Logger.WarnwCtx(ctx, "failed to resolve feature for revenue-per-minute rule",
+				s.Logger.Warn(ctx, "failed to resolve feature for revenue-per-minute rule",
 					"error", err,
 					"target_id", rule.TargetID,
 				)
 				return "", false
 			}
 			if feature.MeterID == "" {
-				s.Logger.WarnwCtx(ctx, "feature has no meter_id for revenue-per-minute rule",
+				s.Logger.Warn(ctx, "feature has no meter_id for revenue-per-minute rule",
 					"feature_id", feature.ID,
 				)
 				return "", false

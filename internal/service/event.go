@@ -515,7 +515,7 @@ func (s *eventService) GetUsageByMeterWithFilters(ctx context.Context, req *dto.
 	}
 
 	if len(results) == 0 {
-		s.logger.Debugw("no usage found for meter with filters",
+		s.logger.Debug(ctx, "no usage found for meter with filters",
 			"meter_id", m.ID,
 			"filter_groups", len(filterGroups))
 		return results, nil
@@ -761,7 +761,7 @@ func (s *eventService) monitorConsumerLag(
 		defer span.Finish()
 	}
 
-	s.logger.Infow("kafka lag monitored",
+	s.logger.Info(ctx, "kafka lag monitored",
 		"topic", topic,
 		"consumer_group", consumerGroup,
 		"total_lag", lag.TotalLag,
@@ -799,7 +799,7 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
 
-	s.logger.Infow("fetching monitoring data",
+	s.logger.Info(ctx, "fetching monitoring data",
 		"tenant_id", tenantID,
 		"environment_id", envID,
 		"event_consumption_group", s.config.EventProcessing.ConsumerGroup,

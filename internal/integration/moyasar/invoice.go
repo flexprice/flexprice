@@ -60,7 +60,7 @@ func (s *InvoiceSyncService) SyncInvoiceToMoyasar(
 	req MoyasarInvoiceSyncRequest,
 	customerService interfaces.CustomerService,
 ) (*MoyasarInvoiceSyncResponse, error) {
-	s.logger.Infow("starting Moyasar invoice sync",
+	s.logger.Info(ctx, "starting Moyasar invoice sync",
 		"invoice_id", req.InvoiceID)
 
 	// Step 1: Check if Moyasar connection exists
@@ -86,7 +86,7 @@ func (s *InvoiceSyncService) SyncInvoiceToMoyasar(
 
 	if existingMapping != nil {
 		moyasarInvoiceID := existingMapping.ProviderEntityID
-		s.logger.Infow("invoice already synced to Moyasar",
+		s.logger.Info(ctx, "invoice already synced to Moyasar",
 			"invoice_id", req.InvoiceID,
 			"moyasar_invoice_id", moyasarInvoiceID)
 
@@ -109,14 +109,14 @@ func (s *InvoiceSyncService) SyncInvoiceToMoyasar(
 	}
 
 	moyasarInvoiceID := moyasarInvoice.ID
-	s.logger.Infow("successfully created invoice in Moyasar",
+	s.logger.Info(ctx, "successfully created invoice in Moyasar",
 		"invoice_id", req.InvoiceID,
 		"moyasar_invoice_id", moyasarInvoiceID,
 		"payment_url_present", moyasarInvoice.URL != "")
 
 	// Step 6: Create entity integration mapping
 	if err := s.createInvoiceMapping(ctx, req.InvoiceID, moyasarInvoice, flexInvoice.EnvironmentID); err != nil {
-		s.logger.Errorw("failed to create invoice mapping",
+		s.logger.Error(ctx, "failed to create invoice mapping",
 			"error", err,
 			"invoice_id", req.InvoiceID,
 			"moyasar_invoice_id", moyasarInvoiceID)
@@ -125,7 +125,7 @@ func (s *InvoiceSyncService) SyncInvoiceToMoyasar(
 
 	// Step 7: Update FlexPrice invoice metadata with Moyasar details
 	if err := s.updateFlexPriceInvoiceFromMoyasar(ctx, flexInvoice, moyasarInvoice); err != nil {
-		s.logger.Errorw("failed to update FlexPrice invoice metadata from Moyasar", "error", err)
+		s.logger.Error(ctx, "failed to update FlexPrice invoice metadata from Moyasar", "error", err)
 		// Don't fail the entire sync for this
 	}
 
@@ -231,7 +231,7 @@ func (s *InvoiceSyncService) buildInvoiceRequest(
 		Metadata:    metadata,
 	}
 
-	s.logger.Infow("built invoice request for Moyasar",
+	s.logger.Info(ctx, "built invoice request for Moyasar",
 		"invoice_id", flexInvoice.ID,
 		"amount", flexInvoice.Total.String(),
 		"currency", flexInvoice.Currency)
@@ -375,7 +375,7 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 		return err
 	}
 
-	s.logger.Infow("created invoice mapping",
+	s.logger.Info(ctx, "created invoice mapping",
 		"invoice_id", flexInvoiceID,
 		"moyasar_invoice_id", moyasarInvoice.ID)
 
@@ -437,7 +437,7 @@ func (s *InvoiceSyncService) updateFlexPriceInvoiceFromMoyasar(ctx context.Conte
 	}
 
 	if updated {
-		s.logger.Infow("updating FlexPrice invoice with Moyasar details",
+		s.logger.Info(ctx, "updating FlexPrice invoice with Moyasar details",
 			"invoice_id", flexInvoice.ID,
 			"moyasar_invoice_id", moyasarInvoice.ID,
 			"moyasar_invoice_url_present", moyasarInvoice.URL != "")

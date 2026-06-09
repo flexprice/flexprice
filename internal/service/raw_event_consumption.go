@@ -34,8 +34,8 @@ type RawEventConsumptionService interface {
 
 type rawEventConsumptionService struct {
 	ServiceParams
-	pubSub        pubsub.PubSub
-	outputPubSub  pubsub.PubSub
+	pubSub         pubsub.PubSub
+	outputPubSub   pubsub.PubSub
 	tracingService *tracing.Service
 }
 
@@ -52,7 +52,7 @@ func NewRawEventConsumptionService(
 	tracingService *tracing.Service,
 ) RawEventConsumptionService {
 	ev := &rawEventConsumptionService{
-		ServiceParams: params,
+		ServiceParams:  params,
 		tracingService: tracingService,
 	}
 
@@ -144,7 +144,7 @@ func (s *rawEventConsumptionService) loadIngestionFilter(ctx context.Context) (e
 		allowlist[id] = struct{}{}
 	}
 
-	s.Logger.Infow("event ingestion filter loaded",
+	s.Logger.Info(ctx, "event ingestion filter loaded",
 		"allowlist_size", len(allowlist),
 	)
 	return true, allowlist, nil
@@ -328,7 +328,7 @@ func (s *rawEventConsumptionService) BulkIngestRawEvents(ctx context.Context, ev
 		return fmt.Errorf("failed to publish raw event batch: %w", err)
 	}
 
-	s.Logger.Infow("published raw event batch to kafka",
+	s.Logger.Info(ctx, "published raw event batch to kafka",
 		"batch_size", len(events),
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
@@ -366,7 +366,7 @@ func (s *rawEventConsumptionService) publishTransformedEvent(ctx context.Context
 	// Publish to events topic (from raw_event_consumption config)
 	topic := s.Config.RawEventConsumption.OutputTopic
 
-	s.Logger.DebugwCtx(ctx, "publishing transformed event to kafka",
+	s.Logger.Debug(ctx, "publishing transformed event to kafka",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"partition_key", partitionKey,

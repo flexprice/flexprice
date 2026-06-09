@@ -81,7 +81,7 @@ func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.
 	if err != nil {
 		SetSpanError(span, err)
 
-		r.log.Error("failed to create credit note", "error", err)
+		r.log.Error(ctx, "failed to create credit note", "error", err)
 		if ent.IsConstraintError(err) {
 			var pqErr *pq.Error
 			if errors.As(err, &pqErr) {
@@ -423,7 +423,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	r.log.Info("deleting credit note", "creditnote_id", id)
+	r.log.Info(ctx, "deleting credit note", "creditnote_id", id)
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Delete line items first

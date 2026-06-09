@@ -11,7 +11,6 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"go.uber.org/zap"
 )
 
 // EventPublisher handles event publishing across multiple destinations
@@ -66,9 +65,9 @@ func (s *eventPublisher) Publish(ctx context.Context, event *events.Event) error
 	defer s.mu.RUnlock()
 
 	s.logger.With(
-		zap.String("event_id", event.ID),
-		zap.String("event_name", event.EventName),
-		zap.String("destination", string(s.config.PublishDestination)),
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"destination", string(s.config.PublishDestination),
 	).Debug("publishing event")
 
 	switch s.config.PublishDestination {

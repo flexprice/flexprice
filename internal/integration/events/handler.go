@@ -97,7 +97,7 @@ func NewHandler(deps Deps) Handler {
 func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	cfg := h.deps.Config.IntegrationEvents
 	if !cfg.Enabled {
-		h.deps.Logger.Info("integration_events: handler disabled by configuration, skipping registration")
+		h.deps.Logger.Info(context.Background(), "integration_events: handler disabled by configuration, skipping registration")
 		return
 	}
 

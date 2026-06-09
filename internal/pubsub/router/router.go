@@ -45,12 +45,12 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 			return nil, err
 		}
 		dlqTopicName = cfg.Kafka.TopicDLQ
-		logger.Infow("DLQ enabled with Kafka", "dlq_topic", cfg.Kafka.TopicDLQ)
+		logger.Info(context.Background(), "DLQ enabled with Kafka", "dlq_topic", cfg.Kafka.TopicDLQ)
 	} else {
 		// Use in-memory DLQ (original behavior) when not configured
 		poisonQueuePublisher = getTempDLQ()
 		dlqTopicName = "poison_queue"
-		logger.Infow("DLQ using in-memory queue (no topic_dlq configured)")
+		logger.Info(context.Background(), "DLQ using in-memory queue (no topic_dlq configured)")
 	}
 
 	// PoisonQueue middleware (always present, just with different publisher)
@@ -147,15 +147,15 @@ func (r *Router) AddNoPublishHandler(
 
 // Run starts the router
 func (r *Router) Run() error {
-	r.logger.Info("starting router")
 	ctx, cancel := context.WithCancel(context.Background())
+	r.logger.Info(ctx, "starting router")
 	defer cancel()
 	return r.router.Run(ctx)
 }
 
 // Close gracefully shuts down the router
 func (r *Router) Close() error {
-	r.logger.Info("closing router")
+	r.logger.Info(context.Background(), "closing router")
 	return r.router.Close()
 }
 

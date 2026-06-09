@@ -432,7 +432,7 @@ func (s *subscriptionModificationService) executeQuantityChange(
 
 			// Skip no-op: quantity unchanged avoids unnecessary DB writes and a spurious invoice.
 			if change.Quantity.Equal(lineItem.Quantity) {
-				sp.Logger.Debugw("skipping quantity change: quantity is unchanged",
+				sp.Logger.Debug(ctx, "skipping quantity change: quantity is unchanged",
 					"line_item_id", change.ID, "quantity", change.Quantity)
 				continue
 			}
@@ -802,7 +802,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 			LineItems:      lineItems,
 		})
 		if err != nil {
-			sp.Logger.Errorw("failed to create delta proration invoice for quantity change", "error", err)
+			sp.Logger.Error(ctx, "failed to create delta proration invoice for quantity change", "error", err)
 			return nil, err
 		}
 		// CreateInvoice with InvoiceTypeOneOff already finalizes the invoice internally.
@@ -831,7 +831,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 	idempotencyKey := fmt.Sprintf("proration_credit_%s_%s_%s", sub.ID, oldItem.ID, effectiveDate.Format(time.RFC3339))
 	walletTx, err := walletSvc.TopUpWalletForProratedCharge(ctx, billingCustomer, creditAmount, sub.Currency, idempotencyKey)
 	if err != nil {
-		sp.Logger.Errorw("failed to top up wallet for downgrade proration", "error", err)
+		sp.Logger.Error(ctx, "failed to top up wallet for downgrade proration", "error", err)
 		return nil, err
 	}
 	changedID := "(wallet_credit)"
@@ -1169,7 +1169,7 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 
 	webhookPayload, err := json.Marshal(eventPayload)
 	if err != nil {
-		s.serviceParams.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		s.serviceParams.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -1185,6 +1185,6 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 		EntityID:      subscriptionID,
 	}
 	if err := s.serviceParams.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.serviceParams.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.serviceParams.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }

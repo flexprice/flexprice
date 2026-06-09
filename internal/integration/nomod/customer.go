@@ -59,7 +59,7 @@ func (s *CustomerService) EnsureCustomerSyncedToNomod(ctx context.Context, custo
 
 	// Check if customer already has Nomod ID in metadata
 	if nomodID, exists := flexpriceCustomer.Metadata["nomod_customer_id"]; exists && nomodID != "" {
-		s.logger.Infow("customer already synced to Nomod",
+		s.logger.Info(ctx, "customer already synced to Nomod",
 			"customer_id", customerID,
 			"nomod_customer_id", nomodID)
 		return flexpriceCustomer, nil
@@ -76,7 +76,7 @@ func (s *CustomerService) EnsureCustomerSyncedToNomod(ctx context.Context, custo
 		existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 		if err == nil && existingMappings != nil && len(existingMappings) > 0 {
 			existingMapping := existingMappings[0]
-			s.logger.Infow("customer already mapped to Nomod via integration mapping",
+			s.logger.Info(ctx, "customer already mapped to Nomod via integration mapping",
 				"customer_id", customerID,
 				"nomod_customer_id", existingMapping.ProviderEntityID)
 
@@ -99,7 +99,7 @@ func (s *CustomerService) EnsureCustomerSyncedToNomod(ctx context.Context, custo
 	}
 
 	// Customer is not synced, create in Nomod
-	s.logger.Infow("customer not synced to Nomod, creating in Nomod",
+	s.logger.Info(ctx, "customer not synced to Nomod, creating in Nomod",
 		"customer_id", customerID)
 	err = s.CreateCustomerInNomod(ctx, customerID, customerService)
 	if err != nil {
@@ -165,14 +165,14 @@ func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCust
 		Email:     flexpriceCustomer.Email,
 	}
 
-	s.logger.Infow("creating customer in Nomod",
+	s.logger.Info(ctx, "creating customer in Nomod",
 		"customer_id", flexpriceCustomer.ID,
 		"email", flexpriceCustomer.Email)
 
 	// Create customer in Nomod
 	nomodCustomer, err := s.client.CreateCustomer(ctx, req)
 	if err != nil {
-		s.logger.Errorw("failed to create customer in Nomod",
+		s.logger.Error(ctx, "failed to create customer in Nomod",
 			"error", err,
 			"customer_id", flexpriceCustomer.ID)
 		return "", err
@@ -180,7 +180,7 @@ func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCust
 
 	nomodCustomerID := nomodCustomer.ID
 
-	s.logger.Infow("created customer in Nomod",
+	s.logger.Info(ctx, "created customer in Nomod",
 		"customer_id", flexpriceCustomer.ID,
 		"nomod_customer_id", nomodCustomerID)
 
@@ -202,14 +202,14 @@ func (s *CustomerService) SyncCustomerToNomod(ctx context.Context, flexpriceCust
 
 	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
-		s.logger.Errorw("failed to store Nomod customer mapping",
+		s.logger.Error(ctx, "failed to store Nomod customer mapping",
 			"error", err,
 			"customer_id", flexpriceCustomer.ID,
 			"nomod_customer_id", nomodCustomerID)
 		// Don't fail the entire operation if mapping storage fails
 		// The customer was created successfully in Nomod
 	} else {
-		s.logger.Infow("stored Nomod customer mapping",
+		s.logger.Info(ctx, "stored Nomod customer mapping",
 			"customer_id", flexpriceCustomer.ID,
 			"nomod_customer_id", nomodCustomerID)
 	}

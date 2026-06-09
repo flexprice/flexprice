@@ -95,10 +95,10 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 	// This flag is used when a customer is created via a workflow to prevent infinite loops
 	if !req.SkipOnboardingWorkflow {
 		if err := s.handleCustomerOnboarding(ctx, cust); err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
+			s.Logger.Error(ctx, "failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
 		}
 	} else {
-		s.Logger.DebugwCtx(ctx, "skipping customer onboarding workflow",
+		s.Logger.Debug(ctx, "skipping customer onboarding workflow",
 			"customer_id", cust.ID,
 			"external_id", cust.ExternalID,
 			"reason", "skip_onboarding_workflow flag is true")
@@ -353,7 +353,7 @@ func (s *customerService) publishSystemEvent(ctx context.Context, eventName type
 	})
 
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -369,7 +369,7 @@ func (s *customerService) publishSystemEvent(ctx context.Context, eventName type
 		EntityID:      customerID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
 
@@ -423,7 +423,7 @@ func (s *customerService) GetUpcomingCreditGrantApplications(ctx context.Context
 }
 
 func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer *customer.Customer) error {
-	s.Logger.InfowCtx(ctx, "handling customer onboarding", "customer_id", customer.ID)
+	s.Logger.Info(ctx, "handling customer onboarding", "customer_id", customer.ID)
 
 	// Get customer onboarding workflow config
 	settingsService := &settingsService{
@@ -435,13 +435,13 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 	}
 
 	if workflowConfig == nil {
-		s.Logger.InfowCtx(ctx, "workflow config is nil, skipping customer onboarding", "customer_id", customer.ID)
+		s.Logger.Info(ctx, "workflow config is nil, skipping customer onboarding", "customer_id", customer.ID)
 		return nil
 	}
 
 	// If there are no actions, return
 	if len(workflowConfig.Actions) == 0 {
-		s.Logger.InfowCtx(ctx, "no actions found for customer onboarding", "customer_id", customer.ID)
+		s.Logger.Info(ctx, "no actions found for customer onboarding", "customer_id", customer.ID)
 		return nil
 	}
 
@@ -450,7 +450,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 	envID := types.GetEnvironmentID(ctx)
 	userID := types.GetUserID(ctx)
 
-	s.Logger.InfowCtx(ctx, "executing customer onboarding workflow",
+	s.Logger.Info(ctx, "executing customer onboarding workflow",
 		"customer_id", customer.ID,
 		"tenant_id", tenantID,
 		"environment_id", envID,
@@ -470,7 +470,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 
 	// Validate input
 	if err := input.Validate(); err != nil {
-		s.Logger.ErrorwCtx(ctx, "invalid workflow input for customer onboarding",
+		s.Logger.Error(ctx, "invalid workflow input for customer onboarding",
 			"error", err,
 			"customer_id", customer.ID)
 		return ierr.WithError(err).
@@ -499,7 +499,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		input,
 	)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to start customer onboarding workflow",
+		s.Logger.Error(ctx, "failed to start customer onboarding workflow",
 			"error", err,
 			"customer_id", customer.ID)
 		return ierr.WithError(err).
@@ -510,7 +510,7 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.InfowCtx(ctx, "customer onboarding workflow started successfully",
+	s.Logger.Info(ctx, "customer onboarding workflow started successfully",
 		"customer_id", customer.ID,
 		"workflow_id", workflowRun.GetID(),
 		"run_id", workflowRun.GetRunID())

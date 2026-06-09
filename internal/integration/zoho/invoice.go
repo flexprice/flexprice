@@ -72,7 +72,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 			}
 		}
 		if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoID); werr != nil {
-			s.logger.Warnw("failed to update FlexPrice invoice metadata from existing Zoho mapping",
+			s.logger.Warn(ctx, "failed to update FlexPrice invoice metadata from existing Zoho mapping",
 				"error", werr,
 				"invoice_id", req.InvoiceID,
 				"zoho_invoice_id", zohoID)
@@ -151,7 +151,7 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	}
 
 	if werr := s.writeZohoInvoiceMetadata(ctx, flexInvoice, zohoInv.InvoiceID); werr != nil {
-		s.logger.Warnw("failed to update FlexPrice invoice metadata from Zoho sync",
+		s.logger.Warn(ctx, "failed to update FlexPrice invoice metadata from Zoho sync",
 			"error", werr,
 			"invoice_id", req.InvoiceID,
 			"zoho_invoice_id", zohoInv.InvoiceID)
@@ -219,7 +219,7 @@ func (s *InvoiceService) buildLineItems(ctx context.Context, flexInvoice *invoic
 	if len(inputs) > 0 {
 		mapped, err := s.itemSyncSvc.EnsureItemsMapped(ctx, inputs, taxRes)
 		if err != nil {
-			s.logger.Warnw("failed to ensure Zoho item mappings, sending line items without item_id",
+			s.logger.Warn(ctx, "failed to ensure Zoho item mappings, sending line items without item_id",
 				"invoice_id", flexInvoice.ID,
 				"error", err)
 			return nil, err

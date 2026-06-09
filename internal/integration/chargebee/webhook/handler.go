@@ -31,7 +31,7 @@ func NewHandler(
 
 // HandleWebhookEvent processes a Chargebee webhook event
 func (h *Handler) HandleWebhookEvent(ctx context.Context, event *ChargebeeWebhookEvent, environmentID string) error {
-	h.logger.Infow("processing Chargebee webhook event",
+	h.logger.Info(ctx, "processing Chargebee webhook event",
 		"event_type", event.EventType,
 		"event_id", event.ID,
 		"environment_id", environmentID,
@@ -44,7 +44,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *ChargebeeWebhoo
 	case EventPaymentSucceeded:
 		return h.handlePaymentSucceeded(ctx, event, environmentID)
 	default:
-		h.logger.Infow("unhandled Chargebee webhook event type", "type", event.EventType)
+		h.logger.Info(ctx, "unhandled Chargebee webhook event type", "type", event.EventType)
 		return nil // Not an error, just unhandled
 	}
 }
@@ -54,20 +54,20 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	// Parse the webhook content
 	var content ChargebeeWebhookContent
 	if err := json.Unmarshal(event.Content, &content); err != nil {
-		h.logger.Errorw("failed to parse webhook content",
+		h.logger.Error(ctx, "failed to parse webhook content",
 			"error", err,
 			"event_id", event.ID)
 		return nil
 	}
 
 	if content.Transaction == nil {
-		h.logger.Warnw("no transaction found in payment_succeeded event",
+		h.logger.Warn(ctx, "no transaction found in payment_succeeded event",
 			"event_id", event.ID)
 		return nil
 	}
 
 	if content.Invoice == nil {
-		h.logger.Warnw("no invoice found in payment_succeeded event",
+		h.logger.Warn(ctx, "no invoice found in payment_succeeded event",
 			"event_id", event.ID)
 		return nil
 	}
@@ -75,7 +75,7 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	transaction := content.Transaction
 	invoice := content.Invoice
 
-	h.logger.Infow("received payment_succeeded webhook",
+	h.logger.Info(ctx, "received payment_succeeded webhook",
 		"chargebee_transaction_id", transaction.ID,
 		"chargebee_invoice_id", invoice.ID,
 	)
@@ -83,14 +83,14 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	// Get FlexPrice invoice ID from entity mapping via service method
 	flexpriceInvoiceID, err := h.invoiceSvc.GetFlexPriceInvoiceIDByChargebeeInvoiceID(ctx, invoice.ID)
 	if err != nil {
-		h.logger.Errorw("failed to get FlexPrice invoice ID for Chargebee invoice",
+		h.logger.Error(ctx, "failed to get FlexPrice invoice ID for Chargebee invoice",
 			"error", err,
 			"chargebee_invoice_id", invoice.ID,
 			"event_id", event.ID)
 		return nil // Don't fail webhook processing
 	}
 
-	h.logger.Infow("found FlexPrice invoice for payment",
+	h.logger.Info(ctx, "found FlexPrice invoice for payment",
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"chargebee_invoice_id", invoice.ID,
 		"chargebee_transaction_id", transaction.ID)
@@ -109,14 +109,14 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 		transaction.PaymentMethod,
 	)
 	if err != nil {
-		h.logger.Errorw("failed to process Chargebee payment",
+		h.logger.Error(ctx, "failed to process Chargebee payment",
 			"error", err,
 			"flexprice_invoice_id", flexpriceInvoiceID,
 			"chargebee_transaction_id", transaction.ID)
 		return nil // Don't fail webhook processing
 	}
 
-	h.logger.Infow("successfully processed payment_succeeded webhook",
+	h.logger.Info(ctx, "successfully processed payment_succeeded webhook",
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"chargebee_invoice_id", invoice.ID,
 		"chargebee_transaction_id", transaction.ID,

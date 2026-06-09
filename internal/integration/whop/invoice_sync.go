@@ -47,7 +47,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 	req WhopInvoiceSyncRequest,
 	customerService interfaces.CustomerService,
 ) (*WhopInvoiceSyncResponse, error) {
-	s.logger.Infow("starting Whop invoice sync", "invoice_id", req.InvoiceID)
+	s.logger.Info(ctx, "starting Whop invoice sync", "invoice_id", req.InvoiceID)
 
 	if !s.client.HasWhopConnection(ctx) {
 		return nil, ierr.NewError("Whop connection not available").
@@ -65,7 +65,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 		return nil, err
 	}
 	if existingMapping != nil {
-		s.logger.Infow("invoice already synced to Whop",
+		s.logger.Info(ctx, "invoice already synced to Whop",
 			"invoice_id", req.InvoiceID,
 			"whop_invoice_id", existingMapping.ProviderEntityID)
 		return &WhopInvoiceSyncResponse{
@@ -100,7 +100,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 	paymentMethodID := ""
 	if flexInvoice.CustomerID != "" {
 		if savedPaymentMethodID, err := s.resolvePaymentMethod(ctx, flexInvoice.CustomerID); err != nil {
-			s.logger.Infow("could not resolve Whop payment method, falling back to send_invoice",
+			s.logger.Info(ctx, "could not resolve Whop payment method, falling back to send_invoice",
 				"customer_id", flexInvoice.CustomerID, "error", err)
 		} else if savedPaymentMethodID != "" {
 			collectionMethod = WhopCollectionMethodChargeAutomatically
@@ -129,7 +129,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 			WithHint("Failed to create invoice in Whop").
 			Mark(ierr.ErrHTTPClient)
 	}
-	s.logger.Infow("created Whop invoice",
+	s.logger.Info(ctx, "created Whop invoice",
 		"amount_due", flexInvoice.AmountDue.String(),
 		"flexprice_invoice_id", flexInvoice.ID,
 		"whop_invoice_id", whopInvoice.ID)
@@ -157,7 +157,7 @@ func (s *InvoiceSyncService) SyncInvoiceToWhop(
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.logger.Infow("successfully synced invoice to Whop",
+	s.logger.Info(ctx, "successfully synced invoice to Whop",
 		"invoice_id", req.InvoiceID,
 		"whop_invoice_id", whopInvoice.ID)
 
@@ -180,7 +180,7 @@ func (s *InvoiceSyncService) MarkInvoicePaidInWhop(ctx context.Context, flexpric
 		return err
 	}
 	if flexInvoice.PaymentStatus != types.PaymentStatusSucceeded {
-		s.logger.Infow("invoice not in succeeded payment state, skipping Whop mark_paid",
+		s.logger.Info(ctx, "invoice not in succeeded payment state, skipping Whop mark_paid",
 			"invoice_id", flexpriceInvoiceID,
 			"payment_status", flexInvoice.PaymentStatus)
 		return nil
@@ -188,7 +188,7 @@ func (s *InvoiceSyncService) MarkInvoicePaidInWhop(ctx context.Context, flexpric
 
 	mapping, err := s.getExistingWhopMapping(ctx, flexpriceInvoiceID)
 	if ierr.IsNotFound(err) {
-		s.logger.Infow("no Whop mapping for invoice, skipping mark_paid",
+		s.logger.Info(ctx, "no Whop mapping for invoice, skipping mark_paid",
 			"invoice_id", flexpriceInvoiceID)
 		return nil
 	}
@@ -202,7 +202,7 @@ func (s *InvoiceSyncService) MarkInvoicePaidInWhop(ctx context.Context, flexpric
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Infow("marked Whop invoice as paid",
+	s.logger.Info(ctx, "marked Whop invoice as paid",
 		"invoice_id", flexpriceInvoiceID,
 		"whop_invoice_id", mapping.ProviderEntityID)
 	return nil
@@ -235,7 +235,7 @@ func (s *InvoiceSyncService) ensureProduct(ctx context.Context) (string, error) 
 	}
 
 	if err := s.client.UpdateProductID(ctx, product.ID); err != nil {
-		s.logger.Errorw("failed to persist Whop product ID to connection", "error", err,
+		s.logger.Error(ctx, "failed to persist Whop product ID to connection", "error", err,
 			"product_id", product.ID)
 	}
 
@@ -313,7 +313,7 @@ func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerI
 		return "", err
 	}
 	if len(paymentMethods.Data) == 0 {
-		s.logger.Infow("no payment methods on Whop member, falling back to send_invoice",
+		s.logger.Info(ctx, "no payment methods on Whop member, falling back to send_invoice",
 			"customer_id", customerID)
 		return "", nil
 	}
@@ -321,7 +321,7 @@ func (s *InvoiceSyncService) resolvePaymentMethod(ctx context.Context, customerI
 	// Currently uses first payment method from the fetched list
 	// TODO: allow users to select their default payment method
 	paymentMethodID := paymentMethods.Data[0].ID
-	s.logger.Infow("resolved Whop payment method for customer", "customer_id", customerID)
+	s.logger.Info(ctx, "resolved Whop payment method for customer", "customer_id", customerID)
 	return paymentMethodID, nil
 }
 
@@ -343,7 +343,7 @@ func (s *InvoiceSyncService) CreateCustomerMapping(ctx context.Context, customer
 	}
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
 		if ierr.IsAlreadyExists(err) {
-			s.logger.Infow("customer→Whop mapping already exists, skipping",
+			s.logger.Info(ctx, "customer→Whop mapping already exists, skipping",
 				"customer_id", customerID)
 			return nil
 		}

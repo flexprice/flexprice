@@ -38,7 +38,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 	// CRITICAL: Panic recovery to ensure tracking failures never crash workflows
 	defer func() {
 		if r := recover(); r != nil {
-			a.logger.Error("Panic recovered in TrackWorkflowStart - workflow will continue",
+			a.logger.Error(ctx, "Panic recovered in TrackWorkflowStart - workflow will continue",
 				"panic", r,
 				"workflow_id", input.WorkflowID,
 				"run_id", input.RunID)
@@ -53,7 +53,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 		ctx = types.SetUserID(ctx, input.CreatedBy)
 	}
 
-	a.logger.Info("Tracking workflow start",
+	a.logger.Info(ctx, "Tracking workflow start",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID,
 		"workflow_type", input.WorkflowType)
@@ -76,12 +76,12 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 	})
 
 	if err != nil {
-		a.logger.Error("Failed to track workflow start", "error", err)
+		a.logger.Error(ctx, "Failed to track workflow start", "error", err)
 		// Don't fail the workflow if tracking fails - just log the error
 		return nil
 	}
 
-	a.logger.Info("Successfully tracked workflow start",
+	a.logger.Info(ctx, "Successfully tracked workflow start",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID)
 
@@ -96,7 +96,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowEnd(ctx context.Context, input
 	// CRITICAL: Panic recovery to ensure tracking failures never crash workflows
 	defer func() {
 		if r := recover(); r != nil {
-			a.logger.Error("Panic recovered in TrackWorkflowEnd - workflow will continue",
+			a.logger.Error(ctx, "Panic recovered in TrackWorkflowEnd - workflow will continue",
 				"panic", r,
 				"workflow_id", input.WorkflowID,
 				"run_id", input.RunID)
@@ -104,7 +104,7 @@ func (a *WorkflowTrackingActivities) TrackWorkflowEnd(ctx context.Context, input
 		}
 	}()
 
-	a.logger.Info("Tracking workflow end",
+	a.logger.Info(ctx, "Tracking workflow end",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID,
 		"status", input.WorkflowStatus,
@@ -127,12 +127,12 @@ func (a *WorkflowTrackingActivities) TrackWorkflowEnd(ctx context.Context, input
 	)
 
 	if err != nil {
-		a.logger.Error("Failed to update workflow status", "error", err)
+		a.logger.Error(ctx, "Failed to update workflow status", "error", err)
 		// Don't fail the workflow if tracking fails - just log the error
 		return nil
 	}
 
-	a.logger.Info("Successfully tracked workflow end",
+	a.logger.Info(ctx, "Successfully tracked workflow end",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID,
 		"status", input.WorkflowStatus,

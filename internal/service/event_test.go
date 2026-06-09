@@ -34,7 +34,7 @@ func (s *EventServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
 	s.eventRepo = testutil.NewInMemoryEventStore()
 	s.publisher = testutil.NewInMemoryEventPublisher(s.eventRepo).(*testutil.InMemoryPublisherService)
-	s.logger = logger.GetLogger()
+	s.logger = logger.NewNoopLogger()
 	s.config = config.GetDefaultConfig()
 
 	// Add Kafka config required by getKafkaConsumerConfig method

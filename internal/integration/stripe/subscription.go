@@ -57,7 +57,7 @@ func (s *stripeSubscriptionService) fetchStripeSubscription(ctx context.Context,
 
 	stripeSub, err := stripeClient.V1Subscriptions.Retrieve(ctx, subscriptionID, params)
 	if err != nil {
-		s.logger.Errorw("failed to retrieve subscription from Stripe",
+		s.logger.Error(ctx, "failed to retrieve subscription from Stripe",
 			"error", err,
 			"subscription_id", subscriptionID,
 		)
@@ -204,7 +204,7 @@ func (s *stripeSubscriptionService) UpdateSubscription(ctx context.Context, stri
 		}
 	})
 	if err != nil {
-		s.logger.Errorw("failed to update subscription",
+		s.logger.Error(ctx, "failed to update subscription",
 			"error", err,
 			"subscription_id", stripeSubscriptionID)
 		return err
@@ -583,7 +583,7 @@ func (s *stripeSubscriptionService) isPlanChange(ctx context.Context, existingSu
 }
 
 func (s *stripeSubscriptionService) handlePlanChange(ctx context.Context, existingSubscription *dto.SubscriptionResponse, stripeSubscription *stripe.Subscription, services *ServiceDependencies) error {
-	s.logger.Infow("handling plan change for subscription",
+	s.logger.Info(ctx, "handling plan change for subscription",
 		"existing_subscription_id", existingSubscription.ID,
 		"stripe_subscription_id", stripeSubscription.ID)
 
@@ -603,7 +603,7 @@ func (s *stripeSubscriptionService) handlePlanChange(ctx context.Context, existi
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("successfully cancelled existing subscription",
+	s.logger.Info(ctx, "successfully cancelled existing subscription",
 		"subscription_id", existingSubscription.ID)
 
 	// STEP 2: Delete the old mapping
@@ -655,7 +655,7 @@ func (s *stripeSubscriptionService) handlePlanChange(ctx context.Context, existi
 }
 
 func (s *stripeSubscriptionService) handleNormalChange(ctx context.Context, existingSubscription *dto.SubscriptionResponse, stripeSubscription *stripe.Subscription, services *ServiceDependencies) error {
-	s.logger.Infow("handling normal subscription change",
+	s.logger.Info(ctx, "handling normal subscription change",
 		"existing_subscription_id", existingSubscription.ID,
 		"stripe_subscription_id", stripeSubscription.ID)
 
@@ -672,7 +672,7 @@ func (s *stripeSubscriptionService) handleNormalChange(ctx context.Context, exis
 	}
 
 	// Log the changes that will be made
-	s.logger.Infow("subscription changes detected",
+	s.logger.Info(ctx, "subscription changes detected",
 		"subscription_id", existingSubscription.ID,
 		"stripe_status", stripeSubscription.Status,
 		"flexprice_status", updateReq.Status,
@@ -692,7 +692,7 @@ func (s *stripeSubscriptionService) handleNormalChange(ctx context.Context, exis
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("normal subscription change processed successfully",
+	s.logger.Info(ctx, "normal subscription change processed successfully",
 		"subscription_id", existingSubscription.ID,
 		"stripe_subscription_id", stripeSubscription.ID)
 

@@ -50,8 +50,6 @@ func LoggingMiddleware(log *logger.Logger) gin.HandlerFunc {
 		// BEFORE we reach this post-phase. So c.Request.Context() no longer holds
 		// the OTel span. SpanEnrichmentMiddleware (post-phase executes before otelgin's
 		// defer) captured both the string IDs and the span-carrying context for us.
-		reqLog := log
-
 		// Use the saved span context (still has span) so:
 		//  1. WithContext injects trace_id/span_id as string fields.
 		//  2. otelCtxCore injects ctx into otelzap so the OTLP log record's
@@ -63,15 +61,14 @@ func LoggingMiddleware(log *logger.Logger) gin.HandlerFunc {
 				spanCtx = savedCtx
 			}
 		}
-		reqLog = reqLog.WithContext(spanCtx)
 
 		switch {
 		case statusCode >= 500:
-			reqLog.Errorw("HTTP_REQUEST_ERROR", fields...)
+			log.Error(spanCtx, "HTTP_REQUEST_ERROR", fields...)
 		case statusCode >= 400:
-			reqLog.Warnw("HTTP_REQUEST_WARNING", fields...)
+			log.Warn(spanCtx, "HTTP_REQUEST_WARNING", fields...)
 		default:
-			reqLog.Infow("HTTP_REQUEST_INFO", fields...)
+			log.Info(spanCtx, "HTTP_REQUEST_INFO", fields...)
 		}
 	}
 }

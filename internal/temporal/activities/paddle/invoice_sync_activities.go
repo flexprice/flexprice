@@ -42,7 +42,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 	ctx context.Context,
 	input models.PaddleInvoiceSyncWorkflowInput,
 ) error {
-	a.logger.Infow("syncing invoice to Paddle",
+	a.logger.Info(ctx, "syncing invoice to Paddle",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
@@ -65,7 +65,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get Paddle integration",
+		a.logger.Error(ctx, "failed to get Paddle integration",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
@@ -89,13 +89,13 @@ func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to sync invoice to Paddle",
+		a.logger.Error(ctx, "failed to sync invoice to Paddle",
 			"error", err,
 			"invoice_id", input.InvoiceID)
 		return err
 	}
 
-	a.logger.Infow("successfully synced invoice to Paddle",
+	a.logger.Info(ctx, "successfully synced invoice to Paddle",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID)
 
@@ -108,7 +108,7 @@ func (a *InvoiceSyncActivities) PullAndUpdatePaddleInvoice(
 	ctx context.Context,
 	input models.PaddleInvoicePullSyncWorkflowInput,
 ) error {
-	a.logger.Infow("pulling and updating Paddle invoice",
+	a.logger.Info(ctx, "pulling and updating Paddle invoice",
 		"invoice_id", input.InvoiceID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
@@ -140,7 +140,7 @@ func (a *InvoiceSyncActivities) PullAndUpdatePaddleInvoice(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to pull and update Paddle invoice",
+		a.logger.Error(ctx, "failed to pull and update Paddle invoice",
 			"invoice_id", input.InvoiceID, "error", err)
 		return temporal.NewNonRetryableApplicationError(
 			err.Error(),
@@ -149,7 +149,7 @@ func (a *InvoiceSyncActivities) PullAndUpdatePaddleInvoice(
 		)
 	}
 
-	a.logger.Infow("successfully pulled and updated Paddle invoice",
+	a.logger.Info(ctx, "successfully pulled and updated Paddle invoice",
 		"invoice_id", input.InvoiceID)
 
 	return nil

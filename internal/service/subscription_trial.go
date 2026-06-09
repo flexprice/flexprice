@@ -66,7 +66,7 @@ func (s *subscriptionService) ProcessTrialEndDue(ctx context.Context) (*dto.Subs
 	now := time.Now().UTC()
 	listCtx := ctx
 
-	s.Logger.InfowCtx(ctx, "starting trial end processing", "current_time", now)
+	s.Logger.Info(ctx, "starting trial end processing", "current_time", now)
 
 	response := &dto.SubscriptionUpdatePeriodResponse{
 		Items:        make([]*dto.SubscriptionUpdatePeriodResponseItem, 0),
@@ -97,7 +97,7 @@ func (s *subscriptionService) ProcessTrialEndDue(ctx context.Context) (*dto.Subs
 			break
 		}
 
-		s.Logger.InfowCtx(listCtx, "processing trial end batch", "batch_size", len(subs))
+		s.Logger.Info(listCtx, "processing trial end batch", "batch_size", len(subs))
 
 		// Derive per-sub context from listCtx (no WithValue chain growth); rows can span envs/tenants.
 		for _, trialingSubscription := range subs {
@@ -111,7 +111,7 @@ func (s *subscriptionService) ProcessTrialEndDue(ctx context.Context) (*dto.Subs
 
 			_, err := s.processSubscriptionTrialEnd(subCtx, trialingSubscription, invoiceService, now)
 			if err != nil {
-				s.Logger.ErrorwCtx(subCtx, "failed to process trial end for subscription",
+				s.Logger.Error(subCtx, "failed to process trial end for subscription",
 					"subscription_id", trialingSubscription.ID,
 					"error", err)
 				response.TotalFailed++
@@ -159,7 +159,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		return nil, nil
 	}
 	if sub.TrialStart == nil || sub.TrialEnd == nil {
-		s.Logger.WarnwCtx(ctx, "trialing subscription missing trial bounds, skipping",
+		s.Logger.Warn(ctx, "trialing subscription missing trial bounds, skipping",
 			"subscription_id", sub.ID)
 		return nil, nil
 	}
@@ -210,7 +210,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		return nil, err
 	}
 
-	s.Logger.InfowCtx(ctx, "subscription period advanced and moved to incomplete after trial end",
+	s.Logger.Info(ctx, "subscription period advanced and moved to incomplete after trial end",
 		"subscription_id", sub.ID,
 		"first_period_start", firstPeriodStart,
 		"first_period_end", firstPeriodEnd)
@@ -220,7 +220,7 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 		if err := s.completeTrialConversionToActive(ctx, sub); err != nil {
 			return nil, err
 		}
-		s.Logger.InfowCtx(ctx, "subscription activated after zero-amount trial end",
+		s.Logger.Info(ctx, "subscription activated after zero-amount trial end",
 			"subscription_id", sub.ID)
 	}
 	return trialEndInvoice, nil

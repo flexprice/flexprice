@@ -40,7 +40,7 @@ type ServiceDependencies = interfaces.ServiceDependencies
 // This function never returns errors to ensure webhooks always return 200 OK
 // All errors are logged internally to prevent Moyasar from retrying
 func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookEvent, environmentID string, services *ServiceDependencies) error {
-	h.logger.Infow("processing Moyasar webhook event",
+	h.logger.Info(ctx, "processing Moyasar webhook event",
 		"event_type", event.Type,
 		"event_id", event.ID,
 		"environment_id", environmentID,
@@ -52,7 +52,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 		return h.handlePaymentPaid(ctx, event, environmentID, services)
 	}
 
-	h.logger.Infow("ignoring non-payment_paid event", "type", event.Type)
+	h.logger.Info(ctx, "ignoring non-payment_paid event", "type", event.Type)
 	return nil
 }
 
@@ -60,7 +60,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookE
 func (h *Handler) handlePaymentPaid(ctx context.Context, event *MoyasarWebhookEvent, environmentID string, services *ServiceDependencies) error {
 	payment := event.Data
 
-	h.logger.Infow("received payment_paid webhook",
+	h.logger.Info(ctx, "received payment_paid webhook",
 		"moyasar_payment_id", payment.ID,
 		"amount", payment.Amount,
 		"currency", payment.Currency,
@@ -83,7 +83,7 @@ func (h *Handler) handlePaymentPaid(ctx context.Context, event *MoyasarWebhookEv
 // handleInvoicePayment handles payments for FlexPrice invoices (Invoice Link Flow)
 func (h *Handler) handleInvoicePayment(ctx context.Context, payment PaymentEventData, services *ServiceDependencies) error {
 	moyasarInvoiceID := payment.InvoiceID
-	h.logger.Infow("processing Moyasar invoice payment",
+	h.logger.Info(ctx, "processing Moyasar invoice payment",
 		"moyasar_payment_id", payment.ID,
 		"moyasar_invoice_id", moyasarInvoiceID)
 
@@ -96,7 +96,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment PaymentEvent
 
 	mappings, err := h.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
-		h.logger.Errorw("failed to find mapping for Moyasar invoice",
+		h.logger.Error(ctx, "failed to find mapping for Moyasar invoice",
 			"error", err,
 			"moyasar_invoice_id", moyasarInvoiceID)
 		return nil
@@ -109,7 +109,7 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment PaymentEvent
 	}
 
 	flexpriceInvoiceID := mappings[0].EntityID
-	h.logger.Infow("found FlexPrice invoice for Moyasar invoice",
+	h.logger.Info(ctx, "found FlexPrice invoice for Moyasar invoice",
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"moyasar_invoice_id", moyasarInvoiceID)
 
@@ -140,14 +140,14 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment PaymentEvent
 	// Reuse existing logic to create payment record and reconcile
 	err = h.paymentSvc.ProcessExternalMoyasarPayment(ctx, moyasarPayment, flexpriceInvoiceID, services.PaymentService, services.InvoiceService)
 	if err != nil {
-		h.logger.Errorw("failed to process external Moyasar payment",
+		h.logger.Error(ctx, "failed to process external Moyasar payment",
 			"error", err,
 			"flexprice_invoice_id", flexpriceInvoiceID,
 			"moyasar_payment_id", payment.ID)
 		return nil
 	}
 
-	h.logger.Infow("successfully processed invoice payment",
+	h.logger.Info(ctx, "successfully processed invoice payment",
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"moyasar_payment_id", payment.ID)
 

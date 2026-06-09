@@ -95,7 +95,7 @@ func EnsureSchedules(ctx context.Context, tc client.TemporalClient, log *logger.
 		if err := ensureOneSchedule(ctx, tc, cfg); err != nil {
 			return err
 		}
-		log.Infow("schedule ensured", "id", cfg.ID)
+		log.Info(ctx, "schedule ensured", "id", cfg.ID)
 	}
 	return nil
 }

@@ -213,7 +213,7 @@ func (s *PaddleSyncService) lookupPaddleCustomerByEmail(ctx context.Context, ema
 		return "", nil
 	}
 	customer := first.Value()
-	s.logger.Infow("found existing Paddle customer by email", "paddle_customer_id", customer.ID, "email", email)
+	s.logger.Info(ctx, "found existing Paddle customer by email", "paddle_customer_id", customer.ID, "email", email)
 	return customer.ID, nil
 }
 
@@ -526,7 +526,7 @@ func (s *PaddleSyncService) appendCheckoutToken(ctx context.Context, checkoutURL
 
 	paddleConfig, err := s.client.GetPaddleConfig(ctx)
 	if err != nil || paddleConfig == nil || paddleConfig.ClientSideToken == "" {
-		s.logger.Debugw("skipping checkout token: client_side_token not configured")
+		s.logger.Debug(ctx, "skipping checkout token: client_side_token not configured")
 		return checkoutURL
 	}
 
@@ -556,7 +556,7 @@ func (s *PaddleSyncService) appendCheckoutToken(ctx context.Context, checkoutURL
 	q := parsed.Query()
 	q.Set("token", signedToken)
 	parsed.RawQuery = q.Encode()
-	s.logger.Debugw("appended checkout token to Paddle checkout URL")
+	s.logger.Debug(ctx, "appended checkout token to Paddle checkout URL")
 	return parsed.String()
 }
 
@@ -728,7 +728,7 @@ func (s *PaddleSyncService) SyncInvoice(ctx context.Context, req SyncInvoiceRequ
 	if txn.Checkout != nil {
 		checkoutURL = lo.FromPtrOr(txn.Checkout.URL, "")
 	}
-	s.logger.Debugw("paddle transaction checkout",
+	s.logger.Debug(ctx, "paddle transaction checkout",
 		"transaction_id", txn.ID,
 		"checkout_nil", txn.Checkout == nil,
 		"checkout_url_from_paddle", checkoutURL,
@@ -860,7 +860,7 @@ func (s *PaddleSyncService) ProcessCustomerCreatedWebhook(ctx context.Context, p
 	}
 	resp, err := s.mappingService.GetEntityIntegrationMappings(ctx, filter)
 	if err != nil {
-		s.logger.Errorw("failed to check Paddle customer mapping",
+		s.logger.Error(ctx, "failed to check Paddle customer mapping",
 			"error", err,
 			MetaKeyPaddleCustomerID, paddleCustomerID)
 		return err
@@ -1025,7 +1025,7 @@ func (s *PaddleSyncService) ProcessTransactionCompletedWebhook(
 	}
 
 	if txn.Status != paddlesdk.TransactionStatusCompleted {
-		s.logger.Debugw("Paddle transaction not yet completed",
+		s.logger.Debug(ctx, "Paddle transaction not yet completed",
 			"paddle_transaction_id", txnID,
 			"status", txn.Status)
 		return nil
@@ -1133,10 +1133,10 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 		}); err != nil {
 			return fmt.Errorf("activating draft subscription: %w", err)
 		}
-		s.logger.Infow("subscription.activated",
+		s.logger.Info(ctx, "subscription.activated",
 			"sub_id", flexSubID, "paddle_sub_id", paddleSubID)
 	default:
-		s.logger.Infow("subscription not in draft state — no-op",
+		s.logger.Info(ctx, "subscription not in draft state — no-op",
 			"sub_id", flexSubID, "status", sub.SubscriptionStatus, "paddle_sub_id", paddleSubID)
 	}
 
@@ -1156,7 +1156,7 @@ func (s *PaddleSyncService) ProcessSubscriptionActivatedWebhook(
 // If TemporalService is nil (e.g. in unit-test environments), the method returns silently.
 func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Context, subscriptionID string) {
 	if s.temporalSvc == nil {
-		s.logger.Errorw("temporal service is nil, skipping resync pending invoices for subscription",
+		s.logger.Error(ctx, "temporal service is nil, skipping resync pending invoices for subscription",
 			"subscription_id", subscriptionID)
 		return
 	}
@@ -1179,7 +1179,7 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 	}
 
 	if len(invoices) == 0 {
-		s.logger.Infow("no pending invoices to resync after subscription.activated",
+		s.logger.Info(ctx, "no pending invoices to resync after subscription.activated",
 			"subscription_id", subscriptionID)
 		return
 	}
@@ -1187,7 +1187,7 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	s.logger.Infow("triggering post-activation invoice resync workflows",
+	s.logger.Info(ctx, "triggering post-activation invoice resync workflows",
 		"subscription_id", subscriptionID, "count", len(invoices))
 
 	triggered := 0
@@ -1201,14 +1201,14 @@ func (s *PaddleSyncService) resyncPendingInvoicesForSubscription(ctx context.Con
 		}
 		_, wErr := s.temporalSvc.ExecuteWorkflow(ctx, types.TemporalPaddleInvoiceSyncWorkflow, input)
 		if wErr != nil {
-			s.logger.Error("failed to trigger invoice resync workflow after subscription.activated",
+			s.logger.Error(ctx, "failed to trigger invoice resync workflow after subscription.activated",
 				"subscription_id", subscriptionID, "invoice_id", inv.ID, "error", wErr)
 			continue
 		}
 		triggered++
 	}
 
-	s.logger.Infow("completed post-activation invoice resync workflow dispatch",
+	s.logger.Info(ctx, "completed post-activation invoice resync workflow dispatch",
 		"subscription_id", subscriptionID,
 		"attempted", len(invoices),
 		"triggered", triggered,
@@ -1272,7 +1272,7 @@ func (s *PaddleSyncService) PullAndUpdateInvoice(ctx context.Context, invoiceID 
 
 	if flexInvoice.InvoiceStatus == types.InvoiceStatusFinalized &&
 		flexInvoice.PaymentStatus == types.PaymentStatusSucceeded {
-		s.logger.Debugw("invoice already finalized and paid, skipping reconciliation",
+		s.logger.Debug(ctx, "invoice already finalized and paid, skipping reconciliation",
 			"invoice_id", invoiceID)
 		return nil
 	}

@@ -80,7 +80,7 @@ func (s *CustomerService) GetOrCreateChargebeeCustomer(ctx context.Context, flex
 	// Check if customer already exists in Chargebee via entity mapping
 	chargebeeCustomerID, err := s.GetChargebeeCustomerID(ctx, flexpriceCustomer.ID)
 	if err == nil && chargebeeCustomerID != "" {
-		s.Logger.Infow("customer already synced to Chargebee",
+		s.Logger.Info(ctx, "customer already synced to Chargebee",
 			"flexprice_customer_id", flexpriceCustomer.ID,
 			"chargebee_customer_id", chargebeeCustomerID)
 		return chargebeeCustomerID, nil
@@ -89,14 +89,14 @@ func (s *CustomerService) GetOrCreateChargebeeCustomer(ctx context.Context, flex
 	// Check if error is "not found" (customer not synced) vs database error
 	if err != nil && !ierr.IsNotFound(err) {
 		// Database or infrastructure error - propagate it instead of creating duplicate
-		s.Logger.Errorw("failed to check customer mapping due to infrastructure error",
+		s.Logger.Error(ctx, "failed to check customer mapping due to infrastructure error",
 			"flexprice_customer_id", flexpriceCustomer.ID,
 			"error", err)
 		return "", err
 	}
 
 	// Customer doesn't exist in Chargebee (genuine not found), create new one
-	s.Logger.Infow("creating new customer in Chargebee",
+	s.Logger.Info(ctx, "creating new customer in Chargebee",
 		"flexprice_customer_id", flexpriceCustomer.ID,
 		"email", flexpriceCustomer.Email)
 
@@ -115,7 +115,7 @@ func (s *CustomerService) SyncCustomerToChargebee(ctx context.Context, flexprice
 		return nil, err
 	}
 
-	s.Logger.Infow("syncing customer to Chargebee",
+	s.Logger.Info(ctx, "syncing customer to Chargebee",
 		"customer_id", flexpriceCustomer.ID,
 		"email", flexpriceCustomer.Email)
 
@@ -156,7 +156,7 @@ func (s *CustomerService) SyncCustomerToChargebee(ctx context.Context, flexprice
 	// Create customer in Chargebee using client wrapper
 	result, err := s.Client.CreateCustomer(ctx, createParams)
 	if err != nil {
-		s.Logger.Errorw("failed to create customer in Chargebee",
+		s.Logger.Error(ctx, "failed to create customer in Chargebee",
 			"customer_id", flexpriceCustomer.ID,
 			"error", err)
 		return nil, ierr.NewError("failed to create customer in Chargebee").
@@ -170,7 +170,7 @@ func (s *CustomerService) SyncCustomerToChargebee(ctx context.Context, flexprice
 
 	chargebeeCustomer := result.Customer
 
-	s.Logger.Infow("successfully created customer in Chargebee",
+	s.Logger.Info(ctx, "successfully created customer in Chargebee",
 		"flexprice_customer_id", flexpriceCustomer.ID,
 		"chargebee_customer_id", chargebeeCustomer.Id,
 		"email", chargebeeCustomer.Email)
@@ -189,7 +189,7 @@ func (s *CustomerService) SyncCustomerToChargebee(ctx context.Context, flexprice
 
 	err = s.EntityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
-		s.Logger.Errorw("failed to save entity mapping",
+		s.Logger.Error(ctx, "failed to save entity mapping",
 			"customer_id", flexpriceCustomer.ID,
 			"chargebee_customer_id", chargebeeCustomer.Id,
 			"error", err)
@@ -228,7 +228,7 @@ func (s *CustomerService) EnsureCustomerSyncedToChargebee(ctx context.Context, c
 
 	// Check if customer already has Chargebee ID in metadata
 	if chargebeeID, exists := flexpriceCustomer.Metadata["chargebee_customer_id"]; exists && chargebeeID != "" {
-		s.Logger.Infow("customer already synced to Chargebee",
+		s.Logger.Info(ctx, "customer already synced to Chargebee",
 			"customer_id", customerID,
 			"chargebee_customer_id", chargebeeID)
 		return flexpriceCustomer, nil
@@ -245,7 +245,7 @@ func (s *CustomerService) EnsureCustomerSyncedToChargebee(ctx context.Context, c
 		existingMappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
 		if err == nil && existingMappings != nil && len(existingMappings) > 0 {
 			existingMapping := existingMappings[0]
-			s.Logger.Infow("customer already mapped to Chargebee via integration mapping",
+			s.Logger.Info(ctx, "customer already mapped to Chargebee via integration mapping",
 				"customer_id", customerID,
 				"chargebee_customer_id", existingMapping.ProviderEntityID)
 
@@ -266,7 +266,7 @@ func (s *CustomerService) EnsureCustomerSyncedToChargebee(ctx context.Context, c
 	}
 
 	// Customer is not synced, create in Chargebee
-	s.Logger.Infow("customer not synced to Chargebee, creating in Chargebee",
+	s.Logger.Info(ctx, "customer not synced to Chargebee, creating in Chargebee",
 		"customer_id", customerID)
 	err = s.CreateCustomerInChargebee(ctx, customerID)
 	if err != nil {

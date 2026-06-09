@@ -65,7 +65,7 @@ type ScheduledTaskDetails struct {
 
 // GetScheduledTaskDetails fetches scheduled task and calculates time range
 func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, input GetScheduledTaskDetailsInput) (*ScheduledTaskDetails, error) {
-	a.logger.Infow("fetching scheduled task details",
+	a.logger.Info(ctx, "fetching scheduled task details",
 		"scheduled_task_id", input.ScheduledTaskID,
 		"tenant_id", input.TenantID,
 		"env_id", input.EnvID)
@@ -77,7 +77,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 	// Get scheduled task
 	task, err := a.scheduledTaskRepo.Get(ctx, input.ScheduledTaskID)
 	if err != nil {
-		a.logger.Errorw("failed to get scheduled task", "error", err)
+		a.logger.Error(ctx, "failed to get scheduled task", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to fetch scheduled task").
 			Mark(ierr.ErrDatabase)
@@ -86,7 +86,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 	// Parse job config
 	jobConfig, err := task.GetS3JobConfig()
 	if err != nil {
-		a.logger.Errorw("failed to parse job config", "error", err)
+		a.logger.Error(ctx, "failed to parse job config", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Invalid job configuration").
 			Mark(ierr.ErrValidation)
@@ -95,7 +95,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 	// Use workflow execution time for calculating interval boundaries
 	// This ensures retries use the same time boundaries as the original execution
 	executionTime := input.WorkflowExecutionTime
-	a.logger.Infow("execution time", "execution_time", executionTime)
+	a.logger.Info(ctx, "execution time", "execution_time", executionTime)
 	if executionTime.IsZero() {
 		// Fallback to current time if not provided (for backward compatibility)
 		executionTime = time.Now()
@@ -109,7 +109,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 		// Use custom time range for force runs
 		startTime = *input.CustomStartTime
 		endTime = *input.CustomEndTime
-		a.logger.Infow("using custom time range for force run",
+		a.logger.Info(ctx, "using custom time range for force run",
 			"scheduled_task_id", input.ScheduledTaskID,
 			"start_time", startTime,
 			"end_time", endTime)
@@ -118,7 +118,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 		startTime, endTime = a.calculateTimeRange(ctx, task, executionTime)
 	}
 
-	a.logger.Infow("scheduled task details retrieved",
+	a.logger.Info(ctx, "scheduled task details retrieved",
 		"scheduled_task_id", input.ScheduledTaskID,
 		"entity_type", task.EntityType,
 		"interval", task.Interval,
@@ -167,7 +167,7 @@ func (a *ScheduledTaskActivity) calculateTimeRange(ctx context.Context, task *sc
 		startTime = endTime.AddDate(0, 0, -1)
 	}
 
-	a.logger.Infow("calculated export time range",
+	a.logger.Info(ctx, "calculated export time range",
 		"scheduled_task_id", task.ID,
 		"interval", interval,
 		"current_time", currentTime,

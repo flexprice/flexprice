@@ -40,7 +40,7 @@ type eventConsumptionService struct {
 	lazyPubSub             pubsub.PubSub
 	replayPubSub           pubsub.PubSub
 	eventRepo              events.Repository
-	tracingService          *tracing.Service
+	tracingService         *tracing.Service
 	eventPostProcessingSvc EventPostProcessingService
 }
 
@@ -54,7 +54,7 @@ func NewEventConsumptionService(
 	ev := &eventConsumptionService{
 		ServiceParams:          params,
 		eventRepo:              eventRepo,
-		tracingService:          tracingService,
+		tracingService:         tracingService,
 		eventPostProcessingSvc: eventPostProcessingSvc,
 	}
 
@@ -336,7 +336,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(payload, &event); err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to unmarshal event",
+		s.Logger.Error(ctx, "failed to unmarshal event",
 			"error", err,
 			"payload", string(payload),
 		)
@@ -344,7 +344,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		return fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 
-	s.Logger.DebugwCtx(ctx, "processing raw event",
+	s.Logger.Debug(ctx, "processing raw event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
@@ -378,7 +378,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 
 	// Insert events into ClickHouse
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to insert events",
+		s.Logger.Error(ctx, "failed to insert events",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -390,7 +390,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 	// Only for the tenants that are forced to v1
 	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
 		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to publish event to post-processing service",
+			s.Logger.Error(ctx, "failed to publish event to post-processing service",
 				"error", err,
 				"event_id", event.ID,
 				"event_name", event.EventName,
@@ -399,7 +399,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		}
 	}
 
-	s.Logger.DebugwCtx(ctx, "successfully processed raw event",
+	s.Logger.Debug(ctx, "successfully processed raw event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"lag_ms", time.Since(event.Timestamp).Milliseconds(),

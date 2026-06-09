@@ -86,7 +86,7 @@ func (c *Client) GetMoyasarConfig(ctx context.Context) (*MoyasarConfig, error) {
 
 	// Validate required fields
 	if moyasarConfig.SecretKey == "" {
-		c.logger.Errorw("missing Moyasar secret key",
+		c.logger.Error(ctx, "missing Moyasar secret key",
 			"connection_id", conn.ID,
 			"environment_id", conn.EnvironmentID)
 		return nil, ierr.NewError("missing Moyasar secret key").
@@ -282,14 +282,14 @@ func (c *Client) CreatePayment(ctx context.Context, req *CreatePaymentRequest) (
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Log the request for debugging (sanitized to remove sensitive card data)
-	c.logger.Infow("sending request to Moyasar",
+	c.logger.Info(ctx, "sending request to Moyasar",
 		"url", BaseURL+"/payments",
 		"request_body", sanitizeRequestBody(bodyBytes))
 
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		c.logger.Errorw("failed to create payment in Moyasar", "error", err)
+		c.logger.Error(ctx, "failed to create payment in Moyasar", "error", err)
 		return nil, ierr.NewError("failed to create payment in Moyasar").
 			WithHint("Unable to connect to Moyasar API").
 			Mark(ierr.ErrInternal)
@@ -303,7 +303,7 @@ func (c *Client) CreatePayment(ctx context.Context, req *CreatePaymentRequest) (
 	}
 
 	// Log response for debugging (sanitized to remove sensitive data)
-	c.logger.Infow("received response from Moyasar",
+	c.logger.Info(ctx, "received response from Moyasar",
 		"status_code", resp.StatusCode,
 		"response_body", sanitizeResponseBody(respBody))
 
@@ -311,7 +311,7 @@ func (c *Client) CreatePayment(ctx context.Context, req *CreatePaymentRequest) (
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			c.logger.Errorw("Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "type", errResp.Type, "errors", errResp.Errors)
+			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "type", errResp.Type, "errors", errResp.Errors)
 			return nil, ierr.NewError(errResp.Message).
 				WithHint("Moyasar payment creation failed").
 				WithReportableDetails(map[string]interface{}{
@@ -331,7 +331,7 @@ func (c *Client) CreatePayment(ctx context.Context, req *CreatePaymentRequest) (
 		return nil, ierr.NewError("failed to parse Moyasar response").Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created payment in Moyasar",
+	c.logger.Info(ctx, "successfully created payment in Moyasar",
 		"payment_id", payment.ID,
 		"status", payment.Status,
 		"amount", payment.Amount)
@@ -365,14 +365,14 @@ func (c *Client) CreateInvoice(ctx context.Context, req *CreateInvoiceRequest) (
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Log the request for debugging (sanitized to remove sensitive data)
-	c.logger.Infow("sending invoice request to Moyasar",
+	c.logger.Info(ctx, "sending invoice request to Moyasar",
 		"url", BaseURL+"/invoices",
 		"request_body", sanitizeRequestBody(bodyBytes))
 
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		c.logger.Errorw("failed to create invoice in Moyasar", "error", err)
+		c.logger.Error(ctx, "failed to create invoice in Moyasar", "error", err)
 		return nil, ierr.NewError("failed to create invoice in Moyasar").
 			WithHint("Unable to connect to Moyasar API").
 			Mark(ierr.ErrInternal)
@@ -386,7 +386,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req *CreateInvoiceRequest) (
 	}
 
 	// Log response for debugging (sanitized to remove sensitive data)
-	c.logger.Infow("received invoice response from Moyasar",
+	c.logger.Info(ctx, "received invoice response from Moyasar",
 		"status_code", resp.StatusCode,
 		"response_body", sanitizeResponseBody(respBody))
 
@@ -394,7 +394,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req *CreateInvoiceRequest) (
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			c.logger.Errorw("Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "type", errResp.Type, "errors", errResp.Errors)
+			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message, "type", errResp.Type, "errors", errResp.Errors)
 			return nil, ierr.NewError(errResp.Message).
 				WithHint("Moyasar invoice creation failed").
 				WithReportableDetails(map[string]interface{}{
@@ -414,7 +414,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req *CreateInvoiceRequest) (
 		return nil, ierr.NewError("failed to parse Moyasar invoice response").Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created invoice in Moyasar",
+	c.logger.Info(ctx, "successfully created invoice in Moyasar",
 		"invoice_id", invoice.ID,
 		"status", invoice.Status,
 		"amount", invoice.Amount,
@@ -443,7 +443,7 @@ func (c *Client) GetPayment(ctx context.Context, paymentID string) (*MoyasarPaym
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		c.logger.Errorw("failed to get payment from Moyasar", "error", err, "payment_id", paymentID)
+		c.logger.Error(ctx, "failed to get payment from Moyasar", "error", err, "payment_id", paymentID)
 		return nil, ierr.NewError("failed to get payment from Moyasar").
 			WithHint("Unable to connect to Moyasar API").
 			Mark(ierr.ErrInternal)
@@ -474,7 +474,7 @@ func (c *Client) GetPayment(ctx context.Context, paymentID string) (*MoyasarPaym
 		return nil, ierr.NewError("failed to parse Moyasar response").Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully fetched payment from Moyasar",
+	c.logger.Info(ctx, "successfully fetched payment from Moyasar",
 		"payment_id", payment.ID,
 		"status", payment.Status)
 
@@ -512,7 +512,7 @@ func (c *Client) RefundPayment(ctx context.Context, paymentID string, amount int
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		c.logger.Errorw("failed to refund payment in Moyasar", "error", err, "payment_id", paymentID)
+		c.logger.Error(ctx, "failed to refund payment in Moyasar", "error", err, "payment_id", paymentID)
 		return nil, ierr.NewError("failed to refund payment in Moyasar").
 			WithHint("Unable to connect to Moyasar API").
 			Mark(ierr.ErrInternal)
@@ -544,7 +544,7 @@ func (c *Client) RefundPayment(ctx context.Context, paymentID string, amount int
 		return nil, ierr.NewError("failed to parse Moyasar response").Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully refunded payment in Moyasar",
+	c.logger.Info(ctx, "successfully refunded payment in Moyasar",
 		"payment_id", paymentID,
 		"refund_id", refund.ID,
 		"amount", refund.Amount)
@@ -573,7 +573,7 @@ func (c *Client) VoidPayment(ctx context.Context, paymentID string) (*MoyasarPay
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		c.logger.Errorw("failed to void payment in Moyasar", "error", err, "payment_id", paymentID)
+		c.logger.Error(ctx, "failed to void payment in Moyasar", "error", err, "payment_id", paymentID)
 		return nil, ierr.NewError("failed to void payment in Moyasar").
 			WithHint("Unable to connect to Moyasar API").
 			Mark(ierr.ErrInternal)
@@ -605,7 +605,7 @@ func (c *Client) VoidPayment(ctx context.Context, paymentID string) (*MoyasarPay
 		return nil, ierr.NewError("failed to parse Moyasar response").Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully voided payment in Moyasar",
+	c.logger.Info(ctx, "successfully voided payment in Moyasar",
 		"payment_id", paymentID,
 		"status", payment.Status)
 
@@ -616,7 +616,7 @@ func (c *Client) VoidPayment(ctx context.Context, paymentID string) (*MoyasarPay
 func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, signature string) error {
 	config, err := c.GetMoyasarConfig(ctx)
 	if err != nil {
-		c.logger.Errorw("failed to get Moyasar config for signature verification", "error", err)
+		c.logger.Error(ctx, "failed to get Moyasar config for signature verification", "error", err)
 		return ierr.NewError("failed to verify webhook signature").
 			WithHint("Unable to verify Moyasar webhook signature").
 			Mark(ierr.ErrInternal)
@@ -625,7 +625,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	// Use webhook secret for verification
 	secretForVerification := config.WebhookSecret
 	if secretForVerification == "" {
-		c.logger.Errorw("webhook secret not configured")
+		c.logger.Error(ctx, "webhook secret not configured")
 		return ierr.NewError("webhook secret not configured").
 			WithHint("Configure Moyasar webhook secret").
 			Mark(ierr.ErrValidation)
@@ -634,7 +634,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 	// Decode the received signature from hex
 	decodedSignature, err := hex.DecodeString(signature)
 	if err != nil {
-		c.logger.Errorw("failed to decode webhook signature",
+		c.logger.Error(ctx, "failed to decode webhook signature",
 			"error", err,
 			"signature_length", len(signature),
 			"signature_preview", getSignaturePreview(signature))
@@ -650,7 +650,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 
 	// Use constant-time comparison to prevent timing attacks
 	if !hmac.Equal(expectedMAC, decodedSignature) {
-		c.logger.Errorw("webhook signature mismatch",
+		c.logger.Error(ctx, "webhook signature mismatch",
 			"expected_mac_length", len(expectedMAC),
 			"received_signature_length", len(decodedSignature),
 			"payload_length", len(payload),
@@ -660,7 +660,7 @@ func (c *Client) VerifyWebhookSignature(ctx context.Context, payload []byte, sig
 			Mark(ierr.ErrValidation)
 	}
 
-	c.logger.Infow("webhook signature verified successfully",
+	c.logger.Info(ctx, "webhook signature verified successfully",
 		"using_webhook_secret", config.WebhookSecret != "")
 	return nil
 }
@@ -697,7 +697,7 @@ func (c *Client) CreateToken(ctx context.Context, req *CreateTokenRequest) (*Cre
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		c.logger.Errorw("failed to create token in Moyasar", "error", err)
+		c.logger.Error(ctx, "failed to create token in Moyasar", "error", err)
 		return nil, ierr.NewError("failed to create token in Moyasar").
 			WithHint("Unable to connect to Moyasar API").
 			Mark(ierr.ErrInternal)
@@ -714,7 +714,7 @@ func (c *Client) CreateToken(ctx context.Context, req *CreateTokenRequest) (*Cre
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err == nil {
-			c.logger.Errorw("Moyasar API error", "status", resp.StatusCode, "message", errResp.Message)
+			c.logger.Error(ctx, "Moyasar API error", "status", resp.StatusCode, "message", errResp.Message)
 			return nil, ierr.NewError(errResp.Message).
 				WithHint("Moyasar token creation failed").
 				Mark(ierr.ErrInternal)
@@ -730,7 +730,7 @@ func (c *Client) CreateToken(ctx context.Context, req *CreateTokenRequest) (*Cre
 		return nil, ierr.NewError("failed to parse Moyasar response").Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully created token in Moyasar",
+	c.logger.Info(ctx, "successfully created token in Moyasar",
 		"token_id", token.ID,
 		"status", token.Status,
 		"brand", token.Brand)
@@ -758,7 +758,7 @@ func (c *Client) GetToken(ctx context.Context, tokenID string) (*MoyasarToken, e
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		c.logger.Errorw("failed to get token from Moyasar", "error", err, "token_id", tokenID)
+		c.logger.Error(ctx, "failed to get token from Moyasar", "error", err, "token_id", tokenID)
 		return nil, ierr.NewError("failed to get token from Moyasar").
 			WithHint("Unable to connect to Moyasar API").
 			Mark(ierr.ErrInternal)
@@ -789,7 +789,7 @@ func (c *Client) GetToken(ctx context.Context, tokenID string) (*MoyasarToken, e
 		return nil, ierr.NewError("failed to parse Moyasar response").Mark(ierr.ErrInternal)
 	}
 
-	c.logger.Infow("successfully fetched token from Moyasar",
+	c.logger.Info(ctx, "successfully fetched token from Moyasar",
 		"token_id", token.ID,
 		"status", token.Status)
 
@@ -811,7 +811,7 @@ func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int
 		},
 	}
 
-	c.logger.Infow("charging payment with token",
+	c.logger.Info(ctx, "charging payment with token",
 		"token_id", tokenID,
 		"amount", amount,
 		"currency", currency)

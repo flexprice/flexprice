@@ -291,7 +291,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	}
 
 	if len(meters) == 0 {
-		s.Logger.Debugw("no meters found for event name, skipping",
+		s.Logger.Debug(ctx, "no meters found for event name, skipping",
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
@@ -307,7 +307,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 
 		qty, err := s.extractQuantity(event, m)
 		if err != nil {
-			s.Logger.Errorw("failed to extract quantity, skipping meter",
+			s.Logger.Error(ctx, "failed to extract quantity, skipping meter",
 				"event_id", event.ID,
 				"meter_id", m.ID,
 				"error", err,
@@ -342,7 +342,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		return fmt.Errorf("failed to bulk insert meter usage: %w", err)
 	}
 
-	s.Logger.Debugw("meter usage records inserted",
+	s.Logger.Debug(ctx, "meter usage records inserted",
 		"event_id", event.ID,
 		"count", len(records),
 	)

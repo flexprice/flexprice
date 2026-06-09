@@ -46,7 +46,7 @@ func NewItemSyncService(params ItemSyncServiceParams) QuickBooksItemSyncService 
 // - Usage charge (with meter): "{plan_name}-{meter_name}"
 // - Recurring charge (without meter): "{plan_name}-Recurring"
 func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.Plan, priceToSync *price.Price) error {
-	s.Logger.Infow("syncing price to QuickBooks",
+	s.Logger.Info(ctx, "syncing price to QuickBooks",
 		"price_id", priceToSync.ID,
 		"plan_id", plan.ID,
 		"plan_name", plan.Name)
@@ -54,7 +54,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 	// Check if price is already synced
 	existingItemID, err := s.getQuickBooksItemID(ctx, priceToSync.ID)
 	if err == nil && existingItemID != "" {
-		s.Logger.Infow("price already synced to QuickBooks",
+		s.Logger.Info(ctx, "price already synced to QuickBooks",
 			"price_id", priceToSync.ID,
 			"quickbooks_item_id", existingItemID)
 		return nil
@@ -90,12 +90,12 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 	// Check if item already exists by name (avoid duplicates)
 	existingItem, err := s.Client.QueryItemByName(ctx, itemName)
 	if err == nil && existingItem != nil && existingItem.ID != "" {
-		s.Logger.Infow("found existing item in QuickBooks by name",
+		s.Logger.Info(ctx, "found existing item in QuickBooks by name",
 			"item_name", itemName,
 			"quickbooks_item_id", existingItem.ID)
 		// Create mapping for existing item
 		if err := s.createItemMapping(ctx, priceToSync.ID, existingItem.ID, existingItem.Name, plan.EnvironmentID, plan.TenantID); err != nil {
-			s.Logger.Debugw("failed to create item mapping",
+			s.Logger.Debug(ctx, "failed to create item mapping",
 				"error", err,
 				"price_id", priceToSync.ID)
 		}
@@ -122,7 +122,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 	// - For tiered prices: use first tier's unit amount
 	var unitPrice decimal.Decimal
 
-	s.Logger.Infow("determining unit price for QuickBooks item",
+	s.Logger.Info(ctx, "determining unit price for QuickBooks item",
 		"price_id", priceToSync.ID,
 		"price_type", priceToSync.Type,
 		"billing_model", priceToSync.BillingModel)
@@ -133,16 +133,16 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 	} else if priceToSync.BillingModel == types.BILLING_MODEL_TIERED && len(priceToSync.Tiers) > 0 {
 		// Tiered pricing: use first tier's unit amount as default
 		unitPrice = priceToSync.Tiers[0].UnitAmount
-		s.Logger.Infow("using first tier unit amount for tiered price", "unit_price", unitPrice)
+		s.Logger.Info(ctx, "using first tier unit amount for tiered price", "unit_price", unitPrice)
 	} else {
 		// Recurring/flat fee: use the fixed amount
 		unitPrice = priceToSync.Amount
-		s.Logger.Infow("using Amount for recurring/flat-fee price", "unit_price", unitPrice)
+		s.Logger.Info(ctx, "using Amount for recurring/flat-fee price", "unit_price", unitPrice)
 	}
 
 	if !unitPrice.IsZero() {
 		itemReq.UnitPrice = &unitPrice
-		s.Logger.Infow("set UnitPrice on ItemCreateRequest", "unit_price", unitPrice)
+		s.Logger.Info(ctx, "set UnitPrice on ItemCreateRequest", "unit_price", unitPrice)
 	} else {
 		s.Logger.Warnw("unit price is zero, not setting UnitPrice on ItemCreateRequest",
 			"price_id", priceToSync.ID,
@@ -156,7 +156,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Infow("created item in QuickBooks",
+	s.Logger.Info(ctx, "created item in QuickBooks",
 		"price_id", priceToSync.ID,
 		"quickbooks_item_id", itemResp.ID,
 		"item_name", itemResp.Name,
@@ -164,7 +164,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 
 	// Create mapping
 	if err := s.createItemMapping(ctx, priceToSync.ID, itemResp.ID, itemResp.Name, plan.EnvironmentID, plan.TenantID); err != nil {
-		s.Logger.Errorw("failed to create item mapping",
+		s.Logger.Error(ctx, "failed to create item mapping",
 			"error", err,
 			"price_id", priceToSync.ID,
 			"quickbooks_item_id", itemResp.ID)
@@ -173,7 +173,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.Infow("successfully synced price to QuickBooks",
+	s.Logger.Info(ctx, "successfully synced price to QuickBooks",
 		"price_id", priceToSync.ID,
 		"quickbooks_item_id", itemResp.ID)
 
@@ -252,7 +252,7 @@ func (s *ItemSyncService) getIncomeAccountID(ctx context.Context) string {
 	conn, err := s.Client.GetConnection(ctx)
 	if err != nil {
 		// If connection not found or error, use default
-		s.Logger.Debugw("could not get QuickBooks connection, using default income account ID",
+		s.Logger.Debug(ctx, "could not get QuickBooks connection, using default income account ID",
 			"default_account_id", defaultIncomeAccountID,
 			"error", err)
 		return defaultIncomeAccountID
@@ -261,7 +261,7 @@ func (s *ItemSyncService) getIncomeAccountID(ctx context.Context) string {
 	// Check if connection has custom income account ID in metadata
 	if conn.EncryptedSecretData.QuickBooks != nil {
 		if incomeAccountID := conn.EncryptedSecretData.QuickBooks.IncomeAccountID; incomeAccountID != "" {
-			s.Logger.Debugw("using custom income account ID from connection",
+			s.Logger.Debug(ctx, "using custom income account ID from connection",
 				"income_account_id", incomeAccountID,
 				"connection_id", conn.ID)
 			return incomeAccountID
@@ -269,7 +269,7 @@ func (s *ItemSyncService) getIncomeAccountID(ctx context.Context) string {
 	}
 
 	// No custom account ID configured, use default
-	s.Logger.Debugw("no custom income account ID configured, using default Service Revenue account",
+	s.Logger.Debug(ctx, "no custom income account ID configured, using default Service Revenue account",
 		"default_account_id", defaultIncomeAccountID,
 		"connection_id", conn.ID,
 		"hint", "Set 'income_account_id' in connection metadata to use a different account")

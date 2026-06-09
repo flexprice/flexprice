@@ -36,15 +36,15 @@ func NewPaddleInvoicePullSyncActivities(
 func (a *PaddleInvoicePullSyncActivities) FetchAndTriggerPaddleInvoicePullSyncActivity(
 	ctx context.Context,
 ) (*cronModels.PaddleInvoicePullSyncCronResult, error) {
-	a.logger.Infow("starting Paddle invoice pull-sync cron activity")
+	a.logger.Info(ctx, "starting Paddle invoice pull-sync cron activity")
 
 	invoices, err := a.invoiceRepo.ListPendingInvoicesByProvider(ctx, types.SecretProviderPaddle)
 	if err != nil {
-		a.logger.Errorw("failed to fetch Paddle pending invoices", "error", err)
+		a.logger.Error(ctx, "failed to fetch Paddle pending invoices", "error", err)
 		return nil, err
 	}
 
-	a.logger.Infow("fetched Paddle pending invoices", "count", len(invoices))
+	a.logger.Info(ctx, "fetched Paddle pending invoices", "count", len(invoices))
 
 	result := &cronModels.PaddleInvoicePullSyncCronResult{}
 	for _, inv := range invoices {
@@ -60,7 +60,7 @@ func (a *PaddleInvoicePullSyncActivities) FetchAndTriggerPaddleInvoicePullSyncAc
 		}
 		_, wErr := a.temporalSvc.ExecuteWorkflow(envCtx, types.TemporalPaddleInvoicePullSyncWorkflow, input)
 		if wErr != nil {
-			a.logger.Errorw("failed to trigger Paddle invoice pull-sync workflow",
+			a.logger.Error(ctx, "failed to trigger Paddle invoice pull-sync workflow",
 				"invoice_id", inv.InvoiceID,
 				"tenant_id", inv.TenantID,
 				"environment_id", inv.EnvironmentID,
@@ -71,7 +71,7 @@ func (a *PaddleInvoicePullSyncActivities) FetchAndTriggerPaddleInvoicePullSyncAc
 		result.Triggered++
 	}
 
-	a.logger.Infow("completed Paddle invoice pull-sync cron activity",
+	a.logger.Info(ctx, "completed Paddle invoice pull-sync cron activity",
 		"total", result.Total, "triggered", result.Triggered, "failed", result.Failed)
 
 	return result, nil

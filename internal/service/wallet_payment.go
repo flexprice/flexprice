@@ -87,7 +87,7 @@ func (s *walletPaymentService) ProcessInvoicePaymentWithWallets(
 	}
 
 	if len(wallets) == 0 {
-		s.Logger.Infow("no suitable wallets found for payment",
+		s.Logger.Info(ctx, "no suitable wallets found for payment",
 			"customer_id", inv.CustomerID,
 			"invoice_id", inv.ID,
 			"currency", inv.Currency)
@@ -97,7 +97,7 @@ func (s *walletPaymentService) ProcessInvoicePaymentWithWallets(
 	// Calculate price type breakdown for the invoice using existing line items
 	priceTypeAmounts := s.calculatePriceTypeAmounts(inv.LineItems)
 
-	s.Logger.Infow("calculated price type breakdown for invoice",
+	s.Logger.Info(ctx, "calculated price type breakdown for invoice",
 		"invoice_id", inv.ID,
 		"price_type_amounts", priceTypeAmounts)
 
@@ -106,12 +106,12 @@ func (s *walletPaymentService) ProcessInvoicePaymentWithWallets(
 
 	if !amountPaid.IsZero() {
 		remainingAmount := inv.AmountRemaining.Sub(amountPaid)
-		s.Logger.Infow("payment processed using wallets",
+		s.Logger.Info(ctx, "payment processed using wallets",
 			"invoice_id", inv.ID,
 			"amount_paid", amountPaid,
 			"remaining_amount", remainingAmount)
 	} else {
-		s.Logger.Infow("no payments processed using wallets",
+		s.Logger.Info(ctx, "no payments processed using wallets",
 			"invoice_id", inv.ID,
 			"amount", inv.AmountRemaining)
 	}
@@ -206,7 +206,7 @@ func (s *walletPaymentService) GetWalletsForPayment(
 	// Add ALL wallets last (can pay anything)
 	result = append(result, allWallets...)
 
-	s.Logger.Infow("categorized wallets for payment",
+	s.Logger.Info(ctx, "categorized wallets for payment",
 		"customer_id", customerID,
 		"usage_wallets", len(usageWallets),
 		"fixed_wallets", len(fixedWallets),
@@ -249,7 +249,7 @@ func (s *walletPaymentService) GetWalletsForCreditAdjustment(
 	// Sort by balance (highest first) to minimize wallet usage
 	s.sortWalletsByBalanceDesc(activeWallets)
 
-	s.Logger.Infow("retrieved prepaid wallets for credit adjustment",
+	s.Logger.Info(ctx, "retrieved prepaid wallets for credit adjustment",
 		"customer_id", customerID,
 		"currency", currency,
 		"total_wallets", len(activeWallets))
@@ -278,7 +278,7 @@ func (s *walletPaymentService) processWalletPayments(
 		// Calculate how much this wallet can pay based on its price type restrictions
 		allowedAmount := s.calculateAllowedPaymentAmount(w, priceTypeAmounts, remainingAmount)
 		if allowedAmount.IsZero() {
-			s.Logger.Infow("wallet cannot pay any amount due to price type restrictions",
+			s.Logger.Info(ctx, "wallet cannot pay any amount due to price type restrictions",
 				"wallet_id", w.ID,
 				"wallet_config", w.Config,
 				"price_type_amounts", priceTypeAmounts)
@@ -292,7 +292,7 @@ func (s *walletPaymentService) processWalletPayments(
 
 		// Create and process the payment
 		if err := s.createWalletPayment(ctx, inv, w, paymentAmount, options.AdditionalMetadata, paymentService); err != nil {
-			s.Logger.Errorw("failed to create wallet payment",
+			s.Logger.Error(ctx, "failed to create wallet payment",
 				"error", err,
 				"invoice_id", inv.ID,
 				"wallet_id", w.ID,

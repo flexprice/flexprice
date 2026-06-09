@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"go.uber.org/zap"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -34,18 +33,18 @@ func NewProrationService(
 // CalculateProration delegates to the underlying calculator.
 func (s *prorationService) CalculateProration(ctx context.Context, params proration.ProrationParams) (*proration.ProrationResult, error) {
 	calculator := s.serviceParams.ProrationCalculator
-	s.serviceParams.Logger.Info("calculating proration",
-		zap.String("subscription_id", params.SubscriptionID),
-		zap.String("line_item_id", params.LineItemID),
-		zap.String("action", string(params.Action)),
+	s.serviceParams.Logger.Info(ctx, "calculating proration",
+		"subscription_id", params.SubscriptionID,
+		"line_item_id", params.LineItemID,
+		"action", string(params.Action),
 	)
 
 	result, err := calculator.Calculate(ctx, params)
 	if err != nil {
-		s.serviceParams.Logger.Error("proration calculation failed",
-			zap.Error(err),
-			zap.String("subscription_id", params.SubscriptionID),
-			zap.String("line_item_id", params.LineItemID),
+		s.serviceParams.Logger.Error(ctx, "proration calculation failed",
+			"error", err,
+			"subscription_id", params.SubscriptionID,
+			"line_item_id", params.LineItemID,
 		)
 		return nil, ierr.NewErrorf("proration calculation failed: %v", err).
 			WithHint("Check if the subscription and line item details are valid").
@@ -56,10 +55,10 @@ func (s *prorationService) CalculateProration(ctx context.Context, params prorat
 		return nil, nil
 	}
 
-	s.serviceParams.Logger.Debug("proration calculation completed",
-		zap.String("subscription_id", params.SubscriptionID),
-		zap.String("line_item_id", params.LineItemID),
-		zap.String("net_amount", result.NetAmount.String()),
+	s.serviceParams.Logger.Debug(ctx, "proration calculation completed",
+		"subscription_id", params.SubscriptionID,
+		"line_item_id", params.LineItemID,
+		"net_amount", result.NetAmount.String(),
 	)
 
 	return result, nil
@@ -137,7 +136,7 @@ func (s *prorationService) CalculateSubscriptionProration(
 	}
 
 	logger := s.serviceParams.Logger
-	logger.Infow("starting subscription proration calculation",
+	logger.Info(ctx, "starting subscription proration calculation",
 		"subscription_id", params.Subscription.ID,
 		"billing_cycle", params.BillingCycle,
 		"proration_behavior", params.ProrationBehavior,
@@ -151,7 +150,7 @@ func (s *prorationService) CalculateSubscriptionProration(
 	// Only proceed if proration is needed
 	if params.BillingCycle != types.BillingCycleCalendar ||
 		params.ProrationBehavior == types.ProrationBehaviorNone {
-		logger.Infow("skipping proration - not needed",
+		logger.Info(ctx, "skipping proration - not needed",
 			"subscription_id", params.Subscription.ID,
 			"billing_cycle", params.BillingCycle,
 			"proration_behavior", params.ProrationBehavior)
@@ -163,7 +162,7 @@ func (s *prorationService) CalculateSubscriptionProration(
 	for _, item := range params.Subscription.LineItems {
 		price, ok := params.Prices[item.PriceID]
 		if !ok {
-			logger.Debugw("price not found for line item - skipping",
+			logger.Debug(ctx, "price not found for line item - skipping",
 				"subscription_id", params.Subscription.ID,
 				"line_item_id", item.ID,
 				"price_id", item.PriceID)
@@ -171,7 +170,7 @@ func (s *prorationService) CalculateSubscriptionProration(
 		}
 
 		if price == nil {
-			logger.Debugw("price not found for line item - skipping",
+			logger.Debug(ctx, "price not found for line item - skipping",
 				"subscription_id", params.Subscription.ID,
 				"line_item_id", item.ID,
 				"price_id", item.PriceID)
@@ -186,7 +185,7 @@ func (s *prorationService) CalculateSubscriptionProration(
 			params.ProrationBehavior,
 		)
 		if err != nil {
-			logger.Errorw("failed to create proration parameters for line item",
+			logger.Error(ctx, "failed to create proration parameters for line item",
 				"error", err,
 				"subscription_id", params.Subscription.ID,
 				"line_item_id", item.ID)
@@ -198,7 +197,7 @@ func (s *prorationService) CalculateSubscriptionProration(
 
 		prorationResult, err := s.CalculateProration(ctx, prorationParams)
 		if err != nil {
-			logger.Errorw("failed to calculate proration for line item",
+			logger.Error(ctx, "failed to calculate proration for line item",
 				"error", err,
 				"subscription_id", params.Subscription.ID,
 				"line_item_id", item.ID)
@@ -217,7 +216,7 @@ func (s *prorationService) CalculateSubscriptionProration(
 		result.LineItemResults[item.ID] = prorationResult
 		result.TotalProrationAmount = result.TotalProrationAmount.Add(prorationResult.NetAmount)
 
-		logger.Debugw("proration calculated for line item",
+		logger.Debug(ctx, "proration calculated for line item",
 			"subscription_id", params.Subscription.ID,
 			"line_item_id", item.ID,
 			"net_amount", prorationResult.NetAmount.String(),
@@ -231,7 +230,7 @@ func (s *prorationService) CalculateSubscriptionProration(
 			Mark(ierr.ErrSystem)
 	}
 
-	logger.Infow("proration calculation completed",
+	logger.Info(ctx, "proration calculation completed",
 		"subscription_id", params.Subscription.ID,
 		"total_amount", result.TotalProrationAmount.String(),
 		"line_items_processed", len(result.LineItemResults))
@@ -251,13 +250,13 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 	behavior types.ProrationBehavior,
 ) (*proration.SubscriptionProrationResult, error) {
 	logger := s.serviceParams.Logger.With(
-		zap.String("subscription_id", subscription.ID),
-		zap.String("cancellation_type", string(cancellationType)),
-		zap.String("reason", reason),
-		zap.Int("line_items_count", len(lineItems)),
+		"subscription_id", subscription.ID,
+		"cancellation_type", string(cancellationType),
+		"reason", reason,
+		"line_items_count", len(lineItems),
 	)
 
-	logger.Info("starting subscription cancellation proration calculation")
+	logger.Info(ctx, "starting subscription cancellation proration calculation")
 
 	// Initialize result
 	result := &proration.SubscriptionProrationResult{
@@ -268,13 +267,13 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 
 	// Skip proration if behavior is none
 	if behavior == types.ProrationBehaviorNone {
-		logger.Info("skipping proration calculation - behavior is none")
+		logger.Info(ctx, "skipping proration calculation - behavior is none")
 		return result, nil
 	}
 
 	// Skip proration for end_of_period cancellations (typically no credits issued)
 	if cancellationType == types.CancellationTypeEndOfPeriod {
-		logger.Info("skipping proration calculation - end of period cancellation")
+		logger.Info(ctx, "skipping proration calculation - end of period cancellation")
 		return result, nil
 	}
 
@@ -284,7 +283,7 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 	// Process each active line item
 	for _, lineItem := range lineItems {
 		if lineItem.Status != types.StatusPublished {
-			logger.Debugw("skipping inactive line item",
+			logger.Debug(ctx, "skipping inactive line item",
 				"line_item_id", lineItem.ID,
 				"status", lineItem.Status)
 			continue
@@ -293,7 +292,7 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 		// Get price for line item
 		price, err := s.serviceParams.PriceRepo.Get(ctx, lineItem.PriceID)
 		if err != nil {
-			logger.Errorw("failed to get price for line item",
+			logger.Error(ctx, "failed to get price for line item",
 				"line_item_id", lineItem.ID,
 				"price_id", lineItem.PriceID,
 				"error", err)
@@ -322,7 +321,7 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 			behavior,
 		)
 		if err != nil {
-			logger.Errorw("failed to create proration params",
+			logger.Error(ctx, "failed to create proration params",
 				"line_item_id", lineItem.ID,
 				"error", err)
 			processingErrors = append(processingErrors,
@@ -334,7 +333,7 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 		// Calculate proration for this line item
 		prorationResult, err := s.CalculateProration(ctx, params)
 		if err != nil {
-			logger.Errorw("failed to calculate proration",
+			logger.Error(ctx, "failed to calculate proration",
 				"line_item_id", lineItem.ID,
 				"error", err)
 			processingErrors = append(processingErrors,
@@ -352,7 +351,7 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 
 		processedCount++
 
-		logger.Debugw("proration calculated for line item",
+		logger.Debug(ctx, "proration calculated for line item",
 			"line_item_id", lineItem.ID,
 			"net_amount", prorationResult.NetAmount.String(),
 			"credit_items", len(prorationResult.CreditItems),
@@ -375,7 +374,7 @@ func (s *prorationService) CalculateSubscriptionCancellationProration(
 		}
 	}
 
-	logger.Infow("subscription cancellation proration calculation completed",
+	logger.Info(ctx, "subscription cancellation proration calculation completed",
 		"subscription_id", subscription.ID,
 		"total_proration_amount", result.TotalProrationAmount.String(),
 		"line_items_processed", processedCount,
@@ -396,12 +395,12 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 	behavior types.ProrationBehavior,
 ) (proration.ProrationParams, error) {
 	logger := s.serviceParams.Logger.With(
-		zap.String("subscription_id", subscription.ID),
-		zap.String("line_item_id", item.ID),
-		zap.String("cancellation_type", string(cancellationType)),
+		"subscription_id", subscription.ID,
+		"line_item_id", item.ID,
+		"cancellation_type", string(cancellationType),
 	)
 
-	logger.Info("creating proration parameters for cancellation")
+	logger.Info(ctx, "creating proration parameters for cancellation")
 
 	// Get billing period boundaries
 	periodStart := subscription.CurrentPeriodStart
@@ -413,7 +412,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 	switch cancellationType {
 	case types.CancellationTypeEndOfPeriod:
 		effectiveDate = periodEnd
-		logger.Debugw("using end of period for cancellation", "effective_date", effectiveDate)
+		logger.Debug(ctx, "using end of period for cancellation", "effective_date", effectiveDate)
 	case types.CancellationTypeImmediate:
 		// Use provided cancellation date, but ensure it's not before period start
 		if cancellationDate.Before(periodStart) {
@@ -467,7 +466,7 @@ func (s *prorationService) CreateProrationParamsForLineItemCancellation(
 	// Determine if customer is eligible for refund/credit
 	refundEligible := s.isRefundEligible(subscription, item, price, cancellationType, effectiveDate)
 
-	logger.Debugw("cancellation proration parameters calculated",
+	logger.Debug(ctx, "cancellation proration parameters calculated",
 		"effective_date", effectiveDate,
 		"original_amount_paid", originalAmountPaid.String(),
 		"previous_credits", previousCredits.String(),
@@ -582,9 +581,9 @@ func (s *prorationService) isRefundEligible(
 	effectiveDate time.Time,
 ) bool {
 	logger := s.serviceParams.Logger.With(
-		zap.String("subscription_id", subscription.ID),
-		zap.String("line_item_id", item.ID),
-		zap.String("cancellation_type", string(cancellationType)),
+		"subscription_id", subscription.ID,
+		"line_item_id", item.ID,
+		"cancellation_type", string(cancellationType),
 	)
 
 	// Basic eligibility rules
@@ -592,7 +591,7 @@ func (s *prorationService) isRefundEligible(
 	case types.CancellationTypeEndOfPeriod:
 		// End of period cancellations typically don't get credits
 		// since customer uses service for full period
-		logger.Debug("end of period cancellation - not eligible for refund")
+		logger.Debug(context.Background(), "end of period cancellation - not eligible for refund")
 		return false
 
 	case types.CancellationTypeImmediate:
@@ -609,7 +608,7 @@ func (s *prorationService) isRefundEligible(
 		}
 
 		// For arrears billing, no refund needed (they pay for what they used)
-		logger.Debug("arrears billing cancellation - no refund needed")
+		logger.Debug(context.Background(), "arrears billing cancellation - no refund needed")
 		return false
 
 	default:
@@ -632,14 +631,14 @@ func (s *prorationService) CalculateEntitlementProration(
 	billingPeriodCount int,
 ) (*proration.EntitlementProrationResult, error) {
 	logger := s.serviceParams.Logger.With(
-		zap.String("plan_id", planID),
-		zap.Time("period_start", periodStart),
-		zap.Time("period_end", periodEnd),
-		zap.Time("proration_date", prorationDate),
-		zap.String("billing_cycle", string(billingCycle)),
+		"plan_id", planID,
+		"period_start", periodStart,
+		"period_end", periodEnd,
+		"proration_date", prorationDate,
+		"billing_cycle", string(billingCycle),
 	)
 
-	logger.Info("calculating entitlement proration")
+	logger.Info(ctx, "calculating entitlement proration")
 
 	// Get plan entitlements
 	entitlementService := NewEntitlementService(s.serviceParams)
@@ -683,7 +682,7 @@ func (s *prorationService) CalculateEntitlementProration(
 			Mark(ierr.ErrSystem)
 	}
 
-	logger.Infow("entitlement proration calculated",
+	logger.Info(ctx, "entitlement proration calculated",
 		"prorated_count", len(result.ProratedLimits),
 		"coefficient", result.ProrationCoefficient.String())
 
@@ -707,13 +706,13 @@ func (s *prorationService) CalculateAdditiveEntitlementProration(
 	billingPeriodCount int,
 ) (*proration.EntitlementProrationResult, error) {
 	logger := s.serviceParams.Logger.With(
-		zap.String("old_plan_id", oldPlanID),
-		zap.String("new_plan_id", newPlanID),
-		zap.Time("change_date", changeDate),
-		zap.String("billing_cycle", string(billingCycle)),
+		"old_plan_id", oldPlanID,
+		"new_plan_id", newPlanID,
+		"change_date", changeDate,
+		"billing_cycle", string(billingCycle),
 	)
 
-	logger.Info("calculating additive entitlement proration for plan change")
+	logger.Info(ctx, "calculating additive entitlement proration for plan change")
 
 	// Determine the period end to use for proration based on billing cycle
 	var periodEnd time.Time
@@ -722,17 +721,17 @@ func (s *prorationService) CalculateAdditiveEntitlementProration(
 		// CalculateCalendarBillingAnchor returns the START of the NEXT period,
 		// which is the END of the current period
 		periodEnd = types.CalculateCalendarBillingAnchor(changeDate, billingPeriod)
-		logger.Debugw("using calendar period end for proration",
+		logger.Debug(ctx, "using calendar period end for proration",
 			"period_end", periodEnd)
 	} else {
 		// For anniversary billing, use subscription period end
 		periodEnd = oldPeriodEnd
-		logger.Debugw("using subscription period end for proration",
+		logger.Debug(ctx, "using subscription period end for proration",
 			"period_end", periodEnd)
 	}
 
 	// Step 1: Calculate remaining entitlement from old plan
-	logger.Debug("calculating remaining entitlement from old plan")
+	logger.Debug(ctx, "calculating remaining entitlement from old plan")
 	oldProration, err := s.CalculateEntitlementProration(
 		ctx, oldPlanID,
 		oldPeriodStart, periodEnd,
@@ -747,7 +746,7 @@ func (s *prorationService) CalculateAdditiveEntitlementProration(
 	}
 
 	// Step 2: Calculate prorated entitlement for new plan
-	logger.Debug("calculating prorated entitlement for new plan")
+	logger.Debug(ctx, "calculating prorated entitlement for new plan")
 	newProration, err := s.CalculateEntitlementProration(
 		ctx, newPlanID,
 		oldPeriodStart, periodEnd,
@@ -762,7 +761,7 @@ func (s *prorationService) CalculateAdditiveEntitlementProration(
 	}
 
 	// Step 3: Combine the limits
-	logger.Infow("proration coefficient calculated",
+	logger.Info(ctx, "proration coefficient calculated",
 		"coefficient", oldProration.ProrationCoefficient.String(),
 		"total_days", oldProration.TotalDays,
 		"remaining_days", oldProration.RemainingDays,
@@ -859,7 +858,7 @@ func (s *prorationService) CalculateAdditiveEntitlementProration(
 			UsageResetPeriod: usageResetPeriod,
 		})
 
-		logger.Infow("combined entitlement for feature",
+		logger.Info(ctx, "combined entitlement for feature",
 			"feature_id", featureID,
 			"old_plan_original_limit", oldOriginal,
 			"old_plan_prorated_limit", oldLimit,
@@ -868,14 +867,14 @@ func (s *prorationService) CalculateAdditiveEntitlementProration(
 			"combined_limit", combinedLimit,
 			"coefficient", oldProration.ProrationCoefficient.String())
 
-		logger.Debugw("combined entitlement limits",
+		logger.Debug(ctx, "combined entitlement limits",
 			"feature_id", featureID,
 			"old_limit", oldLimit,
 			"new_limit", newLimit,
 			"combined_limit", combinedLimit)
 	}
 
-	logger.Infow("additive entitlement proration calculation completed",
+	logger.Info(ctx, "additive entitlement proration calculation completed",
 		"total_features", len(combinedResult.ProratedLimits),
 		"coefficient", combinedResult.ProrationCoefficient.String(),
 		"old_plan_features", len(oldProration.ProratedLimits),
@@ -893,14 +892,14 @@ func (s *prorationService) CreateProratedEntitlements(
 	endDate time.Time,
 ) error {
 	logger := s.serviceParams.Logger.With(
-		zap.String("subscription_id", subscriptionID),
-		zap.Int("entitlements_count", len(prorationResult.ProratedLimits)),
+		"subscription_id", subscriptionID,
+		"entitlements_count", len(prorationResult.ProratedLimits),
 	)
 
-	logger.Info("creating prorated entitlements")
+	logger.Info(ctx, "creating prorated entitlements")
 
 	if len(prorationResult.ProratedLimits) == 0 {
-		logger.Info("no entitlements to prorate")
+		logger.Info(ctx, "no entitlements to prorate")
 		return nil
 	}
 
@@ -910,7 +909,7 @@ func (s *prorationService) CreateProratedEntitlements(
 
 	// Create subscription-scoped entitlement for each prorated limit
 	for _, detail := range prorationResult.EntitlementDetails {
-		logger.Debugw("creating prorated entitlement",
+		logger.Debug(ctx, "creating prorated entitlement",
 			"feature_id", detail.FeatureID,
 			"original_limit", detail.OriginalLimit,
 			"prorated_limit", detail.ProratedLimit)
@@ -930,7 +929,7 @@ func (s *prorationService) CreateProratedEntitlements(
 		})
 
 		if err != nil {
-			logger.Errorw("failed to create prorated entitlement",
+			logger.Error(ctx, "failed to create prorated entitlement",
 				"feature_id", detail.FeatureID,
 				"error", err)
 			errors = append(errors, err)
@@ -952,7 +951,7 @@ func (s *prorationService) CreateProratedEntitlements(
 		}
 	}
 
-	logger.Infow("prorated entitlements created",
+	logger.Info(ctx, "prorated entitlements created",
 		"created_count", createdCount)
 
 	return nil

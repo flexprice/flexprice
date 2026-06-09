@@ -108,7 +108,7 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 	var filter types.InvoiceFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.logger.Error("Failed to bind query parameters", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind query parameters", "error", err)
 		c.Error(ierr.WithError(err).WithHint("invalid query parameters").Mark(ierr.ErrValidation))
 		return
 	}
@@ -119,14 +119,14 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 
 	// Validate filter
 	if err := filter.Validate(); err != nil {
-		h.logger.Error("Invalid filter parameters", "error", err)
+		h.logger.Error(c.Request.Context(), "Invalid filter parameters", "error", err)
 		c.Error(ierr.WithError(err).WithHint("invalid filter parameters").Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.invoiceService.ListInvoices(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Error("Failed to list invoices", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to list invoices", "error", err)
 		c.Error(err)
 		return
 	}
@@ -302,7 +302,7 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 			// Empty body is fine, use zero value
 			req = dto.InvoiceVoidRequest{}
 		} else {
-			h.logger.Error("Failed to parse request body", "error", err)
+			h.logger.Error(c.Request.Context(), "Failed to parse request body", "error", err)
 			c.Error(ierr.WithError(err).WithHint("failed to parse request body").Mark(ierr.ErrValidation))
 			return
 		}
@@ -440,7 +440,7 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.UpdatePaymentStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind request body", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind request body", "error", err)
 		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
 		return
 	}
@@ -454,7 +454,7 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 			c.Error(ierr.WithError(err).WithHint("invalid request").Mark(ierr.ErrValidation))
 			return
 		}
-		h.logger.Error("Failed to update invoice payment status",
+		h.logger.Error(c.Request.Context(), "Failed to update invoice payment status",
 			"invoice_id", id,
 			"payment_status", req.PaymentStatus,
 			"error", err,
@@ -466,7 +466,7 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 	// Get updated invoice
 	resp, err := h.invoiceService.GetInvoice(c.Request.Context(), id)
 	if err != nil {
-		h.logger.Error("Failed to get updated invoice",
+		h.logger.Error(c.Request.Context(), "Failed to get updated invoice",
 			"invoice_id", id,
 			"error", err,
 		)
@@ -493,7 +493,7 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 	var req dto.GetPreviewInvoiceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind request body", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind request body", "error", err)
 		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
 		return
 	}
@@ -506,7 +506,7 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 		resp, err = h.invoiceService.GetPreviewInvoice(c.Request.Context(), req)
 	}
 	if err != nil {
-		h.logger.Error("Failed to get preview invoice", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get preview invoice", "error", err)
 		c.Error(err)
 		return
 	}
@@ -517,14 +517,14 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 func (h *InvoiceHandler) GetInternalPreviewInvoice(c *gin.Context) {
 	var req dto.GetPreviewInvoiceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind request body", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind request body", "error", err)
 		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.invoiceService.GetInternalPreviewInvoice(c.Request.Context(), req)
 	if err != nil {
-		h.logger.Error("Failed to get internal preview invoice", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get internal preview invoice", "error", err)
 		c.Error(err)
 		return
 	}
@@ -535,14 +535,14 @@ func (h *InvoiceHandler) GetInternalPreviewInvoice(c *gin.Context) {
 func (h *InvoiceHandler) GetMeterUsagePreviewInvoice(c *gin.Context) {
 	var req dto.GetPreviewInvoiceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error("Failed to bind request body", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind request body", "error", err)
 		c.Error(ierr.WithError(err).WithHint("failed to bind request body").Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.invoiceService.GetMeterUsagePreviewInvoice(c.Request.Context(), req)
 	if err != nil {
-		h.logger.Error("Failed to get meter usage preview invoice", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to get meter usage preview invoice", "error", err)
 		c.Error(err)
 		return
 	}
@@ -742,20 +742,20 @@ func (h *InvoiceHandler) UpdateInvoice(c *gin.Context) {
 func (h *InvoiceHandler) QueryInvoices(c *gin.Context) {
 	var filter types.InvoiceFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
-		h.logger.Error("Failed to bind request body", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to bind request body", "error", err)
 		c.Error(ierr.WithError(err).WithHint("invalid request body").Mark(ierr.ErrValidation))
 		return
 	}
 
 	if err := filter.Validate(); err != nil {
-		h.logger.Error("Invalid filter parameters", "error", err)
+		h.logger.Error(c.Request.Context(), "Invalid filter parameters", "error", err)
 		c.Error(ierr.WithError(err).WithHint("invalid filter parameters").Mark(ierr.ErrValidation))
 		return
 	}
 
 	resp, err := h.invoiceService.ListInvoices(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Error("Failed to list invoices", "error", err)
+		h.logger.Error(c.Request.Context(), "Failed to list invoices", "error", err)
 		c.Error(err)
 		return
 	}

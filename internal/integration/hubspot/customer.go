@@ -70,7 +70,7 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 
 		existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 		if err == nil && existingMappings != nil && len(existingMappings) > 0 {
-			s.logger.Infow("customer already mapped to HubSpot contact, skipping creation",
+			s.logger.Info(ctx, "customer already mapped to HubSpot contact, skipping creation",
 				"hubspot_contact_id", hubspotContact.ID,
 				"customer_id", existingMappings[0].EntityID)
 			return nil
@@ -87,7 +87,7 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 		existingCustomers, err := customerService.GetCustomers(ctx, filter)
 		if err == nil && existingCustomers != nil && len(existingCustomers.Items) > 0 {
 			existingCustomer := existingCustomers.Items[0]
-			s.logger.Infow("customer with same email already exists, creating mapping",
+			s.logger.Info(ctx, "customer with same email already exists, creating mapping",
 				"customer_id", existingCustomer.ID,
 				"hubspot_contact_id", hubspotContact.ID)
 
@@ -143,7 +143,7 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("successfully created customer from HubSpot contact",
+	s.logger.Info(ctx, "successfully created customer from HubSpot contact",
 		"customer_id", customerResp.ID,
 		"hubspot_contact_id", hubspotContact.ID)
 
@@ -193,7 +193,7 @@ func (s *CustomerService) createEntityIntegrationMapping(
 		return err
 	}
 
-	s.logger.Infow("created entity integration mapping",
+	s.logger.Info(ctx, "created entity integration mapping",
 		"flexprice_customer_id", customerID,
 		"hubspot_contact_id", hubspotContact.ID)
 

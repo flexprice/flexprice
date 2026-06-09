@@ -77,7 +77,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 
 	useMeterUsage := e.config != nil && e.config.FeatureFlag.IsMeterUsageEnabledForAnalytics(request.TenantID)
 
-	e.logger.Infow("starting batched feature usage data fetch",
+	e.logger.Info(ctx, "starting batched feature usage data fetch",
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
 		"start_time", request.StartTime,
@@ -96,7 +96,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 
 	// Fetch and process data in batches
 	for {
-		e.logger.Debugw("fetching batch",
+		e.logger.Debug(ctx, "fetching batch",
 			"offset", offset,
 			"batch_size", batchSize)
 
@@ -122,7 +122,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 			break
 		}
 
-		e.logger.Debugw("fetched batch",
+		e.logger.Debug(ctx, "fetched batch",
 			"offset", offset,
 			"records_in_batch", len(usageData),
 			"total_so_far", totalRecords+len(usageData))
@@ -183,12 +183,12 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 	csvBytes := buf.Bytes()
 
 	if totalRecords == 0 {
-		e.logger.Infow("no feature usage data found for export - will upload empty CSV with headers only",
+		e.logger.Info(ctx, "no feature usage data found for export - will upload empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"csv_size_bytes", len(csvBytes))
 	} else {
-		e.logger.Infow("completed batched data fetch and CSV conversion",
+		e.logger.Info(ctx, "completed batched data fetch and CSV conversion",
 			"total_records", totalRecords,
 			"csv_size_bytes", len(csvBytes))
 	}
@@ -207,7 +207,7 @@ func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *
 	offset := 0
 
 	for {
-		e.logger.Debugw("fetching meter_usage batch",
+		e.logger.Debug(ctx, "fetching meter_usage batch",
 			"offset", offset,
 			"batch_size", batchSize)
 
@@ -255,12 +255,12 @@ func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *
 	csvBytes := buf.Bytes()
 
 	if totalRecords == 0 {
-		e.logger.Infow("no meter usage data found for export - will upload empty CSV with headers only",
+		e.logger.Info(ctx, "no meter usage data found for export - will upload empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"csv_size_bytes", len(csvBytes))
 	} else {
-		e.logger.Infow("completed batched meter_usage fetch and CSV conversion",
+		e.logger.Info(ctx, "completed batched meter_usage fetch and CSV conversion",
 			"total_records", totalRecords,
 			"csv_size_bytes", len(csvBytes))
 	}

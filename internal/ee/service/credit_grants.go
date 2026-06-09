@@ -192,13 +192,13 @@ func (s *creditGrantService) initializeCreditGrantWorkflow(ctx context.Context, 
 
 	cga := cgaReq.ToCreditGrantApplication(ctx)
 	if err := s.CreditGrantApplicationRepo.Create(ctx, cga); err != nil {
-		s.Logger.Errorw("failed to create initial CGA record", "error", err, "grant_id", cg.ID)
+		s.Logger.Error(ctx, "failed to create initial CGA record", "error", err, "grant_id", cg.ID)
 		return nil, err
 	}
 
 	if cg.CreditGrantAnchor.Before(time.Now()) || cg.CreditGrantAnchor.Equal(time.Now()) {
 		if err := s.processCatchUpApplications(ctx, cga); err != nil {
-			s.Logger.Errorw("failed to process initial CGA eagerly", "error", err, "cga_id", cga.ID)
+			s.Logger.Error(ctx, "failed to process initial CGA eagerly", "error", err, "cga_id", cga.ID)
 		}
 	}
 
@@ -387,12 +387,12 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 }
 
 func (s *creditGrantService) handleCreditGrantFailure(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication, err error, hint string) error {
-	s.Logger.Errorw("Credit grant application failed", "cga_id", cga.ID, "grant_id", cga.CreditGrantID, "hint", hint, "error", err)
+	s.Logger.Error(ctx, "Credit grant application failed", "cga_id", cga.ID, "grant_id", cga.CreditGrantID, "hint", hint, "error", err)
 	s.TracingSvc.CaptureException(err)
 	cga.ApplicationStatus = types.ApplicationStatusFailed
 	cga.FailureReason = lo.ToPtr(fmt.Sprintf("%s: %s", hint, err.Error()))
 	if updateErr := s.CreditGrantApplicationRepo.Update(ctx, cga); updateErr != nil {
-		s.Logger.Errorw("Failed to update CGA after failure", "cga_id", cga.ID, "original_error", err.Error())
+		s.Logger.Error(ctx, "Failed to update CGA after failure", "cga_id", cga.ID, "original_error", err.Error())
 		return err
 	}
 	return err
@@ -405,12 +405,12 @@ func (s *creditGrantService) processScheduledApplication(ctx context.Context, cg
 
 	subscription, err := subscriptionSvc.GetSubscription(ctx, cga.SubscriptionID)
 	if err != nil {
-		s.Logger.Errorw("Failed to get subscription", "subscription_id", cga.SubscriptionID, "error", err)
+		s.Logger.Error(ctx, "Failed to get subscription", "subscription_id", cga.SubscriptionID, "error", err)
 		return nil, err
 	}
 	creditGrant, err := creditGrantSvc.GetCreditGrant(ctx, cga.CreditGrantID)
 	if err != nil {
-		s.Logger.Errorw("Failed to get credit grant", "credit_grant_id", cga.CreditGrantID, "error", err)
+		s.Logger.Error(ctx, "Failed to get credit grant", "credit_grant_id", cga.CreditGrantID, "error", err)
 		return nil, err
 	}
 	if creditGrant.CreditGrant.Status != types.StatusPublished {
@@ -423,7 +423,7 @@ func (s *creditGrantService) processScheduledApplication(ctx context.Context, cg
 	stateHandler := service.NewSubscriptionStateHandler(subscription.Subscription, creditGrant.CreditGrant)
 	action, err := stateHandler.DetermineCreditGrantAction()
 	if err != nil {
-		s.Logger.Errorw("Failed to determine action", "application_id", cga.ID, "error", err)
+		s.Logger.Error(ctx, "Failed to determine action", "application_id", cga.ID, "error", err)
 		return nil, err
 	}
 
@@ -476,7 +476,7 @@ func (s *creditGrantService) processCatchUpApplications(
 	for i := 0; i < maxCatchUpIterations; i++ {
 		nextCGA, err := s.processScheduledApplication(ctx, currentCGA)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "catch-up loop stopping due to failure",
+			s.Logger.Warn(ctx, "catch-up loop stopping due to failure",
 				"cga_id", currentCGA.ID,
 				"grant_id", currentCGA.CreditGrantID,
 				"subscription_id", currentCGA.SubscriptionID,
@@ -493,7 +493,7 @@ func (s *creditGrantService) processCatchUpApplications(
 		currentCGA = nextCGA
 	}
 
-	s.Logger.InfowCtx(ctx, "credit grant catch-up loop completed",
+	s.Logger.Info(ctx, "credit grant catch-up loop completed",
 		"grant_id", initialCGA.CreditGrantID,
 		"subscription_id", initialCGA.SubscriptionID,
 		"catch_up_from", startTime,
