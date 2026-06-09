@@ -53,4 +53,8 @@ type Repository interface {
 	// Dashboard methods
 	GetRevenueTrend(ctx context.Context, windowCount int) ([]types.RevenueTrendWindow, error)
 	GetInvoicePaymentStatus(ctx context.Context) (*types.InvoicePaymentStatus, error)
+
+	// ListPendingInvoicesByProvider returns finalized+unpaid invoices for tenant/env pairs
+	// that have an active connection for the given provider.
+	ListPendingInvoicesByProvider(ctx context.Context, provider types.SecretProvider) ([]PendingProviderInvoice, error)
 }

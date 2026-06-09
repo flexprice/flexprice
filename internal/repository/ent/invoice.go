@@ -1266,6 +1266,55 @@ func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, 
 	return result, nil
 }
 
+// ListPendingInvoicesByProvider returns finalized+unpaid invoices for tenant/env pairs
+// that have an active connection for the given provider.
+func (r *invoiceRepository) ListPendingInvoicesByProvider(ctx context.Context, provider types.SecretProvider) ([]domainInvoice.PendingProviderInvoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "list_pending_invoices_by_provider", map[string]interface{}{
+		"provider": provider,
+	})
+	defer FinishSpan(span)
+
+	const query = `
+		SELECT i.id, i.tenant_id, i.environment_id
+		FROM invoices i
+		INNER JOIN connections c
+			ON  c.tenant_id      = i.tenant_id
+			AND c.environment_id = i.environment_id
+		WHERE c.provider_type  = $1
+		  AND c.status         = 'published'
+		  AND i.invoice_status = $2
+		  AND i.payment_status = $3
+		  AND i.status         = 'published'`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query,
+		string(provider),
+		string(types.InvoiceStatusFinalized),
+		string(types.PaymentStatusPending),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to list pending invoices by provider").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var result []domainInvoice.PendingProviderInvoice
+	for rows.Next() {
+		var row domainInvoice.PendingProviderInvoice
+		if err := rows.Scan(&row.InvoiceID, &row.TenantID, &row.EnvironmentID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("failed to scan pending provider invoice row").Mark(ierr.ErrDatabase)
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to iterate pending provider invoice rows").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return result, nil
+}
+
 // Helper functions for type conversion
 func convertStringPtrToInvoiceLineItemEntityTypePtr(s *string) *types.InvoiceLineItemEntityType {
 	if s == nil {
