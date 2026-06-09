@@ -2101,6 +2101,9 @@ var (
 				Name:    "unique_entity_tax_mapping",
 				Unique:  true,
 				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[9], TaxAssociationsColumns[10], TaxAssociationsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 		},
 	}
