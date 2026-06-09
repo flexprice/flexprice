@@ -2,6 +2,7 @@ package synthetic
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -117,6 +118,7 @@ func getInt(key string, def int) int {
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "synthetic: warning: %s=%q is not a valid int; using default %d\n", key, v, def)
 		return def
 	}
 	return n
@@ -129,6 +131,7 @@ func getInt64(key string, def int64) int64 {
 	}
 	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "synthetic: warning: %s=%q is not a valid int64; using default %d\n", key, v, def)
 		return def
 	}
 	return n
@@ -141,7 +144,19 @@ func getDuration(key string, def time.Duration) time.Duration {
 	}
 	d, err := time.ParseDuration(v)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "synthetic: warning: %s=%q is not a valid duration; using default %s\n", key, v, def)
 		return def
 	}
 	return d
+}
+
+func init() {
+	if len(CheckNames) != len(checkDefaultIntervals) {
+		panic(fmt.Sprintf("synthetic config: CheckNames has %d entries but checkDefaultIntervals has %d", len(CheckNames), len(checkDefaultIntervals)))
+	}
+	for _, name := range CheckNames {
+		if _, ok := checkDefaultIntervals[name]; !ok {
+			panic(fmt.Sprintf("synthetic config: CheckNames has %q but checkDefaultIntervals lacks it", name))
+		}
+	}
 }

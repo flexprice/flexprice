@@ -6,14 +6,32 @@ import (
 )
 
 func TestLoadConfig_RequiredFields(t *testing.T) {
-	t.Setenv("SYNTHETIC_API_HOST", "")
-	t.Setenv("SYNTHETIC_API_KEY", "")
-	if _, err := LoadConfig(); err == nil {
-		t.Fatal("expected error when SYNTHETIC_API_HOST missing")
-	}
+	t.Run("missing API host", func(t *testing.T) {
+		t.Setenv("SYNTHETIC_API_HOST", "")
+		t.Setenv("SYNTHETIC_API_KEY", "k")
+		if _, err := LoadConfig(); err == nil {
+			t.Fatal("expected error when SYNTHETIC_API_HOST missing")
+		}
+	})
+	t.Run("missing API key", func(t *testing.T) {
+		t.Setenv("SYNTHETIC_API_HOST", "https://api.example/v1")
+		t.Setenv("SYNTHETIC_API_KEY", "")
+		if _, err := LoadConfig(); err == nil {
+			t.Fatal("expected error when SYNTHETIC_API_KEY missing")
+		}
+	})
+}
+
+func TestLoadConfig_MalformedEnvFallsBackQuietly(t *testing.T) {
 	t.Setenv("SYNTHETIC_API_HOST", "https://api.example/v1")
-	if _, err := LoadConfig(); err == nil {
-		t.Fatal("expected error when SYNTHETIC_API_KEY missing")
+	t.Setenv("SYNTHETIC_API_KEY", "k")
+	t.Setenv("SYNTHETIC_LISTENER_PORT", "not-a-number")
+	c, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: unexpected error: %v", err)
+	}
+	if c.ListenerPort != 8765 {
+		t.Errorf("ListenerPort=%d, want 8765 (default)", c.ListenerPort)
 	}
 }
 
