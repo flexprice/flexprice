@@ -1224,6 +1224,24 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 		queryParams = append(queryParams, group.Source)
 	}
 
+	// Propagate the request-level sources filter so the points query runs against
+	// the same row set as getMaxBucketTotals. group.Source above only narrows when
+	// `source` is in group_by (sourceInGroupBy is what decides whether outer select
+	// carries it through); when it isn't, group.Source is "" and without this clause
+	// the points query would aggregate across every source, leaving total_cost
+	// (which is computed from these points) unchanged by the filter while
+	// total_usage (from the totals query) drops correctly.
+	if len(params.Sources) > 0 {
+		placeholders := make([]string, len(params.Sources))
+		for i := range params.Sources {
+			placeholders[i] = "?"
+		}
+		innerQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		for _, source := range params.Sources {
+			queryParams = append(queryParams, source)
+		}
+	}
+
 	// Add filter for this specific group's price_id
 	if group.PriceID != "" {
 		innerQuery += " AND price_id = ?"
@@ -1653,6 +1671,20 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 		queryParams = append(queryParams, group.Source)
 	}
 
+	// Propagate the request-level sources filter. See getMaxBucketPointsForGroup
+	// for the rationale — without this, total_cost (computed from these points)
+	// stays unchanged while total_usage (from the totals query) drops correctly.
+	if len(params.Sources) > 0 {
+		placeholders := make([]string, len(params.Sources))
+		for i := range params.Sources {
+			placeholders[i] = "?"
+		}
+		innerQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		for _, source := range params.Sources {
+			queryParams = append(queryParams, source)
+		}
+	}
+
 	// Add filter for this specific group's price_id
 	if group.PriceID != "" {
 		innerQuery += " AND price_id = ?"
@@ -1894,6 +1926,20 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 	if analytics.Source != "" {
 		query += " AND source = ?"
 		queryParams = append(queryParams, analytics.Source)
+	}
+
+	// Propagate the request-level sources filter. analytics.Source above only carries
+	// a value when source is in group_by; without this clause, per-point Cost on
+	// non-bucketed meters would aggregate across every source instead of the filtered set.
+	if len(params.Sources) > 0 {
+		placeholders := make([]string, len(params.Sources))
+		for i := range params.Sources {
+			placeholders[i] = "?"
+		}
+		query += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		for _, source := range params.Sources {
+			queryParams = append(queryParams, source)
+		}
 	}
 
 	// Add filters for grouped properties values

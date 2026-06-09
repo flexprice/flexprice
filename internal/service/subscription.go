@@ -3444,8 +3444,9 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 
 	if entityType == types.PRICE_ENTITY_TYPE_PLAN {
 		pricesResponse, err = priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
-			PlanID:       entityID,
-			AllowExpired: false,
+			PlanID:         entityID,
+			AllowExpired:   false,
+			BillingPeriods: []types.BillingPeriod{subscription.BillingPeriod},
 		})
 	} else if entityType == types.PRICE_ENTITY_TYPE_ADDON {
 		pricesResponse, err = priceService.GetPricesByAddonID(ctx, entityID)
@@ -4150,8 +4151,8 @@ func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub
 }
 
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
-func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
-	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx)
+func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context, referenceTime time.Time) error {
+	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx, referenceTime)
 	if err != nil {
 		s.Logger.ErrorwCtx(ctx, "failed to list subscriptions due for renewal", "error", err)
 		return err

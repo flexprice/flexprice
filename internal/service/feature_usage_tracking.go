@@ -1507,6 +1507,13 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 	// 6. Inject synthetic zero-usage analytics entries for committed line items
 	// that have no usage data in ClickHouse. Without this, the commitment fill
 	// logic in calculateCosts never fires for these line items.
+	//
+	// Skip injection when property_filters or sources are present: those filters
+	// restrict the SQL result by design, so "line item has no rows" is the filter
+	// working, not zero usage. Injecting full commitment cost on top would pin
+	// total_cost regardless of the filter — matching the calculateCosts skip.
+	skipSyntheticZeros := len(req.PropertyFilters) > 0 || len(req.Sources) > 0
+
 	existingLineItemIDs := make(map[string]bool, len(data.Analytics))
 	for _, item := range data.Analytics {
 		if item.SubLineItemID != "" {
@@ -1522,7 +1529,7 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 	var missingLineItems []missingLineItemInfo
 	for _, sub := range subscriptions {
 		for _, li := range sub.LineItems {
-			if existingLineItemIDs[li.ID] || !li.HasCommitment() || !li.IsUsage() {
+			if skipSyntheticZeros || existingLineItemIDs[li.ID] || !li.HasCommitment() || !li.IsUsage() {
 				continue
 			}
 			periodStart := li.GetPeriodStart(params.StartTime)
@@ -2075,6 +2082,13 @@ func (s *featureUsageTrackingService) CalculateCostsForAnalytics(ctx context.Con
 func (s *featureUsageTrackingService) calculateCosts(ctx context.Context, data *AnalyticsData) error {
 	priceService := NewPriceService(s.ServiceParams)
 
+	// Analytics filters (property_filters, sources) restrict the SQL result set to a
+	// subset of the customer's actual usage. Commitment / overage / true-up are billing
+	// concepts tied to the FULL period usage — applying them to a filtered subset would
+	// pin cost at the commitment floor regardless of usage and pull commitment costs from
+	// line items that fall entirely outside the filter. Report raw filtered cost instead.
+	skipCommitment := len(data.Params.PropertyFilters) > 0 || len(data.Params.Sources) > 0
+
 	for _, item := range data.Analytics {
 		// Resolve meter: prefer via feature, fall back to direct MeterID lookup.
 		// The fallback handles meter-usage analytics where no feature exists for a meter.
@@ -2097,9 +2111,9 @@ func (s *featureUsageTrackingService) calculateCosts(ctx context.Context, data *
 		}
 
 		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
-			s.calculateBucketedCost(ctx, priceService, item, price, m, data)
+			s.calculateBucketedCost(ctx, priceService, item, price, m, data, skipCommitment)
 		} else {
-			s.calculateRegularCost(ctx, priceService, item, m, price, data)
+			s.calculateRegularCost(ctx, priceService, item, m, price, data, skipCommitment)
 		}
 	}
 
@@ -2118,11 +2132,14 @@ type bucketedCostParams struct {
 	bucketSize   types.WindowSize
 }
 
-// calculateBucketedCost calculates cost for bucketed max meters
-func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, price *price.Price, meter *meter.Meter, data *AnalyticsData) {
+// calculateBucketedCost calculates cost for bucketed max meters.
+// skipCommitment forces hasCommitment=false when set; used for analytics queries with
+// property/source filters where the SQL result is a subset of the period's true usage —
+// applying commitments to that subset would surface misleading commitment/overage values.
+func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, price *price.Price, meter *meter.Meter, data *AnalyticsData, skipCommitment bool) {
 	params := &bucketedCostParams{ctx, priceService, item, price, data, meter.Aggregation.Type, meter.Aggregation.BucketSize}
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-	hasCommitment := lineItem != nil && lineItem.HasCommitment()
+	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
 	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
 
@@ -2356,8 +2373,9 @@ func (s *featureUsageTrackingService) sumPointCosts(points []events.UsageAnalyti
 	return total
 }
 
-// calculateRegularCost calculates cost for regular meters
-func (s *featureUsageTrackingService) calculateRegularCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, meter *meter.Meter, price *price.Price, data *AnalyticsData) {
+// calculateRegularCost calculates cost for regular meters.
+// skipCommitment bypasses commitment / true-up application; see calculateBucketedCost.
+func (s *featureUsageTrackingService) calculateRegularCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, meter *meter.Meter, price *price.Price, data *AnalyticsData, skipCommitment bool) {
 	// Set correct usage value
 	item.TotalUsage = s.getCorrectUsageValue(item, meter.Aggregation.Type)
 
@@ -2365,7 +2383,7 @@ func (s *featureUsageTrackingService) calculateRegularCost(ctx context.Context, 
 	cost := priceService.CalculateCost(ctx, price, item.TotalUsage)
 
 	// Check for line item commitment
-	if item.SubLineItemID != "" {
+	if !skipCommitment && item.SubLineItemID != "" {
 		// Find the line item
 
 		lineItem := data.SubscriptionLineItems[item.SubLineItemID]
