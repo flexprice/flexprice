@@ -475,6 +475,10 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, req dto.GetPricesB
 		WithAllowExpiredPrices(req.AllowExpired).
 		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandGroups) + "," + string(types.ExpandPriceUnit))
 
+	if len(req.BillingPeriods) > 0 {
+		priceFilter = priceFilter.WithBillingPeriods(req.BillingPeriods)
+	}
+
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
 		return nil, err
