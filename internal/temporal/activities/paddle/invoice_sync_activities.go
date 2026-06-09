@@ -101,3 +101,50 @@ func (a *InvoiceSyncActivities) SyncInvoiceToPaddle(
 
 	return nil
 }
+
+// PullAndUpdatePaddleInvoice polls Paddle for the payment status of a synced invoice and
+// updates the FlexPrice invoice if the Paddle transaction is completed.
+func (a *InvoiceSyncActivities) PullAndUpdatePaddleInvoice(
+	ctx context.Context,
+	input models.PaddleInvoicePullSyncWorkflowInput,
+) error {
+	a.logger.Infow("pulling and updating Paddle invoice",
+		"invoice_id", input.InvoiceID,
+		"tenant_id", input.TenantID,
+		"environment_id", input.EnvironmentID)
+
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	paddleIntegration, err := a.integrationFactory.GetPaddleIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			a.logger.Warnw("Paddle connection not configured",
+				"invoice_id", input.InvoiceID)
+			return temporal.NewNonRetryableApplicationError(
+				"Paddle connection not configured",
+				"ConnectionNotFound",
+				err,
+			)
+		}
+		return err
+	}
+
+	if err := paddleIntegration.SyncSvc.PullAndUpdateInvoice(ctx, input.InvoiceID); err != nil {
+		if ierr.IsNotFound(err) {
+			a.logger.Warnw("no Paddle mapping for invoice, skipping",
+				"invoice_id", input.InvoiceID, "error", err)
+			return temporal.NewNonRetryableApplicationError(
+				err.Error(),
+				"MappingNotFound",
+				err,
+			)
+		}
+		return err
+	}
+
+	a.logger.Infow("successfully pulled and updated Paddle invoice",
+		"invoice_id", input.InvoiceID)
+
+	return nil
+}
