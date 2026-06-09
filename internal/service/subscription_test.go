@@ -1520,6 +1520,73 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionInheritanceChildEqualsS
 	s.Contains(err.Error(), "cannot inherit onto itself")
 }
 
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionInheritanceChildAlreadyHasParent() {
+	ctx := s.GetContext()
+
+	// Create a child customer that already has an active inherited subscription under another parent
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_already_has_parent",
+		Name:       "Child Already Has Parent",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	existingParentSub := *s.testData.subscription
+	existingParentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, &existingParentSub))
+
+	inherited := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               existingParentSub.PlanID,
+		Currency:             existingParentSub.Currency,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		BillingAnchor:        existingParentSub.BillingAnchor,
+		BillingCycle:         existingParentSub.BillingCycle,
+		StartDate:            existingParentSub.StartDate,
+		EndDate:              existingParentSub.EndDate,
+		CurrentPeriodStart:   existingParentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:     existingParentSub.CurrentPeriodEnd,
+		BillingPeriod:        existingParentSub.BillingPeriod,
+		BillingPeriodCount:   existingParentSub.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        existingParentSub.EnvironmentID,
+		ParentSubscriptionID: &existingParentSub.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
+
+	// Now a second parent tries to add the same child
+	newParent := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_new_parent_blocked",
+		Name:       "New Parent Blocked",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, newParent))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         newParent.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	}
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "expected validation error, got %v", err)
+	s.Contains(err.Error(), "already has a parent")
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCollectionMethod() {
 	// Test cases specifically for collection method functionality
 	testCases := []struct {

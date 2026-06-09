@@ -7153,6 +7153,20 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
 				Mark(ierr.ErrValidation)
 		}
+
+		subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+		subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+		inheritedCount, err := s.SubRepo.Count(ctx, subFilter)
+		if err != nil {
+			return nil, err
+		}
+		if inheritedCount > 0 {
+			return nil, ierr.NewError("child customer already has a parent subscription").
+				WithHint("A customer can only be inherited under one parent").
+				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+				Mark(ierr.ErrValidation)
+		}
+
 		childCustomerIDs = append(childCustomerIDs, cust.ID)
 	}
 	return childCustomerIDs, nil

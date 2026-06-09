@@ -597,6 +597,38 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_DuplicateC
 	s.Require().Error(err)
 }
 
+// TestExecuteInheritance_ChildAlreadyHasParentRejected verifies that a child customer
+// cannot be added under a second parent if it already has an active inherited subscription.
+func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_ChildAlreadyHasParentRejected() {
+	ctx := s.GetContext()
+
+	parentA := s.createCustomer("ext-parent-a-dup")
+	parentB := s.createCustomer("ext-parent-b-dup")
+	child := s.createCustomer("ext-child-dup")
+
+	subA := s.createActiveSub(parentA.ID)
+	subB := s.createActiveSub(parentB.ID)
+
+	// Parent A inherits child successfully
+	_, err := s.service.Execute(ctx, subA.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeInheritance,
+		InheritanceParams: &dto.SubModifyInheritanceRequest{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	})
+	s.Require().NoError(err)
+
+	// Parent B tries to inherit the same child — must be rejected
+	_, err = s.service.Execute(ctx, subB.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeInheritance,
+		InheritanceParams: &dto.SubModifyInheritanceRequest{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "already has a parent")
+}
+
 // TestExecuteInheritance_InheritedSubCannotAddChildren verifies that calling Execute on
 // an inherited subscription returns an error.
 func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_InheritedSubCannotAddChildren() {

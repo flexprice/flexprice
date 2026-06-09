@@ -1097,6 +1097,25 @@ func (s *subscriptionModificationService) resolveExternalCustomersForInheritance
 				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
 				Mark(ierr.ErrValidation)
 		}
+
+		subFilter := types.NewSubscriptionFilter()
+		subFilter.CustomerID = cust.ID
+		subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+		subFilter.Status = lo.ToPtr(types.StatusPublished)
+		subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+		subFilter.WithLineItems = false
+		subFilter.Limit = lo.ToPtr(1)
+		inheritedCount, err := s.serviceParams.SubRepo.Count(ctx, subFilter)
+		if err != nil {
+			return nil, err
+		}
+		if inheritedCount > 0 {
+			return nil, ierr.NewError("child customer already has a parent subscription").
+				WithHint("A customer can only be inherited under one parent").
+				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+				Mark(ierr.ErrValidation)
+		}
+
 		childCustomerIDs = append(childCustomerIDs, cust.ID)
 	}
 	return childCustomerIDs, nil
