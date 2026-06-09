@@ -120,13 +120,13 @@ func TestCancelSubscriptionRequest_Validate_BackdatedImmediate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "scheduled_date_past_cancel_at_still_rejected",
+			name: "scheduled_date_past_cancel_at_is_valid",
 			req: CancelSubscriptionRequest{
 				CancellationType:  types.CancellationTypeScheduledDate,
 				ProrationBehavior: types.ProrationBehaviorNone,
 				CancelAt:          &past,
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "scheduled_date_future_cancel_at_is_valid",

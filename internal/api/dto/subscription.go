@@ -559,6 +559,10 @@ type CancelSubscriptionRequest struct {
 	// Reason for cancellation (for audit and business intelligence)
 	Reason string `json:"reason,omitempty"`
 
+	// CancelAt is the exact date/time when the subscription should be cancelled.
+	// Required for cancellation_type "scheduled_date"; optional for "immediate" (past dates only — backdated cancellation).
+	// For "scheduled_date", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).
+	// For "immediate", accepts past/current dates only; use "scheduled_date" for future dates.
 	CancelAt *time.Time `json:"cancel_at,omitempty"`
 
 	//SuppressWebhook is an internal flag to suppress webhook events during cancellation.
@@ -621,16 +625,7 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	if r.CancellationType == types.CancellationTypeScheduledDate {
 		if r.CancelAt == nil {
 			return ierr.NewError("cancel_at is required for scheduled_date").
-				WithHint("Provide a date strictly after the current period start in cancel_at").
-				Mark(ierr.ErrValidation)
-		}
-		now := time.Now().UTC()
-		if !r.CancelAt.After(now) {
-			return ierr.NewError("cancel_at must be a future date for scheduled_date cancellation").
-				WithHint("Provide a date strictly in the future for cancel_at").
-				WithReportableDetails(map[string]interface{}{
-					"cancel_at": r.CancelAt.UTC().Format(time.RFC3339),
-				}).
+				WithHint("Provide a cancel_at date (past for backdated cancellation, future for scheduled cancellation)").
 				Mark(ierr.ErrValidation)
 		}
 	}
