@@ -3065,9 +3065,14 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		return nil
 	}
 
-	// For inherited subscriptions, skip invoice creation and only advance the billing period.
+	// For inherited subscriptions, skip invoice creation.
 	// Invoices are created on the parent subscription; the child just needs its period kept current.
 	if sub.SubscriptionType == types.SubscriptionTypeInherited {
+		// If scheduled for period-end removal, cancel without advancing period.
+		if sub.CancelAtPeriodEnd && sub.CancelAt != nil {
+			return s.cancelInheritedSubscriptionAtPeriodEnd(ctx, sub)
+		}
+		// Otherwise, just advance the period; no invoice created.
 		newPeriod := periods[len(periods)-1]
 		sub.CurrentPeriodStart = newPeriod.start
 		sub.CurrentPeriodEnd = newPeriod.end
@@ -3444,6 +3449,20 @@ func (s *subscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.
 		}
 	}
 	return nil
+}
+
+// cancelInheritedSubscriptionAtPeriodEnd cancels an inherited subscription that was
+// scheduled for removal at period end. It does not generate an invoice — the parent
+// subscription's invoice already covers this child's full-period usage.
+func (s *subscriptionService) cancelInheritedSubscriptionAtPeriodEnd(ctx context.Context, sub *subscription.Subscription) error {
+	cancelledAt := *sub.CancelAt
+	sub.SubscriptionStatus = types.SubscriptionStatusCancelled
+	sub.CancelledAt = &cancelledAt
+	sub.EndDate = &cancelledAt
+	s.Logger.Info(ctx, "cancelling inherited subscription at period end",
+		"subscription_id", sub.ID,
+		"cancelled_at", cancelledAt)
+	return s.SubRepo.Update(ctx, sub)
 }
 
 func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost decimal.Decimal, meterDisplayName string) *dto.SubscriptionUsageByMetersResponse {
