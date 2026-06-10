@@ -12,16 +12,18 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=<optional, e.g. signoz-otel:4317>
 make run-e2eprobe
 ```
 
-## One-time tenant prep (manual)
+## Self-provisioning
 
-v1 of seed-ensure auto-creates customers + meters. You'll need to manually pre-provision in the e2eprobe tenant:
+`seed-ensure` is fully self-contained — no manual tenant prep is required. On first run (or any run where entities are missing) the harness idempotently provisions:
 
-- ≥ 1 plan tagged `metadata.e2eprobe = "true"` with at least one attached price
-- Feature → meter bindings (for each of the 9 seed meters)
-- Subscriptions for the 10 persistent customers (one per customer)
-- Pre-funded wallets on the first 3 persistent customers (`e2eprobe-cust-persistent-0`, `-1`, `-2`)
+1. **9 features** (each with an embedded meter, one per aggregation type: COUNT, SUM, AVG, COUNT_UNIQUE, LATEST, MAX, SUM_WITH_MULTIPLIER, WEIGHTED_SUM, SUM/api-filter).
+2. **10 persistent customers** tagged `metadata.e2eprobe_cohort = "persistent"`.
+3. **1 plan** (`e2eprobe_plan`) with metadata `e2eprobe = "true"`.
+4. **10 prices** attached to the plan: 1 base recurring fixed fee ($19.99/mo) + 1 usage price per feature ($0.01/unit).
+5. **10 subscriptions** — one per persistent customer — on the e2eprobe plan (monthly, anniversary cycle). Draft subscriptions are activated automatically.
+6. **3 wallets** on the first 3 persistent customers (`e2eprobe-cust-persistent-0/1/2`), each topped up to $100.00 USD.
 
-Without these, the affected checks benignly skip. Expanding seed-ensure to cover them is a tracked follow-up.
+Every step is idempotent: re-running seed-ensure against a tenant that already has all entities is a no-op.
 
 ## Architecture
 
@@ -56,7 +58,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 
 | Kind | Name | Schedule | What it does |
 | ---- | ---- | -------- | ------------ |
-| bootstrap | seed-ensure | OneShot + 6h | Create/verify persistent customers + 9 meters |
+| bootstrap | seed-ensure | OneShot + 6h | Auto-provision: 9 features/meters, 10 customers, 1 plan, 10 prices, 10 subs, 3 wallets |
 | driver | event-ingest-driver | Rate(5/s) | Varied event ingest using the deck |
 | probe | analytics-probe | 2m | `GetUsageAnalytics` rotating params |
 | probe | wallet-balance-probe | 2m | Wallet balance reads |

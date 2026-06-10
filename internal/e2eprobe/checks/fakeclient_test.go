@@ -12,12 +12,12 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
+
 type fakeClient struct {
 	customers fakeCustomers
 	plans     fakePlans
 	prices    fakePrices
 	features  fakeFeatures
-	meters    fakeMeters
 	subs      fakeSubscriptions
 	wallets   fakeWallets
 	events    fakeEvents
@@ -28,7 +28,6 @@ type fakeClient struct {
 func newFakeClient() *fakeClient {
 	return &fakeClient{
 		customers: fakeCustomers{byExt: map[string]string{}},
-		meters:    fakeMeters{},
 		async:     &fakeAsyncEvents{},
 	}
 }
@@ -37,7 +36,6 @@ func (c *fakeClient) Customers() e2eprobe.CustomerOps         { return &c.custom
 func (c *fakeClient) Plans() e2eprobe.PlanOps                 { return &c.plans }
 func (c *fakeClient) Prices() e2eprobe.PriceOps               { return &c.prices }
 func (c *fakeClient) Features() e2eprobe.FeatureOps           { return &c.features }
-func (c *fakeClient) Meters() e2eprobe.MeterOps               { return &c.meters }
 func (c *fakeClient) Subscriptions() e2eprobe.SubscriptionOps { return &c.subs }
 func (c *fakeClient) Wallets() e2eprobe.WalletOps             { return &c.wallets }
 func (c *fakeClient) Events() e2eprobe.EventOps               { return &c.events }
@@ -66,16 +64,18 @@ func (f *fakeCustomers) Create(_ context.Context, req types.DtoCreateCustomerReq
 func (f *fakeCustomers) GetByExternalID(_ context.Context, ext string) (*dtos.GetCustomerByExternalIDResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Check byExt first — entries added by Create always succeed.
+	id, ok := f.byExt[ext]
+	if ok {
+		return &dtos.GetCustomerByExternalIDResponse{
+			DtoCustomerResponse: &types.DtoCustomerResponse{ID: &id},
+		}, nil
+	}
+	// getErr simulates "not found" for pre-existing keys (before any Create call).
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
-	id, ok := f.byExt[ext]
-	if !ok {
-		return nil, errors.New("not found")
-	}
-	return &dtos.GetCustomerByExternalIDResponse{
-		DtoCustomerResponse: &types.DtoCustomerResponse{ID: &id},
-	}, nil
+	return nil, errors.New("not found")
 }
 func (f *fakeCustomers) Get(_ context.Context, _ string) (*dtos.GetCustomerResponse, error) {
 	return &dtos.GetCustomerResponse{}, nil
@@ -106,11 +106,26 @@ func (f *fakePlans) Create(_ context.Context, req types.DtoCreatePlanRequest) (*
 	defer f.mu.Unlock()
 	id := fmt.Sprintf("plan_%d", len(f.plans)+1)
 	f.created = append(f.created, req)
-	f.plans = append(f.plans, types.DtoPlanResponse{ID: &id})
-	return &dtos.CreatePlanResponse{DtoPlanResponse: &types.DtoPlanResponse{ID: &id}}, nil
+	plan := types.DtoPlanResponse{ID: &id, LookupKey: req.LookupKey}
+	f.plans = append(f.plans, plan)
+	return &dtos.CreatePlanResponse{DtoPlanResponse: &types.DtoPlanResponse{ID: &id, LookupKey: req.LookupKey}}, nil
 }
-func (f *fakePlans) Query(_ context.Context, _ types.PlanFilter) (*dtos.QueryPlanResponse, error) {
-	return &dtos.QueryPlanResponse{}, nil
+func (f *fakePlans) Query(_ context.Context, filter types.PlanFilter) (*dtos.QueryPlanResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var matched []types.DtoPlanResponse
+	for _, p := range f.plans {
+		if filter.LookupKey != nil && p.LookupKey != nil && *filter.LookupKey != *p.LookupKey {
+			continue
+		}
+		matched = append(matched, p)
+	}
+	if len(matched) == 0 {
+		return &dtos.QueryPlanResponse{}, nil
+	}
+	return &dtos.QueryPlanResponse{
+		DtoListPlansResponse: &types.DtoListPlansResponse{Items: matched},
+	}, nil
 }
 func (f *fakePlans) Get(_ context.Context, _ string) (*dtos.GetPlanResponse, error) {
 	return &dtos.GetPlanResponse{}, nil
@@ -136,59 +151,48 @@ func (f *fakePrices) Query(_ context.Context, _ types.PriceFilter) (*dtos.QueryP
 // --- Features ---
 
 type fakeFeatures struct {
-	mu      sync.Mutex
-	created []types.DtoCreateFeatureRequest
+	mu       sync.Mutex
+	created  []types.DtoCreateFeatureRequest
+	features []types.DtoFeatureResponse
 }
 
 func (f *fakeFeatures) Create(_ context.Context, req types.DtoCreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	id := fmt.Sprintf("feat_%d", len(f.features)+1)
+	meterID := fmt.Sprintf("meter_%d", len(f.features)+1)
+	feat := types.DtoFeatureResponse{ID: &id, LookupKey: req.LookupKey, MeterID: &meterID}
+	f.features = append(f.features, feat)
 	f.created = append(f.created, req)
-	return &dtos.CreateFeatureResponse{}, nil
+	return &dtos.CreateFeatureResponse{DtoFeatureResponse: &feat}, nil
 }
-func (f *fakeFeatures) Query(_ context.Context, _ types.FeatureFilter) (*dtos.QueryFeatureResponse, error) {
-	return &dtos.QueryFeatureResponse{}, nil
-}
-
-// --- Meters ---
-
-type fakeMeters struct {
-	mu      sync.Mutex
-	meters  []e2eprobe.Meter
-	created []e2eprobe.CreateMeterRequest
-}
-
-func (f *fakeMeters) List(_ context.Context) ([]e2eprobe.Meter, error) {
+func (f *fakeFeatures) Query(_ context.Context, filter types.FeatureFilter) (*dtos.QueryFeatureResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]e2eprobe.Meter, len(f.meters))
-	copy(out, f.meters)
-	return out, nil
-}
-func (f *fakeMeters) Create(_ context.Context, req e2eprobe.CreateMeterRequest) (*e2eprobe.Meter, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	m := e2eprobe.Meter{
-		ID:          "meter_" + req.EventName,
-		EventName:   req.EventName,
-		Name:        req.Name,
-		Aggregation: req.Aggregation,
-		Filters:     req.Filters,
-		Metadata:    req.Metadata,
+	// Build a set of lookup keys to match.
+	wantKeys := map[string]bool{}
+	for _, k := range filter.LookupKeys {
+		wantKeys[k] = true
 	}
-	f.meters = append(f.meters, m)
-	f.created = append(f.created, req)
-	return &m, nil
-}
-func (f *fakeMeters) Get(_ context.Context, id string) (*e2eprobe.Meter, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, m := range f.meters {
-		if m.ID == id {
-			return &m, nil
+	if filter.LookupKey != nil {
+		wantKeys[*filter.LookupKey] = true
+	}
+	var matched []types.DtoFeatureResponse
+	for _, feat := range f.features {
+		if len(wantKeys) == 0 {
+			matched = append(matched, feat)
+			continue
+		}
+		if feat.LookupKey != nil && wantKeys[*feat.LookupKey] {
+			matched = append(matched, feat)
 		}
 	}
-	return nil, errors.New("not found")
+	if len(matched) == 0 {
+		return &dtos.QueryFeatureResponse{}, nil
+	}
+	return &dtos.QueryFeatureResponse{
+		DtoListFeaturesResponse: &types.DtoListFeaturesResponse{Items: matched},
+	}, nil
 }
 
 // --- Subscriptions ---
@@ -235,8 +239,28 @@ func (f *fakeSubscriptions) Cancel(_ context.Context, id string, _ types.DtoCanc
 	f.cancelled = append(f.cancelled, id)
 	return &dtos.CancelSubscriptionResponse{}, nil
 }
-func (f *fakeSubscriptions) Query(_ context.Context, _ types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error) {
-	return &dtos.QuerySubscriptionResponse{}, nil
+func (f *fakeSubscriptions) Query(_ context.Context, filter types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var matched []types.DtoSubscriptionResponse
+	for _, sub := range f.subs {
+		if filter.ExternalCustomerID != nil || filter.PlanID != nil {
+			// Only return if it matches all provided filters; since fakeSubscriptions
+			// stores by ID and doesn't track ExternalCustomerID/PlanID, return empty
+			// unless the caller pre-populated desired subs via direct map manipulation.
+			continue
+		}
+		matched = append(matched, sub)
+	}
+	if len(matched) == 0 {
+		return &dtos.QuerySubscriptionResponse{}, nil
+	}
+	return &dtos.QuerySubscriptionResponse{
+		DtoListSubscriptionsResponse: &types.DtoListSubscriptionsResponse{Items: matched},
+	}, nil
+}
+func (f *fakeSubscriptions) ActivateSubscription(_ context.Context, _ string, _ types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
+	return &dtos.ActivateSubscriptionResponse{}, nil
 }
 func (f *fakeSubscriptions) GetEntitlements(_ context.Context, _ string, _ []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return &dtos.GetSubscriptionEntitlementsResponse{}, nil
@@ -258,15 +282,30 @@ type fakeWallets struct {
 	created []types.DtoCreateWalletRequest
 	// walletItems allows tests to populate wallets returned by Query.
 	walletItems []types.DtoWalletResponse
-	balance     string
-	balErr      error
+	// walletsByCustomerID maps internal customer ID → wallets (for GetWalletsByCustomerID).
+	walletsByCustomerID map[string][]types.DtoWalletResponse
+	balance             string
+	balErr              error
 }
 
 func (f *fakeWallets) Create(_ context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	walletID := fmt.Sprintf("wallet_%d", len(f.created)+1)
 	f.created = append(f.created, req)
-	return &dtos.CreateWalletResponse{}, nil
+	return &dtos.CreateWalletResponse{
+		DtoWalletResponse: &types.DtoWalletResponse{ID: &walletID},
+	}, nil
+}
+func (f *fakeWallets) GetWalletsByCustomerID(_ context.Context, customerID string) (*dtos.GetWalletsByCustomerIDResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.walletsByCustomerID != nil {
+		if wallets, ok := f.walletsByCustomerID[customerID]; ok {
+			return &dtos.GetWalletsByCustomerIDResponse{DtoWalletResponses: wallets}, nil
+		}
+	}
+	return &dtos.GetWalletsByCustomerIDResponse{}, nil
 }
 func (f *fakeWallets) Query(_ context.Context, _ types.WalletFilter) (*dtos.QueryWalletResponse, error) {
 	f.mu.Lock()

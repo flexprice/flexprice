@@ -13,7 +13,6 @@ type Client interface {
 	Plans() PlanOps
 	Prices() PriceOps
 	Features() FeatureOps
-	Meters() MeterOps
 	Subscriptions() SubscriptionOps
 	Wallets() WalletOps
 	Events() EventOps
@@ -52,6 +51,7 @@ type SubscriptionOps interface {
 	Get(ctx context.Context, id string) (*dtos.GetSubscriptionResponse, error)
 	Cancel(ctx context.Context, id string, body types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error)
 	Query(ctx context.Context, filter types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error)
+	ActivateSubscription(ctx context.Context, id string, body types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error)
 	GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error)
 	GetUsage(ctx context.Context, req types.DtoGetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error)
 	CreateLineItem(ctx context.Context, id string, body types.DtoCreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error)
@@ -61,6 +61,7 @@ type SubscriptionOps interface {
 type WalletOps interface {
 	Create(ctx context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error)
 	Query(ctx context.Context, filter types.WalletFilter) (*dtos.QueryWalletResponse, error)
+	GetWalletsByCustomerID(ctx context.Context, customerID string) (*dtos.GetWalletsByCustomerIDResponse, error)
 	GetBalance(ctx context.Context, id string) (*dtos.GetWalletBalanceResponse, error)
 	TopUp(ctx context.Context, id string, body types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error)
 }
@@ -87,20 +88,17 @@ func NewSDKClient(apiHost, apiKey string) Client {
 		flexprice.WithServerURL(apiHost),
 		flexprice.WithSecurity(apiKey),
 	)
-	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey}
+	return &sdkClient{sdk: sdk}
 }
 
 type sdkClient struct {
-	sdk     *flexprice.Flexprice
-	apiHost string
-	apiKey  string
+	sdk *flexprice.Flexprice
 }
 
 func (c *sdkClient) Customers() CustomerOps         { return customerOps{c.sdk.Customers} }
 func (c *sdkClient) Plans() PlanOps                 { return planOps{c.sdk.Plans} }
 func (c *sdkClient) Prices() PriceOps               { return priceOps{c.sdk.Prices} }
 func (c *sdkClient) Features() FeatureOps           { return featureOps{c.sdk.Features} }
-func (c *sdkClient) Meters() MeterOps               { return newMeterHTTPClient(c.apiHost, c.apiKey) }
 func (c *sdkClient) Subscriptions() SubscriptionOps { return subscriptionOps{c.sdk.Subscriptions} }
 func (c *sdkClient) Wallets() WalletOps             { return walletOps{c.sdk.Wallets} }
 func (c *sdkClient) Events() EventOps               { return eventOps{c.sdk.Events} }
@@ -179,6 +177,9 @@ func (o subscriptionOps) Cancel(ctx context.Context, id string, body types.DtoCa
 func (o subscriptionOps) Query(ctx context.Context, f types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error) {
 	return o.s.QuerySubscription(ctx, f)
 }
+func (o subscriptionOps) ActivateSubscription(ctx context.Context, id string, body types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
+	return o.s.ActivateSubscription(ctx, id, body)
+}
 func (o subscriptionOps) GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return o.s.GetSubscriptionEntitlements(ctx, id, featureIDs)
 }
@@ -199,6 +200,9 @@ func (o walletOps) Create(ctx context.Context, req types.DtoCreateWalletRequest)
 }
 func (o walletOps) Query(ctx context.Context, f types.WalletFilter) (*dtos.QueryWalletResponse, error) {
 	return o.s.QueryWallet(ctx, f)
+}
+func (o walletOps) GetWalletsByCustomerID(ctx context.Context, customerID string) (*dtos.GetWalletsByCustomerIDResponse, error) {
+	return o.s.GetWalletsByCustomerID(ctx, customerID)
 }
 
 // GetBalance passes nil for the optional expand parameter (not exposed in the interface).
