@@ -1240,6 +1240,7 @@ func (s *subscriptionModificationService) findInheritedSubForChild(ctx context.C
 	filter.SubscriptionStatus = []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusPaused,
 	}
 	filter.CustomerID = childCustomerID
 
@@ -1292,7 +1293,8 @@ func (s *subscriptionModificationService) executeRemoveInheritance(
 	}
 
 	// 2. Resolve external customer IDs → internal IDs (no status check for remove)
-	childCustomerIDs, err := s.resolveCustomersByExternalIDs(ctx, params.ExternalCustomerIDsToRemove)
+	externalIDs := lo.Uniq(params.ExternalCustomerIDsToRemove)
+	childCustomerIDs, err := s.resolveCustomersByExternalIDs(ctx, externalIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1399,7 +1401,8 @@ func (s *subscriptionModificationService) previewRemoveInheritance(
 	}
 
 	// Resolve customers
-	childCustomerIDs, err := s.resolveCustomersByExternalIDs(ctx, params.ExternalCustomerIDsToRemove)
+	externalIDs := lo.Uniq(params.ExternalCustomerIDsToRemove)
+	childCustomerIDs, err := s.resolveCustomersByExternalIDs(ctx, externalIDs)
 	if err != nil {
 		return nil, err
 	}

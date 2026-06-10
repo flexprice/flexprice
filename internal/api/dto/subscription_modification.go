@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -38,6 +39,13 @@ func (r *SubModifyInheritanceRequest) Validate() error {
 			return ierr.NewError("at least one external customer ID is required for remove").
 				WithHint("Provide external_customer_ids_to_remove with at least one non-empty value").
 				Mark(ierr.ErrValidation)
+		}
+		for _, id := range r.ExternalCustomerIDsToRemove {
+			if strings.TrimSpace(id) == "" {
+				return ierr.NewError("external customer ID must not be empty").
+					WithHint("Remove any empty strings from external_customer_ids_to_remove").
+					Mark(ierr.ErrValidation)
+			}
 		}
 	default: // "" or "add"
 		if len(r.ExternalCustomerIDsToInheritSubscription) == 0 {
