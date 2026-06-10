@@ -112,16 +112,12 @@ type LineItemCommitmentConfig struct {
 // references prices by ID rather than inline). For the DTO-level []CommitmentBucketRequest
 // variant, see validateTimeOfDayBuckets in subscription_line_item.go.
 func validateDomainTimeOfDayBuckets(buckets types.TimeOfDayBuckets) error {
-	for _, b := range buckets {
-		if b.Start.Hour < 0 || b.Start.Hour > 24 {
-			return ierr.NewError("commitment_time_buckets: hour out of range").
-				WithHint("Hour must be in [0, 24]").
-				Mark(ierr.ErrValidation)
+	for i, b := range buckets {
+		if err := validateBucketPoint(b.Start, i); err != nil {
+			return err
 		}
-		if b.End.Hour < 0 || b.End.Hour > 24 {
-			return ierr.NewError("commitment_time_buckets: hour out of range").
-				WithHint("Hour must be in [0, 24]").
-				Mark(ierr.ErrValidation)
+		if err := validateBucketPoint(b.End, i); err != nil {
+			return err
 		}
 	}
 	return nil

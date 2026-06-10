@@ -1493,15 +1493,16 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsBu
 
 	overage := decimal.NewFromFloat(1.5)
 	commitment := decimal.NewFromInt(500)
-	// CommitmentWindowed=false to bypass validateLineItemCommitment's bucket-size check;
-	// we want validateBucketArray to fire instead.
+	// CommitmentWindowed=true so the request clears the windowed-flag guard and
+	// reaches the non-windowed-*meter* alignment check inside validateBucketArray
+	// (the meter has no BucketSize, so ValidateWindowAlignment rejects it).
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:                 usagePrice.ID,
 		SkipEntitlementCheck:    true,
 		CommitmentAmount:        &commitment,
 		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
 		CommitmentOverageFactor: &overage,
-		CommitmentWindowed:      false,
+		CommitmentWindowed:      true,
 		CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
 			{
 				Start: types.Bucket{Hour: 9, Minute: 0},
@@ -1529,7 +1530,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsBu
 
 	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, req)
 	s.Require().Error(err)
-	s.Contains(err.Error(), "windowed", "error should mention 'windowed'")
+	s.Contains(err.Error(), "windowed meter", "error should come from non-windowed meter alignment validation")
 }
 
 // TestAddSubscriptionLineItem_RejectsBucketsWithCumulativeCommitment verifies

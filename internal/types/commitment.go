@@ -128,6 +128,21 @@ func (b TimeOfDayBucket) Validate() error {
 			WithHint("Provide a non-negative decimal value for commitment_value").
 			Mark(ierr.ErrValidation)
 	}
+	// Reject partial commitment shapes: type and value must be set together, or
+	// both omitted (legacy filter-only bucket). A half-set bucket would silently
+	// fall through to legacy behavior, which is surprising.
+	hasType := b.CommitmentType != ""
+	hasValue := b.CommitmentValue.GreaterThan(decimal.Zero)
+	if hasType && !hasValue {
+		return ierr.NewError("commitment_value must be > 0 when commitment_type is set").
+			WithHint("Set commitment_value > 0, or clear commitment_type for a filter-only bucket").
+			Mark(ierr.ErrValidation)
+	}
+	if !hasType && hasValue {
+		return ierr.NewError("commitment_type is required when commitment_value is set").
+			WithHint(`Set commitment_type to "amount" or "quantity"`).
+			Mark(ierr.ErrValidation)
+	}
 	if b.OverageFactor != nil && b.OverageFactor.LessThan(decimal.Zero) {
 		return ierr.NewError("overage_factor must be >= 0").
 			WithHint("Provide a non-negative decimal value for overage_factor").

@@ -88,6 +88,23 @@ func (li *SubscriptionLineItem) HasCommitmentTimeBuckets() bool {
 	return len(li.CommitmentTimeBuckets) > 0
 }
 
+// HasMaterializedBuckets reports whether every configured bucket carries a
+// server-assigned ID (i.e. was materialized via resolveBucketPrices). Legacy
+// filter-only buckets have empty IDs, which would collide with the
+// out-of-bucket sentinel ("") during per-point attribution and bucket
+// summaries — callers use this to gate bucket-level breakdown.
+func (li *SubscriptionLineItem) HasMaterializedBuckets() bool {
+	if len(li.CommitmentTimeBuckets) == 0 {
+		return false
+	}
+	for _, b := range li.CommitmentTimeBuckets {
+		if b.ID == "" {
+			return false
+		}
+	}
+	return true
+}
+
 // HasCommitment returns true if the line item has commitment configured
 func (li *SubscriptionLineItem) HasCommitment() bool {
 	hasAmountCommitment := li.CommitmentAmount != nil && li.CommitmentAmount.GreaterThan(decimal.Zero)

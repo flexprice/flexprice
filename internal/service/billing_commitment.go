@@ -389,11 +389,27 @@ func (c *commitmentCalculator) applyWindowCommitmentLegacy(
 	return totalCharge, info, nil
 }
 
+// commitmentParts holds the four outputs of a single commitment calculation:
+// final charge plus its utilized / overage / true-up breakdown.
+type commitmentParts struct {
+	charge   decimal.Decimal
+	utilized decimal.Decimal
+	overage  decimal.Decimal
+	trueUp   decimal.Decimal
+}
+
+func (p *commitmentParts) add(o commitmentParts) {
+	p.charge = p.charge.Add(o.charge)
+	p.utilized = p.utilized.Add(o.utilized)
+	p.overage = p.overage.Add(o.overage)
+	p.trueUp = p.trueUp.Add(o.trueUp)
+}
+
 // applyWindowCommitmentPerBucket handles the per-bucket-aggregate path.
-// It groups windows by their time-of-day bucket (using bucketIndexAtWindowStart),
-// accumulates usage per bucket, then applies each bucket's own commitment math.
-// Out-of-bucket windows (idx == -1) are handled with the line item's top-level
-// commitment and lineItemPrice.
+// It groups windows by their time-of-day bucket, accumulates usage per bucket,
+// then applies each bucket's own commitment math. Windows whose start falls
+// outside every configured bucket are aggregated separately and billed with the
+// line item's own commitment + price (the legacy fallback).
 func (c *commitmentCalculator) applyWindowCommitmentPerBucket(
 	ctx context.Context,
 	lineItem *subscription.SubscriptionLineItem,
@@ -401,78 +417,112 @@ func (c *commitmentCalculator) applyWindowCommitmentPerBucket(
 	bucketStarts []time.Time,
 	lineItemPrice *price.Price,
 ) (decimal.Decimal, *types.CommitmentInfo, error) {
-	// Group window values by bucket index (-1 for out-of-bucket).
-	perBucketUsage := make(map[int]decimal.Decimal, len(lineItem.CommitmentTimeBuckets)+1)
+	// Accumulate usage per bucket index; windows matching no bucket go into
+	// outOfBucketUsage. hasOutOfBucket tracks whether any such window occurred
+	// (so a zero-usage out-of-bucket window still triggers the fallback, e.g.
+	// a true-up against the line item commitment).
+	buckets := lineItem.CommitmentTimeBuckets
+	perBucketUsage := make(map[int]decimal.Decimal, len(buckets))
+	outOfBucketUsage := decimal.Zero
+	hasOutOfBucket := false
 	for i, v := range bucketedValues {
-		idx := bucketIndexAtWindowStart(lineItem.CommitmentTimeBuckets, bucketStarts[i])
+		idx := bucketIndexAtWindowStart(buckets, bucketStarts[i])
+		if idx < 0 {
+			outOfBucketUsage = outOfBucketUsage.Add(v)
+			hasOutOfBucket = true
+			continue
+		}
 		perBucketUsage[idx] = perBucketUsage[idx].Add(v)
 	}
 
-	totalCharge := decimal.Zero
-	totalUtilized := decimal.Zero
-	totalOverage := decimal.Zero
-	totalTrueUp := decimal.Zero
+	var total commitmentParts
 
-	for idx, usage := range perBucketUsage {
-		if idx == -1 {
-			// Out-of-bucket: apply line item commitment + line item price.
-			// When the line item has no commitment (zero), bill at base usage rate only,
-			// consistent with the legacy out-of-bucket path.
-			usageCharge := c.chargeAtQty(ctx, lineItemPrice, usage)
-			liCommit, err := c.normalizeCommitmentToAmount(ctx, lineItem, lineItemPrice)
-			if err != nil {
-				return decimal.Zero, nil, err
-			}
-			if liCommit.IsZero() {
-				// No out-of-bucket commitment: charge actual usage, no overage/true-up.
-				totalCharge = totalCharge.Add(usageCharge)
-				totalUtilized = totalUtilized.Add(usageCharge)
-				continue
-			}
-			of := lo.FromPtr(lineItem.CommitmentOverageFactor)
-			sub, util, ov, tu := computeCommitmentMathAmount(usageCharge, liCommit, of, lineItem.CommitmentTrueUpEnabled)
-			totalCharge = totalCharge.Add(sub)
-			totalUtilized = totalUtilized.Add(util)
-			totalOverage = totalOverage.Add(ov)
-			totalTrueUp = totalTrueUp.Add(tu)
-			continue
-		}
-
-		b := lineItem.CommitmentTimeBuckets[idx]
-		bucketPrice, err := c.fetchPriceByID(ctx, b.PriceID)
+	if hasOutOfBucket {
+		parts, err := c.chargeOutOfBucketUsage(ctx, lineItem, lineItemPrice, outOfBucketUsage)
 		if err != nil {
 			return decimal.Zero, nil, err
 		}
-		baseCharge := c.chargeAtQty(ctx, bucketPrice, usage)
-		of := lo.FromPtr(b.OverageFactor)
-
-		switch b.CommitmentType {
-		case types.COMMITMENT_TYPE_AMOUNT:
-			sub, util, ov, tu := computeCommitmentMathAmount(baseCharge, b.CommitmentValue, of, b.TrueUpEnabled)
-			totalCharge = totalCharge.Add(sub)
-			totalUtilized = totalUtilized.Add(util)
-			totalOverage = totalOverage.Add(ov)
-			totalTrueUp = totalTrueUp.Add(tu)
-		case types.COMMITMENT_TYPE_QUANTITY:
-			commitCharge := c.chargeAtQty(ctx, bucketPrice, b.CommitmentValue)
-			sub, util, ov, tu := computeCommitmentMathQty(baseCharge, commitCharge, of, b.TrueUpEnabled)
-			totalCharge = totalCharge.Add(sub)
-			totalUtilized = totalUtilized.Add(util)
-			totalOverage = totalOverage.Add(ov)
-			totalTrueUp = totalTrueUp.Add(tu)
-		default:
-			return decimal.Zero, nil, ierr.NewError("unknown bucket commitment type").
-				Mark(ierr.ErrSystem)
-		}
+		total.add(parts)
 	}
 
-	return totalCharge, &types.CommitmentInfo{
+	for idx, usage := range perBucketUsage {
+		parts, err := c.chargeBucketUsage(ctx, buckets[idx], lineItemPrice, usage)
+		if err != nil {
+			return decimal.Zero, nil, err
+		}
+		total.add(parts)
+	}
+
+	return total.charge, &types.CommitmentInfo{
 		Type:                             lineItem.CommitmentType,
 		IsWindowed:                       true,
-		ComputedCommitmentUtilizedAmount: totalUtilized,
-		ComputedOverageAmount:            totalOverage,
-		ComputedTrueUpAmount:             totalTrueUp,
+		ComputedCommitmentUtilizedAmount: total.utilized,
+		ComputedOverageAmount:            total.overage,
+		ComputedTrueUpAmount:             total.trueUp,
 	}, nil
+}
+
+// chargeOutOfBucketUsage bills usage that fell outside every configured bucket
+// using the line item's own commitment + price. With no line-item commitment,
+// it charges actual usage only (matching the legacy out-of-bucket path).
+func (c *commitmentCalculator) chargeOutOfBucketUsage(
+	ctx context.Context,
+	lineItem *subscription.SubscriptionLineItem,
+	lineItemPrice *price.Price,
+	usage decimal.Decimal,
+) (commitmentParts, error) {
+	usageCharge := c.chargeAtQty(ctx, lineItemPrice, usage)
+	liCommit, err := c.normalizeCommitmentToAmount(ctx, lineItem, lineItemPrice)
+	if err != nil {
+		return commitmentParts{}, err
+	}
+	if liCommit.IsZero() {
+		return commitmentParts{charge: usageCharge, utilized: usageCharge}, nil
+	}
+	of := lo.FromPtr(lineItem.CommitmentOverageFactor)
+	charge, util, ov, tu := computeCommitmentMathAmount(usageCharge, liCommit, of, lineItem.CommitmentTrueUpEnabled)
+	return commitmentParts{charge: charge, utilized: util, overage: ov, trueUp: tu}, nil
+}
+
+// chargeBucketUsage bills usage that fell inside a single bucket using that
+// bucket's own commitment + price. It degrades gracefully so mixed bucket
+// shapes never hard-fail: a bucket without its own price falls back to the line
+// item price, and a bucket without commitment is billed at base usage only.
+func (c *commitmentCalculator) chargeBucketUsage(
+	ctx context.Context,
+	b types.TimeOfDayBucket,
+	lineItemPrice *price.Price,
+	usage decimal.Decimal,
+) (commitmentParts, error) {
+	bucketPrice := lineItemPrice
+	if b.PriceID != "" {
+		bp, err := c.fetchPriceByID(ctx, b.PriceID)
+		if err != nil {
+			return commitmentParts{}, err
+		}
+		bucketPrice = bp
+	}
+	baseCharge := c.chargeAtQty(ctx, bucketPrice, usage)
+
+	if !b.HasCommitment() {
+		// Filter-only bucket: no commitment math, charge base usage.
+		return commitmentParts{charge: baseCharge, utilized: baseCharge}, nil
+	}
+
+	of := lo.FromPtr(b.OverageFactor)
+	switch b.CommitmentType {
+	case types.COMMITMENT_TYPE_AMOUNT:
+		charge, util, ov, tu := computeCommitmentMathAmount(baseCharge, b.CommitmentValue, of, b.TrueUpEnabled)
+		return commitmentParts{charge: charge, utilized: util, overage: ov, trueUp: tu}, nil
+	case types.COMMITMENT_TYPE_QUANTITY:
+		commitCharge := c.chargeAtQty(ctx, bucketPrice, b.CommitmentValue)
+		charge, util, ov, tu := computeCommitmentMathQty(baseCharge, commitCharge, of, b.TrueUpEnabled)
+		return commitmentParts{charge: charge, utilized: util, overage: ov, trueUp: tu}, nil
+	default:
+		return commitmentParts{}, ierr.NewError("unknown bucket commitment type").
+			WithReportableDetails(map[string]interface{}{"commitment_type": b.CommitmentType}).
+			Mark(ierr.ErrSystem)
+	}
 }
 
 // computeCommitmentMathAmount is the AMOUNT-typed math: usageCharge vs commitmentAmt.

@@ -1990,6 +1990,15 @@ func (s *featureUsageTrackingService) fetchSubscriptionPrices(ctx context.Contex
 					priceIDSet[lineItem.PriceID] = true
 				}
 			}
+			// Per-bucket prices are referenced only from the line item's
+			// CommitmentTimeBuckets, so collect them too — otherwise bucket
+			// summaries would under-report charges as zero.
+			for _, b := range lineItem.CommitmentTimeBuckets {
+				if b.PriceID != "" && !priceIDSet[b.PriceID] {
+					priceIDs = append(priceIDs, b.PriceID)
+					priceIDSet[b.PriceID] = true
+				}
+			}
 		}
 	}
 
@@ -3203,7 +3212,10 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			var lineItemForBucket *subscription.SubscriptionLineItem
 			if req.BreakdownBucket && analytic.SubLineItemID != "" {
 				lineItemForBucket = data.SubscriptionLineItems[analytic.SubLineItemID]
-				if lineItemForBucket != nil && !lineItemForBucket.HasCommitmentTimeBuckets() {
+				// Only materialized buckets (with server-assigned IDs) can be
+				// attributed. Legacy filter-only buckets have empty IDs that
+				// collide with the out-of-bucket sentinel, so skip breakdown.
+				if lineItemForBucket != nil && !lineItemForBucket.HasMaterializedBuckets() {
 					lineItemForBucket = nil
 				}
 			}

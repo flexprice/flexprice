@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -73,7 +72,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			if bucketErr != nil {
 				return bucketErr
 			}
-			if err := s.validateBucketArray(txCtx, subscriptionID, lineItem.MeterID, buckets); err != nil {
+			if err := s.validateBucketArray(txCtx, subscriptionID, lineItem.MeterID, lineItem.CommitmentWindowed, buckets); err != nil {
 				return err
 			}
 			lineItem.CommitmentTimeBuckets = buckets
@@ -516,7 +515,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 				if buckets == nil {
 					buckets = types.TimeOfDayBuckets{}
 				}
-				if err := s.validateBucketArray(ctx, existingLineItem.SubscriptionID, newLineItem.MeterID, buckets); err != nil {
+				if err := s.validateBucketArray(ctx, existingLineItem.SubscriptionID, newLineItem.MeterID, newLineItem.CommitmentWindowed, buckets); err != nil {
 					return err
 				}
 				newLineItem.CommitmentTimeBuckets = buckets
@@ -884,14 +883,25 @@ func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscriptio
 // When the parent subscription has a cumulative commitment (CommitmentDuration
 // != nil and != BillingPeriod), per-bucket commitments are rejected because the
 // two models are incompatible.
+//
+// commitmentWindowed is the line item's *effective* windowed flag (after merging
+// request + inherited values on update). Buckets only bill via the windowed path,
+// so they require commitment_windowed=true; this guard closes the gap left open
+// by the DTO layer, which can only cross-check both fields when supplied together.
 func (s *subscriptionService) validateBucketArray(
 	ctx context.Context,
 	subscriptionID string,
 	meterID string,
+	commitmentWindowed bool,
 	buckets types.TimeOfDayBuckets,
 ) error {
 	if len(buckets) == 0 {
 		return nil
+	}
+	if !commitmentWindowed {
+		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
+			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
 	}
 	if err := buckets.ValidateNoOverlap(); err != nil {
 		return err
@@ -943,14 +953,21 @@ func (s *subscriptionService) resolveBucketPrices(
 
 		resp, err := priceService.CreatePrice(ctx, priceReq)
 		if err != nil {
+			// Preserve the underlying classification: a bad bucket price is a
+			// user validation error (4xx), not a system error (5xx). Only fall
+			// back to ErrSystem for genuinely internal failures.
+			mark := ierr.ErrSystem
+			if ierr.IsValidation(err) {
+				mark = ierr.ErrValidation
+			}
 			return nil, ierr.WithError(err).
 				WithHint("Inline bucket price creation failed").
 				WithReportableDetails(map[string]interface{}{"bucket_index": i}).
-				Mark(ierr.ErrSystem)
+				Mark(mark)
 		}
 
 		out = append(out, types.TimeOfDayBucket{
-			ID:              uuid.NewString(),
+			ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT_BUCKET),
 			Start:           r.Start,
 			End:             r.End,
 			PriceID:         resp.ID,

@@ -278,10 +278,22 @@ func TestTimeOfDayBucket_Validate(t *testing.T) {
 			wantErr: true, errSub: "overage_factor",
 		},
 		{
-			name: "true-up without commitment value",
+			// type set + zero value is a partial commitment shape; that check
+			// governs here (it fires before the true-up check).
+			name: "commitment type set without value",
 			bucket: TimeOfDayBucket{
 				Start: Bucket{9, 0}, End: Bucket{10, 0},
 				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.Zero,
+				TrueUpEnabled: true,
+			},
+			wantErr: true, errSub: "commitment_value must be > 0",
+		},
+		{
+			// true-up enabled with no type and no value still fails on the
+			// true-up rule (no partial-shape branch applies).
+			name: "true-up without commitment value",
+			bucket: TimeOfDayBucket{
+				Start: Bucket{9, 0}, End: Bucket{10, 0},
 				TrueUpEnabled: true,
 			},
 			wantErr: true, errSub: "true_up_enabled",
