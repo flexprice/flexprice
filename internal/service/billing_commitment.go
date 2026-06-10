@@ -112,7 +112,13 @@ func nextBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *ti
 	}
 }
 
-// commitmentCalculator handles commitment-based pricing calculations for line items
+// commitmentCalculator handles commitment-based pricing calculations for line items.
+//
+// It is STATELESS — constructing one per call site is free. The bucket price
+// cache is deliberately NOT held here: it is a local map created inside each
+// applyWindowCommitmentPerWindow pass, so prices are fetched once per bucket per
+// pass (one pass per line item) and a long-lived calculator can never serve
+// stale prices.
 type commitmentCalculator struct {
 	logger       *logger.Logger
 	priceService PriceService
