@@ -18,10 +18,16 @@ import (
 )
 
 // UsageBenchmarkService publishes benchmark trigger events and consumes them
-// to compare GetFeatureUsageBySubscription against the meter_usage pipeline.
+// to compare two analytics pipelines. Two event kinds share the topic:
+//   - "subscription": GetFeatureUsageBySubscription vs GetMeterUsageBySubscription
+//   - "analytics":    featureUsageTracking GetDetailedUsageAnalytics vs meterUsage GetDetailedAnalytics
 type UsageBenchmarkService interface {
 	// PublishEvent sends a thin benchmark trigger to Kafka. Non-blocking best-effort.
 	PublishEvent(ctx context.Context, event *events.UsageBenchmarkEvent) error
+
+	// PublishAnalyticsEvent sends the analytics-kind benchmark trigger carrying the raw request.
+	// Fire-and-forget: callers should not propagate errors to the live response.
+	PublishAnalyticsEvent(ctx context.Context, req *dto.GetUsageAnalyticsRequest) error
 
 	// RegisterHandler wires the consumer into the router.
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
@@ -29,38 +35,49 @@ type UsageBenchmarkService interface {
 
 type usageBenchmarkService struct {
 	ServiceParams
-	pubSub    pubsub.PubSub
-	benchRepo events.UsageBenchmarkRepository
+	pubSub             pubsub.PubSub
+	benchRepo          events.UsageBenchmarkRepository
+	analyticsBenchRepo events.AnalyticsBenchmarkRepository
+
+	// Injected analytics services for the analytics-kind benchmark path.
+	// Optional — if nil, the analytics dispatch silently no-ops. NewUsageBenchmarkService
+	// wires them; the wallet path uses a partial constructor that leaves them nil.
+	featureUsageTrackingService FeatureUsageTrackingService
+	meterUsageService           MeterUsageService
 }
 
-// NewUsageBenchmarkService is the production constructor wired by FX. It uses
-// the FX-singleton UsageBenchmarkPubSub from ServiceParams instead of opening
-// its own Kafka client — the previous behavior leaked a producer + consumer on
-// every call (publishBenchmarkEvent in walletService re-invokes this constructor
-// per billing iteration).
+// NewUsageBenchmarkService is the production constructor wired by FX.
 func NewUsageBenchmarkService(
 	params ServiceParams,
 	benchRepo events.UsageBenchmarkRepository,
+	analyticsBenchRepo events.AnalyticsBenchmarkRepository,
+	featureUsageTrackingService FeatureUsageTrackingService,
+	meterUsageService MeterUsageService,
 ) UsageBenchmarkService {
 	return &usageBenchmarkService{
-		ServiceParams: params,
-		benchRepo:     benchRepo,
-		pubSub:        params.UsageBenchmarkPubSub.PubSub,
+		ServiceParams:               params,
+		benchRepo:                   benchRepo,
+		analyticsBenchRepo:          analyticsBenchRepo,
+		pubSub:                      params.UsageBenchmarkPubSub.PubSub,
+		featureUsageTrackingService: featureUsageTrackingService,
+		meterUsageService:           meterUsageService,
 	}
 }
 
 // NewUsageBenchmarkServiceForTest builds a minimal service using injected deps (test only).
 func NewUsageBenchmarkServiceForTest(
 	benchRepo events.UsageBenchmarkRepository,
+	analyticsBenchRepo events.AnalyticsBenchmarkRepository,
 	ps pubsub.PubSub,
 ) *usageBenchmarkService {
 	return &usageBenchmarkService{
-		pubSub:    ps,
-		benchRepo: benchRepo,
+		pubSub:             ps,
+		benchRepo:          benchRepo,
+		analyticsBenchRepo: analyticsBenchRepo,
 	}
 }
 
-// PublishEvent marshals and publishes a UsageBenchmarkEvent.
+// PublishEvent marshals and publishes a UsageBenchmarkEvent (any kind).
 func (s *usageBenchmarkService) PublishEvent(ctx context.Context, event *events.UsageBenchmarkEvent) error {
 	if s.pubSub == nil {
 		return nil
@@ -75,7 +92,13 @@ func (s *usageBenchmarkService) PublishEvent(ctx context.Context, event *events.
 		return fmt.Errorf("usage benchmark: failed to marshal event: %w", err)
 	}
 
-	msg := message.NewMessage(fmt.Sprintf("bench-%s-%d", event.SubscriptionID, time.Now().UnixNano()), payload)
+	// Use SubscriptionID in the watermill UUID when present so subscription-kind
+	// events remain debuggable; analytics-kind events fall back to a timestamp suffix.
+	msgID := fmt.Sprintf("bench-%s-%d", event.SubscriptionID, time.Now().UnixNano())
+	if event.Kind == events.UsageBenchmarkKindAnalytics {
+		msgID = fmt.Sprintf("bench-analytics-%d", time.Now().UnixNano())
+	}
+	msg := message.NewMessage(msgID, payload)
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
 
@@ -84,6 +107,32 @@ func (s *usageBenchmarkService) PublishEvent(ctx context.Context, event *events.
 		return fmt.Errorf("usage benchmark: failed to publish to %s: %w", topic, err)
 	}
 	return nil
+}
+
+// PublishAnalyticsEvent wraps a request into an analytics-kind event and publishes it.
+// Fire-and-forget contract: callers (HTTP handlers) must not block or fail on errors.
+func (s *usageBenchmarkService) PublishAnalyticsEvent(ctx context.Context, req *dto.GetUsageAnalyticsRequest) error {
+	if req == nil {
+		return nil
+	}
+	if s.pubSub == nil || s.Config == nil {
+		return nil
+	}
+
+	raw, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("usage benchmark: failed to marshal analytics request: %w", err)
+	}
+
+	evt := &events.UsageBenchmarkEvent{
+		Kind:             events.UsageBenchmarkKindAnalytics,
+		TenantID:         types.GetTenantID(ctx),
+		EnvironmentID:    types.GetEnvironmentID(ctx),
+		StartTime:        req.StartTime,
+		EndTime:          req.EndTime,
+		AnalyticsRequest: raw,
+	}
+	return s.PublishEvent(ctx, evt)
 }
 
 // RegisterHandler wires the benchmark consumer into the watermill router.
@@ -115,6 +164,8 @@ func (s *usageBenchmarkService) processMessage(msg *message.Message) error {
 }
 
 // ProcessMessageForTest is exported so unit tests can call it directly.
+// Dispatches by event Kind; empty Kind is treated as subscription for back-compat
+// with events already in flight when this code rolled out.
 func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) error {
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
@@ -131,8 +182,22 @@ func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) erro
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 
-	featureAmt, featureCurrency := s.callFeatureUsagePipeline(ctx, &evt)
-	meterAmt, meterCurrency := s.callMeterUsagePipeline(ctx, &evt)
+	switch evt.Kind {
+	case events.UsageBenchmarkKindAnalytics:
+		return s.processAnalyticsMessage(ctx, msg, &evt)
+	default:
+		// Empty Kind == subscription (back-compat).
+		return s.processSubscriptionMessage(ctx, msg, &evt)
+	}
+}
+
+// processSubscriptionMessage holds the original subscription-pipeline benchmark logic.
+func (s *usageBenchmarkService) processSubscriptionMessage(ctx context.Context, _ *message.Message, evt *events.UsageBenchmarkEvent) error {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	featureAmt, featureCurrency := s.callFeatureUsagePipeline(ctx, evt)
+	meterAmt, meterCurrency := s.callMeterUsagePipeline(ctx, evt)
 
 	// Prefer feature pipeline's currency (source of truth); fall back to meter
 	// pipeline's currency if the feature call returned no result.
@@ -206,9 +271,7 @@ func (s *usageBenchmarkService) callFeatureUsagePipeline(ctx context.Context, ev
 }
 
 // callMeterUsagePipeline calls GetMeterUsageBySubscription. Returns (0, "") on
-// error so the benchmark insert still succeeds with a recorded diff. The
-// shared subscription service is constructed per call to avoid holding stale
-// references; this matches the feature-pipeline path.
+// error so the benchmark insert still succeeds with a recorded diff.
 func (s *usageBenchmarkService) callMeterUsagePipeline(ctx context.Context, evt *events.UsageBenchmarkEvent) (decimal.Decimal, string) {
 	if s.MeterUsageRepo == nil {
 		return decimal.Zero, ""

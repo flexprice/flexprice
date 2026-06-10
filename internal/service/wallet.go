@@ -3555,7 +3555,7 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 // publishBenchmarkEvent publishes a usage benchmark event to Kafka.
 // Fire-and-forget: errors are logged but never returned to the caller.
 func (s *walletService) publishBenchmarkEvent(ctx context.Context, subscriptionID string, startTime, endTime time.Time) {
-	benchSvc := NewUsageBenchmarkService(s.ServiceParams, nil)
+	benchSvc := NewUsageBenchmarkService(s.ServiceParams, nil, nil, nil, nil)
 	evt := &events.UsageBenchmarkEvent{
 		SubscriptionID: subscriptionID,
 		StartTime:      startTime,
