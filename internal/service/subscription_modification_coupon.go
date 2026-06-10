@@ -124,8 +124,7 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
-	if assoc.EndDate != nil && !assoc.EndDate.After(now) {
+	if assoc.EndDate != nil && !assoc.EndDate.After(effectiveDate) {
 		return nil, ierr.NewError("association already inactive").
 			WithHint("This coupon association has already ended").
 			WithReportableDetails(map[string]interface{}{
@@ -249,8 +248,7 @@ func (s *subscriptionModificationService) previewRemoveCoupon(
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	now := time.Now().UTC()
-	if assoc.EndDate != nil && !assoc.EndDate.After(now) {
+	if assoc.EndDate != nil && !assoc.EndDate.After(effectiveDate) {
 		return nil, ierr.NewError("association already inactive").
 			WithReportableDetails(map[string]interface{}{"association_id": associationID}).
 			Mark(ierr.ErrValidation)

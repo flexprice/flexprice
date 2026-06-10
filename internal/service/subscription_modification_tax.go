@@ -130,8 +130,7 @@ func (s *subscriptionModificationService) executeRemoveTax(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
-	if assoc.EndDate != nil && !assoc.EndDate.After(now) {
+	if assoc.EndDate != nil && !assoc.EndDate.After(effectiveDate) {
 		return nil, ierr.NewError("association already inactive").
 			WithHint("This tax association has already ended").
 			WithReportableDetails(map[string]interface{}{
@@ -258,8 +257,7 @@ func (s *subscriptionModificationService) previewRemoveTax(
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	now := time.Now().UTC()
-	if assoc.EndDate != nil && !assoc.EndDate.After(now) {
+	if assoc.EndDate != nil && !assoc.EndDate.After(effectiveDate) {
 		return nil, ierr.NewError("association already inactive").
 			WithReportableDetails(map[string]interface{}{"association_id": associationID}).
 			Mark(ierr.ErrValidation)
