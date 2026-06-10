@@ -201,8 +201,11 @@ type APIKeyDetails struct {
 	IsActive bool   `mapstructure:"is_active" json:"is_active" default:"true"` // whether this key is active
 }
 
+// SentryConfig is retained only for transitional rollback. Error/exception
+// capture is now OTel-native (see internal/tracing.CaptureException and
+// internal/spanerr); Sentry is no longer the sink and defaults to disabled.
 type SentryConfig struct {
-	Enabled     bool    `mapstructure:"enabled"`
+	Enabled     bool    `mapstructure:"enabled" default:"false"`
 	DSN         string  `mapstructure:"dsn"`
 	Environment string  `mapstructure:"environment"`
 	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
@@ -238,6 +241,10 @@ type OtelTracesConfig struct {
 	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
 	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
 	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	// CaptureExceptions records errors (CaptureException calls, error-level logs,
+	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
+	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.
+	CaptureExceptions bool `mapstructure:"capture_exceptions" default:"true"`
 }
 
 // OtelLogsConfig configures OTLP log export. See OtelTracesConfig for the
@@ -673,6 +680,11 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("otel.traces.auth_value", "FLEXPRICE_OTEL_TRACES_AUTH_VALUE")
 	_ = v.BindEnv("otel.traces.sample_rate", "FLEXPRICE_OTEL_TRACES_SAMPLE_RATE")
 	_ = v.BindEnv("otel.traces.storage_spans_enabled", "FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED")
+	_ = v.BindEnv("otel.traces.capture_exceptions", "FLEXPRICE_OTEL_TRACES_CAPTURE_EXCEPTIONS")
+	// Exception capture is on by default. Struct `default:` tags aren't applied at
+	// runtime here (defaults live in config.yaml), so guarantee default-on via
+	// SetDefault for deploys whose config.yaml predates this key. Env/yaml override.
+	v.SetDefault("otel.traces.capture_exceptions", true)
 	_ = v.BindEnv("otel.logs.enabled", "FLEXPRICE_OTEL_LOGS_ENABLED")
 	_ = v.BindEnv("otel.logs.endpoint", "FLEXPRICE_OTEL_LOGS_ENDPOINT")
 	_ = v.BindEnv("otel.logs.protocol", "FLEXPRICE_OTEL_LOGS_PROTOCOL")

@@ -310,12 +310,12 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 						"processing_time_ms", processingDuration.Milliseconds(),
 					)
 
-					// Capture the error in Sentry if enabled
+					// Record the exception (SigNoz Exceptions tab) if observability is enabled
 					if sentrySvc != nil && sentrySvc.IsEnabled() {
-						sentrySvc.CaptureException(err)
+						sentrySvc.CaptureException(ctx, err)
 
 						// Add breadcrumb about the failure
-						sentrySvc.AddBreadcrumb("meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
+						sentrySvc.AddBreadcrumb(ctx, "meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
 							"meter_id": meterID,
 							"price_id": r.PriceID,
 							"error":    err.Error(),
@@ -436,8 +436,8 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 			)
 
 			if sentrySvc != nil && sentrySvc.IsEnabled() {
-				sentrySvc.CaptureException(err)
-				sentrySvc.AddBreadcrumb("meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
+				sentrySvc.CaptureException(ctx, err)
+				sentrySvc.AddBreadcrumb(ctx, "meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
 					"meter_id": meterID,
 					"price_id": r.PriceID,
 					"error":    err.Error(),

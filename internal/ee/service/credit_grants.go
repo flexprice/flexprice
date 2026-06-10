@@ -388,7 +388,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 
 func (s *creditGrantService) handleCreditGrantFailure(ctx context.Context, cga *domainCreditGrantApplication.CreditGrantApplication, err error, hint string) error {
 	s.Logger.Error(ctx, "Credit grant application failed", "cga_id", cga.ID, "grant_id", cga.CreditGrantID, "hint", hint, "error", err)
-	s.TracingSvc.CaptureException(err)
+	s.TracingSvc.CaptureException(ctx, err)
 	cga.ApplicationStatus = types.ApplicationStatusFailed
 	cga.FailureReason = lo.ToPtr(fmt.Sprintf("%s: %s", hint, err.Error()))
 	if updateErr := s.CreditGrantApplicationRepo.Update(ctx, cga); updateErr != nil {
