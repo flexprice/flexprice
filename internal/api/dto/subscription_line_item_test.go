@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )
@@ -27,6 +28,7 @@ func TestCommitmentBucketRequest_Validate(t *testing.T) {
 				Price:           validPrice,
 				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
 				CommitmentValue: decimal.NewFromInt(100),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
 			},
 		},
 		{
@@ -40,6 +42,7 @@ func TestCommitmentBucketRequest_Validate(t *testing.T) {
 				},
 				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
 				CommitmentValue: decimal.NewFromInt(100),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
 			},
 			wantErr: true, errSub: "SUBSCRIPTION",
 		},
@@ -51,8 +54,54 @@ func TestCommitmentBucketRequest_Validate(t *testing.T) {
 				Price:           validPrice,
 				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
 				CommitmentValue: decimal.NewFromInt(100),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
 			},
 			wantErr: true, errSub: "hour",
+		},
+		{
+			name: "rejects missing overage factor",
+			req: CommitmentBucketRequest{
+				Start:           types.Bucket{Hour: 9, Minute: 0},
+				End:             types.Bucket{Hour: 10, Minute: 0},
+				Price:           validPrice,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(100),
+			},
+			wantErr: true, errSub: "overage_factor is required",
+		},
+		{
+			name: "rejects overage factor <= 1.0",
+			req: CommitmentBucketRequest{
+				Start:           types.Bucket{Hour: 9, Minute: 0},
+				End:             types.Bucket{Hour: 10, Minute: 0},
+				Price:           validPrice,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(100),
+				OverageFactor:   lo.ToPtr(decimal.NewFromInt(1)),
+			},
+			wantErr: true, errSub: "overage_factor must be greater than 1.0",
+		},
+		{
+			name: "rejects missing commitment (filter-only bucket)",
+			req: CommitmentBucketRequest{
+				Start:         types.Bucket{Hour: 9, Minute: 0},
+				End:           types.Bucket{Hour: 10, Minute: 0},
+				Price:         validPrice,
+				OverageFactor: lo.ToPtr(decimal.NewFromFloat(1.5)),
+			},
+			wantErr: true, errSub: "commitment_type is required",
+		},
+		{
+			name: "rejects zero commitment value",
+			req: CommitmentBucketRequest{
+				Start:           types.Bucket{Hour: 9, Minute: 0},
+				End:             types.Bucket{Hour: 10, Minute: 0},
+				Price:           validPrice,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.Zero,
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+			},
+			wantErr: true, errSub: "commitment_value must be > 0",
 		},
 	}
 	for _, tt := range tests {

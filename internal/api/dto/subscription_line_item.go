@@ -97,13 +97,13 @@ type CreateSubscriptionLineItemRequest struct {
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal       `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal       `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType   `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal       `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                   `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                   `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod   `json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal          `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal          `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType      `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal          `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                      `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      bool                      `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod      `json:"commitment_duration,omitempty"`
 	CommitmentTimeBuckets   []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
@@ -585,10 +585,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		lineItem.CommitmentDuration = r.CommitmentDuration
 	}
 	if len(r.CommitmentTimeBuckets) > 0 {
-		// CommitmentTimeBuckets is intentionally left empty here; the service layer
-		// materializes buckets via resolveBucketPrices and assigns the result on
-		// the constructed line item.
-		lineItem.CommitmentTimeBuckets = types.TimeOfDayBuckets{}
+		// Build the domain buckets here (IDs + commitment fields); the service
+		// layer materializes a price per bucket and fills in the PriceIDs.
+		lineItem.CommitmentTimeBuckets = bucketRequestsToDomain(r.CommitmentTimeBuckets)
 	}
 
 	return lineItem
@@ -685,6 +684,34 @@ func (r CommitmentBucketRequest) Validate() error {
 		TrueUpEnabled:   r.TrueUpEnabled,
 	}
 	return tmp.Validate()
+}
+
+// ToTimeOfDayBucket maps the request to a domain bucket with a fresh server-assigned
+// ID and all commitment fields, but no PriceID — the service materializes the
+// bucket's price and fills in PriceID.
+func (r CommitmentBucketRequest) ToTimeOfDayBucket() types.TimeOfDayBucket {
+	return types.TimeOfDayBucket{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT_BUCKET),
+		Start:           r.Start,
+		End:             r.End,
+		CommitmentType:  r.CommitmentType,
+		CommitmentValue: r.CommitmentValue,
+		OverageFactor:   r.OverageFactor,
+		TrueUpEnabled:   r.TrueUpEnabled,
+	}
+}
+
+// bucketRequestsToDomain maps a slice of bucket requests to domain buckets
+// (preserving order) so the service can fill in PriceIDs positionally.
+func bucketRequestsToDomain(reqs []CommitmentBucketRequest) types.TimeOfDayBuckets {
+	if len(reqs) == 0 {
+		return types.TimeOfDayBuckets{}
+	}
+	out := make(types.TimeOfDayBuckets, len(reqs))
+	for i, r := range reqs {
+		out[i] = r.ToTimeOfDayBucket()
+	}
+	return out
 }
 
 // validateTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59],
@@ -820,10 +847,9 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	}
 
 	if r.CommitmentTimeBuckets != nil {
-		// CommitmentTimeBuckets is intentionally left empty here; the service layer
-		// materializes buckets via resolveBucketPrices and assigns the result on
-		// the constructed line item. Task 10 will wire the update flow.
-		newLineItem.CommitmentTimeBuckets = types.TimeOfDayBuckets{}
+		// Replace-all: build fresh domain buckets (new IDs, empty PriceIDs); the
+		// service layer materializes a price per bucket and fills in the PriceIDs.
+		newLineItem.CommitmentTimeBuckets = bucketRequestsToDomain(*r.CommitmentTimeBuckets)
 	} else {
 		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets
 	}

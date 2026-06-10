@@ -113,9 +113,9 @@ func nextBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *ti
 }
 
 // windowSizeMinutes converts a meter aggregation BucketSize to minutes for
-// bucket alignment validation. Returns 0 for window sizes larger than 1 hour,
-// which causes ValidateWindowAlignment to reject any buckets (because buckets
-// require a sub-hourly or hourly meter).
+// bucket alignment validation. Time-of-day buckets live within a single day, so
+// any window up to a day (1440 min) is supported. Window sizes larger than a day
+// (week, month) return 0, which causes ValidateWindowAlignment to reject buckets.
 func windowSizeMinutes(w types.WindowSize) int {
 	switch w {
 	case types.WindowSizeMinute:
@@ -126,6 +126,14 @@ func windowSizeMinutes(w types.WindowSize) int {
 		return 30
 	case types.WindowSizeHour:
 		return 60
+	case types.WindowSize3Hour:
+		return 180
+	case types.WindowSize6Hour:
+		return 360
+	case types.WindowSize12Hour:
+		return 720
+	case types.WindowSizeDay:
+		return 1440
 	default:
 		return 0
 	}
@@ -291,11 +299,10 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	return c.applyWindowCommitmentPerBucket(ctx, lineItem, bucketedValues, bucketStarts, priceObj)
 }
 
-// applyWindowCommitmentLegacy is the original applyWindowCommitmentToLineItem body,
-// renamed verbatim. Applies a single commitment (the line item's top-level fields)
-// to every in-bucket window. Out-of-bucket windows (when time buckets are configured
-// and bucketStarts is provided) are billed at base usage rate with no commitment
-// adjustment.
+// applyWindowCommitmentLegacy applies the line item's top-level commitment to
+// every window independently (per-window true-up / overage). It is used for
+// windowed commitment WITHOUT per-bucket pricing; line items that configure
+// buckets are routed to applyWindowCommitmentPerBucket instead.
 func (c *commitmentCalculator) applyWindowCommitmentLegacy(
 	ctx context.Context,
 	lineItem *subscription.SubscriptionLineItem,
@@ -337,20 +344,12 @@ func (c *commitmentCalculator) applyWindowCommitmentLegacy(
 	windowsWithOverage := 0
 	windowsWithTrueUp := 0
 
-	// Time-of-day filter applies only when the line item has buckets configured
-	// AND the caller provided per-window timestamps to check against.
-	hasTimeBuckets := lineItem.HasCommitmentTimeBuckets() && bucketStarts != nil
-
-	// Process each window independently
-	for i, bucketValue := range bucketedValues {
+	// Process each window independently. This path handles windowed commitment
+	// WITHOUT per-bucket pricing; line items that configure buckets are routed to
+	// applyWindowCommitmentPerBucket by the dispatcher.
+	for _, bucketValue := range bucketedValues {
 		// Calculate cost for this window
 		windowCost := c.priceService.CalculateCost(ctx, priceObj, bucketValue)
-
-		// Out-of-bucket windows: bill at base usage rate, no commitment logic.
-		if hasTimeBuckets && !lineItem.CommitmentTimeBuckets.ContainsTime(bucketStarts[i]) {
-			totalCharge = totalCharge.Add(windowCost)
-			continue
-		}
 
 		var windowCharge decimal.Decimal
 
@@ -446,7 +445,7 @@ func (c *commitmentCalculator) applyWindowCommitmentPerBucket(
 	}
 
 	for idx, usage := range perBucketUsage {
-		parts, err := c.chargeBucketUsage(ctx, buckets[idx], lineItemPrice, usage)
+		parts, err := c.chargeBucketUsage(ctx, buckets[idx], usage)
 		if err != nil {
 			return decimal.Zero, nil, err
 		}
@@ -485,29 +484,24 @@ func (c *commitmentCalculator) chargeOutOfBucketUsage(
 }
 
 // chargeBucketUsage bills usage that fell inside a single bucket using that
-// bucket's own commitment + price. It degrades gracefully so mixed bucket
-// shapes never hard-fail: a bucket without its own price falls back to the line
-// item price, and a bucket without commitment is billed at base usage only.
+// bucket's own commitment + price. Every bucket is materialized with a price and
+// a commitment, so a missing PriceID or commitment type is a data invariant
+// violation (system error) rather than a supported fallback.
 func (c *commitmentCalculator) chargeBucketUsage(
 	ctx context.Context,
 	b types.TimeOfDayBucket,
-	lineItemPrice *price.Price,
 	usage decimal.Decimal,
 ) (commitmentParts, error) {
-	bucketPrice := lineItemPrice
-	if b.PriceID != "" {
-		bp, err := c.fetchPriceByID(ctx, b.PriceID)
-		if err != nil {
-			return commitmentParts{}, err
-		}
-		bucketPrice = bp
+	if b.PriceID == "" {
+		return commitmentParts{}, ierr.NewError("bucket is missing its price").
+			WithHint("Every commitment time bucket must be materialized with a price").
+			Mark(ierr.ErrSystem)
+	}
+	bucketPrice, err := c.fetchPriceByID(ctx, b.PriceID)
+	if err != nil {
+		return commitmentParts{}, err
 	}
 	baseCharge := c.chargeAtQty(ctx, bucketPrice, usage)
-
-	if !b.HasCommitment() {
-		// Filter-only bucket: no commitment math, charge base usage.
-		return commitmentParts{charge: baseCharge, utilized: baseCharge}, nil
-	}
 
 	of := lo.FromPtr(b.OverageFactor)
 	switch b.CommitmentType {

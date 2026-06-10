@@ -46,13 +46,12 @@ func (b Bucket) MinuteOfDay() int {
 	return b.Hour*60 + b.Minute
 }
 
-// TimeOfDayBucket defines a [Start, End) half-open range within a UTC day and,
-// optionally, a per-bucket commitment + base price.
+// TimeOfDayBucket defines a [Start, End) half-open range within a UTC day with
+// its own commitment + base price. The bucket overrides the line item's
+// price/commitment for any window whose start falls inside [Start, End).
 //
-// When ID + PriceID + CommitmentValue are set the bucket overrides the line
-// item's price/commitment for any window whose start falls inside [Start, End).
-// When unset (legacy shape) the bucket is treated as a time-of-day filter only
-// and the line item's price/commitment apply.
+// Every bucket must carry a commitment (type + value) and a price — filter-only
+// buckets are not supported.
 type TimeOfDayBucket struct {
 	// ID is server-assigned. Stable for the lifetime of the line item;
 	// invoice breakdown and analytics responses reference this ID.
@@ -70,8 +69,8 @@ type TimeOfDayBucket struct {
 	TrueUpEnabled   bool             `json:"true_up_enabled,omitempty"`
 }
 
-// HasCommitment reports whether the bucket carries its own commitment config
-// (as opposed to a legacy time-of-day-filter-only bucket).
+// HasCommitment reports whether the bucket carries a valid commitment config.
+// Valid buckets always do; this is a defensive guard for the billing path.
 func (b TimeOfDayBucket) HasCommitment() bool {
 	return b.CommitmentType != "" && b.CommitmentValue.GreaterThan(decimal.Zero)
 }
@@ -110,6 +109,9 @@ func (bs TimeOfDayBuckets) ContainsTime(t time.Time) bool {
 // Validate reports per-field issues with the bucket. It does NOT enforce
 // array-level invariants (overlap, window alignment) — those live in the
 // commitment_bucket_validation file and require external context.
+//
+// Every bucket must carry a commitment (type + value > 0) and an overage factor
+// greater than 1.0 — filter-only buckets are not supported.
 func (b TimeOfDayBucket) Validate() error {
 	// Start/End point sanity is enforced by the DTO layer (validateBucketPoint),
 	// but we still need start != end at the type level.
@@ -118,39 +120,26 @@ func (b TimeOfDayBucket) Validate() error {
 			WithHint("Empty buckets are not allowed").
 			Mark(ierr.ErrValidation)
 	}
-	if b.CommitmentType != "" && !b.CommitmentType.Validate() {
-		return ierr.NewError("invalid commitment_type").
-			WithHint(`commitment_type must be "amount" or "quantity"`).
+	if b.CommitmentType == "" || !b.CommitmentType.Validate() {
+		return ierr.NewError("commitment_type is required").
+			WithHint(`Set commitment_type to "amount" or "quantity" on every bucket`).
 			Mark(ierr.ErrValidation)
 	}
-	if b.CommitmentValue.LessThan(decimal.Zero) {
-		return ierr.NewError("commitment_value must be >= 0").
-			WithHint("Provide a non-negative decimal value for commitment_value").
+	if !b.CommitmentValue.GreaterThan(decimal.Zero) {
+		return ierr.NewError("commitment_value must be > 0").
+			WithHint("Provide a positive decimal value for commitment_value").
 			Mark(ierr.ErrValidation)
 	}
-	// Reject partial commitment shapes: type and value must be set together, or
-	// both omitted (legacy filter-only bucket). A half-set bucket would silently
-	// fall through to legacy behavior, which is surprising.
-	hasType := b.CommitmentType != ""
-	hasValue := b.CommitmentValue.GreaterThan(decimal.Zero)
-	if hasType && !hasValue {
-		return ierr.NewError("commitment_value must be > 0 when commitment_type is set").
-			WithHint("Set commitment_value > 0, or clear commitment_type for a filter-only bucket").
+	// Overage factor is required and must be a premium over the committed rate,
+	// matching the line-item rule.
+	if b.OverageFactor == nil {
+		return ierr.NewError("overage_factor is required").
+			WithHint("Specify an overage_factor greater than 1.0 on every bucket").
 			Mark(ierr.ErrValidation)
 	}
-	if !hasType && hasValue {
-		return ierr.NewError("commitment_type is required when commitment_value is set").
-			WithHint(`Set commitment_type to "amount" or "quantity"`).
-			Mark(ierr.ErrValidation)
-	}
-	if b.OverageFactor != nil && b.OverageFactor.LessThan(decimal.Zero) {
-		return ierr.NewError("overage_factor must be >= 0").
-			WithHint("Provide a non-negative decimal value for overage_factor").
-			Mark(ierr.ErrValidation)
-	}
-	if b.TrueUpEnabled && !b.CommitmentValue.GreaterThan(decimal.Zero) {
-		return ierr.NewError("true_up_enabled requires commitment_value > 0").
-			WithHint("Enable true-up only when commitment_value > 0").
+	if b.OverageFactor.LessThanOrEqual(decimal.NewFromInt(1)) {
+		return ierr.NewError("overage_factor must be greater than 1.0").
+			WithHint("Overage factor determines the multiplier for usage beyond the bucket commitment").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

@@ -68,14 +68,16 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		// and stable UUIDs) onto the line item. This must happen inside the
 		// transaction so that any created prices are rolled back on failure.
 		if len(resolvedReq.CommitmentTimeBuckets) > 0 {
-			buckets, bucketErr := s.resolveBucketPrices(txCtx, subscriptionID, resolvedReq.CommitmentTimeBuckets)
-			if bucketErr != nil {
-				return bucketErr
-			}
-			if err := s.validateBucketArray(txCtx, subscriptionID, lineItem.MeterID, lineItem.CommitmentWindowed, buckets); err != nil {
+			// ToSubscriptionLineItem already built lineItem.CommitmentTimeBuckets
+			// (IDs + commitment fields, empty PriceID); create a SUBSCRIPTION-scoped
+			// price per bucket and fill in the PriceIDs.
+			if err := s.materializeBucketPrices(txCtx, subscriptionID, resolvedReq.CommitmentTimeBuckets, lineItem.CommitmentTimeBuckets); err != nil {
 				return err
 			}
-			lineItem.CommitmentTimeBuckets = buckets
+			_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
+			if err := s.validateBucketArray(txCtx, lineItem.MeterID, lineItem.CommitmentWindowed, hasCumulative, lineItem.CommitmentTimeBuckets); err != nil {
+				return err
+			}
 		}
 
 		if types.BillingPeriodGreaterThan(sub.BillingPeriod, lineItem.BillingPeriod) {
@@ -498,27 +500,24 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			newLineItem.StartDate = endDate // Start where the old one ends
 
 			// Materialize bucket prices when the update request carries
-			// commitment_time_buckets. Because CommitmentBucketRequest carries no
-			// stable identifier, we use replace-all semantics: every bucket in the
-			// request gets a fresh SUBSCRIPTION-scoped Price and a new UUID. The
-			// old bucket prices (from the terminated line item) are left intact in
-			// the price table — they may still be referenced by historical invoices.
+			// commitment_time_buckets (replace-all semantics): ToSubscriptionLineItem
+			// rebuilt newLineItem.CommitmentTimeBuckets from the request (fresh IDs,
+			// empty PriceIDs); we create a fresh SUBSCRIPTION-scoped price per bucket
+			// and fill in the PriceIDs. The old bucket prices (from the terminated
+			// line item) are left intact — they may still be referenced by historical
+			// invoices.
 			//
 			// Omitting commitment_time_buckets (nil pointer) inherits the existing
 			// line item's buckets (copied by ToSubscriptionLineItem); supplying an
 			// explicit empty slice clears them.
 			if req.CommitmentTimeBuckets != nil {
-				buckets, bucketErr := s.resolveBucketPrices(ctx, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets)
-				if bucketErr != nil {
-					return bucketErr
-				}
-				if buckets == nil {
-					buckets = types.TimeOfDayBuckets{}
-				}
-				if err := s.validateBucketArray(ctx, existingLineItem.SubscriptionID, newLineItem.MeterID, newLineItem.CommitmentWindowed, buckets); err != nil {
+				if err := s.materializeBucketPrices(ctx, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets); err != nil {
 					return err
 				}
-				newLineItem.CommitmentTimeBuckets = buckets
+				_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
+				if err := s.validateBucketArray(ctx, newLineItem.MeterID, newLineItem.CommitmentWindowed, hasCumulative, newLineItem.CommitmentTimeBuckets); err != nil {
+					return err
+				}
 			}
 
 			// Validate line item commitment if configured
@@ -718,9 +717,11 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 }
 
 // applyLineItemCommitmentFromMap applies commitment config (keyed by price_id) onto a line item
-// and validates the resulting commitment configuration.
+// and validates the resulting commitment configuration. When the config carries
+// per-bucket commitments, a SUBSCRIPTION-scoped price is materialized per bucket.
 func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	ctx context.Context,
+	sub *subscription.Subscription,
 	lineItem *subscription.SubscriptionLineItem,
 	commitments map[string]*dto.LineItemCommitmentConfig,
 ) error {
@@ -755,10 +756,16 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 		lineItem.CommitmentDuration = cfg.CommitmentDuration
 	}
 	if len(cfg.CommitmentTimeBuckets) > 0 {
-		// Copy to avoid aliasing the config's backing array — mutations to cfg
-		// after this point must not bleed into the domain object.
-		buckets := make(types.TimeOfDayBuckets, len(cfg.CommitmentTimeBuckets))
-		copy(buckets, cfg.CommitmentTimeBuckets)
+		// Build domain buckets (IDs + commitment fields), then materialize a
+		// SUBSCRIPTION-scoped price per bucket and validate the array.
+		buckets := cfg.ToDomainBuckets()
+		if err := s.materializeBucketPrices(ctx, sub.ID, cfg.CommitmentTimeBuckets, buckets); err != nil {
+			return err
+		}
+		_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
+		if err := s.validateBucketArray(ctx, lineItem.MeterID, lineItem.CommitmentWindowed, hasCumulative, buckets); err != nil {
+			return err
+		}
 		lineItem.CommitmentTimeBuckets = buckets
 	}
 	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
@@ -880,9 +887,10 @@ func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscriptio
 // When meterID is empty (e.g. line items not tied to a meter), the alignment
 // check is skipped — overlap still runs.
 //
-// When the parent subscription has a cumulative commitment (CommitmentDuration
-// != nil and != BillingPeriod), per-bucket commitments are rejected because the
-// two models are incompatible.
+// hasCumulativeCommitment is computed by the caller (which already holds the
+// subscription) and, when true, rejects per-bucket commitments because the two
+// models are incompatible. Keeping the lookup out of this method leaves it
+// focused on array-level validation only.
 //
 // commitmentWindowed is the line item's *effective* windowed flag (after merging
 // request + inherited values on update). Buckets only bill via the windowed path,
@@ -890,9 +898,9 @@ func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscriptio
 // by the DTO layer, which can only cross-check both fields when supplied together.
 func (s *subscriptionService) validateBucketArray(
 	ctx context.Context,
-	subscriptionID string,
 	meterID string,
 	commitmentWindowed bool,
+	hasCumulativeCommitment bool,
 	buckets types.TimeOfDayBuckets,
 ) error {
 	if len(buckets) == 0 {
@@ -901,6 +909,11 @@ func (s *subscriptionService) validateBucketArray(
 	if !commitmentWindowed {
 		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
 			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+	if hasCumulativeCommitment {
+		return ierr.NewError("per-bucket commitment cannot be combined with cumulative subscription commitment").
+			WithHint("Pick one model: per-bucket OR cumulative.").
 			Mark(ierr.ErrValidation)
 	}
 	if err := buckets.ValidateNoOverlap(); err != nil {
@@ -915,38 +928,34 @@ func (s *subscriptionService) validateBucketArray(
 			return err
 		}
 	}
-	// Cumulative-subscription-commitment guard: per-bucket commitments cannot
-	// coexist with a cumulative subscription commitment.
-	sub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
-		return err
-	}
-	if _, _, ok := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart); ok {
-		return ierr.NewError("per-bucket commitment cannot be combined with cumulative subscription commitment").
-			WithHint("Pick one model: per-bucket OR cumulative.").
-			Mark(ierr.ErrValidation)
-	}
 	return nil
 }
 
-// resolveBucketPrices creates a SUBSCRIPTION-scoped price for each bucket and
-// returns the materialized types.TimeOfDayBuckets ready to persist on the line
-// item. Each bucket gets a stable UUID id.
+// materializeBucketPrices creates a SUBSCRIPTION-scoped price for each bucket
+// request and writes the resulting PriceID onto the matching domain bucket.
+// reqs and buckets are positionally aligned: the DTO layer builds buckets (ID +
+// commitment fields, empty PriceID) and the service fills in the price here.
 //
 // On error, callers must rely on the surrounding transaction to roll back any
 // prices already created.
-func (s *subscriptionService) resolveBucketPrices(
+func (s *subscriptionService) materializeBucketPrices(
 	ctx context.Context,
 	subscriptionID string,
 	reqs []dto.CommitmentBucketRequest,
-) (types.TimeOfDayBuckets, error) {
-	if len(reqs) == 0 {
-		return nil, nil
+	buckets types.TimeOfDayBuckets,
+) error {
+	if len(reqs) != len(buckets) {
+		return ierr.NewError("bucket request/domain length mismatch").
+			WithHint("Each commitment bucket request must map to exactly one domain bucket").
+			WithReportableDetails(map[string]interface{}{
+				"requests": len(reqs),
+				"buckets":  len(buckets),
+			}).
+			Mark(ierr.ErrSystem)
 	}
 	priceService := NewPriceService(s.ServiceParams)
-	out := make(types.TimeOfDayBuckets, 0, len(reqs))
-	for i, r := range reqs {
-		priceReq := r.Price
+	for i := range reqs {
+		priceReq := reqs[i].Price
 		priceReq.EntityType = types.PRICE_ENTITY_TYPE_SUBSCRIPTION
 		priceReq.EntityID = subscriptionID
 		priceReq.SkipEntityValidation = true
@@ -960,24 +969,14 @@ func (s *subscriptionService) resolveBucketPrices(
 			if ierr.IsValidation(err) {
 				mark = ierr.ErrValidation
 			}
-			return nil, ierr.WithError(err).
+			return ierr.WithError(err).
 				WithHint("Inline bucket price creation failed").
 				WithReportableDetails(map[string]interface{}{"bucket_index": i}).
 				Mark(mark)
 		}
-
-		out = append(out, types.TimeOfDayBucket{
-			ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT_BUCKET),
-			Start:           r.Start,
-			End:             r.End,
-			PriceID:         resp.ID,
-			CommitmentType:  r.CommitmentType,
-			CommitmentValue: r.CommitmentValue,
-			OverageFactor:   r.OverageFactor,
-			TrueUpEnabled:   r.TrueUpEnabled,
-		})
+		buckets[i].PriceID = resp.ID
 	}
-	return out, nil
+	return nil
 }
 
 // validateSubscriptionLevelCommitment validates that subscription and line items don't both have commitment

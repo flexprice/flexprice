@@ -212,7 +212,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 
 		// Apply commitment configuration if provided for this price
-		if err := s.applyLineItemCommitmentFromMap(ctx, item, req.LineItemCommitments); err != nil {
+		if err := s.applyLineItemCommitmentFromMap(ctx, sub, item, req.LineItemCommitments); err != nil {
 			return nil, err
 		}
 
@@ -4371,7 +4371,7 @@ func (s *subscriptionService) addAddonToSubscription(
 			lineItem.EndDate = onetimePeriodEnd
 		}
 
-		if err := s.applyLineItemCommitmentFromMap(ctx, lineItem, req.LineItemCommitments); err != nil {
+		if err := s.applyLineItemCommitmentFromMap(ctx, sub, lineItem, req.LineItemCommitments); err != nil {
 			return nil, err
 		}
 		lineItems = append(lineItems, lineItem)

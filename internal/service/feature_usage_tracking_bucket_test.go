@@ -92,7 +92,6 @@ func buildHourlyPoints(baseDate time.Time) []dto.UsageAnalyticPoint {
 //   - Points outside the bucket receive empty BucketID/PriceID.
 func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 	ctx := context.Background()
-	svc := &featureUsageTrackingService{}
 
 	bucketID := "bkt_0001"
 	bucketPriceID := "price_bucket"
@@ -149,7 +148,7 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 	}
 
 	// Build bucket summaries from the stamped points.
-	summaries := svc.buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
+	summaries := buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
 
 	// Expect 2 summaries: one for the bucket, one out-of-bucket.
 	require.Len(t, summaries, 2, "expected one bucket summary + one out-of-bucket summary")
@@ -177,7 +176,6 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 // Expected: utilized=$50, overage=$110 (overageCharge = ($160-$50)*1 = $110), trueUp=0.
 func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 	ctx := context.Background()
-	svc := &featureUsageTrackingService{}
 
 	commitment := decimal.NewFromInt(50)
 	overageFactor := decimal.NewFromInt(1)
@@ -222,7 +220,7 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 		}
 	}
 
-	summaries := svc.buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
+	summaries := buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
 	require.Len(t, summaries, 2)
 
 	bucketSummary := summaries[0]
@@ -245,7 +243,6 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 // emitted without BucketID and no BucketSummaries are appended.
 func TestAnalytics_BreakdownBucketFlag_NoLineItem(t *testing.T) {
 	ctx := context.Background()
-	svc := &featureUsageTrackingService{}
 
 	// Line item WITHOUT CommitmentTimeBuckets.
 	lineItem := &subscriptionDomain.SubscriptionLineItem{
@@ -277,7 +274,7 @@ func TestAnalytics_BreakdownBucketFlag_NoLineItem(t *testing.T) {
 	// When lineItemForBucket is nil (no buckets), buildBucketSummaries is not called.
 	// Verify it would not panic if called with an empty bucket slice by passing a
 	// line item with empty CommitmentTimeBuckets explicitly.
-	summaries := svc.buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
+	summaries := buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
 	// No defined buckets => only the out-of-bucket summary row.
 	require.Len(t, summaries, 1, "expect only out-of-bucket summary when no buckets defined")
 	assert.Empty(t, summaries[0].BucketID)

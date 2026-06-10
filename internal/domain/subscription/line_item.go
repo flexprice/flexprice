@@ -83,26 +83,9 @@ func (li *SubscriptionLineItem) IsOneTime() bool {
 	return li.BillingPeriod == types.BILLING_PERIOD_ONETIME
 }
 
-// HasCommitmentTimeBuckets returns true when time-of-day filtering is configured.
+// HasCommitmentTimeBuckets returns true when per-bucket commitments are configured.
 func (li *SubscriptionLineItem) HasCommitmentTimeBuckets() bool {
 	return len(li.CommitmentTimeBuckets) > 0
-}
-
-// HasMaterializedBuckets reports whether every configured bucket carries a
-// server-assigned ID (i.e. was materialized via resolveBucketPrices). Legacy
-// filter-only buckets have empty IDs, which would collide with the
-// out-of-bucket sentinel ("") during per-point attribution and bucket
-// summaries — callers use this to gate bucket-level breakdown.
-func (li *SubscriptionLineItem) HasMaterializedBuckets() bool {
-	if len(li.CommitmentTimeBuckets) == 0 {
-		return false
-	}
-	for _, b := range li.CommitmentTimeBuckets {
-		if b.ID == "" {
-			return false
-		}
-	}
-	return true
 }
 
 // HasCommitment returns true if the line item has commitment configured

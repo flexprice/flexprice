@@ -207,11 +207,18 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	}
 	sub.LineItems = lineItems
 
-	// 5. Collect usage line items and fetch prices with meter expansion
+	// 5. Collect usage line items and fetch prices with meter expansion.
+	// Per-bucket prices are referenced only from CommitmentTimeBuckets, so collect
+	// them too — otherwise bucket summaries would under-report charges as zero.
 	priceIDs := make([]string, 0, len(lineItems))
 	for _, item := range lineItems {
 		if item.PriceType == types.PRICE_TYPE_USAGE && item.MeterID != "" {
 			priceIDs = append(priceIDs, item.PriceID)
+		}
+		for _, b := range item.CommitmentTimeBuckets {
+			if b.PriceID != "" {
+				priceIDs = append(priceIDs, b.PriceID)
+			}
 		}
 	}
 
@@ -825,7 +832,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
 	// Convert to response DTO
-	return s.toUsageAnalyticsResponseDTO(data, data.Meters, params), nil
+	return s.toUsageAnalyticsResponseDTO(ctx, data, data.Meters, params), nil
 }
 
 // mergeSubscriptionUsagesToAnalyticsData converts N SubscriptionMeterUsage results
@@ -1268,7 +1275,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
 	// Convert to response DTO (no cost calculation without subscription context)
-	return s.toUsageAnalyticsResponseDTO(data, meterMap, params), nil
+	return s.toUsageAnalyticsResponseDTO(ctx, data, meterMap, params), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1286,6 +1293,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 //   - Honors params.Expand to attach Price/Meter/Feature/SubscriptionLineItem/Plan/Addon
 //     objects, and treats Sources as expand-driven (expand=source).
 func (s *meterUsageService) toUsageAnalyticsResponseDTO(
+	ctx context.Context,
 	data *AnalyticsData,
 	meterMap map[string]*meter.Meter,
 	params *events.MeterUsageDetailedAnalyticsParams,
@@ -1415,8 +1423,17 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 		// Points are computed internally for bucketed cost calc regardless of request;
 		// only expose them when the caller asked for a window_size (mirrors feature_usage).
 		if params.WindowSize != "" {
+			// Resolve the line item for bucket attribution (nil when no buckets).
+			var lineItemForBucket *subscription.SubscriptionLineItem
+			if params.BreakdownBucket && analytic.SubLineItemID != "" {
+				lineItemForBucket = data.SubscriptionLineItems[analytic.SubLineItemID]
+				if lineItemForBucket != nil && !lineItemForBucket.HasCommitmentTimeBuckets() {
+					lineItemForBucket = nil
+				}
+			}
+
 			for _, point := range analytic.Points {
-				item.Points = append(item.Points, dto.UsageAnalyticPoint{
+				dtoPoint := dto.UsageAnalyticPoint{
 					Timestamp:                        point.Timestamp,
 					Usage:                            point.Usage,
 					Cost:                             point.Cost,
@@ -1424,7 +1441,21 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
 					ComputedOverageAmount:            point.ComputedOverageAmount,
 					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
-				})
+				}
+				// Per-point bucket identity.
+				if lineItemForBucket != nil {
+					if idx := bucketIndexAtWindowStart(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp); idx >= 0 {
+						dtoPoint.BucketID = lineItemForBucket.CommitmentTimeBuckets[idx].ID
+						dtoPoint.PriceID = lineItemForBucket.CommitmentTimeBuckets[idx].PriceID
+					}
+				}
+				item.Points = append(item.Points, dtoPoint)
+			}
+
+			// Bucket-level summaries.
+			if lineItemForBucket != nil {
+				priceService := NewPriceService(s.ServiceParams)
+				item.BucketSummaries = buildBucketSummaries(ctx, priceService, item.Points, lineItemForBucket, data)
 			}
 		}
 

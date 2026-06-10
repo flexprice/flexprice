@@ -101,26 +101,18 @@ type LineItemCommitmentConfig struct {
 	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
-	// CommitmentTimeBuckets restricts commitment treatment to windows whose start
-	// UTC hour falls within one of the configured buckets. Empty/omitted = no
-	// restriction (commitment applies 24/7). Requires IsWindowCommitment=true.
-	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	// CommitmentTimeBuckets defines per-bucket commitment + inline price for
+	// windows whose start UTC hour falls within each configured bucket. Each
+	// bucket carries its own price (materialized by the service). Requires
+	// IsWindowCommitment=true.
+	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
-// validateDomainTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59]
-// for domain-level types.TimeOfDayBuckets (used by LineItemCommitmentConfig which
-// references prices by ID rather than inline). For the DTO-level []CommitmentBucketRequest
-// variant, see validateTimeOfDayBuckets in subscription_line_item.go.
-func validateDomainTimeOfDayBuckets(buckets types.TimeOfDayBuckets) error {
-	for i, b := range buckets {
-		if err := validateBucketPoint(b.Start, i); err != nil {
-			return err
-		}
-		if err := validateBucketPoint(b.End, i); err != nil {
-			return err
-		}
-	}
-	return nil
+// ToDomainBuckets maps the config's bucket requests to domain buckets (IDs +
+// commitment fields, empty PriceIDs); the service materializes a price per
+// bucket and fills in the PriceIDs.
+func (c *LineItemCommitmentConfig) ToDomainBuckets() types.TimeOfDayBuckets {
+	return bucketRequestsToDomain(c.CommitmentTimeBuckets)
 }
 
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.
@@ -264,7 +256,7 @@ func (c *LineItemCommitmentConfig) Validate() error {
 				WithHint("Set is_window_commitment=true to apply commitment only during the configured hours").
 				Mark(ierr.ErrValidation)
 		}
-		if err := validateDomainTimeOfDayBuckets(c.CommitmentTimeBuckets); err != nil {
+		if err := validateTimeOfDayBuckets(c.CommitmentTimeBuckets); err != nil {
 			return err
 		}
 	}

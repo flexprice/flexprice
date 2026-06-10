@@ -886,10 +886,10 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_WithBucke
 	s.Equal(bucket.PriceID, persisted.CommitmentTimeBuckets[0].PriceID)
 }
 
-// TestResolveBucketPrices_CreatesSubscriptionPriceAndAssignsID verifies that
-// resolveBucketPrices creates a SUBSCRIPTION-scoped Price for each bucket and
-// populates the resulting TimeOfDayBuckets with the created price's ID.
-func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_CreatesSubscriptionPriceAndAssignsID() {
+// TestMaterializeBucketPrices_CreatesSubscriptionPriceAndAssignsID verifies that
+// materializeBucketPrices creates a SUBSCRIPTION-scoped Price for each bucket and
+// fills in the created price's ID on the (DTO-built) domain buckets.
+func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_CreatesSubscriptionPriceAndAssignsID() {
 	ctx := s.GetContext()
 
 	// Access the concrete *subscriptionService so we can call the unexported helper.
@@ -900,16 +900,16 @@ func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_CreatesSubscr
 			Start: types.Bucket{Hour: 9, Minute: 0},
 			End:   types.Bucket{Hour: 17, Minute: 0},
 			Price: dto.CreatePriceRequest{
-				Amount:             lo.ToPtr(decimal.NewFromInt(10)),
-				Currency:           "usd",
-				EntityType:         types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
-				EntityID:           s.testData.subscription.ID,
-				Type:               types.PRICE_TYPE_FIXED,
-				PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
-				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-				BillingPeriodCount: 1,
-				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				Amount:               lo.ToPtr(decimal.NewFromInt(10)),
+				Currency:             "usd",
+				EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+				EntityID:             s.testData.subscription.ID,
+				Type:                 types.PRICE_TYPE_FIXED,
+				PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+				BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount:   1,
+				BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+				InvoiceCadence:       types.InvoiceCadenceAdvance,
 				SkipEntityValidation: true,
 			},
 			CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
@@ -919,13 +919,19 @@ func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_CreatesSubscr
 		},
 	}
 
-	out, err := concreteSvc.resolveBucketPrices(ctx, s.testData.subscription.ID, reqs)
+	// DTO builds the domain buckets (IDs + commitment fields, empty PriceIDs).
+	buckets := make(types.TimeOfDayBuckets, len(reqs))
+	for i, r := range reqs {
+		buckets[i] = r.ToTimeOfDayBucket()
+	}
+
+	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets)
 	s.NoError(err)
-	s.Require().Len(out, 1)
+	s.Require().Len(buckets, 1)
 
-	bucket := out[0]
+	bucket := buckets[0]
 
-	// ID should be a non-empty UUID assigned by the helper.
+	// ID should be a non-empty UUID assigned by the DTO converter.
 	s.NotEmpty(bucket.ID)
 
 	// PriceID should reference the newly created price.
@@ -947,22 +953,20 @@ func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_CreatesSubscr
 	s.True(bucket.TrueUpEnabled)
 }
 
-// TestResolveBucketPrices_EmptySlice returns nil, nil without error.
-func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_EmptySlice() {
+// TestMaterializeBucketPrices_EmptySlice is a no-op without error.
+func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_EmptySlice() {
 	ctx := s.GetContext()
 	concreteSvc := s.service.(*subscriptionService)
 
-	out, err := concreteSvc.resolveBucketPrices(ctx, s.testData.subscription.ID, nil)
+	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, nil, types.TimeOfDayBuckets{})
 	s.NoError(err)
-	s.Nil(out)
 
-	out2, err2 := concreteSvc.resolveBucketPrices(ctx, s.testData.subscription.ID, []dto.CommitmentBucketRequest{})
+	err2 := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, []dto.CommitmentBucketRequest{}, types.TimeOfDayBuckets{})
 	s.NoError(err2)
-	s.Nil(out2)
 }
 
-// TestResolveBucketPrices_MultipleBuckets verifies that each bucket gets its own price and a distinct UUID.
-func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_MultipleBuckets() {
+// TestMaterializeBucketPrices_MultipleBuckets verifies that each bucket gets its own price and a distinct UUID.
+func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_MultipleBuckets() {
 	ctx := s.GetContext()
 	concreteSvc := s.service.(*subscriptionService)
 
@@ -996,14 +1000,19 @@ func (s *SubscriptionLineItemServiceSuite) TestResolveBucketPrices_MultipleBucke
 		makeBucketReq(16, 24, "bucket_multi_test_3"),
 	}
 
-	out, err := concreteSvc.resolveBucketPrices(ctx, s.testData.subscription.ID, reqs)
+	buckets := make(types.TimeOfDayBuckets, len(reqs))
+	for i, r := range reqs {
+		buckets[i] = r.ToTimeOfDayBucket()
+	}
+
+	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets)
 	s.NoError(err)
-	s.Require().Len(out, 3)
+	s.Require().Len(buckets, 3)
 
 	// All bucket IDs must be distinct.
 	ids := map[string]bool{}
 	priceIDs := map[string]bool{}
-	for _, b := range out {
+	for _, b := range buckets {
 		s.NotEmpty(b.ID)
 		s.NotEmpty(b.PriceID)
 		s.False(ids[b.ID], "bucket ID must be unique: %s", b.ID)

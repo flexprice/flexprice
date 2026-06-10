@@ -116,10 +116,26 @@ func TestTimeOfDayBuckets_ValidateWindowAlignment(t *testing.T) {
 			wantErr:   true, errSub: "alignment",
 		},
 		{
-			name:      "window > 60 min rejected",
+			name:      "3h window, 3h-aligned bucket accepted",
 			buckets:   TimeOfDayBuckets{{Start: Bucket{9, 0}, End: Bucket{12, 0}}},
 			windowMin: 180,
-			wantErr:   true, errSub: "60",
+		},
+		{
+			name:      "3h window, misaligned start rejected",
+			buckets:   TimeOfDayBuckets{{Start: Bucket{10, 0}, End: Bucket{13, 0}}},
+			windowMin: 180,
+			wantErr:   true, errSub: "alignment",
+		},
+		{
+			name:      "day window, whole-day bucket accepted",
+			buckets:   TimeOfDayBuckets{{Start: Bucket{0, 0}, End: Bucket{24, 0}}},
+			windowMin: 1440,
+		},
+		{
+			name:      "window > 1 day rejected",
+			buckets:   TimeOfDayBuckets{{Start: Bucket{0, 0}, End: Bucket{24, 0}}},
+			windowMin: 10080,
+			wantErr:   true, errSub: "1 day",
 		},
 		{
 			name:      "non-windowed (0) rejected when buckets present",
