@@ -52,12 +52,16 @@ func (t Target) label() string {
 }
 
 // maskedKey returns the API key with the middle redacted for display.
+// Always masks, regardless of length, to avoid leaking secrets in logs.
 func (t Target) maskedKey() string {
 	k := t.APIKey
-	if len(k) > 12 {
-		return k[:8] + "..." + k[len(k)-4:]
+	if len(k) <= 4 {
+		return "***"
 	}
-	return k
+	if len(k) <= 12 {
+		return k[:2] + "..." + k[len(k)-2:]
+	}
+	return k[:8] + "..." + k[len(k)-4:]
 }
 
 // loadTargets resolves the list of targets to run, in priority order:
