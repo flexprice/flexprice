@@ -64,6 +64,7 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 		SetCreatedBy(t.CreatedBy).
 		SetTenantID(t.TenantID).
 		SetUpdatedBy(t.UpdatedBy).
+		SetStartDate(t.StartDate).
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -145,7 +146,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 	})
 	defer FinishSpan(span)
 
-	_, err := client.TaxAssociation.Update().
+	update := client.TaxAssociation.Update().
 		Where(
 			entTaxConfig.ID(t.ID),
 			entTaxConfig.TenantID(types.GetTenantID(ctx)),
@@ -156,8 +157,13 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 		SetAutoApply(t.AutoApply).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetMetadata(t.Metadata).
-		Save(ctx)
+		SetMetadata(t.Metadata)
+
+	if t.EndDate != nil {
+		update = update.SetEndDate(*t.EndDate)
+	}
+
+	_, err := update.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {

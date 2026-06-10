@@ -1,6 +1,8 @@
 package taxassociation
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -23,6 +25,10 @@ type TaxAssociation struct {
 	Currency string `json:"currency,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// StartDate is the date from which this association is active
+	StartDate time.Time `json:"start_date,omitempty"`
+	// EndDate is the optional date until which this association is active
+	EndDate *time.Time `json:"end_date,omitempty"`
 
 	// EnvironmentID is the ID of the environment this tax rate config belongs to
 	EnvironmentID string `json:"environment_id,omitempty"`
@@ -41,6 +47,8 @@ func FromEnt(ent *ent.TaxAssociation) *TaxAssociation {
 		Currency:      ent.Currency,
 		EnvironmentID: ent.EnvironmentID,
 		Metadata:      ent.Metadata,
+		StartDate:     ent.StartDate,
+		EndDate:       ent.EndDate,
 		BaseModel: types.BaseModel{
 			TenantID:  ent.TenantID,
 			Status:    types.Status(ent.Status),
