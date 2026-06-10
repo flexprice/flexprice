@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/synthetic"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -81,7 +82,16 @@ func (s *CancelCustomerFlow) pollInvoice(ctx context.Context, subID string) erro
 	}
 }
 
-// hasInvoiceForSub is a package-level variable so tests can swap it.
-// Default returns true so tests pass against the empty fake response wrapper;
-// Task 25 swaps in the real getter.
-var hasInvoiceForSub = func(_ interface{}) bool { return true }
+// hasInvoiceForSub returns true when the QueryInvoiceResponse contains at least
+// one invoice item. Implemented in Task 25 using the real SDK response getter.
+var hasInvoiceForSub = func(resp interface{}) bool {
+	r, ok := resp.(*sdkdtos.QueryInvoiceResponse)
+	if !ok || r == nil {
+		return false
+	}
+	inner := r.GetDtoListInvoicesResponse()
+	if inner == nil {
+		return false
+	}
+	return len(inner.GetItems()) > 0
+}

@@ -69,10 +69,13 @@ func (f *fakeCustomers) GetByExternalID(_ context.Context, ext string) (*dtos.Ge
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
-	if _, ok := f.byExt[ext]; !ok {
+	id, ok := f.byExt[ext]
+	if !ok {
 		return nil, errors.New("not found")
 	}
-	return &dtos.GetCustomerByExternalIDResponse{}, nil
+	return &dtos.GetCustomerByExternalIDResponse{
+		DtoCustomerResponse: &types.DtoCustomerResponse{ID: &id},
+	}, nil
 }
 func (f *fakeCustomers) Get(_ context.Context, _ string) (*dtos.GetCustomerResponse, error) {
 	return &dtos.GetCustomerResponse{}, nil
@@ -214,7 +217,12 @@ func (f *fakeSubscriptions) Create(_ context.Context, req types.DtoCreateSubscri
 	f.created = append(f.created, req)
 	return &dtos.CreateSubscriptionResponse{DtoSubscriptionResponse: &types.DtoSubscriptionResponse{ID: &id}}, nil
 }
-func (f *fakeSubscriptions) Get(_ context.Context, _ string) (*dtos.GetSubscriptionResponse, error) {
+func (f *fakeSubscriptions) Get(_ context.Context, id string) (*dtos.GetSubscriptionResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if sub, ok := f.subs[id]; ok {
+		return &dtos.GetSubscriptionResponse{DtoSubscriptionResponse: &sub}, nil
+	}
 	return &dtos.GetSubscriptionResponse{}, nil
 }
 func (f *fakeSubscriptions) Cancel(_ context.Context, id string, _ types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
@@ -244,8 +252,10 @@ func (f *fakeSubscriptions) UpdateLineItem(_ context.Context, _ string, _ types.
 type fakeWallets struct {
 	mu      sync.Mutex
 	created []types.DtoCreateWalletRequest
-	balance string
-	balErr  error
+	// walletItems allows tests to populate wallets returned by Query.
+	walletItems []types.DtoWalletResponse
+	balance     string
+	balErr      error
 }
 
 func (f *fakeWallets) Create(_ context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error) {
@@ -255,7 +265,16 @@ func (f *fakeWallets) Create(_ context.Context, req types.DtoCreateWalletRequest
 	return &dtos.CreateWalletResponse{}, nil
 }
 func (f *fakeWallets) Query(_ context.Context, _ types.WalletFilter) (*dtos.QueryWalletResponse, error) {
-	return &dtos.QueryWalletResponse{}, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.walletItems) == 0 {
+		return &dtos.QueryWalletResponse{}, nil
+	}
+	return &dtos.QueryWalletResponse{
+		ListResponseDtoWalletResponse: &types.ListResponseDtoWalletResponse{
+			Items: f.walletItems,
+		},
+	}, nil
 }
 func (f *fakeWallets) GetBalance(_ context.Context, _ string) (*dtos.GetWalletBalanceResponse, error) {
 	f.mu.Lock()
@@ -263,7 +282,12 @@ func (f *fakeWallets) GetBalance(_ context.Context, _ string) (*dtos.GetWalletBa
 	if f.balErr != nil {
 		return nil, f.balErr
 	}
-	return &dtos.GetWalletBalanceResponse{}, nil
+	if f.balance == "" {
+		return &dtos.GetWalletBalanceResponse{}, nil
+	}
+	return &dtos.GetWalletBalanceResponse{
+		DtoWalletBalanceResponse: &types.DtoWalletBalanceResponse{Balance: &f.balance},
+	}, nil
 }
 func (f *fakeWallets) TopUp(_ context.Context, _ string, _ types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
 	return &dtos.TopUpWalletResponse{}, nil
@@ -310,7 +334,12 @@ func (f *fakeInvoices) Query(_ context.Context, _ types.InvoiceFilter) (*dtos.Qu
 	if f.queryErr != nil {
 		return nil, f.queryErr
 	}
-	return &dtos.QueryInvoiceResponse{}, nil
+	if len(f.invoices) == 0 {
+		return &dtos.QueryInvoiceResponse{}, nil
+	}
+	return &dtos.QueryInvoiceResponse{
+		DtoListInvoicesResponse: &types.DtoListInvoicesResponse{Items: f.invoices},
+	}, nil
 }
 func (f *fakeInvoices) Get(_ context.Context, _ string) (*dtos.GetInvoiceResponse, error) {
 	return &dtos.GetInvoiceResponse{}, nil

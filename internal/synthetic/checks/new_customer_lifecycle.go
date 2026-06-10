@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/synthetic"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -132,6 +133,15 @@ func (s *NewCustomerLifecycle) pollAnalytics(ctx context.Context, ext string) er
 	}
 }
 
-// extractSubscriptionID is a package-level variable so tests can swap it.
-// Task 25 replaces this default with a real SDK response getter.
-var extractSubscriptionID = func(_ interface{}) string { return "" }
+// extractSubscriptionID reads the sub ID from the SDK CreateSubscriptionResponse wrapper.
+var extractSubscriptionID = func(resp interface{}) string {
+	r, ok := resp.(*sdkdtos.CreateSubscriptionResponse)
+	if !ok || r == nil {
+		return ""
+	}
+	inner := r.GetDtoSubscriptionResponse()
+	if inner == nil || inner.ID == nil {
+		return ""
+	}
+	return *inner.ID
+}

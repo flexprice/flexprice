@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/flexprice/flexprice/internal/synthetic"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -46,10 +47,26 @@ func (p *WalletBalanceProbe) Run(ctx context.Context) error {
 	return nil
 }
 
-// extractWalletIDs is filled in by Task 25 to read the SDK's wallet query
-// response. Until then it returns nil so the probe is a soft no-op. This
-// placeholder is documented as one of the production-unsafe stubs Task 25
-// must replace.
-func extractWalletIDs(_ interface{}) []string {
-	return nil
+// extractWalletIDs reads wallet IDs from the SDK QueryWalletResponse.
+// Returns nil if the response has no items (probe soft no-ops).
+func extractWalletIDs(resp interface{}) []string {
+	r, ok := resp.(*sdkdtos.QueryWalletResponse)
+	if !ok || r == nil {
+		return nil
+	}
+	inner := r.GetListResponseDtoWalletResponse()
+	if inner == nil {
+		return nil
+	}
+	items := inner.GetItems()
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(items))
+	for _, w := range items {
+		if w.ID != nil {
+			ids = append(ids, *w.ID)
+		}
+	}
+	return ids
 }

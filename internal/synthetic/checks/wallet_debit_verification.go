@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/synthetic"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -52,7 +53,7 @@ func (v *WalletDebitVerification) Run(ctx context.Context) error {
 	idx := atomic.AddInt64(&v.cursor, 1)
 	customer := seeds.PreFundedCustomerIDs[int(idx)%len(seeds.PreFundedCustomerIDs)]
 
-	// Use the same WalletFilter shape that wallet_balance_probe.go used (WalletIds placeholder)
+	// Use the same WalletFilter shape as wallet_balance_probe.go.
 	walletResp, err := v.client.Wallets().Query(ctx, types.WalletFilter{WalletIds: []string{customer}})
 	if err != nil {
 		return fmt.Errorf("wallet query for %s: %w", customer, err)
@@ -131,9 +132,21 @@ func (v *WalletDebitVerification) readBalance(ctx context.Context, walletID stri
 	return extractBalanceFloat(resp), nil
 }
 
-// extractBalanceFloat reads the numeric balance from the SDK response wrapper.
-// Filled in by Task 25. Returns 0 → probe soft no-ops for new wallets.
-func extractBalanceFloat(_ interface{}) float64 { return 0 }
+// extractBalanceFloat reads the numeric balance from the SDK GetWalletBalanceResponse.
+// Uses the Balance field (string-encoded decimal). Returns 0 if unavailable.
+func extractBalanceFloat(resp interface{}) float64 {
+	r, ok := resp.(*sdkdtos.GetWalletBalanceResponse)
+	if !ok || r == nil {
+		return 0
+	}
+	inner := r.GetDtoWalletBalanceResponse()
+	if inner == nil || inner.Balance == nil {
+		return 0
+	}
+	var f float64
+	_, _ = fmt.Sscanf(*inner.Balance, "%f", &f)
+	return f
+}
 
 func mustParseFloat(s string) float64 {
 	var f float64

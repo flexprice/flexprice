@@ -74,6 +74,17 @@ func (p *EntitlementAndUsageProbe) Run(ctx context.Context) error {
 	return nil
 }
 
-// extractCustomerID reads the internal customer ID from the SDK response wrapper.
-// Filled in by Task 25. Returns "" → probe exits early before making API calls.
-func extractCustomerID(_ interface{}) string { return "" }
+// extractCustomerID reads the internal customer ID from the SDK
+// GetCustomerByExternalIDResponse wrapper.
+// Returns "" → probe exits early before making the 4 downstream API calls.
+func extractCustomerID(resp interface{}) string {
+	r, ok := resp.(*dtos.GetCustomerByExternalIDResponse)
+	if !ok || r == nil {
+		return ""
+	}
+	inner := r.GetDtoCustomerResponse()
+	if inner == nil || inner.ID == nil {
+		return ""
+	}
+	return *inner.ID
+}
