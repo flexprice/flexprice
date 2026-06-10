@@ -43,8 +43,5 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Build loglint
-        run: cd tools/loglint && go mod download && go build -o ../bin/loglint ./main.go
-
       - name: Run loglint
-        run: go vet -vettool=./tools/bin/loglint ./internal/...
+        run: make lint-ci
