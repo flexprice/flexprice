@@ -685,6 +685,11 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("otel.traces.auth_value", "FLEXPRICE_OTEL_TRACES_AUTH_VALUE")
 	_ = v.BindEnv("otel.traces.sample_rate", "FLEXPRICE_OTEL_TRACES_SAMPLE_RATE")
 	_ = v.BindEnv("otel.traces.storage_spans_enabled", "FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED")
+	_ = v.BindEnv("otel.traces.capture_exceptions", "FLEXPRICE_OTEL_TRACES_CAPTURE_EXCEPTIONS")
+	// Exception capture is on by default. Struct `default:` tags aren't applied at
+	// runtime here (defaults live in config.yaml), so guarantee default-on via
+	// SetDefault for deploys whose config.yaml predates this key. Env/yaml override.
+	v.SetDefault("otel.traces.capture_exceptions", true)
 	_ = v.BindEnv("otel.logs.enabled", "FLEXPRICE_OTEL_LOGS_ENABLED")
 	_ = v.BindEnv("otel.logs.endpoint", "FLEXPRICE_OTEL_LOGS_ENDPOINT")
 	_ = v.BindEnv("otel.logs.protocol", "FLEXPRICE_OTEL_LOGS_PROTOCOL")
