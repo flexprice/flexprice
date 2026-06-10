@@ -37,7 +37,7 @@ func TestE2EProbe_LocalSmoke(t *testing.T) {
 	rep := e2eprobe.NewLogReporter(lg)
 	runner := e2eprobe.NewRunner(rep, lg, "integration-smoke")
 
-	seed := checks_pkg.NewSeedEnsure(client, reg, "integration-smoke")
+	seed := checks_pkg.NewSeedEnsure(client, reg, "integration-smoke", lg)
 	runner.Add(seed, e2eprobe.NewOneShotScheduler(seed))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -69,7 +69,7 @@ func main() {
 		}
 	}
 
-	seed := checks_pkg.NewSeedEnsure(client, reg, runID)
+	seed := checks_pkg.NewSeedEnsure(client, reg, runID, lg)
 	addCheck(seed, e2eprobe.NewTickerScheduler(seed, cfg.Checks["SEED_ENSURE"].Interval), "SEED_ENSURE")
 
 	var ingest *checks_pkg.EventIngestDriver

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	"github.com/flexprice/flexprice/internal/logger"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
@@ -28,10 +29,11 @@ type SeedEnsure struct {
 	client e2eprobe.Client
 	reg    e2eprobe.Registry
 	runID  string
+	logger *logger.Logger
 }
 
-func NewSeedEnsure(c e2eprobe.Client, r e2eprobe.Registry, runID string) *SeedEnsure {
-	return &SeedEnsure{client: c, reg: r, runID: runID}
+func NewSeedEnsure(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *logger.Logger) *SeedEnsure {
+	return &SeedEnsure{client: c, reg: r, runID: runID, logger: lg}
 }
 
 func (s *SeedEnsure) Name() string         { return "seed-ensure" }
@@ -442,9 +444,13 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 					StartDate: now.Format(time.RFC3339),
 				},
 			)
-			if activateErr != nil {
+			if activateErr != nil && s.logger != nil {
 				// Log warning but don't fail — sub will still work for most checks.
-				fmt.Printf("warn: activate sub %s for customer %s: %v\n", subID, extID, activateErr)
+				s.logger.Warnw("subscription activation failed; sub will still work for most checks",
+					"subscription_id", subID,
+					"external_customer_id", extID,
+					"error", activateErr,
+				)
 			}
 		}
 	}

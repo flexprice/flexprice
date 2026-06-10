@@ -128,7 +128,7 @@ func TestSeedEnsure(t *testing.T) {
 			fc := newFakeClient()
 			reg := e2eprobe.NewRegistry()
 			tc.setup(fc)
-			s := NewSeedEnsure(fc, reg, "run-1")
+			s := NewSeedEnsure(fc, reg, "run-1", nil)
 			err := s.Run(context.Background())
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("Run() error = %v, wantErr %v", err, tc.wantErr)
