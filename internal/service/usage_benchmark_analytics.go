@@ -20,13 +20,13 @@ import (
 func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg *message.Message, evt *events.UsageBenchmarkEvent) error {
 	if s.analyticsBenchRepo == nil {
 		if s.Logger != nil {
-			s.Logger.Warnw("usage benchmark: analytics repo not wired, skipping analytics event")
+			s.Logger.WarnwCtx(ctx, "usage benchmark: analytics repo not wired, skipping analytics event")
 		}
 		return nil
 	}
 	if len(evt.AnalyticsRequest) == 0 {
 		if s.Logger != nil {
-			s.Logger.Warnw("usage benchmark: analytics event missing request body, skipping")
+			s.Logger.WarnwCtx(ctx, "usage benchmark: analytics event missing request body, skipping")
 		}
 		return nil
 	}
@@ -34,7 +34,7 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 	var req dto.GetUsageAnalyticsRequest
 	if err := json.Unmarshal(evt.AnalyticsRequest, &req); err != nil {
 		if s.Logger != nil {
-			s.Logger.Errorw("usage benchmark: failed to unmarshal analytics request", "error", err)
+			s.Logger.ErrorwCtx(ctx, "usage benchmark: failed to unmarshal analytics request", "error", err)
 		}
 		return nil
 	}
@@ -43,13 +43,13 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 	meterResp, meterErr := s.callAnalyticsMeterPipeline(ctx, &req)
 
 	if featureErr != nil && s.Logger != nil {
-		s.Logger.Warnw("usage benchmark: analytics feature pipeline failed",
+		s.Logger.WarnwCtx(ctx, "usage benchmark: analytics feature pipeline failed",
 			"tenant_id", evt.TenantID,
 			"error", featureErr,
 		)
 	}
 	if meterErr != nil && s.Logger != nil {
-		s.Logger.Warnw("usage benchmark: analytics meter pipeline failed",
+		s.Logger.WarnwCtx(ctx, "usage benchmark: analytics meter pipeline failed",
 			"tenant_id", evt.TenantID,
 			"error", meterErr,
 		)
@@ -113,7 +113,7 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 
 	if err := s.analyticsBenchRepo.BulkInsert(ctx, records); err != nil {
 		if s.Logger != nil {
-			s.Logger.Errorw("usage benchmark: failed to bulk insert analytics rows",
+			s.Logger.ErrorwCtx(ctx, "usage benchmark: failed to bulk insert analytics rows",
 				"event_id", eventID,
 				"rows", len(records),
 				"error", err,
