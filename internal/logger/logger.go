@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/fluent/fluent-logger-golang/fluent"
 	"go.opentelemetry.io/contrib/bridges/otelzap"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -27,7 +25,6 @@ import (
 //
 // Outputs:
 //   - stdout (zap JSON encoder)
-//   - Fluentd (optional, via FluentdEnabled config)
 //   - OTLP logs (optional, via OtelEnabled config; goes to SigNoz / any OTLP backend)
 //
 // Trace-log correlation: call WithContext(ctx) / Ctx(ctx) to bind a request
@@ -38,9 +35,7 @@ import (
 // callers use tracing.Service.CaptureException explicitly.
 type Logger struct {
 	*zap.SugaredLogger
-	fluentdLogger   *fluent.Fluent
 	otelLogProvider *sdklog.LoggerProvider
-	serviceName     string
 	// ctxBound is true once WithContext has wrapped the core with otelCtxCore.
 	// Guards against repeated WithContext calls accumulating nested wrappers,
 	// which would append multiple _span_ctx fields on every Write.
@@ -127,36 +122,6 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 		return nil, err
 	}
 
-	// Initialize Fluentd logger based on configuration
-	var fluentdLogger *fluent.Fluent
-	var fluentdHost string
-	var fluentdPort int
-
-	if cfg.Logging.FluentdEnabled {
-		fluentdHost = cfg.Logging.FluentdHost
-		fluentdPort = cfg.Logging.FluentdPort
-	}
-
-	// Initialize Fluentd client if host and port are configured
-	if fluentdHost != "" && fluentdPort > 0 {
-		fluentdLogger, err = fluent.New(fluent.Config{
-			FluentHost:   fluentdHost,
-			FluentPort:   fluentdPort,
-			Async:        true,
-			BufferLimit:  8 * 1024 * 1024, // 8MB buffer
-			WriteTimeout: 3 * time.Second,
-			RetryWait:    500,
-			MaxRetry:     5,
-		})
-		if err != nil {
-			zapLogger.Sugar().Warnf("Failed to initialize Fluentd logger: %v, falling back to stdout only", err)
-		} else {
-			zapLogger.Sugar().Infof("Fluentd logger initialized successfully (host: %s, port: %d)", fluentdHost, fluentdPort)
-		}
-	} else if cfg.Logging.FluentdEnabled {
-		zapLogger.Sugar().Warn("Fluentd is enabled but host/port not configured properly")
-	}
-
 	// Initialize OpenTelemetry log exporter (for any OTLP backend). Reads the
 	// unified otel.logs.* config first; falls back to legacy logging.otel_*
 	// fields (deprecated) so existing deployments keep working.
@@ -214,9 +179,7 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 
 	return &Logger{
 		SugaredLogger:   sugar,
-		fluentdLogger:   fluentdLogger,
 		otelLogProvider: otelLogProvider,
-		serviceName:     string(cfg.Deployment.Mode),
 	}, nil
 }
 
@@ -414,9 +377,7 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 
 	return &Logger{
 		SugaredLogger:   newSugared,
-		fluentdLogger:   l.fluentdLogger,
 		otelLogProvider: l.otelLogProvider,
-		serviceName:     l.serviceName,
 		ctxBound:        ctxBound,
 	}
 }
@@ -436,37 +397,27 @@ func (l *Logger) Ctx(ctx context.Context) *Logger {
 
 // Debug logs at debug level with auto-bound context fields.
 func (l *Logger) Debug(ctx context.Context, msg string, fields ...any) {
-	lc := l.WithContext(ctx)
-	lc.SugaredLogger.Debugw(msg, fields...)
-	lc.sendToFluentd("debug", msg, lc.keysAndValuesToMap(fields...))
+	l.WithContext(ctx).SugaredLogger.Debugw(msg, fields...)
 }
 
 // Info logs at info level with auto-bound context fields.
 func (l *Logger) Info(ctx context.Context, msg string, fields ...any) {
-	lc := l.WithContext(ctx)
-	lc.SugaredLogger.Infow(msg, fields...)
-	lc.sendToFluentd("info", msg, lc.keysAndValuesToMap(fields...))
+	l.WithContext(ctx).SugaredLogger.Infow(msg, fields...)
 }
 
 // Warn logs at warn level. Only use in bootstrap/startup code.
 func (l *Logger) Warn(ctx context.Context, msg string, fields ...any) {
-	lc := l.WithContext(ctx)
-	lc.SugaredLogger.Warnw(msg, fields...)
-	lc.sendToFluentd("warning", msg, lc.keysAndValuesToMap(fields...))
+	l.WithContext(ctx).SugaredLogger.Warnw(msg, fields...)
 }
 
 // Error logs at error level with auto-bound context fields.
 func (l *Logger) Error(ctx context.Context, msg string, fields ...any) {
-	lc := l.WithContext(ctx)
-	lc.SugaredLogger.Errorw(msg, fields...)
-	lc.sendToFluentd("error", msg, lc.keysAndValuesToMap(fields...))
+	l.WithContext(ctx).SugaredLogger.Errorw(msg, fields...)
 }
 
 // Fatal logs at fatal level then calls os.Exit(1). Use only in cmd/.
 func (l *Logger) Fatal(ctx context.Context, msg string, fields ...any) {
-	lc := l.WithContext(ctx)
-	lc.sendToFluentd("fatal", msg, lc.keysAndValuesToMap(fields...))
-	lc.SugaredLogger.Fatalw(msg, fields...)
+	l.WithContext(ctx).SugaredLogger.Fatalw(msg, fields...)
 }
 
 // ---------------------------------------------------------------------------
@@ -476,25 +427,21 @@ func (l *Logger) Fatal(ctx context.Context, msg string, fields ...any) {
 // Debugw logs at debug level with key-value pairs.
 func (l *Logger) Debugw(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Debugw(msg, keysAndValues...)
-	l.sendToFluentd("debug", msg, l.keysAndValuesToMap(keysAndValues...))
 }
 
 // Infow logs at info level with key-value pairs.
 func (l *Logger) Infow(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Infow(msg, keysAndValues...)
-	l.sendToFluentd("info", msg, l.keysAndValuesToMap(keysAndValues...))
 }
 
 // Warnw logs at warn level with key-value pairs.
 func (l *Logger) Warnw(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Warnw(msg, keysAndValues...)
-	l.sendToFluentd("warning", msg, l.keysAndValuesToMap(keysAndValues...))
 }
 
 // Errorw logs at error level with key-value pairs.
 func (l *Logger) Errorw(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Errorw(msg, keysAndValues...)
-	l.sendToFluentd("error", msg, l.keysAndValuesToMap(keysAndValues...))
 }
 
 // ---------------------------------------------------------------------------
@@ -522,80 +469,6 @@ func Event(entity, action string) []any {
 // Entity produces an "<entity>_id" field.
 func Entity(name, id string) []any {
 	return []any{name + "_id", id}
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-// sanitizeValue converts error objects to strings for msgpack serialization
-// Also handles nested structures (maps and slices) that may contain errors
-func sanitizeValue(v interface{}) interface{} {
-	// Convert error objects to strings
-	if err, ok := v.(error); ok {
-		return err.Error()
-	}
-
-	// Handle nested maps
-	if m, ok := v.(map[string]interface{}); ok {
-		sanitized := make(map[string]interface{}, len(m))
-		for k, val := range m {
-			sanitized[k] = sanitizeValue(val)
-		}
-		return sanitized
-	}
-
-	// Handle slices/arrays
-	if s, ok := v.([]interface{}); ok {
-		sanitized := make([]interface{}, len(s))
-		for i, val := range s {
-			sanitized[i] = sanitizeValue(val)
-		}
-		return sanitized
-	}
-
-	return v
-}
-
-// sendToFluentd sends structured log data to Fluentd
-func (l *Logger) sendToFluentd(level string, msg string, fields map[string]interface{}) {
-	if l.fluentdLogger == nil {
-		return // Fluentd not configured, skip
-	}
-
-	logData := map[string]interface{}{
-		"level":     level,
-		"message":   msg,
-		"service":   l.serviceName,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	// Merge additional fields, converting error objects to strings
-	for k, v := range fields {
-		logData[k] = sanitizeValue(v)
-	}
-
-	// Post to Fluentd asynchronously (non-blocking)
-	// Tag format: app.logs
-	err := l.fluentdLogger.Post("app.logs", logData)
-	if err != nil {
-		// If Fluentd fails, log to stderr but don't block the application
-		l.SugaredLogger.Warnf("Failed to send log to Fluentd: %v", err)
-	}
-}
-
-// keysAndValuesToMap converts variadic key-value pairs to a map
-func (l *Logger) keysAndValuesToMap(keysAndValues ...interface{}) map[string]interface{} {
-	fields := make(map[string]interface{})
-	for i := 0; i < len(keysAndValues); i += 2 {
-		if i+1 < len(keysAndValues) {
-			if key, ok := keysAndValues[i].(string); ok {
-				// Convert error objects to strings for msgpack serialization
-				fields[key] = sanitizeValue(keysAndValues[i+1])
-			}
-		}
-	}
-	return fields
 }
 
 // ---------------------------------------------------------------------------
