@@ -22,12 +22,17 @@ func TestCycleInvoiceProbe_NoPersistentSubsIsNoOp(t *testing.T) {
 
 func TestCycleInvoiceProbe_QueriesInvoicesForRotatingSub(t *testing.T) {
 	fc := newFakeClient()
+	sub1, sub2 := "sub_1", "sub_2"
+	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+		sub1: {ID: &sub1},
+		sub2: {ID: &sub2},
+	}
 	reg := e2eprobe.NewRegistry()
-	reg.LoadSeeds(e2eprobe.Seeds{PersistentSubIDs: []string{"sub_1", "sub_2"}})
+	reg.LoadSeeds(e2eprobe.Seeds{PersistentSubIDs: []string{sub1, sub2}})
 	p := NewCycleInvoiceProbe(fc, reg, "run-1")
 	_ = p.Run(context.Background())
-	// Get returns an empty subscription response → extractBillingCycleLength
-	// returns the 30-day default, so invoice query should fire.
+	// Get returns a subscription response → extractBillingCycleLength
+	// returns the 30-day default (no billing period set), so invoice query fires.
 	if fc.invoices.queries == 0 {
 		t.Errorf("expected at least 1 invoice query, got 0")
 	}

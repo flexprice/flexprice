@@ -19,7 +19,7 @@ func TestSlackReporter_Posts(t *testing.T) {
 		w.WriteHeader(200)
 	}))
 	defer srv.Close()
-	r := NewSlackReporter(srv.URL, "#syn", nil)
+	r := NewSlackReporter(srv.URL, "#syn", nil, nil)
 	r.Report(context.Background(), FailureReport{
 		CheckName:  "cycle-invoice-probe",
 		CheckKind:  KindProbe,
@@ -49,6 +49,6 @@ func TestSlackReporter_SwallowsHTTPErr(t *testing.T) {
 		w.WriteHeader(500)
 	}))
 	defer srv.Close()
-	r := NewSlackReporter(srv.URL, "", nil)
+	r := NewSlackReporter(srv.URL, "", nil, nil)
 	r.Report(context.Background(), FailureReport{CheckName: "x"})
 }

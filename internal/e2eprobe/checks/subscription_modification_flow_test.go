@@ -21,6 +21,10 @@ func TestSubscriptionModificationFlow_AddsLineItem(t *testing.T) {
 	fc := newFakeClient()
 	reg := e2eprobe.NewRegistry()
 	reg.RegisterEphemeral("subscription", "sub_a", time.Now().Add(-10*time.Minute))
+	subID := "sub_a"
+	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+		subID: {ID: &subID},
+	}
 	s := NewSubscriptionModificationFlow(fc, reg, "run-1")
 	if err := s.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)

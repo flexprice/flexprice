@@ -1,7 +1,6 @@
 package e2eprobe
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -54,11 +53,18 @@ func TestEventDeck_AlwaysHasAmount(t *testing.T) {
 
 func TestEventDeck_SometimesAddsRandomExtras(t *testing.T) {
 	d := NewEventDeck(EventDeckOpts{Customers: []string{"c"}, EventNames: []string{"e"}, Seed: 3})
+	extras := map[string]bool{
+		"session_id": true,
+		"endpoint":   true,
+		"status":     true,
+		"method":     true,
+		"tier":       true,
+	}
 	sawExtra := false
 	for i := 0; i < 100; i++ {
 		ev := d.Next()
 		for k := range ev.Properties {
-			if strings.Contains("session_id endpoint status method tier", k) && k != "amount" && k != "user_id" && k != "duration_ms" && k != "region" {
+			if extras[k] {
 				sawExtra = true
 			}
 		}

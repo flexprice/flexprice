@@ -53,12 +53,13 @@ func (v *WalletDebitVerification) Run(ctx context.Context) error {
 	idx := atomic.AddInt64(&v.cursor, 1)
 	customer := seeds.PreFundedCustomerIDs[int(idx)%len(seeds.PreFundedCustomerIDs)]
 
-	// Use the same WalletFilter shape as wallet_balance_probe.go.
-	walletResp, err := v.client.Wallets().Query(ctx, types.WalletFilter{WalletIds: []string{customer}})
+	// Query all wallets and filter client-side by customer ID (WalletFilter has
+	// no customer filter field; the synthetic tenant has a bounded wallet count).
+	walletResp, err := v.client.Wallets().Query(ctx, types.WalletFilter{})
 	if err != nil {
 		return fmt.Errorf("wallet query for %s: %w", customer, err)
 	}
-	walletIDs := extractWalletIDs(walletResp)
+	walletIDs := extractWalletIDsForCustomer(walletResp, customer)
 	if len(walletIDs) == 0 {
 		return nil
 	}
@@ -68,7 +69,11 @@ func (v *WalletDebitVerification) Run(ctx context.Context) error {
 		return fmt.Errorf("read start balance: %w", err)
 	}
 
-	expectedDebit := float64(v.opts.EventCount) * mustParseFloat(v.opts.EventAmount)
+	amountPerEvent, err := parseFloat(v.opts.EventAmount)
+	if err != nil {
+		return fmt.Errorf("parse event amount: %w", err)
+	}
+	expectedDebit := float64(v.opts.EventCount) * amountPerEvent
 	if startBalance < expectedDebit*5 {
 		topUp := expectedDebit * 10
 		topUpStr := fmt.Sprintf("%.4f", topUp)
@@ -129,27 +134,32 @@ func (v *WalletDebitVerification) readBalance(ctx context.Context, walletID stri
 	if err != nil {
 		return 0, err
 	}
-	return extractBalanceFloat(resp), nil
+	return extractBalanceFloat(resp)
 }
 
 // extractBalanceFloat reads the numeric balance from the SDK GetWalletBalanceResponse.
-// Uses the Balance field (string-encoded decimal). Returns 0 if unavailable.
-func extractBalanceFloat(resp interface{}) float64 {
+// Uses the Balance field (string-encoded decimal). Returns an error if the field is
+// absent or unparseable.
+var extractBalanceFloat = func(resp interface{}) (float64, error) {
 	r, ok := resp.(*sdkdtos.GetWalletBalanceResponse)
 	if !ok || r == nil {
-		return 0
+		return 0, fmt.Errorf("unexpected response type %T", resp)
 	}
 	inner := r.GetDtoWalletBalanceResponse()
 	if inner == nil || inner.Balance == nil {
-		return 0
+		return 0, fmt.Errorf("response missing balance field")
 	}
 	var f float64
-	_, _ = fmt.Sscanf(*inner.Balance, "%f", &f)
-	return f
+	if _, err := fmt.Sscanf(*inner.Balance, "%f", &f); err != nil {
+		return 0, fmt.Errorf("parse balance %q: %w", *inner.Balance, err)
+	}
+	return f, nil
 }
 
-func mustParseFloat(s string) float64 {
+func parseFloat(s string) (float64, error) {
 	var f float64
-	_, _ = fmt.Sscanf(s, "%f", &f)
-	return f
+	if _, err := fmt.Sscanf(s, "%f", &f); err != nil {
+		return 0, fmt.Errorf("parse %q as float: %w", s, err)
+	}
+	return f, nil
 }

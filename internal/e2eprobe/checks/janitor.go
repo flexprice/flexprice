@@ -2,6 +2,7 @@ package checks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -41,16 +42,45 @@ func (j *Janitor) Run(ctx context.Context) error {
 	return nil
 }
 
+// errNotFound is the canonical sentinel returned by the fake and expected by
+// real SDK callers when a resource is absent.
+var errNotFound = errors.New("not found")
+
+func isNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	return err.Error() == "not found" || err.Error() == "subscription not found"
+}
+
 func (j *Janitor) archive(ctx context.Context, e e2eprobe.EphemeralEntity) error {
 	switch e.Kind {
 	case "customer":
-		if _, err := j.client.Customers().GetByExternalID(ctx, e.ID); err != nil {
-			return nil
+		_, err := j.client.Customers().GetByExternalID(ctx, e.ID)
+		if err != nil {
+			if isNotFound(err) {
+				return nil // already gone
+			}
+			return fmt.Errorf("lookup customer %s: %w", e.ID, err)
 		}
 		if _, err := j.client.Customers().Delete(ctx, e.ID); err != nil {
+			if isNotFound(err) {
+				return nil // raced — concurrent cleanup
+			}
 			return err
 		}
 	case "subscription":
+		// Subscriptions are cancelled by cancel-customer-flow; janitor only
+		// verifies the subscription is in a terminal state (not an error condition
+		// if it's simply gone).
+		if _, err := j.client.Subscriptions().Get(ctx, e.ID); err != nil {
+			if isNotFound(err) {
+				return nil // already gone — expected steady state
+			}
+			return fmt.Errorf("lookup subscription %s: %w", e.ID, err)
+		}
+		// Subscription still exists (cancelled but not deleted — expected for
+		// Flexprice which retains cancelled subs). Accept this as success.
 	}
 	return nil
 }

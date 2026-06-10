@@ -48,7 +48,12 @@ type compositeReporter struct {
 
 func (c *compositeReporter) Report(ctx context.Context, r FailureReport) {
 	for _, s := range c.sinks {
-		s.Report(ctx, r)
+		func() {
+			defer func() {
+				_ = recover() // intentionally swallow; sink failures cannot cascade
+			}()
+			s.Report(ctx, r)
+		}()
 	}
 }
 

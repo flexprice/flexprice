@@ -38,6 +38,12 @@ type EventDeck struct {
 }
 
 func NewEventDeck(opts EventDeckOpts) *EventDeck {
+	if len(opts.Customers) == 0 {
+		panic("e2eprobe: EventDeck requires at least one customer")
+	}
+	if len(opts.EventNames) == 0 {
+		panic("e2eprobe: EventDeck requires at least one event name")
+	}
 	return &EventDeck{opts: opts, rnd: rand.New(rand.NewSource(opts.Seed))}
 }
 

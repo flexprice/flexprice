@@ -48,7 +48,8 @@ func TestWalletBalanceProbe_ErrorPropagates(t *testing.T) {
 func TestWalletBalanceProbe_GetsBalance(t *testing.T) {
 	fc := newFakeClient()
 	walletID := "wallet_001"
-	fc.wallets.walletItems = []types.DtoWalletResponse{{ID: &walletID}}
+	customerID := "c0"
+	fc.wallets.walletItems = []types.DtoWalletResponse{{ID: &walletID, CustomerID: &customerID}}
 	fc.wallets.balance = "100.00"
 
 	reg := e2eprobe.NewRegistry()

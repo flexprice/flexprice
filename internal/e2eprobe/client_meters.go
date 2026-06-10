@@ -113,7 +113,10 @@ func (m *meterHTTPClient) do(ctx context.Context, method, path string, body, out
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read meter response body: %w", err)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("meter http %s %s: %d %s", method, path, resp.StatusCode, string(respBody))
 	}

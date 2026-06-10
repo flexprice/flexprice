@@ -220,10 +220,14 @@ func (f *fakeSubscriptions) Create(_ context.Context, req types.DtoCreateSubscri
 func (f *fakeSubscriptions) Get(_ context.Context, id string) (*dtos.GetSubscriptionResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if sub, ok := f.subs[id]; ok {
-		return &dtos.GetSubscriptionResponse{DtoSubscriptionResponse: &sub}, nil
+	if f.subs == nil {
+		return nil, errors.New("subscription not found")
 	}
-	return &dtos.GetSubscriptionResponse{}, nil
+	sub, ok := f.subs[id]
+	if !ok {
+		return nil, errors.New("subscription not found")
+	}
+	return &dtos.GetSubscriptionResponse{DtoSubscriptionResponse: &sub}, nil
 }
 func (f *fakeSubscriptions) Cancel(_ context.Context, id string, _ types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
 	f.mu.Lock()

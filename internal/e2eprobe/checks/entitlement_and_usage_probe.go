@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
@@ -50,19 +49,13 @@ func (p *EntitlementAndUsageProbe) Run(ctx context.Context) error {
 		return fmt.Errorf("sub entitlements %s: %w", subID, err)
 	}
 
-	end := time.Now().UTC()
-	start := end.Add(-24 * time.Hour)
-	startStr, endStr := start.Format(time.RFC3339), end.Format(time.RFC3339)
 	// SDK: GetCustomerUsageSummaryRequest.CustomerID is *string, not string.
+	// Note: StartTime and EndTime are not fields on GetCustomerUsageSummaryRequest.
 	if _, err := p.client.Customers().GetUsageSummary(ctx, dtos.GetCustomerUsageSummaryRequest{
-		CustomerID: &customerID,
+		CustomerID:      &customerID,
 		SubscriptionIds: []string{},
 		FeatureIds:      []string{},
-		// StartTime and EndTime are not fields on GetCustomerUsageSummaryRequest;
-		// they are passed via startStr/endStr only for context (unused here until Task 25).
 	}); err != nil {
-		_ = startStr
-		_ = endStr
 		return fmt.Errorf("customer usage summary %s: %w", customerID, err)
 	}
 

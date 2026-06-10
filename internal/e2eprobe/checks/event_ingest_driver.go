@@ -34,10 +34,14 @@ func (d *EventIngestDriver) Run(ctx context.Context) error {
 	if err := d.ensureDeck(); err != nil {
 		return err
 	}
-	if d.deck == nil {
+	d.mu.Lock()
+	async := d.async
+	deck := d.deck
+	d.mu.Unlock()
+	if deck == nil || async == nil {
 		return nil
 	}
-	draw := d.deck.Next()
+	draw := deck.Next()
 
 	props := map[string]interface{}{
 		"e2eprobe_run_id": d.runID,
@@ -52,7 +56,7 @@ func (d *EventIngestDriver) Run(ctx context.Context) error {
 		Source:             draw.Source,
 		Properties:         props,
 	}
-	if err := d.async.EnqueueWithOptions(opts); err != nil {
+	if err := async.EnqueueWithOptions(opts); err != nil {
 		return fmt.Errorf("enqueue: %w", err)
 	}
 	return nil

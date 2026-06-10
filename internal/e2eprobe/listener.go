@@ -73,7 +73,10 @@ func (h *HTTPWebhookListener) Subscribe(ctx context.Context) (<-chan ListenerEve
 	mux := http.NewServeMux()
 	mux.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&payload)
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
 		select {
 		case ch <- ListenerEvent{Source: "http-webhook", ReceivedAt: time.Now(), Payload: payload}:
 			w.WriteHeader(http.StatusOK)

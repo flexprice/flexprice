@@ -31,11 +31,14 @@ func (p *WalletBalanceProbe) Run(ctx context.Context) error {
 	}
 	idx := atomic.AddInt64(&p.cursor, 1)
 	customer := seeds.PreFundedCustomerIDs[int(idx)%len(seeds.PreFundedCustomerIDs)]
-	resp, err := p.client.Wallets().Query(ctx, types.WalletFilter{WalletIds: []string{customer}})
+	// Query all wallets and filter client-side by customer ID.
+	// WalletFilter has no customer filter field; the synthetic tenant has a
+	// bounded wallet count so a full scan is acceptable.
+	resp, err := p.client.Wallets().Query(ctx, types.WalletFilter{})
 	if err != nil {
 		return fmt.Errorf("wallet query for %s: %w", customer, err)
 	}
-	walletIDs := extractWalletIDs(resp)
+	walletIDs := extractWalletIDsForCustomer(resp, customer)
 	if len(walletIDs) == 0 {
 		return nil
 	}
@@ -47,9 +50,18 @@ func (p *WalletBalanceProbe) Run(ctx context.Context) error {
 	return nil
 }
 
-// extractWalletIDs reads wallet IDs from the SDK QueryWalletResponse.
+// extractWalletIDs reads all wallet IDs from the SDK QueryWalletResponse
+// regardless of customer. Used by wallet_debit_verification which already
+// narrows by customer via WalletIds.
 // Returns nil if the response has no items (probe soft no-ops).
 func extractWalletIDs(resp interface{}) []string {
+	return extractWalletIDsForCustomer(resp, "")
+}
+
+// extractWalletIDsForCustomer reads wallet IDs from the SDK QueryWalletResponse,
+// filtering to wallets whose CustomerID matches customerID. If customerID is
+// empty, all wallet IDs in the response are returned.
+func extractWalletIDsForCustomer(resp interface{}, customerID string) []string {
 	r, ok := resp.(*sdkdtos.QueryWalletResponse)
 	if !ok || r == nil {
 		return nil
@@ -64,9 +76,13 @@ func extractWalletIDs(resp interface{}) []string {
 	}
 	ids := make([]string, 0, len(items))
 	for _, w := range items {
-		if w.ID != nil {
-			ids = append(ids, *w.ID)
+		if w.ID == nil {
+			continue
 		}
+		if customerID != "" && (w.CustomerID == nil || *w.CustomerID != customerID) {
+			continue
+		}
+		ids = append(ids, *w.ID)
 	}
 	return ids
 }

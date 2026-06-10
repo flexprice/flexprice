@@ -51,7 +51,7 @@ func main() {
 
 	reporters := []e2eprobe.Reporter{e2eprobe.NewLogReporter(lg)}
 	if cfg.Slack.WebhookURL != "" {
-		reporters = append(reporters, e2eprobe.NewSlackReporter(cfg.Slack.WebhookURL, cfg.Slack.Channel, nil))
+		reporters = append(reporters, e2eprobe.NewSlackReporter(cfg.Slack.WebhookURL, cfg.Slack.Channel, nil, lg))
 	}
 	if tp != nil {
 		reporters = append(reporters, e2eprobe.NewOTELReporter(tp.Tracer("e2eprobe")))
