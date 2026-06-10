@@ -263,6 +263,34 @@ jobs:
           dry_run: ${{ needs.resolve-config.outputs.dry_run }}
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Job 4: Manual approval gate (production only).
+  # Bound to the GitHub Environment `prod-approval` whose required-reviewers
+  # protection rule pauses the run here until a reviewer approves.
+  # - Runs only for production, after preprod deploys succeed.
+  # - 'skipped' preprod is also accepted so a prod config with no preprod
+  #   services still gates + deploys instead of silently doing nothing.
+  # - Dry runs bypass the gate (nothing is registered/deployed anyway).
+  # Setup runbook: docs/deployment/preprod-approval-gate.md
+  # ──────────────────────────────────────────────────────────────────────────
+  approval-gate:
+    name: Approve production rollout
+    needs: [resolve-config, deploy-preprod]
+    if: >-
+      ${{ always() &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.environment == 'production' &&
+          needs.resolve-config.outputs.dry_run != 'true' &&
+          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
+    runs-on: self-hosted
+    environment: prod-approval
+
+    steps:
+      - name: Production rollout approved
+        run: |
+          echo "Preprod canary validated and production rollout approved."
+          echo "Proceeding to deploy api, consumer and worker services to all production targets."
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Jobs 3a–3c: Deploy API, Consumer, Worker — one job per service type,
   # each with matrix over targets (regions). Runs in parallel for faster deploys
   # and smaller, trackable steps. max-parallel limits concurrent load on runners.
