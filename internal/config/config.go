@@ -162,11 +162,6 @@ type LoggingConfig struct {
 	Environment string `mapstructure:"environment" validate:"omitempty"`
 	Region      string `mapstructure:"region" validate:"omitempty"`
 
-	// Fluentd configuration
-	FluentdEnabled bool   `mapstructure:"fluentd_enabled" default:"false"`
-	FluentdHost    string `mapstructure:"fluentd_host" validate:"omitempty"`
-	FluentdPort    int    `mapstructure:"fluentd_port" validate:"omitempty"`
-
 	// OpenTelemetry log export configuration (works with SigNoz, Grafana, Datadog, etc.)
 	OtelEnabled    bool   `mapstructure:"otel_enabled" default:"false"`
 	OtelEndpoint   string `mapstructure:"otel_endpoint" validate:"omitempty"`    // e.g. <host>:<port>

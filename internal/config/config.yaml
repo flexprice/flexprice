@@ -135,11 +135,6 @@ logging:
   # Service identity — override via SERVICE_NAME and ENVIRONMENT env vars
   service_name: "" # e.g., "flexprice-api"
   environment: "" # e.g., "production", "staging"
-  # Fluentd configuration for centralized logging
-  # When enabled, logs will be sent to Fluentd in addition to stdout
-  fluentd_enabled: false # Set to true to enable Fluentd logging
-  fluentd_host: "" # e.g., "fluentd-forward.kube-system.svc.cluster.local" or "X.X.X.X"
-  fluentd_port: 0 # e.g., 24224
   # DEPRECATED: configure OTLP log export under `otel.logs.*` (top of file).
   # The following keys are still read for back-compat and will be removed in a
   # future release. otel_debug below is still honored for legacy debug runs.
