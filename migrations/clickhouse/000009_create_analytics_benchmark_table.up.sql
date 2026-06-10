@@ -38,6 +38,6 @@ CREATE TABLE IF NOT EXISTS flexprice.analytics_benchmark
     created_at             DateTime64(3)           NOT NULL DEFAULT now64(3)  CODEC(Delta, ZSTD(1))
 )
 ENGINE = MergeTree()
-PARTITION BY toYYYYMM(start_time)
+PARTITION BY toYYYYMMDD(created_at)
 ORDER BY (tenant_id, environment_id, event_id, feature_id, group_key)
 SETTINGS index_granularity = 8192;
