@@ -145,7 +145,8 @@ jobs:
   #       "cluster":          "fp-prod-backend",
   #       "api_service":      "flexprice-api-v4",
   #       "consumer_service": "flexprice-consumer-v1",
-  #       "worker_service":   "temporal-worker"
+  #       "worker_service":   "temporal-worker",
+  #       "preprod_service":  "preprod-flexprice-api-service"
   #     },
   #     {
   #       "region":           "us-west-2",
@@ -155,6 +156,10 @@ jobs:
   #       "worker_service":   "flexprice-temporal-worker-v1"
   #     }
   #   ]
+  #
+  #   preprod_service (optional): canary ECS service in the SAME cluster/region.
+  #   Targets that define it are deployed to preprod first; production rollout
+  #   then waits for manual approval (GitHub Environment: prod-approval).
   #
   #   Trigger mapping:
   #     push to main    → production targets
@@ -166,6 +171,8 @@ jobs:
     runs-on: self-hosted
     outputs:
       targets: ${{ steps.config.outputs.targets }}
+      preprod_targets: ${{ steps.config.outputs.preprod_targets }}
+      environment: ${{ steps.config.outputs.environment }}
       dry_run: ${{ steps.config.outputs.dry_run }}
 
     steps:
@@ -191,17 +198,34 @@ jobs:
 
           echo "Environment and dry_run configured (values redacted for public logs)"
 
-          # Use delimiter format so JSON (newlines, spaces) is written correctly to GITHUB_OUTPUT
           if [ "$ENV" = "production" ]; then
-            echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
-            echo "$PROD_TARGETS" >> $GITHUB_OUTPUT
-            echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+            TARGETS_JSON="$PROD_TARGETS"
           else
-            echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
-            echo "$STAGING_TARGETS" >> $GITHUB_OUTPUT
-            echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+            TARGETS_JSON="$STAGING_TARGETS"
           fi
 
+          # Targets that also define a preprod_service get a canary deploy +
+          # manual approval gate before the full production rollout.
+          if [ -z "$TARGETS_JSON" ]; then
+            PREPROD_TARGETS_JSON="[]"
+          else
+            PREPROD_TARGETS_JSON=$(echo "$TARGETS_JSON" | python3 -c "
+          import json, sys
+          targets = json.load(sys.stdin)
+          print(json.dumps([t for t in targets if t.get('preprod_service')]))
+          ")
+          fi
+
+          # Use delimiter format so JSON (newlines, spaces) is written correctly to GITHUB_OUTPUT
+          echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
+          echo "$TARGETS_JSON" >> $GITHUB_OUTPUT
+          echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+
+          echo "preprod_targets<<PREPROD_EOF" >> $GITHUB_OUTPUT
+          echo "$PREPROD_TARGETS_JSON" >> $GITHUB_OUTPUT
+          echo "PREPROD_EOF" >> $GITHUB_OUTPUT
+
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
 
   # ──────────────────────────────────────────────────────────────────────────
