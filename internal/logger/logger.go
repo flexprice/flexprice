@@ -3,7 +3,6 @@ package logger
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -229,25 +228,6 @@ func NewNoopLogger() *Logger {
 // NewFromSugared creates a Logger from an existing SugaredLogger. For use in tests only.
 func NewFromSugared(s *zap.SugaredLogger) *Logger {
 	return &Logger{SugaredLogger: s}
-}
-
-// NewLoggerWithWriter is like NewLogger but writes to the given writer instead
-// of stdout. Used by tests that need to capture log output.
-func NewLoggerWithWriter(cfg *config.Configuration, w io.Writer) (*Logger, error) {
-	encoderCfg := zap.NewProductionEncoderConfig()
-	encoderCfg.TimeKey = "time"
-	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-	level := zapcore.InfoLevel
-	if err := level.UnmarshalText([]byte(cfg.Logging.Level)); err != nil {
-		level = zapcore.InfoLevel // invalid level string; default to info
-	}
-	core := zapcore.NewCore(
-		zapcore.NewJSONEncoder(encoderCfg),
-		zapcore.AddSync(w),
-		level,
-	)
-	z := zap.New(core)
-	return &Logger{SugaredLogger: z.Sugar()}, nil
 }
 
 // resolveOtelLogsConfig picks the active log-export settings. Precedence:

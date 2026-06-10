@@ -1,0 +1,178 @@
+package checks
+
+import (
+	"context"
+	"fmt"
+	"sync/atomic"
+	"time"
+
+	"github.com/flexprice/flexprice/internal/e2eprobe"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
+	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
+)
+
+type CycleInvoiceProbe struct {
+	client e2eprobe.Client
+	reg    e2eprobe.Registry
+	runID  string
+	cursor int64
+}
+
+func NewCycleInvoiceProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string) *CycleInvoiceProbe {
+	return &CycleInvoiceProbe{client: c, reg: r, runID: runID}
+}
+
+func (p *CycleInvoiceProbe) Name() string         { return "cycle-invoice-probe" }
+func (p *CycleInvoiceProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
+
+func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
+	seeds := p.reg.Seeds()
+	if len(seeds.PersistentSubIDs) == 0 {
+		return nil
+	}
+	idx := atomic.AddInt64(&p.cursor, 1)
+	subID := seeds.PersistentSubIDs[int(idx)%len(seeds.PersistentSubIDs)]
+
+	subResp, err := p.client.Subscriptions().Get(ctx, subID)
+	if err != nil {
+		return fmt.Errorf("get sub %s: %w", subID, err)
+	}
+	cycleLength := extractBillingCycleLength(subResp)
+	if cycleLength <= 0 {
+		return nil
+	}
+
+	invResp, err := p.client.Invoices().Query(ctx, sdktypes.InvoiceFilter{
+		SubscriptionID: &subID,
+	})
+	if err != nil {
+		return fmt.Errorf("query invoices for %s: %w", subID, err)
+	}
+	latest := extractLatestInvoice(invResp)
+	if latest == nil {
+		subAge := extractSubAge(subResp)
+		if subAge > 0 && subAge > 2*cycleLength {
+			return fmt.Errorf("sub %s is %s old (>2 cycles) and has no invoices", subID, subAge)
+		}
+		return nil
+	}
+	lag := time.Since(latest.PeriodEnd)
+	if lag > 2*cycleLength {
+		return fmt.Errorf("invoice freshness: sub=%s latest_period_end=%s lag=%s cycle_length=%s (lag > 2*cycle)",
+			subID, latest.PeriodEnd.Format(time.RFC3339), lag, cycleLength)
+	}
+	return nil
+}
+
+type latestInvoice struct {
+	PeriodEnd time.Time
+}
+
+// billingPeriodDuration maps SDK BillingPeriod + count to a Go duration.
+// Conservative default of 30 days for MONTHLY when count is nil or 0.
+func billingPeriodDuration(period sdktypes.BillingPeriod, count int64) time.Duration {
+	if count <= 0 {
+		count = 1
+	}
+	var unit time.Duration
+	switch period {
+	case sdktypes.BillingPeriodDaily:
+		unit = 24 * time.Hour
+	case sdktypes.BillingPeriodWeekly:
+		unit = 7 * 24 * time.Hour
+	case sdktypes.BillingPeriodMonthly:
+		unit = 30 * 24 * time.Hour
+	case sdktypes.BillingPeriodQuarterly:
+		unit = 91 * 24 * time.Hour
+	case sdktypes.BillingPeriodHalfYearly:
+		unit = 182 * 24 * time.Hour
+	case sdktypes.BillingPeriodAnnual:
+		unit = 365 * 24 * time.Hour
+	default:
+		// Unknown period — use conservative 30-day default so freshness
+		// invariant still works for the most common case.
+		return 30 * 24 * time.Hour
+	}
+	return unit * time.Duration(count)
+}
+
+// extractBillingCycleLength reads the billing cycle duration from the SDK
+// GetSubscriptionResponse. Returns 30d default when fields are missing.
+func extractBillingCycleLength(resp interface{}) time.Duration {
+	r, ok := resp.(*sdkdtos.GetSubscriptionResponse)
+	if !ok || r == nil {
+		return 30 * 24 * time.Hour // conservative default
+	}
+	inner := r.GetDtoSubscriptionResponse()
+	if inner == nil {
+		return 30 * 24 * time.Hour
+	}
+	period := inner.GetBillingPeriod()
+	if period == nil {
+		return 30 * 24 * time.Hour
+	}
+	var count int64
+	if c := inner.GetBillingPeriodCount(); c != nil {
+		count = *c
+	}
+	d := billingPeriodDuration(*period, count)
+	if d <= 0 {
+		return 30 * 24 * time.Hour
+	}
+	return d
+}
+
+// extractLatestInvoice reads the most recent invoice (by PeriodEnd) from the
+// SDK QueryInvoiceResponse. Returns nil when no invoices are present.
+func extractLatestInvoice(resp interface{}) *latestInvoice {
+	r, ok := resp.(*sdkdtos.QueryInvoiceResponse)
+	if !ok || r == nil {
+		return nil
+	}
+	inner := r.GetDtoListInvoicesResponse()
+	if inner == nil {
+		return nil
+	}
+	items := inner.GetItems()
+	if len(items) == 0 {
+		return nil
+	}
+	var best *latestInvoice
+	for _, inv := range items {
+		if inv.PeriodEnd == nil {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, *inv.PeriodEnd)
+		if err != nil {
+			continue
+		}
+		if best == nil || t.After(best.PeriodEnd) {
+			cp := latestInvoice{PeriodEnd: t}
+			best = &cp
+		}
+	}
+	return best
+}
+
+// extractSubAge reads how long ago the subscription was created from the
+// GetSubscriptionResponse. Returns 0 → probe skips age-based checks when
+// the created_at field is absent or unparseable.
+func extractSubAge(resp interface{}) time.Duration {
+	r, ok := resp.(*sdkdtos.GetSubscriptionResponse)
+	if !ok || r == nil {
+		return 0
+	}
+	inner := r.GetDtoSubscriptionResponse()
+	if inner == nil || inner.CreatedAt == nil {
+		return 0
+	}
+	t, err := time.Parse(time.RFC3339, *inner.CreatedAt)
+	if err != nil {
+		return 0
+	}
+	age := time.Since(t)
+	if age < 0 {
+		return 0
+	}
+	return age
+}
