@@ -301,8 +301,16 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   deploy-api:
     name: Deploy API (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, approval-gate]
+    # staging: deploys immediately (gate is skipped / irrelevant)
+    # production: requires the approval-gate to have been approved
+    # dry-run: bypasses the gate; composite action prints plan only
+    if: >-
+      ${{ always() &&
+          needs.resolve-config.result == 'success' &&
+          (needs.resolve-config.outputs.environment != 'production' ||
+           needs.resolve-config.outputs.dry_run == 'true' ||
+           needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -329,8 +337,16 @@ jobs:
 
   deploy-consumer:
     name: Deploy Consumer (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, approval-gate]
+    # staging: deploys immediately (gate is skipped / irrelevant)
+    # production: requires the approval-gate to have been approved
+    # dry-run: bypasses the gate; composite action prints plan only
+    if: >-
+      ${{ always() &&
+          needs.resolve-config.result == 'success' &&
+          (needs.resolve-config.outputs.environment != 'production' ||
+           needs.resolve-config.outputs.dry_run == 'true' ||
+           needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
     strategy:
       matrix:
@@ -357,8 +373,16 @@ jobs:
 
   deploy-worker:
     name: Deploy Worker (${{ strategy.job-index }})
-    needs: [build, resolve-config]
-    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    needs: [build, resolve-config, approval-gate]
+    # staging: deploys immediately (gate is skipped / irrelevant)
+    # production: requires the approval-gate to have been approved
+    # dry-run: bypasses the gate; composite action prints plan only
+    if: >-
+      ${{ always() &&
+          needs.resolve-config.result == 'success' &&
+          (needs.resolve-config.outputs.environment != 'production' ||
+           needs.resolve-config.outputs.dry_run == 'true' ||
+           needs.approval-gate.result == 'success') }}
     runs-on: self-hosted
     strategy:
       matrix:
