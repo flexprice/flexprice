@@ -1918,12 +1918,12 @@ func (s *meterUsageService) processPointsWithBuckets(
 		cost = s.applyWindowCommitmentToPoints(p, lineItem, p.item.Points)
 	case !hasCommitment:
 		cost = p.priceService.CalculateBucketedCost(p.ctx, p.price, s.extractBucketValues(p.item.Points, p.aggType))
-		s.stampPointCosts(p)
+		s.stampPointCosts(p.ctx, p.priceService, p.item, p.price)
 	default:
 		// Non-windowed commitment applies to the period aggregate.
 		bucketedValues := s.extractBucketValues(p.item.Points, p.aggType)
 		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, nil, decimal.Zero)
-		s.stampPointCosts(p)
+		s.stampPointCosts(p.ctx, p.priceService, p.item, p.price)
 	}
 
 	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
@@ -1980,9 +1980,9 @@ func (s *meterUsageService) extractBucketValues(points []events.UsageAnalyticPoi
 }
 
 // stampPointCosts sets each point's cost at the plain price (no commitment math).
-func (s *meterUsageService) stampPointCosts(p *meterUsageBucketedCostParams) {
-	for i := range p.item.Points {
-		p.item.Points[i].Cost = p.priceService.CalculateCost(p.ctx, p.price, p.item.Points[i].Usage)
+func (s *meterUsageService) stampPointCosts(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, p *price.Price) {
+	for i := range item.Points {
+		item.Points[i].Cost = priceService.CalculateCost(ctx, p, item.Points[i].Usage)
 	}
 }
 
@@ -2009,7 +2009,7 @@ func (s *meterUsageService) applyWindowCommitmentToPoints(
 	if err != nil {
 		s.logger.Info(p.ctx, "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
 		p.item.Points = points
-		s.stampPointCosts(p)
+		s.stampPointCosts(p.ctx, p.priceService, p.item, p.price)
 		return p.priceService.CalculateBucketedCost(p.ctx, p.price, values)
 	}
 
@@ -2081,33 +2081,28 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 	if !skipCommitment && item.SubLineItemID != "" {
 		lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 
-		if lineItem != nil && lineItem.HasAnyCommitment() {
-			if lineItem.CommitmentWindowed {
-				if len(item.Points) > 0 {
-					bucketedValues := make([]decimal.Decimal, len(item.Points))
-					bucketStarts := make([]time.Time, len(item.Points))
-					for i, point := range item.Points {
-						bucketedValues[i] = point.Usage
-						bucketStarts[i] = point.Timestamp
-					}
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, bucketedValues, bucketStarts, decimal.Zero)
-				} else {
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, nil, cost)
-				}
-			} else {
-				cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, nil, cost)
-			}
+		// Windowed commitment (and time buckets, which require it) can only
+		// exist on bucketed meters: meter validation allows bucket_size only
+		// with MAX/SUM aggregation, and windowed commitment requires a meter
+		// with bucket_size — those meters route to calculateBucketedCost. So a
+		// regular meter can carry only a non-windowed aggregate commitment; a
+		// windowed flag here is invalid data and is ignored (billed plain).
+		switch {
+		case lineItem == nil:
+		case lineItem.CommitmentWindowed:
+			s.logger.Info(ctx, "ignoring windowed commitment on non-bucketed meter",
+				"line_item_id", lineItem.ID, "meter_id", m.ID)
+		case lineItem.HasCommitment():
+			cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, nil, cost)
 		}
 	}
 
 	item.TotalCost = cost
 	item.Currency = p.Currency
 
-	for i := range item.Points {
-		pointUsage := item.Points[i].Usage
-		pointCost := priceService.CalculateCost(ctx, p, pointUsage)
-		item.Points[i].Cost = pointCost
-	}
+	// Points here are a display series (request window_size); the commitment
+	// applies to the period aggregate, so per-point costs are plain price.
+	s.stampPointCosts(ctx, priceService, item, p)
 }
 
 // applyLineItemCommitment applies the line item's commitment — windowed (per
