@@ -3401,6 +3401,11 @@ func (s *subscriptionService) cancelInheritedSubscriptionAtPeriodEnd(ctx context
 	s.Logger.Info(ctx, "cancelling inherited subscription at period end",
 		"subscription_id", sub.ID,
 		"cancelled_at", cancelledAt)
+	if err := s.MarkCancellationScheduleAsExecuted(ctx, sub.ID); err != nil {
+		s.Logger.Error(ctx, "failed to mark cancellation schedule as executed",
+			"subscription_id", sub.ID,
+			"error", err)
+	}
 	return s.SubRepo.Update(ctx, sub)
 }
 
