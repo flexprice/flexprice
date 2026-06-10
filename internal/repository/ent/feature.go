@@ -35,7 +35,7 @@ func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cac
 func (r *featureRepository) Create(ctx context.Context, f *domainFeature.Feature) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating feature",
+	r.log.Debug(ctx, "creating feature",
 		"feature_id", f.ID,
 		"tenant_id", f.TenantID,
 		"name", f.Name,
@@ -126,7 +126,7 @@ func (r *featureRepository) Get(ctx context.Context, id string) (*domainFeature.
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting feature",
+	r.log.Debug(ctx, "getting feature",
 		"feature_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -258,7 +258,7 @@ func (r *featureRepository) ListAll(ctx context.Context, filter *types.FeatureFi
 func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating feature",
+	r.log.Debug(ctx, "updating feature",
 		"feature_id", f.ID,
 		"tenant_id", f.TenantID,
 	)
@@ -331,7 +331,7 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 func (r *featureRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting feature",
+	r.log.Debug(ctx, "deleting feature",
 		"feature_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -383,7 +383,7 @@ func (r *featureRepository) ListByIDs(ctx context.Context, featureIDs []string) 
 		return []*domainFeature.Feature{}, nil
 	}
 
-	r.log.Debugw("listing features by IDs", "feature_ids", featureIDs)
+	r.log.Debug(ctx, "listing features by IDs", "feature_ids", featureIDs)
 
 	// Create a filter with feature IDs
 	filter := &types.FeatureFilter{

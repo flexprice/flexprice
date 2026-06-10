@@ -39,7 +39,7 @@ func NewPriceUnitHandler(service service.PriceUnitService, log *logger.Logger) *
 func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 	var req dto.CreatePriceUnitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.NewError("invalid request body").
 			WithMessage("failed to parse request").
 			WithHint("The request body is invalid").
@@ -52,7 +52,7 @@ func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 
 	unit, err := h.service.CreatePriceUnit(c.Request.Context(), req)
 	if err != nil {
-		h.log.Error("Failed to create price unit", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to create price unit", "error", err)
 		c.Error(err)
 		return
 	}
@@ -91,7 +91,7 @@ func (h *PriceUnitHandler) ListPriceUnits(c *gin.Context) {
 	}
 
 	// Debug logging to verify pagination
-	h.log.Info("PriceUnit filter applied",
+	h.log.Info(c.Request.Context(), "PriceUnit filter applied",
 		"limit", filter.GetLimit(),
 		"offset", filter.GetOffset(),
 		"sort", filter.GetSort(),
@@ -100,13 +100,13 @@ func (h *PriceUnitHandler) ListPriceUnits(c *gin.Context) {
 
 	response, err := h.service.ListPriceUnits(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list price units", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list price units", "error", err)
 		c.Error(err)
 		return
 	}
 
 	// Debug logging for response
-	h.log.Info("PriceUnit response",
+	h.log.Info(c.Request.Context(), "PriceUnit response",
 		"items_count", len(response.Items),
 		"total", response.Pagination.Total,
 		"limit", response.Pagination.Limit,
@@ -141,7 +141,7 @@ func (h *PriceUnitHandler) UpdatePriceUnit(c *gin.Context) {
 
 	var req dto.UpdatePriceUnitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.NewError("invalid request body").
 			WithMessage("failed to parse request").
 			WithHint("The request body is invalid").
@@ -154,7 +154,7 @@ func (h *PriceUnitHandler) UpdatePriceUnit(c *gin.Context) {
 
 	unit, err := h.service.UpdatePriceUnit(c.Request.Context(), id, req)
 	if err != nil {
-		h.log.Error("Failed to update price unit", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to update price unit", "error", err)
 		c.Error(err)
 		return
 	}
@@ -187,7 +187,7 @@ func (h *PriceUnitHandler) DeletePriceUnit(c *gin.Context) {
 
 	err := h.service.DeletePriceUnit(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to delete price unit", "error", err, "id", id)
+		h.log.Error(c.Request.Context(), "Failed to delete price unit", "error", err, "id", id)
 
 		// Handle specific error types
 		if ierr.IsNotFound(err) {
@@ -233,7 +233,7 @@ func (h *PriceUnitHandler) GetPriceUnit(c *gin.Context) {
 
 	unit, err := h.service.GetPriceUnit(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to get price unit", "error", err, "id", id)
+		h.log.Error(c.Request.Context(), "Failed to get price unit", "error", err, "id", id)
 
 		if ierr.IsNotFound(err) {
 			c.Error(ierr.NewError("price unit not found").
@@ -279,7 +279,7 @@ func (h *PriceUnitHandler) GetPriceUnitByCode(c *gin.Context) {
 
 	unit, err := h.service.GetPriceUnitByCode(c.Request.Context(), code)
 	if err != nil {
-		h.log.Error("Failed to get price unit by code", "error", err, "code", code)
+		h.log.Error(c.Request.Context(), "Failed to get price unit by code", "error", err, "code", code)
 
 		if ierr.IsNotFound(err) {
 			c.Error(ierr.NewError("price unit not found").
@@ -326,7 +326,7 @@ func (h *PriceUnitHandler) QueryPriceUnits(c *gin.Context) {
 
 	response, err := h.service.ListPriceUnits(c.Request.Context(), &filter)
 	if err != nil {
-		h.log.Error("Failed to list price units by filter", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list price units by filter", "error", err)
 		c.Error(err)
 		return
 	}

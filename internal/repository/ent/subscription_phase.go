@@ -44,7 +44,7 @@ func (r *subscriptionPhaseRepository) Create(ctx context.Context, phase *subscri
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("creating subscription phase",
+	r.log.Debug(ctx, "creating subscription phase",
 		"phase_id", phase.ID,
 		"subscription_id", phase.SubscriptionID,
 		"tenant_id", phase.TenantID,
@@ -283,7 +283,7 @@ func (r *subscriptionPhaseRepository) Delete(ctx context.Context, id string) err
 
 // List retrieves subscription phases based on filter
 func (r *subscriptionPhaseRepository) List(ctx context.Context, filter *types.SubscriptionPhaseFilter) ([]*subscription.SubscriptionPhase, error) {
-	r.log.Debugw("listing subscription phases", "filter", filter)
+	r.log.Debug(ctx, "listing subscription phases", "filter", filter)
 
 	if filter == nil {
 		filter = &types.SubscriptionPhaseFilter{
@@ -320,7 +320,7 @@ func (r *subscriptionPhaseRepository) List(ctx context.Context, filter *types.Su
 	entPhases, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Errorw("failed to list subscription phases", "error", err)
+		r.log.Error(ctx, "failed to list subscription phases", "error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to list subscription phases").
 			Mark(ierr.ErrDatabase)
@@ -335,7 +335,7 @@ func (r *subscriptionPhaseRepository) List(ctx context.Context, filter *types.Su
 
 // Count returns the count of subscription phases matching the filter
 func (r *subscriptionPhaseRepository) Count(ctx context.Context, filter *types.SubscriptionPhaseFilter) (int, error) {
-	r.log.Debugw("counting subscription phases", "filter", filter)
+	r.log.Debug(ctx, "counting subscription phases", "filter", filter)
 
 	if filter == nil {
 		filter = &types.SubscriptionPhaseFilter{
@@ -371,7 +371,7 @@ func (r *subscriptionPhaseRepository) Count(ctx context.Context, filter *types.S
 	count, err := query.Count(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Errorw("failed to count subscription phases", "error", err)
+		r.log.Error(ctx, "failed to count subscription phases", "error", err)
 		return 0, ierr.WithError(err).
 			WithHint("Failed to count subscription phases").
 			Mark(ierr.ErrDatabase)

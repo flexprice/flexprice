@@ -31,7 +31,7 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 	// Get customer ID from URL path
 	customerID := c.Param("id")
 	if customerID == "" {
-		h.log.Error("Missing customer_id in URL path")
+		h.log.Info(c.Request.Context(), "Missing customer_id in URL path")
 		c.Error(ierr.NewError("customer_id is required").
 			WithHint("Customer ID must be provided in the URL path").
 			Mark(ierr.ErrValidation))
@@ -44,7 +44,7 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format. Unknown fields are not allowed").
 			Mark(ierr.ErrValidation))
@@ -53,7 +53,7 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 
 	// Validate the request
 	if err := req.Validate(); err != nil {
-		h.log.Error("Setup Intent request validation failed", "error", err)
+		h.log.Error(c.Request.Context(), "Setup Intent request validation failed", "error", err)
 		c.Error(err)
 		return
 	}
@@ -61,14 +61,14 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 	// Get Stripe integration
 	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(c.Request.Context())
 	if err != nil {
-		h.log.Error("Failed to get Stripe integration", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get Stripe integration", "error", err)
 		c.Error(err)
 		return
 	}
 
 	resp, err := stripeIntegration.PaymentSvc.SetupIntent(c.Request.Context(), customerID, &req, h.customerService)
 	if err != nil {
-		h.log.Error("Failed to create Setup Intent", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to create Setup Intent", "error", err)
 		c.Error(err)
 		return
 	}
@@ -80,7 +80,7 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 	// Get customer ID from URL path
 	customerID := c.Param("id")
 	if customerID == "" {
-		h.log.Error("Missing customer id in URL path")
+		h.log.Info(c.Request.Context(), "Missing customer id in URL path")
 		c.Error(ierr.NewError("customer id is required").
 			WithHint("Customer ID must be provided in the URL path").
 			Mark(ierr.ErrValidation))
@@ -94,7 +94,7 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format. Unknown fields are not allowed.").
 			Mark(ierr.ErrValidation))
@@ -110,7 +110,7 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 		if limit, err := strconv.Atoi(limitStr); err == nil {
 			req.Limit = limit
 		} else {
-			h.log.Error("Invalid limit parameter", "limit", limitStr, "error", err)
+			h.log.Error(c.Request.Context(), "Invalid limit parameter", "limit", limitStr, "error", err)
 			c.Error(ierr.NewError("invalid limit parameter").
 				WithHint("Limit must be a valid integer").
 				Mark(ierr.ErrValidation))
@@ -120,7 +120,7 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 
 	// Validate the request
 	if err := req.Validate(); err != nil {
-		h.log.Error("List Payment Methods request validation failed", "error", err)
+		h.log.Error(c.Request.Context(), "List Payment Methods request validation failed", "error", err)
 		c.Error(err)
 		return
 	}
@@ -128,14 +128,14 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 	// Get Stripe integration
 	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(c.Request.Context())
 	if err != nil {
-		h.log.Error("Failed to get Stripe integration", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to get Stripe integration", "error", err)
 		c.Error(err)
 		return
 	}
 
 	resp, err := stripeIntegration.PaymentSvc.ListCustomerPaymentMethods(c.Request.Context(), customerID, &req, h.customerService)
 	if err != nil {
-		h.log.Error("Failed to list Customer Payment Methods", "error", err)
+		h.log.Error(c.Request.Context(), "Failed to list Customer Payment Methods", "error", err)
 		c.Error(err)
 		return
 	}

@@ -115,7 +115,7 @@ func DispatchInvoiceVendorSync(
 		InvoiceID string `json:"invoice_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.InvoiceID == "" {
-		log.Errorw("integration_events: invalid invoice payload, dropping",
+		log.Error(ctx, "integration_events: invalid invoice payload, dropping",
 			"message_uuid", msgUUID,
 			"error", err,
 		)
@@ -134,7 +134,7 @@ func DispatchInvoiceVendorSync(
 		return errTemporalUnavailable
 	}
 
-	log.Infow("integration_events: dispatching invoice vendor sync",
+	log.Info(ctx, "integration_events: dispatching invoice vendor sync",
 		"invoice_id", in.InvoiceID,
 		"tenant_id", in.TenantID,
 		"environment_id", in.EnvironmentID,
@@ -183,7 +183,7 @@ func DispatchCustomerVendorSync(
 
 	var payload webhookDto.InternalCustomerEvent
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
-		log.Errorw("integration_events: invalid customer payload, dropping",
+		log.Error(ctx, "integration_events: invalid customer payload, dropping",
 			"message_uuid", msgUUID,
 			"error", err,
 		)
@@ -191,7 +191,7 @@ func DispatchCustomerVendorSync(
 	}
 
 	if payload.CustomerID == "" {
-		log.Warnw("integration_events: customer payload missing customer_id, dropping",
+		log.Info(context.Background(), "integration_events: customer payload missing customer_id, dropping",
 			"message_uuid", msgUUID,
 		)
 		return nil
@@ -213,7 +213,7 @@ func DispatchCustomerVendorSync(
 		return nil
 	}
 
-	log.Infow("integration_events: dispatching customer vendor sync",
+	log.Info(ctx, "integration_events: dispatching customer vendor sync",
 		"customer_id", in.CustomerID,
 		"tenant_id", in.TenantID,
 		"environment_id", in.EnvironmentID,
@@ -265,7 +265,7 @@ func DispatchSubscriptionVendorSync(
 		CustomerID     string `json:"customer_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.SubscriptionID == "" {
-		log.Warnw("integration_events: invalid subscription.created payload, skipping",
+		log.Info(context.Background(), "integration_events: invalid subscription.created payload, skipping",
 			"message_uuid", msgUUID, "error", err)
 		return nil
 	}
@@ -309,7 +309,7 @@ func triggerPaddleSubscriptionSyncIfEnabled(
 		return nil
 	}
 	if subscriptionAlreadySynced(ctx, eimRepo, in.SubscriptionID, types.SecretProviderPaddle) {
-		log.Infow("integration_events: subscription already synced to Paddle, skipping",
+		log.Info(ctx, "integration_events: subscription already synced to Paddle, skipping",
 			"subscription_id", in.SubscriptionID)
 		return nil
 	}
@@ -322,11 +322,11 @@ func triggerPaddleSubscriptionSyncIfEnabled(
 	}
 	workflowRun, wfErr := temporalSvc.ExecuteWorkflow(ctx, types.TemporalPaddleSubscriptionSyncWorkflow, input)
 	if wfErr != nil {
-		log.Errorw("integration_events: failed to start PaddleSubscriptionSyncWorkflow",
+		log.Error(ctx, "integration_events: failed to start PaddleSubscriptionSyncWorkflow",
 			"subscription_id", in.SubscriptionID, "error", wfErr)
 		return fmt.Errorf("paddle subscription sync workflow start failed: %w", wfErr)
 	}
-	log.Infow("integration_events: PaddleSubscriptionSyncWorkflow started",
+	log.Info(ctx, "integration_events: PaddleSubscriptionSyncWorkflow started",
 		"subscription_id", in.SubscriptionID,
 		"workflow_id", workflowRun.GetID())
 	return nil
@@ -343,7 +343,7 @@ func executeWorkflow(
 ) error {
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, workflowType, input)
 	if err != nil {
-		log.Errorw("integration_events: failed to start workflow",
+		log.Error(ctx, "integration_events: failed to start workflow",
 			"provider", provider,
 			"workflow_type", workflowType,
 			"invoice_id", invoiceID,
@@ -352,7 +352,7 @@ func executeWorkflow(
 		return fmt.Errorf("provider %s workflow start failed: %w", provider, err)
 	}
 
-	log.Infow("integration_events: workflow started",
+	log.Info(ctx, "integration_events: workflow started",
 		"provider", provider,
 		"workflow_type", workflowType,
 		"invoice_id", invoiceID,
@@ -373,7 +373,7 @@ func executeCustomerWorkflow(
 ) error {
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, workflowType, input)
 	if err != nil {
-		log.Errorw("integration_events: failed to start workflow",
+		log.Error(ctx, "integration_events: failed to start workflow",
 			"provider", provider,
 			"workflow_type", workflowType,
 			"customer_id", customerID,
@@ -382,7 +382,7 @@ func executeCustomerWorkflow(
 		return fmt.Errorf("provider %s workflow start failed: %w", provider, err)
 	}
 
-	log.Infow("integration_events: workflow started",
+	log.Info(ctx, "integration_events: workflow started",
 		"provider", provider,
 		"workflow_type", workflowType,
 		"customer_id", customerID,
@@ -408,7 +408,7 @@ func triggerStripeIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderStripe) {
-		log.Infow("integration_events: invoice already synced to Stripe, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to Stripe, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 
@@ -436,7 +436,7 @@ func triggerRazorpayIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderRazorpay) {
-		log.Infow("integration_events: invoice already synced to Razorpay, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to Razorpay, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 
@@ -464,7 +464,7 @@ func triggerChargebeeIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderChargebee) {
-		log.Infow("integration_events: invoice already synced to Chargebee, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to Chargebee, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 
@@ -492,7 +492,7 @@ func triggerQuickBooksIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderQuickBooks) {
-		log.Infow("integration_events: invoice already synced to QuickBooks, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to QuickBooks, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 
@@ -520,7 +520,7 @@ func triggerHubSpotIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderHubSpot) {
-		log.Infow("integration_events: invoice already synced to HubSpot, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to HubSpot, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 
@@ -548,7 +548,7 @@ func triggerMoyasarIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderMoyasar) {
-		log.Infow("integration_events: invoice already synced to Moyasar, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to Moyasar, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 
@@ -576,7 +576,7 @@ func triggerNomodIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderNomod) {
-		log.Infow("integration_events: invoice already synced to Nomod, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to Nomod, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 
@@ -604,7 +604,7 @@ func triggerPaddleIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderPaddle) {
-		log.Infow("integration_events: invoice already synced to Paddle, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to Paddle, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 
@@ -632,7 +632,7 @@ func triggerZohoBooksIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderZohoBooks) {
-		log.Infow("integration_events: invoice already synced to Zoho Books, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to Zoho Books, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 	input := &temporalmodels.ZohoBooksInvoiceSyncWorkflowInput{
@@ -659,7 +659,7 @@ func triggerStripeCustomerSyncIfEnabled(
 		return nil
 	}
 	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderStripe) {
-		log.Infow("integration_events: customer already synced to Stripe, skipping", "customer_id", in.CustomerID)
+		log.Info(ctx, "integration_events: customer already synced to Stripe, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
 	input := &temporalmodels.StripeCustomerSyncWorkflowInput{
@@ -686,7 +686,7 @@ func triggerRazorpayCustomerSyncIfEnabled(
 		return nil
 	}
 	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderRazorpay) {
-		log.Infow("integration_events: customer already synced to Razorpay, skipping", "customer_id", in.CustomerID)
+		log.Info(ctx, "integration_events: customer already synced to Razorpay, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
 	input := &temporalmodels.RazorpayCustomerSyncWorkflowInput{
@@ -713,7 +713,7 @@ func triggerChargebeeCustomerSyncIfEnabled(
 		return nil
 	}
 	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderChargebee) {
-		log.Infow("integration_events: customer already synced to Chargebee, skipping", "customer_id", in.CustomerID)
+		log.Info(ctx, "integration_events: customer already synced to Chargebee, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
 	input := &temporalmodels.ChargebeeCustomerSyncWorkflowInput{
@@ -740,7 +740,7 @@ func triggerQuickBooksCustomerSyncIfEnabled(
 		return nil
 	}
 	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderQuickBooks) {
-		log.Infow("integration_events: customer already synced to QuickBooks, skipping", "customer_id", in.CustomerID)
+		log.Info(ctx, "integration_events: customer already synced to QuickBooks, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
 	input := &temporalmodels.QuickBooksCustomerSyncWorkflowInput{
@@ -767,7 +767,7 @@ func triggerNomodCustomerSyncIfEnabled(
 		return nil
 	}
 	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderNomod) {
-		log.Infow("integration_events: customer already synced to Nomod, skipping", "customer_id", in.CustomerID)
+		log.Info(ctx, "integration_events: customer already synced to Nomod, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
 	input := &temporalmodels.NomodCustomerSyncWorkflowInput{
@@ -794,7 +794,7 @@ func triggerPaddleCustomerSyncIfEnabled(
 		return nil
 	}
 	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderPaddle) {
-		log.Infow("integration_events: customer already synced to Paddle, skipping", "customer_id", in.CustomerID)
+		log.Info(ctx, "integration_events: customer already synced to Paddle, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
 	input := &temporalmodels.PaddleCustomerSyncWorkflowInput{
@@ -824,7 +824,7 @@ func DispatchInvoicePaidVendorSync(
 		InvoiceID string `json:"invoice_id"`
 	}
 	if err := json.Unmarshal(event.Payload, &pl); err != nil || pl.InvoiceID == "" {
-		log.Errorw("integration_events: invalid invoice payment payload, dropping",
+		log.Error(ctx, "integration_events: invalid invoice payment payload, dropping",
 			"message_uuid", msgUUID,
 			"error", err,
 		)
@@ -843,7 +843,7 @@ func DispatchInvoicePaidVendorSync(
 		return errTemporalUnavailable
 	}
 
-	log.Infow("integration_events: dispatching invoice paid vendor sync",
+	log.Info(ctx, "integration_events: dispatching invoice paid vendor sync",
 		"invoice_id", in.InvoiceID,
 		"tenant_id", in.TenantID,
 		"environment_id", in.EnvironmentID,
@@ -894,7 +894,7 @@ func triggerWhopIfEnabled(
 		return nil
 	}
 	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderWhop) {
-		log.Infow("integration_events: invoice already synced to Whop, skipping", "invoice_id", in.InvoiceID)
+		log.Info(ctx, "integration_events: invoice already synced to Whop, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
 

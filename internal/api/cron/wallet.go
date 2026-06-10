@@ -51,11 +51,11 @@ func NewWalletCronHandler(logger *logger.Logger,
 //
 // Deprecated: for automation, use the Temporal server schedule.
 func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
-	h.logger.Infow("starting credit expiry cron job - %s", time.Now().UTC().Format(time.RFC3339))
+	h.logger.Info(c.Request.Context(), "starting credit expiry cron job - %s", time.Now().UTC().Format(time.RFC3339))
 
 	tenants, err := h.tenantService.GetAllTenants(c.Request.Context())
 	if err != nil {
-		h.logger.Errorw("failed to get all tenants", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to get all tenants", "error", err)
 		c.Error(err)
 		return
 	}
@@ -82,7 +82,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 		envFilter.Limit = 1000
 		environments, err := h.environmentService.GetEnvironments(ctx, envFilter)
 		if err != nil {
-			h.logger.Errorw("failed to get all environments", "error", err)
+			h.logger.Error(c.Request.Context(), "failed to get all environments", "error", err)
 			c.Error(err)
 			return
 		}
@@ -102,12 +102,12 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 
 			transactions, err := h.walletService.ListWalletTransactionsByFilter(ctx, filter)
 			if err != nil {
-				h.logger.Errorw("failed to list expired credits", "error", err)
+				h.logger.Error(c.Request.Context(), "failed to list expired credits", "error", err)
 				c.Error(err)
 				return
 			}
 
-			h.logger.Infow("found expired credits", "count", len(transactions.Items))
+			h.logger.Info(c.Request.Context(), "found expired credits", "count", len(transactions.Items))
 
 			for _, tx := range transactions.Items {
 				tenantResponse.Count++
@@ -116,7 +116,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 				ctx = context.WithValue(ctx, types.CtxUserID, tx.CreatedBy)
 				result, err := h.walletService.ExpireCredits(ctx, tx.ID)
 				if err != nil {
-					h.logger.Errorw("failed to expire credits", "transaction_id", tx.ID, "error", err)
+					h.logger.Error(c.Request.Context(), "failed to expire credits", "transaction_id", tx.ID, "error", err)
 					tenantResponse.Failed++
 					response.Failed++
 					continue
@@ -124,7 +124,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 				if result.Expired {
 					tenantResponse.Success++
 					response.Success++
-					h.logger.Infow("expired credits successfully",
+					h.logger.Info(c.Request.Context(), "expired credits successfully",
 						"transaction_id", tx.ID, "wallet_id", tx.WalletID, "amount", tx.CreditsAvailable)
 					continue
 				}
@@ -142,18 +142,18 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 		}
 	}
 
-	h.logger.Infow("completed credit expiry cron job")
+	h.logger.Info(c.Request.Context(), "completed credit expiry cron job")
 	c.JSON(http.StatusOK, response)
 }
 
 // CheckAlerts checks wallet balances and triggers alerts based on thresholds
 // func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
-// 	h.logger.Infow("starting wallet balance alert and feature alert check cron job", "time", time.Now().UTC().Format(time.RFC3339))
+// 	h.logger.Info(c.Request.Context(), "starting wallet balance alert and feature alert check cron job", "time", time.Now().UTC().Format(time.RFC3339))
 
 // 	// parse request body
 // 	var req types.CheckAlertsRequest
 // 	if err := c.ShouldBindJSON(&req); err != nil {
-// 		h.logger.Errorw("failed to parse request body", "error", err)
+// 		h.logger.Error(c.Request.Context(), "failed to parse request body", "error", err)
 // 		c.Error(err)
 // 		return
 // 	}
@@ -162,13 +162,13 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 
 // 	// Process each tenant
 // 	for _, tenantID := range tenantIDs {
-// 		h.logger.Infow("processing tenant", "tenant_id", tenantID)
+// 		h.logger.Info(c.Request.Context(), "processing tenant", "tenant_id", tenantID)
 // 		ctx := context.WithValue(c.Request.Context(), types.CtxTenantID, tenantID)
 
 // 		// fetch all environments
 // 		environments, err := h.environmentService.GetEnvironments(ctx, types.GetDefaultFilter())
 // 		if err != nil {
-// 			h.logger.Errorw("failed to get all environments", "error", err)
+// 			h.logger.Error(c.Request.Context(), "failed to get all environments", "error", err)
 // 			c.Error(err)
 // 			return
 // 		}
@@ -196,14 +196,14 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 				WalletIDs:    req.WalletIDs,
 // 			})
 // 			if err != nil {
-// 				h.logger.Errorw("failed to get active wallets for tenant",
+// 				h.logger.Error(c.Request.Context(), "failed to get active wallets for tenant",
 // 					"tenant_id", tenantID,
 // 					"error", err,
 // 				)
 // 				continue
 // 			}
 
-// 			h.logger.Infow("found wallets for tenant",
+// 			h.logger.Info(c.Request.Context(), "found wallets for tenant",
 // 				"tenant_id", tenantID,
 // 				"count", len(wallets.Items),
 // 			)
@@ -216,7 +216,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 				QueryFilter: queryFilter,
 // 			})
 // 			if err != nil {
-// 				h.logger.Errorw("failed to get features for alert checking",
+// 				h.logger.Error(c.Request.Context(), "failed to get features for alert checking",
 // 					"environment_id", environment.ID,
 // 					"tenant_id", tenantID,
 // 					"error", err,
@@ -229,7 +229,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 				return feature.AlertSettings != nil && feature.AlertSettings.IsAlertEnabled()
 // 			})
 
-// 			h.logger.Infow("found features with alert settings enabled",
+// 			h.logger.Info(context.Background(), "found features with alert settings enabled",
 // 				"environment_id", environment.ID,
 // 				"tenant_id", tenantID,
 // 				"total_features", len(features.Items),
@@ -238,7 +238,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 
 // 			// Process each wallet
 // 			for _, wallet := range wallets.Items {
-// 				h.logger.Infow("processing wallet",
+// 				h.logger.Info(context.Background(), "processing wallet",
 // 					"wallet_id", wallet.ID,
 // 					"alert_enabled", wallet.AlertEnabled,
 // 					"alert_state", wallet.AlertState,
@@ -265,7 +265,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 				// Get real-time balance
 // 				balance, err := h.walletService.GetWalletBalanceV2(ctx, wallet.ID)
 // 				if err != nil {
-// 					h.logger.Errorw("failed to get wallet balance",
+// 					h.logger.Error(context.Background(), "failed to get wallet balance",
 // 						"wallet_id", wallet.ID,
 // 						"error", err,
 // 					)
@@ -286,7 +286,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 					// Determine alert status based on ongoing balance vs alert settings
 // 					alertStatus, err := feature.AlertSettings.AlertState(*ongoingBalance)
 // 					if err != nil {
-// 						h.logger.Errorw("failed to determine alert status",
+// 						h.logger.Error(context.Background(), "failed to determine alert status",
 // 							"feature_id", feature.ID,
 // 							"feature_name", feature.Name,
 // 							"wallet_id", wallet.ID,
@@ -296,7 +296,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 						continue
 // 					}
 
-// 					h.logger.Debugw("feature alert status determined",
+// 					h.logger.Debug(context.Background(), "feature alert status determined",
 // 						"feature_id", feature.ID,
 // 						"feature_name", feature.Name,
 // 						"wallet_id", wallet.ID,
@@ -329,7 +329,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 						},
 // 					})
 // 					if err != nil {
-// 						h.logger.Errorw("failed to check feature alert",
+// 						h.logger.Error(context.Background(), "failed to check feature alert",
 // 							"feature_id", feature.ID,
 // 							"wallet_id", wallet.ID,
 // 							"alert_status", alertStatus,
@@ -338,7 +338,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 						continue
 // 					}
 
-// 					h.logger.Debugw("feature alert check completed",
+// 					h.logger.Debug(context.Background(), "feature alert check completed",
 // 						"feature_id", feature.ID,
 // 						"wallet_id", wallet.ID,
 // 						"alert_status", alertStatus,
@@ -346,7 +346,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 				}
 
 // 				// Check wallet ongoing balance alert
-// 				h.logger.Debugw("checking balances against threshold",
+// 				h.logger.Debug(context.Background(), "checking balances against threshold",
 // 					"wallet_id", wallet.ID,
 // 					"threshold", threshold,
 // 					"current_balance", currentBalance,
@@ -357,7 +357,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 				// Check ongoing balance
 // 				isOngoingBalanceBelowThreshold := ongoingBalance.LessThanOrEqual(threshold)
 
-// 				h.logger.Debugw("wallet ongoing balance check results",
+// 				h.logger.Debug(context.Background(), "wallet ongoing balance check results",
 // 					"wallet_id", wallet.ID,
 // 					"ongoing_balance_below", isOngoingBalanceBelowThreshold,
 // 				)
@@ -370,7 +370,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 					alertStatus = types.AlertStateOk
 // 				}
 
-// 				h.logger.Debugw("logging wallet ongoing balance alert status",
+// 				h.logger.Debug(context.Background(), "logging wallet ongoing balance alert status",
 // 					"wallet_id", wallet.ID,
 // 					"threshold", threshold,
 // 					"ongoing_balance", ongoingBalance,
@@ -405,7 +405,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 					},
 // 				})
 // 				if err != nil {
-// 					h.logger.Errorw("failed to check wallet ongoing balance alert",
+// 					h.logger.Error(context.Background(), "failed to check wallet ongoing balance alert",
 // 						"wallet_id", wallet.ID,
 // 						"alert_status", alertStatus,
 // 						"error", err,
@@ -413,7 +413,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 					continue
 // 				}
 
-// 				h.logger.Debugw("wallet ongoing balance alert check completed",
+// 				h.logger.Debug(context.Background(), "wallet ongoing balance alert check completed",
 // 					"wallet_id", wallet.ID,
 // 					"alert_status", alertStatus,
 // 				)
@@ -421,13 +421,13 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 				// Update wallet alert state to match the logged status (if it changed)
 // 				if wallet.AlertState != string(alertStatus) {
 // 					if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, alertStatus); err != nil {
-// 						h.logger.Errorw("failed to update wallet alert state",
+// 						h.logger.Error(context.Background(), "failed to update wallet alert state",
 // 							"wallet_id", wallet.ID,
 // 							"new_state", alertStatus,
 // 							"error", err,
 // 						)
 // 					} else {
-// 						h.logger.Infow("updated wallet alert state",
+// 						h.logger.Info(context.Background(), "updated wallet alert state",
 // 							"wallet_id", wallet.ID,
 // 							"old_state", wallet.AlertState,
 // 							"new_state", alertStatus,
@@ -437,6 +437,6 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 // 			}
 // 		}
 // 	}
-// 	h.logger.Infow("completed wallet balance alert check cron job")
+// 	h.logger.Info(context.Background(), "completed wallet balance alert check cron job")
 // 	c.JSON(http.StatusOK, gin.H{"status": "completed"})
 // }

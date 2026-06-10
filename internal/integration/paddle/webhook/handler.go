@@ -38,7 +38,7 @@ type ServiceDependencies = interfaces.ServiceDependencies
 // This function never returns errors to ensure webhooks always return 200 OK.
 // All errors are logged internally to prevent Paddle from retrying.
 func (h *Handler) HandleWebhookEvent(ctx context.Context, eventType string, payload []byte, environmentID string, services *ServiceDependencies) error {
-	h.logger.Infow("processing Paddle webhook event",
+	h.logger.Info(ctx, "processing Paddle webhook event",
 		"event_type", eventType,
 		"environment_id", environmentID)
 
@@ -52,7 +52,7 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, eventType string, payl
 	case string(EventSubscriptionActivated):
 		return h.handleSubscriptionActivated(ctx, payload, services)
 	default:
-		h.logger.Debugw("ignoring unhandled Paddle event", "type", eventType)
+		h.logger.Debug(ctx, "ignoring unhandled Paddle event", "type", eventType)
 		return nil
 	}
 }
@@ -60,13 +60,13 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, eventType string, payl
 func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte, services *ServiceDependencies) error {
 	var event paddlesdk.TransactionCompletedEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
-		h.logger.Errorw("failed to parse transaction.completed payload",
+		h.logger.Error(ctx, "failed to parse transaction.completed payload",
 			"error", err, "event_type", EventTransactionCompleted)
 		return nil
 	}
 	err := h.syncSvc.ProcessTransactionCompletedWebhook(ctx, event.Data.ID, services.PaymentService, services.InvoiceService)
 	if err != nil {
-		h.logger.Errorw("failed to process transaction.completed webhook",
+		h.logger.Error(ctx, "failed to process transaction.completed webhook",
 			"error", err, "paddle_transaction_id", event.Data.ID)
 		return err
 	}
@@ -75,18 +75,18 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 
 func (h *Handler) handleCustomerCreated(ctx context.Context, payload []byte, services *ServiceDependencies) error {
 	if services == nil || services.CustomerService == nil {
-		h.logger.Errorw("customer service not available for customer.created webhook")
+		h.logger.Info(ctx, "customer service not available for customer.created webhook")
 		return nil
 	}
 	var event paddlenotification.CustomerCreated
 	if err := json.Unmarshal(payload, &event); err != nil {
-		h.logger.Errorw("failed to parse customer.created payload",
+		h.logger.Error(ctx, "failed to parse customer.created payload",
 			"error", err, "event_type", EventCustomerCreated)
 		return nil
 	}
 	err := h.syncSvc.ProcessCustomerCreatedWebhook(ctx, &event.Data, services.CustomerService)
 	if err != nil {
-		h.logger.Errorw("failed to process customer.created webhook",
+		h.logger.Error(ctx, "failed to process customer.created webhook",
 			"error", err, "paddle_customer_id", event.Data.ID)
 	}
 	return nil
@@ -94,18 +94,18 @@ func (h *Handler) handleCustomerCreated(ctx context.Context, payload []byte, ser
 
 func (h *Handler) handleSubscriptionActivated(ctx context.Context, payload []byte, services *ServiceDependencies) error {
 	if services == nil || services.SubscriptionService == nil {
-		h.logger.Errorw("subscription service not available for subscription.activated webhook")
+		h.logger.Info(ctx, "subscription service not available for subscription.activated webhook")
 		return nil
 	}
 	var event paddlenotification.SubscriptionActivated
 	if err := json.Unmarshal(payload, &event); err != nil {
-		h.logger.Errorw("failed to parse subscription.activated payload",
+		h.logger.Error(ctx, "failed to parse subscription.activated payload",
 			"error", err, "event_type", EventSubscriptionActivated)
 		return nil
 	}
 	err := h.syncSvc.ProcessSubscriptionActivatedWebhook(ctx, &event.Data, services.SubscriptionService)
 	if err != nil {
-		h.logger.Errorw("failed to process subscription.activated webhook",
+		h.logger.Error(ctx, "failed to process subscription.activated webhook",
 			"error", err, "paddle_sub_id", event.Data.ID)
 	}
 	return nil
@@ -113,18 +113,18 @@ func (h *Handler) handleSubscriptionActivated(ctx context.Context, payload []byt
 
 func (h *Handler) handleAddressCreated(ctx context.Context, payload []byte, services *ServiceDependencies) error {
 	if services == nil || services.CustomerService == nil {
-		h.logger.Errorw("customer service not available for address.created webhook")
+		h.logger.Info(ctx, "customer service not available for address.created webhook")
 		return nil
 	}
 	var event paddlenotification.AddressCreated
 	if err := json.Unmarshal(payload, &event); err != nil {
-		h.logger.Errorw("failed to parse address.created payload",
+		h.logger.Error(ctx, "failed to parse address.created payload",
 			"error", err, "event_type", EventAddressCreated)
 		return nil
 	}
 	err := h.syncSvc.ProcessAddressCreatedWebhook(ctx, event.Data.CustomerID, &event.Data, services.CustomerService)
 	if err != nil {
-		h.logger.Errorw("failed to process address.created webhook",
+		h.logger.Error(ctx, "failed to process address.created webhook",
 			"error", err, "paddle_customer_id", event.Data.CustomerID)
 	}
 	return nil

@@ -236,7 +236,7 @@ func (s *paymentService) getExistingPaymentLinkResponse(ctx context.Context, inv
 		return nil
 	}
 
-	s.Logger.InfowCtx(ctx, "found existing payment link URL, returning it without creating payment record",
+	s.Logger.Info(ctx, "found existing payment link URL, returning it without creating payment record",
 		"invoice_id", invoice.ID,
 		"gateway", gateway,
 		"payment_url_present", true)
@@ -471,7 +471,7 @@ func (s *paymentService) publishSystemEvent(ctx context.Context, eventName types
 	})
 
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -487,13 +487,13 @@ func (s *paymentService) publishSystemEvent(ctx context.Context, eventName types
 		EntityID:      paymentID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 
 // GetPaymentByGatewayTrackingID retrieves a payment by its gateway tracking ID and gateway type
 func (s *paymentService) GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error) {
-	s.Logger.InfowCtx(ctx, "getting payment by gateway tracking ID",
+	s.Logger.Info(ctx, "getting payment by gateway tracking ID",
 		"gateway_tracking_id", gatewayTrackingID,
 		"gateway", gateway)
 
@@ -526,7 +526,7 @@ func (s *paymentService) GetPaymentByGatewayTrackingID(ctx context.Context, gate
 
 // PaymentExistsByGatewayPaymentID checks if a payment exists with the given gateway payment ID
 func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, gatewayPaymentID string) (bool, error) {
-	s.Logger.DebugwCtx(ctx, "checking if payment exists by gateway payment ID",
+	s.Logger.Debug(ctx, "checking if payment exists by gateway payment ID",
 		"gateway_payment_id", gatewayPaymentID)
 
 	// Use List API with filters

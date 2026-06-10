@@ -13,6 +13,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
@@ -54,7 +55,7 @@ func NewClient(
 	return &Client{
 		connectionRepo:    connectionRepo,
 		encryptionService: encryptionService,
-		httpClient:        &http.Client{Timeout: 30 * time.Second},
+		httpClient:        &http.Client{Timeout: 30 * time.Second, Transport: httpclient.OtelTransport(nil)},
 		logger:            logger,
 	}
 }

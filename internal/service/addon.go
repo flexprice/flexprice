@@ -78,7 +78,7 @@ func (s *addonService) GetAddon(ctx context.Context, id string) (*dto.AddonRespo
 	priceService := NewPriceService(s.ServiceParams)
 	prices, err := priceService.GetPricesByAddonID(ctx, id)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to fetch prices for addon", "addon_id", id, "error", err)
+		s.Logger.Error(ctx, "failed to fetch prices for addon", "addon_id", id, "error", err)
 		return nil, err
 	}
 
@@ -91,7 +91,7 @@ func (s *addonService) GetAddon(ctx context.Context, id string) (*dto.AddonRespo
 	entitlementService := NewEntitlementService(s.ServiceParams)
 	entitlements, err := entitlementService.GetAddonEntitlements(ctx, id)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to fetch entitlements for addon", "addon_id", id, "error", err)
+		s.Logger.Error(ctx, "failed to fetch entitlements for addon", "addon_id", id, "error", err)
 		return nil, err
 	}
 
@@ -121,13 +121,13 @@ func (s *addonService) GetAddonByLookupKey(ctx context.Context, lookupKey string
 
 	pricesResponse, err := priceService.GetPricesByAddonID(ctx, domainAddon.ID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to fetch prices for addon", "addon_id", domainAddon.ID, "error", err)
+		s.Logger.Error(ctx, "failed to fetch prices for addon", "addon_id", domainAddon.ID, "error", err)
 		return nil, err
 	}
 
 	entitlements, err := entitlementService.GetAddonEntitlements(ctx, domainAddon.ID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to fetch entitlements for addon", "addon_id", domainAddon.ID, "error", err)
+		s.Logger.Error(ctx, "failed to fetch entitlements for addon", "addon_id", domainAddon.ID, "error", err)
 		return nil, err
 	}
 
@@ -347,7 +347,7 @@ func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 			Mark(ierr.ErrSystem)
 	}
 
-	s.Logger.InfowCtx(ctx, "addon deleted successfully",
+	s.Logger.Info(ctx, "addon deleted successfully",
 		"addon_id", id)
 
 	return nil

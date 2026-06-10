@@ -458,7 +458,7 @@ func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
 }
 
 func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (client.TemporalClient, error) {
-	log.Info("Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
+	log.Info(context.Background(), "Initializing Temporal client", "address", cfg.Address, "namespace", cfg.Namespace)
 
 	// Use default options and merge with config
 	options := models.DefaultClientOptions()
@@ -476,11 +476,11 @@ func provideTemporalClient(cfg *config.TemporalConfig, log *logger.Logger) (clie
 	// Create temporal client directly
 	temporalClient, err := client.NewTemporalClient(options, log)
 	if err != nil {
-		log.Error("Failed to create Temporal client", "error", err)
+		log.Error(context.Background(), "Failed to create Temporal client", "error", err)
 		return nil, fmt.Errorf("failed to create temporal client: %w", err)
 	}
 
-	log.Info("Temporal client created successfully")
+	log.Info(context.Background(), "Temporal client created successfully")
 	return temporalClient, nil
 }
 
@@ -495,7 +495,7 @@ func provideTemporalService(temporalClient client.TemporalClient, workerManager 
 	// Get the global instance and start it
 	service := temporalservice.GetGlobalTemporalService()
 	if err := service.Start(context.Background()); err != nil {
-		log.Error("Failed to start global Temporal service", "error", err)
+		log.Error(context.Background(), "Failed to start global Temporal service", "error", err)
 		return nil
 	}
 
@@ -536,7 +536,7 @@ func startServer(
 	switch mode {
 	case types.ModeLocal:
 		if consumer == nil {
-			log.Fatal("Kafka consumer required for local mode")
+			log.Fatal(context.Background(), "Kafka consumer required for local mode")
 		}
 		startAPIServer(lc, r, cfg, log)
 
@@ -560,7 +560,7 @@ func startServer(
 		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
 	case types.ModeConsumer:
 		if consumer == nil {
-			log.Fatal("Kafka consumer required for consumer mode")
+			log.Fatal(context.Background(), "Kafka consumer required for consumer mode")
 		}
 
 		// Register all handlers and start router once
@@ -611,10 +611,10 @@ func startAPIServer(
 	cfg *config.Configuration,
 	log *logger.Logger,
 ) {
-	log.Info("Registering API server start hook")
+	log.Info(context.Background(), "Registering API server start hook")
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			log.Info("Starting API server...")
+			log.Info(ctx, "Starting API server...")
 			go func() {
 				if err := r.Run(cfg.Server.Address); err != nil {
 					log.Fatalf("Failed to start server: %v", err)
@@ -623,7 +623,7 @@ func startAPIServer(
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			log.Info("Shutting down server...")
+			log.Info(ctx, "Shutting down server...")
 			log.Shutdown(ctx)
 			return nil
 		},
@@ -674,7 +674,7 @@ func startRouter(
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			logger.Info("starting message router")
+			logger.Info(ctx, "starting message router")
 			go func() {
 				if err := router.Run(); err != nil {
 					logger.Errorw("message router failed", "error", err)
@@ -683,7 +683,7 @@ func startRouter(
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			logger.Info("stopping message router")
+			logger.Info(ctx, "stopping message router")
 			return router.Close()
 		},
 	})

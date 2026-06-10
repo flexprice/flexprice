@@ -48,7 +48,7 @@ func (s *InvoiceSyncService) SyncInvoiceToNomod(
 	req NomodInvoiceSyncRequest,
 	customerService interfaces.CustomerService,
 ) (*NomodInvoiceSyncResponse, error) {
-	s.logger.Infow("starting Nomod invoice sync",
+	s.logger.Info(ctx, "starting Nomod invoice sync",
 		"invoice_id", req.InvoiceID)
 
 	// Step 1: Check if Nomod connection exists
@@ -74,7 +74,7 @@ func (s *InvoiceSyncService) SyncInvoiceToNomod(
 
 	if existingMapping != nil {
 		nomodInvoiceID := existingMapping.ProviderEntityID
-		s.logger.Infow("invoice already synced to Nomod",
+		s.logger.Info(ctx, "invoice already synced to Nomod",
 			"invoice_id", req.InvoiceID,
 			"nomod_invoice_id", nomodInvoiceID)
 
@@ -91,7 +91,7 @@ func (s *InvoiceSyncService) SyncInvoiceToNomod(
 	}
 
 	nomodCustomerID := flexpriceCustomer.Metadata["nomod_customer_id"]
-	s.logger.Infow("customer synced to Nomod",
+	s.logger.Info(ctx, "customer synced to Nomod",
 		"customer_id", flexInvoice.CustomerID,
 		"nomod_customer_id", nomodCustomerID)
 
@@ -110,13 +110,13 @@ func (s *InvoiceSyncService) SyncInvoiceToNomod(
 	}
 
 	nomodInvoiceID := nomodInvoice.ID
-	s.logger.Infow("successfully created invoice in Nomod",
+	s.logger.Info(ctx, "successfully created invoice in Nomod",
 		"invoice_id", req.InvoiceID,
 		"nomod_invoice_id", nomodInvoiceID)
 
 	// Step 7: Create entity integration mapping
 	if err := s.createInvoiceMapping(ctx, req.InvoiceID, nomodInvoice, flexInvoice.EnvironmentID); err != nil {
-		s.logger.Errorw("failed to create invoice mapping",
+		s.logger.Error(ctx, "failed to create invoice mapping",
 			"error", err,
 			"invoice_id", req.InvoiceID,
 			"nomod_invoice_id", nomodInvoiceID)
@@ -125,7 +125,7 @@ func (s *InvoiceSyncService) SyncInvoiceToNomod(
 
 	// Step 8: Update FlexPrice invoice metadata with Nomod details
 	if err := s.updateFlexPriceInvoiceFromNomod(ctx, flexInvoice, nomodInvoice); err != nil {
-		s.logger.Errorw("failed to update FlexPrice invoice metadata from Nomod", "error", err)
+		s.logger.Error(ctx, "failed to update FlexPrice invoice metadata from Nomod", "error", err)
 		// Don't fail the entire sync for this
 	}
 
@@ -191,7 +191,7 @@ func (s *InvoiceSyncService) buildInvoiceRequest(
 		req.StartsAt = &startsAt
 	}
 
-	s.logger.Infow("built invoice request for Nomod",
+	s.logger.Info(ctx, "built invoice request for Nomod",
 		"invoice_id", flexInvoice.ID,
 		"line_items_count", len(items),
 		"currency", flexInvoice.Currency,
@@ -207,7 +207,7 @@ func (s *InvoiceSyncService) buildLineItems(flexInvoice *invoice.Invoice) ([]Lin
 	for _, item := range flexInvoice.LineItems {
 		// Skip zero-amount items
 		if item.Amount.IsZero() {
-			s.logger.Debugw("skipping zero-amount line item",
+			s.logger.Debug(context.Background(), "skipping zero-amount line item",
 				"invoice_id", flexInvoice.ID)
 			continue
 		}
@@ -287,7 +287,7 @@ func (s *InvoiceSyncService) buildSyncResponse(nomodInvoice *InvoiceResponse) *N
 	// Parse amount with error handling
 	amount, err := decimal.NewFromString(nomodInvoice.Amount)
 	if err != nil {
-		s.logger.Errorw("failed to parse Nomod invoice amount",
+		s.logger.Error(context.Background(), "failed to parse Nomod invoice amount",
 			"raw_amount", nomodInvoice.Amount,
 			"invoice_id", nomodInvoice.ID,
 			"error", err)
@@ -362,14 +362,14 @@ func (s *InvoiceSyncService) createInvoiceMapping(
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
 		// If duplicate key error, invoice is already tracked (race condition)
-		s.logger.Warnw("failed to create entity integration mapping (may already exist)",
+		s.logger.Info(context.Background(), "failed to create entity integration mapping (may already exist)",
 			"error", err,
 			"invoice_id", flexInvoiceID,
 			"nomod_invoice_id", nomodInvoice.ID)
 		return err
 	}
 
-	s.logger.Infow("created invoice mapping",
+	s.logger.Info(ctx, "created invoice mapping",
 		"invoice_id", flexInvoiceID,
 		"nomod_invoice_id", nomodInvoice.ID)
 
@@ -420,7 +420,7 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, nomodInv
 			Mark(ierr.ErrNotFound)
 	}
 
-	s.logger.Debugw("looking up FlexPrice invoice ID from Nomod invoice ID",
+	s.logger.Debug(ctx, "looking up FlexPrice invoice ID from Nomod invoice ID",
 		"nomod_invoice_id", nomodInvoiceID)
 
 	filter := &types.EntityIntegrationMappingFilter{
@@ -432,7 +432,7 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, nomodInv
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err != nil {
-		s.logger.Debugw("failed to query entity integration mapping",
+		s.logger.Debug(ctx, "failed to query entity integration mapping",
 			"error", err,
 			"nomod_invoice_id", nomodInvoiceID)
 		return "", ierr.WithError(err).
@@ -441,14 +441,14 @@ func (s *InvoiceSyncService) GetFlexPriceInvoiceID(ctx context.Context, nomodInv
 	}
 
 	if len(mappings) == 0 {
-		s.logger.Debugw("no FlexPrice invoice mapping found for Nomod invoice",
+		s.logger.Debug(ctx, "no FlexPrice invoice mapping found for Nomod invoice",
 			"nomod_invoice_id", nomodInvoiceID)
 		return "", ierr.NewError("flexprice invoice mapping not found").
 			Mark(ierr.ErrNotFound)
 	}
 
 	flexpriceInvoiceID := mappings[0].EntityID
-	s.logger.Infow("found FlexPrice invoice mapping",
+	s.logger.Info(ctx, "found FlexPrice invoice mapping",
 		"nomod_invoice_id", nomodInvoiceID,
 		"flexprice_invoice_id", flexpriceInvoiceID)
 
@@ -496,7 +496,7 @@ func (s *InvoiceSyncService) updateFlexPriceInvoiceFromNomod(ctx context.Context
 	}
 
 	if updated {
-		s.logger.Infow("updating FlexPrice invoice with Nomod details",
+		s.logger.Info(ctx, "updating FlexPrice invoice with Nomod details",
 			"invoice_id", flexInvoice.ID,
 			"nomod_invoice_id", nomodInvoice.ID,
 			"nomod_invoice_url", nomodInvoice.URL)

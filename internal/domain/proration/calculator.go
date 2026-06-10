@@ -146,7 +146,7 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	// Round the final net amount according to currency precision
 	result.NetAmount = result.NetAmount.Round(precision)
 
-	c.logger.Infof("proration net amount: %s", result.NetAmount)
+	c.logger.Info(context.Background(), "proration net amount", "amount", result.NetAmount.String())
 
 	return result, nil
 }

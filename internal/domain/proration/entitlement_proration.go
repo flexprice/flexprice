@@ -92,7 +92,7 @@ func (c *EntitlementProrationCalculator) CalculateEntitlementProration(
 	ctx context.Context,
 	params EntitlementProrationParams,
 ) (*EntitlementProrationResult, error) {
-	c.logger.Infow("calculating entitlement proration",
+	c.logger.Info(ctx, "calculating entitlement proration",
 		"period_start", params.PeriodStart,
 		"period_end", params.PeriodEnd,
 		"proration_date", params.ProrationDate,
@@ -109,12 +109,12 @@ func (c *EntitlementProrationCalculator) CalculateEntitlementProration(
 		return nil, err
 	}
 
-	c.logger.Debugw("proration coefficient calculated",
+	c.logger.Debug(ctx, "proration coefficient calculated",
 		"coefficient", coefficient.String())
 
 	// Filter metered entitlements with usage limits
 	meteredEntitlements := c.filterMeteredEntitlements(params.PlanEntitlements)
-	c.logger.Debugw("filtered metered entitlements",
+	c.logger.Debug(ctx, "filtered metered entitlements",
 		"total", len(params.PlanEntitlements),
 		"metered_with_limits", len(meteredEntitlements))
 
@@ -136,7 +136,7 @@ func (c *EntitlementProrationCalculator) CalculateEntitlementProration(
 	for _, ent := range meteredEntitlements {
 		if ent.UsageLimit == nil {
 			// Skip unlimited entitlements
-			c.logger.Debugw("skipping unlimited entitlement",
+			c.logger.Debug(ctx, "skipping unlimited entitlement",
 				"feature_id", ent.FeatureID)
 			continue
 		}
@@ -156,13 +156,13 @@ func (c *EntitlementProrationCalculator) CalculateEntitlementProration(
 			UsageResetPeriod: ent.UsageResetPeriod,
 		})
 
-		c.logger.Debugw("entitlement prorated",
+		c.logger.Debug(ctx, "entitlement prorated",
 			"feature_id", ent.FeatureID,
 			"original_limit", originalLimit,
 			"prorated_limit", proratedLimit)
 	}
 
-	c.logger.Infow("entitlement proration completed",
+	c.logger.Info(ctx, "entitlement proration completed",
 		"prorated_count", len(result.ProratedLimits),
 		"coefficient", coefficient.String())
 
@@ -199,7 +199,7 @@ func (c *EntitlementProrationCalculator) calculateProrationCoefficient(
 		)
 		if err != nil {
 			// Fallback to subscription period start if calculation fails
-			c.logger.Warnw("failed to calculate previous billing date for calendar proration, using fallback",
+			c.logger.Info(context.Background(), "failed to calculate previous billing date for calendar proration, using fallback",
 				"error", err,
 				"billing_anchor", params.BillingAnchor,
 				"billing_period", params.BillingPeriod,
@@ -233,7 +233,7 @@ func (c *EntitlementProrationCalculator) calculateProrationCoefficient(
 		return decimal.Zero, err
 	}
 
-	c.logger.Debugw("proration coefficient calculated via shared helper",
+	c.logger.Debug(context.Background(), "proration coefficient calculated via shared helper",
 		"coefficient", coefficient.String(),
 		"period_start", periodStart,
 		"period_end", periodEnd)

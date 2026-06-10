@@ -27,7 +27,7 @@ func (a *PrepareProcessedEventsActivities) CreateFeatureAndPriceActivity(
 	input models.CreateFeatureAndPriceActivityInput,
 ) (*models.CreateFeatureAndPriceActivityResult, error) {
 	logger := a.serviceParams.Logger
-	logger.Debugw("Starting CreateFeatureAndPriceActivity",
+	logger.Debug(ctx, "Starting CreateFeatureAndPriceActivity",
 		"event_name", input.EventName,
 		"plan_id", input.FeatureAndPriceConfig.PlanID)
 
@@ -105,7 +105,7 @@ func (a *PrepareProcessedEventsActivities) CreateFeatureAndPriceActivity(
 				PriceID:   priceResp.ID,
 			})
 
-			logger.Infow("Created feature and price",
+			logger.Info(ctx, "Created feature and price",
 				"event_name", input.EventName,
 				"feature_index", i,
 				"feature_id", featureResp.Feature.ID,
@@ -126,7 +126,7 @@ func (a *PrepareProcessedEventsActivities) CreateFeatureAndPriceActivity(
 			Mark(ierr.ErrInternal)
 	}
 
-	logger.Debugw("CreateFeatureAndPriceActivity completed",
+	logger.Debug(ctx, "CreateFeatureAndPriceActivity completed",
 		"event_name", input.EventName,
 		"features_created", len(results),
 	)
@@ -144,7 +144,7 @@ func (a *PrepareProcessedEventsActivities) RolloutToSubscriptionsActivity(
 	input models.RolloutToSubscriptionsActivityInput,
 ) (*models.RolloutToSubscriptionsActivityResult, error) {
 	logger := a.serviceParams.Logger
-	logger.Debugw("Starting RolloutToSubscriptionsActivity",
+	logger.Debug(ctx, "Starting RolloutToSubscriptionsActivity",
 		"plan_id", input.PlanID,
 		"price_id", input.PriceID,
 		"event_timestamp", input.EventTimestamp)
@@ -173,7 +173,7 @@ func (a *PrepareProcessedEventsActivities) RolloutToSubscriptionsActivity(
 			Mark(ierr.ErrDatabase)
 	}
 
-	logger.Debugw("Found subscriptions for plan",
+	logger.Debug(ctx, "Found subscriptions for plan",
 		"plan_id", input.PlanID,
 		"subscription_count", len(subsResponse.Items),
 		"subscription_ids", func() []string {
@@ -202,7 +202,7 @@ func (a *PrepareProcessedEventsActivities) RolloutToSubscriptionsActivity(
 
 		lineItemResp, err := subscriptionService.AddSubscriptionLineItem(ctx, subResp.ID, createReq)
 		if err != nil {
-			logger.Errorw("Failed to create line item for subscription",
+			logger.Error(ctx, "Failed to create line item for subscription",
 				"subscription_id", subResp.ID,
 				"price_id", input.PriceID,
 				"plan_id", input.PlanID,
@@ -212,7 +212,7 @@ func (a *PrepareProcessedEventsActivities) RolloutToSubscriptionsActivity(
 		}
 
 		lineItemsCreated++
-		logger.Debugw("Successfully created line item for subscription",
+		logger.Debug(ctx, "Successfully created line item for subscription",
 			"subscription_id", subResp.ID,
 			"price_id", input.PriceID,
 			"plan_id", input.PlanID,
@@ -223,7 +223,7 @@ func (a *PrepareProcessedEventsActivities) RolloutToSubscriptionsActivity(
 			"start_date", input.EventTimestamp)
 	}
 
-	logger.Debugw("RolloutToSubscriptionsActivity completed",
+	logger.Debug(ctx, "RolloutToSubscriptionsActivity completed",
 		"plan_id", input.PlanID,
 		"price_id", input.PriceID,
 		"line_items_created", lineItemsCreated,

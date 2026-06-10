@@ -38,7 +38,7 @@ func NewAddonRepository(client postgres.IClient, log *logger.Logger, cache cache
 func (r *addonRepository) Create(ctx context.Context, a *domainAddon.Addon) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating addon",
+	r.log.Debug(ctx, "creating addon",
 		"addon_id", a.ID,
 		"tenant_id", a.TenantID,
 		"name", a.Name,
@@ -118,7 +118,7 @@ func (r *addonRepository) GetByID(ctx context.Context, id string) (*domainAddon.
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting addon",
+	r.log.Debug(ctx, "getting addon",
 		"addon_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -167,7 +167,7 @@ func (r *addonRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting addon by lookup key",
+	r.log.Debug(ctx, "getting addon by lookup key",
 		"lookup_key", lookupKey,
 	)
 
@@ -297,7 +297,7 @@ func (r *addonRepository) ListAll(ctx context.Context, filter *types.AddonFilter
 func (r *addonRepository) Update(ctx context.Context, a *domainAddon.Addon) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating addon",
+	r.log.Debug(ctx, "updating addon",
 		"addon_id", a.ID,
 		"tenant_id", a.TenantID,
 	)
@@ -346,7 +346,7 @@ func (r *addonRepository) Update(ctx context.Context, a *domainAddon.Addon) erro
 func (r *addonRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting addon",
+	r.log.Debug(ctx, "deleting addon",
 		"addon_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -398,7 +398,7 @@ func (r *addonRepository) ListByIDs(ctx context.Context, addonIDs []string) ([]*
 		return []*domainAddon.Addon{}, nil
 	}
 
-	r.log.Debugw("listing addons by IDs", "addon_ids", addonIDs)
+	r.log.Debug(ctx, "listing addons by IDs", "addon_ids", addonIDs)
 
 	// Create a filter with addon IDs
 	filter := &types.AddonFilter{

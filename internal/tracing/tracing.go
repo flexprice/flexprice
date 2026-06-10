@@ -88,7 +88,7 @@ func RegisterHooks(lc fx.Lifecycle, s *Service) {
 
 func (s *Service) initSentry() error {
 	if !s.cfg.Sentry.Enabled {
-		s.logger.Info("Sentry is disabled")
+		s.logger.Info(context.Background(), "Sentry is disabled")
 		return nil
 	}
 
@@ -98,12 +98,12 @@ func (s *Service) initSentry() error {
 		EnableTracing: false, // Tracing is handled by OTel; Sentry is errors-only.
 	})
 	if err != nil {
-		s.logger.Errorw("Failed to initialize Sentry", "error", err)
+		s.logger.Error(context.Background(), "Failed to initialize Sentry", "error", err)
 		return err
 	}
 
 	s.sentryEnabled = true
-	s.logger.Infow("Sentry initialized (errors-only mode)",
+	s.logger.Info(context.Background(), "Sentry initialized (errors-only mode)",
 		"environment", s.cfg.Sentry.Environment,
 	)
 	return nil
@@ -112,13 +112,13 @@ func (s *Service) initSentry() error {
 func (s *Service) initTracer(ctx context.Context) error {
 	tracesCfg := s.cfg.Otel.Traces
 	if !s.cfg.Otel.Enabled || !tracesCfg.Enabled || tracesCfg.Endpoint == "" {
-		s.logger.Info("OTel tracing is disabled")
+		s.logger.Info(context.Background(), "OTel tracing is disabled")
 		return nil
 	}
 
 	exporter, err := s.newTraceExporter(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to initialize OTel trace exporter", "error", err)
+		s.logger.Error(ctx, "Failed to initialize OTel trace exporter", "error", err)
 		return err
 	}
 
@@ -132,7 +132,7 @@ func (s *Service) initTracer(ctx context.Context) error {
 		if !errors.Is(err, resource.ErrPartialResource) {
 			return err
 		}
-		s.logger.Warnw("OTel resource: partial detection, some attributes may be missing", "error", err)
+		s.logger.Warn(ctx, "OTel resource: partial detection, some attributes may be missing", "error", err)
 	}
 
 	sampleRate := tracesCfg.SampleRate
@@ -162,7 +162,7 @@ func (s *Service) initTracer(ctx context.Context) error {
 
 	protocol := s.cfg.Otel.ResolveProtocol(tracesCfg.Protocol)
 	headers := s.cfg.Otel.ResolveHeaders(tracesCfg.MergedHeaders())
-	s.logger.Infow("OTel tracing initialized",
+	s.logger.Info(ctx, "OTel tracing initialized",
 		"endpoint", tracesCfg.Endpoint,
 		"protocol", protocol,
 		"sample_rate", sampleRate,
@@ -264,13 +264,13 @@ func (s *Service) newResource(ctx context.Context) (*resource.Resource, error) {
 
 func (s *Service) shutdown(ctx context.Context) {
 	if s.tracerProvider != nil {
-		s.logger.Info("Shutting down OTel tracer provider")
+		s.logger.Info(ctx, "Shutting down OTel tracer provider")
 		if err := s.tracerProvider.Shutdown(ctx); err != nil {
-			s.logger.Warnw("OTel tracer provider shutdown error", "error", err)
+			s.logger.Error(ctx, "OTel tracer provider shutdown error", "error", err)
 		}
 	}
 	if s.sentryEnabled {
-		s.logger.Info("Flushing Sentry events before shutdown")
+		s.logger.Info(ctx, "Flushing Sentry events before shutdown")
 		sentry.Flush(2 * time.Second)
 	}
 }

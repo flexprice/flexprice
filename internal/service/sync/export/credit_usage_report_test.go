@@ -61,7 +61,7 @@ func newCreditUsageTestEnv(t *testing.T) *creditUsageTestEnv {
 	walletStore := testutil.NewInMemoryWalletStore()
 	customerStore := testutil.NewInMemoryCustomerStore()
 	balanceGetter := newInMemoryWalletBalanceGetter()
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 
 	exporter := NewCreditUsageExporter(walletStore, customerStore, balanceGetter, nil, log)
 

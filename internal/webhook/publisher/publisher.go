@@ -82,7 +82,7 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
 	msg.Metadata.Set("user_id", event.UserID)
 
-	p.logger.Debugw("publishing webhook event",
+	p.logger.Debug(ctx, "publishing webhook event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
@@ -92,7 +92,7 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 
 	if p.systemEventRepo != nil {
 		if err := p.systemEventRepo.OnConsumed(ctx, event); err != nil {
-			p.logger.ErrorwCtx(ctx, "system_events OnConsumed failed",
+			p.logger.Error(ctx, "system_events OnConsumed failed",
 				"error", err,
 				"event_id", event.ID,
 				"event_name", event.EventName,
@@ -102,7 +102,7 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 
 	if p.producer != nil {
 		if err := p.producer.Publish(p.config.Topic, msg); err != nil {
-			p.logger.Errorw("failed to publish webhook event",
+			p.logger.Error(ctx, "failed to publish webhook event",
 				"error", err,
 				"event_id", event.ID,
 				"event_name", event.EventName,
@@ -112,7 +112,7 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 		}
 	} else {
 		if err := p.pubSub.Publish(ctx, p.config.Topic, msg); err != nil {
-			p.logger.Errorw("failed to publish webhook event",
+			p.logger.Error(ctx, "failed to publish webhook event",
 				"error", err,
 				"event_id", event.ID,
 				"event_name", event.EventName,
@@ -122,7 +122,7 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 		}
 	}
 
-	p.logger.Infow("successfully published webhook event",
+	p.logger.Info(ctx, "successfully published webhook event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,

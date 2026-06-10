@@ -203,7 +203,7 @@ func (r *creditGrantRepository) Get(ctx context.Context, id string) (*domainCred
 	}
 
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting credit grant",
+	r.log.Debug(ctx, "getting credit grant",
 		"creditgrant_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -330,7 +330,7 @@ func (r *creditGrantRepository) ListAll(ctx context.Context, filter *types.Credi
 func (r *creditGrantRepository) Update(ctx context.Context, cg *domainCreditGrant.CreditGrant) (*domainCreditGrant.CreditGrant, error) {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating credit grant",
+	r.log.Debug(ctx, "updating credit grant",
 		"creditgrant_id", cg.ID,
 		"tenant_id", cg.TenantID,
 	)
@@ -383,7 +383,7 @@ func (r *creditGrantRepository) Delete(ctx context.Context, id string) error {
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting credit grant",
+	r.log.Debug(ctx, "deleting credit grant",
 		"creditgrant_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -429,7 +429,7 @@ func (r *creditGrantRepository) DeleteBulk(ctx context.Context, ids []string) er
 		return nil
 	}
 
-	r.log.Debugw("deleting credit grants in bulk", "count", len(ids))
+	r.log.Debug(ctx, "deleting credit grants in bulk", "count", len(ids))
 
 	_, err := r.client.Writer(ctx).CreditGrant.Update().
 		Where(
@@ -473,7 +473,7 @@ func (r *creditGrantRepository) GetByPlan(ctx context.Context, planID string) ([
 		return []*domainCreditGrant.CreditGrant{}, nil
 	}
 
-	r.log.Debugw("listing credit grants by plan ID", "plan_id", planID)
+	r.log.Debug(ctx, "listing credit grants by plan ID", "plan_id", planID)
 
 	// Create a filter with plan ID
 	filter := types.NewNoLimitCreditGrantFilter()

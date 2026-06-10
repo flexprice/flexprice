@@ -44,7 +44,7 @@ func (s *PriceServiceSuite) SetupTest() {
 	s.planRepo = testutil.NewInMemoryPlanStore()
 	s.priceUnitRepo = testutil.NewInMemoryPriceUnitStore()
 	s.addonRepo = testutil.NewInMemoryAddonStore()
-	s.logger = logger.GetLogger()
+	s.logger = logger.NewNoopLogger()
 
 	serviceParams := ServiceParams{
 		PriceRepo:     s.priceRepo,

@@ -76,7 +76,7 @@ func NewCreditUsageExporter(
 
 // PrepareData fetches credit usage data and streams each row directly into the CSV buffer.
 func (e *CreditUsageExporter) PrepareData(ctx context.Context, request *dto.ExportRequest) ([]byte, int, error) {
-	e.logger.Infow("starting credit usage data fetch",
+	e.logger.Info(ctx, "starting credit usage data fetch",
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
 		"start_time", request.StartTime,
@@ -94,7 +94,7 @@ func (e *CreditUsageExporter) PrepareData(ctx context.Context, request *dto.Expo
 			Mark(ierr.ErrDatabase)
 	}
 
-	e.logger.Infow("found customers to process",
+	e.logger.Info(ctx, "found customers to process",
 		"customer_count", len(customers),
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID)
@@ -132,12 +132,12 @@ func (e *CreditUsageExporter) PrepareData(ctx context.Context, request *dto.Expo
 	csvBytes := buf.Bytes()
 
 	if recordCount == 0 {
-		e.logger.Infow("no credit usage data found for export - will upload empty CSV with headers only",
+		e.logger.Info(ctx, "no credit usage data found for export - will upload empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"csv_size_bytes", len(csvBytes))
 	} else {
-		e.logger.Infow("completed data fetch and CSV conversion",
+		e.logger.Info(ctx, "completed data fetch and CSV conversion",
 			"total_records", recordCount,
 			"csv_size_bytes", len(csvBytes))
 	}
@@ -153,7 +153,7 @@ func (e *CreditUsageExporter) buildRecord(ctx context.Context, c *customer.Custo
 
 	wallets, err := e.walletRepo.GetWalletsByCustomerID(ctx, c.ID)
 	if err != nil {
-		e.logger.Debugw("failed to get wallets for customer", "customer_id", c.ID, "error", err)
+		e.logger.Debug(ctx, "failed to get wallets for customer", "customer_id", c.ID, "error", err)
 	}
 
 	var currentBalance, realtimeBalance decimal.Decimal
@@ -161,7 +161,7 @@ func (e *CreditUsageExporter) buildRecord(ctx context.Context, c *customer.Custo
 	for _, w := range wallets {
 		balanceResp, err := e.walletBalanceGetter.GetWalletBalanceV2(ctx, w.ID)
 		if err != nil {
-			e.logger.Debugw("failed to get wallet balance", "wallet_id", w.ID, "error", err)
+			e.logger.Debug(ctx, "failed to get wallet balance", "wallet_id", w.ID, "error", err)
 			continue
 		}
 		if balanceResp.Wallet != nil {

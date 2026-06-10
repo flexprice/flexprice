@@ -61,13 +61,13 @@ func NewPaymentService(params PaymentServiceParams) QuickBooksPaymentService {
 //
 // IMPORTANT: Now creates payment records, supports partial payments!
 func (s *PaymentService) HandleExternalPaymentFromWebhook(ctx context.Context, qbPaymentID string, paymentService interfaces.PaymentService, invoiceService interfaces.InvoiceService) error {
-	s.logger.Infow("processing QuickBooks payment webhook",
+	s.logger.Info(ctx, "processing QuickBooks payment webhook",
 		"quickbooks_payment_id", qbPaymentID)
 
 	// Fetch payment details from QuickBooks to get the linked invoice and amount
 	qbPayment, err := s.client.GetPayment(ctx, qbPaymentID)
 	if err != nil {
-		s.logger.Errorw("failed to get payment from QuickBooks",
+		s.logger.Error(ctx, "failed to get payment from QuickBooks",
 			"error", err,
 			"quickbooks_payment_id", qbPaymentID)
 		return nil // Don't fail webhook processing
@@ -90,7 +90,7 @@ func (s *PaymentService) HandleExternalPaymentFromWebhook(ctx context.Context, q
 	}
 
 	if qbInvoiceID == "" {
-		s.logger.Debugw("no invoice linked to QuickBooks payment, skipping",
+		s.logger.Debug(ctx, "no invoice linked to QuickBooks payment, skipping",
 			"quickbooks_payment_id", qbPaymentID)
 		return nil
 	}
@@ -99,12 +99,12 @@ func (s *PaymentService) HandleExternalPaymentFromWebhook(ctx context.Context, q
 	invoiceMapping, err := s.findInvoiceMappingByProviderID(ctx, qbInvoiceID)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			s.logger.Debugw("invoice not found in Flexprice, skipping payment sync",
+			s.logger.Debug(ctx, "invoice not found in Flexprice, skipping payment sync",
 				"quickbooks_payment_id", qbPaymentID,
 				"quickbooks_invoice_id", qbInvoiceID)
 			return nil
 		}
-		s.logger.Errorw("failed to find invoice mapping",
+		s.logger.Error(ctx, "failed to find invoice mapping",
 			"error", err,
 			"quickbooks_invoice_id", qbInvoiceID)
 		return nil
@@ -112,7 +112,7 @@ func (s *PaymentService) HandleExternalPaymentFromWebhook(ctx context.Context, q
 
 	flexpriceInvoiceID := invoiceMapping.EntityID
 
-	s.logger.Infow("found Flexprice invoice for QuickBooks payment",
+	s.logger.Info(ctx, "found Flexprice invoice for QuickBooks payment",
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"quickbooks_invoice_id", qbInvoiceID,
 		"quickbooks_payment_id", qbPaymentID,
@@ -121,7 +121,7 @@ func (s *PaymentService) HandleExternalPaymentFromWebhook(ctx context.Context, q
 	// Create external payment record
 	err = s.createExternalPaymentRecord(ctx, qbPayment, qbInvoiceID, invoiceMapping.ID, flexpriceInvoiceID, paymentService, invoiceService)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"quickbooks_payment_id", qbPaymentID)
 		return nil
@@ -131,14 +131,14 @@ func (s *PaymentService) HandleExternalPaymentFromWebhook(ctx context.Context, q
 	amount := decimal.NewFromFloat(paymentAmount)
 	err = s.reconcileInvoiceWithExternalPayment(ctx, flexpriceInvoiceID, amount, invoiceService)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile invoice with external payment",
+		s.logger.Error(ctx, "failed to reconcile invoice with external payment",
 			"error", err,
 			"invoice_id", flexpriceInvoiceID,
 			"payment_amount", amount)
 		return nil
 	}
 
-	s.logger.Infow("successfully processed QuickBooks payment webhook",
+	s.logger.Info(ctx, "successfully processed QuickBooks payment webhook",
 		"quickbooks_payment_id", qbPaymentID,
 		"quickbooks_invoice_id", qbInvoiceID,
 		"flexprice_invoice_id", flexpriceInvoiceID,
@@ -154,7 +154,7 @@ func (s *PaymentService) createExternalPaymentRecord(ctx context.Context, qbPaym
 	filter.GatewayPaymentID = &qbPayment.ID
 	listResp, err := paymentService.ListPayments(ctx, filter)
 	if err == nil && listResp != nil && len(listResp.Items) > 0 {
-		s.logger.Infow("payment already exists, skipping creation",
+		s.logger.Info(ctx, "payment already exists, skipping creation",
 			"payment_id", listResp.Items[0].ID,
 			"quickbooks_payment_id", qbPayment.ID)
 		return nil
@@ -171,13 +171,13 @@ func (s *PaymentService) createExternalPaymentRecord(ctx context.Context, qbPaym
 	// Get invoice to get currency
 	invoiceResp, err := invoiceService.GetInvoice(ctx, invoiceID)
 	if err != nil {
-		s.logger.Errorw("failed to get invoice for payment creation",
+		s.logger.Error(ctx, "failed to get invoice for payment creation",
 			"error", err,
 			"invoice_id", invoiceID)
 		return err
 	}
 
-	s.logger.Infow("creating external payment record for QuickBooks payment",
+	s.logger.Info(ctx, "creating external payment record for QuickBooks payment",
 		"quickbooks_payment_id", qbPayment.ID,
 		"invoice_id", invoiceID,
 		"amount", amount,
@@ -217,7 +217,7 @@ func (s *PaymentService) createExternalPaymentRecord(ctx context.Context, qbPaym
 
 	paymentResp, err := paymentService.CreatePayment(ctx, createReq)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"quickbooks_payment_id", qbPayment.ID,
 			"invoice_id", invoiceID)
@@ -235,14 +235,14 @@ func (s *PaymentService) createExternalPaymentRecord(ctx context.Context, qbPaym
 
 	_, err = paymentService.UpdatePayment(ctx, paymentResp.ID, updateReq)
 	if err != nil {
-		s.logger.Errorw("failed to update external payment status",
+		s.logger.Error(ctx, "failed to update external payment status",
 			"error", err,
 			"payment_id", paymentResp.ID,
 			"quickbooks_payment_id", qbPayment.ID)
 		return err
 	}
 
-	s.logger.Infow("successfully created external payment record",
+	s.logger.Info(ctx, "successfully created external payment record",
 		"payment_id", paymentResp.ID,
 		"quickbooks_payment_id", qbPayment.ID,
 		"invoice_id", invoiceID,
@@ -257,7 +257,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 	// Get invoice to calculate new payment status
 	invoiceResp, err := invoiceService.GetInvoice(ctx, invoiceID)
 	if err != nil {
-		s.logger.Errorw("failed to get invoice for external payment reconciliation",
+		s.logger.Error(ctx, "failed to get invoice for external payment reconciliation",
 			"error", err,
 			"invoice_id", invoiceID)
 		return err
@@ -277,7 +277,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 		newPaymentStatus = types.PaymentStatusPending // Partial payment
 	}
 
-	s.logger.Infow("calculated payment status for external QuickBooks payment",
+	s.logger.Info(ctx, "calculated payment status for external QuickBooks payment",
 		"invoice_id", invoiceID,
 		"payment_amount", paymentAmount,
 		"current_amount_paid", invoiceResp.AmountPaid,
@@ -289,7 +289,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 	// Use ReconcilePaymentStatus
 	err = invoiceService.ReconcilePaymentStatus(ctx, invoiceID, newPaymentStatus, &paymentAmount)
 	if err != nil {
-		s.logger.Errorw("failed to update invoice payment status",
+		s.logger.Error(ctx, "failed to update invoice payment status",
 			"error", err,
 			"invoice_id", invoiceID,
 			"payment_amount", paymentAmount,
@@ -297,7 +297,7 @@ func (s *PaymentService) reconcileInvoiceWithExternalPayment(ctx context.Context
 		return err
 	}
 
-	s.logger.Infow("successfully reconciled invoice with external QuickBooks payment",
+	s.logger.Info(ctx, "successfully reconciled invoice with external QuickBooks payment",
 		"invoice_id", invoiceID,
 		"payment_amount", paymentAmount,
 		"payment_status", newPaymentStatus)

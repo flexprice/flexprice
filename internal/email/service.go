@@ -55,7 +55,7 @@ func NewEmail(client *EmailClient, logger *zap.Logger) *Email {
 // SendEmail sends a plain text email
 func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmailResponse, error) {
 	if !s.client.IsEnabled() {
-		s.logger.Warnw("email client is disabled, skipping email send",
+		s.logger.Info(ctx, "email client is disabled, skipping email send",
 			"to", req.ToAddress,
 			"subject", req.Subject,
 		)
@@ -73,7 +73,7 @@ func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmail
 
 	messageID, err := s.client.SendEmail(ctx, fromAddress, req.ToAddress, req.Subject, "", req.Text)
 	if err != nil {
-		s.logger.Errorw("failed to send email",
+		s.logger.Error(ctx, "failed to send email",
 			"error", err,
 			"to", req.ToAddress,
 			"subject", req.Subject,
@@ -84,7 +84,7 @@ func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmail
 		}, err
 	}
 
-	s.logger.Infow("email sent successfully",
+	s.logger.Info(ctx, "email sent successfully",
 		"message_id", messageID,
 		"to", req.ToAddress,
 		"subject", req.Subject,
@@ -99,7 +99,7 @@ func (s *Email) SendEmail(ctx context.Context, req SendEmailRequest) (*SendEmail
 // SendEmailWithTemplate sends an email using an HTML template
 func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemplateRequest) (*SendEmailWithTemplateResponse, error) {
 	if !s.client.IsEnabled() {
-		s.logger.Warnw("email client is disabled, skipping email send",
+		s.logger.Info(ctx, "email client is disabled, skipping email send",
 			"to", req.ToAddress,
 			"subject", req.Subject,
 			"template", req.TemplatePath,
@@ -116,7 +116,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 		fromAddress = req.FromAddress
 	}
 
-	s.logger.Debugw("preparing to send templated email",
+	s.logger.Debug(ctx, "preparing to send templated email",
 		"from", fromAddress,
 		"to", req.ToAddress,
 		"subject", req.Subject,
@@ -126,7 +126,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 	// Retrieve the template from in-memory store
 	htmlContent, err := s.readTemplate(req.TemplatePath)
 	if err != nil {
-		s.logger.Errorw("failed to read email template",
+		s.logger.Error(ctx, "failed to read email template",
 			"error", err,
 			"template", req.TemplatePath,
 		)
@@ -136,7 +136,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 		}, err
 	}
 
-	s.logger.Debugw("template read successfully",
+	s.logger.Debug(ctx, "template read successfully",
 		"template", req.TemplatePath,
 		"content_length", len(htmlContent),
 	)
@@ -144,7 +144,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 	// Render template with data using html/template
 	htmlContent, err = s.renderTemplate(htmlContent, req.Data)
 	if err != nil {
-		s.logger.Errorw("failed to render email template",
+		s.logger.Error(ctx, "failed to render email template",
 			"error", err,
 			"template", req.TemplatePath,
 		)
@@ -156,7 +156,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 
 	messageID, err := s.client.SendEmail(ctx, fromAddress, req.ToAddress, req.Subject, htmlContent, "")
 	if err != nil {
-		s.logger.Errorw("failed to send templated email",
+		s.logger.Error(ctx, "failed to send templated email",
 			"error", err,
 			"from", fromAddress,
 			"to", req.ToAddress,
@@ -169,7 +169,7 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 		}, err
 	}
 
-	s.logger.Infow("templated email sent successfully",
+	s.logger.Info(ctx, "templated email sent successfully",
 		"message_id", messageID,
 		"from", fromAddress,
 		"to", req.ToAddress,

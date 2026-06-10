@@ -14,6 +14,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
@@ -157,7 +158,7 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 	encryptedCredentials := make(map[string]string)
 
 	// DEBUG: Log what credentials we received
-	s.logger.Debugw("storing OAuth session credentials",
+	s.logger.Debug(ctx, "storing OAuth session credentials",
 		"session_id", session.SessionID,
 		"credentials_count", len(session.Credentials),
 		"credentials_keys", func() []string {
@@ -286,7 +287,7 @@ func (s *oauthService) StoreOAuthSession(ctx context.Context, session *types.OAu
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.logger.Infow("stored OAuth session as incomplete connection",
+	s.logger.Info(ctx, "stored OAuth session as incomplete connection",
 		"session_id", session.SessionID,
 		"connection_id", incompleteConnection.ID,
 		"provider", session.Provider,
@@ -475,7 +476,7 @@ func (s *oauthService) GetOAuthSession(ctx context.Context, sessionID string) (*
 		ExpiresAt:     expiresAt,
 	}
 
-	s.logger.Debugw("retrieved OAuth session from connection",
+	s.logger.Debug(ctx, "retrieved OAuth session from connection",
 		"session_id", sessionID,
 		"connection_id", conn.ID,
 		"provider", session.Provider,
@@ -525,7 +526,7 @@ func (s *oauthService) DeleteOAuthSession(ctx context.Context, sessionID string)
 						Mark(ierr.ErrDatabase)
 				}
 
-				s.logger.Debugw("deleted OAuth session connection",
+				s.logger.Debug(ctx, "deleted OAuth session connection",
 					"session_id", sessionID,
 					"connection_id", c.ID)
 
@@ -727,7 +728,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 				Mark(ierr.ErrDatabase)
 		}
 
-		s.logger.Infow("updated connection with OAuth credentials",
+		s.logger.Info(ctx, "updated connection with OAuth credentials",
 			"connection_id", conn.ID,
 			"session_id", session.SessionID,
 			"realm_id", providerAccountID)
@@ -752,7 +753,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 				Mark(ierr.ErrInternal)
 		}
 
-		s.logger.Infow("QuickBooks OAuth connection completed successfully",
+		s.logger.Info(ctx, "QuickBooks OAuth connection completed successfully",
 			"connection_id", conn.ID,
 			"realm_id", providerAccountID)
 
@@ -821,7 +822,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := httpclient.NewOtelHTTPClient(30 * time.Second).Do(req)
 		if err != nil {
 			return "", ierr.WithError(err).WithHint("Failed to exchange Zoho auth code for tokens").Mark(ierr.ErrInternal)
 		}
@@ -881,7 +882,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 			conn.EncryptedSecretData.ZohoBooks.OAuthSessionData != "" {
 			if encWS, err := zohoEncryptedWebhookSecretFromPendingOAuthSession(
 				s.encryptionService, conn.EncryptedSecretData.ZohoBooks.OAuthSessionData); err != nil {
-				s.logger.Warnw("could not read webhook_secret from pending Zoho OAuth session",
+				s.logger.Info(context.Background(), "could not read webhook_secret from pending Zoho OAuth session",
 					"error", err, "connection_id", conn.ID)
 			} else {
 				preservedWebhookSecret = encWS
@@ -916,7 +917,7 @@ func (s *oauthService) ExchangeCodeForConnection(
 				Mark(ierr.ErrDatabase)
 		}
 
-		s.logger.Infow("Zoho Books OAuth connection completed successfully",
+		s.logger.Info(ctx, "Zoho Books OAuth connection completed successfully",
 			"connection_id", conn.ID,
 			"organization_id", organizationID)
 		return conn.ID, nil

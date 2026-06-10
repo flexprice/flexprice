@@ -40,6 +40,8 @@ func NewStreamingProcessor(client httpclient.Client, logger *logger.Logger) *Str
 	retryClient.RetryWaitMin = 1 * time.Second
 	retryClient.RetryWaitMax = 30 * time.Second
 	retryClient.Logger = logger.GetRetryableHTTPLogger()
+	// Instrument outbound file downloads for SigNoz External API Monitoring.
+	retryClient.HTTPClient.Transport = httpclient.OtelTransport(retryClient.HTTPClient.Transport)
 
 	return &StreamingProcessor{
 		Client:           client,
@@ -160,7 +162,7 @@ func (sp *StreamingProcessor) processCSVStream(
 	// Read headers first
 	headers, err := csvReader.Read()
 	if err != nil {
-		sp.Logger.Error("failed to read CSV headers", "error", err)
+		sp.Logger.Error(ctx, "failed to read CSV headers", "error", err)
 		return ierr.NewError("failed to read CSV headers").
 			WithHint("Failed to read CSV headers").
 			WithReportableDetails(map[string]interface{}{
@@ -176,7 +178,7 @@ func (sp *StreamingProcessor) processCSVStream(
 		}
 	}
 
-	sp.Logger.Debugw("parsed CSV headers", "headers", headers)
+	sp.Logger.Debug(ctx, "parsed CSV headers", "headers", headers)
 
 	// Process file in chunks
 	var chunk [][]string
@@ -193,19 +195,19 @@ func (sp *StreamingProcessor) processCSVStream(
 			break
 		}
 		if err != nil {
-			sp.Logger.Error("failed to read CSV line", "error", err)
+			sp.Logger.Error(ctx, "failed to read CSV line", "error", err)
 			allErrors = append(allErrors, fmt.Sprintf("CSV read error: %v", err))
 
 			// Check error limit
 			if len(allErrors) >= config.MaxErrors {
-				sp.Logger.Error("maximum error limit reached, stopping processing", "max_errors", config.MaxErrors)
+				sp.Logger.Info(ctx, "maximum error limit reached, stopping processing", "max_errors", config.MaxErrors)
 				break
 			}
 			continue
 		}
 
 		// Log each record being processed for debugging
-		sp.Logger.Debugw("processing CSV record",
+		sp.Logger.Debug(ctx, "processing CSV record",
 			"record", record,
 			"chunk_size", len(chunk),
 			"chunk_index", chunkIndex)
@@ -214,19 +216,19 @@ func (sp *StreamingProcessor) processCSVStream(
 
 		// Process chunk when it reaches the configured size
 		if len(chunk) >= config.ChunkSize {
-			sp.Logger.Debugw("processing chunk",
+			sp.Logger.Debug(ctx, "processing chunk",
 				"chunk_index", chunkIndex,
 				"chunk_size", len(chunk),
 				"records", chunk)
 
 			result, err := sp.processChunkWithRetry(ctx, processor, chunk, headers, chunkIndex, config)
 			if err != nil {
-				sp.Logger.Error("failed to process chunk", "chunk_index", chunkIndex, "error", err)
+				sp.Logger.Error(ctx, "failed to process chunk", "chunk_index", chunkIndex, "error", err)
 				allErrors = append(allErrors, fmt.Sprintf("Chunk %d: %v", chunkIndex, err))
 
 				// Check error limit
 				if len(allErrors) >= config.MaxErrors {
-					sp.Logger.Error("maximum error limit reached, stopping processing", "max_errors", config.MaxErrors)
+					sp.Logger.Info(ctx, "maximum error limit reached, stopping processing", "max_errors", config.MaxErrors)
 					break
 				}
 			} else {
@@ -253,7 +255,7 @@ func (sp *StreamingProcessor) processCSVStream(
 	if len(chunk) > 0 {
 		result, err := sp.processChunkWithRetry(ctx, processor, chunk, headers, chunkIndex, config)
 		if err != nil {
-			sp.Logger.Error("failed to process final chunk", "chunk_index", chunkIndex, "error", err)
+			sp.Logger.Error(ctx, "failed to process final chunk", "chunk_index", chunkIndex, "error", err)
 			allErrors = append(allErrors, fmt.Sprintf("Final chunk %d: %v", chunkIndex, err))
 		} else {
 			totalProcessed += result.ProcessedRecords
@@ -301,7 +303,7 @@ func (sp *StreamingProcessor) processJSONStream(
 		return err
 	}
 
-	sp.Logger.Debugw("parsed JSON headers", "headers", headers)
+	sp.Logger.Debug(ctx, "parsed JSON headers", "headers", headers)
 
 	// Process objects in chunks
 	var chunk [][]string
@@ -314,7 +316,7 @@ func (sp *StreamingProcessor) processJSONStream(
 	for decoder.More() {
 		var obj map[string]interface{}
 		if err := decoder.Decode(&obj); err != nil {
-			sp.Logger.Error("failed to decode JSON object", "error", err)
+			sp.Logger.Error(ctx, "failed to decode JSON object", "error", err)
 			allErrors = append(allErrors, fmt.Sprintf("JSON decode error: %v", err))
 			continue
 		}
@@ -333,7 +335,7 @@ func (sp *StreamingProcessor) processJSONStream(
 		if len(chunk) >= config.ChunkSize {
 			result, err := sp.processChunkWithRetry(ctx, processor, chunk, headers, chunkIndex, config)
 			if err != nil {
-				sp.Logger.Error("failed to process chunk", "chunk_index", chunkIndex, "error", err)
+				sp.Logger.Error(ctx, "failed to process chunk", "chunk_index", chunkIndex, "error", err)
 				allErrors = append(allErrors, fmt.Sprintf("Chunk %d: %v", chunkIndex, err))
 			} else {
 				totalProcessed += result.ProcessedRecords
@@ -353,7 +355,7 @@ func (sp *StreamingProcessor) processJSONStream(
 	if len(chunk) > 0 {
 		result, err := sp.processChunkWithRetry(ctx, processor, chunk, headers, chunkIndex, config)
 		if err != nil {
-			sp.Logger.Error("failed to process final chunk", "chunk_index", chunkIndex, "error", err)
+			sp.Logger.Error(ctx, "failed to process final chunk", "chunk_index", chunkIndex, "error", err)
 			allErrors = append(allErrors, fmt.Sprintf("Final chunk %d: %v", chunkIndex, err))
 		} else {
 			totalProcessed += result.ProcessedRecords
@@ -387,7 +389,7 @@ func (sp *StreamingProcessor) finalizeProcessing(
 		t.ErrorSummary = &errorSummary
 	}
 
-	sp.Logger.Infow("completed streaming processing",
+	sp.Logger.Info(context.Background(), "completed streaming processing",
 		"task_id", t.ID,
 		"total_processed", totalProcessed,
 		"successful", totalSuccessful,
@@ -421,7 +423,7 @@ func (sp *StreamingProcessor) processChunkWithRetry(
 
 	err := backoff.Retry(operation, backoffConfig)
 	if err != nil {
-		sp.Logger.Warnw("chunk processing failed after retries",
+		sp.Logger.Info(context.Background(), "chunk processing failed after retries",
 			"chunk_index", chunkIndex,
 			"error", err)
 		return nil, ierr.WithError(err).
@@ -444,18 +446,18 @@ func (sp *StreamingProcessor) downloadFileStream(ctx context.Context, t *task.Ta
 	// Get the actual download URL from the provider
 	downloadURL, err := provider.GetDownloadURL(ctx, t.FileURL)
 	if err != nil {
-		sp.Logger.Error("failed to get download URL", "error", err, "url", t.FileURL, "provider", provider.GetProviderName())
+		sp.Logger.Error(ctx, "failed to get download URL", "error", err, "url", t.FileURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to get download URL: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, fmt.Errorf("failed to get download URL from %s provider: %w", provider.GetProviderName(), err)
 	}
 
-	sp.Logger.DebugwCtx(ctx, "using file provider for streaming", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
+	sp.Logger.Debug(ctx, "using file provider for streaming", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
 
 	// Create retryable HTTP request
 	req, err := retryablehttp.NewRequestWithContext(ctx, "GET", downloadURL, nil)
 	if err != nil {
-		sp.Logger.Error("failed to create retryable HTTP request", "error", err, "url", downloadURL)
+		sp.Logger.Error(ctx, "failed to create retryable HTTP request", "error", err, "url", downloadURL)
 		errorSummary := fmt.Sprintf("Failed to create HTTP request: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
@@ -464,7 +466,7 @@ func (sp *StreamingProcessor) downloadFileStream(ctx context.Context, t *task.Ta
 	// Execute request with automatic retries
 	resp, err := sp.RetryClient.Do(req)
 	if err != nil {
-		sp.Logger.Error("failed to download file", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
+		sp.Logger.Error(ctx, "failed to download file", "error", err, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: %v", err)
 		t.ErrorSummary = &errorSummary
 		return nil, fmt.Errorf("failed to download file from %s: %w", provider.GetProviderName(), err)
@@ -472,7 +474,7 @@ func (sp *StreamingProcessor) downloadFileStream(ctx context.Context, t *task.Ta
 
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		sp.Logger.Error("failed to download file", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
+		sp.Logger.Info(ctx, "failed to download file", "status_code", resp.StatusCode, "url", downloadURL, "provider", provider.GetProviderName())
 		errorSummary := fmt.Sprintf("Failed to download file: HTTP %d", resp.StatusCode)
 		t.ErrorSummary = &errorSummary
 		return nil, fmt.Errorf("failed to download file from %s: HTTP %d", provider.GetProviderName(), resp.StatusCode)
@@ -489,7 +491,7 @@ func (sp *StreamingProcessor) updateTaskProgress(ctx context.Context, t *task.Ta
 	t.SuccessfulRecords = successful
 	t.FailedRecords = failed
 
-	sp.Logger.InfowCtx(ctx, "updating task progress",
+	sp.Logger.Info(ctx, "updating task progress",
 		"task_id", t.ID,
 		"processed", processed,
 		"successful", successful,

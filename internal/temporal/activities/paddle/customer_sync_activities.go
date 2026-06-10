@@ -66,7 +66,7 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 	customerID := input.CustomerID
 	if customerID == "" && input.InvoiceID != "" {
 		if a.invoiceRepo == nil {
-			a.logger.Errorw("invoice repository not configured for Paddle customer pre-check",
+			a.logger.Info(ctx, "invoice repository not configured for Paddle customer pre-check",
 				"invoice_id", input.InvoiceID)
 			err := ierr.NewError("customer ID or invoice-backed resolution is unavailable").
 				Mark(ierr.ErrInternal)
@@ -78,14 +78,14 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 		}
 		inv, err := a.invoiceRepo.Get(ctx, input.InvoiceID)
 		if err != nil {
-			a.logger.Errorw("failed to load invoice for Paddle customer pre-check",
+			a.logger.Error(ctx, "failed to load invoice for Paddle customer pre-check",
 				"error", err,
 				"invoice_id", input.InvoiceID)
 			return err
 		}
 		customerID = inv.CustomerID
 		if customerID == "" {
-			a.logger.Warnw("invoice has no customer_id, cannot sync to Paddle",
+			a.logger.Info(ctx, "invoice has no customer_id, cannot sync to Paddle",
 				"invoice_id", input.InvoiceID)
 			err := ierr.NewError("invoice has no customer id").
 				WithHint("Link the invoice to a customer before Paddle sync").
@@ -107,7 +107,7 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 		)
 	}
 
-	a.logger.Infow("ensuring customer synced to Paddle before invoice sync",
+	a.logger.Info(ctx, "ensuring customer synced to Paddle before invoice sync",
 		"customer_id", customerID,
 		"invoice_id", input.InvoiceID,
 		"tenant_id", input.TenantID,
@@ -116,7 +116,7 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 	paddleIntegration, err := a.integrationFactory.GetPaddleIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Warnw("Paddle connection not configured, skipping customer pre-check",
+			a.logger.Info(ctx, "Paddle connection not configured, skipping customer pre-check",
 				"customer_id", customerID)
 			return temporal.NewNonRetryableApplicationError(
 				"Paddle connection not configured",
@@ -124,7 +124,7 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get Paddle integration for customer pre-check",
+		a.logger.Error(ctx, "failed to get Paddle integration for customer pre-check",
 			"error", err,
 			"customer_id", customerID)
 		return err
@@ -135,7 +135,7 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 	})
 	if err != nil {
 		if ierr.IsValidation(err) {
-			a.logger.Warnw("customer cannot be synced to Paddle: validation error (non-retryable)",
+			a.logger.Info(ctx, "customer cannot be synced to Paddle: validation error (non-retryable)",
 				"customer_id", customerID,
 				"error", err)
 			return temporal.NewNonRetryableApplicationError(
@@ -144,13 +144,13 @@ func (a *CustomerSyncActivities) EnsureCustomerSyncedToPaddle(ctx context.Contex
 				err,
 			)
 		}
-		a.logger.Errorw("failed to ensure customer synced to Paddle",
+		a.logger.Error(ctx, "failed to ensure customer synced to Paddle",
 			"error", err,
 			"customer_id", customerID)
 		return err
 	}
 
-	a.logger.Infow("customer successfully synced to Paddle",
+	a.logger.Info(ctx, "customer successfully synced to Paddle",
 		"customer_id", customerID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)

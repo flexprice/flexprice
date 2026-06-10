@@ -40,7 +40,7 @@ type eventConsumptionService struct {
 	lazyPubSub             pubsub.PubSub
 	replayPubSub           pubsub.PubSub
 	eventRepo              events.Repository
-	tracingService          *tracing.Service
+	tracingService         *tracing.Service
 	eventPostProcessingSvc EventPostProcessingService
 }
 
@@ -54,7 +54,7 @@ func NewEventConsumptionService(
 	ev := &eventConsumptionService{
 		ServiceParams:          params,
 		eventRepo:              eventRepo,
-		tracingService:          tracingService,
+		tracingService:         tracingService,
 		eventPostProcessingSvc: eventPostProcessingSvc,
 	}
 
@@ -64,7 +64,7 @@ func NewEventConsumptionService(
 		params.Config.EventProcessing.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create pubsub", "error", err)
 		return nil
 	}
 	ev.pubSub = pubSub
@@ -75,7 +75,7 @@ func NewEventConsumptionService(
 		params.Config.EventProcessingLazy.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create lazy pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create lazy pubsub", "error", err)
 		return nil
 	}
 	ev.lazyPubSub = lazyPubSub
@@ -86,7 +86,7 @@ func NewEventConsumptionService(
 		params.Config.EventProcessingReplay.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Fatalw("failed to create replay pubsub", "error", err)
+		params.Logger.Fatal(context.Background(), "failed to create replay pubsub", "error", err)
 		return nil
 	}
 	ev.replayPubSub = replayPubSub
@@ -100,7 +100,7 @@ func (s *eventConsumptionService) RegisterHandler(
 	cfg *config.Configuration,
 ) {
 	if !cfg.EventProcessing.Enabled {
-		s.Logger.Infow("event consumption handler disabled by configuration")
+		s.Logger.Info(context.Background(), "event consumption handler disabled by configuration")
 		return
 	}
 
@@ -116,7 +116,7 @@ func (s *eventConsumptionService) RegisterHandler(
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered event consumption handler",
+	s.Logger.Info(context.Background(), "registered event consumption handler",
 		"topic", cfg.EventProcessing.Topic,
 		"rate_limit", cfg.EventProcessing.RateLimit,
 	)
@@ -128,7 +128,7 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 	cfg *config.Configuration,
 ) {
 	if !cfg.EventProcessingLazy.Enabled {
-		s.Logger.Infow("event consumption lazy handler disabled by configuration")
+		s.Logger.Info(context.Background(), "event consumption lazy handler disabled by configuration")
 		return
 	}
 
@@ -144,7 +144,7 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 		throttle.Middleware,
 	)
 
-	s.Logger.Infow("registered event consumption lazy handler",
+	s.Logger.Info(context.Background(), "registered event consumption lazy handler",
 		"topic", cfg.EventProcessingLazy.Topic,
 		"rate_limit", cfg.EventProcessingLazy.RateLimit,
 	)
@@ -156,13 +156,13 @@ func (s *eventConsumptionService) RegisterHandlerReplay(
 	cfg *config.Configuration,
 ) {
 	if !cfg.EventProcessingReplay.Enabled {
-		s.Logger.Infow("event consumption replay handler disabled by configuration")
+		s.Logger.Info(context.Background(), "event consumption replay handler disabled by configuration")
 		return
 	}
 
 	// Check if replay topic is configured
 	if cfg.EventProcessingReplay.Topic == "" {
-		s.Logger.Warnw("replay topic not set, skipping replay handler")
+		s.Logger.Info(context.Background(), "replay topic not set, skipping replay handler")
 		return
 	}
 
@@ -178,7 +178,7 @@ func (s *eventConsumptionService) RegisterHandlerReplay(
 		replayThrottle.Middleware,
 	)
 
-	s.Logger.Infow("registered event consumption replay handler",
+	s.Logger.Info(context.Background(), "registered event consumption replay handler",
 		"topic", cfg.EventProcessingReplay.Topic,
 		"rate_limit", cfg.EventProcessingReplay.RateLimit,
 		"pubsub_type", "kafka",
@@ -192,7 +192,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
-	s.Logger.Debugw("processing event from message queue in event consumption service",
+	s.Logger.Debug(context.Background(), "processing event from message queue in event consumption service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -202,7 +202,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Errorw("failed to unmarshal event",
+		s.Logger.Error(context.Background(), "failed to unmarshal event",
 			"error", err,
 			"payload", string(msg.Payload),
 		)
@@ -234,7 +234,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
-	s.Logger.Debugw("processing event in event consumption service",
+	s.Logger.Debug(context.Background(), "processing event in event consumption service",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
@@ -246,7 +246,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}
 
-	s.Logger.Debugw("creating billing event",
+	s.Logger.Debug(context.Background(), "creating billing event",
 		"tenant_id", s.Config.Billing.TenantID,
 		"environment_id", s.Config.Billing.EnvironmentID,
 		"external_customer_id", event.ExternalCustomerID,
@@ -271,7 +271,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 			"system",
 			s.Config.Billing.EnvironmentID,
 		)
-		s.Logger.Debugw("appending billing event",
+		s.Logger.Debug(context.Background(), "appending billing event",
 			"tenant_id", s.Config.Billing.TenantID,
 			"environment_id", s.Config.Billing.EnvironmentID,
 			"external_customer_id", event.ExternalCustomerID,
@@ -281,13 +281,13 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	}
 
 	// Insert events into ClickHouse
-	s.Logger.Debugw("inserting events into ClickHouse",
+	s.Logger.Debug(context.Background(), "inserting events into ClickHouse",
 		"event_id", event.ID,
 		"events_to_insert_count", len(eventsToInsert),
 	)
 
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
-		s.Logger.Errorw("failed to insert events",
+		s.Logger.Error(context.Background(), "failed to insert events",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -303,7 +303,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	// Only for the tenants that are forced to v1
 	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
 		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.Errorw("failed to publish event to post-processing service",
+			s.Logger.Error(context.Background(), "failed to publish event to post-processing service",
 				"error", err,
 				"event_id", event.ID,
 				"event_name", event.EventName,
@@ -316,7 +316,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		}
 	}
 
-	s.Logger.Debugw("successfully processed event",
+	s.Logger.Debug(context.Background(), "successfully processed event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"lag_ms", time.Since(event.Timestamp).Milliseconds(),
@@ -336,7 +336,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(payload, &event); err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to unmarshal event",
+		s.Logger.Error(ctx, "failed to unmarshal event",
 			"error", err,
 			"payload", string(payload),
 		)
@@ -344,7 +344,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		return fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 
-	s.Logger.DebugwCtx(ctx, "processing raw event",
+	s.Logger.Debug(ctx, "processing raw event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
@@ -378,7 +378,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 
 	// Insert events into ClickHouse
 	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to insert events",
+		s.Logger.Error(ctx, "failed to insert events",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -390,7 +390,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 	// Only for the tenants that are forced to v1
 	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
 		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.ErrorwCtx(ctx, "failed to publish event to post-processing service",
+			s.Logger.Error(ctx, "failed to publish event to post-processing service",
 				"error", err,
 				"event_id", event.ID,
 				"event_name", event.EventName,
@@ -399,7 +399,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 		}
 	}
 
-	s.Logger.DebugwCtx(ctx, "successfully processed raw event",
+	s.Logger.Debug(ctx, "successfully processed raw event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"lag_ms", time.Since(event.Timestamp).Milliseconds(),

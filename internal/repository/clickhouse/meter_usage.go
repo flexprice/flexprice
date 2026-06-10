@@ -268,7 +268,7 @@ func (r *MeterUsageRepository) marshalProperties(record *events.MeterUsage) stri
 	}
 	propsJSON, err := json.Marshal(record.Properties)
 	if err != nil {
-		r.logger.Errorw("failed to marshal properties for meter_usage",
+		r.logger.Error(context.Background(), "failed to marshal properties for meter_usage",
 			"event_id", record.ID,
 			"error", err,
 		)
@@ -287,7 +287,7 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 
 	query, args := r.qb.BuildBucketedQuery(params)
 
-	r.logger.Debugw("executing bucketed meter usage query",
+	r.logger.Debug(ctx, "executing bucketed meter usage query",
 		"meter_id", params.MeterID,
 		"window_size", params.WindowSize,
 		"group_by", params.GroupByProperty,
@@ -439,7 +439,7 @@ func (r *MeterUsageRepository) GetDetailedAnalytics(ctx context.Context, params 
 		query += "\n" + settings
 	}
 
-	r.logger.Debugw("executing detailed meter usage analytics query",
+	r.logger.Debug(ctx, "executing detailed meter usage analytics query",
 		"query", query,
 		"group_by", params.GroupBy,
 		"property_filters", params.PropertyFilters,
@@ -728,7 +728,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-				r.logger.Warnw("failed to parse properties JSON",
+				r.logger.Info(ctx, "failed to parse properties JSON",
 					"event_id", usage.ID,
 					"error", err)
 				usage.Properties = make(map[string]interface{})
@@ -744,7 +744,7 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Debugw("meter_usage export batch query completed",
+	r.logger.Debug(ctx, "meter_usage export batch query completed",
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"batch_size", batchSize,

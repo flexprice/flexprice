@@ -101,9 +101,6 @@ type noopJSONContext struct{ context.Context }
 
 func (noopJSONContext) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
 
-// Global logger for convenience
-var L *Logger
-
 // NewLogger creates and returns a new Logger instance
 func NewLogger(cfg *config.Configuration) (*Logger, error) {
 	config := zap.NewProductionConfig()
@@ -226,6 +223,11 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 // NewNoopLogger returns a logger that discards all output. For use in tests only.
 func NewNoopLogger() *Logger {
 	return &Logger{SugaredLogger: zap.NewNop().Sugar()}
+}
+
+// NewFromSugared creates a Logger from an existing SugaredLogger. For use in tests only.
+func NewFromSugared(s *zap.SugaredLogger) *Logger {
+	return &Logger{SugaredLogger: s}
 }
 
 // resolveOtelLogsConfig picks the active log-export settings. Precedence:
@@ -356,24 +358,175 @@ func (l *Logger) OtelLogProvider() otellog.LoggerProvider {
 	return l.otelLogProvider
 }
 
-// Initialize default logger and set it as global while also using Dependency Injection
-// Given logger is a heavily used object and is used in many places so it's a good idea to
-// have it as a global variable as well for usecases like scripts but for everywhere else
-// we should try to use the Dependency Injection approach only.
-func init() {
-	L, _ = NewLogger(config.GetDefaultConfig())
-}
+// ---------------------------------------------------------------------------
+// Context binding
+// ---------------------------------------------------------------------------
 
-func GetLogger() *Logger {
-	if L == nil {
-		L, _ = NewLogger(config.GetDefaultConfig())
+// WithContext binds request-scoped fields and (if present) the active OTel
+// span's trace_id / span_id so logs correlate to traces in SigNoz.
+//
+// Two correlation mechanisms are applied:
+//  1. trace_id / span_id are injected as string fields — visible in stdout JSON
+//     and as OTLP log attributes for human-readable inspection.
+//  2. The context is injected via otelCtxCore so the otelzap bridge sets the
+//     OTLP log record's record-level TraceId and SpanId fields — these are what
+//     SigNoz uses to link logs to their trace in the Span Details "Logs" tab.
+func (l *Logger) WithContext(ctx context.Context) *Logger {
+	// Guard against nil ctx: noopJSONContext embeds context.Context as an
+	// interface, so noopJSONContext{nil}.Value(...) panics deep in the OTel SDK.
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	return L
+
+	fields := []interface{}{
+		"request_id", types.GetRequestID(ctx),
+		"tenant_id", types.GetTenantID(ctx),
+		"user_id", types.GetUserID(ctx),
+		"environment_id", types.GetEnvironmentID(ctx),
+	}
+
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	if sc.IsValid() {
+		fields = append(fields,
+			"trace_id", sc.TraceID().String(),
+			"span_id", sc.SpanID().String(),
+		)
+	}
+
+	newSugared := l.SugaredLogger.With(fields...)
+
+	// Inject ctx into the otelzap bridge so it can populate the OTLP log record's
+	// record-level TraceId/SpanId (not just string attributes). This enables
+	// SigNoz's native trace-log correlation. We do this even for ended spans —
+	// the span context (TraceId, SpanId) remains valid after span.End().
+	//
+	// Guard: only wrap once. Repeated WithContext calls (e.g. middleware chains
+	// calling Ctx(ctx) on an already-context-bound logger) would otherwise
+	// accumulate nested otelCtxCore layers, producing duplicate _span_ctx fields
+	// on every Write. ctxBound is set on the returned Logger to prevent this.
+	ctxBound := l.ctxBound
+	if sc.IsValid() && !l.ctxBound {
+		newSugared = newSugared.WithOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
+			return &otelCtxCore{Core: c, ctx: ctx}
+		}))
+		ctxBound = true
+	}
+
+	return &Logger{
+		SugaredLogger:   newSugared,
+		fluentdLogger:   l.fluentdLogger,
+		otelLogProvider: l.otelLogProvider,
+		serviceName:     l.serviceName,
+		ctxBound:        ctxBound,
+	}
 }
 
-func GetLoggerWithContext(ctx context.Context) *Logger {
-	return GetLogger().WithContext(ctx)
+// Ctx is a short alias for WithContext — use at the top of service methods to
+// get a request-scoped logger that carries the correct OTel trace ID:
+//
+//	log := s.Logger.Ctx(ctx)
+//	log.Errorw("failed", "error", err)
+func (l *Logger) Ctx(ctx context.Context) *Logger {
+	return l.WithContext(ctx)
 }
+
+// ---------------------------------------------------------------------------
+// ctx-first logging API (preferred)
+// ---------------------------------------------------------------------------
+
+// Debug logs at debug level with auto-bound context fields.
+func (l *Logger) Debug(ctx context.Context, msg string, fields ...any) {
+	lc := l.WithContext(ctx)
+	lc.SugaredLogger.Debugw(msg, fields...)
+	lc.sendToFluentd("debug", msg, lc.keysAndValuesToMap(fields...))
+}
+
+// Info logs at info level with auto-bound context fields.
+func (l *Logger) Info(ctx context.Context, msg string, fields ...any) {
+	lc := l.WithContext(ctx)
+	lc.SugaredLogger.Infow(msg, fields...)
+	lc.sendToFluentd("info", msg, lc.keysAndValuesToMap(fields...))
+}
+
+// Warn logs at warn level. Only use in bootstrap/startup code.
+func (l *Logger) Warn(ctx context.Context, msg string, fields ...any) {
+	lc := l.WithContext(ctx)
+	lc.SugaredLogger.Warnw(msg, fields...)
+	lc.sendToFluentd("warning", msg, lc.keysAndValuesToMap(fields...))
+}
+
+// Error logs at error level with auto-bound context fields.
+func (l *Logger) Error(ctx context.Context, msg string, fields ...any) {
+	lc := l.WithContext(ctx)
+	lc.SugaredLogger.Errorw(msg, fields...)
+	lc.sendToFluentd("error", msg, lc.keysAndValuesToMap(fields...))
+}
+
+// Fatal logs at fatal level then calls os.Exit(1). Use only in cmd/.
+func (l *Logger) Fatal(ctx context.Context, msg string, fields ...any) {
+	lc := l.WithContext(ctx)
+	lc.sendToFluentd("fatal", msg, lc.keysAndValuesToMap(fields...))
+	lc.SugaredLogger.Fatalw(msg, fields...)
+}
+
+// ---------------------------------------------------------------------------
+// Legacy w-variants (kept for gradual migration, do not use in new code)
+// ---------------------------------------------------------------------------
+
+// Debugw logs at debug level with key-value pairs.
+func (l *Logger) Debugw(msg string, keysAndValues ...interface{}) {
+	l.SugaredLogger.Debugw(msg, keysAndValues...)
+	l.sendToFluentd("debug", msg, l.keysAndValuesToMap(keysAndValues...))
+}
+
+// Infow logs at info level with key-value pairs.
+func (l *Logger) Infow(msg string, keysAndValues ...interface{}) {
+	l.SugaredLogger.Infow(msg, keysAndValues...)
+	l.sendToFluentd("info", msg, l.keysAndValuesToMap(keysAndValues...))
+}
+
+// Warnw logs at warn level with key-value pairs.
+func (l *Logger) Warnw(msg string, keysAndValues ...interface{}) {
+	l.SugaredLogger.Warnw(msg, keysAndValues...)
+	l.sendToFluentd("warning", msg, l.keysAndValuesToMap(keysAndValues...))
+}
+
+// Errorw logs at error level with key-value pairs.
+func (l *Logger) Errorw(msg string, keysAndValues ...interface{}) {
+	l.SugaredLogger.Errorw(msg, keysAndValues...)
+	l.sendToFluentd("error", msg, l.keysAndValuesToMap(keysAndValues...))
+}
+
+// ---------------------------------------------------------------------------
+// Structured field helpers
+// ---------------------------------------------------------------------------
+
+// Err produces structured fields for an error. Always use on log.Error calls.
+func Err(err error) []any {
+	if err == nil {
+		return []any{"error", "<nil>", "error_type", "<nil>"}
+	}
+	return []any{"error", err.Error(), "error_type", fmt.Sprintf("%T", err)}
+}
+
+// Op produces a structured "operation" field. Value should be "<entity>.<verb_past>".
+func Op(name string) []any {
+	return []any{"operation", name}
+}
+
+// Event produces "entity", "action", and "operation" fields.
+func Event(entity, action string) []any {
+	return []any{"entity", entity, "action", action, "operation", entity + "." + action}
+}
+
+// Entity produces an "<entity>_id" field.
+func Entity(name, id string) []any {
+	return []any{name + "_id", id}
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
 
 // sanitizeValue converts error objects to strings for msgpack serialization
 // Also handles nested structures (maps and slices) that may contain errors
@@ -431,165 +584,6 @@ func (l *Logger) sendToFluentd(level string, msg string, fields map[string]inter
 	}
 }
 
-// Helper methods to make logging more convenient
-func (l *Logger) Debugf(template string, args ...interface{}) {
-	l.SugaredLogger.Debugf(template, args...)
-	l.sendToFluentd("debug", l.sprintf(template, args...), nil)
-}
-
-func (l *Logger) Infof(template string, args ...interface{}) {
-	l.SugaredLogger.Infof(template, args...)
-	l.sendToFluentd("info", l.sprintf(template, args...), nil)
-}
-
-func (l *Logger) Warnf(template string, args ...interface{}) {
-	l.SugaredLogger.Warnf(template, args...)
-	l.sendToFluentd("warning", l.sprintf(template, args...), nil)
-}
-
-func (l *Logger) Errorf(template string, args ...interface{}) {
-	l.SugaredLogger.Errorf(template, args...)
-	l.sendToFluentd("error", l.sprintf(template, args...), nil)
-}
-
-func (l *Logger) Fatalf(template string, args ...interface{}) {
-	msg := l.sprintf(template, args...)
-	l.sendToFluentd("fatal", msg, nil)
-	l.SugaredLogger.Fatalf(template, args...)
-}
-
-// sprintf is a helper to format strings
-func (l *Logger) sprintf(template string, args ...interface{}) string {
-	if len(args) == 0 {
-		return template
-	}
-	return fmt.Sprintf(template, args...)
-}
-
-// WithContext binds request-scoped fields and (if present) the active OTel
-// span's trace_id / span_id so logs correlate to traces in SigNoz.
-//
-// Two correlation mechanisms are applied:
-//  1. trace_id / span_id are injected as string fields — visible in stdout JSON
-//     and as OTLP log attributes for human-readable inspection.
-//  2. The context is injected via otelCtxCore so the otelzap bridge sets the
-//     OTLP log record's record-level TraceId and SpanId fields — these are what
-//     SigNoz uses to link logs to their trace in the Span Details "Logs" tab.
-func (l *Logger) WithContext(ctx context.Context) *Logger {
-	// Guard against nil ctx: noopJSONContext embeds context.Context as an
-	// interface, so noopJSONContext{nil}.Value(...) panics deep in the OTel SDK.
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	fields := []interface{}{
-		"request_id", types.GetRequestID(ctx),
-		"tenant_id", types.GetTenantID(ctx),
-		"user_id", types.GetUserID(ctx),
-	}
-
-	sc := trace.SpanFromContext(ctx).SpanContext()
-	if sc.IsValid() {
-		fields = append(fields,
-			"trace_id", sc.TraceID().String(),
-			"span_id", sc.SpanID().String(),
-		)
-	}
-
-	newSugared := l.SugaredLogger.With(fields...)
-
-	// Inject ctx into the otelzap bridge so it can populate the OTLP log record's
-	// record-level TraceId/SpanId (not just string attributes). This enables
-	// SigNoz's native trace-log correlation. We do this even for ended spans —
-	// the span context (TraceId, SpanId) remains valid after span.End().
-	//
-	// Guard: only wrap once. Repeated WithContext calls (e.g. middleware chains
-	// calling Ctx(ctx) on an already-context-bound logger) would otherwise
-	// accumulate nested otelCtxCore layers, producing duplicate _span_ctx fields
-	// on every Write. ctxBound is set on the returned Logger to prevent this.
-	ctxBound := l.ctxBound
-	if sc.IsValid() && !l.ctxBound {
-		newSugared = newSugared.WithOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
-			return &otelCtxCore{Core: c, ctx: ctx}
-		}))
-		ctxBound = true
-	}
-
-	return &Logger{
-		SugaredLogger:   newSugared,
-		fluentdLogger:   l.fluentdLogger,
-		otelLogProvider: l.otelLogProvider,
-		serviceName:     l.serviceName,
-		ctxBound:        ctxBound,
-	}
-}
-
-// Ctx is a short alias for WithContext — use at the top of service methods to
-// get a request-scoped logger that carries the correct OTel trace ID:
-//
-//	log := s.Logger.Ctx(ctx)
-//	log.Errorw("failed", "error", err)
-func (l *Logger) Ctx(ctx context.Context) *Logger {
-	return l.WithContext(ctx)
-}
-
-// Structured logging methods that include context fields
-func (l *Logger) Debugw(msg string, keysAndValues ...interface{}) {
-	l.SugaredLogger.Debugw(msg, keysAndValues...)
-	l.sendToFluentd("debug", msg, l.keysAndValuesToMap(keysAndValues...))
-}
-
-func (l *Logger) Infow(msg string, keysAndValues ...interface{}) {
-	l.SugaredLogger.Infow(msg, keysAndValues...)
-	l.sendToFluentd("info", msg, l.keysAndValuesToMap(keysAndValues...))
-}
-
-func (l *Logger) Warnw(msg string, keysAndValues ...interface{}) {
-	l.SugaredLogger.Warnw(msg, keysAndValues...)
-	l.sendToFluentd("warning", msg, l.keysAndValuesToMap(keysAndValues...))
-}
-
-func (l *Logger) Errorw(msg string, keysAndValues ...interface{}) {
-	l.SugaredLogger.Errorw(msg, keysAndValues...)
-	l.sendToFluentd("error", msg, l.keysAndValuesToMap(keysAndValues...))
-}
-
-// Context-aware logging methods — these bind the request context for trace correlation.
-// Use these in service/repository methods instead of the plain variants:
-//
-//	s.Logger.ErrorwCtx(ctx, "failed", "error", err)   instead of   s.Logger.Errorw("failed", "error", err)
-func (l *Logger) DebugwCtx(ctx context.Context, msg string, keysAndValues ...interface{}) {
-	l.WithContext(ctx).Debugw(msg, keysAndValues...)
-}
-
-func (l *Logger) InfowCtx(ctx context.Context, msg string, keysAndValues ...interface{}) {
-	l.WithContext(ctx).Infow(msg, keysAndValues...)
-}
-
-func (l *Logger) WarnwCtx(ctx context.Context, msg string, keysAndValues ...interface{}) {
-	l.WithContext(ctx).Warnw(msg, keysAndValues...)
-}
-
-func (l *Logger) ErrorwCtx(ctx context.Context, msg string, keysAndValues ...interface{}) {
-	l.WithContext(ctx).Errorw(msg, keysAndValues...)
-}
-
-func (l *Logger) DebugfCtx(ctx context.Context, template string, args ...interface{}) {
-	l.WithContext(ctx).Debugf(template, args...)
-}
-
-func (l *Logger) InfofCtx(ctx context.Context, template string, args ...interface{}) {
-	l.WithContext(ctx).Infof(template, args...)
-}
-
-func (l *Logger) WarnfCtx(ctx context.Context, template string, args ...interface{}) {
-	l.WithContext(ctx).Warnf(template, args...)
-}
-
-func (l *Logger) ErrorfCtx(ctx context.Context, template string, args ...interface{}) {
-	l.WithContext(ctx).Errorf(template, args...)
-}
-
 // keysAndValuesToMap converts variadic key-value pairs to a map
 func (l *Logger) keysAndValuesToMap(keysAndValues ...interface{}) map[string]interface{} {
 	fields := make(map[string]interface{})
@@ -604,6 +598,10 @@ func (l *Logger) keysAndValuesToMap(keysAndValues ...interface{}) map[string]int
 	return fields
 }
 
+// ---------------------------------------------------------------------------
+// Framework adapter loggers
+// ---------------------------------------------------------------------------
+
 // retryableHTTPLogger adapts our Logger to go-retryablehttp's logging interface
 type retryableHTTPLogger struct {
 	logger *Logger
@@ -616,24 +614,22 @@ func (l *Logger) GetRetryableHTTPLogger() *retryableHTTPLogger {
 
 // Printf implements the Logger interface for go-retryablehttp
 func (r *retryableHTTPLogger) Printf(format string, v ...interface{}) {
-	r.logger.Infof(format, v...)
+	r.logger.Info(context.Background(), fmt.Sprintf(format, v...))
 }
 
-// GetEntLogger returns an ent-compatible logger function
-func (l *Logger) GetEntLogger() func(...any) {
+// GetEntLogger returns an ent-compatible logger function bound to the given ctx.
+func (l *Logger) GetEntLogger(ctx context.Context) func(...any) {
 	return func(args ...any) {
-		// Ent typically passes query strings, format them properly
-		if len(args) > 0 {
-			// If args is a single string, use it as the query
-			if len(args) == 1 {
-				if query, ok := args[0].(string); ok {
-					l.Debugw("ent_query", "query", query)
-					return
-				}
-			}
-			// Otherwise, format all args as a single query string
-			l.Debugw("ent_query", "query", args)
+		if len(args) == 0 {
+			return
 		}
+		if len(args) == 1 {
+			if query, ok := args[0].(string); ok {
+				l.Debug(ctx, "ent_query", "query", query)
+				return
+			}
+		}
+		l.Debug(ctx, "ent_query", "query", fmt.Sprint(args...))
 	}
 }
 
@@ -649,6 +645,6 @@ func (l *Logger) GetGinLogger() *ginLogger {
 
 // Write implements the io.Writer interface for gin
 func (g *ginLogger) Write(p []byte) (n int, err error) {
-	g.logger.Info(string(p))
+	g.logger.Info(context.Background(), string(p))
 	return len(p), nil
 }

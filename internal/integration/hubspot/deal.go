@@ -40,13 +40,13 @@ func NewDealSyncService(
 
 // SyncSubscriptionToDeal creates HubSpot line items from subscription and associates them with a deal
 func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscriptionID string) error {
-	s.logger.Infow("fetching subscription for deal sync",
+	s.logger.Info(ctx, "fetching subscription for deal sync",
 		"subscription_id", subscriptionID)
 
 	// Fetch subscription with line items
 	sub, lineItems, err := s.subscriptionRepo.GetWithLineItems(ctx, subscriptionID)
 	if err != nil {
-		s.logger.Errorw("failed to fetch subscription with line items",
+		s.logger.Error(ctx, "failed to fetch subscription with line items",
 			"error", err,
 			"subscription_id", subscriptionID)
 		return ierr.WithError(err).
@@ -57,7 +57,7 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 	// Assign line items to the subscription
 	sub.LineItems = lineItems
 
-	s.logger.Infow("fetching customer for deal sync",
+	s.logger.Info(ctx, "fetching customer for deal sync",
 		"customer_id", sub.CustomerID,
 		"subscription_id", subscriptionID,
 		"line_items_count", len(lineItems))
@@ -65,7 +65,7 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 	// Fetch customer to get deal ID from metadata
 	cust, err := s.customerRepo.Get(ctx, sub.CustomerID)
 	if err != nil {
-		s.logger.Errorw("failed to fetch customer",
+		s.logger.Error(ctx, "failed to fetch customer",
 			"error", err,
 			"customer_id", sub.CustomerID,
 			"subscription_id", subscriptionID)
@@ -77,14 +77,14 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 	// Get deal ID from customer metadata
 	dealID, ok := cust.Metadata["hubspot_deal_id"]
 	if !ok || dealID == "" {
-		s.logger.Warnw("no HubSpot deal ID found in customer metadata",
+		s.logger.Info(ctx, "no HubSpot deal ID found in customer metadata",
 			"customer_id", cust.ID,
 			"subscription_id", subscriptionID,
 			"metadata", cust.Metadata)
 		return nil // Not an error - customer might not be from HubSpot
 	}
 
-	s.logger.Infow("found HubSpot deal ID, creating line items",
+	s.logger.Info(ctx, "found HubSpot deal ID, creating line items",
 		"deal_id", dealID,
 		"subscription_id", subscriptionID,
 		"line_items_count", len(sub.LineItems))
@@ -99,7 +99,7 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 	}
 
 	if len(flatRateLineItems) == 0 {
-		s.logger.Warnw("no active flat rate line items to sync",
+		s.logger.Info(ctx, "no active flat rate line items to sync",
 			"subscription_id", subscriptionID,
 			"deal_id", dealID,
 			"line_items_count", len(sub.LineItems))
@@ -109,7 +109,7 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 	// Create HubSpot line items for each flat rate subscription line item
 	for _, lineItem := range flatRateLineItems {
 		if err := s.createHubSpotLineItem(ctx, lineItem, sub, dealID); err != nil {
-			s.logger.Errorw("failed to create HubSpot line item",
+			s.logger.Error(ctx, "failed to create HubSpot line item",
 				"error", err,
 				"line_item_id", lineItem.ID,
 				"deal_id", dealID)
@@ -118,7 +118,7 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 		}
 	}
 
-	s.logger.Infow("successfully synced subscription line items to HubSpot deal",
+	s.logger.Info(ctx, "successfully synced subscription line items to HubSpot deal",
 		"subscription_id", subscriptionID,
 		"deal_id", dealID,
 		"synced_items", len(flatRateLineItems))
@@ -129,13 +129,13 @@ func (s *DealSyncService) SyncSubscriptionToDeal(ctx context.Context, subscripti
 // UpdateDealAmountFromACV updates the deal amount based on HubSpot's calculated ACV
 // This should be called after line items are created and HubSpot has recalculated ACV
 func (s *DealSyncService) UpdateDealAmountFromACV(ctx context.Context, customerID, dealID string) error {
-	s.logger.Infow("updating deal amount from ACV",
+	s.logger.Info(ctx, "updating deal amount from ACV",
 		"customer_id", customerID,
 		"deal_id", dealID)
 
 	// Update deal amount based on ACV - just fetch and update, don't calculate
 	if err := s.updateDealAmountFromHubSpot(ctx, dealID); err != nil {
-		s.logger.Errorw("failed to update deal amount",
+		s.logger.Error(ctx, "failed to update deal amount",
 			"error", err,
 			"deal_id", dealID,
 			"customer_id", customerID)
@@ -155,7 +155,7 @@ func (s *DealSyncService) createHubSpotLineItem(
 	// Fetch the price to get the actual amount
 	priceObj, err := s.priceRepo.Get(ctx, lineItem.PriceID)
 	if err != nil {
-		s.logger.Errorw("failed to fetch price for line item; cannot create accurate HubSpot line item",
+		s.logger.Error(ctx, "failed to fetch price for line item; cannot create accurate HubSpot line item",
 			"error", err,
 			"price_id", lineItem.PriceID,
 			"line_item_id", lineItem.ID,
@@ -207,7 +207,7 @@ func (s *DealSyncService) createHubSpotLineItem(
 		},
 	}
 
-	s.logger.Infow("creating HubSpot line item",
+	s.logger.Info(ctx, "creating HubSpot line item",
 		"deal_id", dealID,
 		"line_item_name", lineItem.DisplayName,
 		"quantity", lineItem.Quantity.String(),
@@ -247,7 +247,7 @@ func (s *DealSyncService) mapBillingFrequency(period types.BillingPeriod) string
 // updateDealAmountFromHubSpot fetches the deal's ACV from HubSpot and updates the deal amount
 // This function only reads ACV calculated by HubSpot, never calculates manually
 func (s *DealSyncService) updateDealAmountFromHubSpot(ctx context.Context, dealID string) error {
-	s.logger.Infow("fetching deal to get ACV",
+	s.logger.Info(ctx, "fetching deal to get ACV",
 		"deal_id", dealID)
 
 	// Get the deal to read its ACV
@@ -258,7 +258,7 @@ func (s *DealSyncService) updateDealAmountFromHubSpot(ctx context.Context, dealI
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Infow("fetched deal properties",
+	s.logger.Info(ctx, "fetched deal properties",
 		"deal_id", dealID,
 		"acv", deal.Properties.ACV,
 		"mrr", deal.Properties.MRR,
@@ -267,7 +267,7 @@ func (s *DealSyncService) updateDealAmountFromHubSpot(ctx context.Context, dealI
 	// Extract ACV from deal properties (already a string)
 	acv := deal.Properties.ACV
 	if acv == "" {
-		s.logger.Warnw("hs_acv property not found or empty",
+		s.logger.Info(ctx, "hs_acv property not found or empty",
 			"deal_id", dealID,
 			"deal_name", deal.Properties.DealName,
 			"current_amount", deal.Properties.Amount)
@@ -276,7 +276,7 @@ func (s *DealSyncService) updateDealAmountFromHubSpot(ctx context.Context, dealI
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Infow("updating deal amount with ACV",
+	s.logger.Info(ctx, "updating deal amount with ACV",
 		"deal_id", dealID,
 		"acv", acv)
 
@@ -292,7 +292,7 @@ func (s *DealSyncService) updateDealAmountFromHubSpot(ctx context.Context, dealI
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	s.logger.Infow("successfully updated deal amount",
+	s.logger.Info(ctx, "successfully updated deal amount",
 		"deal_id", dealID,
 		"amount", acv)
 

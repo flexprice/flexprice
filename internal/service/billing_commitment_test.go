@@ -92,7 +92,7 @@ func TestGenerateBucketStarts_Month_WithAnchor_StartBeforeAnchorDay(t *testing.T
 // backed by in-memory stores so flat-fee CalculateCost works deterministically.
 func newCommitmentCalculatorForTest(t *testing.T) *commitmentCalculator {
 	t.Helper()
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 	params := ServiceParams{
 		Logger:        log,
 		DB:            testutil.NewMockPostgresClient(log),

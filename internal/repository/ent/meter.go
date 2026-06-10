@@ -270,7 +270,7 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 
 	client := r.client.Writer(ctx)
 
-	r.logger.Debugw("updating meter",
+	r.logger.Debug(ctx, "updating meter",
 		"meter_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)

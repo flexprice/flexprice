@@ -1070,7 +1070,7 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 			&exportData.CreatedAt,
 		)
 		if err != nil {
-			r.logger.Errorw("failed to scan credit topup export data", "error", err)
+			r.logger.Error(ctx, "failed to scan credit topup export data", "error", err)
 			continue
 		}
 
