@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -348,7 +349,7 @@ func TestBucketIndexAtWindowStart(t *testing.T) {
 // also returns the in-memory price store so tests can pre-populate bucket prices.
 func newCommitmentCalculatorWithPriceStore(t *testing.T) (*commitmentCalculator, *testutil.InMemoryPriceStore) {
 	t.Helper()
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 	priceStore := testutil.NewInMemoryPriceStore()
 	params := ServiceParams{
 		Logger:        log,
@@ -462,6 +463,124 @@ func TestApplyWindowCommitment_PerBucketDispatch_FlatFee(t *testing.T) {
 	// No true-up should fire: in-bucket exceeded commitment; out-of-bucket has no true-up.
 	assert.True(t, info.ComputedTrueUpAmount.Equal(decimal.Zero),
 		"expected zero true-up, got %s", info.ComputedTrueUpAmount)
+}
+
+// TestApplyWindowCommitment_PerBucket_PriceOverrideFromWindowSize proves that the
+// SUBSCRIPTION-scoped price carried on a bucket actually OVERRIDES the line item
+// price for in-bucket windows — and that the whole thing is driven by a window
+// size provided as input (not hand-built window grids).
+//
+// The window grid is generated from types.WindowSizeHour via the real
+// fillBucketedValuesForWindowedCommitment path, then fed to the commitment
+// calculator. Because the bucket commitment uses overage_factor=1, the in-bucket
+// charge collapses to baseCharge = usage × <bucket price>, so the total directly
+// reflects which price was used.
+//
+// Setup:
+//
+//	period:        2026-01-01 00:00 → 2026-01-02 00:00 UTC (24 hourly windows)
+//	window size:   HOUR (drives the grid)
+//	bucket:        [09:00, 12:00), FLAT_FEE $5/unit (override), amount commitment
+//	               $50, overage_factor=1, true_up=false
+//	line item:     FLAT_FEE $1/unit, top-level commitment=0
+//	usage:         hour 09 = 60u, hour 10 = 40u (in-bucket, 100u total)
+//	               hour 00 = 30u (out-of-bucket)
+//
+// In-bucket:  100u × $5 (override) = $500 base ≥ $50 commitment
+//
+//	overage = ($500 − $50) × 1 = $450 → charge = $50 + $450 = $500
+//
+// Out-of-bucket: 30u × $1 (line item) = $30, no commitment → $30
+//
+// Total = $530. (Had the override NOT been applied, in-bucket would be
+// 100u × $1 = $100 and the total would be $130 — so $530 is unambiguous proof.)
+func TestApplyWindowCommitment_PerBucket_PriceOverrideFromWindowSize(t *testing.T) {
+	ctx := testutil.SetupContext()
+	calc, priceStore := newCommitmentCalculatorWithPriceStore(t)
+
+	// Bucket price override: $5/unit flat-fee.
+	bucketPriceID := "price_bucket_override_5"
+	require.NoError(t, priceStore.Create(ctx, &price.Price{
+		ID:           bucketPriceID,
+		Amount:       decimal.NewFromInt(5),
+		Currency:     "usd",
+		Type:         types.PRICE_TYPE_USAGE,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}))
+
+	bucketCommitment := decimal.NewFromInt(50)
+	overageFactor := decimal.NewFromInt(1)
+	liCommitment := decimal.Zero
+
+	lineItem := &subscription.SubscriptionLineItem{
+		ID:                      "li_price_override",
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentAmount:        &liCommitment, // out-of-bucket: no commitment
+		CommitmentOverageFactor: &overageFactor,
+		CommitmentWindowed:      true,
+		// True-up at the line-item level only makes the fill path generate the
+		// full hourly grid (zero-filling empty windows); out-of-bucket commitment
+		// is zero, so no true-up actually fires there.
+		CommitmentTrueUpEnabled: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{
+				ID:              "bucket_morning",
+				Start:           types.Bucket{Hour: 9, Minute: 0},
+				End:             types.Bucket{Hour: 12, Minute: 0},
+				PriceID:         bucketPriceID,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: bucketCommitment,
+				OverageFactor:   &overageFactor,
+				TrueUpEnabled:   false,
+			},
+		},
+	}
+
+	// Line item price: $1/unit — must NOT be used for in-bucket windows.
+	lineItemPrice := flatFeePrice(decimal.NewFromInt(1))
+
+	periodStart := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	periodEnd := periodStart.AddDate(0, 0, 1)
+
+	// Raw windowed usage, keyed by the hour-window start. The window starts here
+	// must line up with the HOUR grid that fill will generate.
+	usageResult := &events.AggregationResult{
+		Type: types.AggregationSum,
+		Results: []events.UsageResult{
+			{WindowSize: periodStart.Add(9 * time.Hour), Value: decimal.NewFromInt(60)},  // in-bucket
+			{WindowSize: periodStart.Add(10 * time.Hour), Value: decimal.NewFromInt(40)}, // in-bucket
+			{WindowSize: periodStart.Add(0 * time.Hour), Value: decimal.NewFromInt(30)},  // out-of-bucket
+		},
+	}
+
+	// Drive the grid from the window size input (HOUR).
+	bs := &billingService{}
+	bucketedValues, bucketStarts := bs.fillBucketedValuesForWindowedCommitment(
+		lineItem, usageResult, periodStart, periodEnd, types.WindowSizeHour, nil, types.AggregationSum)
+
+	// 24 hourly windows generated from the window size, zero-filled where idle.
+	require.Len(t, bucketStarts, 24, "HOUR window size over a day must yield 24 windows")
+	require.Len(t, bucketedValues, 24)
+
+	total, info, err := calc.applyWindowCommitmentToLineItem(ctx, lineItem, bucketedValues, bucketStarts, lineItemPrice)
+	require.NoError(t, err)
+	require.NotNil(t, info)
+
+	// $500 in-bucket (override applied) + $30 out-of-bucket = $530.
+	assert.True(t, decimal.NewFromInt(530).Equal(total),
+		"expected $530 (bucket price override applied); got %s — $130 would mean the override was ignored", total)
+
+	// In-bucket overage = ($500 − $50) × 1 = $450, proving the $5 override drove the base charge.
+	assert.True(t, decimal.NewFromInt(450).Equal(info.ComputedOverageAmount),
+		"expected in-bucket overage $450 from the $5 override base, got %s", info.ComputedOverageAmount)
+
+	// Utilized = $50 bucket commitment + $30 out-of-bucket actual = $80.
+	assert.True(t, decimal.NewFromInt(80).Equal(info.ComputedCommitmentUtilizedAmount),
+		"expected utilized $80, got %s", info.ComputedCommitmentUtilizedAmount)
+
+	assert.True(t, info.ComputedTrueUpAmount.Equal(decimal.Zero),
+		"expected zero true-up, got %s", info.ComputedTrueUpAmount)
+	assert.True(t, info.IsWindowed)
 }
 
 // TestApplyWindowCommitment_PerBucketDispatch_QuantityTrueUp verifies the
