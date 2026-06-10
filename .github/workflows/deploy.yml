@@ -229,6 +229,40 @@ jobs:
           echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
 
   # ──────────────────────────────────────────────────────────────────────────
+  # Job 3: Canary — deploy preprod service(s) for targets that define one.
+  # Runs BEFORE the approval gate; production rollout only proceeds after a
+  # human validates these preprod deployments and approves the gate.
+  # Skipped entirely when no target defines preprod_service (e.g. staging).
+  # ──────────────────────────────────────────────────────────────────────────
+  deploy-preprod:
+    name: Deploy Preprod (${{ strategy.job-index }})
+    needs: [build, resolve-config]
+    if: ${{ always() && needs.resolve-config.result == 'success' && needs.resolve-config.outputs.preprod_targets != '[]' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.resolve-config.outputs.preprod_targets) }}
+      fail-fast: false
+      max-parallel: 3
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - name: Deploy ECS Preprod service
+        uses: ./.github/actions/deploy-ecs-service
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.preprod_service }}
+          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
+
+  # ──────────────────────────────────────────────────────────────────────────
   # Jobs 3a–3c: Deploy API, Consumer, Worker — one job per service type,
   # each with matrix over targets (regions). Runs in parallel for faster deploys
   # and smaller, trackable steps. max-parallel limits concurrent load on runners.
