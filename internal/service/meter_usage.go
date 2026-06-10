@@ -1857,6 +1857,20 @@ func hasTrueUpEnabled(lineItem *subscription.SubscriptionLineItem) bool {
 	return false
 }
 
+// shouldFillWindow reports whether an EMPTY window starting at t needs a
+// synthetic zero-usage fill point. Filling only matters where commitment math
+// can produce a charge for an empty window: any window when the line item
+// carries its own (top-level) commitment, or windows inside a commitment time
+// bucket otherwise. Empty windows outside both bill $0 regardless, so filling
+// them would only add noise points.
+func shouldFillWindow(lineItem *subscription.SubscriptionLineItem, t time.Time) bool {
+	if lineItem.HasCommitment() {
+		return true
+	}
+	_, ok := bucketIndexAt(lineItem.CommitmentTimeBuckets, []time.Time{t}, 0)
+	return ok
+}
+
 // calculateBucketedCost calculates cost for bucketed max/sum meters.
 // skipCommitment forces hasCommitment=false when set; used for analytics queries
 // with property/source filters where applying commitment over a filtered subset
@@ -2010,21 +2024,30 @@ func (s *meterUsageService) fillMissingWindowsAndRecalculate(p *meterUsageBucket
 	}
 
 	filled := make([]decimal.Decimal, 0, len(expectedStarts))
+	starts := make([]time.Time, 0, len(expectedStarts))
 	filledPoints := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
 	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
 
 	for _, t := range expectedStarts {
 		if existing, ok := pointsByBucket[t]; ok {
+			// Real usage is always billed, in- or out-of-bucket.
 			filled = append(filled, existing.Usage)
+			starts = append(starts, t)
 			filledPoints = append(filledPoints, existing)
-		} else {
-			filled = append(filled, decimal.Zero)
-			filledPoints = append(filledPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
+			continue
 		}
+		// Empty window: synthesize a fill point only where commitment math can
+		// charge for it (line-item commitment, or inside a commitment bucket).
+		if !shouldFillWindow(lineItem, t) {
+			continue
+		}
+		filled = append(filled, decimal.Zero)
+		starts = append(starts, t)
+		filledPoints = append(filledPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
 	}
 
 	p.item.Points = filledPoints
-	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, expectedStarts, p.price)
+	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, starts, p.price)
 	if err != nil {
 		s.logger.Info(p.ctx, "failed to apply window commitment over filled windows", "error", err, "line_item_id", lineItem.ID)
 		return decimal.Zero
@@ -2040,17 +2063,27 @@ func (s *meterUsageService) fillZeroUsageWindows(p *meterUsageBucketedCostParams
 	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
 	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
 
-	filled := make([]decimal.Decimal, len(expectedStarts))
+	// Only windows where commitment math can charge for emptiness are filled
+	// (line-item commitment, or inside a commitment bucket).
+	starts := make([]time.Time, 0, len(expectedStarts))
+	for _, t := range expectedStarts {
+		if shouldFillWindow(lineItem, t) {
+			starts = append(starts, t)
+		}
+	}
+
+	filled := make([]decimal.Decimal, len(starts))
 	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
 
-	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, expectedStarts, p.price)
+	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, starts, p.price)
 	if err != nil {
+		s.logger.Info(p.ctx, "failed to apply window commitment over zero-usage windows", "error", err, "line_item_id", lineItem.ID)
 		return decimal.Zero
 	}
 
 	p.item.CommitmentInfo = info
-	bucketPoints := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
-	for _, t := range expectedStarts {
+	bucketPoints := make([]events.UsageAnalyticPoint, 0, len(starts))
+	for _, t := range starts {
 		bucketPoints = append(bucketPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
 	}
 	p.item.Points = s.mergeBucketPointsByWindow(bucketPoints, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)

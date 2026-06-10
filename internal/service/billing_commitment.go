@@ -456,13 +456,15 @@ func bucketIndexAt(buckets types.TimeOfDayBuckets, starts []time.Time, i int) (i
 // size is coarser than the buckets) is left unattributed so per-point breakdown
 // and bucket summaries don't misreport. Used by analytics breakdown only.
 //
-// Containment is checked on the minute-of-day axis: the window's span from the
-// bucket start must fit inside the bucket's length. This correctly rejects
-// windows of a day or more (which cover every time-of-day) unless the bucket
-// spans the whole day, and rejects week/month windows entirely.
+// The check compares the window's UTC start/end against the bucket's bounds on
+// the minute-of-day axis. When the bucket wraps midnight (end <= start) — or the
+// window starts in the bucket's post-midnight part — the times are unwrapped by
+// one day so a plain end-to-end comparison works.
 func bucketIDForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Time, window types.WindowSize) (string, string, bool) {
 	windowMin := window.ToMinutes()
 	if windowMin <= 0 || windowMin > 1440 {
+		// Unknown or multi-day window sizes can never sit inside a single
+		// time-of-day bucket.
 		return "", "", false
 	}
 	idx, ok := bucketIndexAt(buckets, []time.Time{windowStart}, 0)
@@ -471,16 +473,16 @@ func bucketIDForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Tim
 	}
 	b := buckets[idx]
 
-	bucketLen := b.End.MinuteOfDay() - b.Start.MinuteOfDay()
-	if bucketLen <= 0 {
-		bucketLen += 1440 // midnight-wrapping bucket
-	}
 	utc := windowStart.UTC()
-	offset := utc.Hour()*60 + utc.Minute() - b.Start.MinuteOfDay()
-	if offset < 0 {
-		offset += 1440
+	winStart := utc.Hour()*60 + utc.Minute()
+	bucketStart, bucketEnd := b.Start.MinuteOfDay(), b.End.MinuteOfDay()
+	if bucketEnd <= bucketStart {
+		bucketEnd += 1440 // bucket wraps midnight, e.g. [22:00, 06:00)
 	}
-	if offset+windowMin > bucketLen {
+	if winStart < bucketStart {
+		winStart += 1440 // window starts in the bucket's post-midnight part
+	}
+	if winStart+windowMin > bucketEnd {
 		return "", "", false
 	}
 	return b.ID, b.PriceID, true
