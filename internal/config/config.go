@@ -126,22 +126,22 @@ type SupabaseConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers                []string             `mapstructure:"brokers" validate:"required"`
-	ConsumerGroup          string               `mapstructure:"consumer_group" validate:"required"`
-	Topic                  string               `mapstructure:"topic" validate:"required"`
-	TopicLazy              string               `mapstructure:"topic_lazy" validate:"required"`
-	TopicDLQ               string               `mapstructure:"topic_dlq" default:""`
-	TLS                    bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
-	UseSASL                bool                 `mapstructure:"use_sasl"`
-	SASLMechanism          sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
-	SASLUser               string               `mapstructure:"sasl_user"`
-	SASLPassword           string               `mapstructure:"sasl_password"`
+	Brokers       []string             `mapstructure:"brokers" validate:"required"`
+	ConsumerGroup string               `mapstructure:"consumer_group" validate:"required"`
+	Topic         string               `mapstructure:"topic" validate:"required"`
+	TopicLazy     string               `mapstructure:"topic_lazy" validate:"required"`
+	TopicDLQ      string               `mapstructure:"topic_dlq" default:""`
+	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
+	UseSASL       bool                 `mapstructure:"use_sasl"`
+	SASLMechanism sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
+	SASLUser      string               `mapstructure:"sasl_user"`
+	SASLPassword  string               `mapstructure:"sasl_password"`
 	// SASLOAuthScopes is consulted only when SASLMechanism is OAUTHBEARER.
 	// Empty defaults to ["https://www.googleapis.com/auth/cloud-platform"],
 	// which is what GCP Managed Kafka requires.
-	SASLOAuthScopes        []string             `mapstructure:"sasl_oauth_scopes"`
-	ClientID               string               `mapstructure:"client_id" validate:"required"`
-	RouteTenantsOnLazyMode []string             `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
+	SASLOAuthScopes        []string `mapstructure:"sasl_oauth_scopes"`
+	ClientID               string   `mapstructure:"client_id" validate:"required"`
+	RouteTenantsOnLazyMode []string `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
 }
 
 type ClickHouseConfig struct {
@@ -206,8 +206,11 @@ type APIKeyDetails struct {
 	IsActive bool   `mapstructure:"is_active" json:"is_active" default:"true"` // whether this key is active
 }
 
+// SentryConfig is retained only for transitional rollback. Error/exception
+// capture is now OTel-native (see internal/tracing.CaptureException and
+// internal/spanerr); Sentry is no longer the sink and defaults to disabled.
 type SentryConfig struct {
-	Enabled     bool    `mapstructure:"enabled"`
+	Enabled     bool    `mapstructure:"enabled" default:"false"`
 	DSN         string  `mapstructure:"dsn"`
 	Environment string  `mapstructure:"environment"`
 	SampleRate  float64 `mapstructure:"sample_rate" default:"1.0"`
@@ -240,9 +243,13 @@ type OtelTracesConfig struct {
 	Protocol            string            `mapstructure:"protocol" validate:"omitempty"` // overrides otel.protocol when non-empty
 	AuthHeader          string            `mapstructure:"auth_header" validate:"omitempty"`
 	AuthValue           string            `mapstructure:"auth_value" validate:"omitempty"`
-	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"` // overrides otel.headers when non-empty
-	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`    // 0.0 - 1.0
+	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"`          // overrides otel.headers when non-empty
+	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`             // 0.0 - 1.0
 	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	// CaptureExceptions records errors (CaptureException calls, error-level logs,
+	// recovered panics) as OTel "exception" span events for SigNoz's Exceptions
+	// tab. Keep sample_rate at 1.0 so error-bearing traces are not sampled away.
+	CaptureExceptions bool `mapstructure:"capture_exceptions" default:"true"`
 }
 
 // OtelLogsConfig configures OTLP log export. See OtelTracesConfig for the
@@ -618,20 +625,20 @@ type CustomerPortalConfig struct {
 
 // RedisConfig holds configuration for Redis
 type RedisConfig struct {
-	Host        string        `mapstructure:"host" default:"localhost"`
-	Port        int           `mapstructure:"port" default:"6379"`
-	Password    string        `mapstructure:"password" default:""`
-	DB          int           `mapstructure:"db" default:"0"`
-	UseTLS      bool          `mapstructure:"use_tls" default:"false"`
-	PoolSize    int           `mapstructure:"pool_size" default:"10"`
-	Timeout     time.Duration `mapstructure:"timeout" default:"5s"`
-	KeyPrefix   string        `mapstructure:"key_prefix" default:"flexprice"`
+	Host      string        `mapstructure:"host" default:"localhost"`
+	Port      int           `mapstructure:"port" default:"6379"`
+	Password  string        `mapstructure:"password" default:""`
+	DB        int           `mapstructure:"db" default:"0"`
+	UseTLS    bool          `mapstructure:"use_tls" default:"false"`
+	PoolSize  int           `mapstructure:"pool_size" default:"10"`
+	Timeout   time.Duration `mapstructure:"timeout" default:"5s"`
+	KeyPrefix string        `mapstructure:"key_prefix" default:"flexprice"`
 	// ClusterMode: true → *redis.ClusterClient (Redis Cluster, ElastiCache
 	// cluster-mode enabled). false → standalone *redis.Client. Default is
 	// true to preserve the pre-1.1 hardcoded behaviour; flip to false for
 	// single-node Redis. Baked default lives in config.yaml; env override:
 	// FLEXPRICE_REDIS_CLUSTER_MODE.
-	ClusterMode bool          `mapstructure:"cluster_mode"`
+	ClusterMode bool `mapstructure:"cluster_mode"`
 }
 
 func NewConfig() (*Configuration, error) {

@@ -58,8 +58,12 @@ postgres:
   conn_max_lifetime_minutes: 60
   auto_migrate: false
 
+# Sentry is decommissioned: error/exception capture is now OTel-native and lands
+# in SigNoz's Exceptions tab (see otel.traces.capture_exceptions below). These
+# keys are retained, default-off, only for transitional rollback and will be
+# removed in a follow-up.
 sentry:
-  enabled: true
+  enabled: false
   dsn: "" # Set via FLEXPRICE_SENTRY_DSN env var
   environment: "development" # Override via FLEXPRICE_SENTRY_ENVIRONMENT
   sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
@@ -97,6 +101,9 @@ otel:
     auth_header: "signoz-ingestion-key"  # Set auth_value via FLEXPRICE_OTEL_TRACES_AUTH_VALUE
     auth_value: ""
     sample_rate: 1.0
+    # Record errors/panics as OTel "exception" span events (SigNoz Exceptions tab).
+    # Replaces Sentry. Keep sample_rate at 1.0 so error traces aren't sampled away.
+    capture_exceptions: true
 
   logs:
     enabled: false

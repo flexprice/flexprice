@@ -736,8 +736,9 @@ func (s *creditGrantService) handleCreditGrantFailure(
 		"hint", hint,
 		"error", err)
 
-	// Send to tracing/Sentry early
-	s.TracingSvc.CaptureException(err)
+	// Record the exception (SigNoz Exceptions tab) early. Deduped against the
+	// log.Error auto-capture above within the activity's dedup scope.
+	s.TracingSvc.CaptureException(ctx, err)
 
 	// Prepare status update with readable error message
 	cga.ApplicationStatus = types.ApplicationStatusFailed

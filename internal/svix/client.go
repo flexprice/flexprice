@@ -161,7 +161,7 @@ func (c *Client) SendMessage(ctx context.Context, applicationID string, eventTyp
 		if err.Error() == "application not found" {
 			return "", nil
 		}
-		c.captureException(err)
+		c.captureException(ctx, err)
 		return "", fmt.Errorf("failed to send message: %w", err)
 	}
 	if out == nil {
@@ -181,8 +181,8 @@ func (c *Client) startSpan(ctx context.Context, operation string, params map[str
 	return &tracing.SpanFinisher{Span: span}, ctx
 }
 
-func (c *Client) captureException(err error) {
+func (c *Client) captureException(ctx context.Context, err error) {
 	if c.sentry != nil {
-		c.sentry.CaptureException(err)
+		c.sentry.CaptureException(ctx, err)
 	}
 }

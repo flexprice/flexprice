@@ -1,21 +1,19 @@
 package middleware
 
 import (
-	"time"
-
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/spanerr"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/getsentry/sentry-go"
-	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
-// TracingMiddleware is the combined HTTP tracing + error capture middleware.
-// It uses otelgin to create a span per request (exported to SigNoz / any OTLP
-// backend) and sentrygin for panic recovery + scope binding into Sentry Issues.
+// TracingMiddleware is the HTTP tracing middleware. It uses otelgin to create a
+// span per request (exported to SigNoz / any OTLP backend). Panic recovery is
+// handled separately by OtelRecoveryMiddleware (records the panic as an
+// exception span event) plus gin's own recovery as the outermost safety net.
 func TracingMiddleware(cfg *config.Configuration) []gin.HandlerFunc {
 	handlers := []gin.HandlerFunc{}
 
@@ -23,24 +21,33 @@ func TracingMiddleware(cfg *config.Configuration) []gin.HandlerFunc {
 		handlers = append(handlers, otelgin.Middleware(cfg.Otel.ResolveServiceName(cfg)))
 	}
 
-	if cfg.Sentry.Enabled {
-		handlers = append(handlers, sentrygin.New(sentrygin.Options{
-			Repanic:         true,
-			WaitForDelivery: false,
-			Timeout:         2 * time.Second,
-		}))
-	}
-
 	return handlers
+}
+
+// OtelRecoveryMiddleware records a panicking request as an OTel "exception" span
+// event (with the unwinding stacktrace) on the active span before re-panicking
+// so gin's outer recovery middleware writes the 500 and logs it. Mount it AFTER
+// TracingMiddleware so otelgin's span is present in the request context when the
+// panic unwinds through this deferred handler.
+func OtelRecoveryMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				spanerr.RecordPanic(c.Request.Context(), r)
+				panic(r) // re-panic: gin's outer Recovery writes 500 + logs
+			}
+		}()
+		c.Next()
+	}
 }
 
 // Gin context keys used to propagate OTel trace context from SpanEnrichmentMiddleware
 // to LoggingMiddleware. otelgin's deferred context-restore fires between the two
 // post-phases, so we stash the span IDs and the pre-restore request context here.
 const (
-	ginKeyTraceID  = "_otel_trace_id"
-	ginKeySpanID   = "_otel_span_id"
-	ginKeySpanCtx  = "_otel_span_ctx" // full context.Context with active span
+	ginKeyTraceID = "_otel_trace_id"
+	ginKeySpanID  = "_otel_span_id"
+	ginKeySpanCtx = "_otel_span_ctx" // full context.Context with active span
 )
 
 // SpanEnrichmentMiddleware runs after otelgin (which creates the span) and
@@ -73,6 +80,11 @@ func SpanEnrichmentMiddleware() gin.HandlerFunc {
 			}
 		}
 
+		// Seed a per-request exception dedup scope so an error that is both
+		// logged (auto-capture) and explicitly captured within this request
+		// produces a single exception span event rather than two.
+		c.Request = c.Request.WithContext(spanerr.WithDedup(ctx))
+
 		c.Next()
 
 		// Post-request: the span is still in c.Request.Context() here because
@@ -102,8 +114,8 @@ func SpanEnrichmentMiddleware() gin.HandlerFunc {
 	}
 }
 
-// TenantContextMiddleware enriches the active OTel span and Sentry scope with
-// tenant_id, environment_id, and user_id. Mount this after AuthenticateMiddleware
+// TenantContextMiddleware enriches the active OTel span with tenant_id,
+// environment_id, and user_id. Mount this after AuthenticateMiddleware
 // and EnvAccessMiddleware so the request context already has these set.
 func TenantContextMiddleware(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -129,20 +141,6 @@ func TenantContextMiddleware(c *gin.Context) {
 		}
 		if len(attrs) > 0 {
 			span.SetAttributes(attrs...)
-		}
-	}
-
-	// Attach to Sentry scope (visible in Sentry Issues)
-	if hub := sentrygin.GetHubFromContext(c); hub != nil {
-		if tenantID != "" {
-			hub.Scope().SetTag("tenant_id", tenantID)
-		}
-		if environmentID != "" {
-			hub.Scope().SetTag("environment_id", environmentID)
-		}
-		if userID != "" {
-			hub.Scope().SetTag("user_id", userID)
-			hub.Scope().SetUser(sentry.User{ID: userID})
 		}
 	}
 

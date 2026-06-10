@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/spanerr"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/fluent/fluent-logger-golang/fluent"
 	"go.opentelemetry.io/contrib/bridges/otelzap"
@@ -41,6 +42,10 @@ type Logger struct {
 	fluentdLogger   *fluent.Fluent
 	otelLogProvider *sdklog.LoggerProvider
 	serviceName     string
+	// captureExceptions enables auto-recording error-level logs as OTel
+	// exception span events (SigNoz Exceptions tab). Mirrors
+	// otel.traces.capture_exceptions; see logErrorToSpan.
+	captureExceptions bool
 	// ctxBound is true once WithContext has wrapped the core with otelCtxCore.
 	// Guards against repeated WithContext calls accumulating nested wrappers,
 	// which would append multiple _span_ctx fields on every Write.
@@ -213,10 +218,11 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 	}
 
 	return &Logger{
-		SugaredLogger:   sugar,
-		fluentdLogger:   fluentdLogger,
-		otelLogProvider: otelLogProvider,
-		serviceName:     string(cfg.Deployment.Mode),
+		SugaredLogger:     sugar,
+		fluentdLogger:     fluentdLogger,
+		otelLogProvider:   otelLogProvider,
+		serviceName:       string(cfg.Deployment.Mode),
+		captureExceptions: cfg.Otel.Enabled && cfg.Otel.Traces.Enabled && cfg.Otel.Traces.CaptureExceptions,
 	}, nil
 }
 
@@ -413,11 +419,12 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 	}
 
 	return &Logger{
-		SugaredLogger:   newSugared,
-		fluentdLogger:   l.fluentdLogger,
-		otelLogProvider: l.otelLogProvider,
-		serviceName:     l.serviceName,
-		ctxBound:        ctxBound,
+		SugaredLogger:     newSugared,
+		fluentdLogger:     l.fluentdLogger,
+		otelLogProvider:   l.otelLogProvider,
+		serviceName:       l.serviceName,
+		captureExceptions: l.captureExceptions,
+		ctxBound:          ctxBound,
 	}
 }
 
@@ -455,11 +462,54 @@ func (l *Logger) Warn(ctx context.Context, msg string, fields ...any) {
 	lc.sendToFluentd("warning", msg, lc.keysAndValuesToMap(fields...))
 }
 
-// Error logs at error level with auto-bound context fields.
+// Error logs at error level with auto-bound context fields. When OTel exception
+// capture is enabled and ctx carries a recording span, the error is also
+// recorded as an "exception" span event so it appears in SigNoz's Exceptions tab
+// (Sentry-parity auto-capture, near-zero call-site churn).
 func (l *Logger) Error(ctx context.Context, msg string, fields ...any) {
 	lc := l.WithContext(ctx)
 	lc.SugaredLogger.Errorw(msg, fields...)
 	lc.sendToFluentd("error", msg, lc.keysAndValuesToMap(fields...))
+	l.logErrorToSpan(ctx, msg, fields...)
+}
+
+// logErrorToSpan records an error-level log as an OTel exception span event.
+// It derives exception.type / exception.message from the structured "error" and
+// "error_type" fields the codebase already emits via logger.Err(err); the field
+// value may be a raw error or its string form (both call styles exist). No-op
+// when capture is disabled or ctx has no recording span (spanerr handles the
+// latter) — spanless errors reach the Exceptions tab via CaptureException.
+func (l *Logger) logErrorToSpan(ctx context.Context, msg string, fields ...any) {
+	if !l.captureExceptions || ctx == nil {
+		return
+	}
+	errType, message := "", ""
+	for i := 0; i+1 < len(fields); i += 2 {
+		key, ok := fields[i].(string)
+		if !ok {
+			continue
+		}
+		switch key {
+		case "error":
+			switch v := fields[i+1].(type) {
+			case error:
+				message = v.Error()
+				if errType == "" {
+					errType = fmt.Sprintf("%T", v)
+				}
+			case string:
+				message = v
+			}
+		case "error_type":
+			if v, ok := fields[i+1].(string); ok && v != "" {
+				errType = v
+			}
+		}
+	}
+	if message == "" {
+		message = msg
+	}
+	spanerr.RecordException(ctx, errType, message)
 }
 
 // Fatal logs at fatal level then calls os.Exit(1). Use only in cmd/.
