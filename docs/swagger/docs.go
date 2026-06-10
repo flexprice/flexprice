@@ -7485,7 +7485,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Execute a mid-cycle subscription modification (inheritance or quantity change).",
+                "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, coupon, or tax).",
                 "consumes": [
                     "application/json"
                 ],
@@ -7551,7 +7551,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Preview the impact of a mid-cycle subscription modification without committing changes.",
+                "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, coupon, or tax) without committing changes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12318,6 +12318,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "cancel_at": {
+                    "description": "CancelAt is the exact date/time when the subscription should be cancelled.\nRequired for cancellation_type \"scheduled_date\"; optional for \"immediate\" (past dates only — backdated cancellation).\nFor \"scheduled_date\", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).\nFor \"immediate\", accepts past/current dates only; use \"scheduled_date\" for future dates.",
                     "type": "string"
                 },
                 "cancel_immediately_inovice_policy": {
@@ -14243,6 +14244,12 @@ const docTemplate = `{
                 "commitment_quantity": {
                     "type": "number"
                 },
+                "commitment_time_buckets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
+                },
                 "commitment_true_up_enabled": {
                     "type": "boolean"
                 },
@@ -15553,6 +15560,9 @@ const docTemplate = `{
                 "type"
             ],
             "properties": {
+                "coupon_params": {
+                    "$ref": "#/definitions/SubModifyCouponParams"
+                },
                 "grouped_invoicing_params": {
                     "$ref": "#/definitions/SubModifyGroupedInvoicingParams"
                 },
@@ -15561,6 +15571,9 @@ const docTemplate = `{
                 },
                 "quantity_change_params": {
                     "$ref": "#/definitions/SubModifyQuantityChangeRequest"
+                },
+                "tax_params": {
+                    "$ref": "#/definitions/SubModifyTaxParams"
                 },
                 "trial_end_params": {
                     "$ref": "#/definitions/SubModifyTrialEndRequest"
@@ -16845,6 +16858,13 @@ const docTemplate = `{
                     "description": "CommitmentQuantity is the minimum quantity committed for this line item",
                     "type": "number"
                 },
+                "commitment_time_buckets": {
+                    "description": "CommitmentTimeBuckets restricts commitment treatment to windows whose start\nUTC hour falls within one of the configured buckets. Empty/omitted = no\nrestriction (commitment applies 24/7). Requires IsWindowCommitment=true.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
+                },
                 "commitment_type": {
                     "description": "CommitmentType specifies whether commitment is based on amount or quantity",
                     "allOf": [
@@ -17912,6 +17932,37 @@ const docTemplate = `{
                 }
             }
         },
+        "SubModifyAction": {
+            "type": "string",
+            "enum": [
+                "add",
+                "remove"
+            ],
+            "x-enum-varnames": [
+                "SubModifyActionAdd",
+                "SubModifyActionRemove"
+            ]
+        },
+        "SubModifyCouponParams": {
+            "type": "object",
+            "required": [
+                "action"
+            ],
+            "properties": {
+                "action": {
+                    "$ref": "#/definitions/SubModifyAction"
+                },
+                "association_id": {
+                    "type": "string"
+                },
+                "coupon_id": {
+                    "type": "string"
+                },
+                "effective_date": {
+                    "type": "string"
+                }
+            }
+        },
         "SubModifyGroupedInvoicingParams": {
             "type": "object",
             "required": [
@@ -17961,6 +18012,26 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/LineItemQuantityChange"
                     }
+                }
+            }
+        },
+        "SubModifyTaxParams": {
+            "type": "object",
+            "required": [
+                "action"
+            ],
+            "properties": {
+                "action": {
+                    "$ref": "#/definitions/SubModifyAction"
+                },
+                "association_id": {
+                    "type": "string"
+                },
+                "effective_date": {
+                    "type": "string"
+                },
+                "tax_rate_id": {
+                    "type": "string"
                 }
             }
         },
@@ -18292,6 +18363,12 @@ const docTemplate = `{
                 "commitment_quantity": {
                     "type": "string"
                 },
+                "commitment_time_buckets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
+                },
                 "commitment_true_up_enabled": {
                     "type": "boolean"
                 },
@@ -18417,13 +18494,17 @@ const docTemplate = `{
                 "inheritance",
                 "quantity_change",
                 "grouped_invoicing",
-                "trial_end"
+                "trial_end",
+                "coupon",
+                "tax"
             ],
             "x-enum-varnames": [
                 "SubscriptionModifyTypeInheritance",
                 "SubscriptionModifyTypeQuantityChange",
                 "SubscriptionModifyTypeGroupedInvoicing",
-                "SubscriptionModifyTypeTrialEnd"
+                "SubscriptionModifyTypeTrialEnd",
+                "SubscriptionModifyTypeCoupon",
+                "SubscriptionModifyTypeTax"
             ]
         },
         "SubscriptionPhaseCreateRequest": {
@@ -19429,6 +19510,10 @@ const docTemplate = `{
                     "description": "Currency",
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "EndDate is the optional date until which this association is active",
+                    "type": "string"
+                },
                 "entity_id": {
                     "description": "ID of the entity this tax rate applies to",
                     "type": "string"
@@ -19459,6 +19544,10 @@ const docTemplate = `{
                 "priority": {
                     "description": "Priority for tax resolution (lower number = higher priority)",
                     "type": "integer"
+                },
+                "start_date": {
+                    "description": "StartDate is the date from which this association is active",
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -20144,6 +20233,13 @@ const docTemplate = `{
                 },
                 "commitment_quantity": {
                     "type": "number"
+                },
+                "commitment_time_buckets": {
+                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
                 },
                 "commitment_true_up_enabled": {
                     "type": "boolean"
@@ -21622,6 +21718,17 @@ const docTemplate = `{
                 "BILLING_TIER_SLAB"
             ]
         },
+        "types.Bucket": {
+            "type": "object",
+            "properties": {
+                "hour": {
+                    "type": "integer"
+                },
+                "minute": {
+                    "type": "integer"
+                }
+            }
+        },
         "types.CancelImmediatelyInvoicePolicy": {
             "type": "string",
             "enum": [
@@ -22909,6 +23016,12 @@ const docTemplate = `{
                 "allow_expired_prices": {
                     "type": "boolean",
                     "default": false
+                },
+                "billing_periods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.BillingPeriod"
+                    }
                 },
                 "end_time": {
                     "type": "string"
@@ -24296,6 +24409,7 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
+                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -24305,10 +24419,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
-                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
+                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -24318,8 +24432,7 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth",
-                "DefaultWindowSize"
+                "WindowSizeMonth"
             ]
         },
         "types.WorkflowExecutionFilter": {
@@ -24932,6 +25045,12 @@ const docTemplate = `{
                 "commitment_quantity": {
                     "type": "string"
                 },
+                "commitment_time_buckets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
+                },
                 "commitment_true_up_enabled": {
                     "type": "boolean"
                 },
@@ -25170,6 +25289,17 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "types.TimeOfDayBucket": {
+            "type": "object",
+            "properties": {
+                "end": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "start": {
+                    "$ref": "#/definitions/types.Bucket"
+                }
             }
         },
         "webhookDto.AlertWebhookPayload": {
