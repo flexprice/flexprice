@@ -109,6 +109,21 @@ func main() {
 		runner.Add(eu, synthetic.NewTickerScheduler(eu, cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Interval))
 	}
 
+	if cfg.Checks["NEW_CUSTOMER_LIFECYCLE"].Enabled {
+		nl := checks_pkg.NewNewCustomerLifecycle(client, reg, runID, checks_pkg.NewCustomerLifecycleOpts{})
+		runner.Add(nl, synthetic.NewTickerScheduler(nl, cfg.Checks["NEW_CUSTOMER_LIFECYCLE"].Interval))
+	}
+
+	if cfg.Checks["CANCEL_CUSTOMER_FLOW"].Enabled {
+		cc := checks_pkg.NewCancelCustomerFlow(client, reg, runID, checks_pkg.InvoicePoll{})
+		runner.Add(cc, synthetic.NewTickerScheduler(cc, cfg.Checks["CANCEL_CUSTOMER_FLOW"].Interval))
+	}
+
+	if cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Enabled {
+		smf := checks_pkg.NewSubscriptionModificationFlow(client, reg, runID)
+		runner.Add(smf, synthetic.NewTickerScheduler(smf, cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Interval))
+	}
+
 	lg.Infow("synthetic probe starting", "run_id", runID, "host", cfg.APIHost, "checks", len(cfg.Checks))
 	runner.Start(ctx)
 	lg.Infow("synthetic probe shutdown")
