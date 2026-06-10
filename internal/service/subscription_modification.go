@@ -1324,7 +1324,8 @@ func (s *subscriptionModificationService) executeRemoveInheritance(
 	err = sp.DB.WithTx(ctx, func(txCtx context.Context) error {
 		changedSubs = nil
 		for _, childSub := range childSubs {
-			childSub.CancelAt = &effectiveDate
+			cancelDate := effectiveDate // local copy to avoid pointer aliasing
+			childSub.CancelAt = &cancelDate
 			childSub.CancelAtPeriodEnd = true
 			if err := sp.SubRepo.Update(txCtx, childSub); err != nil {
 				return ierr.WithError(err).
@@ -1338,7 +1339,7 @@ func (s *subscriptionModificationService) executeRemoveInheritance(
 				ID:               childSub.ID,
 				Action:           dto.ChangedSubscriptionActionUpdated,
 				Status:           childSub.SubscriptionStatus,
-				CurrentPeriodEnd: &effectiveDate,
+				CurrentPeriodEnd: &cancelDate,
 			})
 		}
 		return nil
@@ -1347,7 +1348,10 @@ func (s *subscriptionModificationService) executeRemoveInheritance(
 		return nil, err
 	}
 
-	// 6. Return response with parent subscription and changed children
+	// 6. Publish webhook event
+	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
+
+	// 7. Return response with parent subscription and changed children
 	subSvc := NewSubscriptionService(sp)
 	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
 	if err != nil {
@@ -1416,11 +1420,12 @@ func (s *subscriptionModificationService) previewRemoveInheritance(
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		periodEnd := effectiveDate // local copy to avoid pointer aliasing
 		changedSubs = append(changedSubs, dto.ChangedSubscription{
 			ID:               childSub.ID,
 			Action:           dto.ChangedSubscriptionActionUpdated,
 			Status:           childSub.SubscriptionStatus,
-			CurrentPeriodEnd: &effectiveDate,
+			CurrentPeriodEnd: &periodEnd,
 		})
 	}
 
