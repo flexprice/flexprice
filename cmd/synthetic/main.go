@@ -94,6 +94,21 @@ func main() {
 		runner.Add(wp, synthetic.NewTickerScheduler(wp, cfg.Checks["WALLET_BALANCE_PROBE"].Interval))
 	}
 
+	if cfg.Checks["WALLET_DEBIT_VERIFICATION"].Enabled {
+		wd := checks_pkg.NewWalletDebitVerification(client, reg, runID, checks_pkg.WalletDebitOpts{})
+		runner.Add(wd, synthetic.NewTickerScheduler(wd, cfg.Checks["WALLET_DEBIT_VERIFICATION"].Interval))
+	}
+
+	if cfg.Checks["CYCLE_INVOICE_PROBE"].Enabled {
+		ci := checks_pkg.NewCycleInvoiceProbe(client, reg, runID)
+		runner.Add(ci, synthetic.NewTickerScheduler(ci, cfg.Checks["CYCLE_INVOICE_PROBE"].Interval))
+	}
+
+	if cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Enabled {
+		eu := checks_pkg.NewEntitlementAndUsageProbe(client, reg, runID)
+		runner.Add(eu, synthetic.NewTickerScheduler(eu, cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Interval))
+	}
+
 	lg.Infow("synthetic probe starting", "run_id", runID, "host", cfg.APIHost, "checks", len(cfg.Checks))
 	runner.Start(ctx)
 	lg.Infow("synthetic probe shutdown")
