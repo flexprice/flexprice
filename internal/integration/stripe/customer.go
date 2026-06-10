@@ -57,6 +57,7 @@ func (s *CustomerService) EnsureCustomerSyncedToStripe(ctx context.Context, cust
 	// Check if customer is synced via integration mapping table
 	if s.entityIntegrationMappingRepo != nil {
 		filter := &types.EntityIntegrationMappingFilter{
+			QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 			EntityID:      customerID,
 			EntityType:    types.IntegrationEntityTypeCustomer,
 			ProviderTypes: []string{string(types.SecretProviderStripe)},
@@ -221,6 +222,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 		if err == nil && existing != nil {
 			// Customer found, check for existing mapping
 			filter := &types.EntityIntegrationMappingFilter{
+				QueryFilter:       types.NewNoLimitPublishedQueryFilter(),
 				EntityID:          existing.Customer.ID,
 				EntityType:        types.IntegrationEntityTypeCustomer,
 				ProviderTypes:     []string{string(types.SecretProviderStripe)},
@@ -307,6 +309,7 @@ func (s *CustomerService) GetDefaultPaymentMethod(ctx context.Context, customerI
 	}
 	if stripeCustomerID == "" && s.entityIntegrationMappingRepo != nil {
 		filter := &types.EntityIntegrationMappingFilter{
+			QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 			EntityID:      customerID,
 			EntityType:    types.IntegrationEntityTypeCustomer,
 			ProviderTypes: []string{string(types.SecretProviderStripe)},
@@ -581,6 +584,7 @@ func (s *CustomerService) HasCustomerStripeMapping(ctx context.Context, customer
 	}
 
 	filter := &types.EntityIntegrationMappingFilter{
+		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
 		EntityID:      customerID,
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		ProviderTypes: []string{string(types.SecretProviderStripe)},
