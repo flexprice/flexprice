@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/synthetic"
+	checks_pkg "github.com/flexprice/flexprice/internal/synthetic/checks"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -58,7 +59,19 @@ func main() {
 	reporter := synthetic.NewCompositeReporter(reporters...)
 
 	runner := synthetic.NewRunner(reporter, lg, runID)
-	// Check wiring will be appended by later tasks as each check is implemented.
+
+	client := synthetic.NewSDKClient(cfg.APIHost, cfg.APIKey)
+	reg := synthetic.NewRegistry()
+
+	addCheck := func(check synthetic.Check, sched synthetic.Scheduler, key string) {
+		if cfg.Checks[key].Enabled {
+			runner.Add(check, sched)
+		}
+	}
+
+	seed := checks_pkg.NewSeedEnsure(client, reg, runID)
+	addCheck(seed, synthetic.NewOneShotScheduler(seed), "SEED_ENSURE")
+	addCheck(seed, synthetic.NewTickerScheduler(seed, cfg.Checks["SEED_ENSURE"].Interval), "SEED_ENSURE")
 
 	lg.Infow("synthetic probe starting", "run_id", runID, "host", cfg.APIHost, "checks", len(cfg.Checks))
 	runner.Start(ctx)
