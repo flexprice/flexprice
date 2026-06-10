@@ -163,7 +163,7 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 			"error", err,
 			"payload", string(msg.Payload),
 		)
-		s.tracingService.CaptureException(err)
+		s.tracingService.CaptureException(context.Background(), err)
 		return fmt.Errorf("non-retriable unmarshal error: %w", err)
 	}
 

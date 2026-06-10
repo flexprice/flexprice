@@ -32,7 +32,7 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType types.
 		if err != nil {
 			// Log error but don't fail the webhook if customer fetch fails
 			// Customer is optional in the payload
-			b.services.Tracing.CaptureException(err)
+			b.services.Tracing.CaptureException(ctx, err)
 			customer = nil
 		} else {
 			customer = customerData

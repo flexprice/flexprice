@@ -129,7 +129,9 @@ func (r *Router) AddNoPublishHandler(
 		func(msg *message.Message) error {
 			err := handlerFunc(msg)
 			if err != nil {
-				r.tracing.CaptureException(err)
+				// No request span on this watermill callback — CaptureException
+				// synthesizes a span so the failure still reaches SigNoz.
+				r.tracing.CaptureException(context.Background(), err)
 				r.logger.Error(context.Background(), "handler failed",
 					"error", err,
 					"correlation_id", middleware.MessageCorrelationID(msg),

@@ -206,7 +206,7 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 			"error", err,
 			"payload", string(msg.Payload),
 		)
-		s.tracingService.CaptureException(err)
+		s.tracingService.CaptureException(context.Background(), err)
 
 		// Return error for non-retriable parse errors
 		// Watermill's poison queue middleware will handle moving it to DLQ
@@ -340,7 +340,7 @@ func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload [
 			"error", err,
 			"payload", string(payload),
 		)
-		s.tracingService.CaptureException(err)
+		s.tracingService.CaptureException(ctx, err)
 		return fmt.Errorf("failed to unmarshal event: %w", err)
 	}
 
