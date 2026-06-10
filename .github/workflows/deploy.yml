@@ -291,7 +291,7 @@ jobs:
           echo "Proceeding to deploy api, consumer and worker services to all production targets."
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Jobs 3a–3c: Deploy API, Consumer, Worker — one job per service type,
+  # Jobs 5a–5c: Deploy API, Consumer, Worker — one job per service type,
   # each with matrix over targets (regions). Runs in parallel for faster deploys
   # and smaller, trackable steps. max-parallel limits concurrent load on runners.
   #
