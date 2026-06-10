@@ -2624,6 +2624,192 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_LineItemAndBucketCommitmen
 			Add(item.CommitmentInfo.ComputedTrueUpAmount)))
 }
 
+// TestWindowCommitment_MixedBucketTypes_OneLineItem covers four bucket flavours
+// on a single line item, including a QUANTITY (volume) commitment with true-up
+// on a SLAB-priced bucket:
+//
+//	A [00,06): FLAT $1/u,  AMOUNT  $5/window, overage 2x, true-up ON
+//	B [06,12): FLAT $2/u,  AMOUNT  $4/window, overage 2x, true-up OFF
+//	C [12,18): SLAB (≤5u @ $2, rest @ $1), QUANTITY 5u/window, overage 1x, true-up ON
+//	D [18,24): FLAT $3/u,  QUANTITY 3u/window, overage 3x, true-up OFF
+//
+// Line item: $1/u, no top-level commitment, scoped to one day (24 windows; the
+// buckets cover the whole day). One event per bucket:
+//
+//	02:00 → 2u: $2 < $5 → true-up $5; A's 5 empty windows true up $5 each → A = $30
+//	08:00 → 5u: $10 ≥ $4 → $4+($6×2) = $16; B empties $0 (no true-up)  → B = $16
+//	14:00 → 8u: slab $13 ≥ slab(5u)=$10 → $10+($3×1) = $13; C empties true
+//	            up to slab(5u)=$10 each → +$50                          → C = $63
+//	20:00 → 5u: $15 ≥ 3u×$3=$9 → $9+($6×3) = $27; D empties $0          → D = $27
+//
+// Total = $136; utilized $25, overage $33, true-up $78 (sum invariant holds).
+func (s *MeterUsageServiceSuite) TestWindowCommitment_MixedBucketTypes_OneLineItem() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "meter_mixed_tb",
+		Name:      "Hourly SUM (mixed bucket types)",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+
+	flatPrice := func(id string, amount int64) *price.Price {
+		return &price.Price{
+			ID: id, Amount: decimal.NewFromInt(amount), Currency: "usd",
+			EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+			BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+			MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+			InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+	}
+
+	linePrice := flatPrice("price_mixed_line", 1)
+	linePrice.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+	linePrice.EntityID = "plan_1"
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, linePrice))
+
+	priceA := flatPrice("price_mixed_a", 1)
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceA))
+	priceB := flatPrice("price_mixed_b", 2)
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceB))
+	priceD := flatPrice("price_mixed_d", 3)
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceD))
+
+	upTo5 := uint64(5)
+	priceC := &price.Price{
+		ID: "price_mixed_c_slab", Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+		BillingModel: types.BILLING_MODEL_TIERED, TierMode: types.BILLING_TIER_SLAB,
+		Tiers: []price.PriceTier{
+			{UpTo: &upTo5, UnitAmount: decimal.NewFromInt(2)},
+			{UnitAmount: decimal.NewFromInt(1)},
+		},
+		Type: types.PRICE_TYPE_USAGE, MeterID: bucketedMeter.ID,
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceC))
+
+	overage2x := decimal.NewFromInt(2)
+	overage1x := decimal.NewFromInt(1)
+	overage3x := decimal.NewFromInt(3)
+	li := &subscription.SubscriptionLineItem{
+		ID:                 "li_mixed_tb",
+		SubscriptionID:     s.sub.ID,
+		CustomerID:         s.customer.ID,
+		PriceID:            linePrice.ID,
+		PriceType:          types.PRICE_TYPE_USAGE,
+		MeterID:            bucketedMeter.ID,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		StartDate:          time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		EndDate:            time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC),
+		Quantity:           decimal.NewFromInt(1),
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{
+				ID: "bkt_a", Start: types.Bucket{Hour: 0}, End: types.Bucket{Hour: 6},
+				PriceID: priceA.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(5), OverageFactor: &overage2x, TrueUpEnabled: true,
+			},
+			{
+				ID: "bkt_b", Start: types.Bucket{Hour: 6}, End: types.Bucket{Hour: 12},
+				PriceID: priceB.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(4), OverageFactor: &overage2x, TrueUpEnabled: false,
+			},
+			{
+				ID: "bkt_c", Start: types.Bucket{Hour: 12}, End: types.Bucket{Hour: 18},
+				PriceID: priceC.ID, CommitmentType: types.COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(5), OverageFactor: &overage1x, TrueUpEnabled: true,
+			},
+			{
+				ID: "bkt_d", Start: types.Bucket{Hour: 18}, End: types.Bucket{Hour: 24},
+				PriceID: priceD.ID, CommitmentType: types.COMMITMENT_TYPE_QUANTITY,
+				CommitmentValue: decimal.NewFromInt(3), OverageFactor: &overage3x, TrueUpEnabled: false,
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	for _, ev := range []struct {
+		hour int
+		qty  float64
+	}{
+		{2, 2}, {8, 5}, {14, 8}, {20, 5},
+	} {
+		s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID,
+			time.Date(2026, 1, 5, ev.hour, 0, 0, 0, time.UTC), ev.qty)
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeHour,
+		BreakdownBucket:    true,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_mixed_tb" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item, "expected analytic for mixed-bucket line item")
+
+	s.True(item.TotalCost.Equal(decimal.NewFromInt(136)),
+		"expected $136 (A $30 + B $16 + C $63 + D $27); got %s", item.TotalCost)
+
+	s.Require().NotNil(item.CommitmentInfo)
+	s.True(item.CommitmentInfo.ComputedCommitmentUtilizedAmount.Equal(decimal.NewFromInt(25)),
+		"expected utilized $25 ($2+$4+$10+$9); got %s", item.CommitmentInfo.ComputedCommitmentUtilizedAmount)
+	s.True(item.CommitmentInfo.ComputedOverageAmount.Equal(decimal.NewFromInt(33)),
+		"expected overage $33 ($12+$3+$18); got %s", item.CommitmentInfo.ComputedOverageAmount)
+	s.True(item.CommitmentInfo.ComputedTrueUpAmount.Equal(decimal.NewFromInt(78)),
+		"expected true-up $78 (A $3+$25, C $50); got %s", item.CommitmentInfo.ComputedTrueUpAmount)
+	// Sum invariant: total = utilized + overage + true-up.
+	s.True(item.TotalCost.Equal(
+		item.CommitmentInfo.ComputedCommitmentUtilizedAmount.
+			Add(item.CommitmentInfo.ComputedOverageAmount).
+			Add(item.CommitmentInfo.ComputedTrueUpAmount)))
+
+	// Bucket summaries: 4 buckets + the out-of-bucket aggregate (empty here —
+	// the buckets cover the whole day).
+	s.Require().Len(item.BucketSummaries, 5)
+	summaries := make(map[string]dto.BucketSummary, len(item.BucketSummaries))
+	for _, bs := range item.BucketSummaries {
+		summaries[bs.BucketID] = bs
+		s.Equal("li_mixed_tb", bs.SubscriptionLineItemID)
+	}
+
+	// Spot-check C — the volume (QUANTITY) commitment with true-up on SLAB pricing.
+	c := summaries["bkt_c"]
+	s.Equal(priceC.ID, c.PriceID)
+	s.True(c.TotalUsage.Equal(decimal.NewFromInt(8)), "C usage: got %s", c.TotalUsage)
+	s.True(c.BaseCharge.Equal(decimal.NewFromInt(13)), "C slab base $13: got %s", c.BaseCharge)
+	s.True(c.ComputedUtilized.Equal(decimal.NewFromInt(10)), "C utilized $10 (slab of 5u): got %s", c.ComputedUtilized)
+	s.True(c.ComputedOverage.Equal(decimal.NewFromInt(3)), "C overage $3 at 1x: got %s", c.ComputedOverage)
+	s.True(c.ComputedTrueUp.Equal(decimal.NewFromInt(50)), "C true-up $50 (5 empty windows × slab(5u)): got %s", c.ComputedTrueUp)
+
+	// Spot-check A (amount + true-up) and the empty out-of-bucket row.
+	a := summaries["bkt_a"]
+	s.True(a.ComputedTrueUp.Equal(decimal.NewFromInt(28)), "A true-up $28 ($3 + 5×$5): got %s", a.ComputedTrueUp)
+	out := summaries[""]
+	s.True(out.TotalUsage.IsZero(), "out-of-bucket usage should be zero, got %s", out.TotalUsage)
+}
+
 // TestMeterUsage_CancelledSubBeforeWindow_NotAttributed is a regression test
 // for the discrepancy where meter-usage analytics duplicated active-sub usage
 // onto cancelled-sub line items. meter_usage has no per-event subscription

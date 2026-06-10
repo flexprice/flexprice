@@ -213,11 +213,9 @@ func (p *commitmentParts) add(o commitmentParts) {
 }
 
 // applyWindowCommitmentToLineItem applies commitment to windowed usage one window
-// at a time. For each window, if its start falls inside a configured commitment
-// time bucket, that bucket's own price + commitment apply; otherwise the line
-// item's own price + commitment apply (or base rate when the line item carries no
-// commitment). windowValues and windowStarts are 1:1; windowStarts may be nil
-// (single aggregate window), in which case every window uses the line item.
+// at a time and returns the total. Thin wrapper over
+// applyWindowCommitmentPerWindow for callers that don't need the per-window
+// breakdown (billing paths).
 func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	ctx context.Context,
 	lineItem *subscription.SubscriptionLineItem,
@@ -225,8 +223,29 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	windowStarts []time.Time,
 	lineItemPrice *price.Price,
 ) (decimal.Decimal, *types.CommitmentInfo, error) {
+	total, _, info, err := c.applyWindowCommitmentPerWindow(ctx, lineItem, windowValues, windowStarts, lineItemPrice)
+	return total, info, err
+}
+
+// applyWindowCommitmentPerWindow applies commitment to windowed usage one window
+// at a time. For each window, if its start falls inside a configured commitment
+// time bucket, that bucket's own price + commitment apply; otherwise the line
+// item's own price + commitment apply (or base rate when the line item carries no
+// commitment). windowValues and windowStarts are 1:1; windowStarts may be nil
+// (single aggregate window), in which case every window uses the line item.
+//
+// Returns the total charge, the per-window breakdown (parts[i] corresponds to
+// windowValues[i]), and the aggregated commitment info — all from a single pass,
+// with bucket prices fetched once per bucket.
+func (c *commitmentCalculator) applyWindowCommitmentPerWindow(
+	ctx context.Context,
+	lineItem *subscription.SubscriptionLineItem,
+	windowValues []decimal.Decimal,
+	windowStarts []time.Time,
+	lineItemPrice *price.Price,
+) (decimal.Decimal, []commitmentParts, *types.CommitmentInfo, error) {
 	if windowStarts != nil && len(windowStarts) != len(windowValues) {
-		return decimal.Zero, nil, ierr.NewError("windowStarts/windowValues length mismatch").
+		return decimal.Zero, nil, nil, ierr.NewError("windowStarts/windowValues length mismatch").
 			WithHint("When windowStarts is non-nil, it must have the same length as windowValues").
 			WithReportableDetails(map[string]interface{}{
 				"window_starts": len(windowStarts),
@@ -240,6 +259,7 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	priceCache := make(map[string]*price.Price)
 
 	var total commitmentParts
+	perWindow := make([]commitmentParts, len(windowValues))
 	for i, v := range windowValues {
 		var (
 			parts commitmentParts
@@ -251,12 +271,13 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 			parts, err = c.chargeWindowAtLineItem(ctx, lineItem, lineItemPrice, v)
 		}
 		if err != nil {
-			return decimal.Zero, nil, err
+			return decimal.Zero, nil, nil, err
 		}
+		perWindow[i] = parts
 		total.add(parts)
 	}
 
-	return total.charge, &types.CommitmentInfo{
+	return total.charge, perWindow, &types.CommitmentInfo{
 		Type:                             lineItem.CommitmentType,
 		Amount:                           lo.FromPtr(lineItem.CommitmentAmount),
 		Quantity:                         lo.FromPtr(lineItem.CommitmentQuantity),

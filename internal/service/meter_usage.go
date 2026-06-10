@@ -1901,46 +1901,39 @@ func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceServ
 	item.Currency = p.Currency
 }
 
-// processPointsWithBuckets handles the case where we have time-series points to process.
-// needsWindowedFill is true when isWindowed AND CommitmentTrueUpEnabled; it gates the
-// fillMissingWindowsAndRecalculate path that materializes empty windows for windowed
-// true-up commitments.
+// processPointsWithBuckets handles the case where we have time-series points to
+// process. Windowed commitment runs in ONE pass over the window grid (filled
+// with empty windows first when true-up needs them); non-windowed paths stamp
+// plain per-point costs.
 func (s *meterUsageService) processPointsWithBuckets(
 	p *meterUsageBucketedCostParams,
 	lineItem *subscription.SubscriptionLineItem,
 	hasCommitment, isWindowed, needsWindowedFill bool,
 ) decimal.Decimal {
-	bucketedValues := s.extractBucketValues(p.item.Points, p.aggType)
-
 	var cost decimal.Decimal
 	switch {
-	case !hasCommitment:
-		cost = p.priceService.CalculateBucketedCost(p.ctx, p.price, bucketedValues)
+	case isWindowed && needsWindowedFill && p.bucketSize != "":
+		cost = s.fillWindowsAndApplyCommitment(p, lineItem)
 	case isWindowed:
-		cost = decimal.Zero // Will be summed from points after processing
+		cost = s.applyWindowCommitmentToPoints(p, lineItem, p.item.Points)
+	case !hasCommitment:
+		cost = p.priceService.CalculateBucketedCost(p.ctx, p.price, s.extractBucketValues(p.item.Points, p.aggType))
+		s.stampPointCosts(p)
 	default:
-		// Non-windowed (cumulative) commitment — TimeBuckets is windowed-only.
+		// Non-windowed commitment applies to the period aggregate.
+		bucketedValues := s.extractBucketValues(p.item.Points, p.aggType)
 		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, nil, decimal.Zero)
-	}
-
-	s.calculatePointCosts(p, lineItem, isWindowed)
-
-	if needsWindowedFill && p.bucketSize != "" {
-		cost = s.fillMissingWindowsAndRecalculate(p, lineItem)
+		s.stampPointCosts(p)
 	}
 
 	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
-
-	if isWindowed && !needsWindowedFill {
-		cost = s.sumPointCosts(p.item.Points)
-	}
 
 	return cost
 }
 
 // processSingleBucket handles the case where there are no time-series points.
-// needsWindowedFill is true when isWindowed AND CommitmentTrueUpEnabled; it gates the
-// fillZeroUsageWindows path used for windowed true-up when there's no usage at all.
+// needsWindowedFill gates the window-fill path used for windowed true-up when
+// there's no usage at all.
 func (s *meterUsageService) processSingleBucket(
 	p *meterUsageBucketedCostParams,
 	lineItem *subscription.SubscriptionLineItem,
@@ -1969,7 +1962,9 @@ func (s *meterUsageService) processSingleBucket(
 	}
 
 	if needsWindowedFill && p.bucketSize != "" {
-		return s.fillZeroUsageWindows(p, lineItem)
+		cost := s.fillWindowsAndApplyCommitment(p, lineItem)
+		p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
+		return cost
 	}
 
 	return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, nil, nil, decimal.Zero)
@@ -1984,138 +1979,88 @@ func (s *meterUsageService) extractBucketValues(points []events.UsageAnalyticPoi
 	return values
 }
 
-// calculatePointCosts calculates cost for each individual point.
-func (s *meterUsageService) calculatePointCosts(p *meterUsageBucketedCostParams, lineItem *subscription.SubscriptionLineItem, isWindowed bool) {
-	if !isWindowed {
-		for i := range p.item.Points {
-			usage := p.item.Points[i].Usage
-			p.item.Points[i].Cost = p.priceService.CalculateCost(p.ctx, p.price, usage)
-		}
-		return
-	}
-
-	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
+// stampPointCosts sets each point's cost at the plain price (no commitment math).
+func (s *meterUsageService) stampPointCosts(p *meterUsageBucketedCostParams) {
 	for i := range p.item.Points {
-		usage := p.item.Points[i].Usage
-		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, []time.Time{p.item.Points[i].Timestamp}, p.price)
-		if err != nil {
-			s.logger.Info(context.Background(), "failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
-			pointCost = p.priceService.CalculateCost(p.ctx, p.price, usage)
-		}
-		p.item.Points[i].Cost = pointCost
-		if info != nil {
-			p.item.Points[i].ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount
-			p.item.Points[i].ComputedOverageAmount = info.ComputedOverageAmount
-			p.item.Points[i].ComputedTrueUpAmount = info.ComputedTrueUpAmount
-		}
+		p.item.Points[i].Cost = p.priceService.CalculateCost(p.ctx, p.price, p.item.Points[i].Usage)
 	}
 }
 
-// fillMissingWindowsAndRecalculate fills gaps in bucket windows and recalculates total cost.
-func (s *meterUsageService) fillMissingWindowsAndRecalculate(p *meterUsageBucketedCostParams, lineItem *subscription.SubscriptionLineItem) decimal.Decimal {
+// applyWindowCommitmentToPoints applies windowed commitment over the given
+// points in ONE pass: each point is stamped with its window's charge and
+// commitment breakdown, item.CommitmentInfo is set, and the total charge is
+// returned. Bucket prices are fetched once per bucket for the whole pass. On
+// calculation failure it logs, stamps plain costs and returns the uncommitted
+// bucketed cost.
+func (s *meterUsageService) applyWindowCommitmentToPoints(
+	p *meterUsageBucketedCostParams,
+	lineItem *subscription.SubscriptionLineItem,
+	points []events.UsageAnalyticPoint,
+) decimal.Decimal {
+	values := make([]decimal.Decimal, len(points))
+	starts := make([]time.Time, len(points))
+	for i := range points {
+		values[i] = points[i].Usage
+		starts[i] = points[i].Timestamp
+	}
+
+	calc := newCommitmentCalculator(s.logger, p.priceService)
+	total, perWindow, info, err := calc.applyWindowCommitmentPerWindow(p.ctx, lineItem, values, starts, p.price)
+	if err != nil {
+		s.logger.Info(p.ctx, "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
+		p.item.Points = points
+		s.stampPointCosts(p)
+		return p.priceService.CalculateBucketedCost(p.ctx, p.price, values)
+	}
+
+	for i := range points {
+		points[i].Cost = perWindow[i].charge
+		points[i].ComputedCommitmentUtilizedAmount = perWindow[i].utilized
+		points[i].ComputedOverageAmount = perWindow[i].overage
+		points[i].ComputedTrueUpAmount = perWindow[i].trueUp
+	}
+	p.item.Points = points
+	p.item.CommitmentInfo = info
+	return total
+}
+
+// fillWindowsAndApplyCommitment builds the expected window grid for the line
+// item period — real points plus zero-usage fills for windows where commitment
+// can charge for emptiness (line-item commitment, or inside a commitment time
+// bucket) — and applies windowed commitment over it in one pass.
+func (s *meterUsageService) fillWindowsAndApplyCommitment(
+	p *meterUsageBucketedCostParams,
+	lineItem *subscription.SubscriptionLineItem,
+) decimal.Decimal {
 	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
 	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
 	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
 	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
 
-	pointsByBucket := make(map[time.Time]events.UsageAnalyticPoint, len(p.item.Points))
+	existing := make(map[time.Time]events.UsageAnalyticPoint, len(p.item.Points))
 	for _, pt := range p.item.Points {
-		pointsByBucket[pt.Timestamp] = pt
+		existing[pt.Timestamp] = pt
 	}
 
-	filled := make([]decimal.Decimal, 0, len(expectedStarts))
-	starts := make([]time.Time, 0, len(expectedStarts))
-	filledPoints := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
-	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
-
+	points := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
 	for _, t := range expectedStarts {
-		if existing, ok := pointsByBucket[t]; ok {
+		if pt, ok := existing[t]; ok {
 			// Real usage is always billed, in- or out-of-bucket.
-			filled = append(filled, existing.Usage)
-			starts = append(starts, t)
-			filledPoints = append(filledPoints, existing)
+			points = append(points, pt)
 			continue
 		}
-		// Empty window: synthesize a fill point only where commitment math can
-		// charge for it (line-item commitment, or inside a commitment bucket).
 		if !shouldFillWindow(lineItem, t) {
 			continue
 		}
-		filled = append(filled, decimal.Zero)
-		starts = append(starts, t)
-		filledPoints = append(filledPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
+		points = append(points, events.UsageAnalyticPoint{
+			Timestamp:   t,
+			WindowStart: truncateToBucketStart(t, p.data.Params.WindowSize, billingAnchor),
+			Usage:       decimal.Zero,
+			MaxUsage:    decimal.Zero,
+		})
 	}
 
-	p.item.Points = filledPoints
-	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, starts, p.price)
-	if err != nil {
-		s.logger.Info(p.ctx, "failed to apply window commitment over filled windows", "error", err, "line_item_id", lineItem.ID)
-		return decimal.Zero
-	}
-	p.item.CommitmentInfo = info
-	return totalCost
-}
-
-// fillZeroUsageWindows creates fill points for all expected windows when there's no usage.
-func (s *meterUsageService) fillZeroUsageWindows(p *meterUsageBucketedCostParams, lineItem *subscription.SubscriptionLineItem) decimal.Decimal {
-	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
-	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
-	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
-	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
-
-	// Only windows where commitment math can charge for emptiness are filled
-	// (line-item commitment, or inside a commitment bucket).
-	starts := make([]time.Time, 0, len(expectedStarts))
-	for _, t := range expectedStarts {
-		if shouldFillWindow(lineItem, t) {
-			starts = append(starts, t)
-		}
-	}
-
-	filled := make([]decimal.Decimal, len(starts))
-	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
-
-	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, starts, p.price)
-	if err != nil {
-		s.logger.Info(p.ctx, "failed to apply window commitment over zero-usage windows", "error", err, "line_item_id", lineItem.ID)
-		return decimal.Zero
-	}
-
-	p.item.CommitmentInfo = info
-	bucketPoints := make([]events.UsageAnalyticPoint, 0, len(starts))
-	for _, t := range starts {
-		bucketPoints = append(bucketPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
-	}
-	p.item.Points = s.mergeBucketPointsByWindow(bucketPoints, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
-
-	return totalCost
-}
-
-// createFillPoint creates a zero-usage fill point for a missing bucket window.
-func (s *meterUsageService) createFillPoint(
-	p *meterUsageBucketedCostParams,
-	lineItem *subscription.SubscriptionLineItem,
-	timestamp time.Time,
-	billingAnchor *time.Time,
-	calc *commitmentCalculator,
-) events.UsageAnalyticPoint {
-	pointCost, info, _ := calc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{decimal.Zero}, []time.Time{timestamp}, p.price)
-	windowStart := truncateToBucketStart(timestamp, p.data.Params.WindowSize, billingAnchor)
-
-	pt := events.UsageAnalyticPoint{
-		Timestamp:   timestamp,
-		WindowStart: windowStart,
-		Usage:       decimal.Zero,
-		MaxUsage:    decimal.Zero,
-		Cost:        pointCost,
-		EventCount:  0,
-	}
-	if info != nil {
-		pt.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount
-		pt.ComputedOverageAmount = info.ComputedOverageAmount
-		pt.ComputedTrueUpAmount = info.ComputedTrueUpAmount
-	}
-	return pt
+	return s.applyWindowCommitmentToPoints(p, lineItem, points)
 }
 
 // getBillingAnchorFromData retrieves the billing anchor for a subscription from AnalyticsData.
@@ -2124,15 +2069,6 @@ func (s *meterUsageService) getBillingAnchorFromData(data *AnalyticsData, subscr
 		return &sub.BillingAnchor
 	}
 	return nil
-}
-
-// sumPointCosts sums the cost of all points.
-func (s *meterUsageService) sumPointCosts(points []events.UsageAnalyticPoint) decimal.Decimal {
-	total := decimal.Zero
-	for _, pt := range points {
-		total = total.Add(pt.Cost)
-	}
-	return total
 }
 
 // calculateRegularCost calculates cost for regular (non-bucketed) meters.
