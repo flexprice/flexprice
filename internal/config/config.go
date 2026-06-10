@@ -243,6 +243,7 @@ type OtelTracesConfig struct {
 	Headers             map[string]string `mapstructure:"headers" validate:"omitempty"` // overrides otel.headers when non-empty
 	SampleRate          float64           `mapstructure:"sample_rate" default:"1.0"`    // 0.0 - 1.0
 	StorageSpansEnabled bool              `mapstructure:"storage_spans_enabled" default:"false"` // enable per-query DB/cache/ClickHouse child spans (can be noisy)
+	CaptureRequestBody  bool              `mapstructure:"capture_request_body" default:"true"`   // attach request body to HTTP spans (truncated, auth paths excluded)
 }
 
 // OtelLogsConfig configures OTLP log export. See OtelTracesConfig for the
@@ -666,6 +667,10 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("clickhouse.address", "FLEXPRICE_CLICKHOUSE_ADDRESS")
 	_ = v.BindEnv("clickhouse.database", "FLEXPRICE_CLICKHOUSE_DATABASE")
 
+	// OTel defaults — belt-and-suspenders in case config.yaml is not on the path.
+	v.SetDefault("otel.traces.capture_request_body", true)
+	v.SetDefault("otel.traces.storage_spans_enabled", false)
+
 	// Explicitly bind unified OTel config vars — AutomaticEnv misses nested keys with underscores
 	_ = v.BindEnv("otel.enabled", "FLEXPRICE_OTEL_ENABLED")
 	_ = v.BindEnv("otel.service_name", "FLEXPRICE_OTEL_SERVICE_NAME")
@@ -678,6 +683,7 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("otel.traces.auth_value", "FLEXPRICE_OTEL_TRACES_AUTH_VALUE")
 	_ = v.BindEnv("otel.traces.sample_rate", "FLEXPRICE_OTEL_TRACES_SAMPLE_RATE")
 	_ = v.BindEnv("otel.traces.storage_spans_enabled", "FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED")
+	_ = v.BindEnv("otel.traces.capture_request_body", "FLEXPRICE_OTEL_TRACES_CAPTURE_REQUEST_BODY")
 	_ = v.BindEnv("otel.logs.enabled", "FLEXPRICE_OTEL_LOGS_ENABLED")
 	_ = v.BindEnv("otel.logs.endpoint", "FLEXPRICE_OTEL_LOGS_ENDPOINT")
 	_ = v.BindEnv("otel.logs.protocol", "FLEXPRICE_OTEL_LOGS_PROTOCOL")
