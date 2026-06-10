@@ -304,45 +304,6 @@ func (c *commitmentCalculator) chargeWindowAtBucket(
 	return commitmentParts{charge: charge, utilized: util, overage: ov, trueUp: tu}, nil
 }
 
-// applyToCost applies the line item's commitment — windowed (per window, with
-// per-bucket pricing) or aggregate — and returns the adjusted cost plus the
-// commitment info. On calculation failure it logs and falls back to the
-// uncommitted cost (defaultCost, or the bucketed cost of windowValues when
-// defaultCost is zero) with nil info. This is the single dispatch shared by the
-// analytics services; billing paths call the underlying methods directly so
-// errors propagate instead of falling back.
-func (c *commitmentCalculator) applyToCost(
-	ctx context.Context,
-	lineItem *subscription.SubscriptionLineItem,
-	windowValues []decimal.Decimal,
-	windowStarts []time.Time,
-	priceObj *price.Price,
-	defaultCost decimal.Decimal,
-) (decimal.Decimal, *types.CommitmentInfo) {
-	fallback := func() decimal.Decimal {
-		if defaultCost.IsZero() && len(windowValues) > 0 {
-			return c.priceService.CalculateBucketedCost(ctx, priceObj, windowValues)
-		}
-		return defaultCost
-	}
-
-	if lineItem.CommitmentWindowed {
-		cost, info, err := c.applyWindowCommitmentToLineItem(ctx, lineItem, windowValues, windowStarts, priceObj)
-		if err != nil {
-			c.logger.Info(ctx, "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
-			return fallback(), nil
-		}
-		return cost, info
-	}
-
-	cost, info, err := c.applyCommitmentToLineItem(ctx, lineItem, fallback(), priceObj)
-	if err != nil {
-		c.logger.Info(ctx, "failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
-		return fallback(), nil
-	}
-	return cost, info
-}
-
 // chargeWindowAtLineItem bills a single out-of-bucket window using the line item's
 // own price + commitment. With no line-item commitment it charges actual usage only.
 func (c *commitmentCalculator) chargeWindowAtLineItem(

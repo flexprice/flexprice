@@ -1843,6 +1843,20 @@ type meterUsageBucketedCostParams struct {
 	bucketSize   types.WindowSize
 }
 
+// hasTrueUpEnabled reports whether true-up is enabled at the line item level or
+// on any of its commitment time buckets.
+func hasTrueUpEnabled(lineItem *subscription.SubscriptionLineItem) bool {
+	if lineItem.CommitmentTrueUpEnabled {
+		return true
+	}
+	for _, b := range lineItem.CommitmentTimeBuckets {
+		if b.TrueUpEnabled {
+			return true
+		}
+	}
+	return false
+}
+
 // calculateBucketedCost calculates cost for bucketed max/sum meters.
 // skipCommitment forces hasCommitment=false when set; used for analytics queries
 // with property/source filters where applying commitment over a filtered subset
@@ -1855,9 +1869,11 @@ func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceServ
 	// needsWindowedFill gates the per-window fill paths (fillMissingWindowsAndRecalculate,
 	// fillZeroUsageWindows). True-up requires filling missing windows so commitment can be
 	// charged for them too — but only meaningful when the commitment is itself windowed.
+	// Bucket-level TrueUpEnabled counts too: a true-up bucket needs its empty windows
+	// filled even when the line item's top-level true-up flag is off.
 	// Non-windowed commitments with TrueUpEnabled still get true-up applied at the
 	// aggregate level inside applyCommitmentToLineItem; no per-window fill needed.
-	needsWindowedFill := isWindowed && lineItem.CommitmentTrueUpEnabled
+	needsWindowedFill := isWindowed && hasTrueUpEnabled(lineItem)
 
 	var cost decimal.Decimal
 
@@ -2008,10 +2024,13 @@ func (s *meterUsageService) fillMissingWindowsAndRecalculate(p *meterUsageBucket
 	}
 
 	p.item.Points = filledPoints
-	if totalCost, _, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, expectedStarts, p.price); err == nil {
-		return totalCost
+	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, expectedStarts, p.price)
+	if err != nil {
+		s.logger.Info(p.ctx, "failed to apply window commitment over filled windows", "error", err, "line_item_id", lineItem.ID)
+		return decimal.Zero
 	}
-	return decimal.Zero
+	p.item.CommitmentInfo = info
+	return totalCost
 }
 
 // fillZeroUsageWindows creates fill points for all expected windows when there's no usage.
@@ -2122,10 +2141,12 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 	}
 }
 
-// applyLineItemCommitment applies commitment logic to the calculated cost via the
-// shared commitmentCalculator dispatch and records the info on the analytic item.
-// windowStarts (optional) is paired 1:1 with windowValues and enables per-bucket
-// pricing on lineItem.CommitmentTimeBuckets in the windowed path.
+// applyLineItemCommitment applies the line item's commitment — windowed (per
+// window, with per-bucket pricing) or aggregate — to the calculated cost and
+// records the commitment info on the analytic item. windowStarts (optional) is
+// paired 1:1 with windowValues and enables per-bucket pricing on
+// lineItem.CommitmentTimeBuckets in the windowed path. On calculation failure it
+// logs and falls back to the uncommitted cost.
 func (s *meterUsageService) applyLineItemCommitment(
 	ctx context.Context,
 	priceService PriceService,
@@ -2136,11 +2157,27 @@ func (s *meterUsageService) applyLineItemCommitment(
 	windowStarts []time.Time,
 	defaultCost decimal.Decimal,
 ) decimal.Decimal {
-	cost, info := newCommitmentCalculator(s.logger, priceService).
-		applyToCost(ctx, lineItem, windowValues, windowStarts, p, defaultCost)
-	if info != nil {
-		item.CommitmentInfo = info
+	// Uncommitted fallback: the caller-provided cost, or the bucketed cost of
+	// the window values when no cost was provided.
+	rawCost := defaultCost
+	if rawCost.IsZero() && len(windowValues) > 0 {
+		rawCost = priceService.CalculateBucketedCost(ctx, p, windowValues)
 	}
+
+	calc := newCommitmentCalculator(s.logger, priceService)
+	var cost decimal.Decimal
+	var info *types.CommitmentInfo
+	var err error
+	if lineItem.CommitmentWindowed {
+		cost, info, err = calc.applyWindowCommitmentToLineItem(ctx, lineItem, windowValues, windowStarts, p)
+	} else {
+		cost, info, err = calc.applyCommitmentToLineItem(ctx, lineItem, rawCost, p)
+	}
+	if err != nil {
+		s.logger.Info(ctx, "failed to apply commitment", "error", err, "line_item_id", lineItem.ID, "windowed", lineItem.CommitmentWindowed)
+		return rawCost
+	}
+	item.CommitmentInfo = info
 	return cost
 }
 
