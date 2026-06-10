@@ -742,7 +742,7 @@ func (s *billingService) CalculateUsageCharges(
 
 			// Apply line-item commitment if configured
 			// Line item commitment takes precedence over subscription-level commitment
-			if item.HasCommitment() {
+			if item.HasAnyCommitment() {
 				// Defensive check: skip commitment application if Price is nil
 				if matchingCharge.Price == nil {
 					s.Logger.Debug(ctx, "skipping commitment application due to missing price",
@@ -1550,7 +1550,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 			// Apply line-item commitment if configured
 			// Line item commitment takes precedence over subscription-level commitment
-			if item.HasCommitment() {
+			if item.HasAnyCommitment() {
 				// Defensive check: skip commitment application if Price is nil
 				if matchingCharge.Price == nil {
 					s.Logger.Debug(ctx, "skipping commitment application due to missing price",

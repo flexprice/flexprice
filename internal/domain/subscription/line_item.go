@@ -88,11 +88,19 @@ func (li *SubscriptionLineItem) HasCommitmentTimeBuckets() bool {
 	return len(li.CommitmentTimeBuckets) > 0
 }
 
-// HasCommitment returns true if the line item has commitment configured
+// HasCommitment returns true if the line item has a top-level commitment configured
 func (li *SubscriptionLineItem) HasCommitment() bool {
 	hasAmountCommitment := li.CommitmentAmount != nil && li.CommitmentAmount.GreaterThan(decimal.Zero)
 	hasQuantityCommitment := li.CommitmentQuantity != nil && li.CommitmentQuantity.GreaterThan(decimal.Zero)
 	return hasAmountCommitment || hasQuantityCommitment
+}
+
+// HasAnyCommitment returns true if the line item has a top-level commitment OR
+// per-bucket commitments. Per-bucket commitments bill through the windowed path
+// even when there is no top-level commitment (out-of-bucket usage is then billed
+// at base rate), so commitment-application gates must use this.
+func (li *SubscriptionLineItem) HasAnyCommitment() bool {
+	return li.HasCommitment() || li.HasCommitmentTimeBuckets()
 }
 
 // GetCommitmentType returns the commitment type for the line item

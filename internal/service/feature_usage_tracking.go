@@ -1529,7 +1529,7 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 	var missingLineItems []missingLineItemInfo
 	for _, sub := range subscriptions {
 		for _, li := range sub.LineItems {
-			if skipSyntheticZeros || existingLineItemIDs[li.ID] || !li.HasCommitment() || !li.IsUsage() {
+			if skipSyntheticZeros || existingLineItemIDs[li.ID] || !li.HasAnyCommitment() || !li.IsUsage() {
 				continue
 			}
 			periodStart := li.GetPeriodStart(params.StartTime)
@@ -2148,7 +2148,7 @@ type bucketedCostParams struct {
 func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, price *price.Price, meter *meter.Meter, data *AnalyticsData, skipCommitment bool) {
 	params := &bucketedCostParams{ctx, priceService, item, price, data, meter.Aggregation.Type, meter.Aggregation.BucketSize}
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasCommitment()
+	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasAnyCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
 	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
 
@@ -2397,7 +2397,7 @@ func (s *featureUsageTrackingService) calculateRegularCost(ctx context.Context, 
 
 		lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 
-		if lineItem != nil && lineItem.HasCommitment() {
+		if lineItem != nil && lineItem.HasAnyCommitment() {
 
 			// Regular meters don't support window commitment in this context (usually)
 			// effectively treats it as a single window if IsWindowCommitment is true but no buckets are defined
@@ -2944,11 +2944,12 @@ func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflowInternal(ctx
 	}, nil
 }
 
-// buildBucketSummaries constructs per-bucket rollup rows from already-stamped
-// time-series points (where BucketID was set by the caller). One summary is
-// produced for each CommitmentTimeBucket on the line item, plus one aggregate
-// entry for out-of-bucket windows (BucketID == ""). The commitment math reuses
-// computeCommitmentMathAmount / computeCommitmentMathQty from billing_commitment.go.
+// buildBucketSummaries constructs per-bucket rollup rows by summing the per-point
+// commitment fields the caller already stamped (BucketID + Computed* per point).
+// Because commitment is applied per window/point, the summary is a straight sum of
+// those per-point values — it matches the per-window billing exactly. One summary
+// is produced per CommitmentTimeBucket, plus one aggregate for out-of-bucket
+// points (BucketID == "", priced at the line item's own price + commitment).
 //
 // It is a package-level helper so both the feature-usage and meter-usage
 // analytics paths produce identical bucket summaries.
@@ -2963,105 +2964,60 @@ func buildBucketSummaries(
 	summaries := make([]dto.BucketSummary, 0, len(buckets)+1)
 
 	for _, b := range buckets {
-		// Aggregate usage for this bucket from already-stamped points.
-		bucketUsage := decimal.Zero
-		for _, p := range points {
-			if p.BucketID == b.ID {
-				bucketUsage = bucketUsage.Add(p.Usage)
-			}
-		}
-
-		// Resolve the bucket-scoped price (may be missing if PriceID is empty).
-		baseCharge := decimal.Zero
-		if b.PriceID != "" {
-			if priceObj, ok := data.Prices[b.PriceID]; ok {
-				baseCharge = priceService.CalculateCost(ctx, priceObj, bucketUsage)
-			}
-		}
-
-		// Commitment math for this bucket.
-		var utilized, overage, trueUp decimal.Decimal
-		if b.HasCommitment() {
-			of := decimal.Zero
-			if b.OverageFactor != nil {
-				of = *b.OverageFactor
-			}
-			switch b.CommitmentType {
-			case types.COMMITMENT_TYPE_AMOUNT:
-				_, utilized, overage, trueUp = computeCommitmentMathAmount(baseCharge, b.CommitmentValue, of, b.TrueUpEnabled)
-			case types.COMMITMENT_TYPE_QUANTITY:
-				commitCharge := decimal.Zero
-				if b.PriceID != "" {
-					if priceObj, ok := data.Prices[b.PriceID]; ok {
-						commitCharge = priceService.CalculateCost(ctx, priceObj, b.CommitmentValue)
-					}
-				}
-				_, utilized, overage, trueUp = computeCommitmentMathQty(baseCharge, commitCharge, of, b.TrueUpEnabled)
-			}
-		}
-
+		r := rollupBucketPoints(ctx, priceService, points, b.ID, data.Prices[b.PriceID])
 		summaries = append(summaries, dto.BucketSummary{
 			BucketID:         b.ID,
 			CommitmentType:   string(b.CommitmentType),
 			CommitmentValue:  b.CommitmentValue,
-			TotalUsage:       bucketUsage,
-			BaseCharge:       baseCharge,
-			ComputedUtilized: utilized,
-			ComputedOverage:  overage,
-			ComputedTrueUp:   trueUp,
+			TotalUsage:       r.usage,
+			BaseCharge:       r.base,
+			ComputedUtilized: r.utilized,
+			ComputedOverage:  r.overage,
+			ComputedTrueUp:   r.trueUp,
 		})
 	}
 
-	// Out-of-bucket aggregate (uses the line item's own price + commitment).
-	outUsage := decimal.Zero
-	for _, p := range points {
-		if p.BucketID == "" {
-			outUsage = outUsage.Add(p.Usage)
-		}
-	}
-	outBaseCharge := decimal.Zero
-	if lineItem.PriceID != "" {
-		if priceObj, ok := data.Prices[lineItem.PriceID]; ok {
-			outBaseCharge = priceService.CalculateCost(ctx, priceObj, outUsage)
-		}
-	}
-	var outUtilized, outOverage, outTrueUp decimal.Decimal
-	if lineItem.HasCommitment() {
-		of := decimal.Zero
-		if lineItem.CommitmentOverageFactor != nil {
-			of = *lineItem.CommitmentOverageFactor
-		}
-		switch lineItem.CommitmentType {
-		case types.COMMITMENT_TYPE_AMOUNT:
-			commitAmt := decimal.Zero
-			if lineItem.CommitmentAmount != nil {
-				commitAmt = *lineItem.CommitmentAmount
-			}
-			_, outUtilized, outOverage, outTrueUp = computeCommitmentMathAmount(outBaseCharge, commitAmt, of, lineItem.CommitmentTrueUpEnabled)
-		case types.COMMITMENT_TYPE_QUANTITY:
-			commitCharge := decimal.Zero
-			if lineItem.PriceID != "" {
-				if priceObj, ok := data.Prices[lineItem.PriceID]; ok {
-					commitQty := decimal.Zero
-					if lineItem.CommitmentQuantity != nil {
-						commitQty = *lineItem.CommitmentQuantity
-					}
-					commitCharge = priceService.CalculateCost(ctx, priceObj, commitQty)
-				}
-			}
-			_, outUtilized, outOverage, outTrueUp = computeCommitmentMathQty(outBaseCharge, commitCharge, of, lineItem.CommitmentTrueUpEnabled)
-		}
-	}
+	// Out-of-bucket aggregate, priced at the line item's own price.
+	out := rollupBucketPoints(ctx, priceService, points, "", data.Prices[lineItem.PriceID])
 	summaries = append(summaries, dto.BucketSummary{
 		BucketID:         "",
-		TotalUsage:       outUsage,
-		BaseCharge:       outBaseCharge,
-		ComputedUtilized: outUtilized,
-		ComputedOverage:  outOverage,
-		ComputedTrueUp:   outTrueUp,
+		TotalUsage:       out.usage,
+		BaseCharge:       out.base,
+		ComputedUtilized: out.utilized,
+		ComputedOverage:  out.overage,
+		ComputedTrueUp:   out.trueUp,
 	})
 
 	return summaries
+}
+
+type bucketPointRollup struct {
+	usage, base, utilized, overage, trueUp decimal.Decimal
+}
+
+// rollupBucketPoints sums usage and the per-point commitment fields for the points
+// stamped with bucketID. base is the pre-commitment usage cost at p (when known).
+func rollupBucketPoints(
+	ctx context.Context,
+	priceService PriceService,
+	points []dto.UsageAnalyticPoint,
+	bucketID string,
+	p *price.Price,
+) bucketPointRollup {
+	var r bucketPointRollup
+	for _, pt := range points {
+		if pt.BucketID != bucketID {
+			continue
+		}
+		r.usage = r.usage.Add(pt.Usage)
+		if p != nil {
+			r.base = r.base.Add(priceService.CalculateCost(ctx, p, pt.Usage))
+		}
+		r.utilized = r.utilized.Add(pt.ComputedCommitmentUtilizedAmount)
+		r.overage = r.overage.Add(pt.ComputedOverageAmount)
+		r.trueUp = r.trueUp.Add(pt.ComputedTrueUpAmount)
+	}
+	return r
 }
 
 func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, data *AnalyticsData, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
@@ -3232,12 +3188,12 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 					ComputedOverageAmount:            point.ComputedOverageAmount,
 					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
 				}
-				// Per-point bucket identity (Task 18).
+				// Per-point bucket identity (only when the point's whole window
+				// fits inside a single bucket).
 				if lineItemForBucket != nil {
-					idx := bucketIndexAtWindowStart(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp)
-					if idx >= 0 {
-						dtoPoint.BucketID = lineItemForBucket.CommitmentTimeBuckets[idx].ID
-						dtoPoint.PriceID = lineItemForBucket.CommitmentTimeBuckets[idx].PriceID
+					if id, priceID, ok := bucketIDForPointWindow(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, req.WindowSize); ok {
+						dtoPoint.BucketID = id
+						dtoPoint.PriceID = priceID
 					}
 				}
 				item.Points = append(item.Points, dtoPoint)

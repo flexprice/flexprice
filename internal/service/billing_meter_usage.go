@@ -217,7 +217,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 		// 4. Line-item commitment (windowed or flat)
 		var commitmentInfo *types.CommitmentInfo
-		if item.HasCommitment() && matchingCharge.Price != nil {
+		if item.HasAnyCommitment() && matchingCharge.Price != nil {
 			lineItemAmount, commitmentInfo, err = s.applyMeterUsageCommitment(
 				ctx, item, m, matchingCharge, cachedBucketedUsageResult,
 				sub, extCustomerIDs, periodStart, periodEnd, asOf,

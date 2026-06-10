@@ -125,8 +125,7 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 
 	// Stamp the points with bucket attribution.
 	for i := range points {
-		idx := bucketIndexAtWindowStart(lineItem.CommitmentTimeBuckets, points[i].Timestamp)
-		if idx >= 0 {
+		if idx, ok := bucketIndexAt(lineItem.CommitmentTimeBuckets, []time.Time{points[i].Timestamp}, 0); ok {
 			points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
 			points[i].PriceID = lineItem.CommitmentTimeBuckets[idx].PriceID
 		}
@@ -177,7 +176,6 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 	ctx := context.Background()
 
-	commitment := decimal.NewFromInt(50)
 	overageFactor := decimal.NewFromInt(1)
 	bucketID := "bkt_0002"
 	bucketPriceID := "price_bucket2"
@@ -192,7 +190,7 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 				End:             types.Bucket{Hour: 17, Minute: 0},
 				PriceID:         bucketPriceID,
 				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
-				CommitmentValue: commitment,
+				CommitmentValue: decimal.NewFromInt(5),
 				OverageFactor:   &overageFactor,
 				TrueUpEnabled:   false,
 			},
@@ -211,12 +209,16 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 
 	baseDate := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
 	points := buildHourlyPoints(baseDate)
-	// Stamp bucket attribution.
+	// Stamp bucket attribution AND the per-point commitment fields that
+	// calculatePointCosts populates in production. Per-window, each in-bucket
+	// window (10 units × $2 = $20 ≥ $5 commitment, overage 1x) yields
+	// utilized=$5, overage=($15×1)=$15. buildBucketSummaries must SUM these.
 	for i := range points {
-		idx := bucketIndexAtWindowStart(lineItem.CommitmentTimeBuckets, points[i].Timestamp)
-		if idx >= 0 {
+		if idx, ok := bucketIndexAt(lineItem.CommitmentTimeBuckets, []time.Time{points[i].Timestamp}, 0); ok {
 			points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
 			points[i].PriceID = lineItem.CommitmentTimeBuckets[idx].PriceID
+			points[i].ComputedCommitmentUtilizedAmount = decimal.NewFromInt(5)
+			points[i].ComputedOverageAmount = decimal.NewFromInt(15)
 		}
 	}
 
@@ -226,14 +228,13 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 	bucketSummary := summaries[0]
 	assert.Equal(t, bucketID, bucketSummary.BucketID)
 	assert.Equal(t, string(types.COMMITMENT_TYPE_AMOUNT), bucketSummary.CommitmentType)
-	// base = 80 * $2 = $160; commitment = $50; overageFactor=1
-	// utilized=$50, overage=($160-$50)*1=$110, trueUp=0
+	// 8 in-bucket windows: base 8×$20=$160; utilized 8×$5=$40; overage 8×$15=$120.
 	assert.True(t, bucketSummary.BaseCharge.Equal(decimal.NewFromInt(160)),
 		"base charge: got %s, want 160", bucketSummary.BaseCharge)
-	assert.True(t, bucketSummary.ComputedUtilized.Equal(decimal.NewFromInt(50)),
-		"utilized: got %s, want 50", bucketSummary.ComputedUtilized)
-	assert.True(t, bucketSummary.ComputedOverage.Equal(decimal.NewFromInt(110)),
-		"overage: got %s, want 110", bucketSummary.ComputedOverage)
+	assert.True(t, bucketSummary.ComputedUtilized.Equal(decimal.NewFromInt(40)),
+		"utilized: got %s, want 40", bucketSummary.ComputedUtilized)
+	assert.True(t, bucketSummary.ComputedOverage.Equal(decimal.NewFromInt(120)),
+		"overage: got %s, want 120", bucketSummary.ComputedOverage)
 	assert.True(t, bucketSummary.ComputedTrueUp.Equal(decimal.Zero),
 		"true-up: got %s, want 0", bucketSummary.ComputedTrueUp)
 }
@@ -267,8 +268,8 @@ func TestAnalytics_BreakdownBucketFlag_NoLineItem(t *testing.T) {
 
 	// No attribution should occur.
 	for i := range points {
-		idx := bucketIndexAtWindowStart(lineItem.CommitmentTimeBuckets, points[i].Timestamp)
-		assert.Equal(t, -1, idx, "no bucket should match when CommitmentTimeBuckets is empty")
+		_, ok := bucketIndexAt(lineItem.CommitmentTimeBuckets, []time.Time{points[i].Timestamp}, 0)
+		assert.False(t, ok, "no bucket should match when CommitmentTimeBuckets is empty")
 	}
 
 	// When lineItemForBucket is nil (no buckets), buildBucketSummaries is not called.

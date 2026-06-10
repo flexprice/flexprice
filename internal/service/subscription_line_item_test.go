@@ -925,7 +925,7 @@ func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_CreatesSu
 		buckets[i] = r.ToTimeOfDayBucket()
 	}
 
-	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets)
+	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets, nil)
 	s.NoError(err)
 	s.Require().Len(buckets, 1)
 
@@ -958,10 +958,10 @@ func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_EmptySlic
 	ctx := s.GetContext()
 	concreteSvc := s.service.(*subscriptionService)
 
-	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, nil, types.TimeOfDayBuckets{})
+	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, nil, types.TimeOfDayBuckets{}, nil)
 	s.NoError(err)
 
-	err2 := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, []dto.CommitmentBucketRequest{}, types.TimeOfDayBuckets{})
+	err2 := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, []dto.CommitmentBucketRequest{}, types.TimeOfDayBuckets{}, nil)
 	s.NoError(err2)
 }
 
@@ -1005,7 +1005,7 @@ func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_MultipleB
 		buckets[i] = r.ToTimeOfDayBucket()
 	}
 
-	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets)
+	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets, nil)
 	s.NoError(err)
 	s.Require().Len(buckets, 3)
 

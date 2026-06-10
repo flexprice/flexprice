@@ -379,7 +379,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
 			if hasExtraGroupBy {
 				for _, liw := range lineItemsInGroup {
-					if liw.Item != nil && liw.Item.HasCommitment() {
+					if liw.Item != nil && liw.Item.HasAnyCommitment() {
 						commitmentLIs = append(commitmentLIs, liw)
 					} else {
 						nonCommitmentLIs = append(nonCommitmentLIs, liw)
@@ -896,7 +896,7 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		// committed minimum (and true-up, if windowed) is applied even with no usage.
 		for _, lu := range su.LineItemUsages {
 			if lu.Usage.IsZero() && lu.EventCount == 0 && len(lu.Points) == 0 && lu.BucketedResult == nil {
-				if lu.LineItem == nil || !lu.LineItem.HasCommitment() {
+				if lu.LineItem == nil || !lu.LineItem.HasAnyCommitment() {
 					continue
 				}
 			}
@@ -1442,11 +1442,12 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 					ComputedOverageAmount:            point.ComputedOverageAmount,
 					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
 				}
-				// Per-point bucket identity.
+				// Per-point bucket identity (only when the point's whole window
+				// fits inside a single bucket).
 				if lineItemForBucket != nil {
-					if idx := bucketIndexAtWindowStart(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp); idx >= 0 {
-						dtoPoint.BucketID = lineItemForBucket.CommitmentTimeBuckets[idx].ID
-						dtoPoint.PriceID = lineItemForBucket.CommitmentTimeBuckets[idx].PriceID
+					if id, priceID, ok := bucketIDForPointWindow(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, params.WindowSize); ok {
+						dtoPoint.BucketID = id
+						dtoPoint.PriceID = priceID
 					}
 				}
 				item.Points = append(item.Points, dtoPoint)
@@ -1849,7 +1850,7 @@ type meterUsageBucketedCostParams struct {
 func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, p *price.Price, m *meter.Meter, data *AnalyticsData, skipCommitment bool) {
 	params := &meterUsageBucketedCostParams{ctx, priceService, item, p, data, m.Aggregation.Type, m.Aggregation.BucketSize}
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasCommitment()
+	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasAnyCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
 	// needsWindowedFill gates the per-window fill paths (fillMissingWindowsAndRecalculate,
 	// fillZeroUsageWindows). True-up requires filling missing windows so commitment can be
@@ -2092,7 +2093,7 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 	if !skipCommitment && item.SubLineItemID != "" {
 		lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 
-		if lineItem != nil && lineItem.HasCommitment() {
+		if lineItem != nil && lineItem.HasAnyCommitment() {
 			if lineItem.CommitmentWindowed {
 				if len(item.Points) > 0 {
 					bucketedValues := make([]decimal.Decimal, len(item.Points))

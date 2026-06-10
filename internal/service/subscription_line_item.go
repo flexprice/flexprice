@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -71,7 +72,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			// ToSubscriptionLineItem already built lineItem.CommitmentTimeBuckets
 			// (IDs + commitment fields, empty PriceID); create a SUBSCRIPTION-scoped
 			// price per bucket and fill in the PriceIDs.
-			if err := s.materializeBucketPrices(txCtx, subscriptionID, resolvedReq.CommitmentTimeBuckets, lineItem.CommitmentTimeBuckets); err != nil {
+			if err := s.materializeBucketPrices(txCtx, subscriptionID, resolvedReq.CommitmentTimeBuckets, lineItem.CommitmentTimeBuckets, nil); err != nil {
 				return err
 			}
 			_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
@@ -500,18 +501,18 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			newLineItem.StartDate = endDate // Start where the old one ends
 
 			// Materialize bucket prices when the update request carries
-			// commitment_time_buckets (replace-all semantics): ToSubscriptionLineItem
-			// rebuilt newLineItem.CommitmentTimeBuckets from the request (fresh IDs,
-			// empty PriceIDs); we create a fresh SUBSCRIPTION-scoped price per bucket
-			// and fill in the PriceIDs. The old bucket prices (from the terminated
-			// line item) are left intact — they may still be referenced by historical
-			// invoices.
+			// commitment_time_buckets: ToSubscriptionLineItem rebuilt
+			// newLineItem.CommitmentTimeBuckets from the request (fresh IDs, empty
+			// PriceIDs). materializeBucketPrices reuses an existing bucket's price +
+			// ID when that bucket is unchanged, and only creates new prices for
+			// changed/added buckets; old prices for removed/changed buckets are left
+			// intact (still referenced by historical invoices).
 			//
 			// Omitting commitment_time_buckets (nil pointer) inherits the existing
 			// line item's buckets (copied by ToSubscriptionLineItem); supplying an
 			// explicit empty slice clears them.
 			if req.CommitmentTimeBuckets != nil {
-				if err := s.materializeBucketPrices(ctx, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets); err != nil {
+				if err := s.materializeBucketPrices(ctx, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, existingLineItem.CommitmentTimeBuckets); err != nil {
 					return err
 				}
 				_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
@@ -759,7 +760,7 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 		// Build domain buckets (IDs + commitment fields), then materialize a
 		// SUBSCRIPTION-scoped price per bucket and validate the array.
 		buckets := cfg.ToDomainBuckets()
-		if err := s.materializeBucketPrices(ctx, sub.ID, cfg.CommitmentTimeBuckets, buckets); err != nil {
+		if err := s.materializeBucketPrices(ctx, sub.ID, cfg.CommitmentTimeBuckets, buckets, nil); err != nil {
 			return err
 		}
 		_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
@@ -933,8 +934,14 @@ func (s *subscriptionService) validateBucketArray(
 
 // materializeBucketPrices creates a SUBSCRIPTION-scoped price for each bucket
 // request and writes the resulting PriceID onto the matching domain bucket.
-// reqs and buckets are positionally aligned: the DTO layer builds buckets (ID +
-// commitment fields, empty PriceID) and the service fills in the price here.
+// reqs and buckets are positionally aligned (length must match): the DTO layer
+// builds buckets (ID + commitment fields, empty PriceID) and the service fills in
+// the price here.
+//
+// existing holds the line item's current buckets (nil on create). When an
+// incoming bucket is unchanged from an existing one (same time range, commitment,
+// and price), the existing price + bucket ID are reused instead of creating a new
+// price — so a no-op update doesn't churn price rows.
 //
 // On error, callers must rely on the surrounding transaction to roll back any
 // prices already created.
@@ -943,6 +950,7 @@ func (s *subscriptionService) materializeBucketPrices(
 	subscriptionID string,
 	reqs []dto.CommitmentBucketRequest,
 	buckets types.TimeOfDayBuckets,
+	existing types.TimeOfDayBuckets,
 ) error {
 	if len(reqs) != len(buckets) {
 		return ierr.NewError("bucket request/domain length mismatch").
@@ -954,7 +962,22 @@ func (s *subscriptionService) materializeBucketPrices(
 			Mark(ierr.ErrSystem)
 	}
 	priceService := NewPriceService(s.ServiceParams)
+
+	existingPrices, err := s.loadBucketPrices(ctx, priceService, existing)
+	if err != nil {
+		return err
+	}
+
+	usedExisting := make(map[int]bool, len(existing))
 	for i := range reqs {
+		// Reuse an unchanged existing bucket's price + ID where possible.
+		if j, ok := findReusableBucket(existing, usedExisting, buckets[i], reqs[i].Price, existingPrices); ok {
+			buckets[i].ID = existing[j].ID
+			buckets[i].PriceID = existing[j].PriceID
+			usedExisting[j] = true
+			continue
+		}
+
 		priceReq := reqs[i].Price
 		priceReq.EntityType = types.PRICE_ENTITY_TYPE_SUBSCRIPTION
 		priceReq.EntityID = subscriptionID
@@ -977,6 +1000,98 @@ func (s *subscriptionService) materializeBucketPrices(
 		buckets[i].PriceID = resp.ID
 	}
 	return nil
+}
+
+// loadBucketPrices fetches the prices referenced by the given buckets, keyed by
+// price ID. Used to compare existing bucket prices against incoming requests.
+func (s *subscriptionService) loadBucketPrices(ctx context.Context, priceService PriceService, buckets types.TimeOfDayBuckets) (map[string]*price.Price, error) {
+	ids := make([]string, 0, len(buckets))
+	for _, b := range buckets {
+		if b.PriceID != "" {
+			ids = append(ids, b.PriceID)
+		}
+	}
+	out := make(map[string]*price.Price, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	resp, err := priceService.GetPrices(ctx, types.NewNoLimitPriceFilter().WithPriceIDs(ids).WithAllowExpiredPrices(true))
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range resp.Items {
+		out[p.ID] = p.Price
+	}
+	return out, nil
+}
+
+// findReusableBucket returns the index of an unused existing bucket that is
+// unchanged from the incoming bucket (same time range, commitment, and price), so
+// its materialized price + ID can be reused on update.
+func findReusableBucket(
+	existing types.TimeOfDayBuckets,
+	used map[int]bool,
+	incoming types.TimeOfDayBucket,
+	reqPrice dto.CreatePriceRequest,
+	existingPrices map[string]*price.Price,
+) (int, bool) {
+	for j, ex := range existing {
+		if used[j] {
+			continue
+		}
+		if bucketCommitmentUnchanged(ex, incoming) && bucketPriceUnchanged(existingPrices[ex.PriceID], reqPrice) {
+			return j, true
+		}
+	}
+	return 0, false
+}
+
+// bucketCommitmentUnchanged reports whether two buckets share the same time range
+// and commitment configuration (ignoring price, ID and PriceID).
+func bucketCommitmentUnchanged(a, b types.TimeOfDayBucket) bool {
+	return a.Start == b.Start &&
+		a.End == b.End &&
+		a.CommitmentType == b.CommitmentType &&
+		a.CommitmentValue.Equal(b.CommitmentValue) &&
+		decimalPtrEqual(a.OverageFactor, b.OverageFactor) &&
+		a.TrueUpEnabled == b.TrueUpEnabled
+}
+
+// bucketPriceUnchanged conservatively reports whether an existing price equals the
+// incoming request. Only flat-fee prices are compared; tiered or transform prices
+// always produce a fresh price (false) to avoid risky deep comparison.
+func bucketPriceUnchanged(existing *price.Price, req dto.CreatePriceRequest) bool {
+	if existing == nil {
+		return false
+	}
+	if existing.BillingModel != types.BILLING_MODEL_FLAT_FEE || req.BillingModel != types.BILLING_MODEL_FLAT_FEE {
+		return false
+	}
+	if len(req.Tiers) > 0 || req.TransformQuantity != nil {
+		return false
+	}
+	bpc := req.BillingPeriodCount
+	if bpc < 1 {
+		bpc = 1
+	}
+	if existing.Type != req.Type ||
+		existing.BillingPeriod != req.BillingPeriod ||
+		existing.BillingPeriodCount != bpc ||
+		existing.PriceUnitType != req.PriceUnitType ||
+		existing.MeterID != req.MeterID {
+		return false
+	}
+	if req.Amount == nil {
+		return existing.Amount.IsZero()
+	}
+	return existing.Amount.Equal(*req.Amount)
+}
+
+func decimalPtrEqual(a, b *decimal.Decimal) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
 }
 
 // validateSubscriptionLevelCommitment validates that subscription and line items don't both have commitment
