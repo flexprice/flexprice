@@ -117,32 +117,41 @@ data:
       event_table_name: {{ .Values.dynamodb.eventTableName | quote }}
     
     event_processing:
+      # enabled gates whether the consumer subscribes to this topic. The Go
+      # struct default is true, but viper does NOT apply Go `default` tags on
+      # Unmarshal, so it must be rendered here or it resolves to false and the
+      # events→ClickHouse consumer never starts. (same class as onboarding_events)
+      enabled: {{ .Values.eventProcessing.enabled }}
       topic: {{ .Values.eventProcessing.topic | quote }}
       rate_limit: {{ .Values.eventProcessing.rateLimit }}
       consumer_group: {{ .Values.eventProcessing.consumerGroup | quote }}
-    
+
     event_processing_lazy:
+      enabled: {{ .Values.eventProcessingLazy.enabled }}
       topic: {{ .Values.eventProcessingLazy.topic | quote }}
       rate_limit: {{ .Values.eventProcessingLazy.rateLimit }}
       consumer_group: {{ .Values.eventProcessingLazy.consumerGroup | quote }}
-    
+
     event_post_processing:
+      enabled: {{ .Values.eventPostProcessing.enabled }}
       topic: {{ .Values.eventPostProcessing.topic | quote }}
       rate_limit: {{ .Values.eventPostProcessing.rateLimit }}
       consumer_group: {{ .Values.eventPostProcessing.consumerGroup | quote }}
       topic_backfill: {{ .Values.eventPostProcessing.topicBackfill | quote }}
       rate_limit_backfill: {{ .Values.eventPostProcessing.rateLimitBackfill }}
       consumer_group_backfill: {{ .Values.eventPostProcessing.consumerGroupBackfill | quote }}
-    
+
     feature_usage_tracking:
+      enabled: {{ .Values.featureUsageTracking.enabled }}
       topic: {{ .Values.featureUsageTracking.topic | quote }}
       rate_limit: {{ .Values.featureUsageTracking.rateLimit }}
       consumer_group: {{ .Values.featureUsageTracking.consumerGroup | quote }}
       topic_backfill: {{ .Values.featureUsageTracking.topicBackfill | quote }}
       rate_limit_backfill: {{ .Values.featureUsageTracking.rateLimitBackfill }}
       consumer_group_backfill: {{ .Values.featureUsageTracking.consumerGroupBackfill | quote }}
-    
+
     feature_usage_tracking_lazy:
+      enabled: {{ .Values.featureUsageTrackingLazy.enabled }}
       topic: {{ .Values.featureUsageTrackingLazy.topic | quote }}
       rate_limit: {{ .Values.featureUsageTrackingLazy.rateLimit }}
       consumer_group: {{ .Values.featureUsageTrackingLazy.consumerGroup | quote }}
