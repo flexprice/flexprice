@@ -104,6 +104,19 @@ const (
 	SubscriptionModifyTypeTrialEnd         SubscriptionModifyType = "trial_end"
 )
 
+const (
+	SubscriptionModifyTypeCoupon SubscriptionModifyType = "coupon"
+	SubscriptionModifyTypeTax    SubscriptionModifyType = "tax"
+)
+
+// SubModifyAction is the action to perform on a coupon or tax association.
+type SubModifyAction string
+
+const (
+	SubModifyActionAdd    SubModifyAction = "add"
+	SubModifyActionRemove SubModifyAction = "remove"
+)
+
 // GroupedInvoicingAction identifies whether children are being added to or removed from grouped invoicing.
 type GroupedInvoicingAction string
 
@@ -139,6 +152,66 @@ func (r *SubModifyGroupedInvoicingParams) Validate() error {
 	return nil
 }
 
+// SubModifyCouponParams is the payload for coupon association changes on a subscription.
+type SubModifyCouponParams struct {
+	Action        SubModifyAction `json:"action" binding:"required"`
+	CouponID      *string         `json:"coupon_id,omitempty"`
+	AssociationID *string         `json:"association_id,omitempty"`
+	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+}
+
+func (r *SubModifyCouponParams) Validate() error {
+	switch r.Action {
+	case SubModifyActionAdd:
+		if r.CouponID == nil || *r.CouponID == "" {
+			return ierr.NewError("coupon_id is required for action 'add'").
+				WithHint("Provide a valid coupon_id").
+				Mark(ierr.ErrValidation)
+		}
+	case SubModifyActionRemove:
+		if r.AssociationID == nil || *r.AssociationID == "" {
+			return ierr.NewError("association_id is required for action 'remove'").
+				WithHint("Provide the coupon association ID to remove").
+				Mark(ierr.ErrValidation)
+		}
+	default:
+		return ierr.NewError("unknown coupon action: " + string(r.Action)).
+			WithHint("Valid values: add, remove").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// SubModifyTaxParams is the payload for tax association changes on a subscription.
+type SubModifyTaxParams struct {
+	Action        SubModifyAction `json:"action" binding:"required"`
+	TaxRateID     *string         `json:"tax_rate_id,omitempty"`
+	AssociationID *string         `json:"association_id,omitempty"`
+	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+}
+
+func (r *SubModifyTaxParams) Validate() error {
+	switch r.Action {
+	case SubModifyActionAdd:
+		if r.TaxRateID == nil || *r.TaxRateID == "" {
+			return ierr.NewError("tax_rate_id is required for action 'add'").
+				WithHint("Provide a valid tax_rate_id").
+				Mark(ierr.ErrValidation)
+		}
+	case SubModifyActionRemove:
+		if r.AssociationID == nil || *r.AssociationID == "" {
+			return ierr.NewError("association_id is required for action 'remove'").
+				WithHint("Provide the tax association ID to remove").
+				Mark(ierr.ErrValidation)
+		}
+	default:
+		return ierr.NewError("unknown tax action: " + string(r.Action)).
+			WithHint("Valid values: add, remove").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // ExecuteSubscriptionModifyRequest is the unified body for
 // POST /subscriptions/:id/modify/execute and /modify/preview.
 // Exactly one of the *Params fields must be set, matching the type.
@@ -148,6 +221,8 @@ type ExecuteSubscriptionModifyRequest struct {
 	QuantityChangeParams   *SubModifyQuantityChangeRequest  `json:"quantity_change_params,omitempty"`
 	GroupedInvoicingParams *SubModifyGroupedInvoicingParams `json:"grouped_invoicing_params,omitempty"`
 	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
+	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
+	TaxParams              *SubModifyTaxParams              `json:"tax_params,omitempty"`
 }
 
 func (r *ExecuteSubscriptionModifyRequest) Validate() error {
@@ -176,9 +251,21 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 		return r.TrialEndParams.Validate()
+	case SubscriptionModifyTypeCoupon:
+		if r.CouponParams == nil {
+			return ierr.NewError("coupon_params is required for type 'coupon'").
+				Mark(ierr.ErrValidation)
+		}
+		return r.CouponParams.Validate()
+	case SubscriptionModifyTypeTax:
+		if r.TaxParams == nil {
+			return ierr.NewError("tax_params is required for type 'tax'").
+				Mark(ierr.ErrValidation)
+		}
+		return r.TaxParams.Validate()
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax").
 			Mark(ierr.ErrValidation)
 	}
 }
