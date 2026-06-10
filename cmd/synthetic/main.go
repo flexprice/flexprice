@@ -124,6 +124,17 @@ func main() {
 		runner.Add(smf, synthetic.NewTickerScheduler(smf, cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Interval))
 	}
 
+	if cfg.Checks["LOW_WALLET_ALERT_LISTENER"].Enabled {
+		wl := synthetic.NewHTTPWebhookListener(cfg.ListenerPort)
+		lwl := checks_pkg.NewLowWalletAlertListener(runID)
+		runner.Add(lwl, synthetic.NewListenerScheduler(lwl, wl))
+	}
+
+	if cfg.Checks["JANITOR"].Enabled {
+		jn := checks_pkg.NewJanitor(client, reg, 4*time.Hour, runID)
+		runner.Add(jn, synthetic.NewTickerScheduler(jn, cfg.Checks["JANITOR"].Interval))
+	}
+
 	lg.Infow("synthetic probe starting", "run_id", runID, "host", cfg.APIHost, "checks", len(cfg.Checks))
 	runner.Start(ctx)
 	lg.Infow("synthetic probe shutdown")
