@@ -4505,6 +4505,99 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	s.NoError(err)
 }
 
+// TestProcessSubscriptionPeriod_InheritedWithCancelAtPeriodEnd verifies that an inherited
+// subscription with cancel_at_period_end=true is cancelled at period end without having
+// its period advanced and without generating an invoice.
+func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_InheritedWithCancelAtPeriodEnd() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+
+	// Set up a parent subscription reference
+	parentSub := s.testData.subscription
+	periodEnd := now.Add(-time.Minute) // period already ended
+
+	// Create an inherited sub that is scheduled for cancellation at period end
+	cancelAt := periodEnd
+	inheritedSub := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+		CustomerID:           types.GenerateUUID(),
+		PlanID:               parentSub.PlanID,
+		Currency:             parentSub.Currency,
+		BillingPeriod:        parentSub.BillingPeriod,
+		BillingPeriodCount:   parentSub.BillingPeriodCount,
+		BillingCycle:         parentSub.BillingCycle,
+		BillingAnchor:        parentSub.BillingAnchor,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		CurrentPeriodStart:   now.AddDate(0, -1, 0),
+		CurrentPeriodEnd:     periodEnd,
+		StartDate:            now.AddDate(0, -1, 0),
+		ParentSubscriptionID: &parentSub.ID,
+		CancelAt:             &cancelAt,
+		CancelAtPeriodEnd:    true,
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, inheritedSub))
+
+	subService := s.service.(*subscriptionService)
+	err := subService.processSubscriptionPeriod(ctx, inheritedSub, now)
+	s.Require().NoError(err)
+
+	// The inherited sub must be cancelled
+	updated, err := s.GetStores().SubscriptionRepo.Get(ctx, inheritedSub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
+	s.Require().NotNil(updated.CancelledAt)
+	s.Equal(cancelAt.UTC(), updated.CancelledAt.UTC())
+	s.Require().NotNil(updated.EndDate)
+	s.Equal(cancelAt.UTC(), updated.EndDate.UTC())
+
+	// Period must NOT have been advanced
+	s.Equal(inheritedSub.CurrentPeriodStart.UTC(), updated.CurrentPeriodStart.UTC(), "period start must not change")
+	s.Equal(periodEnd.UTC(), updated.CurrentPeriodEnd.UTC(), "period end must not change")
+}
+
+// TestProcessSubscriptionPeriod_InheritedWithoutCancelAtPeriodEnd verifies that a plain
+// inherited subscription (no cancellation scheduled) still just advances its period.
+func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_InheritedWithoutCancelAtPeriodEnd() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	parentSub := s.testData.subscription
+	periodEnd := now.Add(-time.Minute)
+
+	inheritedSub := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+		CustomerID:           types.GenerateUUID(),
+		PlanID:               parentSub.PlanID,
+		Currency:             parentSub.Currency,
+		BillingPeriod:        parentSub.BillingPeriod,
+		BillingPeriodCount:   parentSub.BillingPeriodCount,
+		BillingCycle:         parentSub.BillingCycle,
+		BillingAnchor:        parentSub.BillingAnchor,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		CurrentPeriodStart:   now.AddDate(0, -1, 0),
+		CurrentPeriodEnd:     periodEnd,
+		StartDate:            now.AddDate(0, -1, 0),
+		ParentSubscriptionID: &parentSub.ID,
+	}
+	s.Require().NoError(s.GetStores().SubscriptionRepo.Create(ctx, inheritedSub))
+
+	// Capture original period start before processSubscriptionPeriod mutates the struct.
+	originalPeriodStart := inheritedSub.CurrentPeriodStart
+
+	subService := s.service.(*subscriptionService)
+	err := subService.processSubscriptionPeriod(ctx, inheritedSub, now)
+	s.Require().NoError(err)
+
+	// Period should have been advanced, status stays active
+	updated, err := s.GetStores().SubscriptionRepo.Get(ctx, inheritedSub.ID)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus)
+	s.True(updated.CurrentPeriodStart.After(originalPeriodStart), "period start must advance")
+}
+
 // TestProcessSubscriptionPeriod_BackdatedWithEndDate verifies the complete
 // cancellation behavior matrix for backdated catch-up processing.
 func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod_BackdatedWithEndDate() {
