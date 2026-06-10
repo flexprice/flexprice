@@ -18,55 +18,88 @@ func ts() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }
 
+// targetOutcome captures the aggregate result of running the suite against one target.
+type targetOutcome struct {
+	target      Target
+	coreFailed  int
+	cleanupFail int
+	passed      int
+	failed      int
+	skipped     int
+	total       int
+	duration    time.Duration
+}
+
 func main() {
 	fmt.Println("╔══════════════════════════════════════════════════════════════╗")
 	fmt.Println("║              FLEXPRICE ORCHESTRATED SANITY TEST              ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════════╝")
 	fmt.Println()
 
-	// ── Read environment variables ──────────────────────────────────────
+	// ── Resolve targets (one or many base URL + API key pairs) ──────────
 
-	apiKey := os.Getenv("FLEXPRICE_API_KEY")
-	apiHost := os.Getenv("FLEXPRICE_API_HOST")
-
-	if apiKey == "" {
-		log.Fatal("FLEXPRICE_API_KEY environment variable is required")
-	}
-	if apiHost == "" {
-		apiHost = defaultAPIHost
+	targets, err := loadTargets()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	// Strip scheme if user accidentally included it (e.g. "https://api.cloud.flexprice.io/v1").
-	apiHost = strings.TrimPrefix(apiHost, "https://")
-	apiHost = strings.TrimPrefix(apiHost, "http://")
-
-	// Display masked credentials.
-	maskedKey := apiKey
-	if len(apiKey) > 12 {
-		maskedKey = apiKey[:8] + "..." + apiKey[len(apiKey)-4:]
+	if len(targets) > 1 {
+		fmt.Printf("Running suite against %d targets:\n", len(targets))
+		for i, t := range targets {
+			fmt.Printf("  %d. %-16s %s\n", i+1, t.label(), t.host())
+		}
+		fmt.Println()
 	}
-	fmt.Printf("API Host: %s\n", apiHost)
-	fmt.Printf("API Key:  %s\n", maskedKey)
+
+	// ── Run the suite once per target ───────────────────────────────────
+
+	outcomes := make([]targetOutcome, 0, len(targets))
+	for i, t := range targets {
+		if len(targets) > 1 {
+			fmt.Println(strings.Repeat("█", 62))
+			fmt.Printf("█ TARGET %d/%d: %s\n", i+1, len(targets), t.label())
+			fmt.Println(strings.Repeat("█", 62))
+			fmt.Println()
+		}
+		outcomes = append(outcomes, runTarget(t))
+	}
+
+	// ── Cross-target summary (only when running multiple targets) ────────
+
+	overallFailed := false
+	for _, o := range outcomes {
+		if o.coreFailed > 0 {
+			overallFailed = true
+		}
+	}
+
+	if len(targets) > 1 {
+		printMultiTargetSummary(outcomes)
+	}
+
+	if overallFailed {
+		os.Exit(1)
+	}
+}
+
+// runTarget executes the full sanity suite against a single target and returns
+// its aggregate outcome.
+func runTarget(t Target) targetOutcome {
+	serverURL := t.serverURL()
+
+	fmt.Printf("API Host: %s\n", t.host())
+	fmt.Printf("API Key:  %s\n", t.maskedKey())
 	fmt.Printf("Started:  %s\n", time.Now().Format(time.RFC3339))
-
-	// ── Build server URL ────────────────────────────────────────────────
-
-	// Support both localhost (http) and remote (https).
-	scheme := "https://"
-	if strings.HasPrefix(apiHost, "localhost") || strings.HasPrefix(apiHost, "127.0.0.1") {
-		scheme = "http://"
-	}
-	serverURL := scheme + apiHost
 
 	// ── Initialize SDK client ───────────────────────────────────────────
 
 	client := flexprice.New(
 		flexprice.WithServerURL(serverURL),
-		flexprice.WithSecurity(apiKey),
+		flexprice.WithSecurity(t.APIKey),
 	)
 
 	// Also keep a raw HTTP client as fallback for any edge cases.
-	raw := NewRawClient(serverURL, apiKey)
+	raw := NewRawClient(serverURL, t.APIKey)
 
 	// ── Run orchestrated sanity test ────────────────────────────────────
 
@@ -85,16 +118,63 @@ func main() {
 
 	totalDuration := time.Since(start)
 
-	// ── Print final report ──────────────────────────────────────────────
+	// ── Print per-target report ─────────────────────────────────────────
 
 	runner.printReport(totalDuration)
 
-	// Exit with non-zero if any non-cleanup step failed.
-	for _, r := range runner.results {
-		if !r.Passed && !r.Skipped && !strings.HasPrefix(r.Phase, "PHASE 7") {
-			os.Exit(1)
+	return runner.outcome(t, totalDuration)
+}
+
+// outcome tallies the runner's results into a targetOutcome.
+func (r *SanityRunner) outcome(t Target, duration time.Duration) targetOutcome {
+	o := targetOutcome{target: t, total: len(r.results), duration: duration}
+	for _, s := range r.results {
+		switch {
+		case s.Skipped:
+			o.skipped++
+		case s.Passed:
+			o.passed++
+		default:
+			o.failed++
+			if strings.HasPrefix(s.Phase, "PHASE 7") {
+				o.cleanupFail++
+			} else {
+				o.coreFailed++
+			}
 		}
 	}
+	return o
+}
+
+// printMultiTargetSummary prints a one-line-per-target roll-up across all targets.
+func printMultiTargetSummary(outcomes []targetOutcome) {
+	fmt.Println()
+	fmt.Println(strings.Repeat("═", 62))
+	fmt.Println("CROSS-TARGET SUMMARY")
+	fmt.Println(strings.Repeat("═", 62))
+	fmt.Println()
+
+	allPassed := true
+	for _, o := range outcomes {
+		status := "PASS"
+		if o.coreFailed > 0 {
+			status = "FAIL"
+			allPassed = false
+		}
+		fmt.Printf("[%s] %-18s %d/%d passed | %d failed | %d skipped | %.1fs\n",
+			status, o.target.label(), o.passed, o.total, o.failed, o.skipped, o.duration.Seconds())
+		if o.cleanupFail > 0 {
+			fmt.Printf("       (%d core failures, %d cleanup failures)\n", o.coreFailed, o.cleanupFail)
+		}
+	}
+
+	fmt.Println()
+	if allPassed {
+		fmt.Println("ALL TARGETS PASSED ✓")
+	} else {
+		fmt.Println("ONE OR MORE TARGETS FAILED ✗")
+	}
+	fmt.Println(strings.Repeat("═", 62))
 }
 
 func contextWithTimeout() context.Context {
