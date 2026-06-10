@@ -73,6 +73,27 @@ func main() {
 	addCheck(seed, synthetic.NewOneShotScheduler(seed), "SEED_ENSURE")
 	addCheck(seed, synthetic.NewTickerScheduler(seed, cfg.Checks["SEED_ENSURE"].Interval), "SEED_ENSURE")
 
+	var ingest *checks_pkg.EventIngestDriver
+	if cfg.Checks["EVENT_INGEST_DRIVER"].Enabled {
+		ingest = checks_pkg.NewEventIngestDriver(client, reg, cfg.EventIngestSeed, runID)
+		runner.Add(ingest, synthetic.NewRateScheduler(ingest, cfg.EventIngestRate))
+	}
+	defer func() {
+		if ingest != nil {
+			_ = ingest.Close()
+		}
+	}()
+
+	if cfg.Checks["ANALYTICS_PROBE"].Enabled {
+		ap := checks_pkg.NewAnalyticsProbe(client, reg, runID)
+		runner.Add(ap, synthetic.NewTickerScheduler(ap, cfg.Checks["ANALYTICS_PROBE"].Interval))
+	}
+
+	if cfg.Checks["WALLET_BALANCE_PROBE"].Enabled {
+		wp := checks_pkg.NewWalletBalanceProbe(client, reg, runID)
+		runner.Add(wp, synthetic.NewTickerScheduler(wp, cfg.Checks["WALLET_BALANCE_PROBE"].Interval))
+	}
+
 	lg.Infow("synthetic probe starting", "run_id", runID, "host", cfg.APIHost, "checks", len(cfg.Checks))
 	runner.Start(ctx)
 	lg.Infow("synthetic probe shutdown")
