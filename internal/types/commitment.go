@@ -130,15 +130,16 @@ func (b TimeOfDayBucket) Validate() error {
 			WithHint("Provide a positive decimal value for commitment_value").
 			Mark(ierr.ErrValidation)
 	}
-	// Overage factor is required and must be a premium over the committed rate,
-	// matching the line-item rule.
+	// Overage factor is required and must be at least 1.0. Exactly 1.0 means
+	// usage beyond the commitment bills at the base rate (no premium), which is
+	// a valid bucket configuration.
 	if b.OverageFactor == nil {
 		return ierr.NewError("overage_factor is required").
-			WithHint("Specify an overage_factor greater than 1.0 on every bucket").
+			WithHint("Specify an overage_factor of 1.0 or greater on every bucket").
 			Mark(ierr.ErrValidation)
 	}
-	if b.OverageFactor.LessThanOrEqual(decimal.NewFromInt(1)) {
-		return ierr.NewError("overage_factor must be greater than 1.0").
+	if b.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("overage_factor must be at least 1.0").
 			WithHint("Overage factor determines the multiplier for usage beyond the bucket commitment").
 			Mark(ierr.ErrValidation)
 	}

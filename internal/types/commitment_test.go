@@ -299,13 +299,14 @@ func TestTimeOfDayBucket_Validate(t *testing.T) {
 			wantErr: true, errSub: "overage_factor is required",
 		},
 		{
-			name: "overage factor equals 1.0",
+			// Exactly 1.0 is valid: overage bills at base rate (no premium).
+			name: "overage factor equals 1.0 accepted",
 			bucket: TimeOfDayBucket{
 				Start: Bucket{9, 0}, End: Bucket{10, 0},
 				CommitmentType: COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(1),
 				OverageFactor: &one,
 			},
-			wantErr: true, errSub: "overage_factor must be greater than 1.0",
+			wantErr: false,
 		},
 		{
 			name: "negative overage factor",

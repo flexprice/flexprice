@@ -1884,7 +1884,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemWithBuckets_Ma
 					{
 						Start: types.Bucket{Hour: 9, Minute: 0},
 						End:   types.Bucket{Hour: 17, Minute: 0},
-						Price: dto.CreatePriceRequest{
+						Price: &dto.CreatePriceRequest{
 							Amount:               lo.ToPtr(bucketPriceAmount),
 							Currency:             "usd",
 							EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,

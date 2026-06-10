@@ -423,7 +423,12 @@ type UsageAnalyticPoint struct {
 // a single CommitmentTimeBucket on a subscription line item. Appended to
 // UsageAnalyticItem when BreakdownBucket=true.
 type BucketSummary struct {
-	BucketID         string          `json:"bucket_id"`
+	BucketID string `json:"bucket_id"`
+	// SubscriptionLineItemID is the line item this bucket is configured on.
+	SubscriptionLineItemID string `json:"subscription_line_item_id,omitempty"`
+	// PriceID is the bucket's own price (the line item's price for the
+	// out-of-bucket row).
+	PriceID          string          `json:"price_id,omitempty"`
 	CommitmentType   string          `json:"commitment_type,omitempty"`
 	CommitmentValue  decimal.Decimal `json:"commitment_value,omitempty" swaggertype:"string"`
 	TotalUsage       decimal.Decimal `json:"total_usage" swaggertype:"string"`

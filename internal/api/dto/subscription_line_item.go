@@ -647,13 +647,20 @@ func (r *UpdateSubscriptionLineItemRequest) validateCommitmentFields() error {
 }
 
 // CommitmentBucketRequest is the inline shape for one time-of-day commitment
-// bucket on a subscription line item. The service creates a SUBSCRIPTION-scoped
-// Price from r.Price and stores the resulting price_id on the materialized
-// types.TimeOfDayBucket.
+// bucket on a subscription line item.
+//
+// New bucket: omit id and provide price — the service creates a
+// SUBSCRIPTION-scoped Price and stores its id on the bucket.
+//
+// Existing bucket (update flows): provide the id previously returned by the
+// API and omit price — the bucket keeps its existing price. Commitment fields
+// always come from the request, so a commitment can change while the price is
+// kept.
 type CommitmentBucketRequest struct {
+	ID              string               `json:"id,omitempty"`
 	Start           types.Bucket         `json:"start"`
 	End             types.Bucket         `json:"end"`
-	Price           CreatePriceRequest   `json:"price"`
+	Price           *CreatePriceRequest  `json:"price,omitempty"`
 	CommitmentType  types.CommitmentType `json:"commitment_type"`
 	CommitmentValue decimal.Decimal      `json:"commitment_value" swaggertype:"string"`
 	OverageFactor   *decimal.Decimal     `json:"overage_factor,omitempty" swaggertype:"string"`
@@ -662,7 +669,7 @@ type CommitmentBucketRequest struct {
 
 // Validate runs per-bucket field validation. Array invariants (overlap,
 // window alignment) live on TimeOfDayBuckets and are applied by the service
-// after materialization (and after prices are loaded so we know windowMin).
+// after prices are created (and after the meter is loaded so we know windowMin).
 func (r CommitmentBucketRequest) Validate() error {
 	if err := validateBucketPoint(r.Start, 0); err != nil {
 		return err
@@ -670,7 +677,19 @@ func (r CommitmentBucketRequest) Validate() error {
 	if err := validateBucketPoint(r.End, 0); err != nil {
 		return err
 	}
-	if r.Price.EntityType != "" && r.Price.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION {
+	// Exactly one of id (reuse existing bucket + price) or price (create new)
+	// must be provided.
+	if r.ID == "" && r.Price == nil {
+		return ierr.NewError("bucket price is required").
+			WithHint("Provide price for a new bucket, or id to keep an existing bucket").
+			Mark(ierr.ErrValidation)
+	}
+	if r.ID != "" && r.Price != nil {
+		return ierr.NewError("cannot provide both id and price on a bucket").
+			WithHint("Provide id to keep the existing bucket price, or price (without id) to create a new bucket").
+			Mark(ierr.ErrValidation)
+	}
+	if r.Price != nil && r.Price.EntityType != "" && r.Price.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION {
 		return ierr.NewError("bucket price entity_type must be SUBSCRIPTION").
 			WithHint("Use entity_type=SUBSCRIPTION on inline bucket prices").
 			Mark(ierr.ErrValidation)
@@ -686,12 +705,17 @@ func (r CommitmentBucketRequest) Validate() error {
 	return tmp.Validate()
 }
 
-// ToTimeOfDayBucket maps the request to a domain bucket with a fresh server-assigned
-// ID and all commitment fields, but no PriceID — the service materializes the
-// bucket's price and fills in PriceID.
+// ToTimeOfDayBucket maps the request to a domain bucket with all commitment
+// fields but no PriceID — the service creates the bucket's price (or resolves
+// the existing one when id is provided) and fills in PriceID. A request without
+// an id gets a fresh server-assigned ID.
 func (r CommitmentBucketRequest) ToTimeOfDayBucket() types.TimeOfDayBucket {
+	id := r.ID
+	if id == "" {
+		id = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT_BUCKET)
+	}
 	return types.TimeOfDayBucket{
-		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT_BUCKET),
+		ID:              id,
 		Start:           r.Start,
 		End:             r.End,
 		CommitmentType:  r.CommitmentType,

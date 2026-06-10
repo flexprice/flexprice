@@ -287,6 +287,12 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
+		// Create bucket price rows for line items carrying commitment time
+		// buckets, inside this transaction so they roll back with the line items.
+		if err := s.createBucketPricesForLineItems(ctx, sub, sub.LineItems, req.LineItemCommitments); err != nil {
+			return err
+		}
+
 		if err := s.SubRepo.CreateWithLineItems(ctx, sub, sub.LineItems); err != nil {
 			return err
 		}
@@ -4390,6 +4396,12 @@ func (s *subscriptionService) addAddonToSubscription(
 		// Create subscription addon association
 		err = s.AddonAssociationRepo.Create(ctx, addonAssociation)
 		if err != nil {
+			return err
+		}
+
+		// Create bucket price rows for line items carrying commitment time
+		// buckets, inside this transaction so they roll back with the line items.
+		if err := s.createBucketPricesForLineItems(ctx, sub, lineItems, req.LineItemCommitments); err != nil {
 			return err
 		}
 

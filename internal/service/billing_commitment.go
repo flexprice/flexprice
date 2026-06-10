@@ -112,33 +112,6 @@ func nextBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *ti
 	}
 }
 
-// windowSizeMinutes converts a meter aggregation BucketSize to minutes for
-// bucket alignment validation. Time-of-day buckets live within a single day, so
-// any window up to a day (1440 min) is supported. Window sizes larger than a day
-// (week, month) return 0, which causes ValidateWindowAlignment to reject buckets.
-func windowSizeMinutes(w types.WindowSize) int {
-	switch w {
-	case types.WindowSizeMinute:
-		return 1
-	case types.WindowSize15Min:
-		return 15
-	case types.WindowSize30Min:
-		return 30
-	case types.WindowSizeHour:
-		return 60
-	case types.WindowSize3Hour:
-		return 180
-	case types.WindowSize6Hour:
-		return 360
-	case types.WindowSize12Hour:
-		return 720
-	case types.WindowSizeDay:
-		return 1440
-	default:
-		return 0
-	}
-}
-
 // commitmentCalculator handles commitment-based pricing calculations for line items
 type commitmentCalculator struct {
 	logger       *logger.Logger
@@ -331,6 +304,45 @@ func (c *commitmentCalculator) chargeWindowAtBucket(
 	return commitmentParts{charge: charge, utilized: util, overage: ov, trueUp: tu}, nil
 }
 
+// applyToCost applies the line item's commitment — windowed (per window, with
+// per-bucket pricing) or aggregate — and returns the adjusted cost plus the
+// commitment info. On calculation failure it logs and falls back to the
+// uncommitted cost (defaultCost, or the bucketed cost of windowValues when
+// defaultCost is zero) with nil info. This is the single dispatch shared by the
+// analytics services; billing paths call the underlying methods directly so
+// errors propagate instead of falling back.
+func (c *commitmentCalculator) applyToCost(
+	ctx context.Context,
+	lineItem *subscription.SubscriptionLineItem,
+	windowValues []decimal.Decimal,
+	windowStarts []time.Time,
+	priceObj *price.Price,
+	defaultCost decimal.Decimal,
+) (decimal.Decimal, *types.CommitmentInfo) {
+	fallback := func() decimal.Decimal {
+		if defaultCost.IsZero() && len(windowValues) > 0 {
+			return c.priceService.CalculateBucketedCost(ctx, priceObj, windowValues)
+		}
+		return defaultCost
+	}
+
+	if lineItem.CommitmentWindowed {
+		cost, info, err := c.applyWindowCommitmentToLineItem(ctx, lineItem, windowValues, windowStarts, priceObj)
+		if err != nil {
+			c.logger.Info(ctx, "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
+			return fallback(), nil
+		}
+		return cost, info
+	}
+
+	cost, info, err := c.applyCommitmentToLineItem(ctx, lineItem, fallback(), priceObj)
+	if err != nil {
+		c.logger.Info(ctx, "failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
+		return fallback(), nil
+	}
+	return cost, info
+}
+
 // chargeWindowAtLineItem bills a single out-of-bucket window using the line item's
 // own price + commitment. With no line-item commitment it charges actual usage only.
 func (c *commitmentCalculator) chargeWindowAtLineItem(
@@ -482,26 +494,33 @@ func bucketIndexAt(buckets types.TimeOfDayBuckets, starts []time.Time, i int) (i
 // A window that straddles a bucket boundary (possible when the requested window
 // size is coarser than the buckets) is left unattributed so per-point breakdown
 // and bucket summaries don't misreport. Used by analytics breakdown only.
+//
+// Containment is checked on the minute-of-day axis: the window's span from the
+// bucket start must fit inside the bucket's length. This correctly rejects
+// windows of a day or more (which cover every time-of-day) unless the bucket
+// spans the whole day, and rejects week/month windows entirely.
 func bucketIDForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Time, window types.WindowSize) (string, string, bool) {
-	startIdx, ok := bucketIndexAt(buckets, []time.Time{windowStart}, 0)
+	windowMin := window.ToMinutes()
+	if windowMin <= 0 || windowMin > 1440 {
+		return "", "", false
+	}
+	idx, ok := bucketIndexAt(buckets, []time.Time{windowStart}, 0)
 	if !ok {
 		return "", "", false
 	}
-	// Check the window's last instant lands in the same bucket. With an unknown
-	// window size we fall back to start-only attribution.
-	if dur := windowSizeDuration(window); dur > 0 {
-		lastInstant := windowStart.Add(dur - time.Nanosecond)
-		endIdx, ok := bucketIndexAt(buckets, []time.Time{lastInstant}, 0)
-		if !ok || endIdx != startIdx {
-			return "", "", false
-		}
-	}
-	b := buckets[startIdx]
-	return b.ID, b.PriceID, true
-}
+	b := buckets[idx]
 
-// windowSizeDuration returns the wall-clock span of a window size, or 0 for sizes
-// that are not fixed-length (week/month) or unknown.
-func windowSizeDuration(w types.WindowSize) time.Duration {
-	return time.Duration(windowSizeMinutes(w)) * time.Minute
+	bucketLen := b.End.MinuteOfDay() - b.Start.MinuteOfDay()
+	if bucketLen <= 0 {
+		bucketLen += 1440 // midnight-wrapping bucket
+	}
+	utc := windowStart.UTC()
+	offset := utc.Hour()*60 + utc.Minute() - b.Start.MinuteOfDay()
+	if offset < 0 {
+		offset += 1440
+	}
+	if offset+windowMin > bucketLen {
+		return "", "", false
+	}
+	return b.ID, b.PriceID, true
 }

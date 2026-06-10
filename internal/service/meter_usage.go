@@ -629,7 +629,7 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 			if skipSyntheticZeros {
 				continue
 			}
-			// No data — zero-usage entry; step 12 commitment check uses LineItem.HasCommitment().
+			// No data — zero-usage entry; step 12 commitment check uses LineItem.HasAnyCommitment().
 			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
 				LineItem:    liw.Item,
 				MeterID:     liw.MeterID,
@@ -2122,53 +2122,26 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 	}
 }
 
-// applyLineItemCommitment applies commitment logic to the calculated cost.
-// bucketStarts (optional) is paired 1:1 with bucketedValues and enables time-of-day
-// filtering on lineItem.CommitmentTimeBuckets in the windowed path.
+// applyLineItemCommitment applies commitment logic to the calculated cost via the
+// shared commitmentCalculator dispatch and records the info on the analytic item.
+// windowStarts (optional) is paired 1:1 with windowValues and enables per-bucket
+// pricing on lineItem.CommitmentTimeBuckets in the windowed path.
 func (s *meterUsageService) applyLineItemCommitment(
 	ctx context.Context,
 	priceService PriceService,
 	item *events.DetailedUsageAnalytic,
 	lineItem *subscription.SubscriptionLineItem,
 	p *price.Price,
-	bucketedValues []decimal.Decimal,
-	bucketStarts []time.Time,
+	windowValues []decimal.Decimal,
+	windowStarts []time.Time,
 	defaultCost decimal.Decimal,
 ) decimal.Decimal {
-	commitmentCalc := newCommitmentCalculator(s.logger, priceService)
-	var cost decimal.Decimal
-	var commitmentInfo *types.CommitmentInfo
-	var err error
-
-	if lineItem.CommitmentWindowed {
-		cost, commitmentInfo, err = commitmentCalc.applyWindowCommitmentToLineItem(ctx, lineItem, bucketedValues, bucketStarts, p)
-		if err == nil {
-			item.CommitmentInfo = commitmentInfo
-			return cost
-		}
-		s.logger.Info(context.Background(), "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
-		if defaultCost.IsZero() && len(bucketedValues) > 0 {
-			return priceService.CalculateBucketedCost(ctx, p, bucketedValues)
-		}
-		return defaultCost
+	cost, info := newCommitmentCalculator(s.logger, priceService).
+		applyToCost(ctx, lineItem, windowValues, windowStarts, p, defaultCost)
+	if info != nil {
+		item.CommitmentInfo = info
 	}
-
-	// Non-window commitment
-	rawCost := defaultCost
-	if rawCost.IsZero() && len(bucketedValues) > 0 {
-		rawCost = priceService.CalculateBucketedCost(ctx, p, bucketedValues)
-	}
-
-	cost, commitmentInfo, err = commitmentCalc.applyCommitmentToLineItem(
-		ctx, lineItem, rawCost, p)
-
-	if err == nil {
-		item.CommitmentInfo = commitmentInfo
-		return cost
-	}
-
-	s.logger.Info(context.Background(), "failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
-	return rawCost
+	return cost
 }
 
 // mergeBucketPointsByWindow merges bucket-level points into request-window-level points.

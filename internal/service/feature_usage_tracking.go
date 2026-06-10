@@ -2966,26 +2966,30 @@ func buildBucketSummaries(
 	for _, b := range buckets {
 		r := rollupBucketPoints(ctx, priceService, points, b.ID, data.Prices[b.PriceID])
 		summaries = append(summaries, dto.BucketSummary{
-			BucketID:         b.ID,
-			CommitmentType:   string(b.CommitmentType),
-			CommitmentValue:  b.CommitmentValue,
-			TotalUsage:       r.usage,
-			BaseCharge:       r.base,
-			ComputedUtilized: r.utilized,
-			ComputedOverage:  r.overage,
-			ComputedTrueUp:   r.trueUp,
+			BucketID:               b.ID,
+			SubscriptionLineItemID: lineItem.ID,
+			PriceID:                b.PriceID,
+			CommitmentType:         string(b.CommitmentType),
+			CommitmentValue:        b.CommitmentValue,
+			TotalUsage:             r.usage,
+			BaseCharge:             r.base,
+			ComputedUtilized:       r.utilized,
+			ComputedOverage:        r.overage,
+			ComputedTrueUp:         r.trueUp,
 		})
 	}
 
 	// Out-of-bucket aggregate, priced at the line item's own price.
 	out := rollupBucketPoints(ctx, priceService, points, "", data.Prices[lineItem.PriceID])
 	summaries = append(summaries, dto.BucketSummary{
-		BucketID:         "",
-		TotalUsage:       out.usage,
-		BaseCharge:       out.base,
-		ComputedUtilized: out.utilized,
-		ComputedOverage:  out.overage,
-		ComputedTrueUp:   out.trueUp,
+		BucketID:               "",
+		SubscriptionLineItemID: lineItem.ID,
+		PriceID:                lineItem.PriceID,
+		TotalUsage:             out.usage,
+		BaseCharge:             out.base,
+		ComputedUtilized:       out.utilized,
+		ComputedOverage:        out.overage,
+		ComputedTrueUp:         out.trueUp,
 	})
 
 	return summaries
@@ -3524,52 +3528,24 @@ func (s *featureUsageTrackingService) GetHuggingFaceBillingData(ctx context.Cont
 // applyLineItemCommitment applies commitment logic to the calculated cost.
 // bucketStarts (optional) is paired 1:1 with bucketedValues and enables time-of-day
 // filtering on lineItem.CommitmentTimeBuckets in the windowed path.
+// applyLineItemCommitment applies commitment logic to the calculated cost via the
+// shared commitmentCalculator dispatch and records the info on the analytic item.
 func (s *featureUsageTrackingService) applyLineItemCommitment(
 	ctx context.Context,
 	priceService PriceService,
 	item *events.DetailedUsageAnalytic,
 	lineItem *subscription.SubscriptionLineItem,
 	price *price.Price,
-	bucketedValues []decimal.Decimal,
-	bucketStarts []time.Time,
+	windowValues []decimal.Decimal,
+	windowStarts []time.Time,
 	defaultCost decimal.Decimal,
 ) decimal.Decimal {
-	commitmentCalc := newCommitmentCalculator(s.Logger, priceService)
-	var cost decimal.Decimal
-	var commitmentInfo *types.CommitmentInfo
-	var err error
-
-	if lineItem.CommitmentWindowed {
-		cost, commitmentInfo, err = commitmentCalc.applyWindowCommitmentToLineItem(
-			ctx, lineItem, bucketedValues, bucketStarts, price)
-		if err == nil {
-			item.CommitmentInfo = commitmentInfo
-			return cost
-		}
-		s.Logger.Info(context.Background(), "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
-		if defaultCost.IsZero() && len(bucketedValues) > 0 {
-			// If default cost wasn't provided, calculate it
-			return priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-		}
-		return defaultCost
+	cost, info := newCommitmentCalculator(s.Logger, priceService).
+		applyToCost(ctx, lineItem, windowValues, windowStarts, price, defaultCost)
+	if info != nil {
+		item.CommitmentInfo = info
 	}
-
-	// Non-window commitment
-	rawCost := defaultCost
-	if rawCost.IsZero() && len(bucketedValues) > 0 {
-		rawCost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-	}
-
-	cost, commitmentInfo, err = commitmentCalc.applyCommitmentToLineItem(
-		ctx, lineItem, rawCost, price)
-
-	if err == nil {
-		item.CommitmentInfo = commitmentInfo
-		return cost
-	}
-
-	s.Logger.Info(context.Background(), "failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
-	return rawCost
+	return cost
 }
 
 func (s *featureUsageTrackingService) mergeBucketPointsByWindow(points []events.UsageAnalyticPoint, aggregationType types.AggregationType) []events.UsageAnalyticPoint {

@@ -835,7 +835,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_WithBucke
 			{
 				Start: types.Bucket{Hour: 9, Minute: 0},
 				End:   types.Bucket{Hour: 17, Minute: 0},
-				Price: dto.CreatePriceRequest{
+				Price: &dto.CreatePriceRequest{
 					Amount:               lo.ToPtr(decimal.NewFromInt(15)),
 					Currency:             "usd",
 					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -886,10 +886,10 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_WithBucke
 	s.Equal(bucket.PriceID, persisted.CommitmentTimeBuckets[0].PriceID)
 }
 
-// TestMaterializeBucketPrices_CreatesSubscriptionPriceAndAssignsID verifies that
-// materializeBucketPrices creates a SUBSCRIPTION-scoped Price for each bucket and
+// TestCreateBucketPrices_CreatesSubscriptionPriceAndAssignsID verifies that
+// createBucketPrices creates a SUBSCRIPTION-scoped Price for each bucket and
 // fills in the created price's ID on the (DTO-built) domain buckets.
-func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_CreatesSubscriptionPriceAndAssignsID() {
+func (s *SubscriptionLineItemServiceSuite) TestCreateBucketPrices_CreatesSubscriptionPriceAndAssignsID() {
 	ctx := s.GetContext()
 
 	// Access the concrete *subscriptionService so we can call the unexported helper.
@@ -899,7 +899,7 @@ func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_CreatesSu
 		{
 			Start: types.Bucket{Hour: 9, Minute: 0},
 			End:   types.Bucket{Hour: 17, Minute: 0},
-			Price: dto.CreatePriceRequest{
+			Price: &dto.CreatePriceRequest{
 				Amount:               lo.ToPtr(decimal.NewFromInt(10)),
 				Currency:             "usd",
 				EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -925,7 +925,7 @@ func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_CreatesSu
 		buckets[i] = r.ToTimeOfDayBucket()
 	}
 
-	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets, nil)
+	err := concreteSvc.createBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets, nil)
 	s.NoError(err)
 	s.Require().Len(buckets, 1)
 
@@ -953,20 +953,20 @@ func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_CreatesSu
 	s.True(bucket.TrueUpEnabled)
 }
 
-// TestMaterializeBucketPrices_EmptySlice is a no-op without error.
-func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_EmptySlice() {
+// TestCreateBucketPrices_EmptySlice is a no-op without error.
+func (s *SubscriptionLineItemServiceSuite) TestCreateBucketPrices_EmptySlice() {
 	ctx := s.GetContext()
 	concreteSvc := s.service.(*subscriptionService)
 
-	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, nil, types.TimeOfDayBuckets{}, nil)
+	err := concreteSvc.createBucketPrices(ctx, s.testData.subscription.ID, nil, types.TimeOfDayBuckets{}, nil)
 	s.NoError(err)
 
-	err2 := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, []dto.CommitmentBucketRequest{}, types.TimeOfDayBuckets{}, nil)
+	err2 := concreteSvc.createBucketPrices(ctx, s.testData.subscription.ID, []dto.CommitmentBucketRequest{}, types.TimeOfDayBuckets{}, nil)
 	s.NoError(err2)
 }
 
-// TestMaterializeBucketPrices_MultipleBuckets verifies that each bucket gets its own price and a distinct UUID.
-func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_MultipleBuckets() {
+// TestCreateBucketPrices_MultipleBuckets verifies that each bucket gets its own price and a distinct UUID.
+func (s *SubscriptionLineItemServiceSuite) TestCreateBucketPrices_MultipleBuckets() {
 	ctx := s.GetContext()
 	concreteSvc := s.service.(*subscriptionService)
 
@@ -974,7 +974,7 @@ func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_MultipleB
 		return dto.CommitmentBucketRequest{
 			Start: types.Bucket{Hour: startH, Minute: 0},
 			End:   types.Bucket{Hour: endH, Minute: 0},
-			Price: dto.CreatePriceRequest{
+			Price: &dto.CreatePriceRequest{
 				Amount:               lo.ToPtr(decimal.NewFromInt(5)),
 				Currency:             "usd",
 				EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -1005,7 +1005,7 @@ func (s *SubscriptionLineItemServiceSuite) TestMaterializeBucketPrices_MultipleB
 		buckets[i] = r.ToTimeOfDayBucket()
 	}
 
-	err := concreteSvc.materializeBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets, nil)
+	err := concreteSvc.createBucketPrices(ctx, s.testData.subscription.ID, reqs, buckets, nil)
 	s.NoError(err)
 	s.Require().Len(buckets, 3)
 
@@ -1061,7 +1061,7 @@ func (s *SubscriptionLineItemServiceSuite) makeBucketLineItem(subID string, mete
 			{
 				Start: types.Bucket{Hour: 9, Minute: 0},
 				End:   types.Bucket{Hour: 17, Minute: 0},
-				Price: dto.CreatePriceRequest{
+				Price: &dto.CreatePriceRequest{
 					Amount:               lo.ToPtr(decimal.NewFromInt(20)),
 					Currency:             "usd",
 					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -1130,7 +1130,7 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Replac
 			{
 				Start: types.Bucket{Hour: 0, Minute: 0},
 				End:   types.Bucket{Hour: 8, Minute: 0},
-				Price: dto.CreatePriceRequest{
+				Price: &dto.CreatePriceRequest{
 					Amount:               lo.ToPtr(decimal.NewFromInt(12)),
 					Currency:             "usd",
 					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -1185,6 +1185,105 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_Replac
 	oldLI, getErr := s.GetStores().SubscriptionLineItemRepo.Get(ctx, original.ID)
 	s.NoError(getErr)
 	s.False(oldLI.EndDate.IsZero(), "original line item must be terminated after update")
+}
+
+// TestUpdateSubscriptionLineItem_ReuseBucketByID verifies the id-based reuse
+// contract: a bucket request carrying the existing bucket's id (and no price)
+// keeps that bucket's price + id on the successor line item, while commitment
+// fields are taken from the request.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_ReuseBucketByID() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Reuse Meter",
+		EventName: "bucket_reuse_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	original := s.makeBucketLineItem(s.testData.subscription.ID, m.ID, "reuse_bucket_orig")
+	oldBucket := original.CommitmentTimeBuckets[0]
+
+	// Update: keep the bucket (by id, no price) but raise its commitment value.
+	overage := decimal.NewFromFloat(1.2)
+	commitment := decimal.NewFromInt(400)
+	req := dto.UpdateSubscriptionLineItemRequest{
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overage,
+		CommitmentWindowed:      lo.ToPtr(true),
+		CommitmentTimeBuckets: lo.ToPtr([]dto.CommitmentBucketRequest{
+			{
+				ID:              oldBucket.ID,
+				Start:           oldBucket.Start,
+				End:             oldBucket.End,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(999),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.2)),
+			},
+		}),
+	}
+
+	resp, err := s.service.UpdateSubscriptionLineItem(ctx, original.ID, req)
+	s.Require().NoError(err)
+	s.Require().Len(resp.SubscriptionLineItem.CommitmentTimeBuckets, 1)
+
+	got := resp.SubscriptionLineItem.CommitmentTimeBuckets[0]
+	s.Equal(oldBucket.ID, got.ID, "bucket id must be preserved on reuse")
+	s.Equal(oldBucket.PriceID, got.PriceID, "bucket price must be reused, not recreated")
+	s.True(got.CommitmentValue.Equal(decimal.NewFromInt(999)), "commitment must come from the request, got %s", got.CommitmentValue)
+}
+
+// TestUpdateSubscriptionLineItem_UnknownBucketIDRejected verifies that a bucket
+// request referencing a non-existent bucket id is rejected.
+func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_UnknownBucketIDRejected() {
+	ctx := s.GetContext()
+
+	m := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Unknown ID Meter",
+		EventName: "bucket_unknown_id_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, m))
+
+	original := s.makeBucketLineItem(s.testData.subscription.ID, m.ID, "unknown_bucket_orig")
+
+	overage := decimal.NewFromFloat(1.2)
+	commitment := decimal.NewFromInt(400)
+	req := dto.UpdateSubscriptionLineItemRequest{
+		CommitmentAmount:        &commitment,
+		CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+		CommitmentOverageFactor: &overage,
+		CommitmentWindowed:      lo.ToPtr(true),
+		CommitmentTimeBuckets: lo.ToPtr([]dto.CommitmentBucketRequest{
+			{
+				ID:              "bucket_does_not_exist",
+				Start:           types.Bucket{Hour: 9, Minute: 0},
+				End:             types.Bucket{Hour: 17, Minute: 0},
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(100),
+				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.2)),
+			},
+		}),
+	}
+
+	_, err := s.service.UpdateSubscriptionLineItem(ctx, original.ID, req)
+	s.Require().Error(err)
+	s.Contains(err.Error(), "unknown bucket id")
 }
 
 // TestUpdateSubscriptionLineItem_ClearBuckets verifies that passing an explicit
@@ -1338,7 +1437,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsOv
 				// 09:00-12:00
 				Start: types.Bucket{Hour: 9, Minute: 0},
 				End:   types.Bucket{Hour: 12, Minute: 0},
-				Price: dto.CreatePriceRequest{
+				Price: &dto.CreatePriceRequest{
 					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
 					Currency:             "usd",
 					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -1360,7 +1459,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsOv
 				// 11:00-14:00 — overlaps with the first bucket
 				Start: types.Bucket{Hour: 11, Minute: 0},
 				End:   types.Bucket{Hour: 14, Minute: 0},
-				Price: dto.CreatePriceRequest{
+				Price: &dto.CreatePriceRequest{
 					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
 					Currency:             "usd",
 					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -1437,7 +1536,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsMi
 				// 09:30-10:30 — start (09:30 = 570 min) is not aligned to 60-minute grid.
 				Start: types.Bucket{Hour: 9, Minute: 30},
 				End:   types.Bucket{Hour: 10, Minute: 30},
-				Price: dto.CreatePriceRequest{
+				Price: &dto.CreatePriceRequest{
 					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
 					Currency:             "usd",
 					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -1516,7 +1615,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsBu
 			{
 				Start: types.Bucket{Hour: 9, Minute: 0},
 				End:   types.Bucket{Hour: 17, Minute: 0},
-				Price: dto.CreatePriceRequest{
+				Price: &dto.CreatePriceRequest{
 					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
 					Currency:             "usd",
 					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
@@ -1602,7 +1701,7 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_RejectsBu
 			{
 				Start: types.Bucket{Hour: 9, Minute: 0},
 				End:   types.Bucket{Hour: 17, Minute: 0},
-				Price: dto.CreatePriceRequest{
+				Price: &dto.CreatePriceRequest{
 					Amount:               lo.ToPtr(decimal.NewFromInt(10)),
 					Currency:             "usd",
 					EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
