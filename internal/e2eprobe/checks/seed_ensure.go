@@ -2,10 +2,13 @@ package checks
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -95,8 +98,13 @@ func (s *SeedEnsure) ensureCustomers(ctx context.Context, out *e2eprobe.Seeds) e
 	for i := 0; i < PersistentCustomerCount; i++ {
 		ext := persistentExternalCustomerID(i)
 		out.PersistentCustomerIDs = append(out.PersistentCustomerIDs, ext)
-		if _, err := s.client.Customers().GetByExternalID(ctx, ext); err == nil {
-			continue
+		_, err := s.client.Customers().GetByExternalID(ctx, ext)
+		if err == nil {
+			continue // already exists
+		}
+		var apiErr *sdkerrors.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("lookup customer %s: %w", ext, err)
 		}
 		req := types.DtoCreateCustomerRequest{
 			ExternalID: ext,

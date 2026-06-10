@@ -39,8 +39,8 @@ func TestOneShotScheduler_RunsOnce(t *testing.T) {
 	done := make(chan struct{})
 	go func() { s.Start(ctx, func(ctx context.Context, k Check) { _ = k.Run(ctx) }); close(done) }()
 	<-done
-	if atomic.LoadInt32(&c.runs) != 1 {
-		t.Errorf("runs=%d, want 1", c.runs)
+	if runs := atomic.LoadInt32(&c.runs); runs != 1 {
+		t.Errorf("runs=%d, want 1", runs)
 	}
 }
 
@@ -82,7 +82,7 @@ func TestRateScheduler_ZeroRateNoOps(t *testing.T) {
 	go s.Start(ctx, func(ctx context.Context, k Check) { _ = k.Run(ctx) })
 	time.Sleep(20 * time.Millisecond)
 	cancel()
-	if atomic.LoadInt32(&c.runs) != 0 {
-		t.Errorf("runs=%d, want 0", c.runs)
+	if runs := atomic.LoadInt32(&c.runs); runs != 0 {
+		t.Errorf("runs=%d, want 0", runs)
 	}
 }

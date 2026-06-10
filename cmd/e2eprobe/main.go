@@ -35,7 +35,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	runID := fmt.Sprintf("syn-%d", time.Now().Unix())
+	runID := fmt.Sprintf("e2eprobe-%d", time.Now().Unix())
 
 	tp, shutdownTracer, err := e2eprobe.NewTracerProvider(ctx, cfg.OTEL, "e2eprobe")
 	if err != nil {
@@ -70,7 +70,6 @@ func main() {
 	}
 
 	seed := checks_pkg.NewSeedEnsure(client, reg, runID)
-	addCheck(seed, e2eprobe.NewOneShotScheduler(seed), "SEED_ENSURE")
 	addCheck(seed, e2eprobe.NewTickerScheduler(seed, cfg.Checks["SEED_ENSURE"].Interval), "SEED_ENSURE")
 
 	var ingest *checks_pkg.EventIngestDriver

@@ -87,6 +87,7 @@ func (h *HTTPWebhookListener) Subscribe(ctx context.Context) (<-chan ListenerEve
 	addr := fmt.Sprintf(":%d", h.requestedPort)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
+		h.ch = nil // roll back so a retry can succeed
 		h.mu.Unlock()
 		return nil, err
 	}

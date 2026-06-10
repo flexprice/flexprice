@@ -21,8 +21,8 @@ import (
 //	E2EPROBE_API_KEY   (a key in the local e2eprobe tenant)
 //	go test -tags e2eprobe_integration ./cmd/e2eprobe/
 func TestE2EProbe_LocalSmoke(t *testing.T) {
-	if os.Getenv("E2EPROBE_API_HOST") == "" {
-		t.Skip("E2EPROBE_API_HOST not set; skipping integration smoke")
+	if os.Getenv("E2EPROBE_API_HOST") == "" || os.Getenv("E2EPROBE_API_KEY") == "" {
+		t.Skip("E2EPROBE_API_HOST and E2EPROBE_API_KEY must both be set; skipping integration smoke")
 	}
 	cfg, err := e2eprobe.LoadConfig()
 	if err != nil {
