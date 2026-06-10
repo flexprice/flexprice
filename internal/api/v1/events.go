@@ -474,7 +474,7 @@ func (h *EventsHandler) publishAnalyticsBenchmark(ctx context.Context, req *dto.
 		return
 	}
 	if err := h.usageBenchmarkService.PublishAnalyticsEvent(ctx, req); err != nil {
-		h.log.WarnwCtx(ctx, "analytics benchmark: failed to publish event",
+		h.log.Info(ctx, "analytics benchmark: failed to publish event",
 			"tenant_id", types.GetTenantID(ctx),
 			"error", err,
 		)

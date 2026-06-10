@@ -134,7 +134,7 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.DebugwCtx(ctx, "inserted analytics_benchmark batch",
+	r.logger.Debug(ctx, "inserted analytics_benchmark batch",
 		"rows", len(records),
 		"event_id", firstInserted.EventID,
 		"tenant_id", firstInserted.TenantID,
