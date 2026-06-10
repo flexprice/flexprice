@@ -1,8 +1,9 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
-	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -12,7 +13,6 @@ const (
 	Idx_entity_type_entity_id_tenant_id_environment_id = "idx_entity_type_entity_id_tenant_id_environment_id"
 	Idx_tax_rate_id_tenant_id_environment_id           = "idx_tax_rate_id_tenant_id_environment_id"
 	Idx_entity_lookup_active                           = "idx_entity_lookup_active"
-	Unique_entity_tax_mapping                          = "unique_entity_tax_mapping"
 	Idx_auto_apply_lookup                              = "idx_auto_apply_lookup"
 )
 
@@ -87,6 +87,16 @@ func (TaxAssociation) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+
+		field.Time("start_date").
+			Immutable().
+			Default(time.Now).
+			Comment("When this tax association becomes effective"),
+
+		field.Time("end_date").
+			Optional().
+			Nillable().
+			Comment("When this tax association stops being effective"),
 	}
 }
 
@@ -106,10 +116,5 @@ func (TaxAssociation) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "tax_rate_id").
 			StorageKey(Idx_tax_rate_id_tenant_id_environment_id),
 
-		// Unique constraint: prevent duplicate published assignments per entity
-		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "tax_rate_id").
-			StorageKey(Unique_entity_tax_mapping).
-			Unique().
-			Annotations(entsql.IndexWhere("status = 'published'")),
 	}
 }

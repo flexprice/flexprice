@@ -2083,6 +2083,10 @@ func init() {
 	taxassociationDescCurrency := taxassociationFields[6].Descriptor()
 	// taxassociation.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	taxassociation.CurrencyValidator = taxassociationDescCurrency.Validators[0].(func(string) error)
+	// taxassociationDescStartDate is the schema descriptor for start_date field.
+	taxassociationDescStartDate := taxassociationFields[8].Descriptor()
+	// taxassociation.DefaultStartDate holds the default value on creation for the start_date field.
+	taxassociation.DefaultStartDate = taxassociationDescStartDate.Default.(func() time.Time)
 	taxrateMixin := schema.TaxRate{}.Mixin()
 	taxrateMixinFields0 := taxrateMixin[0].Fields()
 	_ = taxrateMixinFields0

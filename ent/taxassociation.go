@@ -45,7 +45,11 @@ type TaxAssociation struct {
 	// Currency
 	Currency string `json:"currency,omitempty"`
 	// Metadata holds the value of the "metadata" field.
-	Metadata     map[string]string `json:"metadata,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// When this tax association becomes effective
+	StartDate time.Time `json:"start_date,omitempty"`
+	// When this tax association stops being effective
+	EndDate      *time.Time `json:"end_date,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -62,7 +66,7 @@ func (*TaxAssociation) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case taxassociation.FieldID, taxassociation.FieldTenantID, taxassociation.FieldStatus, taxassociation.FieldCreatedBy, taxassociation.FieldUpdatedBy, taxassociation.FieldEnvironmentID, taxassociation.FieldTaxRateID, taxassociation.FieldEntityType, taxassociation.FieldEntityID, taxassociation.FieldCurrency:
 			values[i] = new(sql.NullString)
-		case taxassociation.FieldCreatedAt, taxassociation.FieldUpdatedAt:
+		case taxassociation.FieldCreatedAt, taxassociation.FieldUpdatedAt, taxassociation.FieldStartDate, taxassociation.FieldEndDate:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -171,6 +175,19 @@ func (ta *TaxAssociation) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
+		case taxassociation.FieldStartDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field start_date", values[i])
+			} else if value.Valid {
+				ta.StartDate = value.Time
+			}
+		case taxassociation.FieldEndDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field end_date", values[i])
+			} else if value.Valid {
+				ta.EndDate = new(time.Time)
+				*ta.EndDate = value.Time
+			}
 		default:
 			ta.selectValues.Set(columns[i], values[i])
 		}
@@ -248,6 +265,14 @@ func (ta *TaxAssociation) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", ta.Metadata))
+	builder.WriteString(", ")
+	builder.WriteString("start_date=")
+	builder.WriteString(ta.StartDate.Format(time.ANSIC))
+	builder.WriteString(", ")
+	if v := ta.EndDate; v != nil {
+		builder.WriteString("end_date=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

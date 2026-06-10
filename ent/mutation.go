@@ -61015,6 +61015,8 @@ type TaxAssociationMutation struct {
 	auto_apply     *bool
 	currency       *string
 	metadata       *map[string]string
+	start_date     *time.Time
+	end_date       *time.Time
 	clearedFields  map[string]struct{}
 	done           bool
 	oldValue       func(context.Context) (*TaxAssociation, error)
@@ -61714,6 +61716,91 @@ func (m *TaxAssociationMutation) ResetMetadata() {
 	delete(m.clearedFields, taxassociation.FieldMetadata)
 }
 
+// SetStartDate sets the "start_date" field.
+func (m *TaxAssociationMutation) SetStartDate(t time.Time) {
+	m.start_date = &t
+}
+
+// StartDate returns the value of the "start_date" field in the mutation.
+func (m *TaxAssociationMutation) StartDate() (r time.Time, exists bool) {
+	v := m.start_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartDate returns the old "start_date" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldStartDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartDate: %w", err)
+	}
+	return oldValue.StartDate, nil
+}
+
+// ResetStartDate resets all changes to the "start_date" field.
+func (m *TaxAssociationMutation) ResetStartDate() {
+	m.start_date = nil
+}
+
+// SetEndDate sets the "end_date" field.
+func (m *TaxAssociationMutation) SetEndDate(t time.Time) {
+	m.end_date = &t
+}
+
+// EndDate returns the value of the "end_date" field in the mutation.
+func (m *TaxAssociationMutation) EndDate() (r time.Time, exists bool) {
+	v := m.end_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndDate returns the old "end_date" field's value of the TaxAssociation entity.
+// If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TaxAssociationMutation) OldEndDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndDate: %w", err)
+	}
+	return oldValue.EndDate, nil
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (m *TaxAssociationMutation) ClearEndDate() {
+	m.end_date = nil
+	m.clearedFields[taxassociation.FieldEndDate] = struct{}{}
+}
+
+// EndDateCleared returns if the "end_date" field was cleared in this mutation.
+func (m *TaxAssociationMutation) EndDateCleared() bool {
+	_, ok := m.clearedFields[taxassociation.FieldEndDate]
+	return ok
+}
+
+// ResetEndDate resets all changes to the "end_date" field.
+func (m *TaxAssociationMutation) ResetEndDate() {
+	m.end_date = nil
+	delete(m.clearedFields, taxassociation.FieldEndDate)
+}
+
 // Where appends a list predicates to the TaxAssociationMutation builder.
 func (m *TaxAssociationMutation) Where(ps ...predicate.TaxAssociation) {
 	m.predicates = append(m.predicates, ps...)
@@ -61748,7 +61835,7 @@ func (m *TaxAssociationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TaxAssociationMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 16)
 	if m.tenant_id != nil {
 		fields = append(fields, taxassociation.FieldTenantID)
 	}
@@ -61791,6 +61878,12 @@ func (m *TaxAssociationMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, taxassociation.FieldMetadata)
 	}
+	if m.start_date != nil {
+		fields = append(fields, taxassociation.FieldStartDate)
+	}
+	if m.end_date != nil {
+		fields = append(fields, taxassociation.FieldEndDate)
+	}
 	return fields
 }
 
@@ -61827,6 +61920,10 @@ func (m *TaxAssociationMutation) Field(name string) (ent.Value, bool) {
 		return m.Currency()
 	case taxassociation.FieldMetadata:
 		return m.Metadata()
+	case taxassociation.FieldStartDate:
+		return m.StartDate()
+	case taxassociation.FieldEndDate:
+		return m.EndDate()
 	}
 	return nil, false
 }
@@ -61864,6 +61961,10 @@ func (m *TaxAssociationMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldCurrency(ctx)
 	case taxassociation.FieldMetadata:
 		return m.OldMetadata(ctx)
+	case taxassociation.FieldStartDate:
+		return m.OldStartDate(ctx)
+	case taxassociation.FieldEndDate:
+		return m.OldEndDate(ctx)
 	}
 	return nil, fmt.Errorf("unknown TaxAssociation field %s", name)
 }
@@ -61971,6 +62072,20 @@ func (m *TaxAssociationMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetadata(v)
 		return nil
+	case taxassociation.FieldStartDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartDate(v)
+		return nil
+	case taxassociation.FieldEndDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndDate(v)
+		return nil
 	}
 	return fmt.Errorf("unknown TaxAssociation field %s", name)
 }
@@ -62031,6 +62146,9 @@ func (m *TaxAssociationMutation) ClearedFields() []string {
 	if m.FieldCleared(taxassociation.FieldMetadata) {
 		fields = append(fields, taxassociation.FieldMetadata)
 	}
+	if m.FieldCleared(taxassociation.FieldEndDate) {
+		fields = append(fields, taxassociation.FieldEndDate)
+	}
 	return fields
 }
 
@@ -62059,6 +62177,9 @@ func (m *TaxAssociationMutation) ClearField(name string) error {
 		return nil
 	case taxassociation.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case taxassociation.FieldEndDate:
+		m.ClearEndDate()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxAssociation nullable field %s", name)
@@ -62109,6 +62230,12 @@ func (m *TaxAssociationMutation) ResetField(name string) error {
 		return nil
 	case taxassociation.FieldMetadata:
 		m.ResetMetadata()
+		return nil
+	case taxassociation.FieldStartDate:
+		m.ResetStartDate()
+		return nil
+	case taxassociation.FieldEndDate:
+		m.ResetEndDate()
 		return nil
 	}
 	return fmt.Errorf("unknown TaxAssociation field %s", name)

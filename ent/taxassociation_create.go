@@ -176,6 +176,34 @@ func (tac *TaxAssociationCreate) SetMetadata(m map[string]string) *TaxAssociatio
 	return tac
 }
 
+// SetStartDate sets the "start_date" field.
+func (tac *TaxAssociationCreate) SetStartDate(t time.Time) *TaxAssociationCreate {
+	tac.mutation.SetStartDate(t)
+	return tac
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (tac *TaxAssociationCreate) SetNillableStartDate(t *time.Time) *TaxAssociationCreate {
+	if t != nil {
+		tac.SetStartDate(*t)
+	}
+	return tac
+}
+
+// SetEndDate sets the "end_date" field.
+func (tac *TaxAssociationCreate) SetEndDate(t time.Time) *TaxAssociationCreate {
+	tac.mutation.SetEndDate(t)
+	return tac
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (tac *TaxAssociationCreate) SetNillableEndDate(t *time.Time) *TaxAssociationCreate {
+	if t != nil {
+		tac.SetEndDate(*t)
+	}
+	return tac
+}
+
 // SetID sets the "id" field.
 func (tac *TaxAssociationCreate) SetID(s string) *TaxAssociationCreate {
 	tac.mutation.SetID(s)
@@ -241,6 +269,10 @@ func (tac *TaxAssociationCreate) defaults() {
 		v := taxassociation.DefaultAutoApply
 		tac.mutation.SetAutoApply(v)
 	}
+	if _, ok := tac.mutation.StartDate(); !ok {
+		v := taxassociation.DefaultStartDate()
+		tac.mutation.SetStartDate(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -296,6 +328,9 @@ func (tac *TaxAssociationCreate) check() error {
 		if err := taxassociation.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.currency": %w`, err)}
 		}
+	}
+	if _, ok := tac.mutation.StartDate(); !ok {
+		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "TaxAssociation.start_date"`)}
 	}
 	return nil
 }
@@ -387,6 +422,14 @@ func (tac *TaxAssociationCreate) createSpec() (*TaxAssociation, *sqlgraph.Create
 	if value, ok := tac.mutation.Metadata(); ok {
 		_spec.SetField(taxassociation.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := tac.mutation.StartDate(); ok {
+		_spec.SetField(taxassociation.FieldStartDate, field.TypeTime, value)
+		_node.StartDate = value
+	}
+	if value, ok := tac.mutation.EndDate(); ok {
+		_spec.SetField(taxassociation.FieldEndDate, field.TypeTime, value)
+		_node.EndDate = &value
 	}
 	return _node, _spec
 }

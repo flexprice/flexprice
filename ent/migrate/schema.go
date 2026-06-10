@@ -2081,6 +2081,8 @@ var (
 		{Name: "auto_apply", Type: field.TypeBool, Default: true},
 		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "start_date", Type: field.TypeTime},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 	}
 	// TaxAssociationsTable holds the schema information for the "tax_associations" table.
 	TaxAssociationsTable = &schema.Table{
@@ -2097,14 +2099,6 @@ var (
 				Name:    "idx_tax_rate_id_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[8]},
-			},
-			{
-				Name:    "unique_entity_tax_mapping",
-				Unique:  true,
-				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[9], TaxAssociationsColumns[10], TaxAssociationsColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 		},
 	}
