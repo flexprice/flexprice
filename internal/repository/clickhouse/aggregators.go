@@ -73,10 +73,10 @@ func getDeduplicationKey() string {
 	return "id"
 }
 
-// escapeClickHouseString escapes single quotes in a string to prevent SQL injection
-// in ClickHouse query fragments built via fmt.Sprintf.
+// escapeClickHouseString escapes single quotes for safe embedding in ClickHouse
+// string literals by doubling them (the standard SQL / ClickHouse convention).
 func escapeClickHouseString(s string) string {
-	return strings.ReplaceAll(s, `'`, `\'`)
+	return strings.ReplaceAll(s, "'", "''")
 }
 
 // buildUsageEventCustomerFilters returns PREWHERE fragments for external_customer_id and FlexPrice customer_id.
@@ -707,7 +707,7 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	// 1. per_group CTE: max per group per bucket (e.g., MAX per krn per hour)
 	// 2. Return each group's value with group_key; total is sum of all group values for backward compat
 	if params.GroupByProperty != "" && validateGroupByProperty(params.GroupByProperty) == nil {
-		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", params.GroupByProperty)
+		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", escapeClickHouseString(params.GroupByProperty))
 
 		return fmt.Sprintf(`
 			WITH per_group AS (

@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -698,19 +699,15 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 		return
 	}
 
-	// Reject unsigned QuickBooks webhooks — intuit-signature is mandatory
-	if signature == "" {
-		h.logger.Error(context.Background(), "missing intuit-signature header — rejecting QuickBooks webhook",
+	// Verify QuickBooks webhook signature. VerifyWebhookSignature handles the case
+	// where no verifier token is configured (development mode — it returns nil).
+	// When a verifier token IS configured, an empty or wrong signature causes rejection.
+	if err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature); err != nil {
+		h.logger.Error(context.Background(), "QuickBooks webhook signature verification failed",
 			"tenant_id", tenantID,
-			"environment_id", environmentID)
-		return
-	}
-	err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature)
-	if err != nil {
-		h.logger.Error(context.Background(), "failed to verify QuickBooks webhook signature",
-			"tenant_id", tenantID,
-			"error", err,
-			"environment_id", environmentID)
+			"environment_id", environmentID,
+			"has_signature", signature != "",
+			"error", err)
 		return
 	}
 	h.logger.Debug(context.Background(), "QuickBooks webhook signature verified",
@@ -1215,20 +1212,56 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		return
 	}
 
-	// Verify HMAC-SHA256 signature when a signing secret is configured
+	// Verify Standard Webhooks HMAC-SHA256 signature when a signing secret is configured.
+	// Whop follows the Standard Webhooks spec: https://www.standardwebhooks.com/
+	// Message = "<webhook-id>\n<webhook-timestamp>\n<body>"
+	// Signature header format: "v1,<base64(HMAC-SHA256(secret, message))>"
 	whopConfig, err := whopIntegration.Client.GetWhopConfig(ctx)
-	if err == nil && whopConfig.WebhookSigningSecret != "" {
-		signature := c.GetHeader("whop-signature")
-		if signature == "" {
-			h.logger.Error(context.Background(), "missing whop-signature header",
+	if err != nil {
+		h.logger.Error(context.Background(), "failed to retrieve Whop config — rejecting webhook",
+			"error", err,
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+	if whopConfig.WebhookSigningSecret != "" {
+		msgID := c.GetHeader("webhook-id")
+		msgTimestamp := c.GetHeader("webhook-timestamp")
+		sigHeader := c.GetHeader("whop-signature")
+		if msgID == "" || msgTimestamp == "" || sigHeader == "" {
+			h.logger.Error(context.Background(), "missing required Whop Standard Webhooks headers",
+				"has_webhook_id", msgID != "",
+				"has_webhook_timestamp", msgTimestamp != "",
+				"has_whop_signature", sigHeader != "",
 				"tenant_id", tenantID,
 				"environment_id", environmentID)
 			return
 		}
-		mac := hmac.New(sha256.New, []byte(whopConfig.WebhookSigningSecret))
-		mac.Write(body)
-		expected := hex.EncodeToString(mac.Sum(nil))
-		if !hmac.Equal([]byte(signature), []byte(expected)) {
+
+		// Decode the secret (Standard Webhooks secrets are base64-encoded with optional "base64:" prefix)
+		secretB64 := strings.TrimPrefix(whopConfig.WebhookSigningSecret, "base64:")
+		secretBytes, decErr := base64.StdEncoding.DecodeString(secretB64)
+		if decErr != nil {
+			// Fallback: treat as raw bytes if base64 decode fails
+			secretBytes = []byte(whopConfig.WebhookSigningSecret)
+		}
+
+		toSign := msgID + "\n" + msgTimestamp + "\n" + string(body)
+		mac := hmac.New(sha256.New, secretBytes)
+		mac.Write([]byte(toSign))
+		computedSig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+		// Header may contain multiple space-separated "v1,<base64>" entries
+		verified := false
+		for _, part := range strings.Fields(sigHeader) {
+			if strings.HasPrefix(part, "v1,") {
+				if hmac.Equal([]byte(strings.TrimPrefix(part, "v1,")), []byte(computedSig)) {
+					verified = true
+					break
+				}
+			}
+		}
+		if !verified {
 			h.logger.Error(context.Background(), "Whop webhook signature verification failed",
 				"tenant_id", tenantID,
 				"environment_id", environmentID)

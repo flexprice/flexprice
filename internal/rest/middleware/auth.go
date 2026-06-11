@@ -30,8 +30,12 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 	if secretService != nil {
 		secret, err := secretService.VerifyAPIKey(ctx, apiKey)
 		if err == nil && secret != nil {
-			// Return roles from the secret for RBAC permission checks
-			return secret.TenantID, secret.CreatedBy, secret.EnvironmentID, secret.Roles, true
+			roles := secret.Roles
+			// Default legacy keys with no roles to admin for backward compatibility
+			if len(roles) == 0 {
+				roles = []string{"admin"}
+			}
+			return secret.TenantID, secret.CreatedBy, secret.EnvironmentID, roles, true
 		}
 	}
 
