@@ -909,7 +909,7 @@ webhook:
 #   pyroscope-basic-auth-password  required if pyroscope.basicAuthUser is set
 #   email-resend-api-key           required if email.enabled=true
 #   svix-auth-token                required if webhook.svixConfig.enabled=true
-#   logging-otel-auth-value        required if logging.otel.enabled=true
+#   logging-otel-auth-value        required if logging.otel.enabled=true OR otel.traces.enabled=true
 #   redis-password                 required if redisConfig.password is set
 #
 # ── Dev fallback ──────────────────────────────────────────────────────────────
