@@ -12,8 +12,8 @@ import (
 )
 
 func main() {
-	specPath := flag.String("spec", "topics.yaml", "path to topics.yaml")
 	dryRun := flag.Bool("dry-run", false, "log intended actions without applying")
+	allowDefaults := flag.Bool("allow-defaults", false, "permit running with NO topic env-vars (uses struct defaults; LOCAL/DEV ONLY — unsafe on shared clusters)")
 	flag.Parse()
 
 	cfg, err := config.NewConfig()
@@ -21,20 +21,20 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	spec, err := topicspec.Load(*specPath)
-	if err != nil {
-		log.Fatalf("load topics spec: %v", err)
+	// Startup guard: on a shared cluster, running with a bare environment makes
+	// viper fall back to unprefixed struct defaults (events, system_events, ...)
+	// which would create phantom topics next to the real prod_*/staging_* ones.
+	// Refuse unless explicitly allowed.
+	if !topicspec.HasAnyTopicEnv() && !*allowDefaults {
+		log.Fatalf("refusing to run: no FLEXPRICE_*_TOPIC env-vars set — kafka-migrate would fall back to struct defaults and create phantom topics. Run the Job with the app's env block, or pass --allow-defaults for local/dev.")
 	}
+
+	desired := topicspec.FromConfig(cfg)
 	env := cfg.Logging.Environment
-	names := make([]string, len(spec.Topics))
-	for i, t := range spec.Topics {
-		names[i] = t.Name
-	}
-	desired, err := spec.Resolve(env, topicspec.EnvOverridesFromEnv(names))
-	if err != nil {
-		log.Fatalf("resolve topics spec: %v", err)
-	}
 	log.Printf("kafka-migrate: env=%s topics=%d dry-run=%v", env, len(desired), *dryRun)
+	for _, d := range desired {
+		log.Printf("desired topic: %s partitions=%d rf=%d", d.Name, d.Partitions, d.ReplicationFactor)
+	}
 
 	saramaCfg := kafka.GetSaramaConfig(cfg)
 
@@ -46,8 +46,6 @@ func main() {
 
 	saramaAdmin := &reconcile.SaramaAdmin{Admin: admin}
 
-	// Plan once; dry-run logs the SAME plan that a live apply would execute,
-	// so dry-run can never drift from real behavior (incl. RF-mismatch warns).
 	plan, err := reconcile.Plan(saramaAdmin, desired)
 	if err != nil {
 		log.Fatalf("plan reconcile: %v", err)
