@@ -429,6 +429,8 @@ type BucketSummary struct {
 	// PriceID is the bucket's own price (the line item's price for the
 	// out-of-bucket row).
 	PriceID          string          `json:"price_id,omitempty"`
+	Start            types.Bucket    `json:"start,omitempty"`
+	End              types.Bucket    `json:"end,omitempty"`
 	CommitmentType   string          `json:"commitment_type,omitempty"`
 	CommitmentValue  decimal.Decimal `json:"commitment_value,omitempty" swaggertype:"string"`
 	TotalUsage       decimal.Decimal `json:"total_usage" swaggertype:"string"`

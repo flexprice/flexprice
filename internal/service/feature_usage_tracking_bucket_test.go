@@ -125,7 +125,7 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 
 	// Stamp the points with bucket attribution.
 	for i := range points {
-		if idx, ok := bucketIndexAt(lineItem.CommitmentTimeBuckets, []time.Time{points[i].Timestamp}, 0); ok {
+		if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{points[i].Timestamp}, 0); ok {
 			points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
 			points[i].PriceID = lineItem.CommitmentTimeBuckets[idx].PriceID
 		}
@@ -214,7 +214,7 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 	// window (10 units × $2 = $20 ≥ $5 commitment, overage 1x) yields
 	// utilized=$5, overage=($15×1)=$15. buildBucketSummaries must SUM these.
 	for i := range points {
-		if idx, ok := bucketIndexAt(lineItem.CommitmentTimeBuckets, []time.Time{points[i].Timestamp}, 0); ok {
+		if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{points[i].Timestamp}, 0); ok {
 			points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
 			points[i].PriceID = lineItem.CommitmentTimeBuckets[idx].PriceID
 			points[i].ComputedCommitmentUtilizedAmount = decimal.NewFromInt(5)
@@ -268,7 +268,7 @@ func TestAnalytics_BreakdownBucketFlag_NoLineItem(t *testing.T) {
 
 	// No attribution should occur.
 	for i := range points {
-		_, ok := bucketIndexAt(lineItem.CommitmentTimeBuckets, []time.Time{points[i].Timestamp}, 0)
+		_, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{points[i].Timestamp}, 0)
 		assert.False(t, ok, "no bucket should match when CommitmentTimeBuckets is empty")
 	}
 

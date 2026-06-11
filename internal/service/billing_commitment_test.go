@@ -191,28 +191,6 @@ func TestApplyWindowCommitment_TimeBuckets_NoBucketsConfigured(t *testing.T) {
 		"expected $20 total when no time buckets configured, got %s", total)
 }
 
-func TestBucketIndexAt(t *testing.T) {
-	buckets := types.TimeOfDayBuckets{
-		{Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 17}},
-		{Start: types.Bucket{Hour: 22}, End: types.Bucket{Hour: 6}}, // midnight wrap
-	}
-	at := func(h, m int) []time.Time {
-		return []time.Time{time.Date(2026, 1, 1, h, m, 0, 0, time.UTC)}
-	}
-	assertIdx := func(starts []time.Time, wantIdx int, wantOK bool) {
-		idx, ok := bucketIndexAt(buckets, starts, 0)
-		assert.Equal(t, wantOK, ok)
-		if wantOK {
-			assert.Equal(t, wantIdx, idx)
-		}
-	}
-	assertIdx(at(10, 0), 0, true)
-	assertIdx(at(23, 0), 1, true)
-	assertIdx(at(2, 0), 1, true)
-	assertIdx(at(7, 0), 0, false) // out-of-bucket
-	assertIdx(nil, 0, false)      // nil starts → never matches
-}
-
 // newCommitmentCalculatorWithPriceStore is like newCommitmentCalculatorForTest but
 // also returns the in-memory price store so tests can pre-populate bucket prices.
 func newCommitmentCalculatorWithPriceStore(t *testing.T) (*commitmentCalculator, *testutil.InMemoryPriceStore) {

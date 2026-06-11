@@ -1843,20 +1843,6 @@ type meterUsageBucketedCostParams struct {
 	bucketSize   types.WindowSize
 }
 
-// hasTrueUpEnabled reports whether true-up is enabled at the line item level or
-// on any of its commitment time buckets.
-func hasTrueUpEnabled(lineItem *subscription.SubscriptionLineItem) bool {
-	if lineItem.CommitmentTrueUpEnabled {
-		return true
-	}
-	for _, b := range lineItem.CommitmentTimeBuckets {
-		if b.TrueUpEnabled {
-			return true
-		}
-	}
-	return false
-}
-
 // shouldFillWindow reports whether an EMPTY window starting at t needs a
 // synthetic zero-usage fill point. Filling only matters where commitment math
 // can produce a charge for an empty window: any window when the line item
@@ -1864,10 +1850,10 @@ func hasTrueUpEnabled(lineItem *subscription.SubscriptionLineItem) bool {
 // bucket otherwise. Empty windows outside both bill $0 regardless, so filling
 // them would only add noise points.
 func shouldFillWindow(lineItem *subscription.SubscriptionLineItem, t time.Time) bool {
-	if lineItem.HasCommitment() {
+	if lineItem.HasTrueUpEnabled() {
 		return true
 	}
-	_, ok := bucketIndexAt(lineItem.CommitmentTimeBuckets, []time.Time{t}, 0)
+	_, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{t}, 0)
 	return ok
 }
 
@@ -1887,7 +1873,7 @@ func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceServ
 	// filled even when the line item's top-level true-up flag is off.
 	// Non-windowed commitments with TrueUpEnabled still get true-up applied at the
 	// aggregate level inside applyCommitmentToLineItem; no per-window fill needed.
-	needsWindowedFill := isWindowed && hasTrueUpEnabled(lineItem)
+	needsWindowedFill := isWindowed && lineItem.HasTrueUpEnabled()
 
 	var cost decimal.Decimal
 
@@ -2005,7 +1991,7 @@ func (s *meterUsageService) applyWindowCommitmentToPoints(
 	}
 
 	calc := newCommitmentCalculator(s.logger, p.priceService)
-	total, perWindow, info, err := calc.applyWindowCommitmentPerWindow(p.ctx, lineItem, values, starts, p.price)
+	total, perWindow, info, err := calc.applyWindowCommitmentPerBucket(p.ctx, lineItem, values, starts, p.price)
 	if err != nil {
 		s.logger.Info(p.ctx, "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
 		p.item.Points = points

@@ -106,6 +106,21 @@ func (bs TimeOfDayBuckets) ContainsTime(t time.Time) bool {
 	return false
 }
 
+// BucketIndexAt returns the index of the bucket containing window i's start
+// time-of-day, and whether one was found. When starts is nil (no per-window
+// timestamps) no bucket can match.
+func (bs TimeOfDayBuckets) BucketIndexAt(starts []time.Time, i int) (int, bool) {
+	if starts == nil {
+		return 0, false
+	}
+	for idx, b := range bs {
+		if b.ContainsTime(starts[i]) {
+			return idx, true
+		}
+	}
+	return 0, false
+}
+
 // Validate reports per-field issues with the bucket. It does NOT enforce
 // array-level invariants (overlap, window alignment) — those live in the
 // commitment_bucket_validation file and require external context.

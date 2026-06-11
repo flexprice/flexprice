@@ -2967,6 +2967,8 @@ func buildBucketSummaries(
 		r := rollupBucketPoints(ctx, priceService, points, b.ID, data.Prices[b.PriceID])
 		summaries = append(summaries, dto.BucketSummary{
 			BucketID:               b.ID,
+			Start:                  b.Start,
+			End:                    b.End,
 			SubscriptionLineItemID: lineItem.ID,
 			PriceID:                b.PriceID,
 			CommitmentType:         string(b.CommitmentType),
@@ -2978,20 +2980,6 @@ func buildBucketSummaries(
 			ComputedTrueUp:         r.trueUp,
 		})
 	}
-
-	// Out-of-bucket aggregate, priced at the line item's own price.
-	out := rollupBucketPoints(ctx, priceService, points, "", data.Prices[lineItem.PriceID])
-	summaries = append(summaries, dto.BucketSummary{
-		BucketID:               "",
-		SubscriptionLineItemID: lineItem.ID,
-		PriceID:                lineItem.PriceID,
-		TotalUsage:             out.usage,
-		BaseCharge:             out.base,
-		ComputedUtilized:       out.utilized,
-		ComputedOverage:        out.overage,
-		ComputedTrueUp:         out.trueUp,
-	})
-
 	return summaries
 }
 

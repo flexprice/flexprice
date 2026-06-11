@@ -70,7 +70,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			// ToSubscriptionLineItem already built lineItem.CommitmentTimeBuckets
 			// (IDs + commitment fields, empty PriceID); create a SUBSCRIPTION-scoped
 			// price per bucket and fill in the PriceIDs.
-			if err := s.createBucketPrices(txCtx, subscriptionID, resolvedReq.CommitmentTimeBuckets, lineItem.CommitmentTimeBuckets, nil); err != nil {
+			if err := s.createBucketPrices(txCtx, lineItem.ID, subscriptionID, resolvedReq.CommitmentTimeBuckets, lineItem.CommitmentTimeBuckets, nil); err != nil {
 				return err
 			}
 			_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
@@ -510,7 +510,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			// line item's buckets (copied by ToSubscriptionLineItem); supplying an
 			// explicit empty slice clears them.
 			if req.CommitmentTimeBuckets != nil {
-				if err := s.createBucketPrices(ctx, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, existingLineItem.CommitmentTimeBuckets); err != nil {
+				if err := s.createBucketPrices(ctx, newLineItem.ID, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, existingLineItem.CommitmentTimeBuckets); err != nil {
 					return err
 				}
 				_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
@@ -800,7 +800,7 @@ func (s *subscriptionService) createBucketPricesForLineItems(
 		if cfg == nil || len(cfg.CommitmentTimeBuckets) == 0 {
 			continue
 		}
-		if err := s.createBucketPrices(ctx, sub.ID, cfg.CommitmentTimeBuckets, li.CommitmentTimeBuckets, nil); err != nil {
+		if err := s.createBucketPrices(ctx, li.ID, sub.ID, cfg.CommitmentTimeBuckets, li.CommitmentTimeBuckets, nil); err != nil {
 			return err
 		}
 		if err := s.validateBucketArray(ctx, li.MeterID, li.CommitmentWindowed, hasCumulative, li.CommitmentTimeBuckets); err != nil {
@@ -993,6 +993,7 @@ func (s *subscriptionService) validateBucketArray(
 // created price rows roll back if the line item write fails.
 func (s *subscriptionService) createBucketPrices(
 	ctx context.Context,
+	lineItemID string,
 	subscriptionID string,
 	reqs []dto.CommitmentBucketRequest,
 	buckets types.TimeOfDayBuckets,
@@ -1032,20 +1033,14 @@ func (s *subscriptionService) createBucketPrices(
 		priceReq.EntityType = types.PRICE_ENTITY_TYPE_SUBSCRIPTION
 		priceReq.EntityID = subscriptionID
 		priceReq.SkipEntityValidation = true
+		priceReq.Metadata = map[string]string{
+			"sub_line_item_id": lineItemID,
+			"bucket_id":        buckets[i].ID,
+		}
 
 		resp, err := priceService.CreatePrice(ctx, priceReq)
 		if err != nil {
-			// Preserve the underlying classification: a bad bucket price is a
-			// user validation error (4xx), not a system error (5xx). Only fall
-			// back to ErrSystem for genuinely internal failures.
-			mark := ierr.ErrSystem
-			if ierr.IsValidation(err) {
-				mark = ierr.ErrValidation
-			}
-			return ierr.WithError(err).
-				WithHint("Inline bucket price creation failed").
-				WithReportableDetails(map[string]interface{}{"bucket_index": i}).
-				Mark(mark)
+			return err
 		}
 		buckets[i].PriceID = resp.ID
 	}

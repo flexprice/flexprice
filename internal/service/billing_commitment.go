@@ -116,7 +116,7 @@ func nextBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *ti
 //
 // It is STATELESS — constructing one per call site is free. The bucket price
 // cache is deliberately NOT held here: it is a local map created inside each
-// applyWindowCommitmentPerWindow pass, so prices are fetched once per bucket per
+// applyWindowCommitmentPerBucket pass, so prices are fetched once per bucket per
 // pass (one pass per line item) and a long-lived calculator can never serve
 // stale prices.
 type commitmentCalculator struct {
@@ -220,7 +220,7 @@ func (p *commitmentParts) add(o commitmentParts) {
 
 // applyWindowCommitmentToLineItem applies commitment to windowed usage one window
 // at a time and returns the total. Thin wrapper over
-// applyWindowCommitmentPerWindow for callers that don't need the per-window
+// applyWindowCommitmentPerBucket for callers that don't need the per-window
 // breakdown (billing paths).
 func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	ctx context.Context,
@@ -229,11 +229,11 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	windowStarts []time.Time,
 	lineItemPrice *price.Price,
 ) (decimal.Decimal, *types.CommitmentInfo, error) {
-	total, _, info, err := c.applyWindowCommitmentPerWindow(ctx, lineItem, windowValues, windowStarts, lineItemPrice)
+	total, _, info, err := c.applyWindowCommitmentPerBucket(ctx, lineItem, windowValues, windowStarts, lineItemPrice)
 	return total, info, err
 }
 
-// applyWindowCommitmentPerWindow applies commitment to windowed usage one window
+// applyWindowCommitmentPerBucket applies commitment to windowed usage one window
 // at a time. For each window, if its start falls inside a configured commitment
 // time bucket, that bucket's own price + commitment apply; otherwise the line
 // item's own price + commitment apply (or base rate when the line item carries no
@@ -243,7 +243,7 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 // Returns the total charge, the per-window breakdown (parts[i] corresponds to
 // windowValues[i]), and the aggregated commitment info — all from a single pass,
 // with bucket prices fetched once per bucket.
-func (c *commitmentCalculator) applyWindowCommitmentPerWindow(
+func (c *commitmentCalculator) applyWindowCommitmentPerBucket(
 	ctx context.Context,
 	lineItem *subscription.SubscriptionLineItem,
 	windowValues []decimal.Decimal,
@@ -262,23 +262,23 @@ func (c *commitmentCalculator) applyWindowCommitmentPerWindow(
 
 	buckets := lineItem.CommitmentTimeBuckets
 	// Cache bucket prices so a bucket spanning many windows is fetched once.
-	priceCache := make(map[string]*price.Price)
+	pricesMap := make(map[string]*price.Price)
 
 	var total commitmentParts
 	perWindow := make([]commitmentParts, len(windowValues))
 	for i, v := range windowValues {
-		var (
-			parts commitmentParts
-			err   error
-		)
-		if idx, ok := bucketIndexAt(buckets, windowStarts, i); ok {
-			parts, err = c.chargeWindowAtBucket(ctx, buckets[idx], v, priceCache)
+		var parts commitmentParts
+		var err error
+
+		if idx, ok := buckets.BucketIndexAt(windowStarts, i); ok {
+			parts, err = c.chargeWindowAtBucket(ctx, buckets[idx], v, pricesMap)
 		} else {
 			parts, err = c.chargeWindowAtLineItem(ctx, lineItem, lineItemPrice, v)
 		}
 		if err != nil {
 			return decimal.Zero, nil, nil, err
 		}
+
 		perWindow[i] = parts
 		total.add(parts)
 	}
@@ -301,21 +301,21 @@ func (c *commitmentCalculator) chargeWindowAtBucket(
 	ctx context.Context,
 	b types.TimeOfDayBucket,
 	value decimal.Decimal,
-	priceCache map[string]*price.Price,
+	pricesMap map[string]*price.Price,
 ) (commitmentParts, error) {
 	if b.PriceID == "" {
 		return commitmentParts{}, ierr.NewError("bucket is missing its price").
 			WithHint("Every commitment time bucket must be materialized with a price").
 			Mark(ierr.ErrSystem)
 	}
-	bucketPrice, ok := priceCache[b.PriceID]
+	bucketPrice, ok := pricesMap[b.PriceID]
 	if !ok {
 		resp, err := c.priceService.GetPrice(ctx, b.PriceID)
 		if err != nil {
 			return commitmentParts{}, err
 		}
 		bucketPrice = resp.Price
-		priceCache[b.PriceID] = bucketPrice
+		pricesMap[b.PriceID] = bucketPrice
 	}
 
 	baseCharge := c.priceService.CalculateCost(ctx, bucketPrice, value)
@@ -462,21 +462,6 @@ func isLastPeriodOfCommitmentPeriod(periodEnd, commitmentEnd time.Time) bool {
 	return !periodEnd.Before(commitmentEnd)
 }
 
-// bucketIndexAt returns the index of the bucket containing window i's start
-// time-of-day, and whether one was found. When starts is nil (no per-window
-// timestamps) no bucket can match.
-func bucketIndexAt(buckets types.TimeOfDayBuckets, starts []time.Time, i int) (int, bool) {
-	if starts == nil {
-		return 0, false
-	}
-	for idx, b := range buckets {
-		if b.ContainsTime(starts[i]) {
-			return idx, true
-		}
-	}
-	return 0, false
-}
-
 // bucketIDForPointWindow returns (bucketID, bucketPriceID, ok) for the commitment
 // bucket that FULLY contains the analytics window [windowStart, windowStart+window).
 // A window that straddles a bucket boundary (possible when the requested window
@@ -494,7 +479,7 @@ func bucketIDForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Tim
 		// time-of-day bucket.
 		return "", "", false
 	}
-	idx, ok := bucketIndexAt(buckets, []time.Time{windowStart}, 0)
+	idx, ok := buckets.BucketIndexAt([]time.Time{windowStart}, 0)
 	if !ok {
 		return "", "", false
 	}

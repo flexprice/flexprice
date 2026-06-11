@@ -108,6 +108,20 @@ func (li *SubscriptionLineItem) GetCommitmentType() types.CommitmentType {
 	return li.CommitmentType
 }
 
+// HasTrueUpEnabled returns true if the line item has true-up enabled at the line item level or
+// on any of its commitment time buckets.
+func (li *SubscriptionLineItem) HasTrueUpEnabled() bool {
+	if li.CommitmentTrueUpEnabled {
+		return true
+	}
+	for _, b := range li.CommitmentTimeBuckets {
+		if b.TrueUpEnabled {
+			return true
+		}
+	}
+	return false
+}
+
 // FromEntList converts a list of Ent SubscriptionLineItems to domain SubscriptionLineItems
 func GetLineItemFromEntList(list []*ent.SubscriptionLineItem) []*SubscriptionLineItem {
 	if list == nil {
