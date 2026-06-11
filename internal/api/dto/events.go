@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -35,7 +36,24 @@ type IngestEventRequest struct {
 }
 
 func (r *IngestEventRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	for k, v := range r.Properties {
+		if num, ok := v.(float64); ok {
+			if num < 0 {
+				return ierr.NewErrorf("property %q cannot be negative", k).
+					WithHint("Event property values must be non-negative").
+					Mark(ierr.ErrValidation)
+			}
+			if math.IsInf(num, 0) || math.IsNaN(num) {
+				return ierr.NewErrorf("property %q is not a finite number", k).
+					WithHint("Event property values must be finite numbers").
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+	return nil
 }
 
 type BulkIngestEventRequest struct {
@@ -43,7 +61,15 @@ type BulkIngestEventRequest struct {
 }
 
 func (r *BulkIngestEventRequest) Validate() error {
-	return validator.ValidateRequest(r)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	for _, event := range r.Events {
+		if err := event.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // BulkIngestRawEventRequest is the request body for POST /v1/events/raw/bulk.
