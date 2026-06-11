@@ -4796,12 +4796,19 @@ definitions:
   SubModifyCouponParams:
     properties:
       action:
-        $ref: '#/definitions/SubModifyCouponAction'
+        allOf:
+        - $ref: '#/definitions/SubModifyCouponAction'
+        description: Required. "add" to attach a coupon; "remove" to detach an existing
+          association.
       association_id:
+        description: Required when action="remove". ID of the CouponAssociation to
+          soft-delete.
         type: string
       coupon_id:
+        description: Required when action="add". ID of the coupon to attach.
         type: string
       effective_date:
+        description: Optional. When to apply the change; defaults to now if omitted.
         type: string
     required:
     - action
@@ -4851,12 +4858,18 @@ definitions:
   SubModifyTaxParams:
     properties:
       action:
-        $ref: '#/definitions/SubModifyTaxAction'
+        allOf:
+        - $ref: '#/definitions/SubModifyTaxAction'
+        description: Required. "add" to attach a tax rate; "remove" to detach an existing
+          association.
       association_id:
+        description: Required when action="remove". ID of the TaxAssociation to soft-delete.
         type: string
       effective_date:
+        description: Optional. When to apply the change; defaults to now if omitted.
         type: string
       tax_rate_id:
+        description: Required when action="add". ID of the active tax rate to attach.
         type: string
     required:
     - action
@@ -7511,8 +7524,12 @@ definitions:
   types.Bucket:
     properties:
       hour:
+        maximum: 24
+        minimum: 0
         type: integer
       minute:
+        maximum: 59
+        minimum: 0
         type: integer
     type: object
   types.CancelImmediatelyInvoicePolicy:

@@ -19909,13 +19909,16 @@
             "$ref": "#/components/schemas/SubModifyCouponAction"
           },
           "association_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Required when action=\"remove\". ID of the CouponAssociation to soft-delete."
           },
           "coupon_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Required when action=\"add\". ID of the coupon to attach."
           },
           "effective_date": {
             "type": "string",
+            "description": "Optional. When to apply the change; defaults to now if omitted.",
             "format": "date-time"
           }
         }
@@ -19988,14 +19991,17 @@
             "$ref": "#/components/schemas/SubModifyTaxAction"
           },
           "association_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Required when action=\"remove\". ID of the TaxAssociation to soft-delete."
           },
           "effective_date": {
             "type": "string",
+            "description": "Optional. When to apply the change; defaults to now if omitted.",
             "format": "date-time"
           },
           "tax_rate_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Required when action=\"add\". ID of the active tax rate to attach."
           }
         }
       },
@@ -23528,9 +23534,13 @@
         "type": "object",
         "properties": {
           "hour": {
+            "maximum": 24,
+            "minimum": 0,
             "type": "integer"
           },
           "minute": {
+            "maximum": 59,
+            "minimum": 0,
             "type": "integer"
           }
         },

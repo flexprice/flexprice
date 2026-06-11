@@ -18099,15 +18099,23 @@ const docTemplate = `{
             ],
             "properties": {
                 "action": {
-                    "$ref": "#/definitions/SubModifyCouponAction"
+                    "description": "Required. \"add\" to attach a coupon; \"remove\" to detach an existing association.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/SubModifyCouponAction"
+                        }
+                    ]
                 },
                 "association_id": {
+                    "description": "Required when action=\"remove\". ID of the CouponAssociation to soft-delete.",
                     "type": "string"
                 },
                 "coupon_id": {
+                    "description": "Required when action=\"add\". ID of the coupon to attach.",
                     "type": "string"
                 },
                 "effective_date": {
+                    "description": "Optional. When to apply the change; defaults to now if omitted.",
                     "type": "string"
                 }
             }
@@ -18182,15 +18190,23 @@ const docTemplate = `{
             ],
             "properties": {
                 "action": {
-                    "$ref": "#/definitions/SubModifyTaxAction"
+                    "description": "Required. \"add\" to attach a tax rate; \"remove\" to detach an existing association.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/SubModifyTaxAction"
+                        }
+                    ]
                 },
                 "association_id": {
+                    "description": "Required when action=\"remove\". ID of the TaxAssociation to soft-delete.",
                     "type": "string"
                 },
                 "effective_date": {
+                    "description": "Optional. When to apply the change; defaults to now if omitted.",
                     "type": "string"
                 },
                 "tax_rate_id": {
+                    "description": "Required when action=\"add\". ID of the active tax rate to attach.",
                     "type": "string"
                 }
             }
@@ -21882,10 +21898,14 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "hour": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 24,
+                    "minimum": 0
                 },
                 "minute": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 59,
+                    "minimum": 0
                 }
             }
         },

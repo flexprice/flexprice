@@ -36,8 +36,8 @@ func (ct CommitmentType) String() string {
 // Hour=24 with Minute=0 is allowed so callers can express "end of day"
 // (e.g. {Start: {0, 0}, End: {24, 0}} = the whole day).
 type Bucket struct {
-	Hour   int `json:"hour"`
-	Minute int `json:"minute"`
+	Hour   int `json:"hour" validate:"min=0,max=24"`
+	Minute int `json:"minute" validate:"min=0,max=59"`
 }
 
 // MinuteOfDay returns the bucket's position in the day as Hour*60 + Minute,

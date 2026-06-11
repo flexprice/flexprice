@@ -161,11 +161,16 @@ func (r *SubModifyGroupedInvoicingParams) Validate() error {
 }
 
 // SubModifyCouponParams is the payload for coupon association changes on a subscription.
+// Conditional required fields: coupon_id is required when action="add"; association_id is required when action="remove".
 type SubModifyCouponParams struct {
-	Action        SubModifyCouponAction `json:"action" binding:"required"`
-	CouponID      *string               `json:"coupon_id,omitempty"`
-	AssociationID *string               `json:"association_id,omitempty"`
-	EffectiveDate *time.Time            `json:"effective_date,omitempty"`
+	// Required. "add" to attach a coupon; "remove" to detach an existing association.
+	Action SubModifyCouponAction `json:"action" binding:"required"`
+	// Required when action="add". ID of the coupon to attach.
+	CouponID *string `json:"coupon_id,omitempty"`
+	// Required when action="remove". ID of the CouponAssociation to soft-delete.
+	AssociationID *string `json:"association_id,omitempty"`
+	// Optional. When to apply the change; defaults to now if omitted.
+	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 }
 
 func (r *SubModifyCouponParams) Validate() error {
@@ -191,11 +196,16 @@ func (r *SubModifyCouponParams) Validate() error {
 }
 
 // SubModifyTaxParams is the payload for tax association changes on a subscription.
+// Conditional required fields: tax_rate_id is required when action="add"; association_id is required when action="remove".
 type SubModifyTaxParams struct {
-	Action        SubModifyTaxAction `json:"action" binding:"required"`
-	TaxRateID     *string            `json:"tax_rate_id,omitempty"`
-	AssociationID *string            `json:"association_id,omitempty"`
-	EffectiveDate *time.Time         `json:"effective_date,omitempty"`
+	// Required. "add" to attach a tax rate; "remove" to detach an existing association.
+	Action SubModifyTaxAction `json:"action" binding:"required"`
+	// Required when action="add". ID of the active tax rate to attach.
+	TaxRateID *string `json:"tax_rate_id,omitempty"`
+	// Required when action="remove". ID of the TaxAssociation to soft-delete.
+	AssociationID *string `json:"association_id,omitempty"`
+	// Optional. When to apply the change; defaults to now if omitted.
+	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 }
 
 func (r *SubModifyTaxParams) Validate() error {
