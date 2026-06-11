@@ -22,6 +22,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o server ./cmd/server && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o migrate ./cmd/migrate && \
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o kafka-migrate cmd/kafka-migrate && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o svix-migrate ./cmd/svix-migrate
 
 # Typst stage
@@ -35,6 +36,8 @@ WORKDIR /app
 COPY --from=builder /app/server .
 COPY --from=builder /app/migrate .
 COPY --from=builder /app/svix-migrate .
+COPY --from=builder /app/kafka-migrate .
+COPY --from=builder /app/topics.yaml .
 COPY --from=builder /app/migrations ./migrations
 COPY --from=builder /app/internal/config ./config
 COPY --from=builder /app/assets/fonts ./assets/fonts
