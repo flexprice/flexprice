@@ -93,12 +93,16 @@ func NewRouter(
 		middleware.LoggingMiddleware(logger), // Use our standard logger for HTTP logging
 		middleware.CORSMiddleware,
 	)
-	// Tracing middleware fans out into otelgin (SigNoz / OTLP) and sentrygin
-	// (panic recovery + Sentry scope binding). Each handler is added separately
-	// because gin's Use signature is variadic and the slice may be empty.
+	// Tracing middleware creates the otelgin span per request (SigNoz / OTLP).
+	// Each handler is added separately because gin's Use signature is variadic
+	// and the slice may be empty.
 	for _, h := range middleware.TracingMiddleware(cfg) {
 		router.Use(h)
 	}
+	// OtelRecoveryMiddleware runs inside the otelgin span so it can record a
+	// panic as an exception span event before re-panicking to gin's outer
+	// recovery (registered above) for the 500 response + log.
+	router.Use(middleware.OtelRecoveryMiddleware())
 	// SpanEnrichmentMiddleware runs after otelgin (span created) and before handlers.
 	// Post-phase executes before otelgin's post-phase (LIFO), so it can set span
 	// status / record errors before the span is ended and exported.

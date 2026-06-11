@@ -1,2 +1,7 @@
 # compiled binary produced by `go build`
 go
+
+# real targets file holds API keys — never commit it
+targets.json
+targets.*.json
+!targets.example.json

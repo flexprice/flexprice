@@ -3616,11 +3616,15 @@ func (s *featureUsageTrackingService) DebugEvent(ctx context.Context, eventID st
 }
 
 func (s *featureUsageTrackingService) runDebugTracker(ctx context.Context, event *events.Event) *dto.DebugTracker {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
 	tracker := &dto.DebugTracker{
 		CustomerLookup:             &dto.CustomerLookupResult{Status: types.DebugTrackerStatusUnprocessed},
 		MeterMatching:              &dto.MeterMatchingResult{Status: types.DebugTrackerStatusUnprocessed},
 		PriceLookup:                &dto.PriceLookupResult{Status: types.DebugTrackerStatusUnprocessed},
 		SubscriptionLineItemLookup: &dto.SubscriptionLineItemLookupResult{Status: types.DebugTrackerStatusUnprocessed},
+		// AttributedToCustomer is only populated when the meter_usage feature flag is enabled.
+		// It is initialised lazily in Step 5 below; left nil otherwise (omitted from JSON).
 	}
 
 	// Step 1: Customer Lookup
@@ -3897,6 +3901,47 @@ func (s *featureUsageTrackingService) runDebugTracker(ctx context.Context, event
 
 	// At least one active line item found
 	tracker.SubscriptionLineItemLookup.Status = types.DebugTrackerStatusFound
+
+	// Step 5: Attributed to Customer — only applicable when the meter_usage pipeline is
+	// enabled for this tenant. When disabled, attribution flows through feature_usage
+	// (already checked by the caller before invoking runDebugTracker), so we omit the
+	// step entirely by leaving AttributedToCustomer nil.
+	if s.Config.FeatureFlag.IsMeterUsageEnabledForAnalytics(tenantID) {
+		tracker.AttributedToCustomer = &dto.AttributedToCustomerResult{Status: types.DebugTrackerStatusUnprocessed}
+		meterUsage, err := s.MeterUsageRepo.GetByEventID(ctx, tenantID, environmentID, event.ID)
+		if err != nil {
+			tracker.AttributedToCustomer.Status = types.DebugTrackerStatusError
+			status, code := ierr.ResolveError(err)
+			errorResp := &ierr.ErrorResponse{
+				Code:           code,
+				Message:        err.Error(),
+				HTTPStatusCode: status,
+			}
+			tracker.AttributedToCustomer.Error = errorResp
+			tracker.FailurePoint = &types.FailurePoint{
+				FailurePointType: types.FailurePointTypeAttributedToCustomer,
+				Error:            errorResp,
+			}
+			return tracker
+		}
+
+		if meterUsage == nil {
+			// Event hasn't reached meter_usage yet — still moving through the pipeline.
+			// Not a hard failure; the consumer may not have processed it yet.
+			tracker.AttributedToCustomer.Status = types.DebugTrackerStatusProcessing
+			return tracker
+		}
+
+		tracker.AttributedToCustomer.Status = types.DebugTrackerStatusAttributed
+		tracker.AttributedToCustomer.MeterUsage = &dto.MeterUsageAttribution{
+			MeterID:            meterUsage.MeterID,
+			ExternalCustomerID: meterUsage.ExternalCustomerID,
+			QtyTotal:           meterUsage.QtyTotal.String(),
+		}
+	} else {
+		// meter_usage pipeline not enabled — omit this step entirely.
+		tracker.AttributedToCustomer = nil
+	}
 
 	// No failure point if we got here
 	tracker.FailurePoint = nil

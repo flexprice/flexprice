@@ -753,3 +753,63 @@ func (r *MeterUsageRepository) GetMeterUsageForExport(ctx context.Context, start
 
 	return results, nil
 }
+
+// GetByEventID returns the meter_usage record for a single event, or nil if not yet processed.
+func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, environmentID, eventID string) (*events.MeterUsage, error) {
+	query := `
+		SELECT
+			id,
+			tenant_id,
+			environment_id,
+			external_customer_id,
+			event_name,
+			source,
+			timestamp,
+			ingested_at,
+			properties,
+			meter_id,
+			qty_total,
+			unique_hash
+		FROM meter_usage
+		WHERE tenant_id = ?
+		  AND environment_id = ?
+		  AND id = ?
+		LIMIT 1
+		SETTINGS max_memory_usage = 96636764160
+	`
+
+	var usage events.MeterUsage
+	var propertiesJSON string
+
+	err := r.store.GetConn().QueryRow(ctx, query, tenantID, environmentID, eventID).Scan(
+		&usage.ID,
+		&usage.TenantID,
+		&usage.EnvironmentID,
+		&usage.ExternalCustomerID,
+		&usage.EventName,
+		&usage.Source,
+		&usage.Timestamp,
+		&usage.IngestedAt,
+		&propertiesJSON,
+		&usage.MeterID,
+		&usage.QtyTotal,
+		&usage.UniqueHash,
+	)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query meter_usage by event ID").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if propertiesJSON != "" {
+		if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
+			r.logger.Error(ctx, "failed to parse properties JSON", "event_id", usage.ID, "error", err)
+			usage.Properties = make(map[string]interface{})
+		}
+	}
+
+	return &usage, nil
+}

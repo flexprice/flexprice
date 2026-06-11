@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/spanerr"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/interceptor"
 	"go.temporal.io/sdk/workflow"
 )
 
-// TracingInterceptor adds OTel spans around activity executions and forwards
-// workflow / activity errors to Sentry via the shared tracing.Service.
+// TracingInterceptor adds OTel spans around activity executions and records
+// workflow / activity failures as OTel exception events (SigNoz Exceptions tab)
+// via the shared tracing.Service.
 //
 // For Temporal-native span/trace propagation across workflow boundaries, the
 // recommended upstream package is github.com/temporalio/sdk-contrib/opentelemetry.
@@ -63,16 +65,17 @@ func (w *workflowInboundInterceptor) ExecuteWorkflow(ctx workflow.Context, in *i
 	result, err := w.Next.ExecuteWorkflow(ctx, in)
 
 	if err != nil {
-		logger.Error("Workflow execution failed, capturing in Sentry",
+		logger.Error("Workflow execution failed, recording exception",
 			"workflow_type", workflowInfo.WorkflowType.Name,
 			"workflow_id", workflowInfo.WorkflowExecution.ID,
 			"run_id", workflowInfo.WorkflowExecution.RunID,
 			"error", err,
 		)
 		// Guard against replay: replayed workflows re-run deterministically and
-		// would emit duplicate Sentry events for the same failure.
-		if w.tracing.IsSentryEnabled() && !workflow.IsReplaying(ctx) {
-			w.tracing.CaptureException(fmt.Errorf("temporal workflow failed: %s (ID: %s) - %w",
+		// would emit duplicate exception events for the same failure. No OTel span
+		// exists for workflows here, so CaptureException synthesizes one.
+		if !workflow.IsReplaying(ctx) {
+			w.tracing.CaptureException(context.Background(), fmt.Errorf("temporal workflow failed: %s (ID: %s) - %w",
 				workflowInfo.WorkflowType.Name,
 				workflowInfo.WorkflowExecution.ID,
 				err,
@@ -93,6 +96,12 @@ type activityInboundInterceptor struct {
 func (a *activityInboundInterceptor) ExecuteActivity(ctx context.Context, in *interceptor.ExecuteActivityInput) (interface{}, error) {
 	activityInfo := activity.GetInfo(ctx)
 
+	// Seed a per-activity exception dedup scope BEFORE creating the span so the
+	// span's context (and thus SetStatusError below) shares the same scope as the
+	// inner activity code's auto-capture — an error that is both logged and
+	// recorded via span status then produces a single exception event.
+	ctx = spanerr.WithDedup(ctx)
+
 	span, spanCtx := a.tracing.StartMonitoringSpan(ctx, fmt.Sprintf("temporal.activity.%s", activityInfo.ActivityType.Name), map[string]interface{}{
 		"activity_type": activityInfo.ActivityType.Name,
 		"activity_id":   activityInfo.ActivityID,
@@ -105,6 +114,9 @@ func (a *activityInboundInterceptor) ExecuteActivity(ctx context.Context, in *in
 
 	result, err := a.Next.ExecuteActivity(spanCtx, in)
 
+	// On failure, SetStatusError records the error as an exception event (with
+	// stacktrace) on the activity span — which is exactly what SigNoz's
+	// Exceptions tab reads. No separate CaptureException is needed here.
 	if span != nil {
 		if err != nil {
 			span.SetStatusError(err)
@@ -112,10 +124,6 @@ func (a *activityInboundInterceptor) ExecuteActivity(ctx context.Context, in *in
 			span.SetStatusOK()
 		}
 		span.Finish()
-	}
-
-	if err != nil && a.tracing.IsSentryEnabled() {
-		a.tracing.CaptureException(fmt.Errorf("temporal activity failed: %s - %w", activityInfo.ActivityType.Name, err))
 	}
 
 	return result, err

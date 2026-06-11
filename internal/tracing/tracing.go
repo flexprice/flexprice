@@ -1,9 +1,12 @@
 // Package tracing provides OpenTelemetry-based distributed tracing for Flexprice.
 //
 // Tracing is OTel-native: spans are exported via OTLP (gRPC or HTTP) to any
-// compatible backend (SigNoz, Grafana Tempo, Datadog, etc.). Sentry is kept
-// only for error capture (CaptureException) — it no longer receives traces
-// or transactions.
+// compatible backend (SigNoz, Grafana Tempo, Datadog, etc.). Error and
+// exception capture is also OTel-native — CaptureException records an
+// "exception" span event (see internal/spanerr) which surfaces in SigNoz's
+// Exceptions tab. Sentry init/flush hooks remain behind the (now default-off)
+// Sentry config purely for transitional rollback; they are no longer the sink
+// for CaptureException and will be removed in a follow-up.
 //
 // The Service exposes the same span helpers the codebase historically used
 // (StartRepositorySpan, StartDBSpan, StartClickHouseSpan, etc.) and returns a
@@ -20,6 +23,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/spanerr"
 	"github.com/getsentry/sentry-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -329,25 +333,54 @@ func (s *Service) Flush(timeout uint) bool {
 	return true
 }
 
-// CaptureException reports an error to Sentry Issues.
-func (s *Service) CaptureException(err error) {
-	if s == nil || !s.sentryEnabled || err == nil {
+// CaptureException records err as an OTel "exception" span event so it surfaces
+// in SigNoz's Exceptions tab. If ctx carries a recording span, the event is
+// attached to it. Otherwise a short-lived "error.capture" span is synthesized so
+// the error is captured even outside any active trace (background goroutines,
+// some consumers). Sentry is no longer the sink — see package docs.
+func (s *Service) CaptureException(ctx context.Context, err error) {
+	if s == nil || err == nil {
 		return
 	}
-	sentry.CaptureException(err)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Active span present: record directly onto it (with per-scope dedup).
+	if sp := trace.SpanFromContext(ctx); sp.SpanContext().IsValid() && sp.IsRecording() {
+		spanerr.Record(ctx, err)
+		return
+	}
+
+	// No active span. Synthesize one so the exception still reaches SigNoz.
+	// Requires tracing to be enabled; otherwise there is nowhere to export it.
+	if !s.tracingEnabled {
+		return
+	}
+	_, sp := s.tracer.Start(ctx, "error.capture")
+	defer sp.End()
+	sp.RecordError(err, trace.WithStackTrace(true))
+	sp.SetStatus(codes.Error, err.Error())
 }
 
-// AddBreadcrumb attaches a Sentry breadcrumb to the current scope.
-func (s *Service) AddBreadcrumb(category, message string, data map[string]interface{}) {
-	if s == nil || !s.sentryEnabled {
+// AddBreadcrumb attaches a contextual breadcrumb as an OTel span event on the
+// active span. Breadcrumbs show up in the Span Details timeline in SigNoz,
+// alongside any exception events, giving the same "what led up to this" trail
+// Sentry breadcrumbs provided. No-op when ctx has no recording span.
+func (s *Service) AddBreadcrumb(ctx context.Context, category, message string, data map[string]interface{}) {
+	if s == nil || ctx == nil {
 		return
 	}
-	sentry.AddBreadcrumb(&sentry.Breadcrumb{
-		Category: category,
-		Message:  message,
-		Level:    sentry.LevelInfo,
-		Data:     data,
-	})
+	sp := trace.SpanFromContext(ctx)
+	if !sp.SpanContext().IsValid() || !sp.IsRecording() {
+		return
+	}
+	attrs := make([]attribute.KeyValue, 0, len(data)+1)
+	attrs = append(attrs, attribute.String("breadcrumb.message", message))
+	for k, v := range data {
+		attrs = append(attrs, toAttr("breadcrumb.data."+k, v))
+	}
+	sp.AddEvent("breadcrumb."+category, trace.WithAttributes(attrs...))
 }
 
 // ---------------------------------------------------------------------------
@@ -386,12 +419,18 @@ func (s *Span) SetTag(key, value string) {
 	s.span.SetAttributes(attribute.String(key, value))
 }
 
-// SetStatusError marks the span as failed and records the error.
+// SetStatusError marks the span as failed and records the error as an exception
+// event with a stacktrace (so it lands in SigNoz's Exceptions tab). Routes
+// through spanerr for a stacktrace and per-scope dedup; falls back to the raw
+// OTel RecordError if the span isn't reachable via context.
 func (s *Span) SetStatusError(err error) {
 	if s == nil || s.span == nil || err == nil {
 		return
 	}
-	s.span.RecordError(err)
+	if s.ctx != nil && spanerr.Record(s.ctx, err) {
+		return
+	}
+	s.span.RecordError(err, trace.WithStackTrace(true))
 	s.span.SetStatus(codes.Error, err.Error())
 }
 
@@ -497,7 +536,9 @@ func (s *Service) StartTransaction(ctx context.Context, name string) (*Span, con
 	if s == nil || !s.tracingEnabled {
 		return nil, ctx
 	}
-	newCtx, sp := s.tracer.Start(ctx, name, trace.WithSpanKind(trace.SpanKindServer))
+	// Seed a dedup scope on the transaction so an error that is both logged
+	// (auto-capture) and explicitly captured within it yields one exception event.
+	newCtx, sp := s.tracer.Start(spanerr.WithDedup(ctx), name, trace.WithSpanKind(trace.SpanKindServer))
 	return &Span{span: sp, ctx: newCtx}, newCtx
 }
 
@@ -589,7 +630,7 @@ func rootSpan(ctx context.Context) trace.Span {
 }
 
 func (s *Service) StartSvixSpan(ctx context.Context, operation string, params map[string]interface{}) (*Span, context.Context) {
-	if !s.cfg.Sentry.Enabled {
+	if s == nil || !s.tracingEnabled {
 		return nil, ctx
 	}
 
