@@ -1,0 +1,423 @@
+# The full usage-based billing lifecycle — the YAML port of the legacy
+# orchestrated sanity test (integration-testing-suite/go).
+#
+# Catalog (groups, metered features, plan, recurring + usage prices)
+#   → entitlement → tax rate + coupon
+#   → customer → subscription (with coupon + tax override)
+#   → wallet + top-up
+#   → event ingestion → usage processing poll
+#   → immediate cancellation with invoice → finalize → mark paid
+#   → full teardown.
+journey: billing-lifecycle
+description: End-to-end billing flow from catalog setup to a paid cancellation invoice
+tags: [sanity, billing, subscriptions, invoices]
+
+vars:
+  currency_upper: USD
+  currency_lower: usd
+
+steps:
+  # ── Phase 1: Product catalog ─────────────────────────────────────────
+  - id: feature_group
+    name: Create Feature Group
+    call: Groups.CreateGroup
+    with:
+      name: "it-feature-group-{{ .run.id }}"
+      entity_type: feature
+      lookup_key: "it_feat_grp_{{ .run.id }}"
+    capture: { group_id: id }
+
+  - id: price_group
+    name: Create Price Group
+    call: Groups.CreateGroup
+    with:
+      name: "it-price-group-{{ .run.id }}"
+      entity_type: price
+      lookup_key: "it_price_grp_{{ .run.id }}"
+    capture: { group_id: id }
+
+  - id: feature_a
+    name: Create Metered Feature A (grouped, tokens)
+    call: Features.CreateFeature
+    with:
+      name: "API Calls {{ .run.id }}"
+      type: metered
+      lookup_key: "it_api_calls_{{ .run.id }}"
+      group_id: "{{ .steps.feature_group.group_id }}"
+      meter:
+        name: "api_call_meter_{{ .run.id }}"
+        event_name: "it_api_call_{{ .run.id }}"
+        aggregation: { type: SUM, field: tokens }
+        reset_usage: BILLING_PERIOD
+      metadata: { source: integration_journeys }
+    capture:
+      feature_id: id
+      meter_id: meter_id
+    expect:
+      - { path: meter_id, not_empty: true }
+      - { path: group_id, equals: "{{ .steps.feature_group.group_id }}" }
+
+  - id: feature_b
+    name: Create Metered Feature B (gb_hours)
+    call: Features.CreateFeature
+    with:
+      name: "Storage Usage {{ .run.id }}"
+      type: metered
+      lookup_key: "it_storage_{{ .run.id }}"
+      meter:
+        name: "storage_meter_{{ .run.id }}"
+        event_name: "it_storage_{{ .run.id }}"
+        aggregation: { type: SUM, field: gb_hours }
+        reset_usage: BILLING_PERIOD
+      metadata: { source: integration_journeys }
+    capture:
+      feature_id: id
+      meter_id: meter_id
+
+  - id: plan
+    name: Create Plan
+    call: Plans.CreatePlan
+    with:
+      name: "Integration Plan {{ .run.id }}"
+      lookup_key: "it_plan_{{ .run.id }}"
+      description: Integration test plan with recurring + usage charges
+    capture: { plan_id: id }
+
+  - id: price_recurring_grouped
+    name: Add Recurring Price (grouped, $49.99/mo)
+    call: Prices.CreatePrice
+    with:
+      entity_id: "{{ .steps.plan.plan_id }}"
+      entity_type: PLAN
+      type: FIXED
+      billing_model: FLAT_FEE
+      billing_period: MONTHLY
+      billing_period_count: 1
+      invoice_cadence: ARREAR
+      price_unit_type: FIAT
+      amount: "49.99"
+      currency: "{{ .vars.currency_upper }}"
+      display_name: Platform Fee (Grouped)
+      group_id: "{{ .steps.price_group.group_id }}"
+    capture: { price_id: id }
+
+  - id: price_recurring_base
+    name: Add Recurring Price ($19.99/mo)
+    call: Prices.CreatePrice
+    with:
+      entity_id: "{{ .steps.plan.plan_id }}"
+      entity_type: PLAN
+      type: FIXED
+      billing_model: FLAT_FEE
+      billing_period: MONTHLY
+      billing_period_count: 1
+      invoice_cadence: ARREAR
+      price_unit_type: FIAT
+      amount: "19.99"
+      currency: "{{ .vars.currency_upper }}"
+      display_name: Base Fee
+    capture: { price_id: id }
+
+  - id: price_usage_a
+    name: Add Usage Price (Feature A, $0.01/token)
+    call: Prices.CreatePrice
+    with:
+      entity_id: "{{ .steps.plan.plan_id }}"
+      entity_type: PLAN
+      type: USAGE
+      billing_model: FLAT_FEE
+      billing_period: MONTHLY
+      billing_period_count: 1
+      invoice_cadence: ARREAR
+      price_unit_type: FIAT
+      amount: "0.01"
+      currency: "{{ .vars.currency_upper }}"
+      meter_id: "{{ .steps.feature_a.meter_id }}"
+      display_name: API Call Usage
+    capture: { price_id: id }
+
+  - id: price_usage_b
+    name: Add Usage Price (Feature B, $0.05/gb_hour)
+    call: Prices.CreatePrice
+    with:
+      entity_id: "{{ .steps.plan.plan_id }}"
+      entity_type: PLAN
+      type: USAGE
+      billing_model: FLAT_FEE
+      billing_period: MONTHLY
+      billing_period_count: 1
+      invoice_cadence: ARREAR
+      price_unit_type: FIAT
+      amount: "0.05"
+      currency: "{{ .vars.currency_upper }}"
+      meter_id: "{{ .steps.feature_b.meter_id }}"
+      display_name: Storage Usage
+    capture: { price_id: id }
+
+  # ── Phase 2: Entitlements & billing entities ─────────────────────────
+  - id: entitlement
+    name: Create Entitlement (Feature A, 1000 tokens, soft limit)
+    call: Entitlements.CreateEntitlement
+    with:
+      feature_id: "{{ .steps.feature_a.feature_id }}"
+      feature_type: metered
+      plan_id: "{{ .steps.plan.plan_id }}"
+      entity_type: PLAN
+      entity_id: "{{ .steps.plan.plan_id }}"
+      is_enabled: true
+      usage_limit: 1000
+      usage_reset_period: MONTHLY
+      is_soft_limit: true
+    capture: { entitlement_id: id }
+
+  - id: plan_entitlements
+    name: Verify Plan Entitlements
+    call: Entitlements.GetPlanEntitlements
+    with: "{{ .steps.plan.plan_id }}"
+    expect:
+      - { path: items, len_gte: 1 }
+      - { path: items.*.feature_id, any_eq: "{{ .steps.feature_a.feature_id }}" }
+
+  - id: tax_rate
+    name: Create Tax Rate (18% GST)
+    call: TaxRates.CreateTaxRate
+    with:
+      name: "GST 18% {{ .run.id }}"
+      code: "GST18_{{ .run.id }}"
+      percentage_value: "18.00"
+      tax_rate_type: percentage
+      scope: INTERNAL
+      description: Goods and Services Tax
+    capture:
+      tax_rate_id: id
+      tax_code: code
+
+  - id: coupon
+    name: Create Coupon (10% off, once)
+    call: Coupons.CreateCoupon
+    with:
+      name: "IT 10pct Off {{ .run.id }}"
+      type: percentage
+      cadence: once
+      percentage_off: "10"
+    capture: { coupon_id: id }
+
+  # ── Phase 3: Customer & subscription ──────────────────────────────────
+  - id: customer
+    name: Create Customer
+    call: Customers.CreateCustomer
+    with:
+      external_id: "it-billing-cust-{{ .run.id }}"
+      name: "Billing Test Customer {{ .run.id }}"
+      email: "it-billing-{{ .run.id }}@test.flexprice.io"
+      metadata: { source: integration_journeys }
+    capture:
+      customer_id: id
+      external_id: external_id
+
+  - id: subscription
+    name: Create Subscription (coupon + tax override)
+    call: Subscriptions.CreateSubscription
+    with:
+      customer_id: "{{ .steps.customer.customer_id }}"
+      plan_id: "{{ .steps.plan.plan_id }}"
+      currency: "{{ .vars.currency_lower }}"
+      billing_period: MONTHLY
+      billing_period_count: 1
+      billing_cycle: anniversary
+      start_date: "{{ now }}"
+      coupons: ["{{ .steps.coupon.coupon_id }}"]
+      tax_rate_overrides:
+        - tax_rate_code: "{{ .steps.tax_rate.tax_code }}"
+          currency: "{{ .vars.currency_lower }}"
+          auto_apply: true
+          priority: 1
+      metadata: { source: integration_journeys }
+    capture: { subscription_id: id }
+
+  - id: subscription_active
+    name: Verify Subscription Active
+    call: Subscriptions.GetSubscription
+    with: "{{ .steps.subscription.subscription_id }}"
+    until:
+      - { path: subscription_status, equals: active }
+    timeout: 30s
+    interval: 3s
+
+  - id: subscription_entitlements
+    name: Verify Subscription Entitlements
+    call: Subscriptions.GetSubscriptionEntitlements
+    args: ["{{ .steps.subscription.subscription_id }}", null]
+    expect:
+      - { path: features, len_gte: 1 }
+      - { path: features.*.feature.id, any_eq: "{{ .steps.feature_a.feature_id }}" }
+
+  - id: customer_entitlements
+    name: Verify Customer Entitlements
+    call: Customers.GetCustomerEntitlements
+    with: "{{ .steps.customer.customer_id }}"
+    expect:
+      - { path: features.*.feature.id, any_eq: "{{ .steps.feature_a.feature_id }}" }
+
+  # ── Phase 3b: Wallet ──────────────────────────────────────────────────
+  - id: wallet
+    name: Create Wallet
+    call: Wallets.CreateWallet
+    with:
+      customer_id: "{{ .steps.customer.customer_id }}"
+      currency: "{{ .vars.currency_upper }}"
+      description: Integration test prepaid wallet
+      metadata: { source: integration_journeys }
+    capture: { wallet_id: id }
+
+  - id: wallet_topup
+    name: Top Up Wallet (500 credits)
+    call: Wallets.TopUpWallet
+    args:
+      - "{{ .steps.wallet.wallet_id }}"
+      - credits_to_add: "500"
+        transaction_reason: PURCHASED_CREDIT_DIRECT
+        description: Integration test top-up
+
+  - id: wallet_balance
+    name: Verify Wallet Balance
+    call: Wallets.GetWalletBalance
+    args: ["{{ .steps.wallet.wallet_id }}", null]
+    capture: { credit_balance: credit_balance }
+    expect:
+      - { path: credit_balance, equals: "500" }
+
+  # ── Phase 4: Usage ingestion & processing ─────────────────────────────
+  - id: ingest_tokens
+    name: Ingest 15 Token Events (5 tokens each)
+    call: Events.IngestEvent
+    repeat: 15
+    with:
+      event_name: "it_api_call_{{ .run.id }}"
+      external_customer_id: "{{ .steps.customer.external_id }}"
+      properties: { tokens: "5" }
+      source: integration_journeys
+
+  - id: ingest_storage
+    name: Ingest 10 Storage Events (2 gb_hours each)
+    call: Events.IngestEvent
+    repeat: 10
+    with:
+      event_name: "it_storage_{{ .run.id }}"
+      external_customer_id: "{{ .steps.customer.external_id }}"
+      properties: { gb_hours: "2" }
+      source: integration_journeys
+
+  - id: usage_processed
+    name: Wait for Usage Processing
+    call: Subscriptions.GetSubscriptionUsage
+    with:
+      subscription_id: "{{ .steps.subscription.subscription_id }}"
+    until:
+      - { path: charges.*.quantity, any_gt: 0 }
+    timeout: 60s
+    interval: 4s
+    # Consumer lag is a valid state; mirror the legacy suite and continue
+    # with a warning instead of failing the journey.
+    optional: true
+
+  # ── Phase 5: Cancellation & invoice ───────────────────────────────────
+  - id: cancel
+    name: Cancel Subscription (immediate, generate invoice)
+    call: Subscriptions.CancelSubscription
+    args:
+      - "{{ .steps.subscription.subscription_id }}"
+      - cancellation_type: immediate
+        cancel_immediately_inovice_policy: generate_invoice
+        reason: Integration test cancellation
+
+  - id: find_invoice
+    name: Find Generated Invoice
+    call: Invoices.QueryInvoice
+    with:
+      subscription_id: "{{ .steps.subscription.subscription_id }}"
+      invoice_type: SUBSCRIPTION
+      sort: [{ field: created_at, direction: desc }]
+      limit: 5
+    until:
+      - { path: items, len_gte: 1 }
+    timeout: 30s
+    interval: 3s
+    capture:
+      invoice_id: items.0.id
+
+  - id: invoice
+    name: Fetch Invoice
+    call: Invoices.GetInvoice
+    # GetInvoice(id, include_deleted?, expand?)
+    args: ["{{ .steps.find_invoice.invoice_id }}", null, null]
+    capture:
+      amount_due: amount_due
+      invoice_status: invoice_status
+      total: total
+    expect:
+      - { path: line_items, len_gte: 1 }
+      - { path: id, equals: "{{ .steps.find_invoice.invoice_id }}" }
+
+  - id: finalize
+    name: Finalize Invoice (if draft)
+    call: Invoices.FinalizeInvoice
+    with: "{{ .steps.find_invoice.invoice_id }}"
+    # Already-finalized invoices reject this; that is acceptable.
+    optional: true
+
+  - id: mark_paid
+    name: Mark Invoice Paid
+    call: Invoices.UpdateInvoicePaymentStatus
+    args:
+      - "{{ .steps.find_invoice.invoice_id }}"
+      - payment_status: SUCCEEDED
+        amount: "{{ .steps.invoice.amount_due }}"
+
+# ── Phase 7: Teardown (always runs, reverse dependency order) ──────────
+teardown:
+  - name: Void Invoice
+    call: Invoices.VoidInvoice
+    with: "{{ .steps.find_invoice.invoice_id }}"
+  - name: Delete Entitlement
+    call: Entitlements.DeleteEntitlement
+    with: "{{ .steps.entitlement.entitlement_id }}"
+  - name: Delete Usage Price B
+    call: Prices.DeletePrice
+    args: ["{{ .steps.price_usage_b.price_id }}", {}]
+  - name: Delete Usage Price A
+    call: Prices.DeletePrice
+    args: ["{{ .steps.price_usage_a.price_id }}", {}]
+  - name: Delete Base Recurring Price
+    call: Prices.DeletePrice
+    args: ["{{ .steps.price_recurring_base.price_id }}", {}]
+  - name: Delete Grouped Recurring Price
+    call: Prices.DeletePrice
+    args: ["{{ .steps.price_recurring_grouped.price_id }}", {}]
+  - name: Delete Plan
+    call: Plans.DeletePlan
+    with: "{{ .steps.plan.plan_id }}"
+  - name: Delete Feature B
+    call: Features.DeleteFeature
+    with: "{{ .steps.feature_b.feature_id }}"
+  - name: Delete Feature A
+    call: Features.DeleteFeature
+    with: "{{ .steps.feature_a.feature_id }}"
+  - name: Terminate Wallet
+    call: Wallets.TerminateWallet
+    with: "{{ .steps.wallet.wallet_id }}"
+  - name: Delete Customer
+    call: Customers.DeleteCustomer
+    with: "{{ .steps.customer.customer_id }}"
+  - name: Delete Coupon
+    call: Coupons.DeleteCoupon
+    with: "{{ .steps.coupon.coupon_id }}"
+  - name: Delete Tax Rate
+    call: TaxRates.DeleteTaxRate
+    with: "{{ .steps.tax_rate.tax_rate_id }}"
+  - name: Delete Price Group
+    call: Groups.DeleteGroup
+    with: "{{ .steps.price_group.group_id }}"
+  - name: Delete Feature Group
+    call: Groups.DeleteGroup
+    with: "{{ .steps.feature_group.group_id }}"

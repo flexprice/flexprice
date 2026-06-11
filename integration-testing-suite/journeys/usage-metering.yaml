@@ -1,0 +1,68 @@
+# Usage metering: define a metered feature (SUM over a numeric property),
+# ingest events for a customer, and poll until the events are queryable —
+# verifying the full ingest pipeline (API → Kafka → ClickHouse).
+journey: usage-metering
+description: Metered feature + event ingestion + raw-event visibility
+tags: [sanity, events, metering]
+
+steps:
+  - id: customer
+    name: Create Customer
+    call: Customers.CreateCustomer
+    with:
+      external_id: "it-usage-cust-{{ .run.id }}"
+      name: "Usage Test Customer {{ .run.id }}"
+      metadata: { source: integration_journeys }
+    capture:
+      customer_id: id
+      external_id: external_id
+
+  - id: feature
+    name: Create Metered Feature (tokens, SUM)
+    call: Features.CreateFeature
+    with:
+      name: "Token Usage {{ .run.id }}"
+      type: metered
+      lookup_key: "it_tokens_{{ .run.id }}"
+      meter:
+        name: "token_meter_{{ .run.id }}"
+        event_name: "it_token_usage_{{ .run.id }}"
+        aggregation: { type: SUM, field: tokens }
+        reset_usage: BILLING_PERIOD
+      metadata: { source: integration_journeys }
+    capture:
+      feature_id: id
+      meter_id: meter_id
+    expect:
+      - { path: meter_id, not_empty: true }
+
+  - id: ingest
+    name: Ingest 10 Usage Events
+    call: Events.IngestEvent
+    repeat: 10
+    with:
+      event_name: "it_token_usage_{{ .run.id }}"
+      external_customer_id: "{{ .steps.customer.external_id }}"
+      properties: { tokens: "5" }
+      source: integration_journeys
+
+  - id: events_visible
+    name: Wait for Events in Query Path
+    call: Events.ListRawEvents
+    with:
+      external_customer_id: "{{ .steps.customer.external_id }}"
+      event_name: "it_token_usage_{{ .run.id }}"
+    until:
+      - { path: events, len_gte: 10 }
+    timeout: 60s
+    interval: 4s
+    capture:
+      event_count: total_count
+
+teardown:
+  - name: Delete Feature
+    call: Features.DeleteFeature
+    with: "{{ .steps.feature.feature_id }}"
+  - name: Delete Customer
+    call: Customers.DeleteCustomer
+    with: "{{ .steps.customer.customer_id }}"

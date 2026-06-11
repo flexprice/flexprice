@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flexprice.io/schemas/integration-journey.schema.json",
+  "title": "Flexprice Integration Journey",
+  "description": "A self-contained customer workflow executed against a live Flexprice API target through the Go SDK. Authoritative validation is `make journeys-validate`; this schema powers editor tooling.",
+  "type": "object",
+  "required": ["journey", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "journey": {
+      "type": "string",
+      "description": "Unique journey name (kebab-case)."
+    },
+    "description": { "type": "string" },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Filter tags; `sanity` journeys run in release CI."
+    },
+    "vars": {
+      "type": "object",
+      "description": "Journey constants, referenced as {{ .vars.<name> }}."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "teardown": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/step" },
+      "description": "Always runs (even after failures). Steps referencing captures that never materialized are skipped."
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+$",
+          "description": "Captures from this step live at .steps.<id>.*"
+        },
+        "name": { "type": "string" },
+        "call": {
+          "type": "string",
+          "pattern": "^[A-Za-z]+\\.[A-Za-z]+$",
+          "description": "SDK operation, e.g. Customers.CreateCustomer. Run `make journeys-ops` for the catalog."
+        },
+        "with": {
+          "description": "The single argument for the call: a request object, or a scalar for id-style parameters."
+        },
+        "args": {
+          "type": "array",
+          "description": "Positional arguments for multi-argument operations. Use null for optional pointers, {} for empty structs."
+        },
+        "http": { "$ref": "#/$defs/http" },
+        "capture": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "name → dotted path into the response body ($status for the HTTP code)."
+        },
+        "expect": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expectation" }
+        },
+        "expect_error": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "contains": { "type": "string" },
+            "status": { "type": "integer" }
+          },
+          "description": "Negative test: the call MUST fail and the error must match."
+        },
+        "until": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/expectation" },
+          "description": "Poll the call until all of these pass (or timeout)."
+        },
+        "timeout": { "type": "string", "description": "Go duration, e.g. 60s" },
+        "interval": { "type": "string", "description": "Go duration, e.g. 3s" },
+        "repeat": { "type": "integer", "minimum": 0 },
+        "optional": { "type": "boolean" }
+      },
+      "oneOf": [
+        { "required": ["call"] },
+        { "required": ["http"] }
+      ]
+    },
+    "http": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path"],
+      "properties": {
+        "method": { "type": "string" },
+        "path": { "type": "string" },
+        "query": { "type": "object", "additionalProperties": { "type": "string" } },
+        "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "body": {},
+        "status": { "type": "integer", "description": "Expected status; 0/omitted = any 2xx/3xx." }
+      }
+    },
+    "expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "description": "Dotted path; * is an array wildcard (items.*.id)." },
+        "equals": {},
+        "not_equals": {},
+        "exists": { "type": "boolean" },
+        "contains": {},
+        "not_empty": { "type": "boolean" },
+        "matches": { "type": "string" },
+        "gt": {},
+        "gte": {},
+        "lt": {},
+        "lte": {},
+        "len_eq": { "type": "integer" },
+        "len_gte": { "type": "integer" },
+        "approx": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "epsilon"],
+          "properties": { "value": {}, "epsilon": { "type": "number" } }
+        },
+        "any_eq": {},
+        "any_gt": {}
+      }
+    }
+  }
+}
