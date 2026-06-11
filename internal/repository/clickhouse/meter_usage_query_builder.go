@@ -36,16 +36,26 @@ func bucketedInnerGroupKeys(params *events.MeterUsageQueryParams) []string {
 	return out
 }
 
-// bucketedOuterGroupKeys returns the key list that appears in the outer CTE
-// GROUP BY and in the result GroupKey. User-supplied keys take precedence; the
-// meter-config single key is the fallback (billing/event paths).
+// bucketedOuterGroupKeys returns the de-duplicated key list that appears in the
+// outer CTE GROUP BY and in the result GroupKey. User-supplied keys take
+// precedence; the meter-config single key is the fallback (billing/event paths).
+// Dedup mirrors bucketedInnerGroupKeys so the stacked-mode check
+// (len(innerKeys) == len(outerKeys)) and bucketedGroupByExpr both see a clean
+// key list — duplicate entries in GroupByProperties would otherwise inflate the
+// outer length and trigger the wrong CTE form.
 func bucketedOuterGroupKeys(params *events.MeterUsageQueryParams) []string {
 	if len(params.GroupByProperties) > 0 {
+		seen := make(map[string]struct{}, len(params.GroupByProperties))
 		out := make([]string, 0, len(params.GroupByProperties))
 		for _, k := range params.GroupByProperties {
-			if k != "" && validMeterUsageGroupByPattern.MatchString(k) {
-				out = append(out, k)
+			if k == "" || !validMeterUsageGroupByPattern.MatchString(k) {
+				continue
 			}
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			out = append(out, k)
 		}
 		if len(out) > 0 {
 			return out
