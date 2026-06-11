@@ -1,44 +1,41 @@
+# Desired-state Kafka topic manifest, env-agnostic. Topic names + default sizing.
+# Per-env sizing (partition overrides) is injected by Helm via env-vars, NOT here
+# (see internal/kafka/topicspec/envoverride.go: FLEXPRICE_KAFKA_TOPIC_<TOPIC>_*).
+#
+# Source of truth: this list mirrors the topics the running app's mounted
+# config.yaml (rendered from the Helm chart base values) actually produces to /
+# consumes from. NOTE: viper ignores Go struct `default:` tags — only values in
+# the mounted config.yaml or env-overrides take effect — so several struct
+# default topic names (replay / feature-tracking / benchmarking) are dead config
+# and intentionally excluded here. This set matches the 9 topics provisioned in
+# Terraform for staging GMK (staging/us-west1/values.yaml kafka.topics).
 defaults:
   replicationFactor: 3
-  retentionMs: 604800000
+  retentionMs: 604800000   # 7d
 topics:
-  # Core event ingestion topics (KafkaConfig.Topic / TopicLazy / TopicDLQ)
+  # Core event ingestion (KafkaConfig.Topic / TopicLazy / TopicDLQ)
   - name: events
     partitions: 6
   - name: events_lazy
     partitions: 6
   - name: events_dlq
     partitions: 3
-    replicationFactor: 1
   # Post-processing
   - name: events_post_processing
     partitions: 6
-  # Backfill topics
-  - name: event_processing_backfill
+  # Backfill
+  # NOTE: events_backfill exists in Terraform/GMK but the code's event-processing
+  # backfill default is `event_processing_backfill`; the running staging consumer
+  # is presumed env-bound to events_backfill. Verify the backfill consumer's env
+  # binding before treating this as canonical. Kept to match live TF state.
+  - name: events_backfill
     partitions: 6
-  - name: event_processing_lazy_backfill
-    partitions: 6
-  - name: v1_events_post_processing_backfill
-    partitions: 6
-  - name: v1_feature_tracking_service_backfill
-    partitions: 6
-  - name: v1_feature_tracking_service_lazy_backfill
-    partitions: 6
-  # Replay topics
-  - name: v1_event_processing_replay
-    partitions: 6
-  - name: v1_feature_tracking_service_replay
+  - name: events_post_processing_backfill
     partitions: 6
   # Auxiliary / domain topics
   - name: system_events
     partitions: 3
   - name: wallet_alert
     partitions: 3
-  - name: raw_events
-    partitions: 6
-  - name: prod_events_v4
-    partitions: 6
-  - name: staging_benchmarking
-    partitions: 3
-  - name: staging_onboarding_events
+  - name: onboarding_events
     partitions: 3
