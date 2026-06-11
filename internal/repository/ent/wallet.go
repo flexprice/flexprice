@@ -408,6 +408,17 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		Save(ctx)
 
 	if err != nil {
+		if ent.IsConstraintError(err) {
+			return ierr.WithError(err).
+				WithHint("A wallet transaction with this idempotency key already exists").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_id":       tx.WalletID,
+					"type":            tx.Type,
+					"amount":          tx.Amount,
+					"idempotency_key": tx.IdempotencyKey,
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
 		return ierr.WithError(err).
 			WithHint("Failed to create wallet transaction").
 			WithReportableDetails(map[string]interface{}{
