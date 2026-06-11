@@ -267,3 +267,58 @@ func (s *MeterUsageQuerySuite) TestWindowSize_DayIgnoresBillingAnchor() {
 	result := formatWindowSizeWithBillingAnchor(types.WindowSizeDay, &anchor)
 	assert.Equal(s.T(), "toStartOfDay(timestamp)", result)
 }
+
+// TestBuildBucketedQuery_EnforcesMemoryCap verifies the 90GB ClickHouse
+// per-query memory cap (see CLAUDE.md) is present in every bucketed query
+// shape — no-group, single-source GroupBy, stacked GroupBy — combined with
+// and without FINAL. Without the cap, an expensive bucketed scan could
+// exhaust ClickHouse server memory.
+func (s *MeterUsageQuerySuite) TestBuildBucketedQuery_EnforcesMemoryCap() {
+	base := &events.MeterUsageQueryParams{
+		TenantID:        "t1",
+		EnvironmentID:   "e1",
+		MeterID:         "m1",
+		StartTime:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndTime:         time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+		AggregationType: types.AggregationSum,
+		WindowSize:      types.WindowSizeHour,
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(p *events.MeterUsageQueryParams)
+	}{
+		{"no group, no FINAL", func(p *events.MeterUsageQueryParams) {}},
+		{"single-source group, no FINAL", func(p *events.MeterUsageQueryParams) {
+			p.AggregationType = types.AggregationMax
+			p.GroupByProperty = "user_id"
+		}},
+		{"stacked group, no FINAL", func(p *events.MeterUsageQueryParams) {
+			p.AggregationType = types.AggregationMax
+			p.GroupByProperty = "user_id"
+			p.GroupByProperties = []string{"region"}
+		}},
+		{"no group, with FINAL", func(p *events.MeterUsageQueryParams) {
+			p.UseFinal = true
+		}},
+		{"single-source group, with FINAL", func(p *events.MeterUsageQueryParams) {
+			p.AggregationType = types.AggregationMax
+			p.GroupByProperty = "user_id"
+			p.UseFinal = true
+		}},
+		{"stacked group, with FINAL", func(p *events.MeterUsageQueryParams) {
+			p.AggregationType = types.AggregationMax
+			p.GroupByProperty = "user_id"
+			p.GroupByProperties = []string{"region"}
+			p.UseFinal = true
+		}},
+	}
+
+	for _, tc := range cases {
+		p := *base
+		tc.mutate(&p)
+		q, _ := s.qb.BuildBucketedQuery(&p)
+		assert.Contains(s.T(), q, "max_memory_usage = 96636764160",
+			"case %s: bucketed query must include 90GB memory cap; got: %s", tc.name, q)
+	}
+}

@@ -249,6 +249,20 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 	where, args := qb.BuildWhereClause(params)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
+	// Every bucketed query gets the 90GB per-query memory cap.
+	// without it, a worst-case bucketed scan could exhaust ClickHouse server
+	// memory. Splice into the existing SETTINGS clause when present (from
+	// useFinal), otherwise emit a fresh SETTINGS clause.
+	const maxMemSetting = "max_memory_usage = 96636764160"
+	switch {
+	case settings == "":
+		settings = "SETTINGS " + maxMemSetting
+	case strings.HasPrefix(settings, "SETTINGS"):
+		settings = settings + ", " + maxMemSetting
+	default:
+		settings = settings + " SETTINGS " + maxMemSetting
+	}
+
 	// Determine aggregation function based on type (default MAX for backward compat)
 	aggFunc := "MAX"
 	bucketTableName := "bucket_maxes"
