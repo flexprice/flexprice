@@ -51,6 +51,11 @@ func (r *IngestEventRequest) Validate() error {
 					WithHint("Event property values must be finite numbers").
 					Mark(ierr.ErrValidation)
 			}
+			if num > 1e15 {
+				return ierr.NewErrorf("property %q exceeds maximum allowed value (1e15)", k).
+					WithHint("Event property values must not exceed 1e15").
+					Mark(ierr.ErrValidation)
+			}
 		}
 	}
 	return nil

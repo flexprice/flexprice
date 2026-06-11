@@ -79,6 +79,17 @@ func escapeClickHouseString(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
+// sanitizeUsageParamsForSQL returns a shallow copy of params with all user-controlled
+// string fields escaped for safe interpolation into ClickHouse SQL string literals.
+// Always call this at the start of GetQuery methods before building SQL.
+func sanitizeUsageParamsForSQL(params *events.UsageParams) events.UsageParams {
+	sp := *params
+	sp.EventName = escapeClickHouseString(params.EventName)
+	sp.PropertyName = escapeClickHouseString(params.PropertyName)
+	sp.GroupByProperty = escapeClickHouseString(params.GroupByProperty)
+	return sp
+}
+
 // buildUsageEventCustomerFilters returns PREWHERE fragments for external_customer_id and FlexPrice customer_id.
 // Params may be nil. External merges ExternalCustomerID and ExternalCustomerIDs (deduped); internal uses CustomerID only.
 func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustomerFilter string, customerFilter string) {
@@ -246,6 +257,8 @@ func parseTimeConditions(params *events.UsageParams) []string {
 type SumAggregator struct{}
 
 func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	// If bucket_size is specified, use windowed aggregation
 	if params.BucketSize != "" {
 		return a.getWindowedQuery(ctx, params)
@@ -357,6 +370,8 @@ func (a *SumAggregator) GetType() types.AggregationType {
 type CountAggregator struct{}
 
 func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	groupByClause := ""
@@ -404,6 +419,8 @@ func (a *CountAggregator) GetType() types.AggregationType {
 type CountUniqueAggregator struct{}
 
 func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
@@ -463,6 +480,8 @@ func (a *CountUniqueAggregator) GetType() types.AggregationType {
 type AvgAggregator struct{}
 
 func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
@@ -522,6 +541,8 @@ func (a *AvgAggregator) GetType() types.AggregationType {
 type LatestAggregator struct{}
 
 func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	windowClause := ""
 	groupByClause := ""
@@ -570,6 +591,8 @@ func (a *LatestAggregator) GetType() types.AggregationType {
 type SumWithMultiAggregator struct{}
 
 func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
@@ -635,6 +658,8 @@ func (a *SumWithMultiAggregator) GetType() types.AggregationType {
 type MaxAggregator struct{}
 
 func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	// If bucket_size is specified, use windowed aggregation
 	if params.BucketSize != "" {
 		return a.getWindowedQuery(ctx, params)
@@ -788,6 +813,8 @@ func (a *MaxAggregator) GetType() types.AggregationType {
 type WeightedSumAggregator struct{}
 
 func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
