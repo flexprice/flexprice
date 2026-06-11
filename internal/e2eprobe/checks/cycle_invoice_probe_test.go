@@ -2,10 +2,12 @@ package checks
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -70,6 +72,24 @@ func TestCycleInvoiceProbe_ChecksFreshness(t *testing.T) {
 	}
 	if fc.invoices.queries != 1 {
 		t.Errorf("expected 1 invoice query, got %d", fc.invoices.queries)
+	}
+}
+
+// TestCycleInvoiceProbe_SubNotFoundSoftSkips verifies that when the sub lookup returns
+// 404 (first-run race — PersistentSubIDs populated before the sub actually exists),
+// the probe soft-skips rather than alerting.
+func TestCycleInvoiceProbe_SubNotFoundSoftSkips(t *testing.T) {
+	fc := newFakeClient()
+	// Inject a 404 API error so the soft-skip guard fires.
+	fc.subs.subErr = &sdkerrors.APIError{StatusCode: http.StatusNotFound, Message: "not found"}
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PersistentSubIDs: []string{"sub_missing"}})
+	p := NewCycleInvoiceProbe(fc, reg, "run-1")
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("expected nil (soft-skip) for 404 sub, got: %v", err)
+	}
+	if fc.invoices.queries != 0 {
+		t.Errorf("expected 0 invoice queries after 404 soft-skip, got %d", fc.invoices.queries)
 	}
 }
 

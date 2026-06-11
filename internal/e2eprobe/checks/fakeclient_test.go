@@ -231,6 +231,10 @@ func (f *fakeSubscriptions) Create(_ context.Context, req types.DtoCreateSubscri
 func (f *fakeSubscriptions) Get(_ context.Context, id string) (*dtos.GetSubscriptionResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Allow tests to inject a specific error (e.g. *sdkerrors.APIError{404}) via subErr.
+	if f.subErr != nil {
+		return nil, f.subErr
+	}
 	if f.subs == nil {
 		return nil, errors.New("subscription not found")
 	}

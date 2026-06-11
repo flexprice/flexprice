@@ -70,11 +70,19 @@ func (s *NewCustomerLifecycle) Run(ctx context.Context) error {
 	}
 	s.reg.RegisterEphemeral("customer", ext, now)
 
+	startDate := now.Format(time.RFC3339)
+	billingCycle := types.BillingCycleAnniversary
 	subResp, err := s.client.Subscriptions().Create(ctx, types.DtoCreateSubscriptionRequest{
 		ExternalCustomerID: &ext,
 		PlanID:             planID,
+		Currency:           "usd",
+		BillingCadence:     types.BillingCadenceRecurring,
+		BillingPeriod:      types.BillingPeriodMonthly,
+		BillingPeriodCount: int64Ptr(1),
+		BillingCycle:       &billingCycle,
+		StartDate:          &startDate,
 		Metadata: map[string]string{
-			"e2eprobe": "true",
+			"e2eprobe":        "true",
 			"e2eprobe_cohort": "ephemeral",
 			"e2eprobe_run_id": s.runID,
 		},

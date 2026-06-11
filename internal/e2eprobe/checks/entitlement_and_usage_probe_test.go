@@ -36,19 +36,20 @@ func TestEntitlementAndUsageProbe_NoSeedsIsNoOp(t *testing.T) {
 	}
 }
 
-// TestEntitlementAndUsageProbe_MissingCustomerExitsEarly verifies that when
-// GetByExternalID returns no match (not in byExt map), the probe exits cleanly.
-func TestEntitlementAndUsageProbe_MissingCustomerExitsEarly(t *testing.T) {
+// TestEntitlementAndUsageProbe_MissingCustomerSoftSkips verifies that when
+// GetByExternalID returns 404 (customer not provisioned yet — first-run race),
+// the probe soft-skips (returns nil) instead of alerting.
+func TestEntitlementAndUsageProbe_MissingCustomerSoftSkips(t *testing.T) {
 	fc := newFakeClient()
-	// byExt is empty — GetByExternalID returns error → probe returns error.
+	// byExt is empty → GetByExternalID returns *sdkerrors.APIError{StatusCode:404}.
 	reg := e2eprobe.NewRegistry()
 	reg.LoadSeeds(e2eprobe.Seeds{
 		PersistentCustomerIDs: []string{"unknown"},
 		PersistentSubIDs:      []string{"sub_1"},
 	})
 	p := NewEntitlementAndUsageProbe(fc, reg, "run-1")
-	// Expect an error because GetByExternalID returns "not found".
-	if err := p.Run(context.Background()); err == nil {
-		t.Fatal("expected error for unknown customer, got nil")
+	// 404 must NOT produce an alert — it's a benign first-run state.
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("expected nil (soft-skip) for 404 customer, got: %v", err)
 	}
 }

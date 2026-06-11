@@ -2,12 +2,15 @@ package checks
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"sync/atomic"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
 	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -35,6 +38,11 @@ func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
 
 	subResp, err := p.client.Subscriptions().Get(ctx, subID)
 	if err != nil {
+		// 404 → sub not provisioned yet (first-run race); soft-skip.
+		var apiErr *sdkerrors.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+			return nil
+		}
 		return fmt.Errorf("get sub %s: %w", subID, err)
 	}
 	cycleLength := extractBillingCycleLength(subResp)
