@@ -3,6 +3,7 @@ package e2eprobe
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -14,12 +15,21 @@ type runnable struct {
 	scheduler Scheduler
 }
 
+type runStats struct {
+	successes int64
+	failures  int64
+}
+
 type Runner struct {
-	items       []runnable
-	reporter    Reporter
-	logger      *logger.Logger
-	runID       string
-	globalAttrs map[string]string
+	items             []runnable
+	reporter          Reporter
+	logger            *logger.Logger
+	runID             string
+	globalAttrs       map[string]string
+	statsMu           sync.Mutex
+	stats             map[string]*runStats // check_name → counters
+	started           time.Time
+	heartbeatInterval time.Duration
 }
 
 // NewRunner creates a Runner. globalAttrs (tenant_id, environment_id, etc.) are
@@ -30,7 +40,20 @@ func NewRunner(reporter Reporter, lg *logger.Logger, runID string, globalAttrs m
 	for k, v := range globalAttrs {
 		merged[k] = v
 	}
-	return &Runner{reporter: reporter, logger: lg, runID: runID, globalAttrs: merged}
+	return &Runner{
+		reporter:    reporter,
+		logger:      lg,
+		runID:       runID,
+		globalAttrs: merged,
+		stats:       make(map[string]*runStats),
+	}
+}
+
+// SetHeartbeatInterval configures how often a summary heartbeat line is logged.
+// Pass 0 to disable heartbeat logging. Returns the receiver for chaining.
+func (r *Runner) SetHeartbeatInterval(d time.Duration) *Runner {
+	r.heartbeatInterval = d
+	return r
 }
 
 func (r *Runner) Add(check Check, sched Scheduler) {
@@ -38,7 +61,15 @@ func (r *Runner) Add(check Check, sched Scheduler) {
 }
 
 func (r *Runner) Start(ctx context.Context) {
+	r.started = time.Now()
 	var wg sync.WaitGroup
+	if r.heartbeatInterval > 0 && r.logger != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.runHeartbeat(ctx)
+		}()
+	}
 	for _, it := range r.items {
 		wg.Add(1)
 		it := it
@@ -50,10 +81,80 @@ func (r *Runner) Start(ctx context.Context) {
 	wg.Wait()
 }
 
+func (r *Runner) runHeartbeat(ctx context.Context) {
+	t := time.NewTicker(r.heartbeatInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			r.logHeartbeat()
+		}
+	}
+}
+
+func (r *Runner) logHeartbeat() {
+	r.statsMu.Lock()
+	defer r.statsMu.Unlock()
+
+	var totalRuns, totalFails int64
+	perCheck := make(map[string]string, len(r.stats))
+	for name, s := range r.stats {
+		runs := s.successes + s.failures
+		totalRuns += runs
+		totalFails += s.failures
+		perCheck[name] = fmt.Sprintf("%d/%d", s.successes, runs)
+	}
+	var successRate string
+	if totalRuns > 0 {
+		successRate = fmt.Sprintf("%.2f%%", float64(totalRuns-totalFails)*100/float64(totalRuns))
+	} else {
+		successRate = "n/a"
+	}
+	uptime := time.Since(r.started).Truncate(time.Second).String()
+
+	fields := []any{
+		"event", "e2eprobe.heartbeat",
+		"run_id", r.runID,
+		"uptime", uptime,
+		"total_runs", totalRuns,
+		"total_failures", totalFails,
+		"success_rate", successRate,
+	}
+	// Add per-check counts (sorted for stable output).
+	keys := make([]string, 0, len(perCheck))
+	for k := range perCheck {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fields = append(fields, "check."+k, perCheck[k])
+	}
+	r.logger.Infow("e2eprobe heartbeat", fields...)
+}
+
+// recordResult increments the success or failure counter for the named check.
+func (r *Runner) recordResult(name string, success bool) {
+	r.statsMu.Lock()
+	defer r.statsMu.Unlock()
+	s, ok := r.stats[name]
+	if !ok {
+		s = &runStats{}
+		r.stats[name] = s
+	}
+	if success {
+		s.successes++
+	} else {
+		s.failures++
+	}
+}
+
 func (r *Runner) execute(ctx context.Context, check Check) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			err := fmt.Errorf("panic: %v", rec)
+			r.recordResult(check.Name(), false)
 			if r.logger != nil {
 				r.logger.Errorw("check panic", "check_name", check.Name(), "panic", rec)
 			}
@@ -73,6 +174,7 @@ func (r *Runner) execute(ctx context.Context, check Check) {
 		}
 	}()
 	if err := check.Run(ctx); err != nil {
+		r.recordResult(check.Name(), false)
 		if r.logger != nil {
 			r.logger.Warnw("check failed", "check_name", check.Name(), "kind", check.Kind(), "error", err)
 		}
@@ -87,6 +189,8 @@ func (r *Runner) execute(ctx context.Context, check Check) {
 				OccurredAt: time.Now(),
 			})
 		}
+	} else {
+		r.recordResult(check.Name(), true)
 	}
 }
 

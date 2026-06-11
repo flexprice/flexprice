@@ -23,6 +23,10 @@ type Config struct {
 	TenantID      string // E2EPROBE_TENANT_ID, optional but recommended
 	EnvironmentID string // E2EPROBE_ENVIRONMENT_ID, optional but recommended
 
+	// HeartbeatInterval controls how often a structured "e2eprobe.heartbeat" log
+	// line is emitted summarising run counts and success rate. Set to 0 to disable.
+	HeartbeatInterval time.Duration // E2EPROBE_HEARTBEAT_INTERVAL, default 5m
+
 	Slack SlackConfig
 	OTEL  OTELConfig
 
@@ -84,8 +88,9 @@ func LoadConfig() (*Config, error) {
 		EventIngestRate: getInt("E2EPROBE_EVENT_INGEST_RATE", 5),
 		EventIngestSeed: getInt64("E2EPROBE_EVENT_INGEST_SEED", time.Now().UnixNano()),
 		ListenerPort:    getInt("E2EPROBE_LISTENER_PORT", 8765),
-		TenantID:        os.Getenv("E2EPROBE_TENANT_ID"),
-		EnvironmentID:   os.Getenv("E2EPROBE_ENVIRONMENT_ID"),
+		TenantID:          os.Getenv("E2EPROBE_TENANT_ID"),
+		EnvironmentID:     os.Getenv("E2EPROBE_ENVIRONMENT_ID"),
+		HeartbeatInterval: getDuration("E2EPROBE_HEARTBEAT_INTERVAL", 5*time.Minute),
 		Slack: SlackConfig{
 			WebhookURL: os.Getenv("E2EPROBE_SLACK_WEBHOOK_URL"),
 			Channel:    os.Getenv("E2EPROBE_SLACK_CHANNEL"),

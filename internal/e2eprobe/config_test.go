@@ -81,6 +81,44 @@ func TestLoadConfig_Overrides(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_HeartbeatInterval(t *testing.T) {
+	t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
+	t.Setenv("E2EPROBE_API_KEY", "k")
+
+	t.Run("default is 5m", func(t *testing.T) {
+		t.Setenv("E2EPROBE_HEARTBEAT_INTERVAL", "")
+		c, err := LoadConfig()
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if c.HeartbeatInterval != 5*time.Minute {
+			t.Errorf("HeartbeatInterval=%v, want 5m", c.HeartbeatInterval)
+		}
+	})
+
+	t.Run("override to 2m", func(t *testing.T) {
+		t.Setenv("E2EPROBE_HEARTBEAT_INTERVAL", "2m")
+		c, err := LoadConfig()
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if c.HeartbeatInterval != 2*time.Minute {
+			t.Errorf("HeartbeatInterval=%v, want 2m", c.HeartbeatInterval)
+		}
+	})
+
+	t.Run("0s disables heartbeat", func(t *testing.T) {
+		t.Setenv("E2EPROBE_HEARTBEAT_INTERVAL", "0s")
+		c, err := LoadConfig()
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if c.HeartbeatInterval != 0 {
+			t.Errorf("HeartbeatInterval=%v, want 0 (disabled)", c.HeartbeatInterval)
+		}
+	})
+}
+
 func TestLoadConfig_TenantAndEnvironment(t *testing.T) {
 	t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
 	t.Setenv("E2EPROBE_API_KEY", "k")

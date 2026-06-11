@@ -51,6 +51,7 @@ Adding a new probe: write `internal/e2eprobe/checks/<name>.go` implementing `Che
 | `E2EPROBE_SLACK_WEBHOOK_URL` | Slack webhook (empty disables) | empty |
 | `E2EPROBE_SLACK_CHANNEL` | Override channel | empty |
 | `E2EPROBE_OTEL_ENABLED` | Emit OTEL spans | `true` |
+| `E2EPROBE_HEARTBEAT_INTERVAL` | How often a structured heartbeat summary is logged (`0` disables) | `5m` |
 | `E2EPROBE_CHECK_<NAME>_ENABLED` | Per-check kill switch | `true` |
 | `E2EPROBE_CHECK_<NAME>_INTERVAL` | Per-check interval override (Go duration) | per-check default |
 
@@ -76,6 +77,28 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 ## Webhook wiring (low-wallet-alert-listener)
 
 The listener exposes `POST http://<e2eprobe-host>:8765/webhook` (port configurable). Wire Flexprice's webhook delivery to it for low-balance alerts. Until wired, the listener sits idle.
+
+## Operational signals
+
+Every `E2EPROBE_HEARTBEAT_INTERVAL` (default 5 minutes) the probe emits a single structured log line summarising activity since startup:
+
+```json
+{"level":"info","time":"2026-06-12T10:05:00.000Z","msg":"e2eprobe heartbeat","event":"e2eprobe.heartbeat","run_id":"e2eprobe-1749720000","uptime":"5m0s","total_runs":142,"total_failures":0,"success_rate":"100.00%","check.analytics-probe":"3/3","check.event-ingest-driver":"125/125","check.wallet-balance-probe":"3/3"}
+```
+
+One line per tick — not per check. Key fields:
+
+| Field | Meaning |
+| ----- | ------- |
+| `uptime` | Time since process started |
+| `total_runs` | All check executions (successes + failures) |
+| `total_failures` | Executions that returned an error or panicked |
+| `success_rate` | `(total_runs - total_failures) / total_runs × 100` |
+| `check.<name>` | `successes/total` for that individual check |
+
+**When to be concerned about silence:** If a heartbeat is missing for more than two intervals (10 minutes at default settings) the process has likely crashed or lost its log pipeline. Alert on the absence of `event=e2eprobe.heartbeat` in your log aggregator.
+
+Set `E2EPROBE_HEARTBEAT_INTERVAL=0` to disable heartbeat logging entirely.
 
 ## Failure surfacing
 

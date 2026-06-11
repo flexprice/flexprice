@@ -66,6 +66,7 @@ func main() {
 		globalAttrs["environment_id"] = cfg.EnvironmentID
 	}
 	runner := e2eprobe.NewRunner(reporter, lg, runID, globalAttrs)
+	runner.SetHeartbeatInterval(cfg.HeartbeatInterval)
 
 	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
 	if cfg.DryRun {
