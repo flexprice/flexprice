@@ -64,7 +64,7 @@ func HubSpotInvoiceSyncWorkflow(ctx workflow.Context, input models.HubSpotInvoic
 			"error", err,
 			"invoice_id", input.InvoiceID)
 		// Log error but don't fail the workflow - invoice sync is not critical
-		logger.Warn("Continuing despite invoice sync failure")
+		logger.Error("Continuing despite invoice sync failure")
 		return nil // Return nil to not fail the workflow
 	}
 

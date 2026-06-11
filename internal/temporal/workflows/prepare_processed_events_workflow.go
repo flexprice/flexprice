@@ -72,7 +72,7 @@ func PrepareProcessedEventsWorkflow(ctx workflow.Context, input models.PreparePr
 			err = executeRolloutToSubscriptionsAction(ctx, input, action, &actionResult, createdPriceIDs)
 
 		default:
-			logger.Warn("Unknown workflow action type",
+			logger.Error("Unknown workflow action type",
 				"event_name", input.EventName,
 				"action_type", actionType,
 				"action_index", i)

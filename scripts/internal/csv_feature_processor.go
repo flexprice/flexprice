@@ -220,7 +220,7 @@ func (p *CSVFeatureProcessor) parseCSV(filePath string) ([]CSVFeatureRecord, err
 		}
 
 		if len(record) < len(requiredColumns) {
-			p.log.Warnw("Skipping record with insufficient columns", "record", record)
+			p.log.Errorw("Skipping record with insufficient columns", "record", record)
 			continue
 		}
 

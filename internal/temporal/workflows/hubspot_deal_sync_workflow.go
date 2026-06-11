@@ -80,7 +80,7 @@ func HubSpotDealSyncWorkflow(ctx workflow.Context, input models.HubSpotDealSyncW
 			"subscription_id", input.SubscriptionID)
 		// Don't fail the entire workflow if deal amount update fails
 		// Line items were created successfully
-		logger.Warn("Continuing despite deal amount update failure")
+		logger.Error("Continuing despite deal amount update failure")
 	}
 
 	logger.Info("Successfully completed HubSpot deal sync workflow",

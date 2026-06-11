@@ -145,7 +145,7 @@ func (s *pricingImportScript) parsePricingCSV(filePath string) ([]PricingRow, er
 		if record[4] != "" {
 			_, err = fmt.Sscanf(record[4], "%f", &perUnitPrice)
 			if err != nil {
-				s.log.Warnw("Failed to parse per_unit_price, setting to 0", "value", record[4], "error", err)
+				s.log.Errorw("Failed to parse per_unit_price, setting to 0", "value", record[4], "error", err)
 			}
 		}
 
@@ -174,7 +174,7 @@ func (s *pricingImportScript) parsePricingCSV(filePath string) ([]PricingRow, er
 // updateMeterDefinition updates a meter definition to match the CSV data using direct SQL
 func (s *pricingImportScript) updateMeterDefinition(ctx context.Context, row PricingRow) error {
 	if row.MeterID == "" {
-		s.log.Warnw("Skipping meter update - no meter ID", "feature_name", row.FeatureName)
+		s.log.Errorw("Skipping meter update - no meter ID", "feature_name", row.FeatureName)
 		return nil
 	}
 
@@ -272,7 +272,7 @@ func (s *pricingImportScript) updateMeterDefinition(ctx context.Context, row Pri
 // updateFeatureMapping updates a feature's meter mapping and status using direct SQL
 func (s *pricingImportScript) updateFeatureMapping(ctx context.Context, row PricingRow) error {
 	if row.FeatureID == "" {
-		s.log.Warnw("Skipping feature update - no feature ID", "feature_name", row.FeatureName)
+		s.log.Errorw("Skipping feature update - no feature ID", "feature_name", row.FeatureName)
 		return nil
 	}
 
@@ -378,7 +378,7 @@ func (s *pricingImportScript) updatePrice(ctx context.Context, row PricingRow) e
 
 	// Check if plan exists
 	if row.PlanID == "" {
-		s.log.Warnw("Skipping price update - no plan ID", "feature_name", row.FeatureName)
+		s.log.Errorw("Skipping price update - no plan ID", "feature_name", row.FeatureName)
 		return nil
 	}
 

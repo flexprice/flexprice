@@ -96,7 +96,7 @@ func MigrateCGA() error {
 
 		sub, err := subscriptionRepo.Get(subCtx, lo.FromPtr(creditGrant.SubscriptionID))
 		if err != nil {
-			log.Warnw("Failed to get subscription", "credit_grant_id", creditGrant.ID, "error", err)
+			log.Errorw("Failed to get subscription", "credit_grant_id", creditGrant.ID, "error", err)
 			creditGrantsSkipped++
 			continue
 		}
@@ -158,7 +158,7 @@ func MigrateCGA() error {
 		// Get credit grant to use its period config
 		grant, err := creditGrantRepo.Get(subCtx, cga.CreditGrantID)
 		if err != nil {
-			log.Warnw("Failed to get credit grant", "cga_id", cga.ID, "credit_grant_id", cga.CreditGrantID, "error", err)
+			log.Errorw("Failed to get credit grant", "cga_id", cga.ID, "credit_grant_id", cga.CreditGrantID, "error", err)
 			cgasSkipped++
 			continue
 		}
@@ -167,7 +167,7 @@ func MigrateCGA() error {
 		// Use credit grant's period config instead of subscription's billing period
 		_, periodEnd, err := service.CalculateNextCreditGrantPeriod(lo.FromPtr(grant), periodStart)
 		if err != nil {
-			log.Warnw("Failed to calculate period_end", "cga_id", cga.ID, "error", err)
+			log.Errorw("Failed to calculate period_end", "cga_id", cga.ID, "error", err)
 			cgasSkipped++
 			continue
 		}

@@ -134,11 +134,11 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 	var otelLogProvider *sdklog.LoggerProvider
 	if logsCfg.Enabled && logsCfg.Endpoint != "" {
 		if legacy {
-			zapLogger.Sugar().Warn("DEPRECATED: configure OTel log export under `otel.logs.*` instead of `logging.otel_*`; legacy keys will be removed in a future release")
+			zapLogger.Sugar().Error("DEPRECATED: configure OTel log export under `otel.logs.*` instead of `logging.otel_*`; legacy keys will be removed in a future release")
 		}
 		otelLogProvider, err = newOtelLogProvider(context.Background(), cfg, logsCfg, headers)
 		if err != nil {
-			zapLogger.Sugar().Warnf("Failed to initialize OTel log exporter: %v, falling back to stdout only", err)
+			zapLogger.Sugar().Errorf("Failed to initialize OTel log exporter: %v, falling back to stdout only", err)
 			otelLogProvider = nil
 		} else {
 			zapLogger.Sugar().Infof("OTel log exporter initialized (endpoint: %s, protocol: %s, header_count: %d)", logsCfg.Endpoint, logsCfg.Protocol, len(headers))
@@ -412,11 +412,6 @@ func (l *Logger) Info(ctx context.Context, msg string, fields ...any) {
 	l.WithContext(ctx).SugaredLogger.Infow(msg, fields...)
 }
 
-// Warn logs at warn level. Only use in bootstrap/startup code.
-func (l *Logger) Warn(ctx context.Context, msg string, fields ...any) {
-	l.WithContext(ctx).SugaredLogger.Warnw(msg, fields...)
-}
-
 // Error logs at error level with auto-bound context fields. When OTel exception
 // capture is enabled and ctx carries a recording span, the error is also
 // recorded as an "exception" span event so it appears in SigNoz's Exceptions tab
@@ -484,9 +479,9 @@ func (l *Logger) Infow(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Infow(msg, keysAndValues...)
 }
 
-// Warnw logs at warn level with key-value pairs.
+// Warnw logs at error level (warn is no longer used; all warnings are promoted to errors).
 func (l *Logger) Warnw(msg string, keysAndValues ...interface{}) {
-	l.SugaredLogger.Warnw(msg, keysAndValues...)
+	l.SugaredLogger.Errorw(msg, keysAndValues...)
 }
 
 // Errorw logs at error level with key-value pairs.

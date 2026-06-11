@@ -252,7 +252,7 @@ func ProcessSubscriptionBillingWorkflow(
 		err = workflow.ExecuteActivity(ctx, ActivityProcessPlanChange, planChangeInput).Get(ctx, &planChangeOutput)
 		if err != nil {
 			// Log error but don't fail the workflow - plan changes can be retried
-			logger.Warn("Failed to process pending plan changes, but continuing",
+			logger.Error("Failed to process pending plan changes, but continuing",
 				"error", err,
 				"subscription_id", input.SubscriptionID)
 			searchattr.UpsertFailureSearchAttributes(ctx, ActivityProcessPlanChange, err, input.SubscriptionID)
@@ -287,7 +287,7 @@ func ProcessSubscriptionBillingWorkflow(
 		err = workflow.ExecuteActivity(ctx, ActivityTriggerInvoiceWorkflow, triggerInput).Get(ctx, &triggerOutput)
 		if err != nil {
 			// Log error but don't fail the workflow - invoice workflows can be triggered manually
-			logger.Warn("Failed to trigger invoice workflows, but continuing",
+			logger.Error("Failed to trigger invoice workflows, but continuing",
 				"error", err,
 				"subscription_id", input.SubscriptionID)
 			searchattr.UpsertFailureSearchAttributes(ctx, ActivityTriggerInvoiceWorkflow, err, input.SubscriptionID)

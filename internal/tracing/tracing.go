@@ -136,7 +136,7 @@ func (s *Service) initTracer(ctx context.Context) error {
 		if !errors.Is(err, resource.ErrPartialResource) {
 			return err
 		}
-		s.logger.Warn(ctx, "OTel resource: partial detection, some attributes may be missing", "error", err)
+		s.logger.Error(ctx, "OTel resource: partial detection, some attributes may be missing", "error", err)
 	}
 
 	sampleRate := tracesCfg.SampleRate

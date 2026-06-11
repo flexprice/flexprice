@@ -163,7 +163,7 @@ func SetupDummyBillingCustomer() error {
 	}
 	defer func() {
 		if err := kafkaProducer.Close(); err != nil {
-			appLogger.Warnw("kafka producer close", "error", err)
+			appLogger.Errorw("kafka producer close", "error", err)
 		}
 	}()
 

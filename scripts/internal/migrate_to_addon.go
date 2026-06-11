@@ -97,7 +97,7 @@ func CopyPlanChargesToAddons() error {
 	for _, p := range prices {
 		addonID, exists := planToAddonMap[p.EntityID]
 		if !exists {
-			log.Warnw("Skipping price - no addon mapping", "price_id", p.ID, "plan_id", p.EntityID)
+			log.Errorw("Skipping price - no addon mapping", "price_id", p.ID, "plan_id", p.EntityID)
 			continue
 		}
 

@@ -157,14 +157,14 @@ func (s *featureImportScript) parseFeatureCSV(filePath string) ([]FeatureRow, er
 
 		// Ensure we have at least 5 columns
 		if len(record) < 5 {
-			s.log.Warnw("Skipping row with insufficient columns", "columns", len(record))
+			s.log.Errorw("Skipping row with insufficient columns", "columns", len(record))
 			continue
 		}
 
 		// Parse price per unit from string to decimal
 		pricePerUnit, err := decimal.NewFromString(record[4])
 		if err != nil {
-			s.log.Warnw("Failed to parse price per unit, skipping row", "price_string", record[4], "error", err)
+			s.log.Errorw("Failed to parse price per unit, skipping row", "price_string", record[4], "error", err)
 			continue
 		}
 

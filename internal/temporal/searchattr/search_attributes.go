@@ -62,7 +62,7 @@ func UpsertFailureSearchAttributes(
 	defer func() {
 		if r := recover(); r != nil {
 			logger := workflow.GetLogger(ctx)
-			logger.Warn("Recovered from panic in UpsertFailureSearchAttributes",
+			logger.Error("Recovered from panic in UpsertFailureSearchAttributes",
 				"panic", r,
 				"activity", activityName)
 		}
@@ -94,7 +94,7 @@ func UpsertFailureSearchAttributes(
 	// Upsert the search attributes - if this fails, only log warning
 	if upsertErr := workflow.UpsertSearchAttributes(ctx, searchAttrs); upsertErr != nil {
 		// Don't fail the workflow, just log a warning
-		logger.Warn("Failed to upsert failure search attributes (non-critical)",
+		logger.Error("Failed to upsert failure search attributes (non-critical)",
 			"activity", activityName,
 			"upsert_error", upsertErr.Error(),
 			"note", "This does not affect workflow execution")
@@ -128,7 +128,7 @@ func UpsertWorkflowSearchAttributes(ctx workflow.Context, attrs map[string]inter
 	defer func() {
 		if r := recover(); r != nil {
 			logger := workflow.GetLogger(ctx)
-			logger.Warn("Recovered from panic in UpsertWorkflowSearchAttributes",
+			logger.Error("Recovered from panic in UpsertWorkflowSearchAttributes",
 				"panic", r)
 		}
 	}()
@@ -138,7 +138,7 @@ func UpsertWorkflowSearchAttributes(ctx workflow.Context, attrs map[string]inter
 	// Attempt to upsert - if this fails, only log warning
 	if err := workflow.UpsertSearchAttributes(ctx, attrs); err != nil {
 		// Don't fail the workflow, just log a warning
-		logger.Warn("Failed to upsert workflow search attributes (non-critical)",
+		logger.Error("Failed to upsert workflow search attributes (non-critical)",
 			"error", err.Error(),
 			"attribute_count", len(attrs),
 			"note", "This does not affect workflow execution")
@@ -161,7 +161,7 @@ func ClearFailureSearchAttributes(ctx workflow.Context) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger := workflow.GetLogger(ctx)
-			logger.Warn("Recovered from panic in ClearFailureSearchAttributes",
+			logger.Error("Recovered from panic in ClearFailureSearchAttributes",
 				"panic", r)
 		}
 	}()
@@ -177,7 +177,7 @@ func ClearFailureSearchAttributes(ctx workflow.Context) {
 	// Attempt to clear - if this fails, only log warning
 	if err := workflow.UpsertSearchAttributes(ctx, searchAttrs); err != nil {
 		// Don't fail the workflow, just log a warning
-		logger.Warn("Failed to clear failure search attributes (non-critical)",
+		logger.Error("Failed to clear failure search attributes (non-critical)",
 			"error", err.Error(),
 			"note", "This does not affect workflow execution")
 	}

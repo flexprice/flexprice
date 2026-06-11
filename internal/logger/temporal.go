@@ -27,7 +27,7 @@ func (t *temporalLogger) Info(msg string, keyvals ...interface{}) {
 }
 
 func (t *temporalLogger) Warn(msg string, keyvals ...interface{}) {
-	t.logger.Warn(t.ctx, msg, keyvals...)
+	t.logger.Error(t.ctx, msg, keyvals...)
 }
 
 func (t *temporalLogger) Error(msg string, keyvals ...interface{}) {

@@ -80,7 +80,7 @@ func CustomerOnboardingWorkflow(ctx workflow.Context, input models.CustomerOnboa
 			err = executeCreateSubscriptionAction(ctx, input, action, &actionResult)
 
 		default:
-			logger.Warn("Unknown workflow action type",
+			logger.Error("Unknown workflow action type",
 				"customer_id", input.CustomerID,
 				"action_type", actionType,
 				"action_index", i)
