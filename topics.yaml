@@ -8,12 +8,21 @@ defaults:
   replicationFactor: 3
   retentionMs: 604800000   # 7d
 topics:
-  events:                          { partitions: 6 }
-  events_lazy:                     { partitions: 6 }
-  events_dlq:                      { partitions: 3 }
-  events_backfill:                 { partitions: 6 }
-  events_post_processing:          { partitions: 6 }
-  events_post_processing_backfill: { partitions: 6 }
-  system_events:                   { partitions: 3 }
-  wallet_alert:                    { partitions: 3 }
-  onboarding_events:               { partitions: 3 }
+  events:
+    partitions: 6
+  events_lazy:
+    partitions: 6
+  events_dlq:
+    partitions: 3
+  events_backfill:
+    partitions: 6
+  events_post_processing:
+    partitions: 6
+  events_post_processing_backfill:
+    partitions: 6
+  system_events:
+    partitions: 3
+  wallet_alert:
+    partitions: 3
+  onboarding_events:
+    partitions: 3
