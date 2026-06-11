@@ -23,6 +23,9 @@ FlexPrice app release.
 - `extraEnv` rendered invalid YAML when non-empty — `{{- toYaml . }}` left-chomped
   the preceding newline and glued the first env var onto the previous line. Now
   uses `{{ toYaml . | trim }}`.
+- Chart-managed (dev) Secret now renders the shared `logging-otel-auth-value` key
+  when `otel.traces.enabled` (not only `logging.otel.enabled`), so a traces-only
+  config doesn't fail pods with a missing secret key (`CreateContainerConfigError`).
 
 ## [1.0.0] - 2026-05-11
 
