@@ -363,9 +363,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		}
 
 		if err := s.WalletRepo.CreateTransaction(ctx, tx); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create wallet transaction").
-				Mark(ierr.ErrInternal)
+			return err
 		}
 
 		if autoCompleteEnabled {
