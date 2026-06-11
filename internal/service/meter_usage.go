@@ -2087,12 +2087,7 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 		// with bucket_size — those meters route to calculateBucketedCost. So a
 		// regular meter can carry only a non-windowed aggregate commitment; a
 		// windowed flag here is invalid data and is ignored (billed plain).
-		switch {
-		case lineItem == nil:
-		case lineItem.CommitmentWindowed:
-			s.logger.Info(ctx, "ignoring windowed commitment on non-bucketed meter",
-				"line_item_id", lineItem.ID, "meter_id", m.ID)
-		case lineItem.HasCommitment():
+		if lineItem != nil && !lineItem.CommitmentWindowed && lineItem.HasCommitment() {
 			cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, nil, cost)
 		}
 	}

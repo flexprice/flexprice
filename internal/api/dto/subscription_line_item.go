@@ -667,14 +667,15 @@ type CommitmentBucketRequest struct {
 	TrueUpEnabled   bool                 `json:"true_up_enabled,omitempty"`
 }
 
-// Validate runs per-bucket field validation. Array invariants (overlap,
+// Validate runs per-bucket field validation; idx is the bucket's position in
+// the request array, surfaced in error details. Array invariants (overlap,
 // window alignment) live on TimeOfDayBuckets and are applied by the service
 // after prices are created (and after the meter is loaded so we know windowMin).
-func (r CommitmentBucketRequest) Validate() error {
-	if err := validateBucketPoint(r.Start, 0); err != nil {
+func (r CommitmentBucketRequest) Validate(idx int) error {
+	if err := validateBucketPoint(r.Start, idx); err != nil {
 		return err
 	}
-	if err := validateBucketPoint(r.End, 0); err != nil {
+	if err := validateBucketPoint(r.End, idx); err != nil {
 		return err
 	}
 	// Exactly one of id (reuse existing bucket + price) or price (create new)
@@ -682,16 +683,19 @@ func (r CommitmentBucketRequest) Validate() error {
 	if r.ID == "" && r.Price == nil {
 		return ierr.NewError("bucket price is required").
 			WithHint("Provide price for a new bucket, or id to keep an existing bucket").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
 			Mark(ierr.ErrValidation)
 	}
 	if r.ID != "" && r.Price != nil {
 		return ierr.NewError("cannot provide both id and price on a bucket").
 			WithHint("Provide id to keep the existing bucket price, or price (without id) to create a new bucket").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
 			Mark(ierr.ErrValidation)
 	}
 	if r.Price != nil && r.Price.EntityType != "" && r.Price.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION {
 		return ierr.NewError("bucket price entity_type must be SUBSCRIPTION").
 			WithHint("Use entity_type=SUBSCRIPTION on inline bucket prices").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
 			Mark(ierr.ErrValidation)
 	}
 	tmp := types.TimeOfDayBucket{
@@ -702,7 +706,13 @@ func (r CommitmentBucketRequest) Validate() error {
 		OverageFactor:   r.OverageFactor,
 		TrueUpEnabled:   r.TrueUpEnabled,
 	}
-	return tmp.Validate()
+	if err := tmp.Validate(); err != nil {
+		// Type-level errors don't know the array position; annotate it here.
+		return ierr.WithError(err).
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // ToTimeOfDayBucket maps the request to a domain bucket with all commitment
@@ -741,8 +751,8 @@ func bucketRequestsToDomain(reqs []CommitmentBucketRequest) types.TimeOfDayBucke
 // validateTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59],
 // rejecting Hour=24 combined with Minute>0 (only 24:00 is a meaningful end-of-day).
 func validateTimeOfDayBuckets(buckets []CommitmentBucketRequest) error {
-	for _, b := range buckets {
-		if err := b.Validate(); err != nil {
+	for i, b := range buckets {
+		if err := b.Validate(i); err != nil {
 			return err
 		}
 	}
