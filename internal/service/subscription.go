@@ -7154,9 +7154,14 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 				Mark(ierr.ErrValidation)
 		}
 
-		subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-		subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
-		inheritedCount, err := s.SubRepo.Count(ctx, subFilter)
+		inheritedSubFilter := types.NewSubscriptionFilter()
+		inheritedSubFilter.CustomerID = cust.ID
+		inheritedSubFilter.Status = lo.ToPtr(types.StatusPublished)
+		inheritedSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+		inheritedSubFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+		inheritedSubFilter.WithLineItems = false
+		inheritedSubFilter.Limit = lo.ToPtr(1)
+		inheritedCount, err := s.SubRepo.Count(ctx, inheritedSubFilter)
 		if err != nil {
 			return nil, err
 		}

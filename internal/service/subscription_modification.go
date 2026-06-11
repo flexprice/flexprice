@@ -1100,12 +1100,31 @@ func (s *subscriptionModificationService) resolveExternalCustomersForInheritance
 
 		subFilter := types.NewSubscriptionFilter()
 		subFilter.CustomerID = cust.ID
-		subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+		subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeStandalone, types.SubscriptionTypeParent}
 		subFilter.Status = lo.ToPtr(types.StatusPublished)
-		subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+		subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusDraft, types.SubscriptionStatusTrialing}
 		subFilter.WithLineItems = false
 		subFilter.Limit = lo.ToPtr(1)
-		inheritedCount, err := s.serviceParams.SubRepo.Count(ctx, subFilter)
+		count, err := s.serviceParams.SubRepo.Count(ctx, subFilter)
+
+		if err != nil {
+			return nil, err
+		}
+		if count > 0 {
+			return nil, ierr.NewError("child customer has standalone or parent subscriptions").
+				WithHint("The child customer cannot have standalone or parent subscriptions").
+				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+				Mark(ierr.ErrValidation)
+		}
+
+		inheritedSubFilter := types.NewSubscriptionFilter()
+		inheritedSubFilter.CustomerID = cust.ID
+		inheritedSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+		inheritedSubFilter.Status = lo.ToPtr(types.StatusPublished)
+		inheritedSubFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+		inheritedSubFilter.WithLineItems = false
+		inheritedSubFilter.Limit = lo.ToPtr(1)
+		inheritedCount, err := s.serviceParams.SubRepo.Count(ctx, inheritedSubFilter)
 		if err != nil {
 			return nil, err
 		}
