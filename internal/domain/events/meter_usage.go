@@ -40,6 +40,11 @@ type MeterUsageQueryParams struct {
 	BillingAnchor       *time.Time
 	// GroupByProperty is the JSON property key for group-by aggregation (e.g. for bucketed MAX meters)
 	GroupByProperty string
+	// GroupByProperties is the ordered list of JSON property keys for bucketed multi-key
+	// group-by aggregation. When non-empty, takes precedence over GroupByProperty.
+	// In the result, UsageResult.GroupKey carries the values joined by \x1f in the
+	// same order as this slice.
+	GroupByProperties []string
 	// UseFinal enables FINAL for ReplacingMergeTree deduplication (use for billing queries)
 	UseFinal bool
 	// PropertyFilters restrict events whose properties match. e.g. {"model": ["gpt-4"]}

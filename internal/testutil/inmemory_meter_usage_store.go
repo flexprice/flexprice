@@ -450,7 +450,32 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 		return aggregateScalar(recs, types.AggregationMax)
 	}
 
-	hasGroupBy := params.GroupByProperty != ""
+	// Inner GROUP BY uses union of meter-config key + analytics keys (so MAX is per
+	// finest tuple). Outer GROUP BY uses analytics keys when set, else meter-config.
+	// When inner ⊃ outer, the meter-key dimension is collapsed via SUM per
+	// (bucket, outer-key) — matches BuildBucketedQuery's stacked CTE.
+	innerKeys := []string{}
+	seen := map[string]struct{}{}
+	if params.GroupByProperty != "" {
+		seen[params.GroupByProperty] = struct{}{}
+		innerKeys = append(innerKeys, params.GroupByProperty)
+	}
+	for _, k := range params.GroupByProperties {
+		if k == "" {
+			continue
+		}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		innerKeys = append(innerKeys, k)
+	}
+	outerKeys := append([]string(nil), params.GroupByProperties...)
+	if len(outerKeys) == 0 && params.GroupByProperty != "" {
+		outerKeys = []string{params.GroupByProperty}
+	}
+	hasGroupBy := len(innerKeys) > 0
+	stacked := len(innerKeys) > len(outerKeys)
 
 	// Bucket records by window first.
 	byBucket := make(map[time.Time][]*events.MeterUsage)
@@ -468,13 +493,38 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 
 	if hasGroupBy {
 		for bucket, recs := range byBucket {
-			byGroup := make(map[string][]*events.MeterUsage)
+			// Inner: aggregate per (bucket, all-inner-key tuple).
+			byInner := make(map[string][]*events.MeterUsage)
 			for _, r := range recs {
-				gk := propertyValue(r.Properties, params.GroupByProperty)
-				byGroup[gk] = append(byGroup[gk], r)
+				parts := make([]string, len(innerKeys))
+				for i, k := range innerKeys {
+					parts[i] = propertyValue(r.Properties, k)
+				}
+				ik := strings.Join(parts, "\x1f")
+				byInner[ik] = append(byInner[ik], r)
 			}
-			for gk, grecs := range byGroup {
-				entries = append(entries, entry{bucket: bucket, group: gk, value: aggFn(grecs)})
+			if !stacked {
+				for ik, grecs := range byInner {
+					entries = append(entries, entry{bucket: bucket, group: ik, value: aggFn(grecs)})
+				}
+				continue
+			}
+			// Stacked: per (bucket, outer-key tuple), sum the inner aggregates that
+			// share that outer tuple. Outer key is a prefix or subset of inner key,
+			// but we re-derive it from the first record in each inner partition so
+			// the in-memory store doesn't need to know the layout.
+			byOuter := make(map[string]decimal.Decimal)
+			for _, grecs := range byInner {
+				inner := aggFn(grecs)
+				outerParts := make([]string, len(outerKeys))
+				for i, k := range outerKeys {
+					outerParts[i] = propertyValue(grecs[0].Properties, k)
+				}
+				ok := strings.Join(outerParts, "\x1f")
+				byOuter[ok] = byOuter[ok].Add(inner)
+			}
+			for ok, v := range byOuter {
+				entries = append(entries, entry{bucket: bucket, group: ok, value: v})
 			}
 		}
 		sort.Slice(entries, func(i, j int) bool {

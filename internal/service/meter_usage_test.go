@@ -3249,3 +3249,257 @@ func (s *MeterUsageServiceSuite) TestBucketedMeter_OmitsPointsWhenWindowSizeUnse
 	s.Empty(item.Points,
 		"points must be omitted from response when window_size is not specified")
 }
+
+// ---------------------------------------------------------------------------
+// SUM-bucketed analytics routing — when req.GroupBy carries user-supplied
+// dimensions (e.g. properties.session_id), SUM-bucketed meters take the
+// standard analytics path instead of the bucketed path, because the bucketed
+// query builder only supports a single meter-config group key and would
+// silently drop the request-level group_by otherwise. SUM-of-bucket-sums =
+// SUM, so this is mathematically equivalent for total_usage.
+// ---------------------------------------------------------------------------
+
+// TestSumBucketedMeter_GroupByPropertyBreaksOutItems: SUM-bucketed meter,
+// events with three distinct session_id values, group_by=[properties.session_id]
+// → response must contain three items (one per session_id) with each item's
+// total_usage matching the sum of its events. Before the routing fix this
+// returned ONE collapsed item because BuildBucketedQuery ignored req.GroupBy.
+func (s *MeterUsageServiceSuite) TestSumBucketedMeter_GroupByPropertyBreaksOutItems() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_sum_bkt_grp",
+		Name:      "Bucketed SUM with group-by",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_sum_bkt_grp", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_sum_bkt_grp", bucketedMeter.ID, bucketedPrice.ID)
+
+	// session A: 3 events @ 10 = 30
+	// session B: 2 events @ 10 = 20
+	// session C: 1 event  @ 10 = 10
+	for _, ev := range []struct {
+		t       time.Time
+		session string
+	}{
+		{time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), "A"},
+		{time.Date(2026, 1, 5, 11, 0, 0, 0, time.UTC), "A"},
+		{time.Date(2026, 1, 5, 12, 0, 0, 0, time.UTC), "A"},
+		{time.Date(2026, 1, 5, 13, 0, 0, 0, time.UTC), "B"},
+		{time.Date(2026, 1, 5, 14, 0, 0, 0, time.UTC), "B"},
+		{time.Date(2026, 1, 5, 15, 0, 0, 0, time.UTC), "C"},
+	} {
+		s.insertMeterUsageWithProps(ctx, bucketedMeter.ID, s.customer.ExternalID, "",
+			ev.t, 10, map[string]interface{}{"session_id": ev.session})
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"properties.session_id"},
+	})
+	s.NoError(err)
+
+	usageBySession := map[string]decimal.Decimal{}
+	for _, item := range resp.Items {
+		if item.MeterID != bucketedMeter.ID {
+			continue
+		}
+		session := item.Properties["session_id"]
+		usageBySession[session] = item.TotalUsage
+	}
+
+	s.Require().Len(usageBySession, 3,
+		"expected three items (one per session_id); got %d (items=%v)", len(usageBySession), usageBySession)
+	s.True(usageBySession["A"].Equal(decimal.NewFromInt(30)),
+		"session A usage: expected 30, got %s", usageBySession["A"])
+	s.True(usageBySession["B"].Equal(decimal.NewFromInt(20)),
+		"session B usage: expected 20, got %s", usageBySession["B"])
+	s.True(usageBySession["C"].Equal(decimal.NewFromInt(10)),
+		"session C usage: expected 10, got %s", usageBySession["C"])
+}
+
+// ---------------------------------------------------------------------------
+// MAX-bucketed analytics group_by — MAX-bucketed semantic is
+// "MAX per bucket per group, then SUM the maxes". The bucketed query path is
+// extended to accept user-supplied group_by; results fan out one item per
+// group tuple, each carrying its own per-bucket points + total. Multi-key
+// group_by is supported via in-query concat.
+// ---------------------------------------------------------------------------
+
+// TestMaxBucketedMeter_GroupByPropertiesBreaksOutItems: MAX-bucketed meter
+// with no meter-config GroupBy, group_by=[properties.session_id, properties.region]
+// → response must contain one item per (session_id, region) tuple. Each
+// item's total_usage must equal SUM(MAX-per-bucket within that tuple).
+func (s *MeterUsageServiceSuite) TestMaxBucketedMeter_GroupByPropertiesBreaksOutItems() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_max_bkt_grp",
+		Name:      "Bucketed MAX with multi group-by",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_max_bkt_grp", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_max_bkt_grp", bucketedMeter.ID, bucketedPrice.ID)
+
+	// Events grouped by (session, region) across multiple hourly buckets:
+	//
+	// (A, us) hour 10: qty 5, 15, 25  → bucket MAX = 25
+	// (A, us) hour 11: qty 10, 20     → bucket MAX = 20
+	//   → tuple total = 25 + 20 = 45
+	// (A, eu) hour 10: qty 30         → bucket MAX = 30
+	//   → tuple total = 30
+	// (B, us) hour 10: qty 50         → bucket MAX = 50
+	//   → tuple total = 50
+	for _, ev := range []struct {
+		t       time.Time
+		qty     float64
+		session string
+		region  string
+	}{
+		{time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 5, "A", "us"},
+		{time.Date(2026, 1, 5, 10, 5, 0, 0, time.UTC), 15, "A", "us"},
+		{time.Date(2026, 1, 5, 10, 30, 0, 0, time.UTC), 25, "A", "us"},
+		{time.Date(2026, 1, 5, 11, 0, 0, 0, time.UTC), 10, "A", "us"},
+		{time.Date(2026, 1, 5, 11, 30, 0, 0, time.UTC), 20, "A", "us"},
+		{time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 30, "A", "eu"},
+		{time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 50, "B", "us"},
+	} {
+		s.insertMeterUsageWithProps(ctx, bucketedMeter.ID, s.customer.ExternalID, "",
+			ev.t, ev.qty, map[string]interface{}{"session_id": ev.session, "region": ev.region})
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"properties.session_id", "properties.region"},
+	})
+	s.NoError(err)
+
+	type key struct{ session, region string }
+	usage := map[key]decimal.Decimal{}
+	for _, item := range resp.Items {
+		if item.MeterID != bucketedMeter.ID {
+			continue
+		}
+		k := key{item.Properties["session_id"], item.Properties["region"]}
+		usage[k] = item.TotalUsage
+	}
+
+	s.Require().Len(usage, 3,
+		"expected three items (one per (session, region) tuple); got %d (items=%v)", len(usage), usage)
+	s.True(usage[key{"A", "us"}].Equal(decimal.NewFromInt(45)),
+		"(A, us) usage: expected 45 (25+20), got %s", usage[key{"A", "us"}])
+	s.True(usage[key{"A", "eu"}].Equal(decimal.NewFromInt(30)),
+		"(A, eu) usage: expected 30, got %s", usage[key{"A", "eu"}])
+	s.True(usage[key{"B", "us"}].Equal(decimal.NewFromInt(50)),
+		"(B, us) usage: expected 50, got %s", usage[key{"B", "us"}])
+}
+
+// TestMaxBucketedMeter_StackedGroupByWithMeterConfig: when a MAX-bucketed
+// meter has a meter-config Aggregation.GroupBy AND the analytics caller
+// passes req.GroupBy, both dimensions stack — matches feature_usage's
+// getMaxBucketAnalytics semantic. The per-user-key total is:
+//
+//	SUM over buckets of ( SUM over meter-key values of MAX_per_(bucket, meter-key) )
+//
+// Equivalent to: MAX is taken per (bucket, meter-key, user-keys), and the
+// meter-key dimension is collapsed via SUM before per-bucket roll-up.
+func (s *MeterUsageServiceSuite) TestMaxBucketedMeter_StackedGroupByWithMeterConfig() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_max_bkt_stack",
+		Name:      "Bucketed MAX with meter-config GroupBy and analytics group_by",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			BucketSize: types.WindowSizeHour,
+			GroupBy:    "user_id", // meter-config key (pricing semantic)
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_max_bkt_stack", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_max_bkt_stack", bucketedMeter.ID, bucketedPrice.ID)
+
+	// Events laid out so the stacked MAX-SUM math is explicit:
+	//
+	// Inner MAX per (bucket, user_id, region):
+	//   (h10, u1, us) max(5, 15)   = 15
+	//   (h10, u2, us) max(20, 80)  = 80
+	//   (h11, u1, us) max(30)      = 30
+	//   (h10, u1, eu) max(50)      = 50
+	//
+	// Per-(bucket, region) sum over user_id:
+	//   (h10, us) 15 + 80 = 95
+	//   (h11, us) 30
+	//   (h10, eu) 50
+	//
+	// Per-region totals:
+	//   us: 95 + 30 = 125
+	//   eu: 50
+	for _, ev := range []struct {
+		t      time.Time
+		qty    float64
+		user   string
+		region string
+	}{
+		{time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 5, "u1", "us"},
+		{time.Date(2026, 1, 5, 10, 5, 0, 0, time.UTC), 15, "u1", "us"},
+		{time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 20, "u2", "us"},
+		{time.Date(2026, 1, 5, 10, 5, 0, 0, time.UTC), 80, "u2", "us"},
+		{time.Date(2026, 1, 5, 11, 0, 0, 0, time.UTC), 30, "u1", "us"},
+		{time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 50, "u1", "eu"},
+	} {
+		s.insertMeterUsageWithProps(ctx, bucketedMeter.ID, s.customer.ExternalID, "",
+			ev.t, ev.qty, map[string]interface{}{"user_id": ev.user, "region": ev.region})
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		GroupBy:            []string{"properties.region"},
+	})
+	s.NoError(err,
+		"expected stacked group_by to succeed (meter-config GroupBy collapsed via outer SUM)")
+
+	usageByRegion := map[string]decimal.Decimal{}
+	for _, item := range resp.Items {
+		if item.MeterID != bucketedMeter.ID {
+			continue
+		}
+		usageByRegion[item.Properties["region"]] = item.TotalUsage
+	}
+
+	s.Require().Len(usageByRegion, 2,
+		"expected two items (one per region); got %d (items=%v)", len(usageByRegion), usageByRegion)
+	s.True(usageByRegion["us"].Equal(decimal.NewFromInt(125)),
+		"region=us total: expected 125 (95+30), got %s", usageByRegion["us"])
+	s.True(usageByRegion["eu"].Equal(decimal.NewFromInt(50)),
+		"region=eu total: expected 50, got %s", usageByRegion["eu"])
+}
