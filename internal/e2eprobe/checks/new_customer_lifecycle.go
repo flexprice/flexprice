@@ -66,7 +66,7 @@ func (s *NewCustomerLifecycle) Run(ctx context.Context) error {
 			"e2eprobe_run_id": s.runID,
 		},
 	}); err != nil {
-		return fmt.Errorf("create customer: %w", err)
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": ext, "plan_id": planID}, "create customer: %w", err)
 	}
 	s.reg.RegisterEphemeral("customer", ext, now)
 
@@ -88,11 +88,11 @@ func (s *NewCustomerLifecycle) Run(ctx context.Context) error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("create subscription: %w", err)
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": ext, "plan_id": planID}, "create subscription: %w", err)
 	}
 	subID := extractSubscriptionID(subResp)
 	if subID == "" {
-		return fmt.Errorf("subscription create returned empty ID for %s", ext)
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": ext, "plan_id": planID}, "subscription create returned empty ID for %s", ext)
 	}
 	s.reg.RegisterEphemeral("subscription", subID, now)
 
@@ -105,7 +105,7 @@ func (s *NewCustomerLifecycle) Run(ctx context.Context) error {
 				"e2eprobe_run_id": s.runID,
 			},
 		}); err != nil {
-			return fmt.Errorf("ingest event %d: %w", i, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": ext, "plan_id": planID, "subscription_id": subID}, "ingest event %d: %w", i, err)
 		}
 	}
 
@@ -131,7 +131,7 @@ func (s *NewCustomerLifecycle) pollAnalytics(ctx context.Context, ext string) er
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("analytics timeout %s after %s: %w", ext, s.opts.AnalyticsPoll.Timeout, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": ext}, "analytics timeout %s after %s: %w", ext, s.opts.AnalyticsPoll.Timeout, err)
 		}
 		select {
 		case <-ctx.Done():

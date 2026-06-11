@@ -80,3 +80,36 @@ func TestLoadConfig_Overrides(t *testing.T) {
 		t.Errorf("JANITOR override: %+v", jan)
 	}
 }
+
+func TestLoadConfig_TenantAndEnvironment(t *testing.T) {
+	t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
+	t.Setenv("E2EPROBE_API_KEY", "k")
+	t.Run("both set", func(t *testing.T) {
+		t.Setenv("E2EPROBE_TENANT_ID", "tenant-abc")
+		t.Setenv("E2EPROBE_ENVIRONMENT_ID", "env-prod")
+		c, err := LoadConfig()
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if c.TenantID != "tenant-abc" {
+			t.Errorf("TenantID=%q, want tenant-abc", c.TenantID)
+		}
+		if c.EnvironmentID != "env-prod" {
+			t.Errorf("EnvironmentID=%q, want env-prod", c.EnvironmentID)
+		}
+	})
+	t.Run("not set defaults to empty string", func(t *testing.T) {
+		t.Setenv("E2EPROBE_TENANT_ID", "")
+		t.Setenv("E2EPROBE_ENVIRONMENT_ID", "")
+		c, err := LoadConfig()
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		if c.TenantID != "" {
+			t.Errorf("TenantID=%q, want empty", c.TenantID)
+		}
+		if c.EnvironmentID != "" {
+			t.Errorf("EnvironmentID=%q, want empty", c.EnvironmentID)
+		}
+	})
+}

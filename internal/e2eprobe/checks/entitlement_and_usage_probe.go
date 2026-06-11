@@ -3,7 +3,6 @@ package checks
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync/atomic"
 
@@ -43,7 +42,7 @@ func (p *EntitlementAndUsageProbe) Run(ctx context.Context) error {
 		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
 			return nil
 		}
-		return fmt.Errorf("get customer %s: %w", customerExt, err)
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": customerExt, "subscription_id": subID}, "get customer %s: %w", customerExt, err)
 	}
 	customerID := extractCustomerID(custResp)
 	if customerID == "" {
@@ -51,10 +50,10 @@ func (p *EntitlementAndUsageProbe) Run(ctx context.Context) error {
 	}
 
 	if _, err := p.client.Customers().GetEntitlements(ctx, customerID); err != nil {
-		return fmt.Errorf("customer entitlements %s: %w", customerID, err)
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": customerExt, "internal_customer_id": customerID, "subscription_id": subID}, "customer entitlements %s: %w", customerID, err)
 	}
 	if _, err := p.client.Subscriptions().GetEntitlements(ctx, subID, nil); err != nil {
-		return fmt.Errorf("sub entitlements %s: %w", subID, err)
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": customerExt, "internal_customer_id": customerID, "subscription_id": subID}, "sub entitlements %s: %w", subID, err)
 	}
 
 	// SDK: GetCustomerUsageSummaryRequest.CustomerID is *string, not string.
@@ -64,13 +63,13 @@ func (p *EntitlementAndUsageProbe) Run(ctx context.Context) error {
 		SubscriptionIds: []string{},
 		FeatureIds:      []string{},
 	}); err != nil {
-		return fmt.Errorf("customer usage summary %s: %w", customerID, err)
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": customerExt, "internal_customer_id": customerID, "subscription_id": subID}, "customer usage summary %s: %w", customerID, err)
 	}
 
 	if _, err := p.client.Subscriptions().GetUsage(ctx, types.DtoGetUsageBySubscriptionRequest{
 		SubscriptionID: subID,
 	}); err != nil {
-		return fmt.Errorf("sub usage %s: %w", subID, err)
+		return e2eprobe.Errorf(map[string]string{"external_customer_id": customerExt, "internal_customer_id": customerID, "subscription_id": subID}, "sub usage %s: %w", subID, err)
 	}
 	return nil
 }

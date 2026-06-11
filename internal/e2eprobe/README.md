@@ -43,6 +43,8 @@ Adding a new probe: write `internal/e2eprobe/checks/<name>.go` implementing `Che
 | `E2EPROBE_API_KEY` | API key for the e2eprobe tenant | required |
 | `E2EPROBE_ENABLED` | Master kill switch | `true` |
 | `E2EPROBE_DRY_RUN` | Log mutating calls without sending | `false` |
+| `E2EPROBE_TENANT_ID` | Tenant ID included in every Slack/OTEL alert for context | empty (optional but recommended) |
+| `E2EPROBE_ENVIRONMENT_ID` | Environment ID included in every Slack/OTEL alert for context | empty (optional but recommended) |
 | `E2EPROBE_EVENT_INGEST_RATE` | Events/sec for the ingest driver | `5` |
 | `E2EPROBE_EVENT_INGEST_SEED` | RNG seed for event deck | derived from start time |
 | `E2EPROBE_LISTENER_PORT` | HTTP listener port for webhook checks | `8765` |
@@ -62,7 +64,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | driver | event-ingest-driver | Rate(5/s) | Varied event ingest using the deck |
 | probe | analytics-probe | 2m | `GetUsageAnalytics` rotating params |
 | probe | wallet-balance-probe | 2m | Wallet balance reads |
-| probe | wallet-debit-verification | 20m | Quantitative debit assertion |
+| probe | wallet-debit-verification | 20m | Phase 1: TopUp read-after-write correctness; Phase 2: event→analytics aggregation pipeline |
 | probe | cycle-invoice-probe | 15m | Auto-invoice freshness invariant |
 | probe | entitlement-and-usage-probe | 5m | Entitlements + usage rollup |
 | scenario | new-customer-lifecycle | 10m | Ephemeral customer/sub + events |
@@ -77,7 +79,12 @@ The listener exposes `POST http://<e2eprobe-host>:8765/webhook` (port configurab
 
 ## Failure surfacing
 
-Failures fan out to log + Slack + OTEL spans (kind=Error). No retries. Reports include scenario, step, error, and any attributes the check attached.
+Failures fan out to log + Slack + OTEL spans (kind=Error). No retries. Every report includes:
+- Global context from config: `tenant_id`, `environment_id` (when set via env vars)
+- Per-check structured attributes: `external_customer_id`, `internal_customer_id`, `wallet_id`, `subscription_id`, `plan_id`, `event_name`, etc. — whichever IDs are known at the point of failure
+- `check`, `step`, `run_id`, `error` always present
+
+Set `E2EPROBE_TENANT_ID` and `E2EPROBE_ENVIRONMENT_ID` to make Slack alerts immediately actionable without cross-referencing logs.
 
 ## Shutdown
 

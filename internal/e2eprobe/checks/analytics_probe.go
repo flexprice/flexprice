@@ -2,7 +2,6 @@ package checks
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -44,7 +43,10 @@ func (p *AnalyticsProbe) Run(ctx context.Context) error {
 		EndTime:            &endStr,
 	}
 	if _, err := p.client.Events().GetUsageAnalytics(ctx, req); err != nil {
-		return fmt.Errorf("analytics %s (window=%s): %w", customer, window, err)
+		return e2eprobe.Errorf(map[string]string{
+			"external_customer_id": customer,
+			"window":               window.String(),
+		}, "analytics %s (window=%s): %w", customer, window, err)
 	}
 	return nil
 }

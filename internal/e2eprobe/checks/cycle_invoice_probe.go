@@ -3,7 +3,6 @@ package checks
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -43,7 +42,7 @@ func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
 		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
 			return nil
 		}
-		return fmt.Errorf("get sub %s: %w", subID, err)
+		return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "get sub %s: %w", subID, err)
 	}
 	cycleLength := extractBillingCycleLength(subResp)
 	if cycleLength <= 0 {
@@ -54,19 +53,23 @@ func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
 		SubscriptionID: &subID,
 	})
 	if err != nil {
-		return fmt.Errorf("query invoices for %s: %w", subID, err)
+		return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "query invoices for %s: %w", subID, err)
 	}
 	latest := extractLatestInvoice(invResp)
 	if latest == nil {
 		subAge := extractSubAge(subResp)
 		if subAge > 0 && subAge > 2*cycleLength {
-			return fmt.Errorf("sub %s is %s old (>2 cycles) and has no invoices", subID, subAge)
+			return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "sub %s is %s old (>2 cycles) and has no invoices", subID, subAge)
 		}
 		return nil
 	}
 	lag := time.Since(latest.PeriodEnd)
 	if lag > 2*cycleLength {
-		return fmt.Errorf("invoice freshness: sub=%s latest_period_end=%s lag=%s cycle_length=%s (lag > 2*cycle)",
+		return e2eprobe.Errorf(map[string]string{
+			"subscription_id":   subID,
+			"latest_period_end": latest.PeriodEnd.Format(time.RFC3339),
+			"lag":               lag.String(),
+		}, "invoice freshness: sub=%s latest_period_end=%s lag=%s cycle_length=%s (lag > 2*cycle)",
 			subID, latest.PeriodEnd.Format(time.RFC3339), lag, cycleLength)
 	}
 	return nil

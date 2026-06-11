@@ -2,7 +2,6 @@ package checks
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
@@ -51,7 +50,7 @@ func (s *CancelCustomerFlow) Run(ctx context.Context) error {
 		ProrationBehavior: &prorate,
 		Reason:            strPtr("e2eprobe-cancel-customer-flow"),
 	}); err != nil {
-		return fmt.Errorf("cancel %s: %w", target.ID, err)
+		return e2eprobe.Errorf(map[string]string{"subscription_id": target.ID}, "cancel %s: %w", target.ID, err)
 	}
 
 	if err := s.pollInvoice(ctx, target.ID); err != nil {
@@ -70,9 +69,9 @@ func (s *CancelCustomerFlow) pollInvoice(ctx context.Context, subID string) erro
 		}
 		if time.Now().After(deadline) {
 			if err != nil {
-				return fmt.Errorf("invoice query timeout: %w", err)
+				return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "invoice query timeout: %w", err)
 			}
-			return fmt.Errorf("no invoice for %s within %s", subID, s.poll.Timeout)
+			return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "no invoice for %s within %s", subID, s.poll.Timeout)
 		}
 		select {
 		case <-ctx.Done():

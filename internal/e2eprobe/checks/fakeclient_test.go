@@ -297,6 +297,11 @@ type fakeWallets struct {
 	walletsByCustomerID map[string][]types.DtoWalletResponse
 	balance             string
 	balErr              error
+	topUpErr            error
+	// topUpCalls records amounts passed to TopUp for test assertions.
+	topUpCalls []string
+	// incrementBalanceOnTopUp, when true, adds the TopUp amount to balance.
+	incrementBalanceOnTopUp bool
 }
 
 func (f *fakeWallets) Create(_ context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error) {
@@ -343,17 +348,33 @@ func (f *fakeWallets) GetBalance(_ context.Context, _ string) (*dtos.GetWalletBa
 		DtoWalletBalanceResponse: &types.DtoWalletBalanceResponse{Balance: &f.balance},
 	}, nil
 }
-func (f *fakeWallets) TopUp(_ context.Context, _ string, _ types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+func (f *fakeWallets) TopUp(_ context.Context, _ string, req types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.topUpErr != nil {
+		return nil, f.topUpErr
+	}
+	if req.Amount != nil {
+		f.topUpCalls = append(f.topUpCalls, *req.Amount)
+	}
+	if f.incrementBalanceOnTopUp && req.Amount != nil {
+		var amt, cur float64
+		fmt.Sscanf(*req.Amount, "%f", &amt)
+		fmt.Sscanf(f.balance, "%f", &cur)
+		f.balance = fmt.Sprintf("%.4f", cur+amt)
+	}
 	return &dtos.TopUpWalletResponse{}, nil
 }
 
 // --- Events ---
 
 type fakeEvents struct {
-	mu        sync.Mutex
-	ingested  []types.DtoIngestEventRequest
-	analytics int
-	anaErr    error
+	mu           sync.Mutex
+	ingested     []types.DtoIngestEventRequest
+	analytics    int
+	anaErr       error
+	// analyticsItems, when set, is returned in GetUsageAnalytics responses.
+	analyticsItems []types.DtoUsageAnalyticItem
 }
 
 func (f *fakeEvents) Ingest(_ context.Context, req types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error) {
@@ -368,6 +389,13 @@ func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.DtoGetUsageAna
 	f.analytics++
 	if f.anaErr != nil {
 		return nil, f.anaErr
+	}
+	if len(f.analyticsItems) > 0 {
+		return &dtos.GetUsageAnalyticsResponse{
+			DtoGetUsageAnalyticsResponse: &types.DtoGetUsageAnalyticsResponse{
+				Items: f.analyticsItems,
+			},
+		}, nil
 	}
 	return &dtos.GetUsageAnalyticsResponse{}, nil
 }

@@ -11,7 +11,7 @@ import (
 func TestRunner_ReportsErrors(t *testing.T) {
 	rep := &recordingReporter{}
 	failing := &checkFn{name: "bad", kind: KindProbe, fn: func(_ context.Context) error { return errors.New("nope") }}
-	r := NewRunner(rep, nil, "run-1")
+	r := NewRunner(rep, nil, "run-1", nil)
 	r.Add(failing, NewTickerScheduler(failing, 20*time.Millisecond))
 	ctx, cancel := context.WithCancel(context.Background())
 	go r.Start(ctx)
@@ -32,7 +32,7 @@ func TestRunner_RecoversPanics(t *testing.T) {
 		}
 		return nil
 	}}
-	r := NewRunner(rep, nil, "run-1")
+	r := NewRunner(rep, nil, "run-1", nil)
 	r.Add(panicker, NewTickerScheduler(panicker, 20*time.Millisecond))
 	ctx, cancel := context.WithCancel(context.Background())
 	go r.Start(ctx)

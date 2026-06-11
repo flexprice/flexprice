@@ -3,7 +3,6 @@ package checks
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -36,7 +35,7 @@ func (j *Janitor) Run(ctx context.Context) error {
 				continue
 			}
 			if err := j.archive(ctx, e); err != nil {
-				return fmt.Errorf("archive %s/%s: %w", kind, e.ID, err)
+				return e2eprobe.Errorf(map[string]string{"kind": kind, "id": e.ID}, "archive %s/%s: %w", kind, e.ID, err)
 			}
 			j.reg.ArchiveEphemeral(kind, e.ID)
 		}
@@ -70,13 +69,13 @@ func (j *Janitor) archive(ctx context.Context, e e2eprobe.EphemeralEntity) error
 			if isNotFound(err) {
 				return nil // already gone
 			}
-			return fmt.Errorf("lookup customer %s: %w", e.ID, err)
+			return e2eprobe.Errorf(map[string]string{"kind": "customer", "id": e.ID}, "lookup customer %s: %w", e.ID, err)
 		}
 		if _, err := j.client.Customers().Delete(ctx, e.ID); err != nil {
 			if isNotFound(err) {
 				return nil // raced — concurrent cleanup
 			}
-			return err
+			return e2eprobe.Errorf(map[string]string{"kind": "customer", "id": e.ID}, "delete customer %s: %w", e.ID, err)
 		}
 	case "subscription":
 		// Subscriptions are cancelled by cancel-customer-flow; janitor only
@@ -86,7 +85,7 @@ func (j *Janitor) archive(ctx context.Context, e e2eprobe.EphemeralEntity) error
 			if isNotFound(err) {
 				return nil // already gone — expected steady state
 			}
-			return fmt.Errorf("lookup subscription %s: %w", e.ID, err)
+			return e2eprobe.Errorf(map[string]string{"kind": "subscription", "id": e.ID}, "lookup subscription %s: %w", e.ID, err)
 		}
 		// Subscription still exists (cancelled but not deleted — expected for
 		// Flexprice which retains cancelled subs). Accept this as success.

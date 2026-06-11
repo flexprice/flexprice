@@ -28,8 +28,17 @@ func (l *LowWalletAlertListener) Run(ctx context.Context) error {
 	if ev == nil {
 		return nil
 	}
+	// Build attributes from payload fields that are present.
+	alertAttrs := map[string]string{}
+	for _, f := range requiredFields {
+		if v, ok := ev.Payload[f]; ok {
+			alertAttrs[f] = fmt.Sprintf("%v", v)
+		}
+	}
+
 	if !ev.ReceivedAt.IsZero() && time.Since(ev.ReceivedAt) > lowWalletAlertMaxAge {
-		return fmt.Errorf("low-wallet alert delivered late: received_at=%s age=%s",
+		return e2eprobe.Errorf(alertAttrs,
+			"low-wallet alert delivered late: received_at=%s age=%s",
 			ev.ReceivedAt.Format(time.RFC3339), time.Since(ev.ReceivedAt))
 	}
 	missing := []string{}
@@ -39,7 +48,7 @@ func (l *LowWalletAlertListener) Run(ctx context.Context) error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("low-wallet alert missing fields: %v", missing)
+		return e2eprobe.Errorf(alertAttrs, "low-wallet alert missing fields: %v", missing)
 	}
 	return nil
 }

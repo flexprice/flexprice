@@ -150,7 +150,7 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 		LookupKeys: lookupKeys,
 	})
 	if err != nil {
-		return fmt.Errorf("query features: %w", err)
+		return e2eprobe.Errorf(map[string]string{"step": "query_features"}, "query features: %w", err)
 	}
 	byLookup := map[string]types.DtoFeatureResponse{}
 	if existResp.DtoListFeaturesResponse != nil {
@@ -207,10 +207,10 @@ func (s *SeedEnsure) ensureFeatures(ctx context.Context, out *e2eprobe.Seeds) er
 		}
 		resp, err := s.client.Features().Create(ctx, req)
 		if err != nil {
-			return fmt.Errorf("create feature %s: %w", spec.lookupKey, err)
+			return e2eprobe.Errorf(map[string]string{"feature_lookup_key": spec.lookupKey}, "create feature %s: %w", spec.lookupKey, err)
 		}
 		if resp.DtoFeatureResponse == nil {
-			return fmt.Errorf("create feature %s: empty response", spec.lookupKey)
+			return e2eprobe.Errorf(map[string]string{"feature_lookup_key": spec.lookupKey}, "create feature %s: empty response", spec.lookupKey)
 		}
 		feat := resp.DtoFeatureResponse
 		if feat.ID != nil {
@@ -233,7 +233,7 @@ func (s *SeedEnsure) ensureCustomers(ctx context.Context, out *e2eprobe.Seeds) e
 		}
 		var apiErr *sdkerrors.APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode != http.StatusNotFound {
-			return fmt.Errorf("lookup customer %s: %w", ext, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": ext}, "lookup customer %s: %w", ext, err)
 		}
 		req := types.DtoCreateCustomerRequest{
 			ExternalID: ext,
@@ -248,7 +248,7 @@ func (s *SeedEnsure) ensureCustomers(ctx context.Context, out *e2eprobe.Seeds) e
 			},
 		}
 		if _, err := s.client.Customers().Create(ctx, req); err != nil {
-			return fmt.Errorf("create customer %s: %w", ext, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": ext}, "create customer %s: %w", ext, err)
 		}
 	}
 	for i := 0; i < PreFundedWalletCount && i < PersistentCustomerCount; i++ {
@@ -265,7 +265,7 @@ func (s *SeedEnsure) ensurePlan(ctx context.Context, out *e2eprobe.Seeds) error 
 		LookupKey: strPtr(e2eprobePlanLookupKey),
 	})
 	if err != nil {
-		return fmt.Errorf("query plans: %w", err)
+		return e2eprobe.Errorf(map[string]string{"step": "query_plans"}, "query plans: %w", err)
 	}
 	if resp.DtoListPlansResponse != nil && len(resp.DtoListPlansResponse.Items) > 0 {
 		plan := resp.DtoListPlansResponse.Items[0]
@@ -286,10 +286,10 @@ func (s *SeedEnsure) ensurePlan(ctx context.Context, out *e2eprobe.Seeds) error 
 	}
 	createResp, err := s.client.Plans().Create(ctx, req)
 	if err != nil {
-		return fmt.Errorf("create plan: %w", err)
+		return e2eprobe.Errorf(map[string]string{"plan_lookup_key": e2eprobePlanLookupKey}, "create plan: %w", err)
 	}
 	if createResp.DtoPlanResponse == nil || createResp.DtoPlanResponse.ID == nil {
-		return fmt.Errorf("create plan: empty response")
+		return e2eprobe.Errorf(map[string]string{"plan_lookup_key": e2eprobePlanLookupKey}, "create plan: empty response")
 	}
 	out.PlanIDs = []string{*createResp.DtoPlanResponse.ID}
 	return nil
@@ -310,7 +310,7 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 		EntityType: &planEntityType,
 	})
 	if err != nil {
-		return fmt.Errorf("query prices for plan %s: %w", planID, err)
+		return e2eprobe.Errorf(map[string]string{"plan_id": planID}, "query prices for plan %s: %w", planID, err)
 	}
 
 	existByLookup := map[string]bool{}
@@ -344,7 +344,7 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 			LookupKey:          strPtr("e2eprobe_base_price"),
 		}
 		if _, err := s.client.Prices().Create(ctx, baseReq); err != nil {
-			return fmt.Errorf("create base price: %w", err)
+			return e2eprobe.Errorf(map[string]string{"plan_id": planID, "price_lookup_key": "e2eprobe_base_price"}, "create base price: %w", err)
 		}
 	}
 
@@ -378,7 +378,7 @@ func (s *SeedEnsure) ensurePrices(ctx context.Context, seeds *e2eprobe.Seeds) er
 			LookupKey:          strPtr(usageKey),
 		}
 		if _, err := s.client.Prices().Create(ctx, usageReq); err != nil {
-			return fmt.Errorf("create usage price for %s: %w", spec.eventName, err)
+			return e2eprobe.Errorf(map[string]string{"plan_id": planID, "event_name": spec.eventName}, "create usage price for %s: %w", spec.eventName, err)
 		}
 	}
 	return nil
@@ -399,7 +399,7 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 			PlanID:             &planID,
 		})
 		if err != nil {
-			return fmt.Errorf("query subs for customer %s: %w", extID, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": extID, "plan_id": planID}, "query subs for customer %s: %w", extID, err)
 		}
 		if existResp.DtoListSubscriptionsResponse != nil && len(existResp.DtoListSubscriptionsResponse.Items) > 0 {
 			existing := existResp.DtoListSubscriptionsResponse.Items[0]
@@ -428,7 +428,7 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 		}
 		createResp, err := s.client.Subscriptions().Create(ctx, req)
 		if err != nil {
-			return fmt.Errorf("create sub for customer %s: %w", extID, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": extID, "plan_id": planID}, "create sub for customer %s: %w", extID, err)
 		}
 		if createResp.DtoSubscriptionResponse == nil || createResp.DtoSubscriptionResponse.ID == nil {
 			continue // defensive: empty response, skip
@@ -467,7 +467,7 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 		// Look up internal customer ID.
 		custResp, err := s.client.Customers().GetByExternalID(ctx, extCustID)
 		if err != nil {
-			return fmt.Errorf("get customer %s for wallet: %w", extCustID, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID}, "get customer %s for wallet: %w", extCustID, err)
 		}
 		if custResp.DtoCustomerResponse == nil || custResp.DtoCustomerResponse.ID == nil {
 			continue // can't look up wallets without internal ID
@@ -477,7 +477,7 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 		// Query wallets for this customer by internal ID.
 		walletsResp, err := s.client.Wallets().GetWalletsByCustomerID(ctx, internalCustID)
 		if err != nil {
-			return fmt.Errorf("get wallets for customer %s: %w", extCustID, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "internal_customer_id": internalCustID}, "get wallets for customer %s: %w", extCustID, err)
 		}
 		if walletsResp != nil && len(walletsResp.DtoWalletResponses) > 0 {
 			continue // wallet already exists
@@ -494,7 +494,7 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 		}
 		walletResp, err := s.client.Wallets().Create(ctx, createReq)
 		if err != nil {
-			return fmt.Errorf("create wallet for customer %s: %w", extCustID, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "internal_customer_id": internalCustID}, "create wallet for customer %s: %w", extCustID, err)
 		}
 		if walletResp.DtoWalletResponse == nil || walletResp.DtoWalletResponse.ID == nil {
 			continue // defensive
@@ -508,7 +508,7 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 			TransactionReason: types.TransactionReasonPurchasedCreditDirect,
 		}
 		if _, err := s.client.Wallets().TopUp(ctx, walletID, topUpReq); err != nil {
-			return fmt.Errorf("top up wallet %s for customer %s: %w", walletID, extCustID, err)
+			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID, "wallet_id": walletID}, "top up wallet %s for customer %s: %w", walletID, extCustID, err)
 		}
 	}
 	return nil

@@ -2,7 +2,6 @@ package checks
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
@@ -57,7 +56,11 @@ func (d *EventIngestDriver) Run(ctx context.Context) error {
 		Properties:         props,
 	}
 	if err := async.EnqueueWithOptions(opts); err != nil {
-		return fmt.Errorf("enqueue: %w", err)
+		return e2eprobe.Errorf(map[string]string{
+			"external_customer_id": draw.ExternalCustomerID,
+			"event_name":           draw.EventName,
+			"source":               draw.Source,
+		}, "enqueue: %w", err)
 	}
 	return nil
 }

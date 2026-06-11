@@ -58,7 +58,14 @@ func main() {
 	}
 	reporter := e2eprobe.NewCompositeReporter(reporters...)
 
-	runner := e2eprobe.NewRunner(reporter, lg, runID)
+	globalAttrs := map[string]string{}
+	if cfg.TenantID != "" {
+		globalAttrs["tenant_id"] = cfg.TenantID
+	}
+	if cfg.EnvironmentID != "" {
+		globalAttrs["environment_id"] = cfg.EnvironmentID
+	}
+	runner := e2eprobe.NewRunner(reporter, lg, runID, globalAttrs)
 
 	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
 	if cfg.DryRun {
