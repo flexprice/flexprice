@@ -2,6 +2,7 @@ package chargebee
 
 import (
 	"context"
+	"crypto/subtle"
 
 	"github.com/chargebee/chargebee-go/v3"
 	customerAction "github.com/chargebee/chargebee-go/v3/actions/customer"
@@ -326,10 +327,11 @@ func (c *Client) VerifyWebhookBasicAuth(ctx context.Context, username, password 
 		return nil // Allow webhook without auth if not configured
 	}
 
-	// Verify credentials match what was configured
-	if username != config.WebhookUsername || password != config.WebhookPassword {
+	// Verify credentials match what was configured using constant-time comparison to prevent timing attacks
+	usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(config.WebhookUsername)) == 1
+	passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(config.WebhookPassword)) == 1
+	if !usernameMatch || !passwordMatch {
 		c.logger.Error(ctx, "webhook Basic Auth verification failed",
-			"error", err,
 			"remote_addr", "masked_for_security") // Don't log credentials or usernames
 		return ierr.NewError("webhook authentication failed").
 			WithHint("Invalid Basic Auth credentials").

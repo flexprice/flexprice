@@ -214,9 +214,9 @@ func (e *CreditUsageExporter) resolveHeaders(metadataFields types.ExportMetadata
 func (e *CreditUsageExporter) buildRow(record *CreditUsageExportData, metadataFields types.ExportMetadataFields) []string {
 	row := make([]string, 0, len(staticHeaders)+len(metadataFields))
 	row = append(row,
-		record.CustomerName,
-		record.CustomerExternalID,
-		record.CustomerID,
+		sanitizeCSVField(record.CustomerName),
+		sanitizeCSVField(record.CustomerExternalID),
+		sanitizeCSVField(record.CustomerID),
 		record.CurrentBalance.String(),
 		record.RealtimeBalance.String(),
 		strconv.Itoa(record.NumberOfWallets),
@@ -230,4 +230,17 @@ func (e *CreditUsageExporter) buildRow(record *CreditUsageExportData, metadataFi
 // GetFilenamePrefix returns the prefix for the exported file
 func (e *CreditUsageExporter) GetFilenamePrefix() string {
 	return string(types.ScheduledTaskEntityTypeCreditUsage)
+}
+
+// sanitizeCSVField prefixes cells starting with formula-injection characters with a single quote
+// to prevent CSV formula injection attacks in spreadsheet applications.
+func sanitizeCSVField(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + s
+	}
+	return s
 }

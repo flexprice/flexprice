@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -49,6 +50,7 @@ type WebhookHandler struct {
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService
 	db                              postgres.IClient
 	webhookService                  *flexwebhook.WebhookService
+	cache                           cache.Cache
 }
 
 // NewWebhookHandler creates a new webhook handler
@@ -79,6 +81,7 @@ func NewWebhookHandler(
 		entityIntegrationMappingService: entityIntegrationMappingService,
 		db:                              db,
 		webhookService:                  webhookService,
+		cache:                           cache.NewInMemoryCache(),
 	}
 }
 
@@ -356,16 +359,11 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	}
 
 	// Construct the full URL that HubSpot called
-	// When behind a proxy (like ngrok), check X-Forwarded-Proto
-	var scheme string
-	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
-	} else if c.Request.TLS != nil {
-		scheme = "https"
-	} else {
-		scheme = "http"
-	}
-	fullURL := scheme + "://" + c.Request.Host + c.Request.URL.String()
+	// Use configured base URL instead of trusting user-supplied headers (X-Forwarded-Proto, Host)
+	// to prevent header injection attacks on the HubSpot signature verification.
+	scheme := "https"
+	host := h.config.Server.Address
+	fullURL := scheme + "://" + host + c.Request.URL.String()
 
 	h.logger.Debug(context.Background(), "verifying v3 signature",
 		"method", c.Request.Method,
@@ -1197,6 +1195,17 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		return
 	}
 
+	// Replay protection: check if this webhook-id has already been processed
+	webhookID := c.GetHeader("webhook-id")
+	if webhookID != "" {
+		cacheKey := "whop_webhook:" + webhookID
+		if _, found := h.cache.ForceCacheGet(context.Background(), cacheKey); found {
+			h.logger.Info(context.Background(), "duplicate Whop webhook received, skipping",
+				"webhook_id", webhookID)
+			return
+		}
+	}
+
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		h.logger.Error(context.Background(), "failed to read Whop webhook body", "error", err)
@@ -1297,5 +1306,12 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		h.logger.Error(context.Background(), "failed to handle Whop webhook event",
 			"error", err,
 			"type", event.Type)
+		return
+	}
+
+	// Store webhook-id in cache to prevent replay attacks (24-hour TTL)
+	if webhookID != "" {
+		cacheKey := "whop_webhook:" + webhookID
+		h.cache.ForceCacheSet(context.Background(), cacheKey, true, 24*time.Hour)
 	}
 }

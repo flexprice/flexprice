@@ -307,9 +307,9 @@ func (e *UsageAnalyticsExporter) resolveHeaders(metadataFields types.ExportMetad
 func (e *UsageAnalyticsExporter) buildRow(record *usageAnalyticsRecord, metadataFields types.ExportMetadataFields) []string {
 	row := make([]string, 0, len(usageAnalyticsStaticHeaders)+len(metadataFields))
 	row = append(row,
-		record.CustomerName,
-		record.CustomerID,
-		record.CustomerExternalID,
+		sanitizeCSVField(record.CustomerName),
+		sanitizeCSVField(record.CustomerID),
+		sanitizeCSVField(record.CustomerExternalID),
 		record.StartTime.Format(time.RFC3339),
 		record.EndTime.Format(time.RFC3339),
 		record.FeatureName,

@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"net/url"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -329,6 +331,11 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 		"payload", string(webHookPayload),
 	)
 
+	// Validate webhook URL to prevent SSRF attacks
+	if err := validateWebhookURL(tenantCfg.Endpoint); err != nil {
+		return err
+	}
+
 	req := &httpclient.Request{
 		Method:  "POST",
 		URL:     tenantCfg.Endpoint,
@@ -355,6 +362,69 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 			"event_name", event.EventName,
 		)
 		return err
+	}
+
+	return nil
+}
+
+// isPrivateIP returns true if the given IP address is a private, loopback, or link-local address.
+// This is used to prevent SSRF attacks by blocking webhook deliveries to internal network addresses.
+func isPrivateIP(ip net.IP) bool {
+	// Check loopback
+	if ip.IsLoopback() {
+		return true
+	}
+	// Check link-local
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	// Check IPv6 loopback (::1) and unique local (fc00::/7)
+	if ip.Equal(net.IPv6loopback) {
+		return true
+	}
+	privateRanges := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"fc00::/7",
+	}
+	for _, cidr := range privateRanges {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateWebhookURL parses the URL and resolves the hostname, rejecting any private/loopback IPs
+// to prevent Server-Side Request Forgery (SSRF) attacks.
+func validateWebhookURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ierr.NewError("invalid webhook URL").
+			WithHint("The configured webhook endpoint URL is malformed").
+			Mark(ierr.ErrValidation)
+	}
+
+	host := parsed.Hostname()
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		return ierr.NewError("failed to resolve webhook URL hostname").
+			WithHint("The webhook endpoint hostname could not be resolved").
+			Mark(ierr.ErrValidation)
+	}
+
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip != nil && isPrivateIP(ip) {
+			return ierr.NewError("webhook URL resolves to a private IP address").
+				WithHint("Webhook endpoints must not target internal network addresses").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil

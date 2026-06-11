@@ -109,13 +109,10 @@ func NewRouter(
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
 	write := permissionMW.RequirePermission // shorthand used on every write route
 
-	// Add middleware to set swagger host dynamically
-	router.Use(func(c *gin.Context) {
-		if swagger.SwaggerInfo != nil {
-			swagger.SwaggerInfo.Host = c.Request.Host
-		}
-		c.Next()
-	})
+	// Set swagger host once from config at startup, not from request headers
+	if swagger.SwaggerInfo != nil {
+		swagger.SwaggerInfo.Host = cfg.Server.Address
+	}
 
 	// Health check
 	router.GET("/health", handlers.Health.Health)
