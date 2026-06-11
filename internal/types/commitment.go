@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -38,6 +39,21 @@ func (ct CommitmentType) String() string {
 type Bucket struct {
 	Hour   int `json:"hour" validate:"min=0,max=24"`
 	Minute int `json:"minute" validate:"min=0,max=59"`
+}
+
+// Validate checks that the bucket values satisfy the contract.
+// Hour=24 is only valid when Minute=0 (end-of-day sentinel).
+func (b Bucket) Validate() error {
+	if b.Hour < 0 || b.Hour > 24 {
+		return fmt.Errorf("hour must be in range [0, 24], got %d", b.Hour)
+	}
+	if b.Minute < 0 || b.Minute > 59 {
+		return fmt.Errorf("minute must be in range [0, 59], got %d", b.Minute)
+	}
+	if b.Hour == 24 && b.Minute != 0 {
+		return fmt.Errorf("when hour=24, minute must be 0 (got minute=%d)", b.Minute)
+	}
+	return nil
 }
 
 // MinuteOfDay returns the bucket's position in the day as Hour*60 + Minute,
