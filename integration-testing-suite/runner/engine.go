@@ -131,6 +131,10 @@ func (e *Executor) RunJourney(ctx context.Context, j *Journey) *JourneyResult {
 	// skipped (ErrMissingDependency), the rest are attempted independently.
 	for _, step := range j.Teardown {
 		sr := e.runStep(ctx, rc, step, "teardown")
+		if sr.Status == StatusFail && step.Optional {
+			sr.Status = StatusPass
+			sr.Warned = true
+		}
 		res.Steps = append(res.Steps, sr)
 	}
 

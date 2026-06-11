@@ -415,6 +415,10 @@ teardown:
   - name: Delete Tax Rate
     call: TaxRates.DeleteTaxRate
     with: "{{ .steps.tax_rate.tax_rate_id }}"
+    # The cancelled subscription retains its tax association, and the API
+    # refuses to delete tax rates with active associations — so this is
+    # expected to fail until subscriptions are hard-deleted server-side.
+    optional: true
   - name: Delete Price Group
     call: Groups.DeleteGroup
     with: "{{ .steps.price_group.group_id }}"
