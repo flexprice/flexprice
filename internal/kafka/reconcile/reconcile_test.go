@@ -41,49 +41,109 @@ func desired(name string, parts int, rf int16) topicspec.ResolvedTopic {
 	return topicspec.ResolvedTopic{Name: name, Partitions: parts, ReplicationFactor: rf, RetentionMs: 1000}
 }
 
-func TestReconcile_CreatesMissingTopic(t *testing.T) {
-	f := &fakeAdmin{live: map[string]liveTopic{}}
-	res, err := Reconcile(f, []topicspec.ResolvedTopic{desired("events", 6, 3)})
-	require.NoError(t, err)
-	require.Len(t, f.created, 1)
-	assert.Equal(t, createCall{"events", 6, 3}, f.created[0])
-	assert.Equal(t, 1, res.Created)
+func TestReconcile(t *testing.T) {
+	tests := []struct {
+		name              string
+		live              map[string]liveTopic
+		failGrow          bool
+		desired           []topicspec.ResolvedTopic
+		wantErr           bool
+		wantCreated       int
+		wantGrown         int
+		wantSkippedShrink int
+		wantRFMismatch    int
+		checkAdmin        func(t *testing.T, f *fakeAdmin)
+	}{
+		{
+			name:        "creates missing topic",
+			live:        map[string]liveTopic{},
+			desired:     []topicspec.ResolvedTopic{desired("events", 6, 3)},
+			wantCreated: 1,
+			checkAdmin: func(t *testing.T, f *fakeAdmin) {
+				require.Len(t, f.created, 1)
+				assert.Equal(t, createCall{"events", 6, 3}, f.created[0])
+			},
+		},
+		{
+			name:      "grows partitions when fewer",
+			live:      map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3}},
+			desired:   []topicspec.ResolvedTopic{desired("events", 12, 3)},
+			wantGrown: 1,
+			checkAdmin: func(t *testing.T, f *fakeAdmin) {
+				assert.Equal(t, int32(12), f.grown["events"])
+			},
+		},
+		{
+			name:              "skips and warns when more partitions",
+			live:              map[string]liveTopic{"events": {Partitions: 12, ReplicationFactor: 3}},
+			desired:           []topicspec.ResolvedTopic{desired("events", 6, 3)},
+			wantSkippedShrink: 1,
+			checkAdmin: func(t *testing.T, f *fakeAdmin) {
+				assert.Empty(t, f.grown)
+			},
+		},
+		{
+			name:        "leaves unmanaged topics alone",
+			live:        map[string]liveTopic{"legacy": {Partitions: 3, ReplicationFactor: 3}},
+			desired:     []topicspec.ResolvedTopic{desired("events", 6, 3)},
+			wantCreated: 1,
+			wantGrown:   0,
+			checkAdmin: func(t *testing.T, f *fakeAdmin) {
+				assert.Len(t, f.created, 1)
+			},
+		},
+		{
+			name:           "warns on RF mismatch but does not change",
+			live:           map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 1}},
+			desired:        []topicspec.ResolvedTopic{desired("events", 6, 3)},
+			wantRFMismatch: 1,
+			checkAdmin: func(t *testing.T, f *fakeAdmin) {
+				assert.Empty(t, f.grown)
+			},
+		},
+		{
+			name:     "propagates grow error",
+			live:     map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3}},
+			failGrow: true,
+			desired:  []topicspec.ResolvedTopic{desired("events", 12, 3)},
+			wantErr:  true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeAdmin{live: tc.live, failGrow: tc.failGrow}
+			res, err := Reconcile(f, tc.desired)
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantCreated, res.Created)
+			assert.Equal(t, tc.wantGrown, res.Grown)
+			assert.Equal(t, tc.wantSkippedShrink, res.SkippedShrink)
+			assert.Equal(t, tc.wantRFMismatch, res.RFMismatch)
+			if tc.checkAdmin != nil {
+				tc.checkAdmin(t, f)
+			}
+		})
+	}
 }
 
-func TestReconcile_GrowsPartitionsWhenFewer(t *testing.T) {
-	f := &fakeAdmin{live: map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3}}}
-	res, err := Reconcile(f, []topicspec.ResolvedTopic{desired("events", 12, 3)})
-	require.NoError(t, err)
-	assert.Equal(t, int32(12), f.grown["events"])
-	assert.Equal(t, 1, res.Grown)
-}
-
-func TestReconcile_SkipsAndWarnsWhenMorePartitions(t *testing.T) {
-	f := &fakeAdmin{live: map[string]liveTopic{"events": {Partitions: 12, ReplicationFactor: 3}}}
-	res, err := Reconcile(f, []topicspec.ResolvedTopic{desired("events", 6, 3)})
-	require.NoError(t, err)
-	assert.Empty(t, f.grown)
-	assert.Equal(t, 1, res.SkippedShrink)
-}
-
-func TestReconcile_LeavesUnmanagedTopicsAlone(t *testing.T) {
-	f := &fakeAdmin{live: map[string]liveTopic{"legacy": {Partitions: 3, ReplicationFactor: 3}}}
-	res, err := Reconcile(f, []topicspec.ResolvedTopic{desired("events", 6, 3)})
-	require.NoError(t, err)
-	assert.Len(t, f.created, 1)
-	assert.Equal(t, 0, res.Grown)
-}
-
-func TestReconcile_WarnsOnRFMismatchButDoesNotChange(t *testing.T) {
+func TestPlan_EmitsRFMismatchAndGrow(t *testing.T) {
 	f := &fakeAdmin{live: map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 1}}}
-	res, err := Reconcile(f, []topicspec.ResolvedTopic{desired("events", 6, 3)})
+	plan, err := Plan(f, []topicspec.ResolvedTopic{desired("events", 12, 3)})
 	require.NoError(t, err)
-	assert.Equal(t, 1, res.RFMismatch)
-	assert.Empty(t, f.grown)
-}
 
-func TestReconcile_PropagatesGrowError(t *testing.T) {
-	f := &fakeAdmin{live: map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3}}, failGrow: true}
-	_, err := Reconcile(f, []topicspec.ResolvedTopic{desired("events", 12, 3)})
-	assert.Error(t, err)
+	var sawRFMismatch, sawGrow bool
+	for _, act := range plan {
+		switch act.Kind {
+		case ActionRFMismatch:
+			sawRFMismatch = true
+		case ActionGrow:
+			sawGrow = true
+		}
+	}
+	assert.True(t, sawRFMismatch, "expected an ActionRFMismatch")
+	assert.True(t, sawGrow, "expected an ActionGrow")
 }

@@ -28,7 +28,8 @@ func TestLoad_ParsesTopics(t *testing.T) {
 func TestResolve_AppliesDefaults(t *testing.T) {
 	spec, err := Parse([]byte(sampleYAML))
 	require.NoError(t, err)
-	got := spec.Resolve("staging", nil)
+	got, err := spec.Resolve("staging", nil)
+	require.NoError(t, err)
 
 	events := findTopic(t, got, "events")
 	assert.Equal(t, 6, events.Partitions)
@@ -37,24 +38,45 @@ func TestResolve_AppliesDefaults(t *testing.T) {
 }
 
 func TestResolve_PerTopicOverridesDefault(t *testing.T) {
-	spec, _ := Parse([]byte(sampleYAML))
-	got := spec.Resolve("staging", nil)
+	spec, err := Parse([]byte(sampleYAML))
+	require.NoError(t, err)
+	got, err := spec.Resolve("staging", nil)
+	require.NoError(t, err)
 	dlq := findTopic(t, got, "events_dlq")
 	assert.Equal(t, int16(1), dlq.ReplicationFactor)
 }
 
 func TestResolve_EnvOverrideFromHelmEnvVars(t *testing.T) {
-	spec, _ := Parse([]byte(sampleYAML))
+	spec, err := Parse([]byte(sampleYAML))
+	require.NoError(t, err)
 	p := 12
 	ov := map[string]EnvOverride{"events": {Partitions: &p}}
-	prod := findTopic(t, spec.Resolve("production", ov), "events")
+	resolvedProd, err := spec.Resolve("production", ov)
+	require.NoError(t, err)
+	prod := findTopic(t, resolvedProd, "events")
 	assert.Equal(t, 12, prod.Partitions)
-	base := findTopic(t, spec.Resolve("staging", nil), "events")
+	resolvedBase, err := spec.Resolve("staging", nil)
+	require.NoError(t, err)
+	base := findTopic(t, resolvedBase, "events")
 	assert.Equal(t, 6, base.Partitions)
 }
 
 func TestParse_RejectsZeroPartitions(t *testing.T) {
 	_, err := Parse([]byte("topics:\n  - name: bad\n    partitions: 0\n"))
+	assert.Error(t, err)
+}
+
+func TestParse_RejectsZeroReplicationFactor(t *testing.T) {
+	_, err := Parse([]byte("topics:\n  - name: bad\n    partitions: 3\n    replicationFactor: 0\n"))
+	assert.Error(t, err)
+}
+
+func TestResolve_RejectsZeroPartitionOverride(t *testing.T) {
+	spec, err := Parse([]byte(sampleYAML))
+	require.NoError(t, err)
+	p := 0
+	ov := map[string]EnvOverride{"events": {Partitions: &p}}
+	_, err = spec.Resolve("production", ov)
 	assert.Error(t, err)
 }
 
