@@ -806,7 +806,7 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 
 	if propertiesJSON != "" {
 		if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-			r.logger.Warnw("failed to parse properties JSON", "event_id", usage.ID, "error", err)
+			r.logger.Error(ctx, "failed to parse properties JSON", "event_id", usage.ID, "error", err)
 			usage.Properties = make(map[string]interface{})
 		}
 	}
