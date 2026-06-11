@@ -597,6 +597,28 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_DuplicateC
 	s.Require().Error(err)
 }
 
+// TestExecuteInheritance_ChildHasStandaloneSubRejected verifies that a customer with an
+// existing standalone subscription cannot be added as a child via the modification path.
+func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_ChildHasStandaloneSubRejected() {
+	ctx := s.GetContext()
+
+	parent := s.createCustomer("ext-parent-standalone-guard")
+	child := s.createCustomer("ext-child-standalone-guard")
+
+	parentSub := s.createActiveSub(parent.ID)
+	// Child already has its own standalone subscription
+	_ = s.createActiveSub(child.ID)
+
+	_, err := s.service.Execute(ctx, parentSub.ID, dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeInheritance,
+		InheritanceParams: &dto.SubModifyInheritanceRequest{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "standalone or parent subscriptions")
+}
+
 // TestExecuteInheritance_ChildAlreadyHasParentRejected verifies that a child customer
 // cannot be added under a second parent if it already has an active inherited subscription.
 func (s *SubscriptionModificationServiceSuite) TestExecuteInheritance_ChildAlreadyHasParentRejected() {
