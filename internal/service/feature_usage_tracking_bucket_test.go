@@ -149,12 +149,11 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 	// Build bucket summaries from the stamped points.
 	summaries := buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
 
-	// Expect 2 summaries: one for the bucket, one out-of-bucket.
-	require.Len(t, summaries, 2, "expected one bucket summary + one out-of-bucket summary")
+	// One summary per configured bucket; out-of-bucket usage is not summarized
+	// (the line item's own CommitmentInfo carries those totals).
+	require.Len(t, summaries, 1, "expected one summary per configured bucket")
 
 	bucketSummary := summaries[0]
-	outSummary := summaries[1]
-
 	assert.Equal(t, bucketID, bucketSummary.BucketID)
 	// 8 in-bucket hours * 10 usage/hour = 80
 	assert.True(t, bucketSummary.TotalUsage.Equal(decimal.NewFromInt(80)),
@@ -162,11 +161,6 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 	// BaseCharge: 80 * $2 = $160
 	assert.True(t, bucketSummary.BaseCharge.Equal(decimal.NewFromInt(160)),
 		"bucket base charge: got %s, want 160", bucketSummary.BaseCharge)
-
-	assert.Empty(t, outSummary.BucketID, "out-of-bucket summary must have empty BucketID")
-	// 16 out-of-bucket hours * 10 usage/hour = 160
-	assert.True(t, outSummary.TotalUsage.Equal(decimal.NewFromInt(160)),
-		"out-of-bucket total usage: got %s, want 160", outSummary.TotalUsage)
 }
 
 // TestAnalytics_BucketSummaries_WithAmountCommitment exercises the commitment math path.
@@ -223,7 +217,7 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 	}
 
 	summaries := buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
-	require.Len(t, summaries, 2)
+	require.Len(t, summaries, 1, "one summary per configured bucket; no out-of-bucket row")
 
 	bucketSummary := summaries[0]
 	assert.Equal(t, bucketID, bucketSummary.BucketID)
@@ -276,7 +270,6 @@ func TestAnalytics_BreakdownBucketFlag_NoLineItem(t *testing.T) {
 	// Verify it would not panic if called with an empty bucket slice by passing a
 	// line item with empty CommitmentTimeBuckets explicitly.
 	summaries := buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
-	// No defined buckets => only the out-of-bucket summary row.
-	require.Len(t, summaries, 1, "expect only out-of-bucket summary when no buckets defined")
-	assert.Empty(t, summaries[0].BucketID)
+	// No defined buckets => no summaries (out-of-bucket usage is not summarized).
+	require.Empty(t, summaries, "expect no summaries when no buckets defined")
 }

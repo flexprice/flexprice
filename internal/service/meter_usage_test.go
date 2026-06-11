@@ -2218,22 +2218,14 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_PerBucket_BreakdownAndSumm
 	}
 	s.Positive(inBucketPoints, "expected at least one point stamped with the bucket id")
 
-	// Bucket summaries: one per bucket + one out-of-bucket aggregate.
-	s.Require().Len(item.BucketSummaries, 2, "expected bucket + out-of-bucket summaries")
-	var bucketSummary, outSummary *dto.BucketSummary
-	for i := range item.BucketSummaries {
-		if item.BucketSummaries[i].BucketID == "bkt_morning" {
-			bucketSummary = &item.BucketSummaries[i]
-		} else if item.BucketSummaries[i].BucketID == "" {
-			outSummary = &item.BucketSummaries[i]
-		}
-	}
-	s.Require().NotNil(bucketSummary, "expected a summary for bkt_morning")
-	s.Require().NotNil(outSummary, "expected an out-of-bucket summary")
+	// Bucket summaries: one per configured bucket; out-of-bucket usage is not
+	// summarized (the item's CommitmentInfo carries the line-item totals).
+	s.Require().Len(item.BucketSummaries, 1, "expected one summary per configured bucket")
+	bucketSummary := item.BucketSummaries[0]
+	s.Equal("bkt_morning", bucketSummary.BucketID)
 	s.True(bucketSummary.TotalUsage.Equal(decimal.NewFromInt(10)), "bucket usage should be 10, got %s", bucketSummary.TotalUsage)
 	s.True(bucketSummary.BaseCharge.Equal(decimal.NewFromInt(20)), "bucket base charge should be $20 (10u × $2), got %s", bucketSummary.BaseCharge)
 	s.True(bucketSummary.ComputedOverage.GreaterThan(decimal.Zero), "bucket overage should be positive, got %s", bucketSummary.ComputedOverage)
-	s.True(outSummary.TotalUsage.Equal(decimal.NewFromInt(10)), "out-of-bucket usage should be 10, got %s", outSummary.TotalUsage)
 }
 
 // TestWindowCommitment_MultipleBuckets_WithTrueUp verifies two commitment
@@ -2787,7 +2779,8 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_MixedBucketTypes_OneLineIt
 
 	// Bucket summaries: 4 buckets + the out-of-bucket aggregate (empty here —
 	// the buckets cover the whole day).
-	s.Require().Len(item.BucketSummaries, 5)
+	// One summary per configured bucket (no out-of-bucket row).
+	s.Require().Len(item.BucketSummaries, 4)
 	summaries := make(map[string]dto.BucketSummary, len(item.BucketSummaries))
 	for _, bs := range item.BucketSummaries {
 		summaries[bs.BucketID] = bs
@@ -2803,11 +2796,9 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_MixedBucketTypes_OneLineIt
 	s.True(c.ComputedOverage.Equal(decimal.NewFromInt(3)), "C overage $3 at 1x: got %s", c.ComputedOverage)
 	s.True(c.ComputedTrueUp.Equal(decimal.NewFromInt(50)), "C true-up $50 (5 empty windows × slab(5u)): got %s", c.ComputedTrueUp)
 
-	// Spot-check A (amount + true-up) and the empty out-of-bucket row.
+	// Spot-check A (amount + true-up).
 	a := summaries["bkt_a"]
 	s.True(a.ComputedTrueUp.Equal(decimal.NewFromInt(28)), "A true-up $28 ($3 + 5×$5): got %s", a.ComputedTrueUp)
-	out := summaries[""]
-	s.True(out.TotalUsage.IsZero(), "out-of-bucket usage should be zero, got %s", out.TotalUsage)
 }
 
 // TestMeterUsage_CancelledSubBeforeWindow_NotAttributed is a regression test
