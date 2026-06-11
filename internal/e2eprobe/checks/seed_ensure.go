@@ -446,10 +446,11 @@ func (s *SeedEnsure) ensureSubscriptions(ctx context.Context, seeds *e2eprobe.Se
 			)
 			if activateErr != nil && s.logger != nil {
 				// Log warning but don't fail — sub will still work for most checks.
-				s.logger.Warnw("subscription activation failed; sub will still work for most checks",
+				// Recovered path (sub still works); Info per LL003.
+				s.logger.Info(ctx, "subscription activation failed; sub will still work for most checks",
 					"subscription_id", subID,
 					"external_customer_id", extID,
-					"error", activateErr,
+					"error", activateErr.Error(),
 				)
 			}
 		}

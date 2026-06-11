@@ -131,7 +131,7 @@ func (r *Runner) logHeartbeat() {
 	for _, k := range keys {
 		fields = append(fields, "check."+k, perCheck[k])
 	}
-	r.logger.Infow("e2eprobe heartbeat", fields...)
+	r.logger.Info(context.Background(), "e2eprobe heartbeat", fields...)
 }
 
 // recordResult increments the success or failure counter for the named check.
@@ -156,7 +156,7 @@ func (r *Runner) execute(ctx context.Context, check Check) {
 			err := fmt.Errorf("panic: %v", rec)
 			r.recordResult(check.Name(), false)
 			if r.logger != nil {
-				r.logger.Errorw("check panic", "check_name", check.Name(), "panic", rec)
+				r.logger.Error(ctx, "check panic", "error", err.Error(), "check_name", check.Name(), "panic", fmt.Sprint(rec))
 			}
 			if r.reporter != nil {
 				attrs := r.mergeAttrs(nil)
@@ -176,7 +176,9 @@ func (r *Runner) execute(ctx context.Context, check Check) {
 	if err := check.Run(ctx); err != nil {
 		r.recordResult(check.Name(), false)
 		if r.logger != nil {
-			r.logger.Warnw("check failed", "check_name", check.Name(), "kind", check.Kind(), "error", err)
+			// Use Info because the failure is reported through the Reporter
+			// (Slack + OTEL); this is the "recovered" path per LL003 guidance.
+			r.logger.Info(ctx, "check completed with failure (reported)", "check_name", check.Name(), "kind", check.Kind(), "error", err.Error())
 		}
 		if r.reporter != nil {
 			r.reporter.Report(ctx, FailureReport{

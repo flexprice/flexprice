@@ -52,12 +52,12 @@ func (c *dryRunClient) NewAsyncEventClient() AsyncEventClient {
 }
 
 // dryLog logs a skipped mutation at Info level.
-func dryLog(lg *logger.Logger, op string, kv ...any) {
+func dryLog(ctx context.Context, lg *logger.Logger, op string, kv ...any) {
 	if lg == nil {
 		return
 	}
 	fields := append([]any{"event", "e2eprobe.dryrun.skip", "op", op}, kv...)
-	lg.Infow("dry-run: skipped mutation", fields...)
+	lg.Info(ctx, "dry-run: skipped mutation", fields...)
 }
 
 func strPtrDryRun(s string) *string { return &s }
@@ -69,8 +69,8 @@ type dryRunCustomers struct {
 	lg    *logger.Logger
 }
 
-func (d *dryRunCustomers) Create(_ context.Context, req types.DtoCreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
-	dryLog(d.lg, "Customers.Create", "external_id", req.ExternalID)
+func (d *dryRunCustomers) Create(ctx context.Context, req types.DtoCreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
+	dryLog(ctx, d.lg, "Customers.Create", "external_id", req.ExternalID)
 	return &dtos.CreateCustomerResponse{}, nil
 }
 func (d *dryRunCustomers) GetByExternalID(ctx context.Context, externalID string) (*dtos.GetCustomerByExternalIDResponse, error) {
@@ -85,16 +85,16 @@ func (d *dryRunCustomers) GetEntitlements(ctx context.Context, id string) (*dtos
 func (d *dryRunCustomers) GetUsageSummary(ctx context.Context, req dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error) {
 	return d.inner.GetUsageSummary(ctx, req)
 }
-func (d *dryRunCustomers) Update(_ context.Context, _ types.DtoUpdateCustomerRequest, id, _ *string) (*dtos.UpdateCustomerResponse, error) {
+func (d *dryRunCustomers) Update(ctx context.Context, _ types.DtoUpdateCustomerRequest, id, _ *string) (*dtos.UpdateCustomerResponse, error) {
 	idVal := ""
 	if id != nil {
 		idVal = *id
 	}
-	dryLog(d.lg, "Customers.Update", "id", idVal)
+	dryLog(ctx, d.lg, "Customers.Update", "id", idVal)
 	return &dtos.UpdateCustomerResponse{}, nil
 }
-func (d *dryRunCustomers) Delete(_ context.Context, id string) (*dtos.DeleteCustomerResponse, error) {
-	dryLog(d.lg, "Customers.Delete", "id", id)
+func (d *dryRunCustomers) Delete(ctx context.Context, id string) (*dtos.DeleteCustomerResponse, error) {
+	dryLog(ctx, d.lg, "Customers.Delete", "id", id)
 	return &dtos.DeleteCustomerResponse{}, nil
 }
 
@@ -105,8 +105,8 @@ type dryRunPlans struct {
 	lg    *logger.Logger
 }
 
-func (d *dryRunPlans) Create(_ context.Context, req types.DtoCreatePlanRequest) (*dtos.CreatePlanResponse, error) {
-	dryLog(d.lg, "Plans.Create", "name", req.Name)
+func (d *dryRunPlans) Create(ctx context.Context, req types.DtoCreatePlanRequest) (*dtos.CreatePlanResponse, error) {
+	dryLog(ctx, d.lg, "Plans.Create", "name", req.Name)
 	fakeID := fmt.Sprintf("plan_dryrun_%d", time.Now().UnixNano())
 	return &dtos.CreatePlanResponse{
 		DtoPlanResponse: &types.DtoPlanResponse{ID: strPtrDryRun(fakeID)},
@@ -126,8 +126,8 @@ type dryRunPrices struct {
 	lg    *logger.Logger
 }
 
-func (d *dryRunPrices) Create(_ context.Context, req types.DtoCreatePriceRequest) (*dtos.CreatePriceResponse, error) {
-	dryLog(d.lg, "Prices.Create", "lookup_key", req.LookupKey)
+func (d *dryRunPrices) Create(ctx context.Context, req types.DtoCreatePriceRequest) (*dtos.CreatePriceResponse, error) {
+	dryLog(ctx, d.lg, "Prices.Create", "lookup_key", req.LookupKey)
 	return &dtos.CreatePriceResponse{}, nil
 }
 func (d *dryRunPrices) Query(ctx context.Context, filter types.PriceFilter) (*dtos.QueryPriceResponse, error) {
@@ -141,8 +141,8 @@ type dryRunFeatures struct {
 	lg    *logger.Logger
 }
 
-func (d *dryRunFeatures) Create(_ context.Context, req types.DtoCreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
-	dryLog(d.lg, "Features.Create", "lookup_key", req.LookupKey)
+func (d *dryRunFeatures) Create(ctx context.Context, req types.DtoCreateFeatureRequest) (*dtos.CreateFeatureResponse, error) {
+	dryLog(ctx, d.lg, "Features.Create", "lookup_key", req.LookupKey)
 	fakeID := fmt.Sprintf("feature_dryrun_%d", time.Now().UnixNano())
 	fakeMeterID := fmt.Sprintf("meter_dryrun_%d", time.Now().UnixNano())
 	return &dtos.CreateFeatureResponse{
@@ -163,12 +163,12 @@ type dryRunSubscriptions struct {
 	lg    *logger.Logger
 }
 
-func (d *dryRunSubscriptions) Create(_ context.Context, req types.DtoCreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
+func (d *dryRunSubscriptions) Create(ctx context.Context, req types.DtoCreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
 	extID := ""
 	if req.ExternalCustomerID != nil {
 		extID = *req.ExternalCustomerID
 	}
-	dryLog(d.lg, "Subscriptions.Create", "external_customer_id", extID)
+	dryLog(ctx, d.lg, "Subscriptions.Create", "external_customer_id", extID)
 	fakeID := fmt.Sprintf("sub_dryrun_%d", time.Now().UnixNano())
 	return &dtos.CreateSubscriptionResponse{
 		DtoSubscriptionResponse: &types.DtoSubscriptionResponse{ID: strPtrDryRun(fakeID)},
@@ -177,15 +177,15 @@ func (d *dryRunSubscriptions) Create(_ context.Context, req types.DtoCreateSubsc
 func (d *dryRunSubscriptions) Get(ctx context.Context, id string) (*dtos.GetSubscriptionResponse, error) {
 	return d.inner.Get(ctx, id)
 }
-func (d *dryRunSubscriptions) Cancel(_ context.Context, id string, _ types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
-	dryLog(d.lg, "Subscriptions.Cancel", "id", id)
+func (d *dryRunSubscriptions) Cancel(ctx context.Context, id string, _ types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
+	dryLog(ctx, d.lg, "Subscriptions.Cancel", "id", id)
 	return &dtos.CancelSubscriptionResponse{}, nil
 }
 func (d *dryRunSubscriptions) Query(ctx context.Context, filter types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error) {
 	return d.inner.Query(ctx, filter)
 }
-func (d *dryRunSubscriptions) ActivateSubscription(_ context.Context, id string, _ types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
-	dryLog(d.lg, "Subscriptions.ActivateSubscription", "id", id)
+func (d *dryRunSubscriptions) ActivateSubscription(ctx context.Context, id string, _ types.DtoActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
+	dryLog(ctx, d.lg, "Subscriptions.ActivateSubscription", "id", id)
 	return &dtos.ActivateSubscriptionResponse{}, nil
 }
 func (d *dryRunSubscriptions) GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
@@ -194,12 +194,12 @@ func (d *dryRunSubscriptions) GetEntitlements(ctx context.Context, id string, fe
 func (d *dryRunSubscriptions) GetUsage(ctx context.Context, req types.DtoGetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
 	return d.inner.GetUsage(ctx, req)
 }
-func (d *dryRunSubscriptions) CreateLineItem(_ context.Context, id string, _ types.DtoCreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
-	dryLog(d.lg, "Subscriptions.CreateLineItem", "id", id)
+func (d *dryRunSubscriptions) CreateLineItem(ctx context.Context, id string, _ types.DtoCreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
+	dryLog(ctx, d.lg, "Subscriptions.CreateLineItem", "id", id)
 	return &dtos.CreateSubscriptionLineItemResponse{}, nil
 }
-func (d *dryRunSubscriptions) UpdateLineItem(_ context.Context, id string, _ types.DtoUpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error) {
-	dryLog(d.lg, "Subscriptions.UpdateLineItem", "id", id)
+func (d *dryRunSubscriptions) UpdateLineItem(ctx context.Context, id string, _ types.DtoUpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error) {
+	dryLog(ctx, d.lg, "Subscriptions.UpdateLineItem", "id", id)
 	return &dtos.UpdateSubscriptionLineItemResponse{}, nil
 }
 
@@ -210,12 +210,12 @@ type dryRunWallets struct {
 	lg    *logger.Logger
 }
 
-func (d *dryRunWallets) Create(_ context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error) {
+func (d *dryRunWallets) Create(ctx context.Context, req types.DtoCreateWalletRequest) (*dtos.CreateWalletResponse, error) {
 	extID := ""
 	if req.ExternalCustomerID != nil {
 		extID = *req.ExternalCustomerID
 	}
-	dryLog(d.lg, "Wallets.Create", "external_customer_id", extID)
+	dryLog(ctx, d.lg, "Wallets.Create", "external_customer_id", extID)
 	fakeID := fmt.Sprintf("wallet_dryrun_%d", time.Now().UnixNano())
 	return &dtos.CreateWalletResponse{
 		DtoWalletResponse: &types.DtoWalletResponse{ID: strPtrDryRun(fakeID)},
@@ -230,8 +230,8 @@ func (d *dryRunWallets) GetWalletsByCustomerID(ctx context.Context, customerID s
 func (d *dryRunWallets) GetBalance(ctx context.Context, id string) (*dtos.GetWalletBalanceResponse, error) {
 	return d.inner.GetBalance(ctx, id)
 }
-func (d *dryRunWallets) TopUp(_ context.Context, id string, _ types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
-	dryLog(d.lg, "Wallets.TopUp", "id", id)
+func (d *dryRunWallets) TopUp(ctx context.Context, id string, _ types.DtoTopUpWalletRequest) (*dtos.TopUpWalletResponse, error) {
+	dryLog(ctx, d.lg, "Wallets.TopUp", "id", id)
 	return &dtos.TopUpWalletResponse{}, nil
 }
 
@@ -242,8 +242,8 @@ type dryRunEvents struct {
 	lg    *logger.Logger
 }
 
-func (d *dryRunEvents) Ingest(_ context.Context, req types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error) {
-	dryLog(d.lg, "Events.Ingest", "event_name", req.EventName)
+func (d *dryRunEvents) Ingest(ctx context.Context, req types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error) {
+	dryLog(ctx, d.lg, "Events.Ingest", "event_name", req.EventName)
 	return &dtos.IngestEventResponse{}, nil
 }
 func (d *dryRunEvents) GetUsageAnalytics(ctx context.Context, req types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
@@ -258,18 +258,18 @@ type dryRunAsync struct {
 }
 
 func (d *dryRunAsync) Enqueue(eventName, externalCustomerID string, properties map[string]any) error {
-	dryLog(d.lg, "AsyncEventClient.Enqueue", "event_name", eventName, "external_customer_id", externalCustomerID)
+	dryLog(context.Background(), d.lg, "AsyncEventClient.Enqueue", "event_name", eventName, "external_customer_id", externalCustomerID)
 	return nil
 }
 func (d *dryRunAsync) EnqueueWithOptions(opts flexprice.EventOptions) error {
-	dryLog(d.lg, "AsyncEventClient.EnqueueWithOptions", "event_name", opts.EventName)
+	dryLog(context.Background(), d.lg, "AsyncEventClient.EnqueueWithOptions", "event_name", opts.EventName)
 	return nil
 }
 func (d *dryRunAsync) Flush() error {
-	dryLog(d.lg, "AsyncEventClient.Flush")
+	dryLog(context.Background(), d.lg, "AsyncEventClient.Flush")
 	return nil
 }
 func (d *dryRunAsync) Close() error {
-	dryLog(d.lg, "AsyncEventClient.Close")
+	dryLog(context.Background(), d.lg, "AsyncEventClient.Close")
 	return nil
 }

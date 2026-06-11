@@ -2,6 +2,7 @@ package e2eprobe
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -65,20 +66,22 @@ type logReporter struct {
 	lg *logger.Logger
 }
 
-func (l *logReporter) Report(_ context.Context, r FailureReport) {
-	fields := []any{
+func (l *logReporter) Report(ctx context.Context, r FailureReport) {
+	errMsg := ""
+	if r.Err != nil {
+		errMsg = r.Err.Error()
+	}
+	// Attributes flattened into a JSON string so the Error call can keep
+	// "error" as a static literal first-position arg (required by LL006).
+	attrJSON, _ := json.Marshal(r.Attributes)
+	l.lg.Error(ctx, "e2eprobe check failed",
+		"error", errMsg,
 		"event", "e2eprobe.check.failed",
 		"check_name", r.CheckName,
 		"check_kind", string(r.CheckKind),
 		"step", r.Step,
 		"run_id", r.RunID,
 		"occurred_at", r.OccurredAt.Format(time.RFC3339Nano),
-	}
-	for k, v := range r.Attributes {
-		fields = append(fields, k, v)
-	}
-	if r.Err != nil {
-		fields = append(fields, "error", r.Err.Error())
-	}
-	l.lg.Errorw("e2eprobe check failed", fields...)
+		"attributes", string(attrJSON),
+	)
 }

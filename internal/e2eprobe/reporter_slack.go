@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/logger"
@@ -32,48 +33,49 @@ func (s *slackReporter) Report(ctx context.Context, r FailureReport) {
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
-		s.logWarn("marshal", err, r.CheckName)
+		s.logWarn(ctx,"marshal", err, r.CheckName)
 		return
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.webhookURL, bytes.NewReader(buf))
 	if err != nil {
-		s.logWarn("build_request", err, r.CheckName)
+		s.logWarn(ctx,"build_request", err, r.CheckName)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.logWarn("transport", err, r.CheckName)
+		s.logWarn(ctx,"transport", err, r.CheckName)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.logWarn("non_2xx", fmt.Errorf("status %d", resp.StatusCode), r.CheckName)
+		s.logWarn(ctx,"non_2xx", fmt.Errorf("status %d", resp.StatusCode), r.CheckName)
 	}
 }
 
-func (s *slackReporter) logWarn(step string, err error, check string) {
+func (s *slackReporter) logWarn(ctx context.Context, step string, err error, check string) {
 	if s.lg == nil {
 		return
 	}
-	s.lg.Warnw("slack reporter delivery failed", "step", step, "error", err.Error(), "check", check)
+	// Slack delivery failed → Error level per LL003 (Warn is bootstrap-only).
+	s.lg.Error(ctx, "slack reporter delivery failed", "error", err.Error(), "step", step, "check", check)
 }
 
 func formatSlack(r FailureReport) string {
-	var b bytes.Buffer
-	fmt.Fprintf(&b, ":rotating_light: *e2eprobe.check.failed*\n")
-	fmt.Fprintf(&b, "check: `%s` (%s)\n", r.CheckName, r.CheckKind)
+	var b strings.Builder
+	b.WriteString(":rotating_light: *e2eprobe.check.failed*\n")
+	b.WriteString(fmt.Sprintf("check: `%s` (%s)\n", r.CheckName, r.CheckKind))
 	if r.Step != "" {
-		fmt.Fprintf(&b, "step: `%s`\n", r.Step)
+		b.WriteString(fmt.Sprintf("step: `%s`\n", r.Step))
 	}
 	if r.RunID != "" {
-		fmt.Fprintf(&b, "run_id: `%s`\n", r.RunID)
+		b.WriteString(fmt.Sprintf("run_id: `%s`\n", r.RunID))
 	}
 	for k, v := range r.Attributes {
-		fmt.Fprintf(&b, "%s: `%s`\n", k, v)
+		b.WriteString(fmt.Sprintf("%s: `%s`\n", k, v))
 	}
 	if r.Err != nil {
-		fmt.Fprintf(&b, "error: ```%s```", r.Err.Error())
+		b.WriteString(fmt.Sprintf("error: ```%s```", r.Err.Error()))
 	}
 	return b.String()
 }

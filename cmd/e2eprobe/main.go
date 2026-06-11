@@ -31,6 +31,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
 		os.Exit(1)
 	}
+	// Drain any config warnings (malformed env vars that fell back to defaults)
+	// into the structured logger now that it exists.
+	for _, w := range cfg.Warnings {
+		lg.Warn(context.Background(), "e2eprobe config warning", "warning", w)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -39,7 +44,7 @@ func main() {
 
 	tp, shutdownTracer, err := e2eprobe.NewTracerProvider(ctx, cfg.OTEL, "e2eprobe")
 	if err != nil {
-		lg.Errorw("tracer init failed; continuing without OTEL", "error", err)
+		lg.Error(ctx, "tracer init failed; continuing without OTEL", "error", err)
 	}
 	defer func() {
 		shutCtx, cancelShut := context.WithTimeout(context.Background(), 5*time.Second)
@@ -71,7 +76,7 @@ func main() {
 	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
 	if cfg.DryRun {
 		client = e2eprobe.NewDryRunClient(client, lg)
-		lg.Infow("dry-run mode enabled: mutating SDK calls will be logged as no-ops")
+		lg.Info(ctx, "dry-run mode enabled: mutating SDK calls will be logged as no-ops")
 	}
 	reg := e2eprobe.NewRegistry()
 
@@ -146,7 +151,7 @@ func main() {
 		runner.Add(jn, e2eprobe.NewTickerScheduler(jn, cfg.Checks["JANITOR"].Interval))
 	}
 
-	lg.Infow("e2eprobe probe starting", "run_id", runID, "host", cfg.APIHost, "checks", len(cfg.Checks))
+	lg.Info(ctx, "e2eprobe probe starting", "run_id", runID, "host", cfg.APIHost, "checks", len(cfg.Checks))
 	runner.Start(ctx)
-	lg.Infow("e2eprobe probe shutdown")
+	lg.Info(ctx, "e2eprobe probe shutdown")
 }

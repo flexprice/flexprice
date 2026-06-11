@@ -31,6 +31,12 @@ type Config struct {
 	OTEL  OTELConfig
 
 	Checks map[string]CheckConfig
+
+	// Warnings collected during LoadConfig (e.g. malformed env vars that fell
+	// back to defaults). main.go drains these into the logger after the logger
+	// has been constructed, so we don't write to stderr from a non-bootstrap
+	// package.
+	Warnings []string
 }
 
 type SlackConfig struct {
@@ -80,17 +86,18 @@ var checkDefaultIntervals = map[string]time.Duration{
 }
 
 func LoadConfig() (*Config, error) {
+	var warnings []string
 	c := &Config{
 		APIHost:         os.Getenv("E2EPROBE_API_HOST"),
 		APIKey:          os.Getenv("E2EPROBE_API_KEY"),
 		Enabled:         getBool("E2EPROBE_ENABLED", true),
 		DryRun:          getBool("E2EPROBE_DRY_RUN", false),
-		EventIngestRate: getInt("E2EPROBE_EVENT_INGEST_RATE", 5),
-		EventIngestSeed: getInt64("E2EPROBE_EVENT_INGEST_SEED", time.Now().UnixNano()),
-		ListenerPort:    getInt("E2EPROBE_LISTENER_PORT", 8765),
+		EventIngestRate: getInt(&warnings, "E2EPROBE_EVENT_INGEST_RATE", 5),
+		EventIngestSeed: getInt64(&warnings, "E2EPROBE_EVENT_INGEST_SEED", time.Now().UnixNano()),
+		ListenerPort:    getInt(&warnings, "E2EPROBE_LISTENER_PORT", 8765),
 		TenantID:          os.Getenv("E2EPROBE_TENANT_ID"),
 		EnvironmentID:     os.Getenv("E2EPROBE_ENVIRONMENT_ID"),
-		HeartbeatInterval: getDuration("E2EPROBE_HEARTBEAT_INTERVAL", 5*time.Minute),
+		HeartbeatInterval: getDuration(&warnings, "E2EPROBE_HEARTBEAT_INTERVAL", 5*time.Minute),
 		Slack: SlackConfig{
 			WebhookURL: os.Getenv("E2EPROBE_SLACK_WEBHOOK_URL"),
 			Channel:    os.Getenv("E2EPROBE_SLACK_CHANNEL"),
@@ -103,9 +110,10 @@ func LoadConfig() (*Config, error) {
 	for _, name := range CheckNames {
 		c.Checks[name] = CheckConfig{
 			Enabled:  getBool("E2EPROBE_CHECK_"+name+"_ENABLED", true),
-			Interval: getDuration("E2EPROBE_CHECK_"+name+"_INTERVAL", checkDefaultIntervals[name]),
+			Interval: getDuration(&warnings, "E2EPROBE_CHECK_"+name+"_INTERVAL", checkDefaultIntervals[name]),
 		}
 	}
+	c.Warnings = warnings
 	if c.APIHost == "" {
 		return nil, errors.New("E2EPROBE_API_HOST is required")
 	}
@@ -123,40 +131,40 @@ func getBool(key string, def bool) bool {
 	return strings.EqualFold(v, "true") || v == "1"
 }
 
-func getInt(key string, def int) int {
+func getInt(warnings *[]string, key string, def int) int {
 	v := os.Getenv(key)
 	if v == "" {
 		return def
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "e2eprobe: warning: %s=%q is not a valid int; using default %d\n", key, v, def)
+		*warnings = append(*warnings, fmt.Sprintf("%s=%q is not a valid int; using default %d", key, v, def))
 		return def
 	}
 	return n
 }
 
-func getInt64(key string, def int64) int64 {
+func getInt64(warnings *[]string, key string, def int64) int64 {
 	v := os.Getenv(key)
 	if v == "" {
 		return def
 	}
 	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "e2eprobe: warning: %s=%q is not a valid int64; using default %d\n", key, v, def)
+		*warnings = append(*warnings, fmt.Sprintf("%s=%q is not a valid int64; using default %d", key, v, def))
 		return def
 	}
 	return n
 }
 
-func getDuration(key string, def time.Duration) time.Duration {
+func getDuration(warnings *[]string, key string, def time.Duration) time.Duration {
 	v := os.Getenv(key)
 	if v == "" {
 		return def
 	}
 	d, err := time.ParseDuration(v)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "e2eprobe: warning: %s=%q is not a valid duration; using default %s\n", key, v, def)
+		*warnings = append(*warnings, fmt.Sprintf("%s=%q is not a valid duration; using default %s", key, v, def))
 		return def
 	}
 	return d
