@@ -93,6 +93,7 @@ func (s *subscriptionModificationService) executeAddTax(
 		StartDate:     effectiveDate,
 		Priority:      100,
 		AutoApply:     true,
+		Currency:      subResp.Currency,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
