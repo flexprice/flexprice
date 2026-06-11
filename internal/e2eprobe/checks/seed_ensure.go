@@ -503,8 +503,9 @@ func (s *SeedEnsure) ensureWallets(ctx context.Context, seeds *e2eprobe.Seeds) e
 
 		// Top up to starting balance of 100 USD.
 		topUpReq := types.DtoTopUpWalletRequest{
-			Amount:      strPtr("100.00"),
-			Description: strPtr("e2eprobe initial seed top-up"),
+			Amount:            strPtr("100.00"),
+			Description:       strPtr("e2eprobe initial seed top-up"),
+			TransactionReason: types.TransactionReasonPurchasedCreditDirect,
 		}
 		if _, err := s.client.Wallets().TopUp(ctx, walletID, topUpReq); err != nil {
 			return fmt.Errorf("top up wallet %s for customer %s: %w", walletID, extCustID, err)

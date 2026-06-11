@@ -60,7 +60,11 @@ func main() {
 
 	runner := e2eprobe.NewRunner(reporter, lg, runID)
 
-	client := e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
+	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
+	if cfg.DryRun {
+		client = e2eprobe.NewDryRunClient(client, lg)
+		lg.Infow("dry-run mode enabled: mutating SDK calls will be logged as no-ops")
+	}
 	reg := e2eprobe.NewRegistry()
 
 	addCheck := func(check e2eprobe.Check, sched e2eprobe.Scheduler, key string) {
