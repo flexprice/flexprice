@@ -1136,7 +1136,11 @@ func (s *subscriptionModificationService) resolveExternalCustomersForInheritance
 		inheritedSubFilter.CustomerID = cust.ID
 		inheritedSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
 		inheritedSubFilter.Status = lo.ToPtr(types.StatusPublished)
-		inheritedSubFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+		inheritedSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusDraft,
+			types.SubscriptionStatusTrialing,
+		}
 		inheritedSubFilter.ExcludeParentSubscriptionIDs = subscriberSubIDs
 		inheritedSubFilter.WithLineItems = false
 		inheritedSubFilter.Limit = lo.ToPtr(1)

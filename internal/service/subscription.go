@@ -7173,7 +7173,11 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 		inheritedSubFilter.CustomerID = cust.ID
 		inheritedSubFilter.Status = lo.ToPtr(types.StatusPublished)
 		inheritedSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-		inheritedSubFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+		inheritedSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusDraft,
+			types.SubscriptionStatusTrialing,
+		}
 		inheritedSubFilter.ExcludeParentSubscriptionIDs = subscriberSubIDs
 		inheritedSubFilter.WithLineItems = false
 		inheritedSubFilter.Limit = lo.ToPtr(1)
