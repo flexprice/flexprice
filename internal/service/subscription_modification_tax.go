@@ -20,9 +20,9 @@ func (s *subscriptionModificationService) executeTaxModification(
 		effectiveDate = params.EffectiveDate.UTC()
 	}
 	switch params.Action {
-	case dto.SubModifyActionAdd:
+	case dto.SubModifyTaxActionAdd:
 		return s.executeAddTax(ctx, subscriptionID, *params.TaxRateID, effectiveDate)
-	case dto.SubModifyActionRemove:
+	case dto.SubModifyTaxActionRemove:
 		return s.executeRemoveTax(ctx, subscriptionID, *params.AssociationID, effectiveDate)
 	default:
 		return nil, ierr.NewError("unknown tax action: " + string(params.Action)).
@@ -37,6 +37,13 @@ func (s *subscriptionModificationService) executeAddTax(
 	effectiveDate time.Time,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
+
+	// Validate subscription exists before any mutation.
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
 
 	taxRate, err := sp.TaxRateRepo.Get(ctx, taxRateID)
 	if err != nil {
@@ -89,17 +96,14 @@ func (s *subscriptionModificationService) executeAddTax(
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
-	if err := sp.TaxAssociationRepo.Create(ctx, assoc); err != nil {
+	if err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		return sp.TaxAssociationRepo.Create(txCtx, assoc)
+	}); err != nil {
 		return nil, err
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
 	return &dto.SubscriptionModifyResponse{
 		Subscription:     subResp,
 		ChangedResources: dto.ChangedResources{},
@@ -113,6 +117,13 @@ func (s *subscriptionModificationService) executeRemoveTax(
 	effectiveDate time.Time,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
+
+	// Validate subscription exists before any mutation.
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
 
 	assoc, err := sp.TaxAssociationRepo.Get(ctx, associationID)
 	if err != nil {
@@ -141,17 +152,14 @@ func (s *subscriptionModificationService) executeRemoveTax(
 	}
 
 	assoc.EndDate = &effectiveDate
-	if err := sp.TaxAssociationRepo.Update(ctx, assoc); err != nil {
+	if err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		return sp.TaxAssociationRepo.Update(txCtx, assoc)
+	}); err != nil {
 		return nil, err
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
 	return &dto.SubscriptionModifyResponse{
 		Subscription:     subResp,
 		ChangedResources: dto.ChangedResources{},
@@ -168,9 +176,9 @@ func (s *subscriptionModificationService) previewTaxModification(
 		effectiveDate = params.EffectiveDate.UTC()
 	}
 	switch params.Action {
-	case dto.SubModifyActionAdd:
+	case dto.SubModifyTaxActionAdd:
 		return s.previewAddTax(ctx, subscriptionID, *params.TaxRateID, effectiveDate)
-	case dto.SubModifyActionRemove:
+	case dto.SubModifyTaxActionRemove:
 		return s.previewRemoveTax(ctx, subscriptionID, *params.AssociationID, effectiveDate)
 	default:
 		return nil, ierr.NewError("unknown tax action: " + string(params.Action)).

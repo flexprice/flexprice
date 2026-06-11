@@ -8975,7 +8975,7 @@
           "Subscriptions"
         ],
         "summary": "Execute subscription modification",
-        "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, coupon, or tax).",
+        "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax).",
         "operationId": "executeSubscriptionModify",
         "parameters": [
           {
@@ -9056,7 +9056,7 @@
           "Subscriptions"
         ],
         "summary": "Preview subscription modification",
-        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, coupon, or tax) without committing changes.",
+        "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax) without committing changes.",
         "operationId": "previewSubscriptionModify",
         "parameters": [
           {
@@ -16394,6 +16394,11 @@
           "currency": {
             "type": "string"
           },
+          "end_date": {
+            "type": "string",
+            "description": "EndDate sets when this association expires. Must be after StartDate when both are provided.",
+            "format": "date-time"
+          },
           "entity_id": {
             "type": "string"
           },
@@ -16411,6 +16416,11 @@
           },
           "priority": {
             "type": "integer"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate sets when this association becomes active. Defaults to now if omitted.",
+            "format": "date-time"
           },
           "tax_rate_code": {
             "type": "string"
@@ -19705,15 +19715,15 @@
           }
         }
       },
-      "SubModifyAction": {
+      "SubModifyCouponAction": {
         "type": "string",
         "enum": [
           "add",
           "remove"
         ],
         "x-enum-varnames": [
-          "SubModifyActionAdd",
-          "SubModifyActionRemove"
+          "SubModifyCouponActionAdd",
+          "SubModifyCouponActionRemove"
         ]
       },
       "SubModifyCouponParams": {
@@ -19723,7 +19733,7 @@
         "type": "object",
         "properties": {
           "action": {
-            "$ref": "#/components/schemas/SubModifyAction"
+            "$ref": "#/components/schemas/SubModifyCouponAction"
           },
           "association_id": {
             "type": "string"
@@ -19784,6 +19794,17 @@
           }
         }
       },
+      "SubModifyTaxAction": {
+        "type": "string",
+        "enum": [
+          "add",
+          "remove"
+        ],
+        "x-enum-varnames": [
+          "SubModifyTaxActionAdd",
+          "SubModifyTaxActionRemove"
+        ]
+      },
       "SubModifyTaxParams": {
         "required": [
           "action"
@@ -19791,7 +19812,7 @@
         "type": "object",
         "properties": {
           "action": {
-            "$ref": "#/components/schemas/SubModifyAction"
+            "$ref": "#/components/schemas/SubModifyTaxAction"
           },
           "association_id": {
             "type": "string"
@@ -26087,7 +26108,6 @@
       "types.WindowSize": {
         "type": "string",
         "enum": [
-          "MONTH",
           "MINUTE",
           "15MIN",
           "30MIN",
@@ -26097,10 +26117,10 @@
           "12HOUR",
           "DAY",
           "WEEK",
+          "MONTH",
           "MONTH"
         ],
         "x-enum-varnames": [
-          "DefaultWindowSize",
           "WindowSizeMinute",
           "WindowSize15Min",
           "WindowSize30Min",
@@ -26110,7 +26130,8 @@
           "WindowSize12Hour",
           "WindowSizeDay",
           "WindowSizeWeek",
-          "WindowSizeMonth"
+          "WindowSizeMonth",
+          "DefaultWindowSize"
         ],
         "x-speakeasy-name-override": "WindowSize"
       },

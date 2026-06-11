@@ -7485,7 +7485,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, coupon, or tax).",
+                "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax).",
                 "consumes": [
                     "application/json"
                 ],
@@ -7551,7 +7551,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, coupon, or tax) without committing changes.",
+                "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax) without committing changes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14556,6 +14556,10 @@ const docTemplate = `{
                 "currency": {
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "EndDate sets when this association expires. Must be after StartDate when both are provided.",
+                    "type": "string"
+                },
                 "entity_id": {
                     "type": "string"
                 },
@@ -14573,6 +14577,10 @@ const docTemplate = `{
                 },
                 "priority": {
                     "type": "integer"
+                },
+                "start_date": {
+                    "description": "StartDate sets when this association becomes active. Defaults to now if omitted.",
+                    "type": "string"
                 },
                 "tax_rate_code": {
                     "type": "string"
@@ -17932,15 +17940,15 @@ const docTemplate = `{
                 }
             }
         },
-        "SubModifyAction": {
+        "SubModifyCouponAction": {
             "type": "string",
             "enum": [
                 "add",
                 "remove"
             ],
             "x-enum-varnames": [
-                "SubModifyActionAdd",
-                "SubModifyActionRemove"
+                "SubModifyCouponActionAdd",
+                "SubModifyCouponActionRemove"
             ]
         },
         "SubModifyCouponParams": {
@@ -17950,7 +17958,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "action": {
-                    "$ref": "#/definitions/SubModifyAction"
+                    "$ref": "#/definitions/SubModifyCouponAction"
                 },
                 "association_id": {
                     "type": "string"
@@ -18015,6 +18023,17 @@ const docTemplate = `{
                 }
             }
         },
+        "SubModifyTaxAction": {
+            "type": "string",
+            "enum": [
+                "add",
+                "remove"
+            ],
+            "x-enum-varnames": [
+                "SubModifyTaxActionAdd",
+                "SubModifyTaxActionRemove"
+            ]
+        },
         "SubModifyTaxParams": {
             "type": "object",
             "required": [
@@ -18022,7 +18041,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "action": {
-                    "$ref": "#/definitions/SubModifyAction"
+                    "$ref": "#/definitions/SubModifyTaxAction"
                 },
                 "association_id": {
                     "type": "string"
@@ -24409,7 +24428,6 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
-                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -24419,10 +24437,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
+                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
-                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -24432,7 +24450,8 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth"
+                "WindowSizeMonth",
+                "DefaultWindowSize"
             ]
         },
         "types.WorkflowExecutionFilter": {

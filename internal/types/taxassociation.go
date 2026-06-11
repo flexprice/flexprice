@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
@@ -15,6 +17,9 @@ type TaxAssociationFilter struct {
 	ExternalCustomerID string            `json:"external_customer_id,omitempty" form:"external_customer_id"`
 	Currency           string            `json:"currency,omitempty" form:"currency"`
 	AutoApply          *bool             `json:"auto_apply,omitempty" form:"auto_apply"`
+	// ActiveAt, when set, restricts results to associations active at that point in time:
+	// start_date <= ActiveAt AND (end_date IS NULL OR end_date > ActiveAt)
+	ActiveAt *time.Time `json:"active_at,omitempty" form:"active_at"`
 }
 
 // EntityHierarchy defines the hierarchy levels for tax associations

@@ -75,7 +75,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionAdd,
+						Action:        dto.SubModifyCouponActionAdd,
 						CouponID:      &c.ID,
 						EffectiveDate: &past,
 					},
@@ -109,7 +109,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionAdd,
+						Action:        dto.SubModifyCouponActionAdd,
 						CouponID:      &c.ID,
 						EffectiveDate: &future,
 					},
@@ -143,7 +143,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:   dto.SubModifyActionAdd,
+						Action:   dto.SubModifyCouponActionAdd,
 						CouponID: &c.ID,
 						// EffectiveDate is nil → should default to now
 					},
@@ -180,7 +180,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionAdd,
+						Action:        dto.SubModifyCouponActionAdd,
 						CouponID:      &c.ID,
 						EffectiveDate: &now,
 					},
@@ -200,7 +200,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:   dto.SubModifyActionAdd,
+						Action:   dto.SubModifyCouponActionAdd,
 						CouponID: &bogusID,
 					},
 				}
@@ -225,7 +225,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyCouponActionRemove,
 						AssociationID: &assoc.ID,
 						EffectiveDate: &past,
 					},
@@ -256,7 +256,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyCouponActionRemove,
 						AssociationID: &assoc.ID,
 						EffectiveDate: &future,
 					},
@@ -287,7 +287,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyCouponActionRemove,
 						AssociationID: &assoc.ID,
 						// EffectiveDate nil → defaults to now
 					},
@@ -313,7 +313,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyCouponActionRemove,
 						AssociationID: &bogusID,
 					},
 				}
@@ -338,7 +338,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyCouponActionRemove,
 						AssociationID: &assoc.ID,
 					},
 				}
@@ -364,7 +364,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyCouponActionRemove,
 						AssociationID: &assoc.ID,
 						EffectiveDate: &effectiveDate,
 					},
@@ -385,7 +385,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyActionAdd,
+						Action:        dto.SubModifyCouponActionAdd,
 						CouponID:      &c.ID,
 						EffectiveDate: &future,
 					},

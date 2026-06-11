@@ -406,5 +406,15 @@ func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f
 			query = query.Where(entTaxConfig.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
 		}
 	}
+	if f.ActiveAt != nil {
+		t := lo.FromPtr(f.ActiveAt)
+		query = query.Where(
+			entTaxConfig.StartDateLTE(t),
+			entTaxConfig.Or(
+				entTaxConfig.EndDateIsNil(),
+				entTaxConfig.EndDateGT(t),
+			),
+		)
+	}
 	return query, nil
 }

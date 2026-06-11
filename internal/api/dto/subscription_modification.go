@@ -109,12 +109,20 @@ const (
 	SubscriptionModifyTypeTax    SubscriptionModifyType = "tax"
 )
 
-// SubModifyAction is the action to perform on a coupon or tax association.
-type SubModifyAction string
+// SubModifyCouponAction is the action to perform on a coupon association.
+type SubModifyCouponAction string
 
 const (
-	SubModifyActionAdd    SubModifyAction = "add"
-	SubModifyActionRemove SubModifyAction = "remove"
+	SubModifyCouponActionAdd    SubModifyCouponAction = "add"
+	SubModifyCouponActionRemove SubModifyCouponAction = "remove"
+)
+
+// SubModifyTaxAction is the action to perform on a tax association.
+type SubModifyTaxAction string
+
+const (
+	SubModifyTaxActionAdd    SubModifyTaxAction = "add"
+	SubModifyTaxActionRemove SubModifyTaxAction = "remove"
 )
 
 // GroupedInvoicingAction identifies whether children are being added to or removed from grouped invoicing.
@@ -154,21 +162,21 @@ func (r *SubModifyGroupedInvoicingParams) Validate() error {
 
 // SubModifyCouponParams is the payload for coupon association changes on a subscription.
 type SubModifyCouponParams struct {
-	Action        SubModifyAction `json:"action" binding:"required"`
-	CouponID      *string         `json:"coupon_id,omitempty"`
-	AssociationID *string         `json:"association_id,omitempty"`
-	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+	Action        SubModifyCouponAction `json:"action" binding:"required"`
+	CouponID      *string               `json:"coupon_id,omitempty"`
+	AssociationID *string               `json:"association_id,omitempty"`
+	EffectiveDate *time.Time            `json:"effective_date,omitempty"`
 }
 
 func (r *SubModifyCouponParams) Validate() error {
 	switch r.Action {
-	case SubModifyActionAdd:
+	case SubModifyCouponActionAdd:
 		if r.CouponID == nil || *r.CouponID == "" {
 			return ierr.NewError("coupon_id is required for action 'add'").
 				WithHint("Provide a valid coupon_id").
 				Mark(ierr.ErrValidation)
 		}
-	case SubModifyActionRemove:
+	case SubModifyCouponActionRemove:
 		if r.AssociationID == nil || *r.AssociationID == "" {
 			return ierr.NewError("association_id is required for action 'remove'").
 				WithHint("Provide the coupon association ID to remove").
@@ -184,21 +192,21 @@ func (r *SubModifyCouponParams) Validate() error {
 
 // SubModifyTaxParams is the payload for tax association changes on a subscription.
 type SubModifyTaxParams struct {
-	Action        SubModifyAction `json:"action" binding:"required"`
-	TaxRateID     *string         `json:"tax_rate_id,omitempty"`
-	AssociationID *string         `json:"association_id,omitempty"`
-	EffectiveDate *time.Time      `json:"effective_date,omitempty"`
+	Action        SubModifyTaxAction `json:"action" binding:"required"`
+	TaxRateID     *string            `json:"tax_rate_id,omitempty"`
+	AssociationID *string            `json:"association_id,omitempty"`
+	EffectiveDate *time.Time         `json:"effective_date,omitempty"`
 }
 
 func (r *SubModifyTaxParams) Validate() error {
 	switch r.Action {
-	case SubModifyActionAdd:
+	case SubModifyTaxActionAdd:
 		if r.TaxRateID == nil || *r.TaxRateID == "" {
 			return ierr.NewError("tax_rate_id is required for action 'add'").
 				WithHint("Provide a valid tax_rate_id").
 				Mark(ierr.ErrValidation)
 		}
-	case SubModifyActionRemove:
+	case SubModifyTaxActionRemove:
 		if r.AssociationID == nil || *r.AssociationID == "" {
 			return ierr.NewError("association_id is required for action 'remove'").
 				WithHint("Provide the tax association ID to remove").

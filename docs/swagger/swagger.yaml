@@ -2292,6 +2292,10 @@ definitions:
         type: boolean
       currency:
         type: string
+      end_date:
+        description: EndDate sets when this association expires. Must be after StartDate
+          when both are provided.
+        type: string
       entity_id:
         type: string
       entity_type:
@@ -2304,6 +2308,10 @@ definitions:
         type: object
       priority:
         type: integer
+      start_date:
+        description: StartDate sets when this association becomes active. Defaults
+          to now if omitted.
+        type: string
       tax_rate_code:
         type: string
     required:
@@ -4768,18 +4776,18 @@ definitions:
           additional context)
         type: string
     type: object
-  SubModifyAction:
+  SubModifyCouponAction:
     enum:
     - add
     - remove
     type: string
     x-enum-varnames:
-    - SubModifyActionAdd
-    - SubModifyActionRemove
+    - SubModifyCouponActionAdd
+    - SubModifyCouponActionRemove
   SubModifyCouponParams:
     properties:
       action:
-        $ref: '#/definitions/SubModifyAction'
+        $ref: '#/definitions/SubModifyCouponAction'
       association_id:
         type: string
       coupon_id:
@@ -4823,10 +4831,18 @@ definitions:
     required:
     - line_items
     type: object
+  SubModifyTaxAction:
+    enum:
+    - add
+    - remove
+    type: string
+    x-enum-varnames:
+    - SubModifyTaxActionAdd
+    - SubModifyTaxActionRemove
   SubModifyTaxParams:
     properties:
       action:
-        $ref: '#/definitions/SubModifyAction'
+        $ref: '#/definitions/SubModifyTaxAction'
       association_id:
         type: string
       effective_date:
@@ -9493,7 +9509,6 @@ definitions:
     - WebhookEventCreditNoteUpdated
   types.WindowSize:
     enum:
-    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -9504,9 +9519,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
+    - MONTH
     type: string
     x-enum-varnames:
-    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -9517,6 +9532,7 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
+    - DefaultWindowSize
   types.WorkflowExecutionFilter:
     properties:
       end_time:
@@ -14976,7 +14992,7 @@ paths:
       consumes:
       - application/json
       description: Execute a mid-cycle subscription modification (inheritance, quantity
-        change, coupon, or tax).
+        change, grouped invoicing, trial end, coupon, or tax).
       operationId: executeSubscriptionModify
       parameters:
       - description: Subscription ID
@@ -15020,7 +15036,8 @@ paths:
       consumes:
       - application/json
       description: Preview the impact of a mid-cycle subscription modification (inheritance,
-        quantity change, coupon, or tax) without committing changes.
+        quantity change, grouped invoicing, trial end, coupon, or tax) without committing
+        changes.
       operationId: previewSubscriptionModify
       parameters:
       - description: Subscription ID

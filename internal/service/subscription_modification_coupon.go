@@ -20,9 +20,9 @@ func (s *subscriptionModificationService) executeCouponModification(
 		effectiveDate = params.EffectiveDate.UTC()
 	}
 	switch params.Action {
-	case dto.SubModifyActionAdd:
+	case dto.SubModifyCouponActionAdd:
 		return s.executeAddCoupon(ctx, subscriptionID, *params.CouponID, effectiveDate)
-	case dto.SubModifyActionRemove:
+	case dto.SubModifyCouponActionRemove:
 		return s.executeRemoveCoupon(ctx, subscriptionID, *params.AssociationID, effectiveDate)
 	default:
 		return nil, ierr.NewError("unknown coupon action: " + string(params.Action)).
@@ -37,6 +37,13 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	effectiveDate time.Time,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
+
+	// Validate subscription exists before any mutation.
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
 
 	c, err := sp.CouponRepo.Get(ctx, couponID)
 	if err != nil {
@@ -76,24 +83,21 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	}
 
 	assoc := &coupon_association.CouponAssociation{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
-		CouponID:      couponID,
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
+		CouponID:       couponID,
 		SubscriptionID: subscriptionID,
-		StartDate:     effectiveDate,
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		BaseModel:     types.GetDefaultBaseModel(ctx),
+		StartDate:      effectiveDate,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
-	if err := sp.CouponAssociationRepo.Create(ctx, assoc); err != nil {
+	if err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		return sp.CouponAssociationRepo.Create(txCtx, assoc)
+	}); err != nil {
 		return nil, err
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
 	return &dto.SubscriptionModifyResponse{
 		Subscription:     subResp,
 		ChangedResources: dto.ChangedResources{},
@@ -107,6 +111,13 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 	effectiveDate time.Time,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
+
+	// Validate subscription exists before any mutation.
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
 
 	assoc, err := sp.CouponAssociationRepo.Get(ctx, associationID)
 	if err != nil {
@@ -135,17 +146,14 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 	}
 
 	assoc.EndDate = &effectiveDate
-	if err := sp.CouponAssociationRepo.Update(ctx, assoc); err != nil {
+	if err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
+		return sp.CouponAssociationRepo.Update(txCtx, assoc)
+	}); err != nil {
 		return nil, err
 	}
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
 	return &dto.SubscriptionModifyResponse{
 		Subscription:     subResp,
 		ChangedResources: dto.ChangedResources{},
@@ -162,9 +170,9 @@ func (s *subscriptionModificationService) previewCouponModification(
 		effectiveDate = params.EffectiveDate.UTC()
 	}
 	switch params.Action {
-	case dto.SubModifyActionAdd:
+	case dto.SubModifyCouponActionAdd:
 		return s.previewAddCoupon(ctx, subscriptionID, *params.CouponID, effectiveDate)
-	case dto.SubModifyActionRemove:
+	case dto.SubModifyCouponActionRemove:
 		return s.previewRemoveCoupon(ctx, subscriptionID, *params.AssociationID, effectiveDate)
 	default:
 		return nil, ierr.NewError("unknown coupon action: " + string(params.Action)).

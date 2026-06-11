@@ -77,7 +77,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionAdd,
+						Action:        dto.SubModifyTaxActionAdd,
 						TaxRateID:     &tr.ID,
 						EffectiveDate: &past,
 					},
@@ -112,7 +112,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionAdd,
+						Action:        dto.SubModifyTaxActionAdd,
 						TaxRateID:     &tr.ID,
 						EffectiveDate: &future,
 					},
@@ -147,7 +147,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:    dto.SubModifyActionAdd,
+						Action:    dto.SubModifyTaxActionAdd,
 						TaxRateID: &tr.ID,
 						// EffectiveDate is nil → should default to now
 					},
@@ -185,7 +185,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionAdd,
+						Action:        dto.SubModifyTaxActionAdd,
 						TaxRateID:     &tr.ID,
 						EffectiveDate: &now,
 					},
@@ -205,7 +205,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:    dto.SubModifyActionAdd,
+						Action:    dto.SubModifyTaxActionAdd,
 						TaxRateID: &bogusID,
 					},
 				}
@@ -230,7 +230,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyTaxActionRemove,
 						AssociationID: &assoc.ID,
 						EffectiveDate: &past,
 					},
@@ -261,7 +261,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyTaxActionRemove,
 						AssociationID: &assoc.ID,
 						EffectiveDate: &future,
 					},
@@ -292,7 +292,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyTaxActionRemove,
 						AssociationID: &assoc.ID,
 						// EffectiveDate nil → defaults to now
 					},
@@ -318,7 +318,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyTaxActionRemove,
 						AssociationID: &bogusID,
 					},
 				}
@@ -343,7 +343,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyTaxActionRemove,
 						AssociationID: &assoc.ID,
 					},
 				}
@@ -369,7 +369,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionRemove,
+						Action:        dto.SubModifyTaxActionRemove,
 						AssociationID: &assoc.ID,
 						EffectiveDate: &effectiveDate,
 					},
@@ -390,7 +390,7 @@ func (s *SubscriptionModificationServiceSuite) TestTaxModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeTax,
 					TaxParams: &dto.SubModifyTaxParams{
-						Action:        dto.SubModifyActionAdd,
+						Action:        dto.SubModifyTaxActionAdd,
 						TaxRateID:     &tr.ID,
 						EffectiveDate: &future,
 					},
