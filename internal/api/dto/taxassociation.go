@@ -77,8 +77,7 @@ func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, taxR
 		StartDate:     startDate,
 	}
 	if r.EndDate != nil {
-		endDate := r.EndDate.UTC()
-		ta.EndDate = &endDate
+		ta.EndDate = lo.ToPtr(r.EndDate.UTC())
 	}
 	return ta
 }

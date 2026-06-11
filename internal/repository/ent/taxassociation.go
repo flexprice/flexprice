@@ -65,6 +65,7 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 		SetTenantID(t.TenantID).
 		SetUpdatedBy(t.UpdatedBy).
 		SetStartDate(t.StartDate).
+		SetNillableEndDate(t.EndDate).
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -157,11 +158,8 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 		SetAutoApply(t.AutoApply).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
+		SetNillableEndDate(t.EndDate).
 		SetMetadata(t.Metadata)
-
-	if t.EndDate != nil {
-		update = update.SetEndDate(*t.EndDate)
-	}
 
 	_, err := update.Save(ctx)
 	if err != nil {
