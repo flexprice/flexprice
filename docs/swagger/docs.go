@@ -861,133 +861,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/coupon-associations": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "List coupon associations with optional filters. Coupon associations are created and removed via the subscription modify API.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Coupon Associations"
-                ],
-                "summary": "List coupon associations",
-                "operationId": "listCouponAssociations",
-                "parameters": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "Filter by subscription IDs",
-                        "name": "subscription_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "Filter by coupon IDs",
-                        "name": "coupon_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Return only currently active associations",
-                        "name": "active_only",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page size",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page offset",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/ListCouponAssociationsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                },
-                "x-scope": "read"
-            }
-        },
-        "/coupon-associations/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get a single coupon association by ID. Coupon associations are created and removed via the subscription modify API.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Coupon Associations"
-                ],
-                "summary": "Get coupon association",
-                "operationId": "getCouponAssociation",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Coupon Association ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/CouponAssociationResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                },
-                "x-scope": "read"
-            }
-        },
         "/coupons": {
             "post": {
                 "security": [
@@ -1059,6 +932,135 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/coupons/associations": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List coupon associations with optional filters. Coupon associations are created and removed via the subscription modify API.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Coupon Associations"
+                ],
+                "summary": "List coupon associations",
+                "operationId": "listCouponAssociations",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "maxItems": 100,
+                        "collectionFormat": "csv",
+                        "description": "Filter by subscription IDs (max 100)",
+                        "name": "subscription_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "maxItems": 100,
+                        "collectionFormat": "csv",
+                        "description": "Filter by coupon IDs (max 100)",
+                        "name": "coupon_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Return only currently active associations",
+                        "name": "active_only",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListCouponAssociationsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/coupons/associations/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a single coupon association by ID. Coupon associations are created and removed via the subscription modify API.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Coupon Associations"
+                ],
+                "summary": "Get coupon association",
+                "operationId": "getCouponAssociation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Coupon Association ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CouponAssociationResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
             }
         },
         "/coupons/search": {
@@ -24589,7 +24591,6 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
-                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -24602,7 +24603,6 @@ const docTemplate = `{
                 "MONTH"
             ],
             "x-enum-varnames": [
-                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",

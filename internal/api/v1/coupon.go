@@ -234,7 +234,7 @@ func (h *CouponHandler) QueryCoupons(c *gin.Context) {
 // @Success 200 {object} dto.CouponAssociationResponse
 // @Failure 404 {object} ierr.ErrorResponse "Not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /coupon-associations/{id} [get]
+// @Router /coupons/associations/{id} [get]
 func (h *CouponHandler) GetCouponAssociation(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -260,15 +260,15 @@ func (h *CouponHandler) GetCouponAssociation(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @x-scope "read"
-// @Param subscription_ids query []string false "Filter by subscription IDs"
-// @Param coupon_ids query []string false "Filter by coupon IDs"
+// @Param subscription_ids query []string false "Filter by subscription IDs (max 100)"
+// @Param coupon_ids query []string false "Filter by coupon IDs (max 100)"
 // @Param active_only query boolean false "Return only currently active associations"
 // @Param limit query integer false "Page size"
 // @Param offset query integer false "Page offset"
 // @Success 200 {object} dto.ListCouponAssociationsResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /coupon-associations [get]
+// @Router /coupons/associations [get]
 func (h *CouponHandler) ListCouponAssociations(c *gin.Context) {
 	var filter types.CouponAssociationFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
