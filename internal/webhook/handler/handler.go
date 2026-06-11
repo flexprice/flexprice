@@ -184,17 +184,11 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 
 // processMessage processes a single webhook message from the system_events topic:
 // 1) unmarshal and verify, 2) call deliverSvix/deliverNative to send to Svix or native HTTP.
-func (h *handler) processMessage(msg *message.Message) error {
-	ctx := msg.Context()
-
-	h.logger.Debug(context.Background(), "context",
-		"tenant_id", types.GetTenantID(ctx),
-		"event_name", types.GetRequestID(ctx),
-	)
+func (h *handler) processMessage(ctx context.Context, msg *message.Message) error {
 
 	var event types.WebhookEvent
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		h.logger.Error(context.Background(), "failed to unmarshal webhook event",
+		h.logger.Error(ctx, "failed to unmarshal webhook event",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -203,7 +197,7 @@ func (h *handler) processMessage(msg *message.Message) error {
 		// system_event ID because the publisher sets it from event.ID.
 		if h.systemEventRepo != nil && msg.UUID != "" {
 			if dbErr := h.systemEventRepo.OnFailed(ctx, msg.UUID, "unmarshal failed: "+err.Error()); dbErr != nil {
-				h.logger.Info(context.Background(), "failed to persist webhook failure_reason on unmarshal error",
+				h.logger.Info(ctx, "failed to persist webhook failure_reason on unmarshal error",
 					"error", dbErr,
 					"message_uuid", msg.UUID,
 				)
@@ -216,7 +210,7 @@ func (h *handler) processMessage(msg *message.Message) error {
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
 
-	h.logger.Debug(context.Background(), "consumed webhook from topic and delivering",
+	h.logger.Debug(ctx, "consumed webhook from topic and delivering",
 		"topic", h.config.Topic,
 		"message_uuid", msg.UUID,
 		"event_name", event.EventName,

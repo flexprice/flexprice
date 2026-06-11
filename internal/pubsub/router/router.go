@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/tracing"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Router manages all message routing
@@ -119,7 +120,7 @@ func (r *Router) AddNoPublishHandler(
 	handlerName string,
 	topicName string,
 	subscriber message.Subscriber,
-	handlerFunc func(msg *message.Message) error,
+	handlerFunc func(ctx context.Context, msg *message.Message) error,
 	middlewares ...message.HandlerMiddleware,
 ) {
 	handler := r.router.AddNoPublisherHandler(
@@ -127,12 +128,13 @@ func (r *Router) AddNoPublishHandler(
 		topicName,
 		subscriber,
 		func(msg *message.Message) error {
-			err := handlerFunc(msg)
+			ctx := context.WithValue(context.Background(), types.CtxRequestID, types.GenerateUUID())
+			err := handlerFunc(ctx, msg)
 			if err != nil {
 				// No request span on this watermill callback — CaptureException
 				// synthesizes a span so the failure still reaches SigNoz.
-				r.tracing.CaptureException(context.Background(), err)
-				r.logger.Error(context.Background(), "handler failed",
+				r.tracing.CaptureException(ctx, err)
+				r.logger.Error(ctx, "handler failed",
 					"error", err,
 					"correlation_id", middleware.MessageCorrelationID(msg),
 					"message_uuid", msg.UUID,

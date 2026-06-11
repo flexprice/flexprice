@@ -200,7 +200,7 @@ func TestUsageBenchmark_DispatchByKind(t *testing.T) {
 		msg.Metadata.Set("tenant_id", evt.TenantID)
 		msg.Metadata.Set("environment_id", evt.EnvironmentID)
 
-		require.NoError(t, svc.ProcessMessageForTest(msg))
+		require.NoError(t, svc.ProcessMessageForTest(context.Background(), msg))
 		require.Equal(t, 1, stub.calls, "subscription benchRepo.Insert should be called for empty Kind")
 	})
 
@@ -220,7 +220,7 @@ func TestUsageBenchmark_DispatchByKind(t *testing.T) {
 		require.NoError(t, err)
 		msg := message.NewMessage("test-2", payload)
 
-		require.NoError(t, svc.ProcessMessageForTest(msg))
+		require.NoError(t, svc.ProcessMessageForTest(context.Background(), msg))
 		require.Equal(t, 1, stub.calls)
 	})
 
@@ -251,7 +251,7 @@ func TestUsageBenchmark_DispatchByKind(t *testing.T) {
 		require.NoError(t, err)
 		msg := message.NewMessage("test-3", payload)
 
-		require.NoError(t, svc.ProcessMessageForTest(msg))
+		require.NoError(t, svc.ProcessMessageForTest(context.Background(), msg))
 		// Both pipelines return nil → no records → BulkInsert NOT called.
 		require.Equal(t, 0, stubAnalytics.calls)
 	})

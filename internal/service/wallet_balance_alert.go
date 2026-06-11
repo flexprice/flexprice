@@ -183,17 +183,26 @@ func (s *walletBalanceAlertService) RegisterHandler(router *pubsubRouter.Router,
 }
 
 // processMessage processes a single Kafka message for wallet balance alerts
-func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
+func (s *walletBalanceAlertService) processMessage(ctx context.Context, msg *message.Message) error {
+
 	var event wallet.WalletBalanceAlertEvent
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to unmarshal wallet balance alert event",
+		s.Logger.Error(ctx, "failed to unmarshal wallet balance alert event",
 			"error", err,
 			"message_uuid", msg.UUID,
 			"payload_size", len(msg.Payload),
 		)
 		return nil
 	}
-	s.Logger.Info(context.Background(), "processing wallet balance alert message",
+
+	if event.TenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
+	}
+	if event.EnvironmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
+	}
+
+	s.Logger.Info(ctx, "processing wallet balance alert message",
 		"message_uuid", msg.UUID,
 		"tenant_id", event.TenantID,
 		"environment_id", event.EnvironmentID,
@@ -202,19 +211,10 @@ func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 		"published_at", event.Timestamp,
 	)
 
-	// Create context with tenant and environment IDs
-	ctx := context.Background()
-	if event.TenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
-	}
-	if event.EnvironmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
-	}
-
 	// Process the event
 	if err := s.processEvent(ctx, event); err != nil {
 		// Return error to trigger retry with backoff
-		s.Logger.Error(context.Background(), "failed to process wallet balance alert event",
+		s.Logger.Error(ctx, "failed to process wallet balance alert event",
 			"error", err,
 			"event_id", event.ID,
 			"customer_id", event.CustomerID,

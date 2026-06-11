@@ -193,13 +193,14 @@ func (s *meterUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Rou
 }
 
 // processMessage unmarshals the Kafka message and delegates to processEvent
-func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
+func (s *meterUsageTrackingService) processMessage(ctx context.Context, msg *message.Message) error {
+
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to unmarshal event for meter usage tracking",
+		s.Logger.Error(ctx, "failed to unmarshal event for meter usage tracking",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -216,7 +217,7 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 	event.EventName = strings.TrimSpace(event.EventName)
 
 	if tenantID == "" || environmentID == "" {
-		s.Logger.Info(context.Background(), "tenant_id and environment_id are required for meter usage tracking",
+		s.Logger.Info(ctx, "tenant_id and environment_id are required for meter usage tracking",
 			"event_id", event.ID,
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
@@ -224,12 +225,11 @@ func (s *meterUsageTrackingService) processMessage(msg *message.Message) error {
 		return nil // non-retriable
 	}
 
-	ctx := context.Background()
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 
 	if err := s.processEvent(ctx, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to process event for meter usage tracking",
+		s.Logger.Error(ctx, "failed to process event for meter usage tracking",
 			"error", err,
 			"event_id", event.ID,
 		)

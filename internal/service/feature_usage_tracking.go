@@ -318,13 +318,14 @@ func (s *featureUsageTrackingService) RegisterHandlerReplay(router *pubsubRouter
 }
 
 // Process a single event message for feature usage tracking
-func (s *featureUsageTrackingService) processMessage(msg *message.Message) error {
+func (s *featureUsageTrackingService) processMessage(ctx context.Context, msg *message.Message) error {
+
 	// Extract tenant ID from message metadata
 	partitionKey := msg.Metadata.Get("partition_key")
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
-	s.Logger.Debug(context.Background(), "processing event from message queue in feature usage tracking service",
+	s.Logger.Debug(ctx, "processing event from message queue in feature usage tracking service",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,
 		"tenant_id", tenantID,
@@ -334,7 +335,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to unmarshal event for feature usage tracking",
+		s.Logger.Error(ctx, "failed to unmarshal event for feature usage tracking",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
@@ -343,7 +344,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 
 	// validate tenant id (todo commenting for now)
 	// if event.TenantID != tenantID {
-	// 	s.Logger.Error(context.Background(), "invalid tenant id",
+	// 	s.Logger.Error(ctx, "invalid tenant id",
 	// 		"expected", tenantID,
 	// 		"actual", event.TenantID,
 	// 		"message_uuid", msg.UUID,
@@ -361,18 +362,8 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 
 	event.EventName = strings.TrimSpace(event.EventName)
 
-	// Create a background context with tenant ID
-	ctx := context.Background()
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-	}
-
-	if environmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-	}
-
 	if tenantID == "" {
-		s.Logger.Info(context.Background(), "tenant id is required for feature usage tracking: event_id", event.ID,
+		s.Logger.Info(ctx, "tenant id is required for feature usage tracking: event_id", event.ID,
 			"event_name", event.EventName,
 			"message_uuid", msg.UUID,
 		)
@@ -380,16 +371,19 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	}
 
 	if environmentID == "" {
-		s.Logger.Info(context.Background(), "environment id is required for feature usage tracking: event_id", event.ID,
+		s.Logger.Info(ctx, "environment id is required for feature usage tracking: event_id", event.ID,
 			"event_name", event.EventName,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on invalid environment id
 	}
 
+	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+
 	// Process the event
 	if err := s.processEvent(ctx, &event); err != nil {
-		s.Logger.Error(context.Background(), "failed to process event for feature usage tracking",
+		s.Logger.Error(ctx, "failed to process event for feature usage tracking",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -397,7 +391,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 		return err // Return error for retry
 	}
 
-	s.Logger.Info(context.Background(), "event for feature usage tracking processed successfully",
+	s.Logger.Info(ctx, "event for feature usage tracking processed successfully",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", tenantID,
