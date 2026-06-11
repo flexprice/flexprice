@@ -589,6 +589,6 @@ All service addresses are resolved via named templates above so this block stays
 {{- end }}
 {{- /* ---- Extra env vars (passthrough) ---- */}}
 {{- with .Values.extraEnv }}
-{{- toYaml . }}
+{{ toYaml . | trim }}
 {{- end }}
 {{- end }}
