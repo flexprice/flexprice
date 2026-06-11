@@ -1211,7 +1211,8 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_ReuseB
 	original := s.makeBucketLineItem(s.testData.subscription.ID, m.ID, "reuse_bucket_orig")
 	oldBucket := original.CommitmentTimeBuckets[0]
 
-	// Update: keep the bucket (by id, no price) but raise its commitment value.
+	// Update: keep the bucket (by id, no price) but change its commitment value
+	// AND its time window — none of which must trigger a new price row.
 	overage := decimal.NewFromFloat(1.2)
 	commitment := decimal.NewFromInt(400)
 	req := dto.UpdateSubscriptionLineItemRequest{
@@ -1222,8 +1223,8 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_ReuseB
 		CommitmentTimeBuckets: lo.ToPtr([]dto.CommitmentBucketRequest{
 			{
 				ID:              oldBucket.ID,
-				Start:           oldBucket.Start,
-				End:             oldBucket.End,
+				Start:           types.Bucket{Hour: 6, Minute: 0},
+				End:             types.Bucket{Hour: 14, Minute: 0},
 				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
 				CommitmentValue: decimal.NewFromInt(999),
 				OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.2)),
@@ -1239,6 +1240,8 @@ func (s *SubscriptionLineItemServiceSuite) TestUpdateSubscriptionLineItem_ReuseB
 	s.Equal(oldBucket.ID, got.ID, "bucket id must be preserved on reuse")
 	s.Equal(oldBucket.PriceID, got.PriceID, "bucket price must be reused, not recreated")
 	s.True(got.CommitmentValue.Equal(decimal.NewFromInt(999)), "commitment must come from the request, got %s", got.CommitmentValue)
+	s.Equal(types.Bucket{Hour: 6, Minute: 0}, got.Start, "time window must come from the request")
+	s.Equal(types.Bucket{Hour: 14, Minute: 0}, got.End)
 }
 
 // TestUpdateSubscriptionLineItem_UnknownBucketIDRejected verifies that a bucket

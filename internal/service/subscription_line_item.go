@@ -717,19 +717,23 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 // applyLineItemCommitmentFromMap applies commitment config (keyed by price_id) onto a line item
 // and validates the resulting commitment configuration. When the config carries
 // per-bucket commitments, a SUBSCRIPTION-scoped price is materialized per bucket.
+//
+// Returns the matched config (nil when the line item has none) so callers can
+// key it by line item ID for createBucketPricesForLineItems — the lookup here
+// uses the line item's CURRENT PriceID, which price overrides may mutate later.
 func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	lineItem *subscription.SubscriptionLineItem,
 	commitments map[string]*dto.LineItemCommitmentConfig,
-) error {
+) (*dto.LineItemCommitmentConfig, error) {
 	if lineItem == nil || len(commitments) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	cfg, ok := commitments[lineItem.PriceID]
 	if !ok || cfg == nil {
-		return nil
+		return nil, nil
 	}
 
 	if cfg.CommitmentAmount != nil {
@@ -762,23 +766,29 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 		lineItem.CommitmentTimeBuckets = cfg.ToDomainBuckets()
 	}
 	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return cfg, nil
 }
 
 // createBucketPricesForLineItems creates the bucket price rows for any line item
 // that carries commitment time buckets (built earlier by
 // applyLineItemCommitmentFromMap) and runs array-level bucket validation.
+//
+// cfgs is keyed by LINE ITEM ID (collected from applyLineItemCommitmentFromMap's
+// return), not by price id: price overrides mutate a line item's PriceID after
+// commitments are applied, so a price-id lookup would miss overridden items and
+// leave their buckets unpriced.
+//
 // MUST be called inside the transaction that persists the line items.
 func (s *subscriptionService) createBucketPricesForLineItems(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	lineItems []*subscription.SubscriptionLineItem,
-	commitments map[string]*dto.LineItemCommitmentConfig,
+	cfgs map[string]*dto.LineItemCommitmentConfig,
 ) error {
-	if len(commitments) == 0 {
+	if len(cfgs) == 0 {
 		return nil
 	}
 	_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
@@ -786,7 +796,7 @@ func (s *subscriptionService) createBucketPricesForLineItems(
 		if li == nil || len(li.CommitmentTimeBuckets) == 0 {
 			continue
 		}
-		cfg := commitments[li.PriceID]
+		cfg := cfgs[li.ID]
 		if cfg == nil || len(cfg.CommitmentTimeBuckets) == 0 {
 			continue
 		}

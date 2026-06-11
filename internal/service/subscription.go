@@ -161,6 +161,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	subscriptionResponse := &dto.SubscriptionResponse{Subscription: sub}
 	planResponse := &dto.PlanResponse{Plan: plan}
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
+	// Bucket configs keyed by line item ID — captured here (while PriceID is the
+	// plan price the commitment map is keyed by) because price overrides mutate
+	// PriceID before bucket prices are created inside the transaction.
+	lineItemBucketCfgs := make(map[string]*dto.LineItemCommitmentConfig)
 
 	for _, priceResponse := range validPrices {
 		lineItemReq := &dto.CreateSubscriptionLineItemRequest{PriceID: priceResponse.Price.ID}
@@ -212,8 +216,12 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 
 		// Apply commitment configuration if provided for this price
-		if err := s.applyLineItemCommitmentFromMap(ctx, sub, item, req.LineItemCommitments); err != nil {
+		cfg, err := s.applyLineItemCommitmentFromMap(ctx, sub, item, req.LineItemCommitments)
+		if err != nil {
 			return nil, err
+		}
+		if cfg != nil && len(cfg.CommitmentTimeBuckets) > 0 {
+			lineItemBucketCfgs[item.ID] = cfg
 		}
 
 		if priceResponse.Price.StartDate != nil && priceResponse.Price.StartDate.After(startDate) {
@@ -289,7 +297,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 		// Create bucket price rows for line items carrying commitment time
 		// buckets, inside this transaction so they roll back with the line items.
-		if err := s.createBucketPricesForLineItems(ctx, sub, sub.LineItems, req.LineItemCommitments); err != nil {
+		if err := s.createBucketPricesForLineItems(ctx, sub, sub.LineItems, lineItemBucketCfgs); err != nil {
 			return err
 		}
 
@@ -4368,6 +4376,7 @@ func (s *subscriptionService) addAddonToSubscription(
 
 	// Create line items for addon prices
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
+	lineItemBucketCfgs := make(map[string]*dto.LineItemCommitmentConfig)
 	for _, priceResponse := range validPrices {
 		lineItem := s.createLineItemFromPrice(ctx, priceResponse, sub, req.AddonID, a.Addon.Name, addonAssociation.ID, addonRequestedStart)
 
@@ -4377,8 +4386,12 @@ func (s *subscriptionService) addAddonToSubscription(
 			lineItem.EndDate = onetimePeriodEnd
 		}
 
-		if err := s.applyLineItemCommitmentFromMap(ctx, sub, lineItem, req.LineItemCommitments); err != nil {
+		cfg, err := s.applyLineItemCommitmentFromMap(ctx, sub, lineItem, req.LineItemCommitments)
+		if err != nil {
 			return nil, err
+		}
+		if cfg != nil && len(cfg.CommitmentTimeBuckets) > 0 {
+			lineItemBucketCfgs[lineItem.ID] = cfg
 		}
 		lineItems = append(lineItems, lineItem)
 	}
@@ -4401,7 +4414,7 @@ func (s *subscriptionService) addAddonToSubscription(
 
 		// Create bucket price rows for line items carrying commitment time
 		// buckets, inside this transaction so they roll back with the line items.
-		if err := s.createBucketPricesForLineItems(ctx, sub, lineItems, req.LineItemCommitments); err != nil {
+		if err := s.createBucketPricesForLineItems(ctx, sub, lineItems, lineItemBucketCfgs); err != nil {
 			return err
 		}
 
