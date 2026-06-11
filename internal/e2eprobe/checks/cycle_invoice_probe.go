@@ -49,13 +49,24 @@ func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// Resolve the internal customer ID from the subscription response so we
+	// can query invoices by customer_id. The server-side InvoiceFilter{SubscriptionID}
+	// is unreliable (returns 0 results even when invoices exist), so we use
+	// customer_id instead and filter client-side for the target subscription.
+	custID := extractSubCustomerID(subResp)
+	if custID == "" {
+		// No customer ID available — skip rather than raise a false alert.
+		return nil
+	}
+
 	invResp, err := p.client.Invoices().Query(ctx, sdktypes.InvoiceFilter{
-		SubscriptionID: &subID,
+		CustomerID: &custID,
 	})
 	if err != nil {
-		return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "query invoices for %s: %w", subID, err)
+		return e2eprobe.Errorf(map[string]string{"subscription_id": subID, "customer_id": custID}, "query invoices for customer %s (sub %s): %w", custID, subID, err)
 	}
-	latest := extractLatestInvoice(invResp)
+
+	latest := extractLatestInvoiceForSub(invResp, subID)
 	if latest == nil {
 		subAge := extractSubAge(subResp)
 		if subAge > 0 && subAge > 2*cycleLength {
@@ -133,9 +144,27 @@ func extractBillingCycleLength(resp interface{}) time.Duration {
 	return d
 }
 
-// extractLatestInvoice reads the most recent invoice (by PeriodEnd) from the
-// SDK QueryInvoiceResponse. Returns nil when no invoices are present.
-func extractLatestInvoice(resp interface{}) *latestInvoice {
+// extractSubCustomerID reads the internal customer_id from the SDK
+// GetSubscriptionResponse.
+func extractSubCustomerID(resp interface{}) string {
+	r, ok := resp.(*sdkdtos.GetSubscriptionResponse)
+	if !ok || r == nil {
+		return ""
+	}
+	inner := r.GetDtoSubscriptionResponse()
+	if inner == nil || inner.CustomerID == nil {
+		return ""
+	}
+	return *inner.CustomerID
+}
+
+// extractLatestInvoiceForSub reads the most recent invoice (by PeriodEnd) from the
+// SDK QueryInvoiceResponse, filtering client-side to only include invoices that
+// belong to the given subID. Returns nil when no matching invoices are present.
+//
+// Note: DtoInvoiceResponse.SubscriptionID is populated by the server; if the
+// server omits it the filter falls back to returning all invoices for the customer.
+func extractLatestInvoiceForSub(resp interface{}, subID string) *latestInvoice {
 	r, ok := resp.(*sdkdtos.QueryInvoiceResponse)
 	if !ok || r == nil {
 		return nil
@@ -150,6 +179,11 @@ func extractLatestInvoice(resp interface{}) *latestInvoice {
 	}
 	var best *latestInvoice
 	for _, inv := range items {
+		// Client-side filter: skip invoices for other subscriptions when the
+		// SubscriptionID field is populated by the server.
+		if inv.SubscriptionID != nil && *inv.SubscriptionID != subID {
+			continue
+		}
 		if inv.PeriodEnd == nil {
 			continue
 		}

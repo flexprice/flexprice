@@ -22,21 +22,28 @@ func TestCycleInvoiceProbe_NoPersistentSubsIsNoOp(t *testing.T) {
 	}
 }
 
-func TestCycleInvoiceProbe_QueriesInvoicesForRotatingSub(t *testing.T) {
+func TestCycleInvoiceProbe_QueriesInvoicesByCustomerID(t *testing.T) {
 	fc := newFakeClient()
 	sub1, sub2 := "sub_1", "sub_2"
+	custID := "cust_abc"
 	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
-		sub1: {ID: &sub1},
-		sub2: {ID: &sub2},
+		sub1: {ID: &sub1, CustomerID: &custID},
+		sub2: {ID: &sub2, CustomerID: &custID},
 	}
 	reg := e2eprobe.NewRegistry()
 	reg.LoadSeeds(e2eprobe.Seeds{PersistentSubIDs: []string{sub1, sub2}})
 	p := NewCycleInvoiceProbe(fc, reg, "run-1")
 	_ = p.Run(context.Background())
-	// Get returns a subscription response → extractBillingCycleLength
-	// returns the 30-day default (no billing period set), so invoice query fires.
+	// Get returns a sub with CustomerID → invoice query should fire using customer_id filter.
 	if fc.invoices.queries == 0 {
 		t.Errorf("expected at least 1 invoice query, got 0")
+	}
+	// Verify the filter passed used CustomerID not SubscriptionID.
+	if fc.invoices.lastFilter.CustomerID == nil {
+		t.Errorf("expected invoice query to use CustomerID filter, got nil CustomerID")
+	}
+	if fc.invoices.lastFilter.SubscriptionID != nil {
+		t.Errorf("expected invoice query NOT to use SubscriptionID filter (unreliable), but SubscriptionID was set")
 	}
 }
 
@@ -49,9 +56,11 @@ func TestCycleInvoiceProbe_ChecksFreshness(t *testing.T) {
 	count := int64(1)
 	createdAt := time.Now().Add(-10 * 24 * time.Hour).Format(time.RFC3339) // 10 days old
 	subID := "sub_fresh"
+	custID := "cust_fresh"
 	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
 		subID: {
 			ID:                 &subID,
+			CustomerID:         &custID,
 			BillingPeriod:      &monthly,
 			BillingPeriodCount: &count,
 			CreatedAt:          &createdAt,
@@ -59,9 +68,10 @@ func TestCycleInvoiceProbe_ChecksFreshness(t *testing.T) {
 	}
 
 	// Invoice period_end was 5 days ago — well within 2*30d freshness window.
+	// SubscriptionID is set so the client-side filter matches.
 	recentPeriodEnd := time.Now().Add(-5 * 24 * time.Hour).Format(time.RFC3339)
 	fc.invoices.invoices = []sdktypes.DtoInvoiceResponse{
-		{PeriodEnd: &recentPeriodEnd},
+		{SubscriptionID: &subID, PeriodEnd: &recentPeriodEnd},
 	}
 
 	reg := e2eprobe.NewRegistry()
@@ -101,9 +111,11 @@ func TestCycleInvoiceProbe_FailsOnStaleInvoice(t *testing.T) {
 	count := int64(1)
 	createdAt := time.Now().Add(-120 * 24 * time.Hour).Format(time.RFC3339)
 	subID := "sub_stale"
+	custID := "cust_stale"
 	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
 		subID: {
 			ID:                 &subID,
+			CustomerID:         &custID,
 			BillingPeriod:      &monthly,
 			BillingPeriodCount: &count,
 			CreatedAt:          &createdAt,
@@ -111,9 +123,10 @@ func TestCycleInvoiceProbe_FailsOnStaleInvoice(t *testing.T) {
 	}
 
 	// Invoice period_end was 75 days ago — exceeds 2*30d = 60d.
+	// SubscriptionID is set so the client-side filter matches.
 	stalePeriodEnd := time.Now().Add(-75 * 24 * time.Hour).Format(time.RFC3339)
 	fc.invoices.invoices = []sdktypes.DtoInvoiceResponse{
-		{PeriodEnd: &stalePeriodEnd},
+		{SubscriptionID: &subID, PeriodEnd: &stalePeriodEnd},
 	}
 
 	reg := e2eprobe.NewRegistry()
@@ -121,5 +134,63 @@ func TestCycleInvoiceProbe_FailsOnStaleInvoice(t *testing.T) {
 	p := NewCycleInvoiceProbe(fc, reg, "run-1")
 	if err := p.Run(context.Background()); err == nil {
 		t.Fatal("expected stale invoice to return an error, got nil")
+	}
+}
+
+// TestCycleInvoiceProbe_ClientSideFiltersOtherSubInvoices verifies that invoices
+// returned by the customer query that belong to a different subscription are
+// excluded from the freshness check.
+func TestCycleInvoiceProbe_ClientSideFiltersOtherSubInvoices(t *testing.T) {
+	fc := newFakeClient()
+
+	monthly := sdktypes.BillingPeriodMonthly
+	count := int64(1)
+	createdAt := time.Now().Add(-120 * 24 * time.Hour).Format(time.RFC3339)
+	subID := "sub_target"
+	otherSubID := "sub_other"
+	custID := "cust_shared"
+	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+		subID: {
+			ID:                 &subID,
+			CustomerID:         &custID,
+			BillingPeriod:      &monthly,
+			BillingPeriodCount: &count,
+			CreatedAt:          &createdAt,
+		},
+	}
+
+	// The customer has invoices but they belong to a different sub — the target sub
+	// has no invoices. The probe should soft-skip (sub is old but no invoices).
+	recentPeriodEnd := time.Now().Add(-5 * 24 * time.Hour).Format(time.RFC3339)
+	fc.invoices.invoices = []sdktypes.DtoInvoiceResponse{
+		{SubscriptionID: &otherSubID, PeriodEnd: &recentPeriodEnd},
+	}
+
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PersistentSubIDs: []string{subID}})
+	p := NewCycleInvoiceProbe(fc, reg, "run-1")
+	// sub is 120 days old, >2*30d, and has no matching invoices → should alert.
+	err := p.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected error for old sub with no matching invoices, got nil")
+	}
+}
+
+// TestCycleInvoiceProbe_NoCustomerIDSkips verifies that when the subscription
+// response has no customer_id, the probe skips gracefully without alerting.
+func TestCycleInvoiceProbe_NoCustomerIDSkips(t *testing.T) {
+	fc := newFakeClient()
+	subID := "sub_nocust"
+	fc.subs.subs = map[string]sdktypes.DtoSubscriptionResponse{
+		subID: {ID: &subID}, // no CustomerID
+	}
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PersistentSubIDs: []string{subID}})
+	p := NewCycleInvoiceProbe(fc, reg, "run-1")
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("expected skip (no customer_id), got: %v", err)
+	}
+	if fc.invoices.queries != 0 {
+		t.Errorf("expected 0 invoice queries when customer_id absent, got %d", fc.invoices.queries)
 	}
 }

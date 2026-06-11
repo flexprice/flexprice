@@ -208,6 +208,7 @@ type fakeSubscriptions struct {
 	mu        sync.Mutex
 	created   []types.DtoCreateSubscriptionRequest
 	cancelled []string
+	gets      int
 	nextID    int
 	subs      map[string]types.DtoSubscriptionResponse
 	subErr    error
@@ -231,6 +232,7 @@ func (f *fakeSubscriptions) Create(_ context.Context, req types.DtoCreateSubscri
 func (f *fakeSubscriptions) Get(_ context.Context, id string) (*dtos.GetSubscriptionResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.gets++
 	// Allow tests to inject a specific error (e.g. *sdkerrors.APIError{404}) via subErr.
 	if f.subErr != nil {
 		return nil, f.subErr
@@ -403,16 +405,18 @@ func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.DtoGetUsageAna
 // --- Invoices ---
 
 type fakeInvoices struct {
-	mu       sync.Mutex
-	queries  int
-	queryErr error
-	invoices []types.DtoInvoiceResponse
+	mu         sync.Mutex
+	queries    int
+	queryErr   error
+	invoices   []types.DtoInvoiceResponse
+	lastFilter types.InvoiceFilter
 }
 
-func (f *fakeInvoices) Query(_ context.Context, _ types.InvoiceFilter) (*dtos.QueryInvoiceResponse, error) {
+func (f *fakeInvoices) Query(_ context.Context, filter types.InvoiceFilter) (*dtos.QueryInvoiceResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.queries++
+	f.lastFilter = filter
 	if f.queryErr != nil {
 		return nil, f.queryErr
 	}

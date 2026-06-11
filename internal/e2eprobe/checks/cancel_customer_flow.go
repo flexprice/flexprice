@@ -2,11 +2,11 @@ package checks
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
-	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -24,7 +24,7 @@ type CancelCustomerFlow struct {
 
 func NewCancelCustomerFlow(c e2eprobe.Client, r e2eprobe.Registry, runID string, poll InvoicePoll) *CancelCustomerFlow {
 	if poll.Timeout == 0 {
-		poll.Timeout = 60 * time.Second
+		poll.Timeout = 30 * time.Second
 	}
 	if poll.Interval == 0 {
 		poll.Interval = 5 * time.Second
@@ -53,25 +53,39 @@ func (s *CancelCustomerFlow) Run(ctx context.Context) error {
 		return e2eprobe.Errorf(map[string]string{"subscription_id": target.ID}, "cancel %s: %w", target.ID, err)
 	}
 
-	if err := s.pollInvoice(ctx, target.ID); err != nil {
+	if err := s.pollSubStatusCancelled(ctx, target.ID); err != nil {
 		return err
 	}
 	s.reg.ArchiveEphemeral("subscription", target.ID)
 	return nil
 }
 
-func (s *CancelCustomerFlow) pollInvoice(ctx context.Context, subID string) error {
+// pollSubStatusCancelled polls Subscriptions.Get until the subscription reaches
+// the CANCELLED terminal state. This replaces the previous invoice-presence poll
+// which produced false alerts because the server-side InvoiceFilter{SubscriptionID}
+// query was unreliable (returned 0 items even when invoices existed in the DB).
+// Sub cancellation is synchronous on the backend, so a 30s window is sufficient
+// to absorb any processing lag.
+func (s *CancelCustomerFlow) pollSubStatusCancelled(ctx context.Context, subID string) error {
 	deadline := time.Now().Add(s.poll.Timeout)
 	for {
-		resp, err := s.client.Invoices().Query(ctx, types.InvoiceFilter{SubscriptionID: &subID})
-		if err == nil && hasInvoiceForSub(resp) {
-			return nil
-		}
-		if time.Now().After(deadline) {
-			if err != nil {
-				return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "invoice query timeout: %w", err)
+		resp, err := s.client.Subscriptions().Get(ctx, subID)
+		if err == nil {
+			if isCancelled(resp) {
+				return nil
 			}
-			return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "no invoice for %s within %s", subID, s.poll.Timeout)
+			observedStatus := observedSubStatus(resp)
+			if time.Now().After(deadline) {
+				return e2eprobe.Errorf(
+					map[string]string{"subscription_id": subID, "observed_status": observedStatus},
+					"sub %s did not reach cancelled status within %s (observed: %s)",
+					subID, s.poll.Timeout, observedStatus,
+				)
+			}
+		} else {
+			if time.Now().After(deadline) {
+				return e2eprobe.Errorf(map[string]string{"subscription_id": subID}, "get sub %s timeout: %w", subID, err)
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -81,16 +95,39 @@ func (s *CancelCustomerFlow) pollInvoice(ctx context.Context, subID string) erro
 	}
 }
 
-// hasInvoiceForSub returns true when the QueryInvoiceResponse contains at least
-// one invoice item. Implemented in Task 25 using the real SDK response getter.
-var hasInvoiceForSub = func(resp interface{}) bool {
-	r, ok := resp.(*sdkdtos.QueryInvoiceResponse)
-	if !ok || r == nil {
+// isCancelled returns true when the GetSubscriptionResponse contains a
+// subscription with SubscriptionStatus == "cancelled".
+func isCancelled(resp interface{}) bool {
+	type subGetter interface {
+		GetDtoSubscriptionResponse() *types.DtoSubscriptionResponse
+	}
+	g, ok := resp.(subGetter)
+	if !ok || g == nil {
 		return false
 	}
-	inner := r.GetDtoListInvoicesResponse()
+	inner := g.GetDtoSubscriptionResponse()
 	if inner == nil {
 		return false
 	}
-	return len(inner.GetItems()) > 0
+	st := inner.SubscriptionStatus
+	if st == nil {
+		return false
+	}
+	return *st == types.SubscriptionStatusCancelled
+}
+
+// observedSubStatus extracts the subscription_status string for error messages.
+func observedSubStatus(resp interface{}) string {
+	type subGetter interface {
+		GetDtoSubscriptionResponse() *types.DtoSubscriptionResponse
+	}
+	g, ok := resp.(subGetter)
+	if !ok || g == nil {
+		return "unknown"
+	}
+	inner := g.GetDtoSubscriptionResponse()
+	if inner == nil || inner.SubscriptionStatus == nil {
+		return "unknown"
+	}
+	return fmt.Sprintf("%v", *inner.SubscriptionStatus)
 }
