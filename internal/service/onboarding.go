@@ -29,7 +29,7 @@ import (
 type OnboardingService interface {
 	GenerateEvents(ctx context.Context, req *dto.OnboardingEventsRequest) (*dto.OnboardingEventsResponse, error)
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
-	OnboardNewUserWithTenant(ctx context.Context, userID, email, tenantName, tenantID string) error
+	OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error
 	SetupSandboxEnvironment(ctx context.Context, tenantID, userID, envID string) error
 }
 
@@ -413,8 +413,8 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 }
 
 // OnboardNewUserWithTenant creates a new tenant, assigns it to the user, and sets up default environments
-func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID, email, tenantName, tenantID string) error {
-	// Use default tenant name if not provided
+func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error {
+	tenantName := req.TenantName
 	if tenantName == "" {
 		tenantName = "Flexprice"
 	}
@@ -422,24 +422,26 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 	tenantService := NewTenantService(s.ServiceParams)
 
 	resp, err := tenantService.CreateTenant(ctx, dto.CreateTenantRequest{
-		Name: tenantName,
-		ID:   tenantID,
+		Name:     tenantName,
+		ID:       req.TenantID,
+		Metadata: req.Metadata,
 	})
 	if err != nil {
 		return err
 	}
 
-	tenantID = resp.ID
+	tenantID := resp.ID
 
 	// Create a new user without a tenant ID initially
 	newUser := &user.User{
-		ID:    userID,
-		Email: email,
+		ID:       req.UserID,
+		Email:    req.Email,
+		Metadata: req.Metadata,
 		BaseModel: types.BaseModel{
 			TenantID:  tenantID,
 			Status:    types.StatusPublished,
-			CreatedBy: userID,
-			UpdatedBy: userID,
+			CreatedBy: req.UserID,
+			UpdatedBy: req.UserID,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
@@ -462,8 +464,8 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 			BaseModel: types.BaseModel{
 				TenantID:  tenantID,
 				Status:    types.StatusPublished,
-				CreatedBy: userID,
-				UpdatedBy: userID,
+				CreatedBy: req.UserID,
+				UpdatedBy: req.UserID,
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			},
@@ -474,14 +476,14 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 		}
 
 		// if envType == types.EnvironmentDevelopment {
-		// 	if err := s.SetupSandboxEnvironment(ctx, tenantID, userID, env.ID); err != nil {
+		// 	if err := s.SetupSandboxEnvironment(ctx, tenantID, req.UserID, env.ID); err != nil {
 		// 		return err
 		// 	}
 		// }
 	}
 
 	// Send Zapier webhook for onboarding (never fails - errors are logged internally)
-	_ = s.sendZapierWebhook(ctx, email)
+	_ = s.sendZapierWebhook(ctx, req.Email)
 
 	return nil
 }

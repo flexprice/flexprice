@@ -88,13 +88,13 @@ func (s *authService) SignUp(ctx context.Context, req *dto.SignUpRequest) (*dto.
 
 		onboardingService := NewOnboardingService(s.ServiceParams)
 
-		err = onboardingService.OnboardNewUserWithTenant(
-			ctx,
-			authResponse.ID,
-			req.Email,
-			req.TenantName,
-			tenantID,
-		)
+		err = onboardingService.OnboardNewUserWithTenant(ctx, dto.OnboardNewUserWithTenantRequest{
+			UserID:     authResponse.ID,
+			Email:      req.Email,
+			TenantName: req.TenantName,
+			TenantID:   tenantID,
+			Metadata:   req.Metadata,
+		})
 
 		if err != nil {
 			return err

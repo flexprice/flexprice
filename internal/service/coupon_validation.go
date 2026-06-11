@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -157,7 +158,7 @@ func (s *couponValidationService) validateCouponDateRange(coupon coupon.Coupon) 
 func (s *couponValidationService) validateCouponCurrency(coupon coupon.Coupon, targetCurrency string) error {
 	// If coupon has specific currency, it must match target currency
 	if coupon.Currency != "" {
-		if coupon.Currency != targetCurrency {
+		if !strings.EqualFold(coupon.Currency, targetCurrency) {
 			return &CouponValidationError{
 				Code:    types.CouponValidationErrorCodeCurrencyMismatch,
 				Message: "Coupon currency does not match target currency",

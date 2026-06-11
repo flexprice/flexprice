@@ -13,6 +13,7 @@ type AuthServiceSuite struct {
 	testutil.BaseServiceTestSuite
 	authService AuthService
 	userRepo    *testutil.InMemoryUserStore
+	tenantRepo  *testutil.InMemoryTenantStore
 }
 
 func TestAuthService(t *testing.T) {
@@ -27,6 +28,7 @@ func (s *AuthServiceSuite) SetupTest() {
 
 func (s *AuthServiceSuite) setupService() {
 	s.userRepo = s.GetStores().UserRepo.(*testutil.InMemoryUserStore)
+	s.tenantRepo = s.GetStores().TenantRepo.(*testutil.InMemoryTenantStore)
 	pubSub := testutil.NewInMemoryPubSub()
 
 	s.authService = NewAuthService(ServiceParams{
@@ -92,6 +94,19 @@ func (s *AuthServiceSuite) TestSignUp() {
 			expectedError: false,
 		},
 		{
+			name: "successful_signup_with_metadata",
+			req: &dto.SignUpRequest{
+				Email:    "metadata@example.com",
+				Password: "securepassword",
+				Metadata: map[string]string{
+					"signup_source": "landing_page",
+					"utm_campaign":  "q2_launch",
+				},
+			},
+			setupFunc:     nil,
+			expectedError: false,
+		},
+		{
 			name: "duplicate_email",
 			req: &dto.SignUpRequest{
 				Email:    "existing@example.com",
@@ -125,6 +140,16 @@ func (s *AuthServiceSuite) TestSignUp() {
 				s.NotNil(resp)
 				// We used a real provider, so check that token exists (not necessarily 'auth-token' as before)
 				s.NotEmpty(resp.Token)
+
+				if tc.req.Metadata != nil {
+					createdUser, err := s.userRepo.GetByEmail(s.GetContext(), tc.req.Email)
+					s.NoError(err)
+					s.Equal(tc.req.Metadata, createdUser.Metadata)
+
+					createdTenant, err := s.tenantRepo.GetByID(s.GetContext(), resp.TenantID)
+					s.NoError(err)
+					s.Equal(tc.req.Metadata, map[string]string(createdTenant.Metadata))
+				}
 			}
 		})
 	}

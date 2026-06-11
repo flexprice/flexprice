@@ -87,6 +87,17 @@ func (s *TenantServiceSuite) TestCreateTenant() {
 			expectedName:  "New Tenant",
 		},
 		{
+			name: "valid_tenant_with_metadata",
+			request: dto.CreateTenantRequest{
+				Name: "Metadata Tenant",
+				Metadata: map[string]string{
+					"signup_source": "partner_portal",
+				},
+			},
+			expectedError: false,
+			expectedName:  "Metadata Tenant",
+		},
+		{
 			name: "invalid_tenant",
 			request: dto.CreateTenantRequest{
 				Name: "",
@@ -108,6 +119,13 @@ func (s *TenantServiceSuite) TestCreateTenant() {
 				s.NoError(err)
 				s.NotNil(resp)
 				s.Equal(tc.expectedName, resp.Name)
+
+				if tc.request.Metadata != nil {
+					createdTenant, err := s.tenantRepo.GetByID(s.GetContext(), resp.ID)
+					s.NoError(err)
+					s.Equal(tc.request.Metadata, map[string]string(createdTenant.Metadata))
+					s.Equal(tc.request.Metadata, map[string]string(*resp.Metadata))
+				}
 			}
 		})
 	}

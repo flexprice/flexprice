@@ -38,3 +38,12 @@ type OnboardingEventsResponse struct {
 	FeatureID      string    `json:"feature_id,omitempty"`
 	SubscriptionID string    `json:"subscription_id,omitempty"`
 }
+
+// OnboardNewUserWithTenantRequest carries inputs for provisioning a new tenant and user during signup.
+type OnboardNewUserWithTenantRequest struct {
+	UserID     string            `json:"user_id"`
+	Email      string            `json:"email"`
+	TenantName string            `json:"tenant_name"`
+	TenantID   string            `json:"tenant_id"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
+}
