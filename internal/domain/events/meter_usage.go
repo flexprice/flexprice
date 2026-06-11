@@ -142,4 +142,7 @@ type MeterUsageRepository interface {
 
 	// GetMeterUsageForExport retrieves meter usage data for export in batches
 	GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*MeterUsage, error)
+
+	// GetByEventID returns the meter_usage record for a single event, or nil if not yet processed.
+	GetByEventID(ctx context.Context, tenantID, environmentID, eventID string) (*MeterUsage, error)
 }

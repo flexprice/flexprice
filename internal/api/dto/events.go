@@ -478,6 +478,7 @@ type DebugTracker struct {
 	MeterMatching              *MeterMatchingResult              `json:"meter_matching"`
 	PriceLookup                *PriceLookupResult                `json:"price_lookup"`
 	SubscriptionLineItemLookup *SubscriptionLineItemLookupResult `json:"subscription_line_item_lookup"`
+	AttributedToCustomer       *AttributedToCustomerResult       `json:"attributed_to_customer,omitempty"`
 	FailurePoint               *types.FailurePoint               `json:"failure_point"`
 }
 
@@ -527,6 +528,18 @@ type MatchedSubscriptionLineItem struct {
 	IsActiveForEvent     bool                               `json:"is_active_for_event"`
 	TimestampWithinRange bool                               `json:"timestamp_within_range"`
 	SubscriptionLineItem *subscription.SubscriptionLineItem `json:"subscription_line_item,omitempty"`
+}
+
+type AttributedToCustomerResult struct {
+	Status     types.DebugTrackerStatus `json:"status"`
+	MeterUsage *MeterUsageAttribution   `json:"meter_usage,omitempty"`
+	Error      *ierr.ErrorResponse      `json:"error,omitempty"`
+}
+
+type MeterUsageAttribution struct {
+	MeterID            string `json:"meter_id"`
+	ExternalCustomerID string `json:"external_customer_id"`
+	QtyTotal           string `json:"qty_total"`
 }
 
 // ReprocessEventsRequest represents the request to reprocess events
