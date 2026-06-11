@@ -53,13 +53,10 @@ func (v *WalletDebitVerification) Run(ctx context.Context) error {
 	idx := atomic.AddInt64(&v.cursor, 1)
 	customer := seeds.PreFundedCustomerIDs[int(idx)%len(seeds.PreFundedCustomerIDs)]
 
-	// Query all wallets and filter client-side by customer ID (WalletFilter has
-	// no customer filter field; the synthetic tenant has a bounded wallet count).
-	walletResp, err := v.client.Wallets().Query(ctx, types.WalletFilter{})
+	walletIDs, err := lookupWalletIDsForExternalCustomer(ctx, v.client, customer)
 	if err != nil {
-		return fmt.Errorf("wallet query for %s: %w", customer, err)
+		return fmt.Errorf("lookup wallets for %s: %w", customer, err)
 	}
-	walletIDs := extractWalletIDsForCustomer(walletResp, customer)
 	if len(walletIDs) == 0 {
 		return nil
 	}
@@ -78,7 +75,8 @@ func (v *WalletDebitVerification) Run(ctx context.Context) error {
 		topUp := expectedDebit * 10
 		topUpStr := fmt.Sprintf("%.4f", topUp)
 		if _, err := v.client.Wallets().TopUp(ctx, walletID, types.DtoTopUpWalletRequest{
-			Amount: &topUpStr,
+			Amount:            &topUpStr,
+			TransactionReason: types.TransactionReasonPurchasedCreditDirect,
 		}); err != nil {
 			return fmt.Errorf("top up: %w", err)
 		}

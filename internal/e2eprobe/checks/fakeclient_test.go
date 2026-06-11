@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
 	flexprice "github.com/flexprice/go-sdk/v2"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -71,12 +73,17 @@ func (f *fakeCustomers) GetByExternalID(_ context.Context, ext string) (*dtos.Ge
 			DtoCustomerResponse: &types.DtoCustomerResponse{ID: &id},
 		}, nil
 	}
-	// getErr simulates "not found" for pre-existing keys (before any Create call).
+	// getErr simulates an injected error from tests.
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
-	return nil, errors.New("not found")
+	// Default not-found: surface as a proper *sdkerrors.APIError so production
+	// callers can use errors.As(err, &apiErr) + apiErr.StatusCode == 404.
+	return nil, &sdkerrors.APIError{StatusCode: http.StatusNotFound, Message: "not found"}
 }
+
+// ensure errors import is exercised (used by seed_ensure_test).
+var _ = errors.New
 func (f *fakeCustomers) Get(_ context.Context, _ string) (*dtos.GetCustomerResponse, error) {
 	return &dtos.GetCustomerResponse{}, nil
 }

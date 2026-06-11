@@ -27,10 +27,11 @@ func TestWalletDebitVerification(t *testing.T) {
 			wantEventsCount: 0,
 		},
 		{
-			name: "empty wallet list exits before ingest",
+			name: "customer not yet provisioned exits before ingest",
 			setup: func(_ *fakeClient, reg e2eprobe.Registry) {
 				reg.LoadSeeds(e2eprobe.Seeds{PreFundedCustomerIDs: []string{"c0"}})
-				// fc.wallets.walletItems is nil → extractWalletIDsForCustomer returns nil
+				// customer is not pre-registered → GetByExternalID returns
+				// "not found" which the helper soft-skips.
 			},
 			opts: WalletDebitOpts{
 				EventCount:   10,
@@ -44,8 +45,11 @@ func TestWalletDebitVerification(t *testing.T) {
 			name: "with wallet ingests expected event count",
 			setup: func(fc *fakeClient, reg e2eprobe.Registry) {
 				walletID := "wallet_002"
-				customerID := "c0"
-				fc.wallets.walletItems = []types.DtoWalletResponse{{ID: &walletID, CustomerID: &customerID}}
+				internalCustID := "internal_c0"
+				fc.customers.byExt = map[string]string{"c0": internalCustID}
+				fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+					internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
+				}
 				// Large balance so top-up is skipped.
 				fc.wallets.balance = "9999.00"
 				reg.LoadSeeds(e2eprobe.Seeds{PreFundedCustomerIDs: []string{"c0"}})

@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 )
 
 type Janitor struct {
@@ -50,7 +52,14 @@ func isNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
-	return err.Error() == "not found" || err.Error() == "subscription not found"
+	// Real SDK errors surface as *sdkerrors.APIError with StatusCode 404.
+	var apiErr *sdkerrors.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+		return true
+	}
+	// Legacy string-based detection used by some fake responses.
+	msg := err.Error()
+	return msg == "not found" || msg == "subscription not found"
 }
 
 func (j *Janitor) archive(ctx context.Context, e e2eprobe.EphemeralEntity) error {

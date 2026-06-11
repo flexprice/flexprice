@@ -43,13 +43,17 @@ func TestWalletBalanceProbe_ErrorPropagates(t *testing.T) {
 	}
 }
 
-// TestWalletBalanceProbe_GetsBalance verifies the positive path: when Query returns
-// wallet IDs, GetBalance is called for each one.
+// TestWalletBalanceProbe_GetsBalance verifies the positive path: when the
+// external customer resolves and GetWalletsByCustomerID returns IDs,
+// GetBalance is called for each one.
 func TestWalletBalanceProbe_GetsBalance(t *testing.T) {
 	fc := newFakeClient()
 	walletID := "wallet_001"
-	customerID := "c0"
-	fc.wallets.walletItems = []types.DtoWalletResponse{{ID: &walletID, CustomerID: &customerID}}
+	internalCustID := "internal_c0"
+	fc.customers.byExt = map[string]string{"c0": internalCustID}
+	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
+	}
 	fc.wallets.balance = "100.00"
 
 	reg := e2eprobe.NewRegistry()

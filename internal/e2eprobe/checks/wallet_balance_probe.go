@@ -2,12 +2,13 @@ package checks
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"sync/atomic"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
-	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
-	"github.com/flexprice/go-sdk/v2/models/types"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 )
 
 type WalletBalanceProbe struct {
@@ -21,7 +22,7 @@ func NewWalletBalanceProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string)
 	return &WalletBalanceProbe{client: c, reg: r, runID: runID}
 }
 
-func (p *WalletBalanceProbe) Name() string         { return "wallet-balance-probe" }
+func (p *WalletBalanceProbe) Name() string        { return "wallet-balance-probe" }
 func (p *WalletBalanceProbe) Kind() e2eprobe.Kind { return e2eprobe.KindProbe }
 
 func (p *WalletBalanceProbe) Run(ctx context.Context) error {
@@ -30,15 +31,12 @@ func (p *WalletBalanceProbe) Run(ctx context.Context) error {
 		return nil
 	}
 	idx := atomic.AddInt64(&p.cursor, 1)
-	customer := seeds.PreFundedCustomerIDs[int(idx)%len(seeds.PreFundedCustomerIDs)]
-	// Query all wallets and filter client-side by customer ID.
-	// WalletFilter has no customer filter field; the synthetic tenant has a
-	// bounded wallet count so a full scan is acceptable.
-	resp, err := p.client.Wallets().Query(ctx, types.WalletFilter{})
+	extCustID := seeds.PreFundedCustomerIDs[int(idx)%len(seeds.PreFundedCustomerIDs)]
+
+	walletIDs, err := lookupWalletIDsForExternalCustomer(ctx, p.client, extCustID)
 	if err != nil {
-		return fmt.Errorf("wallet query for %s: %w", customer, err)
+		return fmt.Errorf("lookup wallets for %s: %w", extCustID, err)
 	}
-	walletIDs := extractWalletIDsForCustomer(resp, customer)
 	if len(walletIDs) == 0 {
 		return nil
 	}
@@ -50,39 +48,43 @@ func (p *WalletBalanceProbe) Run(ctx context.Context) error {
 	return nil
 }
 
-// extractWalletIDs reads all wallet IDs from the SDK QueryWalletResponse
-// regardless of customer. Used by wallet_debit_verification which already
-// narrows by customer via WalletIds.
-// Returns nil if the response has no items (probe soft no-ops).
-func extractWalletIDs(resp interface{}) []string {
-	return extractWalletIDsForCustomer(resp, "")
-}
+// lookupWalletIDsForExternalCustomer resolves the external customer ID to an
+// internal one and returns all wallet IDs associated with that customer via
+// the dedicated GetWalletsByCustomerID endpoint. Returns (nil, nil) when the
+// customer or their wallets aren't found yet (benign first-run state).
+//
+// Shared by wallet_balance_probe and wallet_debit_verification — the previous
+// implementation used Wallets.Query() with an empty filter and filtered client
+// side, but the upstream API returns 500 for unfiltered Query, so the
+// dedicated endpoint is the only reliable path.
+func lookupWalletIDsForExternalCustomer(ctx context.Context, client e2eprobe.Client, extCustID string) ([]string, error) {
+	custResp, err := client.Customers().GetByExternalID(ctx, extCustID)
+	if err != nil {
+		// 404 → first-run state, seed-ensure hasn't created this customer yet.
+		// Treat as "no wallets" so the probe quietly skips. Other errors propagate.
+		var apiErr *sdkerrors.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get customer: %w", err)
+	}
+	if custResp == nil || custResp.DtoCustomerResponse == nil || custResp.DtoCustomerResponse.ID == nil {
+		return nil, nil
+	}
+	internalCustID := *custResp.DtoCustomerResponse.ID
 
-// extractWalletIDsForCustomer reads wallet IDs from the SDK QueryWalletResponse,
-// filtering to wallets whose CustomerID matches customerID. If customerID is
-// empty, all wallet IDs in the response are returned.
-func extractWalletIDsForCustomer(resp interface{}, customerID string) []string {
-	r, ok := resp.(*sdkdtos.QueryWalletResponse)
-	if !ok || r == nil {
-		return nil
+	walletsResp, err := client.Wallets().GetWalletsByCustomerID(ctx, internalCustID)
+	if err != nil {
+		return nil, fmt.Errorf("get wallets by customer: %w", err)
 	}
-	inner := r.GetListResponseDtoWalletResponse()
-	if inner == nil {
-		return nil
+	if walletsResp == nil || len(walletsResp.DtoWalletResponses) == 0 {
+		return nil, nil
 	}
-	items := inner.GetItems()
-	if len(items) == 0 {
-		return nil
-	}
-	ids := make([]string, 0, len(items))
-	for _, w := range items {
-		if w.ID == nil {
-			continue
+	ids := make([]string, 0, len(walletsResp.DtoWalletResponses))
+	for _, w := range walletsResp.DtoWalletResponses {
+		if w.ID != nil {
+			ids = append(ids, *w.ID)
 		}
-		if customerID != "" && (w.CustomerID == nil || *w.CustomerID != customerID) {
-			continue
-		}
-		ids = append(ids, *w.ID)
 	}
-	return ids
+	return ids, nil
 }
