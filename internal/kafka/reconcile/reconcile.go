@@ -53,15 +53,10 @@ type Result struct {
 }
 
 // Plan computes the forward-only, non-destructive decisions for each desired
-// topic without mutating the cluster.
-//
-// Create-only semantics: partition counts are hand-tuned per environment and
-// live ONLY on the cluster (e.g. staging events=6 vs prod events=100), and are
-// never carried in app config/env. So the reconciler NEVER changes the
-// partition count of an existing topic — the live count is authoritative.
-// Desired partition sizing applies only when CREATING a missing topic. An
-// existing topic always yields ActionUnchanged (plus an RF-mismatch warning if
-// the replication factors differ — warn only, never altered).
+// topic without mutating the cluster. Sizing comes from an explicit
+// operator-authored spec (topics.yaml or the FLEXPRICE_KAFKA_TOPICS JSON
+// override), so partition growth is intentional. A topic may yield BOTH an
+// RF-mismatch action (warn) and a partition action (create/grow/skip/unchanged).
 func Plan(a Admin, desired []topicspec.ResolvedTopic) ([]Action, error) {
 	live, err := a.ListTopics()
 	if err != nil {
@@ -86,21 +81,22 @@ func Plan(a Admin, desired []topicspec.ResolvedTopic) ([]Action, error) {
 			})
 		}
 
-		// Existing topic: never touch partitions. Live count is the truth.
-		plan = append(plan, Action{
-			Kind:              ActionUnchanged,
-			Topic:             d,
-			CurrentPartitions: cur.Partitions,
-			CurrentRF:         cur.ReplicationFactor,
-			CurrentExists:     true,
-		})
+		base := Action{Topic: d, CurrentPartitions: cur.Partitions, CurrentRF: cur.ReplicationFactor, CurrentExists: true}
+		switch {
+		case int(cur.Partitions) < d.Partitions:
+			base.Kind = ActionGrow
+		case int(cur.Partitions) > d.Partitions:
+			base.Kind = ActionSkipShrink
+		default:
+			base.Kind = ActionUnchanged
+		}
+		plan = append(plan, base)
 	}
 	return plan, nil
 }
 
-// Apply executes the only mutating action — create missing topics. Existing
-// topics are never mutated (no partition growth, no RF change); RF mismatch is
-// counted as a warning only. Returns a Result summary.
+// Apply executes the mutating actions (create, grow). Warn-only actions
+// (skip-shrink, RF mismatch) and unchanged topics are counted but not acted on.
 func Apply(a Admin, plan []Action) (Result, error) {
 	var res Result
 	for _, act := range plan {
@@ -110,6 +106,13 @@ func Apply(a Admin, plan []Action) (Result, error) {
 				return res, fmt.Errorf("create topic %s: %w", act.Topic.Name, err)
 			}
 			res.Created++
+		case ActionGrow:
+			if err := a.CreatePartitions(act.Topic.Name, int32(act.Topic.Partitions)); err != nil {
+				return res, fmt.Errorf("grow partitions %s: %w", act.Topic.Name, err)
+			}
+			res.Grown++
+		case ActionSkipShrink:
+			res.SkippedShrink++
 		case ActionRFMismatch:
 			res.RFMismatch++
 		case ActionUnchanged:
