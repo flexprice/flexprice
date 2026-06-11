@@ -1,0 +1,19 @@
+{
+  "_comment": "Example value for the FLEXPRICE_KAFKA_TOPICS env-var (ECS task-def environment / k8s ConfigMap). When this env-var is set, it FULLY REPLACES the baked topics.yaml (no merge). Same schema as topics.yaml: map key = the real Kafka topic name; per-topic partitions, optional replicationFactor/retentionMs (else defaults). This sample mirrors prod us-west-2 (prod-flexprice-msk-us) real topic names + live partition counts. Set the partition counts to the cluster's actual live counts so reconcile is a no-op on existing topics (it only creates missing ones and grows when the spec exceeds live; it never shrinks or deletes). Put the JSON on ONE line in the env-var value. Remove this _comment key before use.",
+  "defaults": {
+    "replicationFactor": 3,
+    "retentionMs": 604800000
+  },
+  "topics": {
+    "events": { "partitions": 100 },
+    "events_lazy": { "partitions": 40 },
+    "events_backfill": { "partitions": 20 },
+    "prod_system_events": { "partitions": 6 },
+    "prod_raw_events": { "partitions": 20 },
+    "prod_events_v5": { "partitions": 100 },
+    "prod_bulk_events": { "partitions": 10 },
+    "prod_benchmarking": { "partitions": 5 },
+    "prod_onboarding_events": { "partitions": 2 },
+    "balance_alert": { "partitions": 20 }
+  }
+}
