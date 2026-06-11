@@ -50,6 +50,7 @@ func (r *TenantBillingDetails) ToDomain() tenant.TenantBillingDetails {
 type CreateTenantRequest struct {
 	Name           string                `json:"name" validate:"required"`
 	BillingDetails *TenantBillingDetails `json:"billing_details,omitempty"`
+	Metadata       map[string]string     `json:"metadata,omitempty"`
 	ID             string                `json:"-"`
 }
 
@@ -88,6 +89,7 @@ func (r *CreateTenantRequest) ToTenant(ctx context.Context) *tenant.Tenant {
 		Status:         types.StatusPublished,
 		InternalStatus: types.TenantInternalStatusTrialing,
 		BillingDetails: billingDetails,
+		Metadata:       r.Metadata,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}

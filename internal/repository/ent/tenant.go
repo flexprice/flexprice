@@ -40,7 +40,7 @@ func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tena
 	defer FinishSpan(span)
 
 	client := r.client.Writer(ctx)
-	_, err := client.Tenant.
+	builder := client.Tenant.
 		Create().
 		SetID(tenant.ID).
 		SetName(tenant.Name).
@@ -48,8 +48,13 @@ func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tena
 		SetInternalStatus(string(tenant.InternalStatus)).
 		SetCreatedAt(tenant.CreatedAt).
 		SetUpdatedAt(tenant.UpdatedAt).
-		SetBillingDetails(tenant.BillingDetails.ToSchema()).
-		Save(ctx)
+		SetBillingDetails(tenant.BillingDetails.ToSchema())
+
+	if tenant.Metadata != nil {
+		builder.SetMetadata(tenant.Metadata)
+	}
+
+	_, err := builder.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
