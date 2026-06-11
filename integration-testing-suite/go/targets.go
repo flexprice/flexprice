@@ -18,6 +18,25 @@ type Target struct {
 	APIHost string `json:"api_host"`
 	// APIKey is the secret API key for this target.
 	APIKey string `json:"api_key"`
+	// Insecure skips TLS certificate verification for this target. Use only
+	// for environments whose cert does not cover the host (e.g. preprod).
+	// Can also be forced for all targets via FLEXPRICE_INSECURE_SKIP_VERIFY.
+	Insecure bool `json:"insecure"`
+}
+
+// skipTLSVerify reports whether TLS verification should be skipped for this
+// target, honouring both the per-target flag and the global env override.
+func (t Target) skipTLSVerify() bool {
+	return t.Insecure || envTruthy("FLEXPRICE_INSECURE_SKIP_VERIFY")
+}
+
+// envTruthy reports whether an env var is set to a truthy value.
+func envTruthy(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	}
+	return false
 }
 
 // host returns the scheme-stripped host (and path) for this target, applying
