@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -3502,4 +3503,68 @@ func (s *MeterUsageServiceSuite) TestMaxBucketedMeter_StackedGroupByWithMeterCon
 		"region=us total: expected 125 (95+30), got %s", usageByRegion["us"])
 	s.True(usageByRegion["eu"].Equal(decimal.NewFromInt(50)),
 		"region=eu total: expected 50, got %s", usageByRegion["eu"])
+}
+
+// TestBucketedMeter_RejectsUnsupportedGroupBy: any req.GroupBy entry that
+// isn't "meter_id" or a valid "properties.<key>" is a caller error on the
+// bucketed path — mirrors feature_usage's strict policy. Specifically:
+//
+//   - "source" and other non-properties dimensions → reject (bucketed
+//     SQL doesn't break these out today)
+//   - "properties.<key>" where the stripped key fails the safe-pattern
+//     regex → reject (would otherwise be silently dropped, leaving the
+//     caller's request unfulfilled)
+//
+// All cases must surface ErrValidation; silently stripping leaves the
+// caller thinking they got per-group analytics when they didn't.
+func (s *MeterUsageServiceSuite) TestBucketedMeter_RejectsUnsupportedGroupBy() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_bkt_reject",
+		Name:      "Bucketed SUM for invalid group_by test",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_bkt_reject", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_bkt_reject", bucketedMeter.ID, bucketedPrice.ID)
+
+	s.insertMeterUsageWithProps(ctx, bucketedMeter.ID, s.customer.ExternalID, "",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 10,
+		map[string]interface{}{"session_id": "A"})
+
+	// Note: "feature_id" is rewritten to "meter_id" by GetDetailedAnalytics, so it
+	// isn't a rejected case — meter_id is a no-op for the bucketed path.
+	cases := []struct {
+		name    string
+		groupBy []string
+	}{
+		{"non-properties dimension", []string{"source"}},
+		{"unknown bare identifier", []string{"arbitrary"}},
+		{"properties prefix with empty key", []string{"properties."}},
+		{"properties prefix with invalid chars", []string{"properties.bad-key!@#"}},
+		{"mix: one valid + one invalid", []string{"properties.session_id", "source"}},
+	}
+
+	for _, tc := range cases {
+		_, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+			TenantID:           types.GetTenantID(ctx),
+			EnvironmentID:      types.GetEnvironmentID(ctx),
+			ExternalCustomerID: s.customer.ExternalID,
+			MeterIDs:           []string{bucketedMeter.ID},
+			StartTime:          s.periodStart,
+			EndTime:            s.periodEnd,
+			GroupBy:            tc.groupBy,
+		})
+		s.Error(err, "case %s: expected validation error for group_by=%v, got nil", tc.name, tc.groupBy)
+		if err != nil {
+			s.True(ierr.IsValidation(err),
+				"case %s: expected ErrValidation, got %T: %s", tc.name, err, err)
+		}
+	}
 }

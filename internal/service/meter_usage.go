@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -134,6 +135,11 @@ type lineItemWithMeter struct {
 	Item    *subscription.SubscriptionLineItem
 	MeterID string
 }
+
+// validBucketedUserGroupByKey matches safe property names (alphanumeric, underscores, dots).
+// Mirrors clickhouse.validMeterUsageGroupByPattern; redeclared here so the service
+// layer can validate without importing the repository package.
+var validBucketedUserGroupByKey = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
 // ---------------------------------------------------------------------------
 // Simple passthrough methods
@@ -340,8 +346,13 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	}
 
 	// Extract the user-supplied property keys (stripped of "properties." prefix)
-	// for the bucketed path. nil for billing callers.
-	bucketedUserGroupBy := extractBucketedUserGroupBy(req.GroupBy)
+	// for the bucketed path. nil for billing callers. Strict validation: any
+	// non-properties / invalid-property entry → ErrValidation (mirrors
+	// feature_usage's policy; see validateBucketedUserGroupBy doc for rationale).
+	bucketedUserGroupBy, err := validateBucketedUserGroupBy(req.GroupBy)
+	if err != nil {
+		return nil, err
+	}
 
 	bucketedMeterIDs := make(map[string]bool)
 	for meterID, m := range result.MeterMap {
@@ -784,24 +795,49 @@ func appendBucketedGroupFanOut(
 	}
 }
 
-// extractBucketedUserGroupBy filters and normalizes the analytics req.GroupBy
-// for use by the bucketed query path. It drops "meter_id" (always in req.GroupBy
-// for non-empty cases) and any entry that isn't a "properties.<key>" reference,
-// then strips the "properties." prefix. The returned slice preserves caller
-// order, which is how response Properties keys are reconstructed downstream.
-func extractBucketedUserGroupBy(groupBy []string) []string {
+// validateBucketedUserGroupBy validates the analytics req.GroupBy for the
+// bucketed query path and returns the property keys (stripped of "properties.")
+// in caller order. Validation matches feature_usage's strict policy:
+//
+//   - "meter_id" and empty string are skipped (no-op).
+//   - "properties.<key>" with <key> matching validBucketedUserGroupByKey is
+//     accepted and added to the output.
+//   - Anything else (bare identifiers like "source"/"feature_id", or
+//     "properties.<key>" where <key> is empty or contains unsafe characters)
+//     is rejected with ErrValidation. Silent stripping would leave the caller
+//     thinking they got a per-group breakdown when they didn't, and routing
+//     to the standard analytics path would corrupt MAX-bucketed totals
+//     (MAX(qty over period) ≠ SUM(MAX per bucket)).
+//
+// The returned slice ordering is how response Properties keys are
+// reconstructed downstream when the bucketed result fans out per group.
+func validateBucketedUserGroupBy(groupBy []string) ([]string, error) {
 	const propPrefix = "properties."
 	out := make([]string, 0, len(groupBy))
 	for _, g := range groupBy {
 		if g == "" || g == "meter_id" {
 			continue
 		}
-		if len(g) <= len(propPrefix) || g[:len(propPrefix)] != propPrefix {
-			continue
+		if !strings.HasPrefix(g, propPrefix) {
+			return nil, ierr.NewError("unsupported group_by value for bucketed meter").
+				WithHint("Valid group_by values are 'meter_id' or 'properties.<field_name>'").
+				WithReportableDetails(map[string]interface{}{
+					"group_by": g,
+				}).
+				Mark(ierr.ErrValidation)
 		}
-		out = append(out, g[len(propPrefix):])
+		stripped := strings.TrimPrefix(g, propPrefix)
+		if !validBucketedUserGroupByKey.MatchString(stripped) {
+			return nil, ierr.NewError("invalid group_by property name").
+				WithHint("Property names must contain only letters, digits, underscores, or dots").
+				WithReportableDetails(map[string]interface{}{
+					"group_by": g,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		out = append(out, stripped)
 	}
-	return out
+	return out, nil
 }
 
 // queryBucketedMeterUsage queries the meter_usage table for a single bucketed meter,
