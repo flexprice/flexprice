@@ -49,6 +49,9 @@ func Parse(data []byte) (*Spec, error) {
 		if t.Partitions < 1 {
 			return nil, fmt.Errorf("topic %q: partitions must be >= 1", t.Name)
 		}
+		if t.ReplicationFactor != nil && *t.ReplicationFactor < 1 {
+			return nil, fmt.Errorf("topic %q: replicationFactor must be >= 1", t.Name)
+		}
 	}
 	return &s, nil
 }
@@ -61,7 +64,13 @@ func Load(path string) (*Spec, error) {
 	return Parse(data)
 }
 
-func (s *Spec) Resolve(env string, overrides map[string]EnvOverride) []ResolvedTopic {
+// Resolve flattens repo defaults + per-topic values + per-env Helm overrides
+// into desired state and validates the final values. env is used only for
+// error context (it no longer selects a yaml block); overrides are keyed by
+// topic name and supplied by the caller from env-vars (Helm), not the yaml.
+// Env-var overrides bypass Parse-time validation, so the resolved values are
+// re-validated here to reject e.g. partitions=0 injected via env.
+func (s *Spec) Resolve(env string, overrides map[string]EnvOverride) ([]ResolvedTopic, error) {
 	out := make([]ResolvedTopic, 0, len(s.Topics))
 	for _, t := range s.Topics {
 		r := ResolvedTopic{
@@ -87,7 +96,13 @@ func (s *Spec) Resolve(env string, overrides map[string]EnvOverride) []ResolvedT
 				r.RetentionMs = *ov.RetentionMs
 			}
 		}
+		if r.Partitions < 1 {
+			return nil, fmt.Errorf("env %q topic %q: resolved partitions must be >= 1 (got %d)", env, r.Name, r.Partitions)
+		}
+		if r.ReplicationFactor < 1 {
+			return nil, fmt.Errorf("env %q topic %q: resolved replicationFactor must be >= 1 (got %d)", env, r.Name, r.ReplicationFactor)
+		}
 		out = append(out, r)
 	}
-	return out
+	return out, nil
 }

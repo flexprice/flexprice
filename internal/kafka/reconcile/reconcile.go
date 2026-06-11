@@ -19,7 +19,31 @@ type Admin interface {
 	CreatePartitions(name string, count int32) error
 }
 
-// Result is a summary of what the reconcile did, for logging.
+// ActionKind enumerates the decisions the reconciler can make for a topic.
+type ActionKind int
+
+const (
+	ActionCreate     ActionKind = iota // topic absent -> create
+	ActionGrow                         // fewer partitions than desired -> grow
+	ActionSkipShrink                   // more partitions than desired -> warn, never act
+	ActionRFMismatch                   // replication factor differs -> warn, never act
+	ActionUnchanged                    // already matches desired
+)
+
+// Action is a single planned decision for one topic. It is the shared output
+// of Plan(): live apply (Apply) and dry-run logging consume the SAME plan, so
+// the two can never drift (e.g. dry-run always surfaces RF mismatches too).
+type Action struct {
+	Kind ActionKind
+	// Topic is the desired sizing this action concerns.
+	Topic topicspec.ResolvedTopic
+	// Current cluster state. CurrentExists is false for ActionCreate.
+	CurrentPartitions int32
+	CurrentRF         int16
+	CurrentExists     bool
+}
+
+// Result is a summary of what was applied, for logging.
 type Result struct {
 	Created       int
 	Grown         int
@@ -28,39 +52,82 @@ type Result struct {
 	Unchanged     int
 }
 
-// Reconcile applies forward-only, non-destructive changes.
-func Reconcile(a Admin, desired []topicspec.ResolvedTopic) (Result, error) {
-	var res Result
+// Plan computes the forward-only, non-destructive decisions for each desired
+// topic without mutating the cluster. A topic may yield BOTH an RF-mismatch
+// action (warn) and a partition action (create/grow/skip/unchanged).
+func Plan(a Admin, desired []topicspec.ResolvedTopic) ([]Action, error) {
 	live, err := a.ListTopics()
 	if err != nil {
-		return res, fmt.Errorf("list topics: %w", err)
+		return nil, fmt.Errorf("list topics: %w", err)
 	}
 
+	var plan []Action
 	for _, d := range desired {
 		cur, exists := live[d.Name]
 		if !exists {
-			if err := a.CreateTopic(d.Name, int32(d.Partitions), d.ReplicationFactor); err != nil {
-				return res, fmt.Errorf("create topic %s: %w", d.Name, err)
-			}
-			res.Created++
+			plan = append(plan, Action{Kind: ActionCreate, Topic: d})
 			continue
 		}
 
 		if cur.ReplicationFactor != 0 && cur.ReplicationFactor != d.ReplicationFactor {
-			res.RFMismatch++
+			plan = append(plan, Action{
+				Kind:              ActionRFMismatch,
+				Topic:             d,
+				CurrentPartitions: cur.Partitions,
+				CurrentRF:         cur.ReplicationFactor,
+				CurrentExists:     true,
+			})
 		}
 
+		base := Action{Topic: d, CurrentPartitions: cur.Partitions, CurrentRF: cur.ReplicationFactor, CurrentExists: true}
 		switch {
 		case int(cur.Partitions) < d.Partitions:
-			if err := a.CreatePartitions(d.Name, int32(d.Partitions)); err != nil {
-				return res, fmt.Errorf("grow partitions %s: %w", d.Name, err)
+			base.Kind = ActionGrow
+		case int(cur.Partitions) > d.Partitions:
+			base.Kind = ActionSkipShrink
+		default:
+			base.Kind = ActionUnchanged
+		}
+		plan = append(plan, base)
+	}
+	return plan, nil
+}
+
+// Apply executes the mutating actions in a plan (create, grow). Warn-only
+// actions (skip-shrink, RF mismatch) and unchanged topics are counted but not
+// acted upon. Returns a Result summary.
+func Apply(a Admin, plan []Action) (Result, error) {
+	var res Result
+	for _, act := range plan {
+		switch act.Kind {
+		case ActionCreate:
+			if err := a.CreateTopic(act.Topic.Name, int32(act.Topic.Partitions), act.Topic.ReplicationFactor); err != nil {
+				return res, fmt.Errorf("create topic %s: %w", act.Topic.Name, err)
+			}
+			res.Created++
+		case ActionGrow:
+			if err := a.CreatePartitions(act.Topic.Name, int32(act.Topic.Partitions)); err != nil {
+				return res, fmt.Errorf("grow partitions %s: %w", act.Topic.Name, err)
 			}
 			res.Grown++
-		case int(cur.Partitions) > d.Partitions:
+		case ActionSkipShrink:
 			res.SkippedShrink++
-		default:
+		case ActionRFMismatch:
+			res.RFMismatch++
+		case ActionUnchanged:
 			res.Unchanged++
 		}
 	}
 	return res, nil
+}
+
+// Reconcile plans then applies forward-only, non-destructive changes: create
+// missing, grow partitions, warn (never act) on shrink and RF mismatch. It
+// never deletes topics and never touches topics absent from desired.
+func Reconcile(a Admin, desired []topicspec.ResolvedTopic) (Result, error) {
+	plan, err := Plan(a, desired)
+	if err != nil {
+		return Result{}, err
+	}
+	return Apply(a, plan)
 }
