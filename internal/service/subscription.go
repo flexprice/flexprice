@@ -7154,11 +7154,27 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 				Mark(ierr.ErrValidation)
 		}
 
+		// Collect all subscription IDs belonging to the subscriber so we can exclude them
+		// from the inherited-sub check — same parent may inherit a child under multiple subscriptions.
+		subscriberSubFilter := types.NewNoLimitSubscriptionFilter()
+		subscriberSubFilter.CustomerID = subscriberCustomerID
+		subscriberSubFilter.Status = lo.ToPtr(types.StatusPublished)
+		subscriberSubFilter.WithLineItems = false
+		subscriberSubs, err := s.SubRepo.List(ctx, subscriberSubFilter)
+		if err != nil {
+			return nil, err
+		}
+		subscriberSubIDs := make([]string, 0, len(subscriberSubs))
+		for _, sub := range subscriberSubs {
+			subscriberSubIDs = append(subscriberSubIDs, sub.ID)
+		}
+
 		inheritedSubFilter := types.NewSubscriptionFilter()
 		inheritedSubFilter.CustomerID = cust.ID
 		inheritedSubFilter.Status = lo.ToPtr(types.StatusPublished)
 		inheritedSubFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
 		inheritedSubFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+		inheritedSubFilter.ExcludeParentSubscriptionIDs = subscriberSubIDs
 		inheritedSubFilter.WithLineItems = false
 		inheritedSubFilter.Limit = lo.ToPtr(1)
 		inheritedCount, err := s.SubRepo.Count(ctx, inheritedSubFilter)

@@ -307,6 +307,9 @@ type SubscriptionFilter struct {
 	// ParentSubscriptionIDs filters by parent subscription IDs
 	ParentSubscriptionIDs []string `json:"parent_subscription_ids,omitempty" form:"parent_subscription_ids"`
 
+	// ExcludeParentSubscriptionIDs excludes rows whose parent_subscription_id is in the list
+	ExcludeParentSubscriptionIDs []string `json:"exclude_parent_subscription_ids,omitempty" form:"exclude_parent_subscription_ids"`
+
 	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
 	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 

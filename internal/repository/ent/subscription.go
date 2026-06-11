@@ -577,6 +577,11 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		query = query.Where(subscription.ParentSubscriptionIDIn(f.ParentSubscriptionIDs...))
 	}
 
+	// Apply exclude parent subscription IDs filter
+	if len(f.ExcludeParentSubscriptionIDs) > 0 {
+		query = query.Where(subscription.ParentSubscriptionIDNotIn(f.ExcludeParentSubscriptionIDs...))
+	}
+
 	// Apply subscription type filter
 	if len(f.SubscriptionTypes) > 0 {
 		query = query.Where(subscription.SubscriptionTypeIn(f.SubscriptionTypes...))
