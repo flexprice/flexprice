@@ -1,0 +1,44 @@
+defaults:
+  replicationFactor: 3
+  retentionMs: 604800000
+topics:
+  # Core event ingestion topics (KafkaConfig.Topic / TopicLazy / TopicDLQ)
+  - name: events
+    partitions: 6
+  - name: events_lazy
+    partitions: 6
+  - name: events_dlq
+    partitions: 3
+    replicationFactor: 1
+  # Post-processing
+  - name: events_post_processing
+    partitions: 6
+  # Backfill topics
+  - name: event_processing_backfill
+    partitions: 6
+  - name: event_processing_lazy_backfill
+    partitions: 6
+  - name: v1_events_post_processing_backfill
+    partitions: 6
+  - name: v1_feature_tracking_service_backfill
+    partitions: 6
+  - name: v1_feature_tracking_service_lazy_backfill
+    partitions: 6
+  # Replay topics
+  - name: v1_event_processing_replay
+    partitions: 6
+  - name: v1_feature_tracking_service_replay
+    partitions: 6
+  # Auxiliary / domain topics
+  - name: system_events
+    partitions: 3
+  - name: wallet_alert
+    partitions: 3
+  - name: raw_events
+    partitions: 6
+  - name: prod_events_v4
+    partitions: 6
+  - name: staging_benchmarking
+    partitions: 3
+  - name: staging_onboarding_events
+    partitions: 3
