@@ -1587,6 +1587,99 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionInheritanceChildAlready
 	s.Contains(err.Error(), "already has a parent")
 }
 
+// TestCreateSubscriptionSameParentCanReInheritChild verifies that the SAME parent customer
+// CAN inherit the same child via a second new subscription (different subscription, same parent).
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionSameParentCanReInheritChild() {
+	ctx := s.GetContext()
+
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_same_parent_reinherit_ok",
+		Name:       "Child Same Parent Re-Inherit OK",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	inheritReq := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, inheritReq)
+	s.Require().NoError(err)
+
+	// Same parent, second subscription inheriting same child — must succeed
+	_, err = s.service.CreateSubscription(ctx, inheritReq)
+	s.Require().NoError(err)
+}
+
+// TestCreateSubscriptionDifferentParentBlockedFromInheritingChild verifies that a DIFFERENT
+// parent cannot inherit a child already under another parent.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionDifferentParentBlockedFromInheritingChild() {
+	ctx := s.GetContext()
+
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_diff_parent_blocked",
+		Name:       "Child Different Parent Blocked",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	// Original parent inherits child
+	_, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	})
+	s.Require().NoError(err)
+
+	// Different parent tries to steal the child — must be blocked
+	differentParent := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_diff_parent_steal",
+		Name:       "Different Parent",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, differentParent))
+
+	_, err = s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         differentParent.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "already has a parent")
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCollectionMethod() {
 	// Test cases specifically for collection method functionality
 	testCases := []struct {
