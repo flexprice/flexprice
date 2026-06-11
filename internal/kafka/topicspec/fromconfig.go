@@ -1,6 +1,7 @@
 package topicspec
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"sort"
@@ -62,7 +63,7 @@ func harvestTopicNames(cfg any) []string {
 	return out
 }
 
-func fromConfigStruct(cfg any, overrides map[string]EnvOverride) []ResolvedTopic {
+func fromConfigStruct(cfg any, overrides map[string]EnvOverride) ([]ResolvedTopic, error) {
 	names := harvestTopicNames(cfg)
 	out := make([]ResolvedTopic, 0, len(names))
 	for _, name := range names {
@@ -83,9 +84,18 @@ func fromConfigStruct(cfg any, overrides map[string]EnvOverride) []ResolvedTopic
 				r.RetentionMs = *ov.RetentionMs
 			}
 		}
+		// Env overrides bypass any compile-time guarantees, so validate the
+		// resolved sizing here and fail fast with a precise message rather than
+		// letting an invalid value surface later during reconcile/apply.
+		if r.Partitions < 1 {
+			return nil, fmt.Errorf("topic %q: resolved partitions must be >= 1 (got %d)", r.Name, r.Partitions)
+		}
+		if r.ReplicationFactor < 1 {
+			return nil, fmt.Errorf("topic %q: resolved replicationFactor must be >= 1 (got %d)", r.Name, r.ReplicationFactor)
+		}
 		out = append(out, r)
 	}
-	return out
+	return out, nil
 }
 
 func anyTopicEnvIn(environ []string) bool {
@@ -117,7 +127,7 @@ func hasAnyTopicEnv() bool { return anyTopicEnvIn(os.Environ()) }
 // FromConfig builds the desired topic set from a fully-resolved app config.
 // Names come from the config (env-vars already won during config.NewConfig),
 // sizing from FLEXPRICE_KAFKA_TOPIC_<NAME>_* env overrides else defaults.
-func FromConfig(cfg *config.Configuration) []ResolvedTopic {
+func FromConfig(cfg *config.Configuration) ([]ResolvedTopic, error) {
 	names := harvestTopicNames(cfg)
 	return fromConfigStruct(cfg, EnvOverridesFromEnv(names))
 }

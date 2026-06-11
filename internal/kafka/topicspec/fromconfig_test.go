@@ -56,7 +56,8 @@ func TestHarvestTopicNames_HandlesNilPointer(t *testing.T) {
 
 func TestFromConfigStruct_AppliesDefaultSizing(t *testing.T) {
 	c := rootCfg{A: subA{Topic: "events"}}
-	got := fromConfigStruct(c, nil)
+	got, err := fromConfigStruct(c, nil)
+	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, "events", got[0].Name)
 	assert.Equal(t, 6, got[0].Partitions)
@@ -68,10 +69,27 @@ func TestFromConfigStruct_EnvOverrideWinsOverDefault(t *testing.T) {
 	c := rootCfg{A: subA{Topic: "events"}}
 	p := 12
 	ov := map[string]EnvOverride{"events": {Partitions: &p}}
-	got := fromConfigStruct(c, ov)
+	got, err := fromConfigStruct(c, ov)
+	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, 12, got[0].Partitions)
 	assert.Equal(t, int16(3), got[0].ReplicationFactor)
+}
+
+func TestFromConfigStruct_RejectsZeroPartitionOverride(t *testing.T) {
+	c := rootCfg{A: subA{Topic: "events"}}
+	p := 0
+	ov := map[string]EnvOverride{"events": {Partitions: &p}}
+	_, err := fromConfigStruct(c, ov)
+	assert.Error(t, err) // env-injected partitions=0 must fail fast
+}
+
+func TestFromConfigStruct_RejectsZeroRFOverride(t *testing.T) {
+	c := rootCfg{A: subA{Topic: "events"}}
+	rf := int16(0)
+	ov := map[string]EnvOverride{"events": {ReplicationFactor: &rf}}
+	_, err := fromConfigStruct(c, ov)
+	assert.Error(t, err)
 }
 
 func TestHasAnyTopicEnv(t *testing.T) {
