@@ -1,0 +1,12 @@
+[
+  {
+    "name": "aws-staging",
+    "api_host": "https://api-dev.cloud.flexprice.io/v1",
+    "api_key": "sk_replace_me"
+  },
+  {
+    "name": "tirdad-prod",
+    "api_host": "https://api.tirdad.ai/v1",
+    "api_key": "sk_replace_me"
+  }
+]
