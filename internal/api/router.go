@@ -246,7 +246,7 @@ func NewRouter(
 			customer.GET("/wallets", handlers.Wallet.GetCustomerWallets)
 
 			// Customer Dashboard - Session creation (requires tenant auth)
-			customer.GET("/portal/:external_id", handlers.CustomerPortal.CreateSession)
+			customer.GET("/portal/:external_id", write("customer_portal", types.ActionWrite), handlers.CustomerPortal.CreateSession)
 		}
 
 		plan := v1Private.Group("/plans")

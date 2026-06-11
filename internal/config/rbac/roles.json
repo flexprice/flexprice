@@ -1,4 +1,42 @@
 {
+  "admin": {
+    "name": "Admin",
+    "description": "Full administrative access to all resources. Assigned to JWT-authenticated users.",
+    "permissions": {
+      "addon": ["read", "write"],
+      "ai": ["read", "write"],
+      "connection": ["read", "write"],
+      "costsheet": ["read", "write"],
+      "coupon": ["read", "write"],
+      "creditgrant": ["read", "write"],
+      "creditnote": ["read", "write"],
+      "cron": ["read", "write"],
+      "customer": ["read", "write"],
+      "customer_portal": ["read", "write"],
+      "entitlement": ["read", "write"],
+      "environment": ["read", "write"],
+      "event": ["read", "write"],
+      "feature": ["read", "write"],
+      "group": ["read", "write"],
+      "invoice": ["read", "write"],
+      "meter": ["read", "write"],
+      "oauth": ["read", "write"],
+      "payment": ["read", "write"],
+      "plan": ["read", "write"],
+      "portal": ["read", "write"],
+      "price": ["read", "write"],
+      "secret": ["read", "write"],
+      "setting": ["read", "write"],
+      "subscription": ["read", "write"],
+      "task": ["read", "write"],
+      "tax": ["read", "write"],
+      "tenant": ["read", "write"],
+      "user": ["read", "write"],
+      "wallet": ["read", "write"],
+      "webhook": ["read", "write"]
+    }
+  },
+
   "event_ingestor": {
     "name": "Event Ingestor",
     "description": "Limited to ingesting events and batch events. Use for services that only send events.",
@@ -15,4 +53,3 @@
     }
   }
 }
-

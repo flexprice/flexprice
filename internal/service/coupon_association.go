@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -162,38 +163,63 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 				Mark(ierr.ErrValidation)
 		}
 
-		// Get coupon details for validation
-		coupon, err := s.CouponRepo.Get(ctx, couponReq.CouponID)
-		if err != nil {
-			return err
-		}
+		// Acquire advisory lock, re-validate, and create association atomically to
+		// prevent concurrent goroutines from bypassing the redemption limit (CVE-005).
+		err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+			if err := s.DB.LockWithWait(txCtx, postgres.LockRequest{Key: couponReq.CouponID}); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to acquire coupon lock").
+					Mark(ierr.ErrInternal)
+			}
 
-		// Validate coupon applicability using subscription object (avoids DB fetch)
-		if err := validationService.ValidateCoupon(ctx, *coupon, subscription); err != nil {
-			return ierr.WithError(err).
-				WithHint("Coupon validation failed").
-				WithReportableDetails(map[string]interface{}{
-					"coupon_id":       couponReq.CouponID,
-					"subscription_id": subscription.ID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
+			// Re-fetch coupon inside transaction after acquiring the lock
+			coupon, err := s.CouponRepo.Get(txCtx, couponReq.CouponID)
+			if err != nil {
+				return err
+			}
 
-		// Create coupon association request
-		// LineItemID is used directly if provided (coupon applies to specific line item)
-		// If omitted, coupon applies at subscription level
-		createReq := dto.CreateCouponAssociationRequest{
-			CouponID:               couponReq.CouponID,
-			SubscriptionID:         subscription.ID,
-			SubscriptionLineItemID: couponReq.LineItemID,
-			StartDate:              couponReq.StartDate.UTC(),
-			EndDate:                couponReq.EndDate,
-			SubscriptionPhaseID:    couponReq.SubscriptionPhaseID,
-			Metadata:               map[string]string{},
-		}
+			// Validate coupon applicability using fresh data
+			if err := validationService.ValidateCoupon(txCtx, *coupon, subscription); err != nil {
+				return ierr.WithError(err).
+					WithHint("Coupon validation failed").
+					WithReportableDetails(map[string]interface{}{
+						"coupon_id":       couponReq.CouponID,
+						"subscription_id": subscription.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
 
-		// Create the coupon association
-		_, err = s.CreateCouponAssociation(ctx, createReq)
+			ca := &coupon_association.CouponAssociation{
+				ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
+				CouponID:               couponReq.CouponID,
+				SubscriptionID:         subscription.ID,
+				SubscriptionLineItemID: couponReq.LineItemID,
+				StartDate:              couponReq.StartDate.UTC(),
+				EndDate:                couponReq.EndDate,
+				SubscriptionPhaseID:    couponReq.SubscriptionPhaseID,
+				Metadata:               map[string]string{},
+				BaseModel:              types.GetDefaultBaseModel(txCtx),
+				EnvironmentID:          types.GetEnvironmentID(txCtx),
+			}
+
+			if err := s.CouponAssociationRepo.Create(txCtx, ca); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to create coupon association").
+					WithReportableDetails(map[string]interface{}{
+						"coupon_id": couponReq.CouponID,
+					}).
+					Mark(ierr.ErrInternal)
+			}
+
+			if err := s.CouponRepo.IncrementRedemptions(txCtx, couponReq.CouponID); err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to increment coupon redemptions").
+					Mark(ierr.ErrInternal)
+			}
+
+			return nil
+		})
+
 		if err != nil {
 			return err
 		}

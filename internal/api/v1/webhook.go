@@ -2,6 +2,9 @@ package v1
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -695,26 +698,24 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 		return
 	}
 
-	// Verify webhook signature (if signature provided)
-	if signature != "" {
-		err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature)
-		if err != nil {
-			h.logger.Error(context.Background(), "failed to verify QuickBooks webhook signature",
-				"tenant_id", tenantID,
-				"error", err,
-				"environment_id", environmentID)
-			// Don't return 401 - QuickBooks expects 200
-			return
-		}
-		h.logger.Debug(context.Background(), "QuickBooks webhook signature verified",
+	// Reject unsigned QuickBooks webhooks — intuit-signature is mandatory
+	if signature == "" {
+		h.logger.Error(context.Background(), "missing intuit-signature header — rejecting QuickBooks webhook",
 			"tenant_id", tenantID,
 			"environment_id", environmentID)
-	} else {
-		h.logger.Info(context.Background(), "QuickBooks webhook received without signature",
-			"tenant_id", tenantID,
-			"environment_id", environmentID,
-			"note", "Consider configuring webhook verifier token for security")
+		return
 	}
+	err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature)
+	if err != nil {
+		h.logger.Error(context.Background(), "failed to verify QuickBooks webhook signature",
+			"tenant_id", tenantID,
+			"error", err,
+			"environment_id", environmentID)
+		return
+	}
+	h.logger.Debug(context.Background(), "QuickBooks webhook signature verified",
+		"tenant_id", tenantID,
+		"environment_id", environmentID)
 
 	// Create service dependencies for webhook handler
 	serviceDeps := &quickbookswebhook.ServiceDependencies{
@@ -1208,6 +1209,36 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
 
+	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
+	if err != nil {
+		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
+		return
+	}
+
+	// Verify HMAC-SHA256 signature when a signing secret is configured
+	whopConfig, err := whopIntegration.Client.GetWhopConfig(ctx)
+	if err == nil && whopConfig.WebhookSigningSecret != "" {
+		signature := c.GetHeader("whop-signature")
+		if signature == "" {
+			h.logger.Error(context.Background(), "missing whop-signature header",
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			return
+		}
+		mac := hmac.New(sha256.New, []byte(whopConfig.WebhookSigningSecret))
+		mac.Write(body)
+		expected := hex.EncodeToString(mac.Sum(nil))
+		if !hmac.Equal([]byte(signature), []byte(expected)) {
+			h.logger.Error(context.Background(), "Whop webhook signature verification failed",
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			return
+		}
+		h.logger.Debug(context.Background(), "Whop webhook signature verified",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+	}
+
 	var event whopwebhook.WhopWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		h.logger.Error(context.Background(), "failed to parse Whop webhook payload", "error", err)
@@ -1218,12 +1249,6 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		"type", event.Type,
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
-
-	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
-	if err != nil {
-		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
-		return
-	}
 
 	serviceDeps := &whopwebhook.ServiceDependencies{
 		CustomerService:                 h.customerService,

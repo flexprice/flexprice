@@ -23,7 +23,7 @@ func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretServic
 	// First check in config
 	tenantID, userID, valid = auth.ValidateAPIKey(cfg, apiKey)
 	if valid {
-		return tenantID, userID, "", []string{}, true // Empty roles = full access for config keys
+		return tenantID, userID, "", []string{"admin"}, true
 	}
 
 	// If not found in config, check in database
@@ -129,8 +129,8 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 			return
 		}
 
-		// JWT users have empty roles = full access
-		setContextValues(c, claims.TenantID, claims.UserID, claims.EnvironmentID, []string{})
+		// JWT users are tenant admins with full access
+		setContextValues(c, claims.TenantID, claims.UserID, claims.EnvironmentID, []string{"admin"})
 		c.Next()
 	}
 }

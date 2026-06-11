@@ -73,6 +73,12 @@ func getDeduplicationKey() string {
 	return "id"
 }
 
+// escapeClickHouseString escapes single quotes in a string to prevent SQL injection
+// in ClickHouse query fragments built via fmt.Sprintf.
+func escapeClickHouseString(s string) string {
+	return strings.ReplaceAll(s, `'`, `\'`)
+}
+
 // buildUsageEventCustomerFilters returns PREWHERE fragments for external_customer_id and FlexPrice customer_id.
 // Params may be nil. External merges ExternalCustomerID and ExternalCustomerIDs (deduped); internal uses CustomerID only.
 func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustomerFilter string, customerFilter string) {
@@ -92,17 +98,17 @@ func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustome
 	case 0:
 		externalCustomerFilter = ""
 	case 1:
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", extUnique[0])
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", escapeClickHouseString(extUnique[0]))
 	default:
 		quoted := make([]string, len(extUnique))
 		for i, id := range extUnique {
-			quoted[i] = fmt.Sprintf("'%s'", id)
+			quoted[i] = fmt.Sprintf("'%s'", escapeClickHouseString(id))
 		}
 		externalCustomerFilter = fmt.Sprintf("AND external_customer_id IN (%s)", strings.Join(quoted, ", "))
 	}
 
 	if params.CustomerID != "" {
-		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
+		customerFilter = fmt.Sprintf("AND customer_id = '%s'", escapeClickHouseString(params.CustomerID))
 	}
 	return externalCustomerFilter, customerFilter
 }
@@ -191,12 +197,12 @@ func buildFilterConditions(filters map[string][]string) string {
 
 		quotedValues := make([]string, len(values))
 		for i, v := range values {
-			quotedValues[i] = fmt.Sprintf("'%s'", v)
+			quotedValues[i] = fmt.Sprintf("'%s'", escapeClickHouseString(v))
 		}
 
 		conditions = append(conditions, fmt.Sprintf(
 			"JSONExtractString(properties, '%s') IN (%s)",
-			key,
+			escapeClickHouseString(key),
 			strings.Join(quotedValues, ","),
 		))
 	}
