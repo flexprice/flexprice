@@ -13,14 +13,16 @@ import (
 )
 
 type CouponHandler struct {
-	couponService service.CouponService
-	logger        *logger.Logger
+	couponService            service.CouponService
+	couponAssociationService service.CouponAssociationService
+	logger                   *logger.Logger
 }
 
-func NewCouponHandler(couponService service.CouponService, logger *logger.Logger) *CouponHandler {
+func NewCouponHandler(couponService service.CouponService, couponAssociationService service.CouponAssociationService, logger *logger.Logger) *CouponHandler {
 	return &CouponHandler{
-		couponService: couponService,
-		logger:        logger,
+		couponService:            couponService,
+		couponAssociationService: couponAssociationService,
+		logger:                   logger,
 	}
 }
 
@@ -219,4 +221,68 @@ func (h *CouponHandler) QueryCoupons(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// @Summary Get coupon association
+// @ID getCouponAssociation
+// @Description Get a single coupon association by ID. Coupon associations are created and removed via the subscription modify API.
+// @Tags Coupon Associations
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param id path string true "Coupon Association ID"
+// @Success 200 {object} dto.CouponAssociationResponse
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /coupon-associations/{id} [get]
+func (h *CouponHandler) GetCouponAssociation(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("coupon association ID is required").
+			WithHint("Please provide a valid coupon association ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.couponAssociationService.GetCouponAssociation(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary List coupon associations
+// @ID listCouponAssociations
+// @Description List coupon associations with optional filters. Coupon associations are created and removed via the subscription modify API.
+// @Tags Coupon Associations
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param subscription_ids query []string false "Filter by subscription IDs"
+// @Param coupon_ids query []string false "Filter by coupon IDs"
+// @Param active_only query boolean false "Return only currently active associations"
+// @Param limit query integer false "Page size"
+// @Param offset query integer false "Page offset"
+// @Success 200 {object} dto.ListCouponAssociationsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /coupon-associations [get]
+func (h *CouponHandler) ListCouponAssociations(c *gin.Context) {
+	var filter types.CouponAssociationFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.couponAssociationService.ListCouponAssociations(c.Request.Context(), &filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

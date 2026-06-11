@@ -958,7 +958,8 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 		// soft-deleted (end_date set) and future (start_date not yet reached) associations
 		// are excluded. Falls back to time.Now() when no billing period is available.
 		if req.PeriodStart != nil {
-			filter.ActiveAt = req.PeriodStart
+			t := req.PeriodStart.UTC()
+			filter.ActiveAt = &t
 		} else {
 			now := time.Now().UTC()
 			filter.ActiveAt = &now

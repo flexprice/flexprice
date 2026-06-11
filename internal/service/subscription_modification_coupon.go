@@ -145,6 +145,17 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 			Mark(ierr.ErrValidation)
 	}
 
+	if effectiveDate.Before(assoc.StartDate) {
+		return nil, ierr.NewError("effective_date cannot be before association start_date").
+			WithHint("Use an effective_date on or after the association start date").
+			WithReportableDetails(map[string]interface{}{
+				"association_id": associationID,
+				"start_date":     assoc.StartDate,
+				"effective_date": effectiveDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	assoc.EndDate = &effectiveDate
 	if err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
 		return sp.CouponAssociationRepo.Update(txCtx, assoc)
@@ -259,6 +270,17 @@ func (s *subscriptionModificationService) previewRemoveCoupon(
 	if assoc.EndDate != nil && !assoc.EndDate.After(effectiveDate) {
 		return nil, ierr.NewError("association already inactive").
 			WithReportableDetails(map[string]interface{}{"association_id": associationID}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if effectiveDate.Before(assoc.StartDate) {
+		return nil, ierr.NewError("effective_date cannot be before association start_date").
+			WithHint("Use an effective_date on or after the association start date").
+			WithReportableDetails(map[string]interface{}{
+				"association_id": associationID,
+				"start_date":     assoc.StartDate,
+				"effective_date": effectiveDate,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 

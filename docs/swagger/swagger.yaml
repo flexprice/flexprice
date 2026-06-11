@@ -4102,6 +4102,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListCouponAssociationsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CouponAssociationResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListEntityIntegrationMappingsResponse:
     properties:
       items:
@@ -10854,6 +10863,91 @@ paths:
       summary: Query costsheets
       tags:
       - Costs
+  /coupon-associations:
+    get:
+      description: List coupon associations with optional filters. Coupon associations
+        are created and removed via the subscription modify API.
+      operationId: listCouponAssociations
+      parameters:
+      - collectionFormat: csv
+        description: Filter by subscription IDs
+        in: query
+        items:
+          type: string
+        name: subscription_ids
+        type: array
+      - collectionFormat: csv
+        description: Filter by coupon IDs
+        in: query
+        items:
+          type: string
+        name: coupon_ids
+        type: array
+      - description: Return only currently active associations
+        in: query
+        name: active_only
+        type: boolean
+      - description: Page size
+        in: query
+        name: limit
+        type: integer
+      - description: Page offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListCouponAssociationsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List coupon associations
+      tags:
+      - Coupon Associations
+      x-scope: read
+  /coupon-associations/{id}:
+    get:
+      description: Get a single coupon association by ID. Coupon associations are
+        created and removed via the subscription modify API.
+      operationId: getCouponAssociation
+      parameters:
+      - description: Coupon Association ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CouponAssociationResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get coupon association
+      tags:
+      - Coupon Associations
+      x-scope: read
   /coupons:
     post:
       consumes:
