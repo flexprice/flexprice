@@ -1,0 +1,15 @@
+# Keeps the integration journey runner pinned to the latest published Go SDK.
+# Each weekly bump PR triggers the integration-journeys validate job, whose
+# coverage summary lists any new SDK operations that have no journey yet —
+# the signal to add steps for them (see integration-testing-suite/CLAUDE.md).
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /integration-testing-suite/runner
+    schedule:
+      interval: weekly
+    labels: [integration-suite]
+    commit-message:
+      prefix: "chore(integration-suite)"
+    allow:
+      - dependency-name: github.com/flexprice/go-sdk/v2
