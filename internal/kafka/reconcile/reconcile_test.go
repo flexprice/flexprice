@@ -9,10 +9,9 @@ import (
 )
 
 type fakeAdmin struct {
-	live     map[string]liveTopic
-	created  []createCall
-	grown    map[string]int32
-	failGrow bool
+	live    map[string]liveTopic
+	created []createCall
+	grown   map[string]int32
 }
 
 type createCall struct {
@@ -26,10 +25,10 @@ func (f *fakeAdmin) CreateTopic(name string, partitions int32, rf int16) error {
 	f.created = append(f.created, createCall{name, partitions, rf})
 	return nil
 }
+
+// CreatePartitions must never be called under create-only semantics. If the
+// reconciler ever invokes it, the test fails loudly.
 func (f *fakeAdmin) CreatePartitions(name string, count int32) error {
-	if f.failGrow {
-		return assert.AnError
-	}
 	if f.grown == nil {
 		f.grown = map[string]int32{}
 	}
@@ -43,19 +42,16 @@ func desired(name string, parts int, rf int16) topicspec.ResolvedTopic {
 
 func TestReconcile(t *testing.T) {
 	tests := []struct {
-		name              string
-		live              map[string]liveTopic
-		failGrow          bool
-		desired           []topicspec.ResolvedTopic
-		wantErr           bool
-		wantCreated       int
-		wantGrown         int
-		wantSkippedShrink int
-		wantRFMismatch    int
-		checkAdmin        func(t *testing.T, f *fakeAdmin)
+		name           string
+		live           map[string]liveTopic
+		desired        []topicspec.ResolvedTopic
+		wantCreated    int
+		wantUnchanged  int
+		wantRFMismatch int
+		checkAdmin     func(t *testing.T, f *fakeAdmin)
 	}{
 		{
-			name:        "creates missing topic",
+			name:        "creates missing topic with desired sizing",
 			live:        map[string]liveTopic{},
 			desired:     []topicspec.ResolvedTopic{desired("events", 6, 3)},
 			wantCreated: 1,
@@ -65,64 +61,59 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name:      "grows partitions when fewer",
-			live:      map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3}},
-			desired:   []topicspec.ResolvedTopic{desired("events", 12, 3)},
-			wantGrown: 1,
+			// Live partition count is authoritative; even if desired is higher,
+			// NEVER grow. Create-only.
+			name:          "never grows an existing topic with fewer live partitions",
+			live:          map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3}},
+			desired:       []topicspec.ResolvedTopic{desired("events", 12, 3)},
+			wantUnchanged: 1,
 			checkAdmin: func(t *testing.T, f *fakeAdmin) {
-				assert.Equal(t, int32(12), f.grown["events"])
+				assert.Empty(t, f.grown)   // no CreatePartitions ever
+				assert.Empty(t, f.created) // already exists
 			},
 		},
 		{
-			name:              "skips and warns when more partitions",
-			live:              map[string]liveTopic{"events": {Partitions: 12, ReplicationFactor: 3}},
-			desired:           []topicspec.ResolvedTopic{desired("events", 6, 3)},
-			wantSkippedShrink: 1,
+			name:          "never shrinks an existing topic with more live partitions",
+			live:          map[string]liveTopic{"events": {Partitions: 100, ReplicationFactor: 3}},
+			desired:       []topicspec.ResolvedTopic{desired("events", 6, 3)},
+			wantUnchanged: 1,
 			checkAdmin: func(t *testing.T, f *fakeAdmin) {
 				assert.Empty(t, f.grown)
 			},
 		},
 		{
-			name:        "leaves unmanaged topics alone",
+			name:        "leaves unmanaged live topics alone, creates the missing desired one",
 			live:        map[string]liveTopic{"legacy": {Partitions: 3, ReplicationFactor: 3}},
 			desired:     []topicspec.ResolvedTopic{desired("events", 6, 3)},
 			wantCreated: 1,
-			wantGrown:   0,
 			checkAdmin: func(t *testing.T, f *fakeAdmin) {
 				assert.Len(t, f.created, 1)
-			},
-		},
-		{
-			name:           "warns on RF mismatch but does not change",
-			live:           map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 1}},
-			desired:        []topicspec.ResolvedTopic{desired("events", 6, 3)},
-			wantRFMismatch: 1,
-			checkAdmin: func(t *testing.T, f *fakeAdmin) {
 				assert.Empty(t, f.grown)
 			},
 		},
 		{
-			name:     "propagates grow error",
-			live:     map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 3}},
-			failGrow: true,
-			desired:  []topicspec.ResolvedTopic{desired("events", 12, 3)},
-			wantErr:  true,
+			name:           "warns on RF mismatch but changes nothing",
+			live:           map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 1}},
+			desired:        []topicspec.ResolvedTopic{desired("events", 6, 3)},
+			wantRFMismatch: 1,
+			wantUnchanged:  1,
+			checkAdmin: func(t *testing.T, f *fakeAdmin) {
+				assert.Empty(t, f.grown)
+				assert.Empty(t, f.created)
+			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &fakeAdmin{live: tc.live, failGrow: tc.failGrow}
+			f := &fakeAdmin{live: tc.live}
 			res, err := Reconcile(f, tc.desired)
-			if tc.wantErr {
-				assert.Error(t, err)
-				return
-			}
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantCreated, res.Created)
-			assert.Equal(t, tc.wantGrown, res.Grown)
-			assert.Equal(t, tc.wantSkippedShrink, res.SkippedShrink)
+			assert.Equal(t, tc.wantUnchanged, res.Unchanged)
 			assert.Equal(t, tc.wantRFMismatch, res.RFMismatch)
+			assert.Zero(t, res.Grown, "create-only: Grown must always be 0")
+			assert.Zero(t, res.SkippedShrink, "create-only: SkippedShrink must always be 0")
 			if tc.checkAdmin != nil {
 				tc.checkAdmin(t, f)
 			}
@@ -130,20 +121,24 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-func TestPlan_EmitsRFMismatchAndGrow(t *testing.T) {
+func TestPlan_ExistingTopicIsUnchangedRegardlessOfPartitions(t *testing.T) {
+	// desired wants 12 partitions, live has 6 — under create-only this must be
+	// Unchanged (NOT a grow), plus an RF-mismatch warning for the RF diff.
 	f := &fakeAdmin{live: map[string]liveTopic{"events": {Partitions: 6, ReplicationFactor: 1}}}
 	plan, err := Plan(f, []topicspec.ResolvedTopic{desired("events", 12, 3)})
 	require.NoError(t, err)
 
-	var sawRFMismatch, sawGrow bool
+	var sawRFMismatch, sawUnchanged bool
 	for _, act := range plan {
 		switch act.Kind {
 		case ActionRFMismatch:
 			sawRFMismatch = true
-		case ActionGrow:
-			sawGrow = true
+		case ActionUnchanged:
+			sawUnchanged = true
+		case ActionGrow, ActionSkipShrink:
+			t.Fatalf("create-only: unexpected partition action %v", act.Kind)
 		}
 	}
 	assert.True(t, sawRFMismatch, "expected an ActionRFMismatch")
-	assert.True(t, sawGrow, "expected an ActionGrow")
+	assert.True(t, sawUnchanged, "expected an ActionUnchanged (never grow existing)")
 }
