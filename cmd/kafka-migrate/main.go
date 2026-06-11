@@ -12,8 +12,8 @@ import (
 )
 
 func main() {
+	specPath := flag.String("spec", "topics.yaml", "path to the baked base topics.yaml (used when FLEXPRICE_KAFKA_TOPICS is unset)")
 	dryRun := flag.Bool("dry-run", false, "log intended actions without applying")
-	allowDefaults := flag.Bool("allow-defaults", false, "permit running with NO topic env-vars (uses struct defaults; LOCAL/DEV ONLY — unsafe on shared clusters)")
 	flag.Parse()
 
 	cfg, err := config.NewConfig()
@@ -21,17 +21,10 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	// Startup guard: on a shared cluster, running with a bare environment makes
-	// viper fall back to unprefixed struct defaults (events, system_events, ...)
-	// which would create phantom topics next to the real prod_*/staging_* ones.
-	// Refuse unless explicitly allowed.
-	if !topicspec.HasAnyTopicEnv() && !*allowDefaults {
-		log.Fatalf("refusing to run: no FLEXPRICE_*_TOPIC env-vars set — kafka-migrate would fall back to struct defaults and create phantom topics. Run the Job with the app's env block, or pass --allow-defaults for local/dev.")
-	}
-
-	desired, err := topicspec.FromConfig(cfg)
+	// FLEXPRICE_KAFKA_TOPICS (JSON), when set, fully replaces the baked file.
+	desired, err := topicspec.LoadDesired(*specPath)
 	if err != nil {
-		log.Fatalf("resolve topics from config: %v", err)
+		log.Fatalf("load desired topics: %v", err)
 	}
 	env := cfg.Logging.Environment
 	log.Printf("kafka-migrate: env=%s topics=%d dry-run=%v", env, len(desired), *dryRun)
