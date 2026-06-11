@@ -1,6 +1,7 @@
 package topicspec
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,10 +60,21 @@ func TestParse_RejectsZeroReplicationFactor(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestLoadDesired_FallsBackToFileWithSource(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/topics.yaml"
+	require.NoError(t, os.WriteFile(path, []byte(sampleYAML), 0o600))
+	got, source, err := LoadDesired(path)
+	require.NoError(t, err)
+	assert.Equal(t, "file:"+path, source) // source is loud about the fallback
+	assert.Equal(t, 6, find(t, got, "events").Partitions)
+}
+
 func TestLoadDesired_EnvOverrideReplacesFile(t *testing.T) {
 	t.Setenv("FLEXPRICE_KAFKA_TOPICS", sampleJSON)
-	got, err := LoadDesired("/nonexistent/topics.yaml")
+	got, source, err := LoadDesired("/nonexistent/topics.yaml")
 	require.NoError(t, err)
+	assert.Equal(t, "env:FLEXPRICE_KAFKA_TOPICS", source)
 	assert.Equal(t, 12, find(t, got, "events").Partitions)
 	assert.Equal(t, 6, find(t, got, "prod_system_events").Partitions)
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"strings"
 
 	"github.com/Shopify/sarama"
 	"github.com/flexprice/flexprice/internal/config"
@@ -22,12 +23,18 @@ func main() {
 	}
 
 	// FLEXPRICE_KAFKA_TOPICS (JSON), when set, fully replaces the baked file.
-	desired, err := topicspec.LoadDesired(*specPath)
+	desired, source, err := topicspec.LoadDesired(*specPath)
 	if err != nil {
 		log.Fatalf("load desired topics: %v", err)
 	}
 	env := cfg.Logging.Environment
-	log.Printf("kafka-migrate: env=%s topics=%d dry-run=%v", env, len(desired), *dryRun)
+	log.Printf("kafka-migrate: env=%s topics=%d source=%s dry-run=%v", env, len(desired), source, *dryRun)
+	if strings.HasPrefix(source, "file:") {
+		// The baked file carries the base/dev topic names (unprefixed), which are
+		// WRONG for a shared prod cluster. Every real deploy must set
+		// FLEXPRICE_KAFKA_TOPICS. Make a forgotten env-var loud.
+		log.Printf("WARN FLEXPRICE_KAFKA_TOPICS is NOT set — using the baked base topic list (%s). This is correct only for local/dev; a shared prod cluster needs the per-env JSON override or it may create wrong/unprefixed topics. Review the dry-run before applying.", source)
+	}
 	for _, d := range desired {
 		log.Printf("desired topic: %s partitions=%d rf=%d", d.Name, d.Partitions, d.ReplicationFactor)
 	}

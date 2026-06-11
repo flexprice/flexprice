@@ -80,21 +80,31 @@ func (s *Spec) Resolve() ([]ResolvedTopic, error) {
 	return out, nil
 }
 
-func LoadDesired(yamlPath string) ([]ResolvedTopic, error) {
+// LoadDesired resolves the desired topic set and reports its source. If
+// FLEXPRICE_KAFKA_TOPICS is set (non-empty) it is parsed as JSON and FULLY
+// REPLACES the baked file. Otherwise the yaml file at yamlPath is used.
+//
+// The returned source string ("env:FLEXPRICE_KAFKA_TOPICS" or "file:<path>")
+// lets the caller log loudly which source won — the file fallback carries the
+// baked base/dev topic names (unprefixed), which are WRONG for a shared prod
+// cluster, so a deploy that forgot to set the env-var must be obvious in logs.
+func LoadDesired(yamlPath string) (topics []ResolvedTopic, source string, err error) {
 	if v := os.Getenv(envVar); v != "" {
-		spec, err := ParseJSON([]byte(v))
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", envVar, err)
+		spec, perr := ParseJSON([]byte(v))
+		if perr != nil {
+			return nil, "", fmt.Errorf("%s: %w", envVar, perr)
 		}
-		return spec.Resolve()
+		r, rerr := spec.Resolve()
+		return r, "env:" + envVar, rerr
 	}
-	data, err := os.ReadFile(yamlPath)
-	if err != nil {
-		return nil, fmt.Errorf("read topics spec %s: %w", yamlPath, err)
+	data, rerr := os.ReadFile(yamlPath)
+	if rerr != nil {
+		return nil, "", fmt.Errorf("read topics spec %s: %w", yamlPath, rerr)
 	}
-	spec, err := ParseYAML(data)
-	if err != nil {
-		return nil, err
+	spec, perr := ParseYAML(data)
+	if perr != nil {
+		return nil, "", perr
 	}
-	return spec.Resolve()
+	r, resErr := spec.Resolve()
+	return r, "file:" + yamlPath, resErr
 }
