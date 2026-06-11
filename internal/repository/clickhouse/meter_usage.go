@@ -705,7 +705,7 @@ func (r *MeterUsageRepository) GetByEventID(ctx context.Context, tenantID, envir
 			meter_id,
 			qty_total,
 			unique_hash
-		FROM meter_usage FINAL
+		FROM meter_usage
 		WHERE tenant_id = ?
 		  AND environment_id = ?
 		  AND id = ?
