@@ -72,7 +72,12 @@ func (d *EventDeck) Next() EventDraw {
 		"region":      region,
 		"user_id":     user,
 		"duration_ms": durMs,
-		"e2eprobe": "true",
+		"e2eprobe":    "true",
+		// Mirror the top-level Source field into properties as well.
+		// MeterFilter (server-side) reads only from event.Properties (see
+		// feature_usage_tracking.go checkMeterFilters), so meters that filter
+		// on `source` would otherwise see zero matching events.
+		"source": source,
 	}
 
 	if d.rnd.Float64() < 0.3 {
