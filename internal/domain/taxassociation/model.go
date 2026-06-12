@@ -47,7 +47,12 @@ func FromEnt(ent *ent.TaxAssociation) *TaxAssociation {
 		Currency:      ent.Currency,
 		EnvironmentID: ent.EnvironmentID,
 		Metadata:      ent.Metadata,
-		StartDate:     ent.StartDate,
+		StartDate: func() time.Time {
+			if ent.StartDate != nil {
+				return *ent.StartDate
+			}
+			return time.Time{}
+		}(),
 		EndDate:       ent.EndDate,
 		BaseModel: types.BaseModel{
 			TenantID:  ent.TenantID,
