@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -147,6 +148,50 @@ func TestCancelSubscriptionRequest_Validate_BackdatedImmediate(t *testing.T) {
 			}
 			if !tt.wantErr && err != nil {
 				t.Fatalf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestCancelSubscriptionRequest_UnmarshalJSON_InvoicePolicySpellings(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want types.CancelImmediatelyInvoicePolicy
+	}{
+		{
+			name: "corrected_key_is_accepted",
+			body: `{"cancellation_type":"immediate","cancel_immediately_invoice_policy":"generate_invoice"}`,
+			want: types.CancelImmediatelyInvoicePolicyGenerateInvoice,
+		},
+		{
+			name: "legacy_misspelled_key_is_accepted",
+			body: `{"cancellation_type":"immediate","cancel_immediately_inovice_policy":"generate_invoice"}`,
+			want: types.CancelImmediatelyInvoicePolicyGenerateInvoice,
+		},
+		{
+			name: "corrected_key_wins_when_both_present",
+			body: `{"cancellation_type":"immediate","cancel_immediately_invoice_policy":"generate_invoice","cancel_immediately_inovice_policy":"skip"}`,
+			want: types.CancelImmediatelyInvoicePolicyGenerateInvoice,
+		},
+		{
+			name: "absent_key_leaves_policy_empty",
+			body: `{"cancellation_type":"immediate"}`,
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req CancelSubscriptionRequest
+			if err := json.Unmarshal([]byte(tt.body), &req); err != nil {
+				t.Fatalf("unexpected unmarshal error: %v", err)
+			}
+			if req.CancelImmediatelyInvoicePolicy != tt.want {
+				t.Fatalf("expected policy %q, got %q", tt.want, req.CancelImmediatelyInvoicePolicy)
+			}
+			if req.CancellationType != types.CancellationTypeImmediate {
+				t.Fatalf("expected cancellation_type to be preserved, got %q", req.CancellationType)
 			}
 		})
 	}
