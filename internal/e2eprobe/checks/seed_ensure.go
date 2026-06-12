@@ -124,7 +124,7 @@ var seedFeatureSpecs = func() []featureSpec {
 		{
 			lookupKey: "e2eprobe_weighted_sum_feature", eventName: "e2eprobe_weighted_sum",
 			displayName: "E2EProbe WeightedSum", aggType: types.AggregationTypeWeightedSum,
-			field: strPtr("amount"), expression: strPtr("amount * duration_ms"), aggLabel: "weighted_sum",
+			field: strPtr("amount"), expression: strPtr("double(amount) * double(duration_ms)"), aggLabel: "weighted_sum",
 		},
 		{
 			lookupKey: "e2eprobe_sum_filtered_feature", eventName: "e2eprobe_sum_filtered",

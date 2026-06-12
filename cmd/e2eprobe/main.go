@@ -105,6 +105,11 @@ func main() {
 		runner.Add(ap, e2eprobe.NewTickerScheduler(ap, cfg.Checks["ANALYTICS_PROBE"].Interval))
 	}
 
+	if cfg.Checks["METER_AGGREGATION_PROBE"].Enabled {
+		mapr := checks_pkg.NewMeterAggregationProbe(client, reg, runID)
+		runner.Add(mapr, e2eprobe.NewTickerScheduler(mapr, cfg.Checks["METER_AGGREGATION_PROBE"].Interval))
+	}
+
 	if cfg.Checks["WALLET_BALANCE_PROBE"].Enabled {
 		wp := checks_pkg.NewWalletBalanceProbe(client, reg, runID)
 		runner.Add(wp, e2eprobe.NewTickerScheduler(wp, cfg.Checks["WALLET_BALANCE_PROBE"].Interval))

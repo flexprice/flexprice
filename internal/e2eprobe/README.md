@@ -65,6 +65,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | bootstrap | seed-ensure | OneShot + 6h | Auto-provision: 9 features/meters, 10 customers, 1 plan, 10 prices, 10 subs, 3 wallets |
 | driver | event-ingest-driver | Rate(5/s) | Varied event ingest using the deck |
 | probe | analytics-probe | 2m | `GetUsageAnalytics` rotating params |
+| probe | meter-aggregation-probe | 3m | Asserts each seed meter produces >0 usage over a 30-min window (round-robin; all 9 meters covered every ~27 min) |
 | probe | wallet-balance-probe | 2m | Wallet balance reads |
 | probe | wallet-debit-verification | 20m | Phase 1: TopUp read-after-write correctness; Phase 2: event→analytics aggregation pipeline |
 | probe | cycle-invoice-probe | 15m | Auto-invoice freshness invariant |

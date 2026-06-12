@@ -63,6 +63,7 @@ var CheckNames = []string{
 	"SEED_ENSURE",
 	"EVENT_INGEST_DRIVER",
 	"ANALYTICS_PROBE",
+	"METER_AGGREGATION_PROBE",
 	"WALLET_BALANCE_PROBE",
 	"WALLET_DEBIT_VERIFICATION",
 	"CYCLE_INVOICE_PROBE",
@@ -78,6 +79,7 @@ var checkDefaultIntervals = map[string]time.Duration{
 	"SEED_ENSURE":                    6 * time.Hour,
 	"EVENT_INGEST_DRIVER":            1 * time.Second, // rate-scheduled internally
 	"ANALYTICS_PROBE":                2 * time.Minute,
+	"METER_AGGREGATION_PROBE":        3 * time.Minute,
 	"WALLET_BALANCE_PROBE":           2 * time.Minute,
 	"WALLET_DEBIT_VERIFICATION":      20 * time.Minute,
 	"CYCLE_INVOICE_PROBE":            15 * time.Minute,
