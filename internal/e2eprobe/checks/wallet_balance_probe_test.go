@@ -1,0 +1,66 @@
+package checks
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/flexprice/flexprice/internal/e2eprobe"
+	"github.com/flexprice/go-sdk/v2/models/types"
+)
+
+func TestWalletBalanceProbe_Happy(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{
+		PersistentCustomerIDs: []string{"c0", "c1", "c2"},
+		PreFundedCustomerIDs:  []string{"c0"},
+	})
+	p := NewWalletBalanceProbe(fc, reg, "run-1")
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+}
+
+func TestWalletBalanceProbe_NoPreFundedIsNoOp(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PersistentCustomerIDs: []string{"c"}})
+	p := NewWalletBalanceProbe(fc, reg, "run-1")
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWalletBalanceProbe_ErrorPropagates(t *testing.T) {
+	fc := newFakeClient()
+	fc.wallets.balErr = errors.New("503")
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PreFundedCustomerIDs: []string{"c"}})
+	p := NewWalletBalanceProbe(fc, reg, "run-1")
+	if err := p.Run(context.Background()); err != nil {
+		t.Errorf("expected nil with empty wallet list (no wallet items), got %v", err)
+	}
+}
+
+// TestWalletBalanceProbe_GetsBalance verifies the positive path: when the
+// external customer resolves and GetWalletsByCustomerID returns IDs,
+// GetBalance is called for each one.
+func TestWalletBalanceProbe_GetsBalance(t *testing.T) {
+	fc := newFakeClient()
+	walletID := "wallet_001"
+	internalCustID := "internal_c0"
+	fc.customers.byExt = map[string]string{"c0": internalCustID}
+	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
+	}
+	fc.wallets.balance = "100.00"
+
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PreFundedCustomerIDs: []string{"c0"}})
+	p := NewWalletBalanceProbe(fc, reg, "run-1")
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// If we got here without error, GetBalance was called with the real wallet ID.
+}

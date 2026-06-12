@@ -65,6 +65,10 @@ down:
 run-server:
 	go run cmd/server/main.go
 
+.PHONY: run-e2eprobe
+run-e2eprobe:
+	go run cmd/e2eprobe/main.go
+
 .PHONY: run-server-local
 run-server-local: run-server
 
