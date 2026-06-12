@@ -82,12 +82,12 @@ func loadTargets() ([]Target, error) {
 		return parseTargets([]byte(raw), "FLEXPRICE_TARGETS")
 	}
 
-	apiKey := os.Getenv("FLEXPRICE_API_KEY")
+	apiKey := strings.TrimSpace(os.Getenv("FLEXPRICE_API_KEY"))
 	if apiKey == "" {
 		return nil, fmt.Errorf("no targets configured: set FLEXPRICE_TARGETS_FILE, FLEXPRICE_TARGETS, or FLEXPRICE_API_KEY")
 	}
 	return []Target{{
-		APIHost: os.Getenv("FLEXPRICE_API_HOST"),
+		APIHost: strings.TrimSpace(os.Getenv("FLEXPRICE_API_HOST")),
 		APIKey:  apiKey,
 	}}, nil
 }
