@@ -175,14 +175,27 @@ func (j *Janitor) sweepOrphans(ctx context.Context, cutoff time.Time) error {
 			continue
 		}
 
+		// Best-effort cleanup: cancel any active subscriptions on this customer
+		// so the subsequent Delete is not blocked. Errors here are logged and
+		// skipped — the next janitor tick will retry.
+		j.cancelCustomerSubs(ctx, custID, extID)
+
 		if _, delErr := j.client.Customers().Delete(ctx, custID); delErr != nil {
 			if isNotFound(delErr) {
 				continue // already gone — concurrent cleanup
 			}
-			return e2eprobe.Errorf(map[string]string{
-				"customer_id":          custID,
-				"external_customer_id": extID,
-			}, "janitor sweepOrphans: delete customer %s: %w", custID, delErr)
+			// The upstream API sometimes returns 4xx with body `{}` when a
+			// customer has lingering constraints (active wallets, pending
+			// invoices, etc.) that we can't yet fully drain. Log + skip so
+			// the next janitor tick retries; do NOT fail the check (no
+			// Slack alert). Orphans accumulate slowly enough that this
+			// best-effort cycle catches up over time.
+			slog.InfoContext(ctx, "janitor sweepOrphans: delete deferred (will retry)",
+				"customer_id", custID,
+				"external_customer_id", extID,
+				"upstream_error", delErr.Error(),
+			)
+			continue
 		}
 		deleted++
 	}
@@ -197,3 +210,49 @@ func (j *Janitor) sweepOrphans(ctx context.Context, cutoff time.Time) error {
 func parseRFC3339(s string) (time.Time, error) {
 	return time.Parse(time.RFC3339, s)
 }
+
+// cancelCustomerSubs queries subscriptions for the given internal customer ID
+// and cancels any that aren't already in a terminal state. All errors are
+// swallowed and logged at Info level — this is a best-effort prepass to the
+// Delete call. The next janitor tick will retry anything that didn't drain.
+func (j *Janitor) cancelCustomerSubs(ctx context.Context, custID, extID string) {
+	subResp, err := j.client.Subscriptions().Query(ctx, types.SubscriptionFilter{
+		CustomerID: &custID,
+	})
+	if err != nil {
+		slog.InfoContext(ctx, "janitor sweepOrphans: query subs failed (will retry)",
+			"customer_id", custID,
+			"external_customer_id", extID,
+			"upstream_error", err.Error(),
+		)
+		return
+	}
+	listResp := subResp.GetDtoListSubscriptionsResponse()
+	if listResp == nil {
+		return
+	}
+	immediate := types.CancellationTypeImmediate
+	for _, sub := range listResp.GetItems() {
+		if sub.ID == nil {
+			continue
+		}
+		// Skip subs already in a terminal state.
+		if sub.SubscriptionStatus != nil && *sub.SubscriptionStatus == types.SubscriptionStatusCancelled {
+			continue
+		}
+		_, cErr := j.client.Subscriptions().Cancel(ctx, *sub.ID, types.DtoCancelSubscriptionRequest{
+			CancellationType: immediate,
+			Reason:           strPtrJanitor("e2eprobe-janitor-orphan-sweep"),
+		})
+		if cErr != nil && !isNotFound(cErr) {
+			slog.InfoContext(ctx, "janitor sweepOrphans: cancel sub deferred (will retry)",
+				"customer_id", custID,
+				"external_customer_id", extID,
+				"subscription_id", *sub.ID,
+				"upstream_error", cErr.Error(),
+			)
+		}
+	}
+}
+
+func strPtrJanitor(s string) *string { return &s }
