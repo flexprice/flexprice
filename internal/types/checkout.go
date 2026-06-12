@@ -1,0 +1,86 @@
+package types
+
+import ierr "github.com/flexprice/flexprice/internal/errors"
+
+// CheckoutEntityType is the kind of subject a checkout activates.
+type CheckoutEntityType string
+
+const (
+	CheckoutEntityTypeSubscription CheckoutEntityType = "subscription"
+)
+
+func (t CheckoutEntityType) Validate() error {
+	switch t {
+	case CheckoutEntityTypeSubscription:
+		return nil
+	default:
+		return ierr.NewError("invalid checkout entity type").
+			WithHint("Checkout entity type must be 'subscription'").
+			WithReportableDetails(map[string]any{"entity_type": t}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// CheckoutType is the operation a checkout defers.
+type CheckoutType string
+
+const (
+	CheckoutTypeSubscriptionCreation CheckoutType = "subscription_creation"
+	CheckoutTypeSubscriptionChange   CheckoutType = "subscription_change"
+)
+
+func (t CheckoutType) Validate() error {
+	switch t {
+	case CheckoutTypeSubscriptionCreation, CheckoutTypeSubscriptionChange:
+		return nil
+	default:
+		return ierr.NewError("invalid checkout type").
+			WithHint("Checkout type must be 'subscription_creation' or 'subscription_change'").
+			WithReportableDetails(map[string]any{"checkout_type": t}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// CheckoutObjective drives parking state, provider mode and completion trigger.
+type CheckoutObjective string
+
+const (
+	CheckoutObjectivePayment CheckoutObjective = "payment"
+	CheckoutObjectiveSetup   CheckoutObjective = "setup"
+)
+
+func (o CheckoutObjective) Validate() error {
+	switch o {
+	case CheckoutObjectivePayment, CheckoutObjectiveSetup:
+		return nil
+	default:
+		return ierr.NewError("invalid checkout objective").
+			WithHint("Checkout objective must be 'payment' or 'setup'").
+			WithReportableDetails(map[string]any{"objective": o}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// CheckoutStatus is the workflow state of the checkout (distinct from the base mixin lifecycle status).
+type CheckoutStatus string
+
+const (
+	CheckoutStatusPending   CheckoutStatus = "pending"
+	CheckoutStatusCompleted CheckoutStatus = "completed"
+	CheckoutStatusExpired   CheckoutStatus = "expired"
+	CheckoutStatusCancelled CheckoutStatus = "cancelled"
+	CheckoutStatusFailed    CheckoutStatus = "failed"
+)
+
+func (s CheckoutStatus) Validate() error {
+	switch s {
+	case CheckoutStatusPending, CheckoutStatusCompleted, CheckoutStatusExpired,
+		CheckoutStatusCancelled, CheckoutStatusFailed:
+		return nil
+	default:
+		return ierr.NewError("invalid checkout status").
+			WithHint("Invalid checkout status").
+			WithReportableDetails(map[string]any{"status": s}).
+			Mark(ierr.ErrValidation)
+	}
+}
