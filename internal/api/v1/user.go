@@ -56,7 +56,7 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("invalid request body", "error", err)
+		h.logger.Error("invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request. For user: type and email required. For service_account: type and roles required.").
 			Mark(ierr.ErrValidation))
@@ -65,7 +65,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 	resp, err := h.userService.CreateUser(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to create user", "error", err)
+		h.logger.Error("failed to create user", "error", err)
 		c.Error(err)
 		return
 	}
@@ -88,7 +88,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("invalid request body", "error", err)
+		h.logger.Error("invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request body").
 			Mark(ierr.ErrValidation))
@@ -97,7 +97,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 	resp, err := h.userService.UpdateUser(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to update user", "error", err)
+		h.logger.Error("failed to update user", "error", err)
 		c.Error(err)
 		return
 	}
@@ -139,7 +139,7 @@ func (h *UserHandler) QueryUsers(c *gin.Context) {
 
 	users, err := h.userService.ListUsersByFilter(c.Request.Context(), &filter)
 	if err != nil {
-		h.logger.Errorw("failed to list service accounts", "error", err)
+		h.logger.Error("failed to list service accounts", "error", err)
 		c.Error(err)
 		return
 	}
@@ -165,7 +165,7 @@ func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
 	id := c.Param("id")
 	var req dto.UpdateServiceAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("invalid request body", "error", err)
+		h.logger.Error("invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request body").
 			Mark(ierr.ErrValidation))
@@ -174,7 +174,7 @@ func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
 
 	resp, err := h.userService.UpdateServiceAccount(c.Request.Context(), id, &req)
 	if err != nil {
-		h.logger.Errorw("failed to update service account", "error", err)
+		h.logger.Error("failed to update service account", "error", err)
 		c.Error(err)
 		return
 	}
@@ -197,7 +197,7 @@ func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.userService.DeleteUser(c.Request.Context(), id); err != nil {
-		h.logger.Errorw("failed to delete user", "error", err)
+		h.logger.Error("failed to delete user", "error", err)
 		c.Error(err)
 		return
 	}
