@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/checkout"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -242,6 +243,43 @@ func init() {
 	billingsequence.DefaultUpdatedAt = billingsequenceDescUpdatedAt.Default.(func() time.Time)
 	// billingsequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	billingsequence.UpdateDefaultUpdatedAt = billingsequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
+	checkoutMixin := schema.Checkout{}.Mixin()
+	checkoutMixinFields0 := checkoutMixin[0].Fields()
+	_ = checkoutMixinFields0
+	checkoutMixinFields1 := checkoutMixin[1].Fields()
+	_ = checkoutMixinFields1
+	checkoutFields := schema.Checkout{}.Fields()
+	_ = checkoutFields
+	// checkoutDescTenantID is the schema descriptor for tenant_id field.
+	checkoutDescTenantID := checkoutMixinFields0[0].Descriptor()
+	// checkout.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	checkout.TenantIDValidator = checkoutDescTenantID.Validators[0].(func(string) error)
+	// checkoutDescStatus is the schema descriptor for status field.
+	checkoutDescStatus := checkoutMixinFields0[1].Descriptor()
+	// checkout.DefaultStatus holds the default value on creation for the status field.
+	checkout.DefaultStatus = checkoutDescStatus.Default.(string)
+	// checkoutDescCreatedAt is the schema descriptor for created_at field.
+	checkoutDescCreatedAt := checkoutMixinFields0[2].Descriptor()
+	// checkout.DefaultCreatedAt holds the default value on creation for the created_at field.
+	checkout.DefaultCreatedAt = checkoutDescCreatedAt.Default.(func() time.Time)
+	// checkoutDescUpdatedAt is the schema descriptor for updated_at field.
+	checkoutDescUpdatedAt := checkoutMixinFields0[3].Descriptor()
+	// checkout.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	checkout.DefaultUpdatedAt = checkoutDescUpdatedAt.Default.(func() time.Time)
+	// checkout.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	checkout.UpdateDefaultUpdatedAt = checkoutDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// checkoutDescEnvironmentID is the schema descriptor for environment_id field.
+	checkoutDescEnvironmentID := checkoutMixinFields1[0].Descriptor()
+	// checkout.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	checkout.DefaultEnvironmentID = checkoutDescEnvironmentID.Default.(string)
+	// checkoutDescCustomerID is the schema descriptor for customer_id field.
+	checkoutDescCustomerID := checkoutFields[1].Descriptor()
+	// checkout.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	checkout.CustomerIDValidator = checkoutDescCustomerID.Validators[0].(func(string) error)
+	// checkoutDescCheckoutStatus is the schema descriptor for checkout_status field.
+	checkoutDescCheckoutStatus := checkoutFields[7].Descriptor()
+	// checkout.DefaultCheckoutStatus holds the default value on creation for the checkout_status field.
+	checkout.DefaultCheckoutStatus = types.CheckoutStatus(checkoutDescCheckoutStatus.Default.(string))
 	connectionMixin := schema.Connection{}.Mixin()
 	connectionMixinFields0 := connectionMixin[0].Fields()
 	_ = connectionMixinFields0

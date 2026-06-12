@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/checkout"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -81,6 +82,8 @@ type Client struct {
 	Auth *AuthClient
 	// BillingSequence is the client for interacting with the BillingSequence builders.
 	BillingSequence *BillingSequenceClient
+	// Checkout is the client for interacting with the Checkout builders.
+	Checkout *CheckoutClient
 	// Connection is the client for interacting with the Connection builders.
 	Connection *ConnectionClient
 	// Costsheet is the client for interacting with the Costsheet builders.
@@ -181,6 +184,7 @@ func (c *Client) init() {
 	c.AlertLogs = NewAlertLogsClient(c.config)
 	c.Auth = NewAuthClient(c.config)
 	c.BillingSequence = NewBillingSequenceClient(c.config)
+	c.Checkout = NewCheckoutClient(c.config)
 	c.Connection = NewConnectionClient(c.config)
 	c.Costsheet = NewCostsheetClient(c.config)
 	c.Coupon = NewCouponClient(c.config)
@@ -320,6 +324,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AlertLogs:                NewAlertLogsClient(cfg),
 		Auth:                     NewAuthClient(cfg),
 		BillingSequence:          NewBillingSequenceClient(cfg),
+		Checkout:                 NewCheckoutClient(cfg),
 		Connection:               NewConnectionClient(cfg),
 		Costsheet:                NewCostsheetClient(cfg),
 		Coupon:                   NewCouponClient(cfg),
@@ -386,6 +391,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AlertLogs:                NewAlertLogsClient(cfg),
 		Auth:                     NewAuthClient(cfg),
 		BillingSequence:          NewBillingSequenceClient(cfg),
+		Checkout:                 NewCheckoutClient(cfg),
 		Connection:               NewConnectionClient(cfg),
 		Costsheet:                NewCostsheetClient(cfg),
 		Coupon:                   NewCouponClient(cfg),
@@ -457,7 +463,7 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Addon, c.AddonAssociation, c.AlertLogs, c.Auth, c.BillingSequence,
+		c.Addon, c.AddonAssociation, c.AlertLogs, c.Auth, c.BillingSequence, c.Checkout,
 		c.Connection, c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation,
 		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
 		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
@@ -476,7 +482,7 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Addon, c.AddonAssociation, c.AlertLogs, c.Auth, c.BillingSequence,
+		c.Addon, c.AddonAssociation, c.AlertLogs, c.Auth, c.BillingSequence, c.Checkout,
 		c.Connection, c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation,
 		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
 		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
@@ -504,6 +510,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Auth.mutate(ctx, m)
 	case *BillingSequenceMutation:
 		return c.BillingSequence.mutate(ctx, m)
+	case *CheckoutMutation:
+		return c.Checkout.mutate(ctx, m)
 	case *ConnectionMutation:
 		return c.Connection.mutate(ctx, m)
 	case *CostsheetMutation:
@@ -1271,6 +1279,139 @@ func (c *BillingSequenceClient) mutate(ctx context.Context, m *BillingSequenceMu
 		return (&BillingSequenceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown BillingSequence mutation op: %q", m.Op())
+	}
+}
+
+// CheckoutClient is a client for the Checkout schema.
+type CheckoutClient struct {
+	config
+}
+
+// NewCheckoutClient returns a client for the Checkout from the given config.
+func NewCheckoutClient(c config) *CheckoutClient {
+	return &CheckoutClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `checkout.Hooks(f(g(h())))`.
+func (c *CheckoutClient) Use(hooks ...Hook) {
+	c.hooks.Checkout = append(c.hooks.Checkout, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `checkout.Intercept(f(g(h())))`.
+func (c *CheckoutClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Checkout = append(c.inters.Checkout, interceptors...)
+}
+
+// Create returns a builder for creating a Checkout entity.
+func (c *CheckoutClient) Create() *CheckoutCreate {
+	mutation := newCheckoutMutation(c.config, OpCreate)
+	return &CheckoutCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Checkout entities.
+func (c *CheckoutClient) CreateBulk(builders ...*CheckoutCreate) *CheckoutCreateBulk {
+	return &CheckoutCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CheckoutClient) MapCreateBulk(slice any, setFunc func(*CheckoutCreate, int)) *CheckoutCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CheckoutCreateBulk{err: fmt.Errorf("calling to CheckoutClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CheckoutCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CheckoutCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Checkout.
+func (c *CheckoutClient) Update() *CheckoutUpdate {
+	mutation := newCheckoutMutation(c.config, OpUpdate)
+	return &CheckoutUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CheckoutClient) UpdateOne(ch *Checkout) *CheckoutUpdateOne {
+	mutation := newCheckoutMutation(c.config, OpUpdateOne, withCheckout(ch))
+	return &CheckoutUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CheckoutClient) UpdateOneID(id string) *CheckoutUpdateOne {
+	mutation := newCheckoutMutation(c.config, OpUpdateOne, withCheckoutID(id))
+	return &CheckoutUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Checkout.
+func (c *CheckoutClient) Delete() *CheckoutDelete {
+	mutation := newCheckoutMutation(c.config, OpDelete)
+	return &CheckoutDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CheckoutClient) DeleteOne(ch *Checkout) *CheckoutDeleteOne {
+	return c.DeleteOneID(ch.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CheckoutClient) DeleteOneID(id string) *CheckoutDeleteOne {
+	builder := c.Delete().Where(checkout.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CheckoutDeleteOne{builder}
+}
+
+// Query returns a query builder for Checkout.
+func (c *CheckoutClient) Query() *CheckoutQuery {
+	return &CheckoutQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCheckout},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Checkout entity by its id.
+func (c *CheckoutClient) Get(ctx context.Context, id string) (*Checkout, error) {
+	return c.Query().Where(checkout.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CheckoutClient) GetX(ctx context.Context, id string) *Checkout {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CheckoutClient) Hooks() []Hook {
+	return c.hooks.Checkout
+}
+
+// Interceptors returns the client interceptors.
+func (c *CheckoutClient) Interceptors() []Interceptor {
+	return c.inters.Checkout
+}
+
+func (c *CheckoutClient) mutate(ctx context.Context, m *CheckoutMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CheckoutCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CheckoutUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CheckoutUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CheckoutDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Checkout mutation op: %q", m.Op())
 	}
 }
 
@@ -7471,7 +7612,7 @@ func (c *WorkflowExecutionClient) mutate(ctx context.Context, m *WorkflowExecuti
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
+		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Checkout, Connection,
 		Costsheet, Coupon, CouponApplication, CouponAssociation, CreditGrant,
 		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
 		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
@@ -7482,7 +7623,7 @@ type (
 		WorkflowExecution []ent.Hook
 	}
 	inters struct {
-		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
+		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Checkout, Connection,
 		Costsheet, Coupon, CouponApplication, CouponAssociation, CreditGrant,
 		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
 		EntityIntegrationMapping, Environment, Feature, Group, Invoice,

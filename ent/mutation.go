@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
+	"github.com/flexprice/flexprice/ent/checkout"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/coupon"
@@ -78,6 +79,7 @@ const (
 	TypeAlertLogs                = "AlertLogs"
 	TypeAuth                     = "Auth"
 	TypeBillingSequence          = "BillingSequence"
+	TypeCheckout                 = "Checkout"
 	TypeConnection               = "Connection"
 	TypeCostsheet                = "Costsheet"
 	TypeCoupon                   = "Coupon"
@@ -4859,6 +4861,1957 @@ func (m *BillingSequenceMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *BillingSequenceMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown BillingSequence edge %s", name)
+}
+
+// CheckoutMutation represents an operation that mutates the Checkout nodes in the graph.
+type CheckoutMutation struct {
+	config
+	op                     Op
+	typ                    string
+	id                     *string
+	tenant_id              *string
+	status                 *string
+	created_at             *time.Time
+	updated_at             *time.Time
+	created_by             *string
+	updated_by             *string
+	environment_id         *string
+	customer_id            *string
+	entity_type            *types.CheckoutEntityType
+	entity_id              *string
+	source_subscription_id *string
+	checkout_type          *types.CheckoutType
+	objective              *types.CheckoutObjective
+	checkout_status        *types.CheckoutStatus
+	amount                 *decimal.Decimal
+	currency               *string
+	provider               *string
+	provider_session_id    *string
+	checkout_url           *string
+	success_url            *string
+	cancel_url             *string
+	configuration          *map[string]interface{}
+	expires_at             *time.Time
+	completed_at           *time.Time
+	cancelled_at           *time.Time
+	error_message          *string
+	clearedFields          map[string]struct{}
+	done                   bool
+	oldValue               func(context.Context) (*Checkout, error)
+	predicates             []predicate.Checkout
+}
+
+var _ ent.Mutation = (*CheckoutMutation)(nil)
+
+// checkoutOption allows management of the mutation configuration using functional options.
+type checkoutOption func(*CheckoutMutation)
+
+// newCheckoutMutation creates new mutation for the Checkout entity.
+func newCheckoutMutation(c config, op Op, opts ...checkoutOption) *CheckoutMutation {
+	m := &CheckoutMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCheckout,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCheckoutID sets the ID field of the mutation.
+func withCheckoutID(id string) checkoutOption {
+	return func(m *CheckoutMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Checkout
+		)
+		m.oldValue = func(ctx context.Context) (*Checkout, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Checkout.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCheckout sets the old Checkout of the mutation.
+func withCheckout(node *Checkout) checkoutOption {
+	return func(m *CheckoutMutation) {
+		m.oldValue = func(context.Context) (*Checkout, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CheckoutMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CheckoutMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Checkout entities.
+func (m *CheckoutMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CheckoutMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CheckoutMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Checkout.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *CheckoutMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *CheckoutMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *CheckoutMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *CheckoutMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *CheckoutMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *CheckoutMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CheckoutMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CheckoutMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CheckoutMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CheckoutMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CheckoutMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CheckoutMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *CheckoutMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *CheckoutMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *CheckoutMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[checkout.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *CheckoutMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *CheckoutMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, checkout.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *CheckoutMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *CheckoutMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *CheckoutMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[checkout.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *CheckoutMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *CheckoutMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, checkout.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *CheckoutMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *CheckoutMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *CheckoutMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[checkout.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *CheckoutMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *CheckoutMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, checkout.FieldEnvironmentID)
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (m *CheckoutMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *CheckoutMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *CheckoutMutation) ResetCustomerID() {
+	m.customer_id = nil
+}
+
+// SetEntityType sets the "entity_type" field.
+func (m *CheckoutMutation) SetEntityType(tet types.CheckoutEntityType) {
+	m.entity_type = &tet
+}
+
+// EntityType returns the value of the "entity_type" field in the mutation.
+func (m *CheckoutMutation) EntityType() (r types.CheckoutEntityType, exists bool) {
+	v := m.entity_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityType returns the old "entity_type" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldEntityType(ctx context.Context) (v types.CheckoutEntityType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityType: %w", err)
+	}
+	return oldValue.EntityType, nil
+}
+
+// ResetEntityType resets all changes to the "entity_type" field.
+func (m *CheckoutMutation) ResetEntityType() {
+	m.entity_type = nil
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *CheckoutMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *CheckoutMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldEntityID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *CheckoutMutation) ResetEntityID() {
+	m.entity_id = nil
+}
+
+// SetSourceSubscriptionID sets the "source_subscription_id" field.
+func (m *CheckoutMutation) SetSourceSubscriptionID(s string) {
+	m.source_subscription_id = &s
+}
+
+// SourceSubscriptionID returns the value of the "source_subscription_id" field in the mutation.
+func (m *CheckoutMutation) SourceSubscriptionID() (r string, exists bool) {
+	v := m.source_subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceSubscriptionID returns the old "source_subscription_id" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldSourceSubscriptionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceSubscriptionID: %w", err)
+	}
+	return oldValue.SourceSubscriptionID, nil
+}
+
+// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
+func (m *CheckoutMutation) ClearSourceSubscriptionID() {
+	m.source_subscription_id = nil
+	m.clearedFields[checkout.FieldSourceSubscriptionID] = struct{}{}
+}
+
+// SourceSubscriptionIDCleared returns if the "source_subscription_id" field was cleared in this mutation.
+func (m *CheckoutMutation) SourceSubscriptionIDCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldSourceSubscriptionID]
+	return ok
+}
+
+// ResetSourceSubscriptionID resets all changes to the "source_subscription_id" field.
+func (m *CheckoutMutation) ResetSourceSubscriptionID() {
+	m.source_subscription_id = nil
+	delete(m.clearedFields, checkout.FieldSourceSubscriptionID)
+}
+
+// SetCheckoutType sets the "checkout_type" field.
+func (m *CheckoutMutation) SetCheckoutType(tt types.CheckoutType) {
+	m.checkout_type = &tt
+}
+
+// CheckoutType returns the value of the "checkout_type" field in the mutation.
+func (m *CheckoutMutation) CheckoutType() (r types.CheckoutType, exists bool) {
+	v := m.checkout_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCheckoutType returns the old "checkout_type" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCheckoutType(ctx context.Context) (v types.CheckoutType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCheckoutType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCheckoutType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCheckoutType: %w", err)
+	}
+	return oldValue.CheckoutType, nil
+}
+
+// ResetCheckoutType resets all changes to the "checkout_type" field.
+func (m *CheckoutMutation) ResetCheckoutType() {
+	m.checkout_type = nil
+}
+
+// SetObjective sets the "objective" field.
+func (m *CheckoutMutation) SetObjective(to types.CheckoutObjective) {
+	m.objective = &to
+}
+
+// Objective returns the value of the "objective" field in the mutation.
+func (m *CheckoutMutation) Objective() (r types.CheckoutObjective, exists bool) {
+	v := m.objective
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjective returns the old "objective" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldObjective(ctx context.Context) (v types.CheckoutObjective, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjective is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjective requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjective: %w", err)
+	}
+	return oldValue.Objective, nil
+}
+
+// ResetObjective resets all changes to the "objective" field.
+func (m *CheckoutMutation) ResetObjective() {
+	m.objective = nil
+}
+
+// SetCheckoutStatus sets the "checkout_status" field.
+func (m *CheckoutMutation) SetCheckoutStatus(ts types.CheckoutStatus) {
+	m.checkout_status = &ts
+}
+
+// CheckoutStatus returns the value of the "checkout_status" field in the mutation.
+func (m *CheckoutMutation) CheckoutStatus() (r types.CheckoutStatus, exists bool) {
+	v := m.checkout_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCheckoutStatus returns the old "checkout_status" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCheckoutStatus(ctx context.Context) (v types.CheckoutStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCheckoutStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCheckoutStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCheckoutStatus: %w", err)
+	}
+	return oldValue.CheckoutStatus, nil
+}
+
+// ResetCheckoutStatus resets all changes to the "checkout_status" field.
+func (m *CheckoutMutation) ResetCheckoutStatus() {
+	m.checkout_status = nil
+}
+
+// SetAmount sets the "amount" field.
+func (m *CheckoutMutation) SetAmount(d decimal.Decimal) {
+	m.amount = &d
+}
+
+// Amount returns the value of the "amount" field in the mutation.
+func (m *CheckoutMutation) Amount() (r decimal.Decimal, exists bool) {
+	v := m.amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAmount returns the old "amount" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldAmount(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAmount: %w", err)
+	}
+	return oldValue.Amount, nil
+}
+
+// ClearAmount clears the value of the "amount" field.
+func (m *CheckoutMutation) ClearAmount() {
+	m.amount = nil
+	m.clearedFields[checkout.FieldAmount] = struct{}{}
+}
+
+// AmountCleared returns if the "amount" field was cleared in this mutation.
+func (m *CheckoutMutation) AmountCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldAmount]
+	return ok
+}
+
+// ResetAmount resets all changes to the "amount" field.
+func (m *CheckoutMutation) ResetAmount() {
+	m.amount = nil
+	delete(m.clearedFields, checkout.FieldAmount)
+}
+
+// SetCurrency sets the "currency" field.
+func (m *CheckoutMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *CheckoutMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCurrency(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ClearCurrency clears the value of the "currency" field.
+func (m *CheckoutMutation) ClearCurrency() {
+	m.currency = nil
+	m.clearedFields[checkout.FieldCurrency] = struct{}{}
+}
+
+// CurrencyCleared returns if the "currency" field was cleared in this mutation.
+func (m *CheckoutMutation) CurrencyCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldCurrency]
+	return ok
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *CheckoutMutation) ResetCurrency() {
+	m.currency = nil
+	delete(m.clearedFields, checkout.FieldCurrency)
+}
+
+// SetProvider sets the "provider" field.
+func (m *CheckoutMutation) SetProvider(s string) {
+	m.provider = &s
+}
+
+// Provider returns the value of the "provider" field in the mutation.
+func (m *CheckoutMutation) Provider() (r string, exists bool) {
+	v := m.provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProvider returns the old "provider" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldProvider(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProvider: %w", err)
+	}
+	return oldValue.Provider, nil
+}
+
+// ResetProvider resets all changes to the "provider" field.
+func (m *CheckoutMutation) ResetProvider() {
+	m.provider = nil
+}
+
+// SetProviderSessionID sets the "provider_session_id" field.
+func (m *CheckoutMutation) SetProviderSessionID(s string) {
+	m.provider_session_id = &s
+}
+
+// ProviderSessionID returns the value of the "provider_session_id" field in the mutation.
+func (m *CheckoutMutation) ProviderSessionID() (r string, exists bool) {
+	v := m.provider_session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderSessionID returns the old "provider_session_id" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldProviderSessionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderSessionID: %w", err)
+	}
+	return oldValue.ProviderSessionID, nil
+}
+
+// ClearProviderSessionID clears the value of the "provider_session_id" field.
+func (m *CheckoutMutation) ClearProviderSessionID() {
+	m.provider_session_id = nil
+	m.clearedFields[checkout.FieldProviderSessionID] = struct{}{}
+}
+
+// ProviderSessionIDCleared returns if the "provider_session_id" field was cleared in this mutation.
+func (m *CheckoutMutation) ProviderSessionIDCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldProviderSessionID]
+	return ok
+}
+
+// ResetProviderSessionID resets all changes to the "provider_session_id" field.
+func (m *CheckoutMutation) ResetProviderSessionID() {
+	m.provider_session_id = nil
+	delete(m.clearedFields, checkout.FieldProviderSessionID)
+}
+
+// SetCheckoutURL sets the "checkout_url" field.
+func (m *CheckoutMutation) SetCheckoutURL(s string) {
+	m.checkout_url = &s
+}
+
+// CheckoutURL returns the value of the "checkout_url" field in the mutation.
+func (m *CheckoutMutation) CheckoutURL() (r string, exists bool) {
+	v := m.checkout_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCheckoutURL returns the old "checkout_url" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCheckoutURL(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCheckoutURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCheckoutURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCheckoutURL: %w", err)
+	}
+	return oldValue.CheckoutURL, nil
+}
+
+// ClearCheckoutURL clears the value of the "checkout_url" field.
+func (m *CheckoutMutation) ClearCheckoutURL() {
+	m.checkout_url = nil
+	m.clearedFields[checkout.FieldCheckoutURL] = struct{}{}
+}
+
+// CheckoutURLCleared returns if the "checkout_url" field was cleared in this mutation.
+func (m *CheckoutMutation) CheckoutURLCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldCheckoutURL]
+	return ok
+}
+
+// ResetCheckoutURL resets all changes to the "checkout_url" field.
+func (m *CheckoutMutation) ResetCheckoutURL() {
+	m.checkout_url = nil
+	delete(m.clearedFields, checkout.FieldCheckoutURL)
+}
+
+// SetSuccessURL sets the "success_url" field.
+func (m *CheckoutMutation) SetSuccessURL(s string) {
+	m.success_url = &s
+}
+
+// SuccessURL returns the value of the "success_url" field in the mutation.
+func (m *CheckoutMutation) SuccessURL() (r string, exists bool) {
+	v := m.success_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSuccessURL returns the old "success_url" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldSuccessURL(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSuccessURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSuccessURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSuccessURL: %w", err)
+	}
+	return oldValue.SuccessURL, nil
+}
+
+// ClearSuccessURL clears the value of the "success_url" field.
+func (m *CheckoutMutation) ClearSuccessURL() {
+	m.success_url = nil
+	m.clearedFields[checkout.FieldSuccessURL] = struct{}{}
+}
+
+// SuccessURLCleared returns if the "success_url" field was cleared in this mutation.
+func (m *CheckoutMutation) SuccessURLCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldSuccessURL]
+	return ok
+}
+
+// ResetSuccessURL resets all changes to the "success_url" field.
+func (m *CheckoutMutation) ResetSuccessURL() {
+	m.success_url = nil
+	delete(m.clearedFields, checkout.FieldSuccessURL)
+}
+
+// SetCancelURL sets the "cancel_url" field.
+func (m *CheckoutMutation) SetCancelURL(s string) {
+	m.cancel_url = &s
+}
+
+// CancelURL returns the value of the "cancel_url" field in the mutation.
+func (m *CheckoutMutation) CancelURL() (r string, exists bool) {
+	v := m.cancel_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCancelURL returns the old "cancel_url" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCancelURL(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCancelURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCancelURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCancelURL: %w", err)
+	}
+	return oldValue.CancelURL, nil
+}
+
+// ClearCancelURL clears the value of the "cancel_url" field.
+func (m *CheckoutMutation) ClearCancelURL() {
+	m.cancel_url = nil
+	m.clearedFields[checkout.FieldCancelURL] = struct{}{}
+}
+
+// CancelURLCleared returns if the "cancel_url" field was cleared in this mutation.
+func (m *CheckoutMutation) CancelURLCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldCancelURL]
+	return ok
+}
+
+// ResetCancelURL resets all changes to the "cancel_url" field.
+func (m *CheckoutMutation) ResetCancelURL() {
+	m.cancel_url = nil
+	delete(m.clearedFields, checkout.FieldCancelURL)
+}
+
+// SetConfiguration sets the "configuration" field.
+func (m *CheckoutMutation) SetConfiguration(value map[string]interface{}) {
+	m.configuration = &value
+}
+
+// Configuration returns the value of the "configuration" field in the mutation.
+func (m *CheckoutMutation) Configuration() (r map[string]interface{}, exists bool) {
+	v := m.configuration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfiguration returns the old "configuration" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldConfiguration(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfiguration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfiguration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfiguration: %w", err)
+	}
+	return oldValue.Configuration, nil
+}
+
+// ClearConfiguration clears the value of the "configuration" field.
+func (m *CheckoutMutation) ClearConfiguration() {
+	m.configuration = nil
+	m.clearedFields[checkout.FieldConfiguration] = struct{}{}
+}
+
+// ConfigurationCleared returns if the "configuration" field was cleared in this mutation.
+func (m *CheckoutMutation) ConfigurationCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldConfiguration]
+	return ok
+}
+
+// ResetConfiguration resets all changes to the "configuration" field.
+func (m *CheckoutMutation) ResetConfiguration() {
+	m.configuration = nil
+	delete(m.clearedFields, checkout.FieldConfiguration)
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *CheckoutMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *CheckoutMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *CheckoutMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *CheckoutMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *CheckoutMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCompletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (m *CheckoutMutation) ClearCompletedAt() {
+	m.completed_at = nil
+	m.clearedFields[checkout.FieldCompletedAt] = struct{}{}
+}
+
+// CompletedAtCleared returns if the "completed_at" field was cleared in this mutation.
+func (m *CheckoutMutation) CompletedAtCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldCompletedAt]
+	return ok
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *CheckoutMutation) ResetCompletedAt() {
+	m.completed_at = nil
+	delete(m.clearedFields, checkout.FieldCompletedAt)
+}
+
+// SetCancelledAt sets the "cancelled_at" field.
+func (m *CheckoutMutation) SetCancelledAt(t time.Time) {
+	m.cancelled_at = &t
+}
+
+// CancelledAt returns the value of the "cancelled_at" field in the mutation.
+func (m *CheckoutMutation) CancelledAt() (r time.Time, exists bool) {
+	v := m.cancelled_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCancelledAt returns the old "cancelled_at" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldCancelledAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCancelledAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCancelledAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCancelledAt: %w", err)
+	}
+	return oldValue.CancelledAt, nil
+}
+
+// ClearCancelledAt clears the value of the "cancelled_at" field.
+func (m *CheckoutMutation) ClearCancelledAt() {
+	m.cancelled_at = nil
+	m.clearedFields[checkout.FieldCancelledAt] = struct{}{}
+}
+
+// CancelledAtCleared returns if the "cancelled_at" field was cleared in this mutation.
+func (m *CheckoutMutation) CancelledAtCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldCancelledAt]
+	return ok
+}
+
+// ResetCancelledAt resets all changes to the "cancelled_at" field.
+func (m *CheckoutMutation) ResetCancelledAt() {
+	m.cancelled_at = nil
+	delete(m.clearedFields, checkout.FieldCancelledAt)
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (m *CheckoutMutation) SetErrorMessage(s string) {
+	m.error_message = &s
+}
+
+// ErrorMessage returns the value of the "error_message" field in the mutation.
+func (m *CheckoutMutation) ErrorMessage() (r string, exists bool) {
+	v := m.error_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorMessage returns the old "error_message" field's value of the Checkout entity.
+// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CheckoutMutation) OldErrorMessage(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+	}
+	return oldValue.ErrorMessage, nil
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (m *CheckoutMutation) ClearErrorMessage() {
+	m.error_message = nil
+	m.clearedFields[checkout.FieldErrorMessage] = struct{}{}
+}
+
+// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
+func (m *CheckoutMutation) ErrorMessageCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldErrorMessage]
+	return ok
+}
+
+// ResetErrorMessage resets all changes to the "error_message" field.
+func (m *CheckoutMutation) ResetErrorMessage() {
+	m.error_message = nil
+	delete(m.clearedFields, checkout.FieldErrorMessage)
+}
+
+// Where appends a list predicates to the CheckoutMutation builder.
+func (m *CheckoutMutation) Where(ps ...predicate.Checkout) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CheckoutMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CheckoutMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Checkout, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CheckoutMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CheckoutMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Checkout).
+func (m *CheckoutMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CheckoutMutation) Fields() []string {
+	fields := make([]string, 0, 26)
+	if m.tenant_id != nil {
+		fields = append(fields, checkout.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, checkout.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, checkout.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, checkout.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, checkout.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, checkout.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, checkout.FieldEnvironmentID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, checkout.FieldCustomerID)
+	}
+	if m.entity_type != nil {
+		fields = append(fields, checkout.FieldEntityType)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, checkout.FieldEntityID)
+	}
+	if m.source_subscription_id != nil {
+		fields = append(fields, checkout.FieldSourceSubscriptionID)
+	}
+	if m.checkout_type != nil {
+		fields = append(fields, checkout.FieldCheckoutType)
+	}
+	if m.objective != nil {
+		fields = append(fields, checkout.FieldObjective)
+	}
+	if m.checkout_status != nil {
+		fields = append(fields, checkout.FieldCheckoutStatus)
+	}
+	if m.amount != nil {
+		fields = append(fields, checkout.FieldAmount)
+	}
+	if m.currency != nil {
+		fields = append(fields, checkout.FieldCurrency)
+	}
+	if m.provider != nil {
+		fields = append(fields, checkout.FieldProvider)
+	}
+	if m.provider_session_id != nil {
+		fields = append(fields, checkout.FieldProviderSessionID)
+	}
+	if m.checkout_url != nil {
+		fields = append(fields, checkout.FieldCheckoutURL)
+	}
+	if m.success_url != nil {
+		fields = append(fields, checkout.FieldSuccessURL)
+	}
+	if m.cancel_url != nil {
+		fields = append(fields, checkout.FieldCancelURL)
+	}
+	if m.configuration != nil {
+		fields = append(fields, checkout.FieldConfiguration)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, checkout.FieldExpiresAt)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, checkout.FieldCompletedAt)
+	}
+	if m.cancelled_at != nil {
+		fields = append(fields, checkout.FieldCancelledAt)
+	}
+	if m.error_message != nil {
+		fields = append(fields, checkout.FieldErrorMessage)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CheckoutMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case checkout.FieldTenantID:
+		return m.TenantID()
+	case checkout.FieldStatus:
+		return m.Status()
+	case checkout.FieldCreatedAt:
+		return m.CreatedAt()
+	case checkout.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case checkout.FieldCreatedBy:
+		return m.CreatedBy()
+	case checkout.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case checkout.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case checkout.FieldCustomerID:
+		return m.CustomerID()
+	case checkout.FieldEntityType:
+		return m.EntityType()
+	case checkout.FieldEntityID:
+		return m.EntityID()
+	case checkout.FieldSourceSubscriptionID:
+		return m.SourceSubscriptionID()
+	case checkout.FieldCheckoutType:
+		return m.CheckoutType()
+	case checkout.FieldObjective:
+		return m.Objective()
+	case checkout.FieldCheckoutStatus:
+		return m.CheckoutStatus()
+	case checkout.FieldAmount:
+		return m.Amount()
+	case checkout.FieldCurrency:
+		return m.Currency()
+	case checkout.FieldProvider:
+		return m.Provider()
+	case checkout.FieldProviderSessionID:
+		return m.ProviderSessionID()
+	case checkout.FieldCheckoutURL:
+		return m.CheckoutURL()
+	case checkout.FieldSuccessURL:
+		return m.SuccessURL()
+	case checkout.FieldCancelURL:
+		return m.CancelURL()
+	case checkout.FieldConfiguration:
+		return m.Configuration()
+	case checkout.FieldExpiresAt:
+		return m.ExpiresAt()
+	case checkout.FieldCompletedAt:
+		return m.CompletedAt()
+	case checkout.FieldCancelledAt:
+		return m.CancelledAt()
+	case checkout.FieldErrorMessage:
+		return m.ErrorMessage()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CheckoutMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case checkout.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case checkout.FieldStatus:
+		return m.OldStatus(ctx)
+	case checkout.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case checkout.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case checkout.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case checkout.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case checkout.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case checkout.FieldCustomerID:
+		return m.OldCustomerID(ctx)
+	case checkout.FieldEntityType:
+		return m.OldEntityType(ctx)
+	case checkout.FieldEntityID:
+		return m.OldEntityID(ctx)
+	case checkout.FieldSourceSubscriptionID:
+		return m.OldSourceSubscriptionID(ctx)
+	case checkout.FieldCheckoutType:
+		return m.OldCheckoutType(ctx)
+	case checkout.FieldObjective:
+		return m.OldObjective(ctx)
+	case checkout.FieldCheckoutStatus:
+		return m.OldCheckoutStatus(ctx)
+	case checkout.FieldAmount:
+		return m.OldAmount(ctx)
+	case checkout.FieldCurrency:
+		return m.OldCurrency(ctx)
+	case checkout.FieldProvider:
+		return m.OldProvider(ctx)
+	case checkout.FieldProviderSessionID:
+		return m.OldProviderSessionID(ctx)
+	case checkout.FieldCheckoutURL:
+		return m.OldCheckoutURL(ctx)
+	case checkout.FieldSuccessURL:
+		return m.OldSuccessURL(ctx)
+	case checkout.FieldCancelURL:
+		return m.OldCancelURL(ctx)
+	case checkout.FieldConfiguration:
+		return m.OldConfiguration(ctx)
+	case checkout.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case checkout.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
+	case checkout.FieldCancelledAt:
+		return m.OldCancelledAt(ctx)
+	case checkout.FieldErrorMessage:
+		return m.OldErrorMessage(ctx)
+	}
+	return nil, fmt.Errorf("unknown Checkout field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CheckoutMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case checkout.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case checkout.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case checkout.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case checkout.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case checkout.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case checkout.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case checkout.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case checkout.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
+	case checkout.FieldEntityType:
+		v, ok := value.(types.CheckoutEntityType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityType(v)
+		return nil
+	case checkout.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
+	case checkout.FieldSourceSubscriptionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceSubscriptionID(v)
+		return nil
+	case checkout.FieldCheckoutType:
+		v, ok := value.(types.CheckoutType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCheckoutType(v)
+		return nil
+	case checkout.FieldObjective:
+		v, ok := value.(types.CheckoutObjective)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjective(v)
+		return nil
+	case checkout.FieldCheckoutStatus:
+		v, ok := value.(types.CheckoutStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCheckoutStatus(v)
+		return nil
+	case checkout.FieldAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAmount(v)
+		return nil
+	case checkout.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
+		return nil
+	case checkout.FieldProvider:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProvider(v)
+		return nil
+	case checkout.FieldProviderSessionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderSessionID(v)
+		return nil
+	case checkout.FieldCheckoutURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCheckoutURL(v)
+		return nil
+	case checkout.FieldSuccessURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSuccessURL(v)
+		return nil
+	case checkout.FieldCancelURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCancelURL(v)
+		return nil
+	case checkout.FieldConfiguration:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfiguration(v)
+		return nil
+	case checkout.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case checkout.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
+		return nil
+	case checkout.FieldCancelledAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCancelledAt(v)
+		return nil
+	case checkout.FieldErrorMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorMessage(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Checkout field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CheckoutMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CheckoutMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CheckoutMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Checkout numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CheckoutMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(checkout.FieldCreatedBy) {
+		fields = append(fields, checkout.FieldCreatedBy)
+	}
+	if m.FieldCleared(checkout.FieldUpdatedBy) {
+		fields = append(fields, checkout.FieldUpdatedBy)
+	}
+	if m.FieldCleared(checkout.FieldEnvironmentID) {
+		fields = append(fields, checkout.FieldEnvironmentID)
+	}
+	if m.FieldCleared(checkout.FieldSourceSubscriptionID) {
+		fields = append(fields, checkout.FieldSourceSubscriptionID)
+	}
+	if m.FieldCleared(checkout.FieldAmount) {
+		fields = append(fields, checkout.FieldAmount)
+	}
+	if m.FieldCleared(checkout.FieldCurrency) {
+		fields = append(fields, checkout.FieldCurrency)
+	}
+	if m.FieldCleared(checkout.FieldProviderSessionID) {
+		fields = append(fields, checkout.FieldProviderSessionID)
+	}
+	if m.FieldCleared(checkout.FieldCheckoutURL) {
+		fields = append(fields, checkout.FieldCheckoutURL)
+	}
+	if m.FieldCleared(checkout.FieldSuccessURL) {
+		fields = append(fields, checkout.FieldSuccessURL)
+	}
+	if m.FieldCleared(checkout.FieldCancelURL) {
+		fields = append(fields, checkout.FieldCancelURL)
+	}
+	if m.FieldCleared(checkout.FieldConfiguration) {
+		fields = append(fields, checkout.FieldConfiguration)
+	}
+	if m.FieldCleared(checkout.FieldCompletedAt) {
+		fields = append(fields, checkout.FieldCompletedAt)
+	}
+	if m.FieldCleared(checkout.FieldCancelledAt) {
+		fields = append(fields, checkout.FieldCancelledAt)
+	}
+	if m.FieldCleared(checkout.FieldErrorMessage) {
+		fields = append(fields, checkout.FieldErrorMessage)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CheckoutMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CheckoutMutation) ClearField(name string) error {
+	switch name {
+	case checkout.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case checkout.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case checkout.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case checkout.FieldSourceSubscriptionID:
+		m.ClearSourceSubscriptionID()
+		return nil
+	case checkout.FieldAmount:
+		m.ClearAmount()
+		return nil
+	case checkout.FieldCurrency:
+		m.ClearCurrency()
+		return nil
+	case checkout.FieldProviderSessionID:
+		m.ClearProviderSessionID()
+		return nil
+	case checkout.FieldCheckoutURL:
+		m.ClearCheckoutURL()
+		return nil
+	case checkout.FieldSuccessURL:
+		m.ClearSuccessURL()
+		return nil
+	case checkout.FieldCancelURL:
+		m.ClearCancelURL()
+		return nil
+	case checkout.FieldConfiguration:
+		m.ClearConfiguration()
+		return nil
+	case checkout.FieldCompletedAt:
+		m.ClearCompletedAt()
+		return nil
+	case checkout.FieldCancelledAt:
+		m.ClearCancelledAt()
+		return nil
+	case checkout.FieldErrorMessage:
+		m.ClearErrorMessage()
+		return nil
+	}
+	return fmt.Errorf("unknown Checkout nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CheckoutMutation) ResetField(name string) error {
+	switch name {
+	case checkout.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case checkout.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case checkout.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case checkout.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case checkout.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case checkout.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case checkout.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case checkout.FieldCustomerID:
+		m.ResetCustomerID()
+		return nil
+	case checkout.FieldEntityType:
+		m.ResetEntityType()
+		return nil
+	case checkout.FieldEntityID:
+		m.ResetEntityID()
+		return nil
+	case checkout.FieldSourceSubscriptionID:
+		m.ResetSourceSubscriptionID()
+		return nil
+	case checkout.FieldCheckoutType:
+		m.ResetCheckoutType()
+		return nil
+	case checkout.FieldObjective:
+		m.ResetObjective()
+		return nil
+	case checkout.FieldCheckoutStatus:
+		m.ResetCheckoutStatus()
+		return nil
+	case checkout.FieldAmount:
+		m.ResetAmount()
+		return nil
+	case checkout.FieldCurrency:
+		m.ResetCurrency()
+		return nil
+	case checkout.FieldProvider:
+		m.ResetProvider()
+		return nil
+	case checkout.FieldProviderSessionID:
+		m.ResetProviderSessionID()
+		return nil
+	case checkout.FieldCheckoutURL:
+		m.ResetCheckoutURL()
+		return nil
+	case checkout.FieldSuccessURL:
+		m.ResetSuccessURL()
+		return nil
+	case checkout.FieldCancelURL:
+		m.ResetCancelURL()
+		return nil
+	case checkout.FieldConfiguration:
+		m.ResetConfiguration()
+		return nil
+	case checkout.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case checkout.FieldCompletedAt:
+		m.ResetCompletedAt()
+		return nil
+	case checkout.FieldCancelledAt:
+		m.ResetCancelledAt()
+		return nil
+	case checkout.FieldErrorMessage:
+		m.ResetErrorMessage()
+		return nil
+	}
+	return fmt.Errorf("unknown Checkout field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CheckoutMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CheckoutMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CheckoutMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CheckoutMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CheckoutMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CheckoutMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CheckoutMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown Checkout unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CheckoutMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown Checkout edge %s", name)
 }
 
 // ConnectionMutation represents an operation that mutates the Connection nodes in the graph.
