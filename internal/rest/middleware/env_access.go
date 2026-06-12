@@ -26,7 +26,7 @@ func EnvAccessMiddleware(envAccessService service.EnvAccessService, logger *logg
 		// Check if user has access to the environment
 		hasAccess := envAccessService.HasEnvironmentAccess(c.Request.Context(), userID, tenantID, environmentID)
 		if !hasAccess {
-			logger.Warnw("environment access denied",
+			logger.Info(c.Request.Context(), "environment access denied",
 				"user_id", userID,
 				"tenant_id", tenantID,
 				"environment_id", environmentID,

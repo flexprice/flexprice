@@ -9,7 +9,6 @@ import (
 )
 
 // It monitors lag metrics across event consumption and post-processing pipelines.
-//
 type KafkaLagMonitoringHandler struct {
 	logger       *logger.Logger
 	eventService service.EventService
@@ -29,15 +28,15 @@ func NewKafkaLagMonitoringHandler(log *logger.Logger, eventService service.Event
 func (h *KafkaLagMonitoringHandler) HandleKafkaLagMonitoring(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	h.logger.Infow("kafka lag monitoring job started")
+	h.logger.Info(c.Request.Context(), "kafka lag monitoring job started")
 
 	if err := h.eventService.MonitorKafkaLag(ctx); err != nil {
-		h.logger.Errorw("kafka lag monitoring job failed", "error", err)
+		h.logger.Error(c.Request.Context(), "kafka lag monitoring job failed", "error", err)
 		c.Error(err)
 		return
 	}
 
-	h.logger.Infow("kafka lag monitoring job completed successfully")
+	h.logger.Info(c.Request.Context(), "kafka lag monitoring job completed successfully")
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "kafka lag monitoring completed",

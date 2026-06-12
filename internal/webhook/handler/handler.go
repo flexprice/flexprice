@@ -15,8 +15,8 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/svix"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
 	"github.com/samber/lo"
@@ -37,7 +37,7 @@ type handler struct {
 	factory         payload.PayloadBuilderFactory
 	client          httpclient.Client
 	logger          *logger.Logger
-	sentry          *sentry.Service
+	tracing         *tracing.Service
 	svixClient      *svix.Client
 	systemEventRepo *repoent.SystemEventRepository
 }
@@ -49,7 +49,7 @@ func NewHandler(
 	factory payload.PayloadBuilderFactory,
 	client httpclient.Client,
 	logger *logger.Logger,
-	sentry *sentry.Service,
+	tracingSvc *tracing.Service,
 	svixClient *svix.Client,
 	systemEventRepo *repoent.SystemEventRepository,
 ) (Handler, error) {
@@ -59,7 +59,7 @@ func NewHandler(
 		factory:         factory,
 		client:          client,
 		logger:          logger,
-		sentry:          sentry,
+		tracing:         tracingSvc,
 		svixClient:      svixClient,
 		systemEventRepo: systemEventRepo,
 	}, nil
@@ -67,12 +67,12 @@ func NewHandler(
 
 func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 	if !h.config.Enabled {
-		h.logger.Info("webhook handler disabled by configuration, skipping registration")
+		h.logger.Info(context.Background(), "webhook handler disabled by configuration, skipping registration")
 		return
 	}
 	rateLimit := h.config.RateLimit
 	if rateLimit <= 0 {
-		h.logger.Errorw("webhook rate limit is invalid", "rate_limit", rateLimit)
+		h.logger.Info(context.Background(), "webhook rate limit is invalid", "rate_limit", rateLimit)
 		return
 	}
 	throttle := middleware.NewThrottle(rateLimit, time.Second)
@@ -83,7 +83,7 @@ func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
 		h.processMessage,
 		throttle.Middleware,
 	)
-	h.logger.Debugw("registered webhook handler",
+	h.logger.Debug(context.Background(), "registered webhook handler",
 		"topic", h.config.Topic,
 		"consumer_group", h.config.ConsumerGroup,
 		"rate_limit", rateLimit,
@@ -107,7 +107,7 @@ func (h *handler) DeliverWebhook(ctx context.Context, event *types.WebhookEvent)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
 
 	messageUUID := types.GenerateUUID()
-	h.logger.Debugw("delivering webhook synchronously",
+	h.logger.Debug(ctx, "delivering webhook synchronously",
 		"message_uuid", messageUUID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
@@ -121,7 +121,7 @@ func (h *handler) DeliverWebhook(ctx context.Context, event *types.WebhookEvent)
 		deliveryErr = h.deliverNative(ctx, event, messageUUID)
 	}
 	if deliveryErr != nil {
-		h.logger.Errorw("failed to deliver webhook synchronously",
+		h.logger.Error(ctx, "failed to deliver webhook synchronously",
 			"error", deliveryErr,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -130,7 +130,7 @@ func (h *handler) DeliverWebhook(ctx context.Context, event *types.WebhookEvent)
 		)
 		if h.systemEventRepo != nil && event.ID != "" {
 			if dbErr := h.systemEventRepo.OnFailed(ctx, event.ID, deliveryErr.Error()); dbErr != nil {
-				h.logger.Warnw("failed to persist webhook failure_reason",
+				h.logger.Info(ctx, "failed to persist webhook failure_reason",
 					"error", dbErr,
 					"event_id", event.ID,
 				)
@@ -156,7 +156,7 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 		return
 	}
 	if webhookMissingDataError(err) {
-		h.logger.Errorw("skipping webhook; referenced data not found (ack, no retry)",
+		h.logger.Error(ctx, "skipping webhook; referenced data not found (ack, no retry)",
 			"transport", transport,
 			"error", err,
 			"message_uuid", messageUUID,
@@ -164,7 +164,7 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 			"tenant_id", event.TenantID,
 		)
 	} else {
-		h.logger.Errorw("failed to send webhook",
+		h.logger.Error(ctx, "failed to send webhook",
 			"transport", transport,
 			"error", err,
 			"message_uuid", messageUUID,
@@ -174,7 +174,7 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 	}
 	if h.systemEventRepo != nil && event.ID != "" {
 		if dbErr := h.systemEventRepo.OnFailed(ctx, event.ID, err.Error()); dbErr != nil {
-			h.logger.Warnw("failed to persist webhook failure_reason",
+			h.logger.Info(ctx, "failed to persist webhook failure_reason",
 				"error", dbErr,
 				"event_id", event.ID,
 			)
@@ -187,17 +187,28 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 func (h *handler) processMessage(msg *message.Message) error {
 	ctx := msg.Context()
 
-	h.logger.Debugw("context",
+	h.logger.Debug(context.Background(), "context",
 		"tenant_id", types.GetTenantID(ctx),
 		"event_name", types.GetRequestID(ctx),
 	)
 
 	var event types.WebhookEvent
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
-		h.logger.Errorw("failed to unmarshal webhook event",
+		h.logger.Error(context.Background(), "failed to unmarshal webhook event",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
+		// Track the failure in the DB so the event doesn't stay as a zombie
+		// (published_at=NULL, failure_count=0) forever. msg.UUID equals the
+		// system_event ID because the publisher sets it from event.ID.
+		if h.systemEventRepo != nil && msg.UUID != "" {
+			if dbErr := h.systemEventRepo.OnFailed(ctx, msg.UUID, "unmarshal failed: "+err.Error()); dbErr != nil {
+				h.logger.Info(context.Background(), "failed to persist webhook failure_reason on unmarshal error",
+					"error", dbErr,
+					"message_uuid", msg.UUID,
+				)
+			}
+		}
 		return nil // Don't retry on unmarshal errors
 	}
 
@@ -205,7 +216,7 @@ func (h *handler) processMessage(msg *message.Message) error {
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, event.EnvironmentID)
 	ctx = context.WithValue(ctx, types.CtxUserID, event.UserID)
 
-	h.logger.Debugw("consumed webhook from topic and delivering",
+	h.logger.Debug(context.Background(), "consumed webhook from topic and delivering",
 		"topic", h.config.Topic,
 		"message_uuid", msg.UUID,
 		"event_name", event.EventName,
@@ -238,7 +249,7 @@ func (h *handler) deliverSvix(ctx context.Context, event *types.WebhookEvent, me
 		return err
 	}
 
-	h.logger.Debugw("building webhook payload",
+	h.logger.Debug(ctx, "building webhook payload",
 		"event_name", event.EventName,
 		"builder", builder,
 	)
@@ -260,7 +271,7 @@ func (h *handler) deliverSvix(ctx context.Context, event *types.WebhookEvent, me
 	}
 
 	if err := h.systemEventRepo.OnDelivered(ctx, event.ID, lo.ToPtr(svixOut)); err != nil {
-		h.logger.Warnw("system_events OnDelivered failed",
+		h.logger.Info(ctx, "system_events OnDelivered failed",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -268,7 +279,7 @@ func (h *handler) deliverSvix(ctx context.Context, event *types.WebhookEvent, me
 		return err
 	}
 
-	h.logger.Infow("webhook sent successfully via Svix",
+	h.logger.Info(ctx, "webhook sent successfully via Svix",
 		"message_uuid", messageUUID,
 		"tenant_id", event.TenantID,
 		"event", event.EventName,
@@ -303,7 +314,7 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 		return err
 	}
 
-	h.logger.Debugw("building webhook payload",
+	h.logger.Debug(ctx, "building webhook payload",
 		"event_name", event.EventName,
 		"builder", builder,
 	)
@@ -313,7 +324,7 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 		return err
 	}
 
-	h.logger.Debugw("built webhook payload",
+	h.logger.Debug(ctx, "built webhook payload",
 		"event_name", event.EventName,
 		"payload", string(webHookPayload),
 	)
@@ -330,7 +341,7 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 		return err
 	}
 
-	h.logger.Infow("webhook sent successfully",
+	h.logger.Info(ctx, "webhook sent successfully",
 		"message_uuid", messageUUID,
 		"tenant_id", event.TenantID,
 		"event", event.EventName,
@@ -338,7 +349,7 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 	)
 
 	if err := h.systemEventRepo.OnDelivered(ctx, event.ID, nil); err != nil {
-		h.logger.Warnw("system_events OnDelivered failed",
+		h.logger.Info(ctx, "system_events OnDelivered failed",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,

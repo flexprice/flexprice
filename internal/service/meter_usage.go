@@ -207,11 +207,18 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	}
 	sub.LineItems = lineItems
 
-	// 5. Collect usage line items and fetch prices with meter expansion
+	// 5. Collect usage line items and fetch prices with meter expansion.
+	// Per-bucket prices are referenced only from CommitmentTimeBuckets, so collect
+	// them too — otherwise bucket summaries would under-report charges as zero.
 	priceIDs := make([]string, 0, len(lineItems))
 	for _, item := range lineItems {
 		if item.PriceType == types.PRICE_TYPE_USAGE && item.MeterID != "" {
 			priceIDs = append(priceIDs, item.PriceID)
+		}
+		for _, b := range item.CommitmentTimeBuckets {
+			if b.PriceID != "" {
+				priceIDs = append(priceIDs, b.PriceID)
+			}
 		}
 	}
 
@@ -256,7 +263,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			featureFilter.MeterIDs = meterIDs
 			features, err := s.FeatureRepo.List(ctx, featureFilter)
 			if err != nil {
-				s.logger.Warnw("failed to fetch features for meter mapping", "error", err)
+				s.logger.Info(context.Background(), "failed to fetch features for meter mapping", "error", err)
 			} else {
 				for _, f := range features {
 					if f.MeterID != "" {
@@ -332,7 +339,11 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		for _, item := range items {
 			start := item.GetPeriodStart(usageStartTime)
 			end := item.GetPeriodEnd(usageEndTime)
-			key := dateRangeGroup{Start: start, End: end, AggType: meterAggType[meterID]}
+			key := dateRangeGroup{
+				Start:   start,
+				End:     end,
+				AggType: meterAggType[meterID],
+			}
 			standardGroups[key] = append(standardGroups[key], &lineItemWithMeter{Item: item, MeterID: meterID})
 		}
 	}
@@ -368,7 +379,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
 			if hasExtraGroupBy {
 				for _, liw := range lineItemsInGroup {
-					if liw.Item != nil && liw.Item.HasCommitment() {
+					if liw.Item != nil && liw.Item.HasAnyCommitment() {
 						commitmentLIs = append(commitmentLIs, liw)
 					} else {
 						nonCommitmentLIs = append(nonCommitmentLIs, liw)
@@ -430,6 +441,16 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	}
 
 	// 11. Query bucketed meters per line item (already uses GetPeriodStart/End)
+	//
+	// When analytics filters (PropertyFilters / Sources) are active, suppress
+	// bucketed line-item entries that have no matching events — same rationale
+	// as the gates in queryAndAppendAnalyticsEntries and the step-12 loop:
+	// surfacing them would misrepresent the filtered slice (and pin commitment
+	// cost for committed items). Without filters, empty bucketed line items
+	// continue to be surfaced as zero-usage rows (preserves the contract that
+	// committed line items can have their commitment fire on no usage).
+	skipBucketedZeros := len(req.PropertyFilters) > 0 || len(req.Sources) > 0
+
 	for meterID := range bucketedMeterIDs {
 		m := result.MeterMap[meterID]
 		if m == nil {
@@ -447,6 +468,10 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
+			}
+
+			if skipBucketedZeros && (bucketedResult == nil || len(bucketedResult.Results) == 0) {
+				continue
 			}
 
 			usage := &LineItemMeterUsage{
@@ -488,34 +513,45 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 	}
 
-	// 12. Zero-usage entries for line items that had no data
-	processedLineItemIDs := make(map[string]bool, len(result.LineItemUsages))
-	for _, lu := range result.LineItemUsages {
-		if lu.LineItem != nil {
-			processedLineItemIDs[lu.LineItem.ID] = true
-		}
-	}
+	// 12. Zero-usage entries for line items that had no data.
+	// Skip when analytics filters (PropertyFilters / Sources) are active: those
+	// filters restrict the SQL result by design, so "line item has no rows" means
+	// the filter excluded them — not that there was zero usage. Surfacing a
+	// zero-usage row for every filtered-out line item would misrepresent the
+	// filtered slice and (for committed line items) pin commitment cost regardless
+	// of the filter. Mirrors the skipSyntheticZeros gate in
+	// featureUsageTrackingService.fetchAnalyticsData.
+	skipSyntheticZeros := len(req.PropertyFilters) > 0 || len(req.Sources) > 0
 
-	for _, item := range lineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
-			continue
-		}
-		if meterIDSet != nil {
-			if _, ok := meterIDSet[item.MeterID]; !ok {
-				continue
+	if !skipSyntheticZeros {
+		processedLineItemIDs := make(map[string]bool, len(result.LineItemUsages))
+		for _, lu := range result.LineItemUsages {
+			if lu.LineItem != nil {
+				processedLineItemIDs[lu.LineItem.ID] = true
 			}
 		}
-		if processedLineItemIDs[item.ID] {
-			continue
+
+		for _, item := range lineItems {
+			if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
+				continue
+			}
+			if meterIDSet != nil {
+				if _, ok := meterIDSet[item.MeterID]; !ok {
+					continue
+				}
+			}
+			if processedLineItemIDs[item.ID] {
+				continue
+			}
+			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+				LineItem:    item,
+				MeterID:     item.MeterID,
+				Meter:       result.MeterMap[item.MeterID],
+				Price:       result.PriceMap[item.PriceID],
+				PeriodStart: item.GetPeriodStart(usageStartTime),
+				PeriodEnd:   item.GetPeriodEnd(usageEndTime),
+			})
 		}
-		result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
-			LineItem:    item,
-			MeterID:     item.MeterID,
-			Meter:       result.MeterMap[item.MeterID],
-			Price:       result.PriceMap[item.PriceID],
-			PeriodStart: item.GetPeriodStart(usageStartTime),
-			PeriodEnd:   item.GetPeriodEnd(usageEndTime),
-		})
 	}
 
 	return result, nil
@@ -581,10 +617,19 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 		resultsByMeter[dr.MeterID] = append(resultsByMeter[dr.MeterID], dr)
 	}
 
+	// When analytics filters are active, suppress the zero-usage entry for line
+	// items whose analytics query returned no rows — that's the filter excluding
+	// them, not zero usage. Surfacing a zero-usage row would misrepresent the
+	// filtered slice. Mirrors the step-12 skipSyntheticZeros gate.
+	skipSyntheticZeros := len(req.PropertyFilters) > 0 || len(req.Sources) > 0
+
 	for _, liw := range lis {
 		drs := resultsByMeter[liw.MeterID]
 		if len(drs) == 0 {
-			// No data — zero-usage entry; step 12 commitment check uses LineItem.HasCommitment().
+			if skipSyntheticZeros {
+				continue
+			}
+			// No data — zero-usage entry; step 12 commitment check uses LineItem.HasAnyCommitment().
 			result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
 				LineItem:    liw.Item,
 				MeterID:     liw.MeterID,
@@ -607,7 +652,7 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 				Price:           result.PriceMap[liw.Item.PriceID],
 				PeriodStart:     group.Start,
 				PeriodEnd:       group.End,
-				Usage:           getUsageValueFromDetailedResult(dr, group.AggType),
+				Usage:           dr.TotalUsage,
 				EventCount:      dr.EventCount,
 				Points:          dr.Points,
 				AnalyticsResult: dr,
@@ -671,6 +716,23 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		params.StartTime = params.EndTime.Add(-6 * time.Hour)
 	}
 
+	// feature_id is a feature_usage-table column; meter_usage doesn't carry it.
+	// Since feature.meter_id is 1:1, group_by=[feature_id] is semantically
+	// equivalent to group_by=[meter_id] — rewrite at the entry point so the
+	// downstream query builder (which only knows meter_id/source/properties.*)
+	// accepts it, and the converter populates FeatureID from the meter→feature
+	// lookup. Dedupe so [feature_id, meter_id] doesn't become [meter_id, meter_id].
+	if len(params.GroupBy) > 0 {
+		rewritten := make([]string, 0, len(params.GroupBy))
+		for _, g := range params.GroupBy {
+			if g == "feature_id" {
+				g = "meter_id"
+			}
+			rewritten = append(rewritten, g)
+		}
+		params.GroupBy = lo.Uniq(rewritten)
+	}
+
 	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified).
 	// Fail closed: a feature-scoped request must not silently broaden to all meters.
 	if len(params.FeatureIDs) > 0 && len(params.MeterIDs) == 0 {
@@ -706,10 +768,28 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		if billingAnchor == nil {
 			billingAnchor = &sub.BillingAnchor
 		}
+
+		// Clamp the query window by CancelledAt for cancelled subs. meter_usage
+		// has no per-event subscription linkage — the per-line-item date bound
+		// (lineItem.GetPeriodEnd) falls back to the request EndTime when the
+		// line item has no EndDate, which is the common case after a cancel.
+		// Without this clamp, a cancelled sub's line items would re-attribute
+		// post-cancellation events from whichever sub is now active for the
+		// same meter. Skip entirely when the clamped window has no overlap.
+		subEndTime := params.EndTime
+		if sub.SubscriptionStatus == types.SubscriptionStatusCancelled && sub.CancelledAt != nil {
+			if sub.CancelledAt.Before(subEndTime) {
+				subEndTime = *sub.CancelledAt
+			}
+		}
+		if !subEndTime.After(params.StartTime) {
+			continue
+		}
+
 		usage, err := s.GetSubscriptionMeterUsage(ctx, &GetSubscriptionMeterUsageRequest{
 			SubscriptionID:  sub.ID,
 			StartTime:       params.StartTime,
-			EndTime:         params.EndTime,
+			EndTime:         subEndTime,
 			WindowSize:      params.WindowSize,
 			BillingAnchor:   billingAnchor,
 			UseFinal:        params.UseFinal,
@@ -720,7 +800,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			Sources:         params.Sources,
 		})
 		if err != nil {
-			s.logger.Warnw("failed to get subscription meter usage, skipping",
+			s.logger.Info(ctx, "failed to get subscription meter usage, skipping",
 				"error", err,
 				"subscription_id", sub.ID,
 			)
@@ -735,7 +815,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	// Calculate costs inline (no dependency on featureUsageTrackingService)
 	if len(data.Analytics) > 0 {
 		if err := s.calculateCosts(ctx, data); err != nil {
-			s.logger.Warnw("failed to calculate costs for meter usage analytics, costs will be zero",
+			s.logger.Info(ctx, "failed to calculate costs for meter usage analytics, costs will be zero",
 				"error", err,
 			)
 		}
@@ -752,7 +832,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
 	// Convert to response DTO
-	return s.toUsageAnalyticsResponseDTO(data, data.Meters, params), nil
+	return s.toUsageAnalyticsResponseDTO(ctx, data, data.Meters, params), nil
 }
 
 // mergeSubscriptionUsagesToAnalyticsData converts N SubscriptionMeterUsage results
@@ -816,7 +896,7 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		// committed minimum (and true-up, if windowed) is applied even with no usage.
 		for _, lu := range su.LineItemUsages {
 			if lu.Usage.IsZero() && lu.EventCount == 0 && len(lu.Points) == 0 && lu.BucketedResult == nil {
-				if lu.LineItem == nil || !lu.LineItem.HasCommitment() {
+				if lu.LineItem == nil || !lu.LineItem.HasAnyCommitment() {
 					continue
 				}
 			}
@@ -867,7 +947,9 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 				analytic.SubscriptionID = lu.LineItem.SubscriptionID
 			}
 
-			// Convert time-series points
+			// Convert time-series points. p.TotalUsage is the primary aggregation
+			// value (see buildMeterUsageAggregationColumns), so it works for every
+			// meter type without per-aggregation routing.
 			if len(lu.Points) > 0 {
 				analytic.Points = make([]events.UsageAnalyticPoint, 0, len(lu.Points))
 				for _, p := range lu.Points {
@@ -930,7 +1012,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(
 		}
 		g, err := s.GroupRepo.Get(ctx, gid)
 		if err != nil {
-			s.logger.Warnw("failed to fetch group for meter usage analytics", "group_id", gid, "error", err)
+			s.logger.Info(context.Background(), "failed to fetch group for meter usage analytics", "group_id", gid, "error", err)
 			continue
 		}
 		data.Groups[gid] = g
@@ -966,7 +1048,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(
 		parentFilter.AllowExpiredPrices = true
 		parentList, err := priceService.GetPrices(ctx, parentFilter)
 		if err != nil {
-			s.logger.Warnw("failed to fetch parent prices for meter usage analytics", "error", err)
+			s.logger.Info(context.Background(), "failed to fetch parent prices for meter usage analytics", "error", err)
 		} else {
 			for _, p := range parentList.Items {
 				data.Prices[p.ID] = p.Price
@@ -982,7 +1064,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(
 		planFilter := types.NewNoLimitPlanFilter()
 		plans, err := s.PlanRepo.List(ctx, planFilter)
 		if err != nil {
-			s.logger.Warnw("failed to fetch plans for meter usage analytics", "error", err)
+			s.logger.Info(context.Background(), "failed to fetch plans for meter usage analytics", "error", err)
 		} else {
 			for _, p := range plans {
 				data.Plans[p.ID] = p
@@ -995,7 +1077,7 @@ func (s *meterUsageService) enrichAnalyticsDataForResponse(
 		addonFilter := types.NewNoLimitAddonFilter()
 		addons, err := s.AddonRepo.List(ctx, addonFilter)
 		if err != nil {
-			s.logger.Warnw("failed to fetch addons for meter usage analytics", "error", err)
+			s.logger.Info(context.Background(), "failed to fetch addons for meter usage analytics", "error", err)
 		} else {
 			for _, a := range addons {
 				data.Addons[a.ID] = a
@@ -1030,21 +1112,18 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 	}
 
 	// Split meters
-	var bucketedMaxMeterIDs, bucketedSumMeterIDs, standardMeterIDs []string
+	var bucketedMeterIDs, standardMeterIDs []string
 	for _, m := range meters {
 		switch {
-		case m.IsBucketedMaxMeter():
-			bucketedMaxMeterIDs = append(bucketedMaxMeterIDs, m.ID)
-		case m.IsBucketedSumMeter():
-			bucketedSumMeterIDs = append(bucketedSumMeterIDs, m.ID)
+		case m.IsBucketedMaxMeter(), m.IsBucketedSumMeter():
+			bucketedMeterIDs = append(bucketedMeterIDs, m.ID)
 		default:
 			standardMeterIDs = append(standardMeterIDs, m.ID)
 		}
 	}
 
-	var allResults []*events.MeterUsageDetailedResult
-
-	for _, meterID := range bucketedMaxMeterIDs {
+	allResults := make([]*events.MeterUsageDetailedResult, 0, len(bucketedMeterIDs)+len(standardMeterIDs))
+	for _, meterID := range bucketedMeterIDs {
 		results, err := s.getBucketedMeterAnalytics(ctx, params, meterMap[meterID])
 		if err != nil {
 			return nil, err
@@ -1052,27 +1131,52 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		allResults = append(allResults, results...)
 	}
 
-	for _, meterID := range bucketedSumMeterIDs {
-		results, err := s.getBucketedMeterAnalytics(ctx, params, meterMap[meterID])
-		if err != nil {
-			return nil, err
+	// Standard (non-bucketed) meters: one repo call per aggregation type.
+	// Mirrors the subscription path, which already splits by AggType via
+	// dateRangeGroup (see queryAndAppendAnalyticsEntries). N is small in
+	// practice — most requests touch 1-2 aggregation types — and keeping the
+	// two paths consistent is worth more than collapsing this loop.
+	// Without splitting, buildMeterUsageAggregationColumns would emit a
+	// single primary total_usage expression chosen by priority order, which
+	// is wrong for every non-winning meter in a mixed-type request.
+	var standardTargets []string
+	if len(standardMeterIDs) > 0 {
+		standardTargets = standardMeterIDs
+	} else if len(params.MeterIDs) == 0 {
+		// Catch-all: enumerate every standard meter we already fetched.
+		for _, m := range meters {
+			if !m.IsBucketedMaxMeter() && !m.IsBucketedSumMeter() {
+				standardTargets = append(standardTargets, m.ID)
+			}
 		}
-		allResults = append(allResults, results...)
 	}
 
-	if len(standardMeterIDs) > 0 || len(params.MeterIDs) == 0 {
-		standardParams := *params
-		if len(standardMeterIDs) > 0 {
-			standardParams.MeterIDs = standardMeterIDs
+	if len(standardTargets) > 0 {
+		byAggType := make(map[types.AggregationType][]string)
+		for _, mid := range standardTargets {
+			m := meterMap[mid]
+			if m == nil {
+				continue
+			}
+			byAggType[m.Aggregation.Type] = append(byAggType[m.Aggregation.Type], mid)
 		}
-		if len(standardParams.MeterIDs) > 1 && !lo.Contains(standardParams.GroupBy, "meter_id") {
-			standardParams.GroupBy = append([]string{"meter_id"}, standardParams.GroupBy...)
+
+		for aggType, meterIDs := range byAggType {
+			subParams := *params
+			subParams.MeterIDs = meterIDs
+			subParams.AggregationTypes = []types.AggregationType{aggType}
+			// Always group by meter_id so the repo populates result.MeterID even
+			// when the subquery has a single meter — the converter keys analytics
+			// by MeterID downstream.
+			if !lo.Contains(subParams.GroupBy, "meter_id") {
+				subParams.GroupBy = append([]string{"meter_id"}, subParams.GroupBy...)
+			}
+			results, err := s.repo.GetDetailedAnalytics(ctx, &subParams)
+			if err != nil {
+				return nil, err
+			}
+			allResults = append(allResults, results...)
 		}
-		results, err := s.repo.GetDetailedAnalytics(ctx, &standardParams)
-		if err != nil {
-			return nil, err
-		}
-		allResults = append(allResults, results...)
 	}
 
 	// Build minimal AnalyticsData (no subscription context)
@@ -1108,7 +1212,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		featureFilter.MeterIDs = meterIDs
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
-			s.logger.Warnw("failed to fetch features for meter mapping", "error", err)
+			s.logger.Info(context.Background(), "failed to fetch features for meter mapping", "error", err)
 		} else {
 			for _, f := range features {
 				if f.MeterID != "" {
@@ -1125,7 +1229,9 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 		}
 	}
 
-	// Convert results to analytics
+	// Convert results to analytics. r.TotalUsage / p.TotalUsage hold the primary
+	// aggregation value courtesy of buildMeterUsageAggregationColumns, so no
+	// per-aggregation routing is needed here.
 	for _, r := range allResults {
 		analytic := &events.DetailedUsageAnalytic{
 			MeterID:          r.MeterID,
@@ -1169,7 +1275,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 	s.enrichAnalyticsDataForResponse(ctx, data, params)
 
 	// Convert to response DTO (no cost calculation without subscription context)
-	return s.toUsageAnalyticsResponseDTO(data, meterMap, params), nil
+	return s.toUsageAnalyticsResponseDTO(ctx, data, meterMap, params), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -1187,6 +1293,7 @@ func (s *meterUsageService) getDetailedAnalyticsWithoutSubscriptionContext(
 //   - Honors params.Expand to attach Price/Meter/Feature/SubscriptionLineItem/Plan/Addon
 //     objects, and treats Sources as expand-driven (expand=source).
 func (s *meterUsageService) toUsageAnalyticsResponseDTO(
+	ctx context.Context,
 	data *AnalyticsData,
 	meterMap map[string]*meter.Meter,
 	params *events.MeterUsageDetailedAnalyticsParams,
@@ -1313,16 +1420,44 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			}
 		}
 
-		for _, point := range analytic.Points {
-			item.Points = append(item.Points, dto.UsageAnalyticPoint{
-				Timestamp:                        point.Timestamp,
-				Usage:                            point.Usage,
-				Cost:                             point.Cost,
-				EventCount:                       point.EventCount,
-				ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
-				ComputedOverageAmount:            point.ComputedOverageAmount,
-				ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
-			})
+		// Points are computed internally for bucketed cost calc regardless of request;
+		// only expose them when the caller asked for a window_size (mirrors feature_usage).
+		if params.WindowSize != "" {
+			// Resolve the line item for bucket attribution (nil when no buckets).
+			var lineItemForBucket *subscription.SubscriptionLineItem
+			if params.BreakdownBucket && analytic.SubLineItemID != "" {
+				lineItemForBucket = data.SubscriptionLineItems[analytic.SubLineItemID]
+				if lineItemForBucket != nil && !lineItemForBucket.HasCommitmentTimeBuckets() {
+					lineItemForBucket = nil
+				}
+			}
+
+			for _, point := range analytic.Points {
+				dtoPoint := dto.UsageAnalyticPoint{
+					Timestamp:                        point.Timestamp,
+					Usage:                            point.Usage,
+					Cost:                             point.Cost,
+					EventCount:                       point.EventCount,
+					ComputedCommitmentUtilizedAmount: point.ComputedCommitmentUtilizedAmount,
+					ComputedOverageAmount:            point.ComputedOverageAmount,
+					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
+				}
+				// Per-point bucket identity (only when the point's whole window
+				// fits inside a single bucket).
+				if lineItemForBucket != nil {
+					if id, priceID, ok := bucketIDForPointWindow(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, params.WindowSize); ok {
+						dtoPoint.BucketID = id
+						dtoPoint.PriceID = priceID
+					}
+				}
+				item.Points = append(item.Points, dtoPoint)
+			}
+
+			// Bucket-level summaries.
+			if lineItemForBucket != nil {
+				priceService := NewPriceService(s.ServiceParams)
+				item.BucketSummaries = buildBucketSummaries(ctx, priceService, item.Points, lineItemForBucket, data)
+			}
 		}
 
 		response.Items = append(response.Items, item)
@@ -1339,29 +1474,6 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// getUsageValueFromDetailedResult extracts the correct scalar usage from a
-// MeterUsageDetailedResult based on aggregation type.
-//
-// For COUNT meters, buildConditionalAggregationColumns emits total_usage as a
-// literal zero — the actual count lives in the event_count column.
-func getUsageValueFromDetailedResult(r *events.MeterUsageDetailedResult, aggType types.AggregationType) decimal.Decimal {
-	switch aggType {
-	case types.AggregationCount:
-		return decimal.NewFromInt(int64(r.EventCount))
-	case types.AggregationCountUnique:
-		return decimal.NewFromInt(int64(r.CountUniqueUsage))
-	case types.AggregationMax:
-		if !r.TotalUsage.IsZero() {
-			return r.TotalUsage
-		}
-		return r.MaxUsage
-	case types.AggregationLatest:
-		return r.LatestUsage
-	default:
-		return r.TotalUsage
-	}
-}
 
 // fetchMeters fetches meter configurations for the requested meter IDs.
 func (s *meterUsageService) fetchMeters(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams) ([]*meter.Meter, error) {
@@ -1416,7 +1528,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 
 	aggResult, err := s.repo.GetUsageForBucketedMeters(ctx, bucketParams)
 	if err != nil {
-		s.logger.Errorw("failed to get bucketed meter usage", "error", err, "meter_id", m.ID)
+		s.logger.Error(ctx, "failed to get bucketed meter usage", "error", err, "meter_id", m.ID)
 		return nil, err
 	}
 
@@ -1449,7 +1561,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 
 	eventCount, err := s.getEventCountForMeter(ctx, params, m.ID)
 	if err != nil {
-		s.logger.Warnw("failed to get event count for bucketed meter, defaulting to 0", "error", err, "meter_id", m.ID)
+		s.logger.Info(context.Background(), "failed to get event count for bucketed meter, defaulting to 0", "error", err, "meter_id", m.ID)
 	} else {
 		result.EventCount = eventCount
 	}
@@ -1509,6 +1621,33 @@ func (s *meterUsageService) resolveCustomerAndSubscriptions(ctx context.Context,
 	subsList, err := subService.ListSubscriptions(ctx, filter)
 	if err != nil {
 		return cust, nil, err
+	}
+
+	// when any child sub is SubscriptionTypeInherited, additionally load its parent
+	// so parent-scoped line items / commitments are visible to analytics.
+	parentSubIDs := make([]string, 0)
+	for _, subResp := range subsList.Items {
+		if subResp.Subscription.SubscriptionType == types.SubscriptionTypeInherited &&
+			subResp.Subscription.ParentSubscriptionID != nil {
+			parentSubIDs = append(parentSubIDs, lo.FromPtr(subResp.Subscription.ParentSubscriptionID))
+		}
+	}
+	if len(parentSubIDs) > 0 {
+		parentFilter := types.NewNoLimitSubscriptionFilter()
+		parentFilter.WithLineItems = true
+		parentFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeParent}
+		parentFilter.SubscriptionIDs = parentSubIDs
+		parentFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusTrialing,
+			types.SubscriptionStatusPaused,
+			types.SubscriptionStatusCancelled,
+		}
+		parentsList, err := subService.ListSubscriptions(ctx, parentFilter)
+		if err != nil {
+			return cust, nil, err
+		}
+		subsList.Items = append(subsList.Items, parentsList.Items...)
 	}
 
 	subscriptions := make([]*subscription.Subscription, len(subsList.Items))
@@ -1704,6 +1843,20 @@ type meterUsageBucketedCostParams struct {
 	bucketSize   types.WindowSize
 }
 
+// shouldFillWindow reports whether an EMPTY window starting at t needs a
+// synthetic zero-usage fill point. Filling only matters where commitment math
+// can produce a charge for an empty window: any window when the line item
+// carries its own (top-level) commitment, or windows inside a commitment time
+// bucket otherwise. Empty windows outside both bill $0 regardless, so filling
+// them would only add noise points.
+func shouldFillWindow(lineItem *subscription.SubscriptionLineItem, t time.Time) bool {
+	if lineItem.HasTrueUpEnabled() {
+		return true
+	}
+	_, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{t}, 0)
+	return ok
+}
+
 // calculateBucketedCost calculates cost for bucketed max/sum meters.
 // skipCommitment forces hasCommitment=false when set; used for analytics queries
 // with property/source filters where applying commitment over a filtered subset
@@ -1711,68 +1864,81 @@ type meterUsageBucketedCostParams struct {
 func (s *meterUsageService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, p *price.Price, m *meter.Meter, data *AnalyticsData, skipCommitment bool) {
 	params := &meterUsageBucketedCostParams{ctx, priceService, item, p, data, m.Aggregation.Type, m.Aggregation.BucketSize}
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasCommitment()
+	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasAnyCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
-	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
+	// needsWindowedFill gates the per-window fill paths (fillMissingWindowsAndRecalculate,
+	// fillZeroUsageWindows). True-up requires filling missing windows so commitment can be
+	// charged for them too — but only meaningful when the commitment is itself windowed.
+	// Bucket-level TrueUpEnabled counts too: a true-up bucket needs its empty windows
+	// filled even when the line item's top-level true-up flag is off.
+	// Non-windowed commitments with TrueUpEnabled still get true-up applied at the
+	// aggregate level inside applyCommitmentToLineItem; no per-window fill needed.
+	needsWindowedFill := isWindowed && lineItem.HasTrueUpEnabled()
 
 	var cost decimal.Decimal
 
 	if len(item.Points) > 0 {
-		cost = s.processPointsWithBuckets(params, lineItem, hasCommitment, isWindowed, hasTrueUp)
+		cost = s.processPointsWithBuckets(params, lineItem, hasCommitment, isWindowed, needsWindowedFill)
 	} else {
-		cost = s.processSingleBucket(params, lineItem, hasCommitment, isWindowed, hasTrueUp)
+		cost = s.processSingleBucket(params, lineItem, hasCommitment, isWindowed, needsWindowedFill)
 	}
 
 	item.TotalCost = cost
 	item.Currency = p.Currency
 }
 
-// processPointsWithBuckets handles the case where we have time-series points to process.
+// processPointsWithBuckets handles the case where we have time-series points to
+// process. Windowed commitment runs in ONE pass over the window grid (filled
+// with empty windows first when true-up needs them); non-windowed paths stamp
+// plain per-point costs.
 func (s *meterUsageService) processPointsWithBuckets(
 	p *meterUsageBucketedCostParams,
 	lineItem *subscription.SubscriptionLineItem,
-	hasCommitment, isWindowed, hasTrueUp bool,
+	hasCommitment, isWindowed, needsWindowedFill bool,
 ) decimal.Decimal {
-	bucketedValues := s.extractBucketValues(p.item.Points, p.aggType)
-
 	var cost decimal.Decimal
 	switch {
-	case !hasCommitment:
-		cost = p.priceService.CalculateBucketedCost(p.ctx, p.price, bucketedValues)
+	case isWindowed && needsWindowedFill && p.bucketSize != "":
+		cost = s.fillWindowsAndApplyCommitment(p, lineItem)
 	case isWindowed:
-		cost = decimal.Zero // Will be summed from points after processing
+		cost = s.applyWindowCommitmentToPoints(p, lineItem, p.item.Points)
+	case !hasCommitment:
+		cost = p.priceService.CalculateBucketedCost(p.ctx, p.price, s.extractBucketValues(p.item.Points, p.aggType))
+		s.stampPointCosts(p.ctx, p.priceService, p.item, p.price)
 	default:
-		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, decimal.Zero)
+		// Non-windowed commitment applies to the period aggregate.
+		bucketedValues := s.extractBucketValues(p.item.Points, p.aggType)
+		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, nil, decimal.Zero)
+		s.stampPointCosts(p.ctx, p.priceService, p.item, p.price)
 	}
 
-	s.calculatePointCosts(p, lineItem, isWindowed)
-
-	if hasTrueUp && p.bucketSize != "" {
-		cost = s.fillMissingWindowsAndRecalculate(p, lineItem)
-	}
-
-	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType)
-
-	if isWindowed && !hasTrueUp {
-		cost = s.sumPointCosts(p.item.Points)
-	}
+	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
 
 	return cost
 }
 
 // processSingleBucket handles the case where there are no time-series points.
+// needsWindowedFill gates the window-fill path used for windowed true-up when
+// there's no usage at all.
 func (s *meterUsageService) processSingleBucket(
 	p *meterUsageBucketedCostParams,
 	lineItem *subscription.SubscriptionLineItem,
-	hasCommitment, isWindowed, hasTrueUp bool,
+	hasCommitment, isWindowed, needsWindowedFill bool,
 ) decimal.Decimal {
-	totalUsage := s.getSingleBucketUsage(p.item, p.aggType)
+	// p.item.TotalUsage is the primary aggregation value (see
+	// buildMeterUsageAggregationColumns) — bucketed-max meters also write it from
+	// bucketedResult.Value at construction, so reading it works uniformly.
+	totalUsage := p.item.TotalUsage
 
 	if totalUsage.IsPositive() {
 		bucketedValues := []decimal.Decimal{totalUsage}
 		baseCost := p.priceService.CalculateBucketedCost(p.ctx, p.price, bucketedValues)
 		if hasCommitment {
-			return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, baseCost)
+			// Single-bucket path: the value is a period-wide aggregate with no per-window
+			// timestamps. We cannot determine which UTC hours the events occurred in, so
+			// any proxy timestamp would be arbitrary. Pass nil to skip TimeBucket filtering
+			// — commitment applies normally (24/7) in this degenerate case.
+			return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, nil, baseCost)
 		}
 		return baseCost
 	}
@@ -1781,132 +1947,106 @@ func (s *meterUsageService) processSingleBucket(
 		return decimal.Zero
 	}
 
-	if hasTrueUp && p.bucketSize != "" {
-		return s.fillZeroUsageWindows(p, lineItem)
+	if needsWindowedFill && p.bucketSize != "" {
+		cost := s.fillWindowsAndApplyCommitment(p, lineItem)
+		p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
+		return cost
 	}
 
-	return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, nil, decimal.Zero)
+	return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, nil, nil, decimal.Zero)
 }
 
 // extractBucketValues extracts usage values from points based on aggregation type.
 func (s *meterUsageService) extractBucketValues(points []events.UsageAnalyticPoint, aggType types.AggregationType) []decimal.Decimal {
 	values := make([]decimal.Decimal, len(points))
 	for i, pt := range points {
-		values[i] = s.getCorrectUsageValueForPoint(pt, aggType)
+		values[i] = pt.Usage
 	}
 	return values
 }
 
-// calculatePointCosts calculates cost for each individual point.
-func (s *meterUsageService) calculatePointCosts(p *meterUsageBucketedCostParams, lineItem *subscription.SubscriptionLineItem, isWindowed bool) {
-	if !isWindowed {
-		for i := range p.item.Points {
-			usage := s.getCorrectUsageValueForPoint(p.item.Points[i], p.aggType)
-			p.item.Points[i].Cost = p.priceService.CalculateCost(p.ctx, p.price, usage)
-		}
-		return
-	}
-
-	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
-	for i := range p.item.Points {
-		usage := s.getCorrectUsageValueForPoint(p.item.Points[i], p.aggType)
-		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, p.price)
-		if err != nil {
-			s.logger.Warnw("failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
-			pointCost = p.priceService.CalculateCost(p.ctx, p.price, usage)
-		}
-		p.item.Points[i].Cost = pointCost
-		if info != nil {
-			p.item.Points[i].ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount
-			p.item.Points[i].ComputedOverageAmount = info.ComputedOverageAmount
-			p.item.Points[i].ComputedTrueUpAmount = info.ComputedTrueUpAmount
-		}
+// stampPointCosts sets each point's cost at the plain price (no commitment math).
+func (s *meterUsageService) stampPointCosts(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, p *price.Price) {
+	for i := range item.Points {
+		item.Points[i].Cost = priceService.CalculateCost(ctx, p, item.Points[i].Usage)
 	}
 }
 
-// fillMissingWindowsAndRecalculate fills gaps in bucket windows and recalculates total cost.
-func (s *meterUsageService) fillMissingWindowsAndRecalculate(p *meterUsageBucketedCostParams, lineItem *subscription.SubscriptionLineItem) decimal.Decimal {
-	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
-	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
-	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
-	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
-
-	pointsByBucket := make(map[time.Time]events.UsageAnalyticPoint, len(p.item.Points))
-	for _, pt := range p.item.Points {
-		pointsByBucket[pt.Timestamp] = pt
-	}
-
-	filled := make([]decimal.Decimal, 0, len(expectedStarts))
-	filledPoints := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
-	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
-
-	for _, t := range expectedStarts {
-		if existing, ok := pointsByBucket[t]; ok {
-			filled = append(filled, s.getCorrectUsageValueForPoint(existing, p.aggType))
-			filledPoints = append(filledPoints, existing)
-		} else {
-			filled = append(filled, decimal.Zero)
-			filledPoints = append(filledPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
-		}
-	}
-
-	p.item.Points = filledPoints
-	if totalCost, _, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, p.price); err == nil {
-		return totalCost
-	}
-	return decimal.Zero
-}
-
-// fillZeroUsageWindows creates fill points for all expected windows when there's no usage.
-func (s *meterUsageService) fillZeroUsageWindows(p *meterUsageBucketedCostParams, lineItem *subscription.SubscriptionLineItem) decimal.Decimal {
-	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
-	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
-	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
-	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
-
-	filled := make([]decimal.Decimal, len(expectedStarts))
-	commitmentCalc := newCommitmentCalculator(s.logger, p.priceService)
-
-	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, p.price)
-	if err != nil {
-		return decimal.Zero
-	}
-
-	p.item.CommitmentInfo = info
-	bucketPoints := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
-	for _, t := range expectedStarts {
-		bucketPoints = append(bucketPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
-	}
-	p.item.Points = s.mergeBucketPointsByWindow(bucketPoints, p.aggType)
-
-	return totalCost
-}
-
-// createFillPoint creates a zero-usage fill point for a missing bucket window.
-func (s *meterUsageService) createFillPoint(
+// applyWindowCommitmentToPoints applies windowed commitment over the given
+// points in ONE pass: each point is stamped with its window's charge and
+// commitment breakdown, item.CommitmentInfo is set, and the total charge is
+// returned. Bucket prices are fetched once per bucket for the whole pass. On
+// calculation failure it logs, stamps plain costs and returns the uncommitted
+// bucketed cost.
+func (s *meterUsageService) applyWindowCommitmentToPoints(
 	p *meterUsageBucketedCostParams,
 	lineItem *subscription.SubscriptionLineItem,
-	timestamp time.Time,
-	billingAnchor *time.Time,
-	calc *commitmentCalculator,
-) events.UsageAnalyticPoint {
-	pointCost, info, _ := calc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{decimal.Zero}, p.price)
-	windowStart := truncateToBucketStart(timestamp, p.data.Params.WindowSize, billingAnchor)
+	points []events.UsageAnalyticPoint,
+) decimal.Decimal {
+	values := make([]decimal.Decimal, len(points))
+	starts := make([]time.Time, len(points))
+	for i := range points {
+		values[i] = points[i].Usage
+		starts[i] = points[i].Timestamp
+	}
 
-	pt := events.UsageAnalyticPoint{
-		Timestamp:   timestamp,
-		WindowStart: windowStart,
-		Usage:       decimal.Zero,
-		MaxUsage:    decimal.Zero,
-		Cost:        pointCost,
-		EventCount:  0,
+	calc := newCommitmentCalculator(s.logger, p.priceService)
+	total, perWindow, info, err := calc.applyWindowCommitmentPerBucket(p.ctx, lineItem, values, starts, p.price)
+	if err != nil {
+		s.logger.Info(p.ctx, "failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
+		p.item.Points = points
+		s.stampPointCosts(p.ctx, p.priceService, p.item, p.price)
+		return p.priceService.CalculateBucketedCost(p.ctx, p.price, values)
 	}
-	if info != nil {
-		pt.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount
-		pt.ComputedOverageAmount = info.ComputedOverageAmount
-		pt.ComputedTrueUpAmount = info.ComputedTrueUpAmount
+
+	for i := range points {
+		points[i].Cost = perWindow[i].charge
+		points[i].ComputedCommitmentUtilizedAmount = perWindow[i].utilized
+		points[i].ComputedOverageAmount = perWindow[i].overage
+		points[i].ComputedTrueUpAmount = perWindow[i].trueUp
 	}
-	return pt
+	p.item.Points = points
+	p.item.CommitmentInfo = info
+	return total
+}
+
+// fillWindowsAndApplyCommitment builds the expected window grid for the line
+// item period — real points plus zero-usage fills for windows where commitment
+// can charge for emptiness (line-item commitment, or inside a commitment time
+// bucket) — and applies windowed commitment over it in one pass.
+func (s *meterUsageService) fillWindowsAndApplyCommitment(
+	p *meterUsageBucketedCostParams,
+	lineItem *subscription.SubscriptionLineItem,
+) decimal.Decimal {
+	billingAnchor := s.getBillingAnchorFromData(p.data, lineItem.SubscriptionID)
+	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
+	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
+	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
+
+	existing := make(map[time.Time]events.UsageAnalyticPoint, len(p.item.Points))
+	for _, pt := range p.item.Points {
+		existing[pt.Timestamp] = pt
+	}
+
+	points := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
+	for _, t := range expectedStarts {
+		if pt, ok := existing[t]; ok {
+			// Real usage is always billed, in- or out-of-bucket.
+			points = append(points, pt)
+			continue
+		}
+		if !shouldFillWindow(lineItem, t) {
+			continue
+		}
+		points = append(points, events.UsageAnalyticPoint{
+			Timestamp:   t,
+			WindowStart: truncateToBucketStart(t, p.data.Params.WindowSize, billingAnchor),
+			Usage:       decimal.Zero,
+			MaxUsage:    decimal.Zero,
+		})
+	}
+
+	return s.applyWindowCommitmentToPoints(p, lineItem, points)
 }
 
 // getBillingAnchorFromData retrieves the billing anchor for a subscription from AnalyticsData.
@@ -1915,23 +2055,6 @@ func (s *meterUsageService) getBillingAnchorFromData(data *AnalyticsData, subscr
 		return &sub.BillingAnchor
 	}
 	return nil
-}
-
-// getSingleBucketUsage returns the usage value for single-bucket calculation.
-func (s *meterUsageService) getSingleBucketUsage(item *events.DetailedUsageAnalytic, aggType types.AggregationType) decimal.Decimal {
-	if aggType == types.AggregationMax {
-		return item.MaxUsage
-	}
-	return s.getCorrectUsageValue(item, aggType)
-}
-
-// sumPointCosts sums the cost of all points.
-func (s *meterUsageService) sumPointCosts(points []events.UsageAnalyticPoint) decimal.Decimal {
-	total := decimal.Zero
-	for _, pt := range points {
-		total = total.Add(pt.Cost)
-	}
-	return total
 }
 
 // calculateRegularCost calculates cost for regular (non-bucketed) meters.
@@ -1944,82 +2067,73 @@ func (s *meterUsageService) calculateRegularCost(ctx context.Context, priceServi
 	if !skipCommitment && item.SubLineItemID != "" {
 		lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 
-		if lineItem != nil && lineItem.HasCommitment() {
-			if lineItem.CommitmentWindowed {
-				if len(item.Points) > 0 {
-					bucketedValues := make([]decimal.Decimal, len(item.Points))
-					for i, point := range item.Points {
-						bucketedValues[i] = s.getCorrectUsageValueForPoint(point, m.Aggregation.Type)
-					}
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, bucketedValues, decimal.Zero)
-				} else {
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, cost)
-				}
-			} else {
-				cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, cost)
-			}
+		// Windowed commitment (and time buckets, which require it) can only
+		// exist on bucketed meters: meter validation allows bucket_size only
+		// with MAX/SUM aggregation, and windowed commitment requires a meter
+		// with bucket_size — those meters route to calculateBucketedCost. So a
+		// regular meter can carry only a non-windowed aggregate commitment; a
+		// windowed flag here is invalid data and is ignored (billed plain).
+		if lineItem != nil && !lineItem.CommitmentWindowed && lineItem.HasCommitment() {
+			cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, p, nil, nil, cost)
 		}
 	}
 
 	item.TotalCost = cost
 	item.Currency = p.Currency
 
-	for i := range item.Points {
-		pointUsage := s.getCorrectUsageValueForPoint(item.Points[i], m.Aggregation.Type)
-		pointCost := priceService.CalculateCost(ctx, p, pointUsage)
-		item.Points[i].Cost = pointCost
-	}
+	// Points here are a display series (request window_size); the commitment
+	// applies to the period aggregate, so per-point costs are plain price.
+	s.stampPointCosts(ctx, priceService, item, p)
 }
 
-// applyLineItemCommitment applies commitment logic to the calculated cost.
+// applyLineItemCommitment applies the line item's commitment — windowed (per
+// window, with per-bucket pricing) or aggregate — to the calculated cost and
+// records the commitment info on the analytic item. windowStarts (optional) is
+// paired 1:1 with windowValues and enables per-bucket pricing on
+// lineItem.CommitmentTimeBuckets in the windowed path. On calculation failure it
+// logs and falls back to the uncommitted cost.
 func (s *meterUsageService) applyLineItemCommitment(
 	ctx context.Context,
 	priceService PriceService,
 	item *events.DetailedUsageAnalytic,
 	lineItem *subscription.SubscriptionLineItem,
 	p *price.Price,
-	bucketedValues []decimal.Decimal,
+	windowValues []decimal.Decimal,
+	windowStarts []time.Time,
 	defaultCost decimal.Decimal,
 ) decimal.Decimal {
-	commitmentCalc := newCommitmentCalculator(s.logger, priceService)
-	var cost decimal.Decimal
-	var commitmentInfo *types.CommitmentInfo
-	var err error
-
-	if lineItem.CommitmentWindowed {
-		cost, commitmentInfo, err = commitmentCalc.applyWindowCommitmentToLineItem(
-			ctx, lineItem, bucketedValues, p)
-		if err == nil {
-			item.CommitmentInfo = commitmentInfo
-			return cost
-		}
-		s.logger.Warnw("failed to apply window commitment", "error", err, "line_item_id", lineItem.ID)
-		if defaultCost.IsZero() && len(bucketedValues) > 0 {
-			return priceService.CalculateBucketedCost(ctx, p, bucketedValues)
-		}
-		return defaultCost
-	}
-
-	// Non-window commitment
+	// Uncommitted fallback: the caller-provided cost, or the bucketed cost of
+	// the window values when no cost was provided.
 	rawCost := defaultCost
-	if rawCost.IsZero() && len(bucketedValues) > 0 {
-		rawCost = priceService.CalculateBucketedCost(ctx, p, bucketedValues)
+	if rawCost.IsZero() && len(windowValues) > 0 {
+		rawCost = priceService.CalculateBucketedCost(ctx, p, windowValues)
 	}
 
-	cost, commitmentInfo, err = commitmentCalc.applyCommitmentToLineItem(
-		ctx, lineItem, rawCost, p)
-
-	if err == nil {
-		item.CommitmentInfo = commitmentInfo
-		return cost
+	calc := newCommitmentCalculator(s.logger, priceService)
+	var cost decimal.Decimal
+	var info *types.CommitmentInfo
+	var err error
+	if lineItem.CommitmentWindowed {
+		cost, info, err = calc.applyWindowCommitmentToLineItem(ctx, lineItem, windowValues, windowStarts, p)
+	} else {
+		cost, info, err = calc.applyCommitmentToLineItem(ctx, lineItem, rawCost, p)
 	}
-
-	s.logger.Warnw("failed to apply commitment", "error", err, "line_item_id", lineItem.ID)
-	return rawCost
+	if err != nil {
+		s.logger.Info(ctx, "failed to apply commitment", "error", err, "line_item_id", lineItem.ID, "windowed", lineItem.CommitmentWindowed)
+		return rawCost
+	}
+	item.CommitmentInfo = info
+	return cost
 }
 
 // mergeBucketPointsByWindow merges bucket-level points into request-window-level points.
-func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnalyticPoint, aggregationType types.AggregationType) []events.UsageAnalyticPoint {
+// Each input point's WindowStart is the bucket start (at the meter's bucket_size). To emit
+// points at the requested window_size, WindowStart is truncated to that window before grouping
+// — so when request window > bucket size (e.g. DAY request, MINUTE bucket), many bucket points
+// collapse into one response point per request window. When request window <= bucket size, the
+// truncation is a no-op and points stay at bucket grain (we cannot subdivide a bucket).
+// requestWindowSize == "" disables roll-up entirely.
+func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnalyticPoint, aggregationType types.AggregationType, requestWindowSize types.WindowSize, billingAnchor *time.Time) []events.UsageAnalyticPoint {
 	if len(points) == 0 {
 		return points
 	}
@@ -2030,7 +2144,11 @@ func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnaly
 
 	windowGroups := make(map[time.Time][]events.UsageAnalyticPoint)
 	for _, point := range points {
-		windowGroups[point.WindowStart] = append(windowGroups[point.WindowStart], point)
+		key := point.WindowStart
+		if requestWindowSize != "" {
+			key = truncateToBucketStart(point.WindowStart, requestWindowSize, billingAnchor)
+		}
+		windowGroups[key] = append(windowGroups[key], point)
 	}
 
 	mergedPoints := make([]events.UsageAnalyticPoint, 0, len(windowGroups))
@@ -2090,43 +2208,6 @@ func (s *meterUsageService) mergeBucketPointsByWindow(points []events.UsageAnaly
 	})
 
 	return mergedPoints
-}
-
-// getCorrectUsageValue returns the correct usage value based on the meter's aggregation type.
-func (s *meterUsageService) getCorrectUsageValue(item *events.DetailedUsageAnalytic, aggregationType types.AggregationType) decimal.Decimal {
-	switch aggregationType {
-	case types.AggregationCount:
-		return decimal.NewFromInt(int64(item.EventCount))
-	case types.AggregationCountUnique:
-		return decimal.NewFromInt(int64(item.CountUniqueUsage))
-	case types.AggregationMax:
-		return item.MaxUsage
-	case types.AggregationLatest:
-		return item.LatestUsage
-	case types.AggregationSum, types.AggregationSumWithMultiplier, types.AggregationAvg, types.AggregationWeightedSum:
-		return item.TotalUsage
-	default:
-		return item.TotalUsage
-	}
-}
-
-// getCorrectUsageValueForPoint returns the correct usage value for a time series point based on aggregation type.
-// COUNT meters store the per-window count in point.EventCount (same convention as the aggregate-level helper).
-func (s *meterUsageService) getCorrectUsageValueForPoint(point events.UsageAnalyticPoint, aggregationType types.AggregationType) decimal.Decimal {
-	switch aggregationType {
-	case types.AggregationCount:
-		return decimal.NewFromInt(int64(point.EventCount))
-	case types.AggregationCountUnique:
-		return decimal.NewFromInt(int64(point.CountUniqueUsage))
-	case types.AggregationMax:
-		return point.MaxUsage
-	case types.AggregationLatest:
-		return point.LatestUsage
-	case types.AggregationSum, types.AggregationSumWithMultiplier, types.AggregationAvg, types.AggregationWeightedSum:
-		return point.Usage
-	default:
-		return point.Usage
-	}
 }
 
 // ensure meterUsageService implements MeterUsageService

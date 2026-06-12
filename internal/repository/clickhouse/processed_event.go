@@ -675,7 +675,7 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		aggregateQuery += " GROUP BY " + strings.Join(groupByColumns, ", ")
 	}
 
-	r.logger.Debugw("executing detailed usage analytics query",
+	r.logger.Debug(ctx, "executing detailed usage analytics query",
 		"query", aggregateQuery,
 		"params", queryParams,
 		"group_by", params.GroupBy,
@@ -912,7 +912,7 @@ func (r *ProcessedEventRepository) getAnalyticsPoints(
 	// Group by the time window and order by time
 	query += fmt.Sprintf(" GROUP BY %s ORDER BY window_time", timeWindowExpr)
 
-	r.logger.Debugw("executing time-series query",
+	r.logger.Debug(ctx, "executing time-series query",
 		"query", query,
 		"params", queryParams,
 		"feature_id", analytics.FeatureID,

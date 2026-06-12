@@ -8,7 +8,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 // SubscriptionModificationHandler handles API requests for mid-cycle subscription modifications.
@@ -54,7 +53,7 @@ func (h *SubscriptionModificationHandler) Execute(c *gin.Context) {
 
 	var req dto.ExecuteSubscriptionModifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("failed to bind JSON", zap.Error(err))
+		h.log.Error(c.Request.Context(), "failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
@@ -96,7 +95,7 @@ func (h *SubscriptionModificationHandler) Preview(c *gin.Context) {
 
 	var req dto.ExecuteSubscriptionModifyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("failed to bind JSON", zap.Error(err))
+		h.log.Error(c.Request.Context(), "failed to bind JSON", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))

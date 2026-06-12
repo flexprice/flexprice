@@ -72,7 +72,7 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
 		tenantID, userID, environmentID, roles, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if !valid {
-			logger.Debugw("invalid api key")
+			logger.Debug(c.Request.Context(), "invalid api key")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
 			c.Abort()
 			return
@@ -117,7 +117,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := authProvider.ValidateToken(c.Request.Context(), tokenString)
 		if err != nil {
-			logger.Errorw("failed to validate token", "error", err)
+			logger.Error(c.Request.Context(), "failed to validate token", "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
@@ -130,7 +130,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 		}
 
 		// JWT users have empty roles = full access
-		setContextValues(c, claims.TenantID, claims.UserID, environmentID, []string{})
+		setContextValues(c, claims.TenantID, claims.UserID, claims.EnvironmentID, []string{})
 		c.Next()
 	}
 }
@@ -149,7 +149,7 @@ func SessionTokenAuthMiddleware(cfg *config.Configuration, logger *logger.Logger
 
 		claims, err := authProvider.ValidateSessionToken(c.Request.Context(), authHeader)
 		if err != nil {
-			logger.Errorw("failed to validate session token", "error", err)
+			logger.Error(c.Request.Context(), "failed to validate session token", "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired session token"})
 			c.Abort()
 			return

@@ -862,7 +862,7 @@ func (m *mockSubscriptionService) ListSubscriptionLineItems(ctx context.Context,
 func (m *mockSubscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
 	return nil
 }
-func (m *mockSubscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
+func (m *mockSubscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context, _ time.Time) error {
 	return nil
 }
 func (m *mockSubscriptionService) ProcessAutoInvoiceThresholdBilling(ctx context.Context) (*apidto.AutoInvoiceThresholdBillingResult, error) {
@@ -916,12 +916,14 @@ func (m *mockSubscriptionService) CascadeCancelToInheritedSubscriptions(ctx cont
 func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
+}
 
 // --- ProcessSubscriptionActivatedWebhook tests ---
 
-// TestProcessSubscriptionActivatedWebhook_IncompleteToActive verifies that an incomplete subscription
-// (with no trial) is activated via ActivateIncompleteSubscription and that the mapping is created.
-func TestProcessSubscriptionActivatedWebhook_IncompleteToActive(t *testing.T) {
+// TestProcessSubscriptionActivatedWebhook_IncompleteNoOp verifies that an incomplete subscription
+// is treated as a no-op (not activated automatically) and that the mapping is still created.
+func TestProcessSubscriptionActivatedWebhook_IncompleteNoOp(t *testing.T) {
 	ctx := buildTestContext()
 
 	const flexSubID = "sub_incomplete_to_active"
@@ -961,8 +963,13 @@ func TestProcessSubscriptionActivatedWebhook_IncompleteToActive(t *testing.T) {
 	err := svc.ProcessSubscriptionActivatedWebhook(ctx, paddlenotification_data, mockSubSvc)
 	require.NoError(t, err)
 
-	// ActivateIncompleteSubscription must have been called.
-	assert.True(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must be called for incomplete sub without trial")
+	// ActivateIncompleteSubscription must NOT have been called — incomplete subs are no-op.
+	assert.False(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must NOT be called for incomplete sub")
+
+	// Subscription must remain incomplete.
+	updatedSub, err := subStore.Get(ctx, flexSubID)
+	require.NoError(t, err)
+	assert.Equal(t, types.SubscriptionStatusIncomplete, updatedSub.SubscriptionStatus)
 
 	// Mapping must have been created.
 	filter := &types.EntityIntegrationMappingFilter{
@@ -976,14 +983,12 @@ func TestProcessSubscriptionActivatedWebhook_IncompleteToActive(t *testing.T) {
 	assert.Equal(t, paddleSubID, resp.Items[0].ProviderEntityID)
 
 	// Subscription metadata must contain the paddle_subscription_id.
-	updatedSub, err := subStore.Get(ctx, flexSubID)
-	require.NoError(t, err)
 	assert.Equal(t, paddleSubID, updatedSub.Metadata[paddle.MetaKeyPaddleSubscriptionID])
 }
 
-// TestProcessSubscriptionActivatedWebhook_IncompleteToTrialing verifies that an incomplete subscription
-// with a future TrialEnd is transitioned to trialing without calling ActivateIncompleteSubscription.
-func TestProcessSubscriptionActivatedWebhook_IncompleteToTrialing(t *testing.T) {
+// TestProcessSubscriptionActivatedWebhook_IncompleteWithTrialNoOp verifies that an incomplete
+// subscription with a future TrialEnd is still treated as a no-op (not transitioned to trialing).
+func TestProcessSubscriptionActivatedWebhook_IncompleteWithTrialNoOp(t *testing.T) {
 	ctx := buildTestContext()
 
 	const flexSubID = "sub_incomplete_to_trialing"
@@ -1023,13 +1028,13 @@ func TestProcessSubscriptionActivatedWebhook_IncompleteToTrialing(t *testing.T) 
 	err := svc.ProcessSubscriptionActivatedWebhook(ctx, data, mockSubSvc)
 	require.NoError(t, err)
 
-	// ActivateIncompleteSubscription must NOT have been called — we only set trialing directly.
-	assert.False(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must NOT be called when trial end is in the future")
+	// ActivateIncompleteSubscription must NOT have been called — incomplete subs are no-op.
+	assert.False(t, mockSubSvc.activateCalled, "ActivateIncompleteSubscription must NOT be called for incomplete sub")
 
-	// Subscription must now be trialing.
+	// Subscription must remain incomplete.
 	updatedSub, err := subStore.Get(ctx, flexSubID)
 	require.NoError(t, err)
-	assert.Equal(t, types.SubscriptionStatusTrialing, updatedSub.SubscriptionStatus)
+	assert.Equal(t, types.SubscriptionStatusIncomplete, updatedSub.SubscriptionStatus)
 
 	// Mapping must have been created.
 	filter := &types.EntityIntegrationMappingFilter{

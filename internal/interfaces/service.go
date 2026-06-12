@@ -117,7 +117,7 @@ type SubscriptionService interface {
 	// Auto-cancellation methods
 	ProcessAutoCancellationSubscriptions(ctx context.Context) error
 	// Renewal due alert methods
-	ProcessSubscriptionRenewalDueAlert(ctx context.Context) error
+	ProcessSubscriptionRenewalDueAlert(ctx context.Context, referenceTime time.Time) error
 
 	// ProcessAutoInvoiceThresholdBilling checks subscriptions with subscription-level auto_invoice_threshold
 	// set and runs auto invoice threshold billing (mid-period invoices when usage crosses that threshold).
@@ -165,6 +165,10 @@ type SubscriptionService interface {
 
 	// CascadeCancelToInheritedSubscriptions mirrors the parent's cancellation fields onto INHERITED child subscriptions (no-op if not a parent). Used by Temporal update-billing-period cancellation and aligned with CancelSubscription / cron processing.
 	CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error
+
+	// PublishCancellationEvents publishes a update and cancel webhook event for a subscription and its inherited subs.
+	// Used by Temporal activities and other callers that need to fire subscription lifecycle events.
+	PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription)
 
 	// ExternalCustomerIDsForSubscription returns distinct non-empty external customer IDs
 	// for the subscription owner plus all active/trialing/draft inherited children.

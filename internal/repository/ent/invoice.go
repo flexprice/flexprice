@@ -103,7 +103,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 	if err != nil {
 		SetSpanError(span, err)
 
-		r.logger.Error("failed to create invoice", "error", err)
+		r.logger.Error(ctx, "failed to create invoice", "error", err)
 		if ent.IsConstraintError(err) {
 			var pqErr *pq.Error
 			if errors.As(err, &pqErr) {
@@ -143,7 +143,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 
 // CreateWithLineItems creates an invoice with its line items in a single transaction
 func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domainInvoice.Invoice) error {
-	r.logger.Debugw("creating invoice with line items",
+	r.logger.Debug(ctx, "creating invoice with line items",
 		"id", inv.ID,
 		"line_items_count", len(inv.LineItems))
 
@@ -209,8 +209,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			if ent.IsConstraintError(err) {
 				var pqErr *pq.Error
 				if errors.As(err, &pqErr) {
-					// Log or print the exact constraint name
-					fmt.Printf("Violated constraint: %s\n", pqErr.Constraint)
+					r.logger.Debug(ctx, "constraint violation", "constraint", pqErr.Constraint)
 					if pqErr.Constraint == schema.Idx_tenant_environment_invoice_number_unique {
 						return ierr.WithError(err).
 							WithHint("Invoice with same invoice number already exists").
@@ -237,7 +236,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					}).
 					Mark(ierr.ErrAlreadyExists)
 			}
-			r.logger.Error("failed to create invoice", "error", err)
+			r.logger.Error(ctx, "failed to create invoice", "error", err)
 			return ierr.WithError(err).WithHint("invoice creation failed").Mark(ierr.ErrDatabase)
 		}
 
@@ -283,14 +282,14 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			}
 
 			if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-				r.logger.Error("failed to create line items", "error", err)
+				r.logger.Error(ctx, "failed to create line items", "error", err)
 				return ierr.WithError(err).WithHint("line item creation failed").Mark(ierr.ErrDatabase)
 			}
 		}
 
 		invoiceWithLineItems, err := r.Get(ctx, invoice.ID)
 		if err != nil {
-			r.logger.Error("failed to get invoice with line items", "error", err)
+			r.logger.Error(ctx, "failed to get invoice with line items", "error", err)
 			return err
 		}
 		*inv = *invoiceWithLineItems
@@ -307,7 +306,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("adding line items", "invoice_id", invoiceID, "count", len(items))
+	r.logger.Debug(ctx, "adding line items", "invoice_id", invoiceID, "count", len(items))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify invoice exists
@@ -358,7 +357,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 		}
 
 		if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
-			r.logger.Error("failed to add line items", "error", err)
+			r.logger.Error(ctx, "failed to add line items", "error", err)
 			return ierr.WithError(err).WithHint("line item addition failed").Mark(ierr.ErrDatabase)
 		}
 
@@ -375,7 +374,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("removing line items", "invoice_id", invoiceID, "count", len(itemIDs))
+	r.logger.Debug(ctx, "removing line items", "invoice_id", invoiceID, "count", len(itemIDs))
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify invoice exists
@@ -416,7 +415,7 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 		return cachedInvoice, nil
 	}
 
-	r.logger.Debugw("getting invoice", "id", id)
+	r.logger.Debug(ctx, "getting invoice", "id", id)
 
 	invoice, err := r.client.Writer(ctx).Invoice.Query().
 		Where(invoice.ID(id),
@@ -443,7 +442,7 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 	invLineitemRepo := NewInvoiceLineItemRepository(r.client, r.logger, r.cache)
 	items, err := invLineitemRepo.ListByInvoiceID(ctx, id)
 	if err != nil {
-		r.logger.Error("failed to get invoice line items", "error", err)
+		r.logger.Error(ctx, "failed to get invoice line items", "error", err)
 		return nil, ierr.WithError(err).WithHint("failed to get invoice line items").Mark(ierr.ErrDatabase)
 	}
 	invoiceData.LineItems = items
@@ -605,7 +604,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	r.logger.Info("deleting invoice", "id", id)
+	r.logger.Info(ctx, "deleting invoice", "id", id)
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Delete line items first
@@ -949,7 +948,7 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 		return "", ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("generated invoice number",
+	r.logger.Info(ctx, "generated invoice number",
 		"tenant_id", tenantID,
 		"year_month", yearMonth,
 		"sequence", lastValue)
@@ -996,7 +995,7 @@ func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscrip
 		return 0, ierr.WithError(err).WithHint("billing sequence generation failed").Mark(ierr.ErrDatabase)
 	}
 
-	r.logger.Infow("generated billing sequence",
+	r.logger.Info(ctx, "generated billing sequence",
 		"tenant_id", tenantID,
 		"subscription_id", subscriptionID,
 		"sequence", lastSequence)
@@ -1175,7 +1174,7 @@ func (r *invoiceRepository) SetCache(ctx context.Context, inv *domainInvoice.Inv
 	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, inv.IdempotencyKey)
 	r.cache.Set(ctx, idempotencyKey, inv, cache.ExpiryDefaultInMemory)
 
-	r.logger.Debugw("set invoice in cache", "id", inv.ID, "cache_key", cacheKey)
+	r.logger.Debug(ctx, "set invoice in cache", "id", inv.ID, "cache_key", cacheKey)
 }
 
 func (r *invoiceRepository) GetCache(ctx context.Context, key string) *domainInvoice.Invoice {
@@ -1207,7 +1206,7 @@ func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
 	// get idempotency key
 	invoice, err := r.Get(ctx, key)
 	if err != nil {
-		r.logger.Errorw("failed to get invoice by idempotency key", "error", err)
+		r.logger.Error(ctx, "failed to get invoice by idempotency key", "error", err)
 		return
 	}
 	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, invoice.IdempotencyKey)
@@ -1226,7 +1225,7 @@ func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, 
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("fetching invoices for export",
+	r.logger.Debug(ctx, "fetching invoices for export",
 		"tenant_id", tenantID,
 		"env_id", envID,
 		"start_time", startTime,
@@ -1263,6 +1262,55 @@ func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, 
 		result[i] = domainInvoice.FromEnt(inv)
 	}
 
+	return result, nil
+}
+
+// ListPendingInvoicesByProvider returns finalized+unpaid invoices for tenant/env pairs
+// that have an active connection for the given provider.
+func (r *invoiceRepository) ListPendingInvoicesByProvider(ctx context.Context, provider types.SecretProvider) ([]domainInvoice.PendingProviderInvoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "list_pending_invoices_by_provider", map[string]interface{}{
+		"provider": provider,
+	})
+	defer FinishSpan(span)
+
+	const query = `
+		SELECT i.id, i.tenant_id, i.environment_id
+		FROM invoices i
+		INNER JOIN connections c
+			ON  c.tenant_id      = i.tenant_id
+			AND c.environment_id = i.environment_id
+		WHERE c.provider_type  = $1
+		  AND c.status         = 'published'
+		  AND i.invoice_status = $2
+		  AND i.payment_status = $3
+		  AND i.status         = 'published'`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query,
+		string(provider),
+		string(types.InvoiceStatusFinalized),
+		string(types.PaymentStatusPending),
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to list pending invoices by provider").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var result []domainInvoice.PendingProviderInvoice
+	for rows.Next() {
+		var row domainInvoice.PendingProviderInvoice
+		if err := rows.Scan(&row.InvoiceID, &row.TenantID, &row.EnvironmentID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("failed to scan pending provider invoice row").Mark(ierr.ErrDatabase)
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to iterate pending provider invoice rows").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
 	return result, nil
 }
 

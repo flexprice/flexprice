@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -30,7 +31,7 @@ func provideIntegrationPubSub(
 	}
 	ps, err := kafka.NewPubSubFromConfig(cfg, log, consumerGroup)
 	if err != nil {
-		log.Fatalw("integration_events: failed to create kafka pubsub", "error", err)
+		log.Fatal(context.Background(), "integration_events: failed to create kafka pubsub", "error", err)
 	}
 	return types.IntegrationEventsPubSub{PubSub: ps}
 }

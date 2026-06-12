@@ -22,8 +22,9 @@ type CreatePlanRequest struct {
 }
 
 type GetPricesByPlanRequest struct {
-	PlanID       string `json:"plan_id" validate:"required"`
-	AllowExpired bool   `json:"allow_expired,omitempty"`
+	PlanID         string                `json:"plan_id" validate:"required"`
+	AllowExpired   bool                  `json:"allow_expired,omitempty"`
+	BillingPeriods []types.BillingPeriod `json:"billing_periods,omitempty"`
 }
 
 func (r *GetPricesByPlanRequest) Validate() error {

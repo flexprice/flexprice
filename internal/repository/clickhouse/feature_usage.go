@@ -780,7 +780,7 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 		aggregateQuery += " GROUP BY " + strings.Join(groupByColumns, ", ")
 	}
 
-	r.logger.Debugw("executing detailed usage analytics query",
+	r.logger.Debug(ctx, "executing detailed usage analytics query",
 		"query", aggregateQuery,
 		"params", queryParams,
 		"group_by", params.GroupBy,
@@ -1224,6 +1224,24 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 		queryParams = append(queryParams, group.Source)
 	}
 
+	// Propagate the request-level sources filter so the points query runs against
+	// the same row set as getMaxBucketTotals. group.Source above only narrows when
+	// `source` is in group_by (sourceInGroupBy is what decides whether outer select
+	// carries it through); when it isn't, group.Source is "" and without this clause
+	// the points query would aggregate across every source, leaving total_cost
+	// (which is computed from these points) unchanged by the filter while
+	// total_usage (from the totals query) drops correctly.
+	if len(params.Sources) > 0 {
+		placeholders := make([]string, len(params.Sources))
+		for i := range params.Sources {
+			placeholders[i] = "?"
+		}
+		innerQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		for _, source := range params.Sources {
+			queryParams = append(queryParams, source)
+		}
+	}
+
 	// Add filter for this specific group's price_id
 	if group.PriceID != "" {
 		innerQuery += " AND price_id = ?"
@@ -1653,6 +1671,20 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 		queryParams = append(queryParams, group.Source)
 	}
 
+	// Propagate the request-level sources filter. See getMaxBucketPointsForGroup
+	// for the rationale — without this, total_cost (computed from these points)
+	// stays unchanged while total_usage (from the totals query) drops correctly.
+	if len(params.Sources) > 0 {
+		placeholders := make([]string, len(params.Sources))
+		for i := range params.Sources {
+			placeholders[i] = "?"
+		}
+		innerQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		for _, source := range params.Sources {
+			queryParams = append(queryParams, source)
+		}
+	}
+
 	// Add filter for this specific group's price_id
 	if group.PriceID != "" {
 		innerQuery += " AND price_id = ?"
@@ -1896,6 +1928,20 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 		queryParams = append(queryParams, analytics.Source)
 	}
 
+	// Propagate the request-level sources filter. analytics.Source above only carries
+	// a value when source is in group_by; without this clause, per-point Cost on
+	// non-bucketed meters would aggregate across every source instead of the filtered set.
+	if len(params.Sources) > 0 {
+		placeholders := make([]string, len(params.Sources))
+		for i := range params.Sources {
+			placeholders[i] = "?"
+		}
+		query += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		for _, source := range params.Sources {
+			queryParams = append(queryParams, source)
+		}
+	}
+
 	// Add filters for grouped properties values
 	if analytics.Properties != nil {
 		for propertyName, value := range analytics.Properties {
@@ -1934,7 +1980,7 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 	// Group by the time window and order by time
 	query += fmt.Sprintf(" GROUP BY %s ORDER BY window_time", timeWindowExpr)
 
-	r.logger.Debugw("executing time-series query",
+	r.logger.Debug(ctx, "executing time-series query",
 		"query", query,
 		"params", queryParams,
 		"feature_id", analytics.FeatureID,
@@ -2025,7 +2071,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		tableRef = "feature_usage FINAL"
 	}
 
-	r.logger.Debugw("subscription usage query", "aggColumns", aggColumns, "tableRef", tableRef, "opts", params.Opts)
+	r.logger.Debug(ctx, "subscription usage query", "aggColumns", aggColumns, "tableRef", tableRef, "opts", params.Opts)
 
 	// Build customer_id filter using IN (...) for all cases.
 	// Guard against empty slice which would yield invalid SQL (IN ()).
@@ -2064,7 +2110,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
 	`, strings.Join(aggColumns, ",\n\t\t\t"), tableRef, customerFilter)
 
-	r.logger.Debugw("executing subscription usage query",
+	r.logger.Debug(ctx, "executing subscription usage query",
 		"subscription_id", params.SubscriptionID,
 		"customer_ids_count", len(params.CustomerIDs),
 		"environment_id", environmentID,
@@ -2072,7 +2118,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		"end_time", params.EndTime,
 	)
 
-	r.logger.Debugw("subscription usage query",
+	r.logger.Debug(ctx, "subscription usage query",
 		"subscription_id", params.SubscriptionID,
 		"customer_ids_count", len(params.CustomerIDs),
 		"agg_types_count", len(params.AggTypes),
@@ -2126,7 +2172,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 	}
 
 	SetSpanSuccess(span)
-	r.logger.Debugw("optimized subscription usage query completed",
+	r.logger.Debug(ctx, "optimized subscription usage query completed",
 		"subscription_id", params.SubscriptionID,
 		"feature_count", len(results))
 
@@ -2229,7 +2275,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 		// Parse properties JSON
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
-				r.logger.Warnw("failed to parse properties JSON",
+				r.logger.Info(ctx, "failed to parse properties JSON",
 					"event_id", usage.ID,
 					"error", err)
 				usage.Properties = make(map[string]interface{})
@@ -2247,7 +2293,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 	}
 
 	SetSpanSuccess(span)
-	r.logger.Debugw("feature usage export batch query completed",
+	r.logger.Debug(ctx, "feature usage export batch query completed",
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 		"batch_size", batchSize,
@@ -2275,7 +2321,7 @@ func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, 
 	defer FinishSpan(span)
 
 	query := r.getWindowedQuery(ctx, params)
-	r.logger.Debugw("executing windowed usage query",
+	r.logger.Debug(ctx, "executing windowed usage query",
 		"meter_id", params.MeterID,
 		"window_size", params.WindowSize,
 	)
@@ -2572,7 +2618,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, 
 		// Parse properties
 		if propertiesJSON != "" {
 			if err := json.Unmarshal([]byte(propertiesJSON), &record.Properties); err != nil {
-				r.logger.Warnw("failed to unmarshal properties",
+				r.logger.Info(ctx, "failed to unmarshal properties",
 					"event_id", record.ID,
 					"error", err,
 				)

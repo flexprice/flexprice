@@ -100,7 +100,7 @@ func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfi
 			Mark(ierr.ErrValidation)
 	}
 	if conn.EncryptedSecretData.Whop == nil {
-		c.logger.Warnw("no whop metadata found", "connection_id", conn.ID)
+		c.logger.Info(context.Background(), "no whop metadata found", "connection_id", conn.ID)
 		return &WhopConfig{}, nil
 	}
 
@@ -108,13 +108,13 @@ func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfi
 
 	apiKey, err := c.encryptionService.Decrypt(w.APIKey)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt Whop API key", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt Whop API key", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt Whop API key").Mark(ierr.ErrInternal)
 	}
 
 	companyID, err := c.encryptionService.Decrypt(w.CompanyID)
 	if err != nil {
-		c.logger.Errorw("failed to decrypt Whop company ID", "connection_id", conn.ID, "error", err)
+		c.logger.Error(context.Background(), "failed to decrypt Whop company ID", "connection_id", conn.ID, "error", err)
 		return nil, ierr.NewError("failed to decrypt Whop company ID").Mark(ierr.ErrInternal)
 	}
 
@@ -179,7 +179,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	if body != nil {
 		jsonBody, err = json.Marshal(body)
 		if err != nil {
-			c.logger.Errorw("failed to marshal request body", "error", err)
+			c.logger.Error(ctx, "failed to marshal request body", "error", err)
 			return ierr.NewError("failed to marshal request body").
 				WithHint("Invalid request data").
 				Mark(ierr.ErrInternal)
@@ -203,7 +203,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 		if httpErr, ok := httpclient.IsHTTPError(err); ok {
 			whopBody = string(httpErr.Response)
 		}
-		c.logger.Errorw("whop API request failed",
+		c.logger.Error(ctx, "whop API request failed",
 			"error", err,
 			"method", method,
 			"endpoint", endpoint,
@@ -219,7 +219,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.logger.Errorw("whop API returned error",
+		c.logger.Info(ctx, "whop API returned error",
 			"status_code", resp.StatusCode,
 			"method", method,
 			"endpoint", endpoint,
@@ -236,7 +236,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 
 	if response != nil && len(resp.Body) > 0 {
 		if err := json.Unmarshal(resp.Body, response); err != nil {
-			c.logger.Errorw("failed to unmarshal response", "error", err, "body", string(resp.Body))
+			c.logger.Error(ctx, "failed to unmarshal response", "error", err, "body", string(resp.Body))
 			return ierr.NewError("failed to unmarshal response").
 				WithHint("Invalid response from Whop").
 				Mark(ierr.ErrInternal)
@@ -248,7 +248,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 
 // GetProduct fetches a product by ID from Whop
 func (c *Client) GetProduct(ctx context.Context, productID string) (*ProductResponse, error) {
-	c.logger.Infow("fetching product from Whop", "product_id", productID)
+	c.logger.Info(ctx, "fetching product from Whop", "product_id", productID)
 
 	var response ProductResponse
 	if err := c.makeRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/products/%s", productID), nil, &response); err != nil {
@@ -259,20 +259,20 @@ func (c *Client) GetProduct(ctx context.Context, productID string) (*ProductResp
 
 // CreateProduct creates a new product in Whop
 func (c *Client) CreateProduct(ctx context.Context, req CreateProductRequest) (*ProductResponse, error) {
-	c.logger.Infow("creating product in Whop", "company_id", req.CompanyID, "title", req.Title)
+	c.logger.Info(ctx, "creating product in Whop", "company_id", req.CompanyID, "title", req.Title)
 
 	var response ProductResponse
 	if err := c.makeRequest(ctx, http.MethodPost, "/v1/products", req, &response); err != nil {
 		return nil, err
 	}
 
-	c.logger.Infow("successfully created product in Whop", "product_id", response.ID)
+	c.logger.Info(ctx, "successfully created product in Whop", "product_id", response.ID)
 	return &response, nil
 }
 
 // GetPlan fetches a plan by ID from Whop
 func (c *Client) GetPlan(ctx context.Context, planID string) (*PlanResponse, error) {
-	c.logger.Infow("fetching plan from Whop", "plan_id", planID)
+	c.logger.Info(ctx, "fetching plan from Whop", "plan_id", planID)
 
 	var response PlanResponse
 	if err := c.makeRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/plans/%s", planID), nil, &response); err != nil {
@@ -292,7 +292,7 @@ func (c *Client) GetInvoice(ctx context.Context, whopInvoiceID string) (*Invoice
 
 // CreateInvoice creates a one-time invoice in Whop
 func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*InvoiceResponse, error) {
-	c.logger.Infow("creating invoice in Whop",
+	c.logger.Info(ctx, "creating invoice in Whop",
 		"company_id", req.CompanyID,
 		"product_id", req.ProductID,
 		"initial_price", req.Plan.InitialPrice)
@@ -302,13 +302,13 @@ func (c *Client) CreateInvoice(ctx context.Context, req CreateInvoiceRequest) (*
 		return nil, err
 	}
 
-	c.logger.Infow("successfully created invoice in Whop", "invoice_id", response.ID, "status", response.Status)
+	c.logger.Info(ctx, "successfully created invoice in Whop", "invoice_id", response.ID, "status", response.Status)
 	return &response, nil
 }
 
 // GetPaymentMethods fetches saved payment methods for a Whop member via GET /v1/payment_methods?member_id=xxx
 func (c *Client) GetPaymentMethods(ctx context.Context, memberID string) (*PaymentMethodsResponse, error) {
-	c.logger.Debugw("fetching payment methods from Whop")
+	c.logger.Debug(ctx, "fetching payment methods from Whop")
 
 	var response PaymentMethodsResponse
 	if err := c.makeRequest(ctx, http.MethodGet, fmt.Sprintf("/v1/payment_methods?member_id=%s", memberID), nil, &response); err != nil {
@@ -319,14 +319,14 @@ func (c *Client) GetPaymentMethods(ctx context.Context, memberID string) (*Payme
 
 // MarkInvoicePaid marks a Whop invoice as paid via POST /v1/invoices/:id/mark_paid
 func (c *Client) MarkInvoicePaid(ctx context.Context, whopInvoiceID string) error {
-	c.logger.Infow("marking invoice as paid in Whop", "whop_invoice_id", whopInvoiceID)
+	c.logger.Info(ctx, "marking invoice as paid in Whop", "whop_invoice_id", whopInvoiceID)
 
 	inv, err := c.GetInvoice(ctx, whopInvoiceID)
 	if err != nil {
 		return err
 	}
 	if inv.Status == WhopInvoiceStatusPaid {
-		c.logger.Infow("Whop invoice already paid, skipping mark_paid", "whop_invoice_id", whopInvoiceID)
+		c.logger.Info(ctx, "Whop invoice already paid, skipping mark_paid", "whop_invoice_id", whopInvoiceID)
 		return nil
 	}
 
@@ -334,6 +334,6 @@ func (c *Client) MarkInvoicePaid(ctx context.Context, whopInvoiceID string) erro
 		return err
 	}
 
-	c.logger.Infow("successfully marked invoice as paid in Whop", "whop_invoice_id", whopInvoiceID)
+	c.logger.Info(ctx, "successfully marked invoice as paid in Whop", "whop_invoice_id", whopInvoiceID)
 	return nil
 }

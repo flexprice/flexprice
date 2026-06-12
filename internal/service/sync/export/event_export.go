@@ -31,25 +31,25 @@ type EventExporter struct {
 
 // FeatureUsageCSV represents the CSV structure for feature usage export
 type FeatureUsageCSV struct {
-	ID                 string `csv:"id"`
-	TenantID           string `csv:"tenant_id"`
-	EnvironmentID      string `csv:"environment_id"`
-	ExternalCustomerID string `csv:"external_customer_id"`
-	CustomerID         string `csv:"customer_id"`
-	SubscriptionID     string `csv:"subscription_id"`
-	SubLineItemID      string `csv:"sub_line_item_id"`
-	PriceID            string `csv:"price_id"`
-	MeterID            string `csv:"meter_id"`
-	FeatureID          string `csv:"feature_id"`
-	EventName          string `csv:"event_name"`
-	Source             string `csv:"source"`
-	Timestamp          string `csv:"timestamp"`   // RFC3339 format
-	IngestedAt         string `csv:"ingested_at"` // RFC3339 format
-	PeriodID           string `csv:"period_id"`   // Billing period ID (uint64 as string)
-	QtyTotal           string `csv:"qty_total"`   // Total quantity (decimal as string)
+	ID                      string `csv:"id"`
+	TenantID                string `csv:"tenant_id"`
+	EnvironmentID           string `csv:"environment_id"`
+	ExternalCustomerID      string `csv:"external_customer_id"`
+	CustomerID              string `csv:"customer_id"`
+	SubscriptionID          string `csv:"subscription_id"`
+	SubLineItemID           string `csv:"sub_line_item_id"`
+	PriceID                 string `csv:"price_id"`
+	MeterID                 string `csv:"meter_id"`
+	FeatureID               string `csv:"feature_id"`
+	EventName               string `csv:"event_name"`
+	Source                  string `csv:"source"`
+	Timestamp               string `csv:"timestamp"`                 // RFC3339 format
+	IngestedAt              string `csv:"ingested_at"`               // RFC3339 format
+	PeriodID                string `csv:"period_id"`                 // Billing period ID (uint64 as string)
+	QtyTotal                string `csv:"qty_total"`                 // Total quantity (decimal as string)
 	ProvisionalUsageCharges string `csv:"provisional_usage_charges"` // price.Amount * quantity (decimal as string)
-	Properties         string `csv:"properties"`  // Event properties as JSON string
-	UniqueHash         string `csv:"unique_hash"` // Deduplication hash
+	Properties              string `csv:"properties"`                // Event properties as JSON string
+	UniqueHash              string `csv:"unique_hash"`               // Deduplication hash
 }
 
 // NewEventExporter creates a new event exporter
@@ -77,7 +77,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 
 	useMeterUsage := e.config != nil && e.config.FeatureFlag.IsMeterUsageEnabledForAnalytics(request.TenantID)
 
-	e.logger.Infow("starting batched feature usage data fetch",
+	e.logger.Info(ctx, "starting batched feature usage data fetch",
 		"tenant_id", request.TenantID,
 		"env_id", request.EnvID,
 		"start_time", request.StartTime,
@@ -96,7 +96,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 
 	// Fetch and process data in batches
 	for {
-		e.logger.Debugw("fetching batch",
+		e.logger.Debug(ctx, "fetching batch",
 			"offset", offset,
 			"batch_size", batchSize)
 
@@ -122,7 +122,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 			break
 		}
 
-		e.logger.Debugw("fetched batch",
+		e.logger.Debug(ctx, "fetched batch",
 			"offset", offset,
 			"records_in_batch", len(usageData),
 			"total_so_far", totalRecords+len(usageData))
@@ -143,7 +143,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 				return nil, 0, ierr.WithError(listErr).
 					WithHint("Failed to fetch prices for export batch").
 					WithReportableDetails(map[string]interface{}{
-						"offset":     offset,
+						"offset":    offset,
 						"price_ids": len(uniquePriceIDs),
 					}).
 					Mark(ierr.ErrDatabase)
@@ -183,12 +183,12 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 	csvBytes := buf.Bytes()
 
 	if totalRecords == 0 {
-		e.logger.Infow("no feature usage data found for export - will upload empty CSV with headers only",
+		e.logger.Info(ctx, "no feature usage data found for export - will upload empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"csv_size_bytes", len(csvBytes))
 	} else {
-		e.logger.Infow("completed batched data fetch and CSV conversion",
+		e.logger.Info(ctx, "completed batched data fetch and CSV conversion",
 			"total_records", totalRecords,
 			"csv_size_bytes", len(csvBytes))
 	}
@@ -207,7 +207,7 @@ func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *
 	offset := 0
 
 	for {
-		e.logger.Debugw("fetching meter_usage batch",
+		e.logger.Debug(ctx, "fetching meter_usage batch",
 			"offset", offset,
 			"batch_size", batchSize)
 
@@ -255,12 +255,12 @@ func (e *EventExporter) prepareDataFromMeterUsage(ctx context.Context, request *
 	csvBytes := buf.Bytes()
 
 	if totalRecords == 0 {
-		e.logger.Infow("no meter usage data found for export - will upload empty CSV with headers only",
+		e.logger.Info(ctx, "no meter usage data found for export - will upload empty CSV with headers only",
 			"tenant_id", request.TenantID,
 			"env_id", request.EnvID,
 			"csv_size_bytes", len(csvBytes))
 	} else {
-		e.logger.Infow("completed batched meter_usage fetch and CSV conversion",
+		e.logger.Info(ctx, "completed batched meter_usage fetch and CSV conversion",
 			"total_records", totalRecords,
 			"csv_size_bytes", len(csvBytes))
 	}
@@ -276,7 +276,7 @@ func (e *EventExporter) convertMeterUsageToCSVRecords(usageData []*events.MeterU
 	for _, usage := range usageData {
 		propertiesJSON, err := json.Marshal(usage.Properties)
 		if err != nil {
-			e.logger.Warnw("failed to marshal properties, using empty object",
+			e.logger.Info(context.Background(), "failed to marshal properties, using empty object",
 				"usage_id", usage.ID,
 				"error", err)
 			propertiesJSON = []byte("{}")
@@ -309,7 +309,7 @@ func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage, pr
 		// Convert properties map to JSON string
 		propertiesJSON, err := json.Marshal(usage.Properties)
 		if err != nil {
-			e.logger.Warnw("failed to marshal properties, using empty object",
+			e.logger.Info(context.Background(), "failed to marshal properties, using empty object",
 				"usage_id", usage.ID,
 				"error", err)
 			propertiesJSON = []byte("{}")
@@ -323,25 +323,25 @@ func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage, pr
 		}
 
 		record := &FeatureUsageCSV{
-			ID:                 usage.ID,
-			TenantID:           usage.TenantID,
-			EnvironmentID:      usage.EnvironmentID,
-			ExternalCustomerID: usage.ExternalCustomerID,
-			CustomerID:         usage.CustomerID,
-			SubscriptionID:     usage.SubscriptionID,
-			SubLineItemID:      usage.SubLineItemID,
-			PriceID:            usage.PriceID,
-			MeterID:            usage.MeterID,
-			FeatureID:          usage.FeatureID,
-			EventName:          usage.EventName,
-			Source:             usage.Source,
-			Timestamp:          usage.Timestamp.Format(time.RFC3339),
-			IngestedAt:         usage.IngestedAt.Format(time.RFC3339),
-			PeriodID:           fmt.Sprintf("%d", usage.PeriodID),
-			QtyTotal:           usage.QtyTotal.String(),
+			ID:                      usage.ID,
+			TenantID:                usage.TenantID,
+			EnvironmentID:           usage.EnvironmentID,
+			ExternalCustomerID:      usage.ExternalCustomerID,
+			CustomerID:              usage.CustomerID,
+			SubscriptionID:          usage.SubscriptionID,
+			SubLineItemID:           usage.SubLineItemID,
+			PriceID:                 usage.PriceID,
+			MeterID:                 usage.MeterID,
+			FeatureID:               usage.FeatureID,
+			EventName:               usage.EventName,
+			Source:                  usage.Source,
+			Timestamp:               usage.Timestamp.Format(time.RFC3339),
+			IngestedAt:              usage.IngestedAt.Format(time.RFC3339),
+			PeriodID:                fmt.Sprintf("%d", usage.PeriodID),
+			QtyTotal:                usage.QtyTotal.String(),
 			ProvisionalUsageCharges: provisionalUsageChargesStr,
-			Properties:         string(propertiesJSON),
-			UniqueHash:         usage.UniqueHash,
+			Properties:              string(propertiesJSON),
+			UniqueHash:              usage.UniqueHash,
 		}
 
 		records = append(records, record)

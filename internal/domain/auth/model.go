@@ -17,9 +17,10 @@ type Auth struct {
 }
 
 type Claims struct {
-	UserID   string
-	TenantID string
-	Email    string
+	UserID        string `json:"user_id"`
+	TenantID      string `json:"tenant_id"`
+	Email         string `json:"email,omitempty"`
+	EnvironmentID string `json:"environment_id,omitempty"`
 }
 
 // DashboardClaims represents the claims in a customer dashboard JWT token

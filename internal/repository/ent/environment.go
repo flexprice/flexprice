@@ -35,7 +35,7 @@ func (r *environmentRepository) Create(ctx context.Context, env *domainEnvironme
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("creating environment", "environment_id", env.ID, "tenant_id", env.TenantID)
+	r.logger.Debug(ctx, "creating environment", "environment_id", env.ID, "tenant_id", env.TenantID)
 
 	client := r.client.Writer(ctx)
 	_, err := client.Environment.
@@ -165,7 +165,7 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 	})
 	defer FinishSpan(span)
 
-	r.logger.Debugw("updating environment", "environment_id", env.ID, "tenant_id", env.TenantID)
+	r.logger.Debug(ctx, "updating environment", "environment_id", env.ID, "tenant_id", env.TenantID)
 
 	client := r.client.Writer(ctx)
 	_, err := client.Environment.

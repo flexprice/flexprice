@@ -189,7 +189,7 @@ func ProviderBaseSyncConfig(provider SecretProvider) *SyncConfig {
 	case SecretProviderPaddle:
 		return &SyncConfig{
 			Customer:     &EntitySyncConfig{Inbound: true, Outbound: true},
-			Invoice:      &EntitySyncConfig{Inbound: false, Outbound: true},
+			Invoice:      &EntitySyncConfig{Inbound: true, Outbound: true},
 			Payment:      off,
 			Plan:         off,
 			Subscription: off,

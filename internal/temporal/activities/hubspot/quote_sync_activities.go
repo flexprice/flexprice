@@ -31,7 +31,7 @@ func (a *QuoteSyncActivities) CreateQuoteAndLineItems(
 	ctx context.Context,
 	input models.HubSpotQuoteSyncWorkflowInput,
 ) error {
-	a.logger.Infow("creating HubSpot quote and line items",
+	a.logger.Info(ctx, "creating HubSpot quote and line items",
 		"subscription_id", input.SubscriptionID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
@@ -43,7 +43,7 @@ func (a *QuoteSyncActivities) CreateQuoteAndLineItems(
 	// Get HubSpot integration with proper context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
-		a.logger.Errorw("failed to get HubSpot integration",
+		a.logger.Error(ctx, "failed to get HubSpot integration",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
 		return err
@@ -52,15 +52,14 @@ func (a *QuoteSyncActivities) CreateQuoteAndLineItems(
 	// Create quote and line items - uses existing QuoteSyncService logic
 	err = hubspotIntegration.QuoteSyncSvc.SyncSubscriptionToQuote(ctx, input.SubscriptionID)
 	if err != nil {
-		a.logger.Errorw("failed to create quote and line items",
+		a.logger.Error(ctx, "failed to create quote and line items",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
 		return err
 	}
 
-	a.logger.Infow("successfully created HubSpot quote and line items",
+	a.logger.Info(ctx, "successfully created HubSpot quote and line items",
 		"subscription_id", input.SubscriptionID)
 
 	return nil
 }
-

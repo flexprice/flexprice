@@ -100,6 +100,19 @@ type LineItemCommitmentConfig struct {
 
 	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
+
+	// CommitmentTimeBuckets defines per-bucket commitment + inline price for
+	// windows whose start UTC hour falls within each configured bucket. Each
+	// bucket carries its own price (materialized by the service). Requires
+	// IsWindowCommitment=true.
+	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
+}
+
+// ToDomainBuckets maps the config's bucket requests to domain buckets (IDs +
+// commitment fields, empty PriceIDs); the service materializes a price per
+// bucket and fills in the PriceIDs.
+func (c *LineItemCommitmentConfig) ToDomainBuckets() types.TimeOfDayBuckets {
+	return bucketRequestsToDomain(c.CommitmentTimeBuckets)
 }
 
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.
@@ -233,6 +246,19 @@ func (c *LineItemCommitmentConfig) Validate() error {
 				"commitment_quantity": c.CommitmentQuantity,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Rule 5: commitment_time_buckets only constrains the per-window application
+	// path — it has no meaning without is_window_commitment=true.
+	if len(c.CommitmentTimeBuckets) > 0 {
+		if c.IsWindowCommitment == nil || !*c.IsWindowCommitment {
+			return ierr.NewError("commitment_time_buckets requires is_window_commitment=true").
+				WithHint("Set is_window_commitment=true to apply commitment only during the configured hours").
+				Mark(ierr.ErrValidation)
+		}
+		if err := validateTimeOfDayBuckets(c.CommitmentTimeBuckets); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -541,6 +567,10 @@ type CancelSubscriptionRequest struct {
 	// Reason for cancellation (for audit and business intelligence)
 	Reason string `json:"reason,omitempty"`
 
+	// CancelAt is the exact date/time when the subscription should be cancelled.
+	// Required for cancellation_type "scheduled_date"; optional for "immediate" (past dates only — backdated cancellation).
+	// For "scheduled_date", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).
+	// For "immediate", accepts past/current dates only; use "scheduled_date" for future dates.
 	CancelAt *time.Time `json:"cancel_at,omitempty"`
 
 	//SuppressWebhook is an internal flag to suppress webhook events during cancellation.
@@ -603,13 +633,16 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	if r.CancellationType == types.CancellationTypeScheduledDate {
 		if r.CancelAt == nil {
 			return ierr.NewError("cancel_at is required for scheduled_date").
-				WithHint("Provide a future date in cancel_at").
+				WithHint("Provide a cancel_at date (past for backdated cancellation, future for scheduled cancellation)").
 				Mark(ierr.ErrValidation)
 		}
+	}
+
+	if r.CancellationType == types.CancellationTypeImmediate && r.CancelAt != nil {
 		now := time.Now().UTC()
-		if !r.CancelAt.After(now) {
-			return ierr.NewError("cancel_at must be a future date for scheduled_date cancellation").
-				WithHint("Provide a date strictly in the future for cancel_at").
+		if r.CancelAt.After(now) {
+			return ierr.NewError("cancel_at cannot be a future date for immediate cancellation").
+				WithHint("Use cancellation_type 'scheduled_date' to schedule a future cancellation").
 				WithReportableDetails(map[string]interface{}{
 					"cancel_at": r.CancelAt.UTC().Format(time.RFC3339),
 				}).
@@ -1325,6 +1358,8 @@ type SubscriptionLineItemRequest struct {
 	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
 	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// CommitmentTimeBuckets - if provided, applies commitment only in specified time buckets
+	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
 }
 
 // SubscriptionLineItemResponse represents the response for a subscription line item
@@ -1745,6 +1780,9 @@ func (r *SubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context
 	lineItem.CommitmentWindowed = r.CommitmentWindowed
 	if r.CommitmentDuration != nil {
 		lineItem.CommitmentDuration = r.CommitmentDuration
+	}
+	if len(r.CommitmentTimeBuckets) > 0 {
+		lineItem.CommitmentTimeBuckets = r.CommitmentTimeBuckets
 	}
 
 	return lineItem

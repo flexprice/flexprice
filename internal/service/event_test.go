@@ -34,7 +34,7 @@ func (s *EventServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
 	s.eventRepo = testutil.NewInMemoryEventStore()
 	s.publisher = testutil.NewInMemoryEventPublisher(s.eventRepo).(*testutil.InMemoryPublisherService)
-	s.logger = logger.GetLogger()
+	s.logger = logger.NewNoopLogger()
 	s.config = config.GetDefaultConfig()
 
 	// Add Kafka config required by getKafkaConsumerConfig method
@@ -66,6 +66,7 @@ func (s *EventServiceSuite) SetupTest() {
 		s.publisher,
 		s.logger,
 		s.config,
+		nil, // tracing disabled in unit tests
 	)
 }
 
@@ -373,6 +374,7 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 		s.publisher,
 		s.logger,
 		s.config,
+		nil, // tracing disabled in unit tests
 	)
 
 	// Setup test events

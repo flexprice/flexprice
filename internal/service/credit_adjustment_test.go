@@ -216,4 +216,3 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	s.True(decimal.NewFromInt(30).Equal(debits["wallet_a"]))
 	s.True(decimal.NewFromInt(20).Equal(debits["wallet_b"]))
 }
-

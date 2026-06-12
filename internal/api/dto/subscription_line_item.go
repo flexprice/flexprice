@@ -97,13 +97,14 @@ type CreateSubscriptionLineItemRequest struct {
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal          `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal          `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType      `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal          `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                      `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      bool                      `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod      `json:"commitment_duration,omitempty"`
+	CommitmentTimeBuckets   []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -143,6 +144,8 @@ type UpdateSubscriptionLineItemRequest struct {
 	CommitmentTrueUpEnabled *bool                `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
 	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
+	CommitmentTimeBuckets *[]CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -432,6 +435,17 @@ func (r *CreateSubscriptionLineItemRequest) validateCommitmentFields() error {
 		return err
 	}
 
+	// commitment_time_buckets only constrains the commitment-application window —
+	// it has no meaning unless commitment_windowed is true.
+	if len(r.CommitmentTimeBuckets) > 0 && !r.CommitmentWindowed {
+		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
+			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+	if err := validateTimeOfDayBuckets(r.CommitmentTimeBuckets); err != nil {
+		return err
+	}
+
 	// Auto-set commitment type if not provided (only for create requests)
 	if r.HasCommitment() && r.CommitmentType == "" {
 		hasAmountCommitment := r.CommitmentAmount != nil && r.CommitmentAmount.GreaterThan(decimal.Zero)
@@ -570,6 +584,11 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	if r.CommitmentDuration != nil {
 		lineItem.CommitmentDuration = r.CommitmentDuration
 	}
+	if len(r.CommitmentTimeBuckets) > 0 {
+		// Build the domain buckets here (IDs + commitment fields); the service
+		// layer materializes a price per bucket and fills in the PriceIDs.
+		lineItem.CommitmentTimeBuckets = bucketRequestsToDomain(r.CommitmentTimeBuckets)
+	}
 
 	return lineItem
 }
@@ -599,13 +618,177 @@ func (r *UpdateSubscriptionLineItemRequest) Validate() error {
 // validateCommitmentFields validates commitment-related fields for update request
 func (r *UpdateSubscriptionLineItemRequest) validateCommitmentFields() error {
 	// Use shared validation logic (update requests require explicit commitment type)
-	return validateCommitmentFieldsCommon(
+	if err := validateCommitmentFieldsCommon(
 		r.CommitmentAmount,
 		r.CommitmentQuantity,
 		r.CommitmentType,
 		r.CommitmentOverageFactor,
 		false, // isCreateRequest
-	)
+	); err != nil {
+		return err
+	}
+
+	// commitment_time_buckets only constrains the commitment-application window —
+	// it has no meaning unless commitment_windowed is true. We can only enforce this
+	// when both fields are explicitly provided in the update; cross-checks against
+	// the existing line item's windowed flag happen at the service layer.
+	if r.CommitmentTimeBuckets != nil && len(*r.CommitmentTimeBuckets) > 0 &&
+		r.CommitmentWindowed != nil && !*r.CommitmentWindowed {
+		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
+			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+	if r.CommitmentTimeBuckets != nil {
+		if err := validateTimeOfDayBuckets(*r.CommitmentTimeBuckets); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CommitmentBucketRequest is the inline shape for one time-of-day commitment
+// bucket on a subscription line item.
+//
+// New bucket: omit id and provide price — the service creates a
+// SUBSCRIPTION-scoped Price and stores its id on the bucket.
+//
+// Existing bucket (update flows): provide the id previously returned by the
+// API and omit price — the bucket keeps its existing price. Commitment fields
+// always come from the request, so a commitment can change while the price is
+// kept.
+type CommitmentBucketRequest struct {
+	ID              string               `json:"id,omitempty"`
+	Start           types.Bucket         `json:"start"`
+	End             types.Bucket         `json:"end"`
+	Price           *CreatePriceRequest  `json:"price,omitempty"`
+	CommitmentType  types.CommitmentType `json:"commitment_type"`
+	CommitmentValue decimal.Decimal      `json:"commitment_value" swaggertype:"string"`
+	OverageFactor   *decimal.Decimal     `json:"overage_factor,omitempty" swaggertype:"string"`
+	TrueUpEnabled   bool                 `json:"true_up_enabled,omitempty"`
+}
+
+// Validate runs per-bucket field validation; idx is the bucket's position in
+// the request array, surfaced in error details. Array invariants (overlap,
+// window alignment) live on TimeOfDayBuckets and are applied by the service
+// after prices are created (and after the meter is loaded so we know windowMin).
+func (r CommitmentBucketRequest) Validate(idx int) error {
+	if err := validateBucketPoint(r.Start, idx); err != nil {
+		return err
+	}
+	if err := validateBucketPoint(r.End, idx); err != nil {
+		return err
+	}
+	// Exactly one of id (reuse existing bucket + price) or price (create new)
+	// must be provided.
+	if r.ID == "" && r.Price == nil {
+		return ierr.NewError("bucket price is required").
+			WithHint("Provide price for a new bucket, or id to keep an existing bucket").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	if r.ID != "" && r.Price != nil {
+		return ierr.NewError("cannot provide both id and price on a bucket").
+			WithHint("Provide id to keep the existing bucket price, or price (without id) to create a new bucket").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	if r.Price != nil && r.Price.EntityType != "" && r.Price.EntityType != types.PRICE_ENTITY_TYPE_SUBSCRIPTION {
+		return ierr.NewError("bucket price entity_type must be SUBSCRIPTION").
+			WithHint("Use entity_type=SUBSCRIPTION on inline bucket prices").
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	tmp := types.TimeOfDayBucket{
+		Start:           r.Start,
+		End:             r.End,
+		CommitmentType:  r.CommitmentType,
+		CommitmentValue: r.CommitmentValue,
+		OverageFactor:   r.OverageFactor,
+		TrueUpEnabled:   r.TrueUpEnabled,
+	}
+	if err := tmp.Validate(); err != nil {
+		// Type-level errors don't know the array position; annotate it here.
+		return ierr.WithError(err).
+			WithReportableDetails(map[string]interface{}{"bucket_index": idx}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ToTimeOfDayBucket maps the request to a domain bucket with all commitment
+// fields but no PriceID — the service creates the bucket's price (or resolves
+// the existing one when id is provided) and fills in PriceID. A request without
+// an id gets a fresh server-assigned ID.
+func (r CommitmentBucketRequest) ToTimeOfDayBucket() types.TimeOfDayBucket {
+	id := r.ID
+	if id == "" {
+		id = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COMMITMENT_BUCKET)
+	}
+	return types.TimeOfDayBucket{
+		ID:              id,
+		Start:           r.Start,
+		End:             r.End,
+		CommitmentType:  r.CommitmentType,
+		CommitmentValue: r.CommitmentValue,
+		OverageFactor:   r.OverageFactor,
+		TrueUpEnabled:   r.TrueUpEnabled,
+	}
+}
+
+// bucketRequestsToDomain maps a slice of bucket requests to domain buckets
+// (preserving order) so the service can fill in PriceIDs positionally.
+func bucketRequestsToDomain(reqs []CommitmentBucketRequest) types.TimeOfDayBuckets {
+	if len(reqs) == 0 {
+		return types.TimeOfDayBuckets{}
+	}
+	out := make(types.TimeOfDayBuckets, len(reqs))
+	for i, r := range reqs {
+		out[i] = r.ToTimeOfDayBucket()
+	}
+	return out
+}
+
+// validateTimeOfDayBuckets enforces per-bucket Hour ∈ [0, 24] and Minute ∈ [0, 59],
+// rejecting Hour=24 combined with Minute>0 (only 24:00 is a meaningful end-of-day).
+func validateTimeOfDayBuckets(buckets []CommitmentBucketRequest) error {
+	for i, b := range buckets {
+		if err := b.Validate(i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateBucketPoint(b types.Bucket, idx int) error {
+	if b.Hour < 0 || b.Hour > 24 {
+		return ierr.NewError("commitment_time_buckets: hour out of range").
+			WithHint("Hour must be in [0, 24]").
+			WithReportableDetails(map[string]interface{}{
+				"index": idx,
+				"hour":  b.Hour,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if b.Minute < 0 || b.Minute > 59 {
+		return ierr.NewError("commitment_time_buckets: minute out of range").
+			WithHint("Minute must be in [0, 59]").
+			WithReportableDetails(map[string]interface{}{
+				"index":  idx,
+				"minute": b.Minute,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if b.Hour == 24 && b.Minute > 0 {
+		return ierr.NewError("commitment_time_buckets: 24:00 is the only allowed end-of-day value").
+			WithHint("Hour=24 must have Minute=0").
+			WithReportableDetails(map[string]interface{}{
+				"index":  idx,
+				"hour":   b.Hour,
+				"minute": b.Minute,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // ShouldCreateNewLineItem checks if the request contains any critical fields that require creating a new line item
@@ -619,7 +802,8 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 		r.CommitmentOverageFactor != nil ||
 		r.CommitmentTrueUpEnabled != nil ||
 		r.CommitmentWindowed != nil ||
-		r.CommitmentDuration != nil
+		r.CommitmentDuration != nil ||
+		r.CommitmentTimeBuckets != nil
 }
 
 // ToSubscriptionLineItem converts the update request to a domain subscription line item
@@ -694,6 +878,14 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		newLineItem.CommitmentDuration = r.CommitmentDuration
 	} else {
 		newLineItem.CommitmentDuration = existingLineItem.CommitmentDuration
+	}
+
+	if r.CommitmentTimeBuckets != nil {
+		// Replace-all: build fresh domain buckets (new IDs, empty PriceIDs); the
+		// service layer materializes a price per bucket and fills in the PriceIDs.
+		newLineItem.CommitmentTimeBuckets = bucketRequestsToDomain(*r.CommitmentTimeBuckets)
+	} else {
+		newLineItem.CommitmentTimeBuckets = existingLineItem.CommitmentTimeBuckets
 	}
 
 	return newLineItem

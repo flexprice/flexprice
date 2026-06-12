@@ -49684,54 +49684,56 @@ func (m *SubscriptionMutation) ResetEdge(name string) error {
 // SubscriptionLineItemMutation represents an operation that mutates the SubscriptionLineItem nodes in the graph.
 type SubscriptionLineItemMutation struct {
 	config
-	op                         Op
-	typ                        string
-	id                         *string
-	tenant_id                  *string
-	status                     *string
-	created_at                 *time.Time
-	updated_at                 *time.Time
-	created_by                 *string
-	updated_by                 *string
-	environment_id             *string
-	customer_id                *string
-	entity_id                  *string
-	entity_type                *types.InvoiceLineItemEntityType
-	plan_display_name          *string
-	price_id                   *string
-	price_type                 *types.PriceType
-	meter_id                   *string
-	meter_display_name         *string
-	price_unit_id              *string
-	price_unit                 *string
-	display_name               *string
-	quantity                   *decimal.Decimal
-	currency                   *string
-	billing_period             *types.BillingPeriod
-	billing_period_count       *int
-	addbilling_period_count    *int
-	invoice_cadence            *types.InvoiceCadence
-	start_date                 *time.Time
-	end_date                   *time.Time
-	subscription_phase_id      *string
-	addon_association_id       *string
-	metadata                   *map[string]string
-	commitment_amount          *decimal.Decimal
-	commitment_quantity        *decimal.Decimal
-	commitment_type            *string
-	commitment_overage_factor  *decimal.Decimal
-	commitment_true_up_enabled *bool
-	commitment_windowed        *bool
-	commitment_duration        *types.BillingPeriod
-	clearedFields              map[string]struct{}
-	subscription               *string
-	clearedsubscription        bool
-	coupon_associations        map[string]struct{}
-	removedcoupon_associations map[string]struct{}
-	clearedcoupon_associations bool
-	done                       bool
-	oldValue                   func(context.Context) (*SubscriptionLineItem, error)
-	predicates                 []predicate.SubscriptionLineItem
+	op                            Op
+	typ                           string
+	id                            *string
+	tenant_id                     *string
+	status                        *string
+	created_at                    *time.Time
+	updated_at                    *time.Time
+	created_by                    *string
+	updated_by                    *string
+	environment_id                *string
+	customer_id                   *string
+	entity_id                     *string
+	entity_type                   *types.InvoiceLineItemEntityType
+	plan_display_name             *string
+	price_id                      *string
+	price_type                    *types.PriceType
+	meter_id                      *string
+	meter_display_name            *string
+	price_unit_id                 *string
+	price_unit                    *string
+	display_name                  *string
+	quantity                      *decimal.Decimal
+	currency                      *string
+	billing_period                *types.BillingPeriod
+	billing_period_count          *int
+	addbilling_period_count       *int
+	invoice_cadence               *types.InvoiceCadence
+	start_date                    *time.Time
+	end_date                      *time.Time
+	subscription_phase_id         *string
+	addon_association_id          *string
+	metadata                      *map[string]string
+	commitment_amount             *decimal.Decimal
+	commitment_quantity           *decimal.Decimal
+	commitment_type               *string
+	commitment_overage_factor     *decimal.Decimal
+	commitment_true_up_enabled    *bool
+	commitment_windowed           *bool
+	commitment_duration           *types.BillingPeriod
+	commitment_time_buckets       *types.TimeOfDayBuckets
+	appendcommitment_time_buckets types.TimeOfDayBuckets
+	clearedFields                 map[string]struct{}
+	subscription                  *string
+	clearedsubscription           bool
+	coupon_associations           map[string]struct{}
+	removedcoupon_associations    map[string]struct{}
+	clearedcoupon_associations    bool
+	done                          bool
+	oldValue                      func(context.Context) (*SubscriptionLineItem, error)
+	predicates                    []predicate.SubscriptionLineItem
 }
 
 var _ ent.Mutation = (*SubscriptionLineItemMutation)(nil)
@@ -51440,6 +51442,71 @@ func (m *SubscriptionLineItemMutation) ResetCommitmentDuration() {
 	delete(m.clearedFields, subscriptionlineitem.FieldCommitmentDuration)
 }
 
+// SetCommitmentTimeBuckets sets the "commitment_time_buckets" field.
+func (m *SubscriptionLineItemMutation) SetCommitmentTimeBuckets(todb types.TimeOfDayBuckets) {
+	m.commitment_time_buckets = &todb
+	m.appendcommitment_time_buckets = nil
+}
+
+// CommitmentTimeBuckets returns the value of the "commitment_time_buckets" field in the mutation.
+func (m *SubscriptionLineItemMutation) CommitmentTimeBuckets() (r types.TimeOfDayBuckets, exists bool) {
+	v := m.commitment_time_buckets
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentTimeBuckets returns the old "commitment_time_buckets" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldCommitmentTimeBuckets(ctx context.Context) (v types.TimeOfDayBuckets, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentTimeBuckets is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentTimeBuckets requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentTimeBuckets: %w", err)
+	}
+	return oldValue.CommitmentTimeBuckets, nil
+}
+
+// AppendCommitmentTimeBuckets adds todb to the "commitment_time_buckets" field.
+func (m *SubscriptionLineItemMutation) AppendCommitmentTimeBuckets(todb types.TimeOfDayBuckets) {
+	m.appendcommitment_time_buckets = append(m.appendcommitment_time_buckets, todb...)
+}
+
+// AppendedCommitmentTimeBuckets returns the list of values that were appended to the "commitment_time_buckets" field in this mutation.
+func (m *SubscriptionLineItemMutation) AppendedCommitmentTimeBuckets() (types.TimeOfDayBuckets, bool) {
+	if len(m.appendcommitment_time_buckets) == 0 {
+		return nil, false
+	}
+	return m.appendcommitment_time_buckets, true
+}
+
+// ClearCommitmentTimeBuckets clears the value of the "commitment_time_buckets" field.
+func (m *SubscriptionLineItemMutation) ClearCommitmentTimeBuckets() {
+	m.commitment_time_buckets = nil
+	m.appendcommitment_time_buckets = nil
+	m.clearedFields[subscriptionlineitem.FieldCommitmentTimeBuckets] = struct{}{}
+}
+
+// CommitmentTimeBucketsCleared returns if the "commitment_time_buckets" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) CommitmentTimeBucketsCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldCommitmentTimeBuckets]
+	return ok
+}
+
+// ResetCommitmentTimeBuckets resets all changes to the "commitment_time_buckets" field.
+func (m *SubscriptionLineItemMutation) ResetCommitmentTimeBuckets() {
+	m.commitment_time_buckets = nil
+	m.appendcommitment_time_buckets = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldCommitmentTimeBuckets)
+}
+
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
 func (m *SubscriptionLineItemMutation) ClearSubscription() {
 	m.clearedsubscription = true
@@ -51555,7 +51622,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 36)
+	fields := make([]string, 0, 37)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -51664,6 +51731,9 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	if m.commitment_duration != nil {
 		fields = append(fields, subscriptionlineitem.FieldCommitmentDuration)
 	}
+	if m.commitment_time_buckets != nil {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentTimeBuckets)
+	}
 	return fields
 }
 
@@ -51744,6 +51814,8 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.CommitmentWindowed()
 	case subscriptionlineitem.FieldCommitmentDuration:
 		return m.CommitmentDuration()
+	case subscriptionlineitem.FieldCommitmentTimeBuckets:
+		return m.CommitmentTimeBuckets()
 	}
 	return nil, false
 }
@@ -51825,6 +51897,8 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldCommitmentWindowed(ctx)
 	case subscriptionlineitem.FieldCommitmentDuration:
 		return m.OldCommitmentDuration(ctx)
+	case subscriptionlineitem.FieldCommitmentTimeBuckets:
+		return m.OldCommitmentTimeBuckets(ctx)
 	}
 	return nil, fmt.Errorf("unknown SubscriptionLineItem field %s", name)
 }
@@ -52086,6 +52160,13 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetCommitmentDuration(v)
 		return nil
+	case subscriptionlineitem.FieldCommitmentTimeBuckets:
+		v, ok := value.(types.TimeOfDayBuckets)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentTimeBuckets(v)
+		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem field %s", name)
 }
@@ -52197,6 +52278,9 @@ func (m *SubscriptionLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(subscriptionlineitem.FieldCommitmentDuration) {
 		fields = append(fields, subscriptionlineitem.FieldCommitmentDuration)
 	}
+	if m.FieldCleared(subscriptionlineitem.FieldCommitmentTimeBuckets) {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentTimeBuckets)
+	}
 	return fields
 }
 
@@ -52276,6 +52360,9 @@ func (m *SubscriptionLineItemMutation) ClearField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldCommitmentDuration:
 		m.ClearCommitmentDuration()
+		return nil
+	case subscriptionlineitem.FieldCommitmentTimeBuckets:
+		m.ClearCommitmentTimeBuckets()
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem nullable field %s", name)
@@ -52392,6 +52479,9 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldCommitmentDuration:
 		m.ResetCommitmentDuration()
+		return nil
+	case subscriptionlineitem.FieldCommitmentTimeBuckets:
+		m.ResetCommitmentTimeBuckets()
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem field %s", name)

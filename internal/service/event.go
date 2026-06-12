@@ -17,7 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/publisher"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -39,11 +39,12 @@ type EventService interface {
 }
 
 type eventService struct {
-	eventRepo events.Repository
-	meterRepo meter.Repository
-	publisher publisher.EventPublisher
-	logger    *logger.Logger
-	config    *config.Configuration
+	eventRepo  events.Repository
+	meterRepo  meter.Repository
+	publisher  publisher.EventPublisher
+	logger     *logger.Logger
+	config     *config.Configuration
+	tracingSvc *tracing.Service
 }
 
 func NewEventService(
@@ -52,13 +53,15 @@ func NewEventService(
 	publisher publisher.EventPublisher,
 	logger *logger.Logger,
 	config *config.Configuration,
+	tracingSvc *tracing.Service,
 ) EventService {
 	return &eventService{
-		eventRepo: eventRepo,
-		meterRepo: meterRepo,
-		publisher: publisher,
-		logger:    logger,
-		config:    config,
+		eventRepo:  eventRepo,
+		meterRepo:  meterRepo,
+		publisher:  publisher,
+		logger:     logger,
+		config:     config,
+		tracingSvc: tracingSvc,
 	}
 }
 
@@ -195,7 +198,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 	if len(req) == 0 {
 		return make(map[string]*events.AggregationResult), nil
 	}
-	sentrySvc := sentry.NewSentryService(s.config, s.logger)
+	sentrySvc := s.tracingSvc
 
 	// Get configuration values or use defaults
 	// Reduced max workers and batch size to reduce ClickHouse CPU load
@@ -253,7 +256,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 				// 2. Create a transaction specifically for this meter
 
 				// Create a new transaction for this specific meter
-				var meterSpanFinisher *sentry.SpanFinisher
+				var meterSpanFinisher *tracing.SpanFinisher
 
 				// Create a description for this operation that includes meter details
 				operationName := "BulkGetUsageByMeter"
@@ -266,7 +269,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 				span, spanCtx := sentrySvc.StartRepositorySpan(ctx, "GetUsageByMeter", operationName, params)
 				if span != nil {
 					ctx = spanCtx
-					meterSpanFinisher = &sentry.SpanFinisher{Span: span}
+					meterSpanFinisher = &tracing.SpanFinisher{Span: span}
 					defer meterSpanFinisher.Finish()
 				}
 
@@ -299,20 +302,20 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 					failureCount++
 					countMu.Unlock()
 
-					s.logger.With(
+					s.logger.Info(ctx, "failed to get meter usage",
 						"meter_id", meterID,
 						"price_id", r.PriceID,
 						"meter_index", meterIdx,
 						"error", err,
 						"processing_time_ms", processingDuration.Milliseconds(),
-					).Warn("failed to get meter usage")
+					)
 
-					// Capture the error in Sentry if enabled
+					// Record the exception (SigNoz Exceptions tab) if observability is enabled
 					if sentrySvc != nil && sentrySvc.IsEnabled() {
-						sentrySvc.CaptureException(err)
+						sentrySvc.CaptureException(ctx, err)
 
 						// Add breadcrumb about the failure
-						sentrySvc.AddBreadcrumb("meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
+						sentrySvc.AddBreadcrumb(ctx, "meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
 							"meter_id": meterID,
 							"price_id": r.PriceID,
 							"error":    err.Error(),
@@ -345,11 +348,11 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 		// Wait for this batch to complete
 		err := p.Wait()
 		if err != nil {
-			s.logger.With(
+			s.logger.Info(ctx, "batch processing failed",
 				"batch_start", batchStart,
 				"batch_end", batchEnd,
 				"error", err,
-			).Warn("batch processing failed")
+			)
 			// Continue to process remaining batches even if one fails
 		}
 
@@ -384,7 +387,7 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 		return make(map[string]*events.AggregationResult), nil
 	}
 
-	sentrySvc := sentry.NewSentryService(s.config, s.logger)
+	sentrySvc := s.tracingSvc
 	timeoutDuration := 10 * time.Second
 
 	s.logger.With(
@@ -407,10 +410,10 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 
 		span, spanCtx := sentrySvc.StartRepositorySpan(ctx, "GetUsageByMeter", "BulkGetUsageByMeterSync", params)
 		callCtx := ctx
-		var spanFinisher *sentry.SpanFinisher
+		var spanFinisher *tracing.SpanFinisher
 		if span != nil {
 			callCtx = spanCtx
-			spanFinisher = &sentry.SpanFinisher{Span: span}
+			spanFinisher = &tracing.SpanFinisher{Span: span}
 		}
 
 		processingStart := time.Now()
@@ -424,17 +427,17 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 		}
 
 		if err != nil {
-			s.logger.With(
+			s.logger.Info(ctx, "failed to get meter usage",
 				"meter_id", meterID,
 				"price_id", r.PriceID,
 				"meter_index", i,
 				"error", err,
 				"processing_time_ms", processingDuration.Milliseconds(),
-			).Warn("failed to get meter usage")
+			)
 
 			if sentrySvc != nil && sentrySvc.IsEnabled() {
-				sentrySvc.CaptureException(err)
-				sentrySvc.AddBreadcrumb("meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
+				sentrySvc.CaptureException(ctx, err)
+				sentrySvc.AddBreadcrumb(ctx, "meter_error", fmt.Sprintf("Failed to get usage for meter %s", meterID), map[string]interface{}{
 					"meter_id": meterID,
 					"price_id": r.PriceID,
 					"error":    err.Error(),
@@ -512,7 +515,7 @@ func (s *eventService) GetUsageByMeterWithFilters(ctx context.Context, req *dto.
 	}
 
 	if len(results) == 0 {
-		s.logger.Debugw("no usage found for meter with filters",
+		s.logger.Debug(ctx, "no usage found for meter with filters",
 			"meter_id", m.ID,
 			"filter_groups", len(filterGroups))
 		return results, nil
@@ -689,9 +692,9 @@ func createEventIteratorKey(timestamp time.Time, id string) string {
 }
 
 // MonitorKafkaLag monitors Kafka consumer lag for event consumption and post-processing pipelines.
-// It creates Sentry monitoring spans to track lag metrics for alerting and observability.
+// It creates OTel monitoring spans to track lag metrics for alerting and observability.
 func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
-	sentrySvc := sentry.NewSentryService(s.config, s.logger)
+	sentrySvc := s.tracingSvc
 	kafkaMonitoring := kafka.NewMonitoringService(s.config, s.logger)
 
 	// Get Kafka configuration for the current tenant
@@ -706,7 +709,7 @@ func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
 		eventConsumptionConsumerGroup,
 		"kafka.lag.event_consumption",
 	); err != nil {
-		s.logger.Warnw("failed to monitor event consumption lag",
+		s.logger.Info(ctx, "failed to monitor event consumption lag",
 			"error", err,
 			"topic", eventConsumptionTopic,
 			"consumer_group", eventConsumptionConsumerGroup)
@@ -721,7 +724,7 @@ func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
 		eventPostProcessingConsumerGroup,
 		"kafka.lag.event_post_processing",
 	); err != nil {
-		s.logger.Warnw("failed to monitor event post-processing lag",
+		s.logger.Info(ctx, "failed to monitor event post-processing lag",
 			"error", err,
 			"topic", eventPostProcessingTopic,
 			"consumer_group", eventPostProcessingConsumerGroup)
@@ -734,7 +737,7 @@ func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
 // It creates a Sentry monitoring span with lag details for observability.
 func (s *eventService) monitorConsumerLag(
 	ctx context.Context,
-	sentrySvc *sentry.Service,
+	sentrySvc *tracing.Service,
 	kafkaMonitoring *kafka.MonitoringService,
 	topic string,
 	consumerGroup string,
@@ -758,7 +761,7 @@ func (s *eventService) monitorConsumerLag(
 		defer span.Finish()
 	}
 
-	s.logger.Infow("kafka lag monitored",
+	s.logger.Info(ctx, "kafka lag monitored",
 		"topic", topic,
 		"consumer_group", consumerGroup,
 		"total_lag", lag.TotalLag,
@@ -781,7 +784,7 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 	// Get total event count with optional windowed time-series data
 	eventCountResult, err := s.eventRepo.GetTotalEventCount(ctx, req.StartTime, req.EndTime, req.WindowSize)
 	if err != nil {
-		s.logger.Warnw("failed to get total event count",
+		s.logger.Info(ctx, "failed to get total event count",
 			"error", err,
 			"start_time", req.StartTime,
 			"end_time", req.EndTime,
@@ -796,7 +799,7 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
 
-	s.logger.Infow("fetching monitoring data",
+	s.logger.Info(ctx, "fetching monitoring data",
 		"tenant_id", tenantID,
 		"environment_id", envID,
 		"event_consumption_group", s.config.EventProcessing.ConsumerGroup,
@@ -810,7 +813,7 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 		eventConsumptionTopic,
 		eventConsumptionConsumerGroup)
 	if err != nil {
-		s.logger.Warnw("failed to get event consumption consumer lag",
+		s.logger.Info(ctx, "failed to get event consumption consumer lag",
 			"error", err,
 			"topic", eventConsumptionTopic,
 			"consumer_group", eventConsumptionConsumerGroup)
@@ -823,7 +826,7 @@ func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonito
 		eventPostProcessingTopic,
 		eventPostProcessingConsumerGroup)
 	if err != nil {
-		s.logger.Warnw("failed to get event post processing consumer lag",
+		s.logger.Info(ctx, "failed to get event post processing consumer lag",
 			"error", err,
 			"topic", eventPostProcessingTopic,
 			"consumer_group", eventPostProcessingConsumerGroup)

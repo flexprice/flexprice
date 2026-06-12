@@ -38,7 +38,7 @@ func NewPriceRepository(client postgres.IClient, log *logger.Logger, cache cache
 func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating price",
+	r.log.Debug(ctx, "creating price",
 		"price_id", p.ID,
 		"tenant_id", p.TenantID,
 		"lookup_key", p.LookupKey,
@@ -144,7 +144,7 @@ func (r *priceRepository) Get(ctx context.Context, id string) (*domainPrice.Pric
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting price",
+	r.log.Debug(ctx, "getting price",
 		"price_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -273,7 +273,7 @@ func (r *priceRepository) ListAll(ctx context.Context, filter *types.PriceFilter
 func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price, bumpSequence bool) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating price",
+	r.log.Debug(ctx, "updating price",
 		"price_id", p.ID,
 		"tenant_id", p.TenantID,
 		"bump_sequence", bumpSequence,
@@ -377,7 +377,7 @@ func (r *priceRepository) nextPriceSequence(ctx context.Context) (int64, error) 
 func (r *priceRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting price",
+	r.log.Debug(ctx, "deleting price",
 		"price_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -430,7 +430,7 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.Price) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("bulk creating prices",
+	r.log.Debug(ctx, "bulk creating prices",
 		"count", len(prices),
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -508,7 +508,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 }
 
 func (r *priceRepository) DeleteBulk(ctx context.Context, ids []string) error {
-	r.log.Debugw("bulk deleting prices",
+	r.log.Debug(ctx, "bulk deleting prices",
 		"count", len(ids),
 		"tenant_id", types.GetTenantID(ctx),
 	)

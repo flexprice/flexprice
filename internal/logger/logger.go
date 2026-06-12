@@ -3,12 +3,11 @@ package logger
 import (
 	"context"
 	"fmt"
-	"time"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/spanerr"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/fluent/fluent-logger-golang/fluent"
-	"github.com/getsentry/sentry-go"
 	"go.opentelemetry.io/contrib/bridges/otelzap"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -18,31 +17,89 @@ import (
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-// sentryToZapLevel maps a sentry LogLevel to its zapcore equivalent for level-gating.
-var sentryToZapLevel = map[sentry.LogLevel]zapcore.Level{
-	sentry.LogLevelDebug: zapcore.DebugLevel,
-	sentry.LogLevelInfo:  zapcore.InfoLevel,
-	sentry.LogLevelWarn:  zapcore.WarnLevel,
-	sentry.LogLevelError: zapcore.ErrorLevel,
-	sentry.LogLevelFatal: zapcore.FatalLevel,
-}
-
-// Logger wraps zap.SugaredLogger to provide logging functionality
+// Logger wraps zap.SugaredLogger to provide logging functionality.
+//
+// Outputs:
+//   - stdout (zap JSON encoder)
+//   - OTLP logs (optional, via OtelEnabled config; goes to SigNoz / any OTLP backend)
+//
+// Trace-log correlation: call WithContext(ctx) / Ctx(ctx) to bind a request
+// context. This injects trace_id and span_id as string fields (visible in stdout
+// and OTLP attributes) AND sets the OTLP log record-level TraceId/SpanId fields
+// via the otelzap bridge so SigNoz can link logs to their trace in the Span
+// Details "Logs" tab. Error capture into Sentry is NOT done here —
+// callers use tracing.Service.CaptureException explicitly.
 type Logger struct {
 	*zap.SugaredLogger
-	fluentdLogger   *fluent.Fluent
 	otelLogProvider *sdklog.LoggerProvider
-	serviceName     string
-	sentryEnabled   bool
-	sentryCtx       context.Context // used for sentry.NewLogger; defaults to context.Background()
+	// captureExceptions enables auto-recording error-level logs as OTel
+	// exception span events (SigNoz Exceptions tab). Mirrors
+	// otel.traces.capture_exceptions; see logErrorToSpan.
+	captureExceptions bool
+	// ctxBound is true once WithContext has wrapped the core with otelCtxCore.
+	// Guards against repeated WithContext calls accumulating nested wrappers,
+	// which would append multiple _span_ctx fields on every Write.
+	ctxBound bool
 }
 
-// Global logger for convenience
-var L *Logger
+// ---------------------------------------------------------------------------
+// Trace-log correlation helpers
+// ---------------------------------------------------------------------------
+
+// otelCtxCore wraps a zapcore.Core and injects the request context into every
+// Write call. The otelzap bridge detects context.Context values in fields and
+// extracts the active span's TraceId/SpanId into the OTLP log record's
+// record-level fields (not attributes). Without this, SigNoz cannot auto-link
+// logs to their trace in the Span Details "Logs" tab.
+//
+// The context is wrapped in noopJSONContext so the stdout JSON encoder emits
+// "_span_ctx":null rather than attempting to reflect-encode the context.
+// The otelzap bridge removes the field from OTLP attributes after extraction,
+// so OTLP log records are clean.
+type otelCtxCore struct {
+	zapcore.Core
+	ctx context.Context
+}
+
+func (c *otelCtxCore) Enabled(level zapcore.Level) bool {
+	return c.Core.Enabled(level)
+}
+
+func (c *otelCtxCore) With(fields []zapcore.Field) zapcore.Core {
+	return &otelCtxCore{Core: c.Core.With(fields), ctx: c.ctx}
+}
+
+func (c *otelCtxCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
+	// Append the span context field last so otelzap can extract TraceId/SpanId.
+	// noopJSONContext satisfies context.Context (detected by otelzap) and
+	// marshals to null so stdout JSON output is not polluted with raw Go context values.
+	return c.Core.Write(entry, append(fields, zap.Any("_span_ctx", noopJSONContext{c.ctx})))
+}
+
+// Check adds otelCtxCore itself to the CheckedEntry instead of delegating to the
+// inner core directly. This is critical: if we delegate (c.Core.Check), the inner
+// tee adds its own constituent cores (jsonCore, otelTeeCore) to the CE. Their Write
+// methods are then called WITHOUT going through otelCtxCore.Write — so _span_ctx
+// is never injected and the OTLP log record never gets TraceId/SpanId set.
+// By adding ourselves (ce.AddCore(entry, c)), ce.Write calls our Write, which
+// appends _span_ctx and then calls c.Core.Write for all inner cores.
+func (c *otelCtxCore) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if c.Core.Enabled(entry.Level) {
+		return ce.AddCore(entry, c)
+	}
+	return ce
+}
+
+// noopJSONContext embeds context.Context so otelzap detects it via type assertion,
+// but marshals to JSON null so stdout logs don't contain a raw context dump.
+type noopJSONContext struct{ context.Context }
+
+func (noopJSONContext) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
 
 // NewLogger creates and returns a new Logger instance
 func NewLogger(cfg *config.Configuration) (*Logger, error) {
@@ -70,45 +127,21 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 		return nil, err
 	}
 
-	// Initialize Fluentd logger based on configuration
-	var fluentdLogger *fluent.Fluent
-	var fluentdHost string
-	var fluentdPort int
-
-	if cfg.Logging.FluentdEnabled {
-		fluentdHost = cfg.Logging.FluentdHost
-		fluentdPort = cfg.Logging.FluentdPort
-	}
-
-	// Initialize Fluentd client if host and port are configured
-	if fluentdHost != "" && fluentdPort > 0 {
-		fluentdLogger, err = fluent.New(fluent.Config{
-			FluentHost:   fluentdHost,
-			FluentPort:   fluentdPort,
-			Async:        true,
-			BufferLimit:  8 * 1024 * 1024, // 8MB buffer
-			WriteTimeout: 3 * time.Second,
-			RetryWait:    500,
-			MaxRetry:     5,
-		})
-		if err != nil {
-			zapLogger.Sugar().Warnf("Failed to initialize Fluentd logger: %v, falling back to stdout only", err)
-		} else {
-			zapLogger.Sugar().Infof("Fluentd logger initialized successfully (host: %s, port: %d)", fluentdHost, fluentdPort)
-		}
-	} else if cfg.Logging.FluentdEnabled {
-		zapLogger.Sugar().Warn("Fluentd is enabled but host/port not configured properly")
-	}
-
-	// Initialize OpenTelemetry log exporter (for any OTLP backend)
+	// Initialize OpenTelemetry log exporter (for any OTLP backend). Reads the
+	// unified otel.logs.* config first; falls back to legacy logging.otel_*
+	// fields (deprecated) so existing deployments keep working.
+	logsCfg, headers, legacy := resolveOtelLogsConfig(cfg)
 	var otelLogProvider *sdklog.LoggerProvider
-	if cfg.Logging.OtelEnabled && cfg.Logging.OtelEndpoint != "" {
-		otelLogProvider, err = newOtelLogProvider(context.Background(), cfg)
+	if logsCfg.Enabled && logsCfg.Endpoint != "" {
+		if legacy {
+			zapLogger.Sugar().Warn("DEPRECATED: configure OTel log export under `otel.logs.*` instead of `logging.otel_*`; legacy keys will be removed in a future release")
+		}
+		otelLogProvider, err = newOtelLogProvider(context.Background(), cfg, logsCfg, headers)
 		if err != nil {
 			zapLogger.Sugar().Warnf("Failed to initialize OTel log exporter: %v, falling back to stdout only", err)
 			otelLogProvider = nil
 		} else {
-			zapLogger.Sugar().Infof("OTel log exporter initialized (endpoint: %s, protocol: %s, auth_header: %s, auth_value_set: %v)", cfg.Logging.OtelEndpoint, cfg.Logging.OtelProtocol, cfg.Logging.OtelAuthHeader, cfg.Logging.OtelAuthValue != "")
+			zapLogger.Sugar().Infof("OTel log exporter initialized (endpoint: %s, protocol: %s, header_count: %d)", logsCfg.Endpoint, logsCfg.Protocol, len(headers))
 		}
 		if cfg.Logging.OtelDebug {
 			// Route otel SDK internal errors (e.g. failed exports, auth errors) to zap so they appear in logs.
@@ -150,12 +183,9 @@ func NewLogger(cfg *config.Configuration) (*Logger, error) {
 	}
 
 	return &Logger{
-		SugaredLogger:   sugar,
-		fluentdLogger:   fluentdLogger,
-		otelLogProvider: otelLogProvider,
-		serviceName:     string(cfg.Deployment.Mode),
-		sentryEnabled:   false,
-		sentryCtx:       context.Background(),
+		SugaredLogger:     sugar,
+		otelLogProvider:   otelLogProvider,
+		captureExceptions: cfg.Otel.Enabled && cfg.Otel.Traces.Enabled && cfg.Otel.Traces.CaptureExceptions,
 	}, nil
 }
 
@@ -164,21 +194,69 @@ func NewNoopLogger() *Logger {
 	return &Logger{SugaredLogger: zap.NewNop().Sugar()}
 }
 
-// newOtelLogProvider builds a sdklog.LoggerProvider that exports via OTLP (gRPC or HTTP).
-func newOtelLogProvider(ctx context.Context, cfg *config.Configuration) (*sdklog.LoggerProvider, error) {
-	headers := map[string]string{}
-	if cfg.Logging.OtelAuthHeader != "" && cfg.Logging.OtelAuthValue != "" {
-		headers[cfg.Logging.OtelAuthHeader] = cfg.Logging.OtelAuthValue
+// NewFromSugared creates a Logger from an existing SugaredLogger. For use in tests only.
+func NewFromSugared(s *zap.SugaredLogger) *Logger {
+	return &Logger{SugaredLogger: s}
+}
+
+// resolveOtelLogsConfig picks the active log-export settings. Precedence:
+//  1. otel.enabled && otel.logs.* (unified config)
+//  2. logging.otel_* (legacy)
+//
+// The bool return is true when the legacy path supplied the values; the caller
+// uses it to print a deprecation warning.
+func resolveOtelLogsConfig(cfg *config.Configuration) (config.OtelLogsConfig, map[string]string, bool) {
+	if cfg.Otel.Enabled && cfg.Otel.Logs.Enabled && cfg.Otel.Logs.Endpoint != "" {
+		logs := cfg.Otel.Logs
+		// Always normalize through ResolveProtocol so values like "http/protobuf"
+		// collapse to the canonical "http" transport. Without this, an exact
+		// `logsCfg.Protocol == "http"` check below would miss "http/protobuf" and
+		// silently fall back to the gRPC exporter (404 against an HTTP endpoint).
+		logs.Protocol = cfg.Otel.ResolveProtocol(logs.Protocol)
+		headers := cfg.Otel.ResolveHeaders(logs.MergedHeaders())
+		return logs, headers, false
 	}
+
+	// Legacy fallback
+	if cfg.Logging.OtelEnabled && cfg.Logging.OtelEndpoint != "" {
+		legacyHeaders := map[string]string{}
+		if cfg.Logging.OtelAuthHeader != "" && cfg.Logging.OtelAuthValue != "" {
+			legacyHeaders[cfg.Logging.OtelAuthHeader] = cfg.Logging.OtelAuthValue
+		}
+		protocol := cfg.Logging.OtelProtocol
+		if protocol == "" {
+			protocol = "grpc"
+		}
+		return config.OtelLogsConfig{
+			Enabled:  true,
+			Endpoint: cfg.Logging.OtelEndpoint,
+			Protocol: protocol,
+			Headers:  legacyHeaders,
+		}, legacyHeaders, true
+	}
+
+	return config.OtelLogsConfig{}, nil, false
+}
+
+// newOtelLogProvider builds a sdklog.LoggerProvider that exports via OTLP (gRPC or HTTP).
+func newOtelLogProvider(ctx context.Context, cfg *config.Configuration, logsCfg config.OtelLogsConfig, headers map[string]string) (*sdklog.LoggerProvider, error) {
+	// Insecure is shared across signals at the top-level (rare to need TLS for
+	// one signal but not another — usually both go to the same network zone).
+	insecure := cfg.Otel.Insecure || cfg.Logging.OtelInsecure
 
 	var exporter sdklog.Exporter
 	var err error
 
-	if cfg.Logging.OtelProtocol == "http" {
-		httpOpts := []otlploghttp.Option{
-			otlploghttp.WithEndpoint(cfg.Logging.OtelEndpoint),
+	endpointIsURL := strings.HasPrefix(logsCfg.Endpoint, "http://") || strings.HasPrefix(logsCfg.Endpoint, "https://")
+
+	if strings.HasPrefix(logsCfg.Protocol, "http") {
+		httpOpts := []otlploghttp.Option{}
+		if endpointIsURL {
+			httpOpts = append(httpOpts, otlploghttp.WithEndpointURL(logsCfg.Endpoint))
+		} else {
+			httpOpts = append(httpOpts, otlploghttp.WithEndpoint(logsCfg.Endpoint))
 		}
-		if cfg.Logging.OtelInsecure {
+		if insecure {
 			httpOpts = append(httpOpts, otlploghttp.WithInsecure())
 		}
 		if len(headers) > 0 {
@@ -187,10 +265,13 @@ func newOtelLogProvider(ctx context.Context, cfg *config.Configuration) (*sdklog
 		exporter, err = otlploghttp.New(ctx, httpOpts...)
 	} else {
 		// default: grpc
-		grpcOpts := []otlploggrpc.Option{
-			otlploggrpc.WithEndpoint(cfg.Logging.OtelEndpoint),
+		grpcOpts := []otlploggrpc.Option{}
+		if endpointIsURL {
+			grpcOpts = append(grpcOpts, otlploggrpc.WithEndpointURL(logsCfg.Endpoint))
+		} else {
+			grpcOpts = append(grpcOpts, otlploggrpc.WithEndpoint(logsCfg.Endpoint))
 		}
-		if cfg.Logging.OtelInsecure {
+		if insecure {
 			grpcOpts = append(grpcOpts, otlploggrpc.WithInsecure())
 		}
 		if len(headers) > 0 {
@@ -204,7 +285,7 @@ func newOtelLogProvider(ctx context.Context, cfg *config.Configuration) (*sdklog
 
 	// Build resource with service.name, deployment.environment, and cloud.region
 	resAttrs := []attribute.KeyValue{
-		semconv.ServiceName(cfg.Logging.ServiceName),
+		semconv.ServiceName(cfg.Otel.ResolveServiceName(cfg)),
 	}
 	if cfg.Logging.Environment != "" {
 		resAttrs = append(resAttrs, semconv.DeploymentEnvironmentName(cfg.Logging.Environment))
@@ -246,149 +327,70 @@ func (l *Logger) OtelLogProvider() otellog.LoggerProvider {
 	return l.otelLogProvider
 }
 
-// Initialize default logger and set it as global while also using Dependency Injection
-// Given logger is a heavily used object and is used in many places so it's a good idea to
-// have it as a global variable as well for usecases like scripts but for everywhere else
-// we should try to use the Dependency Injection approach only.
-func init() {
-	L, _ = NewLogger(config.GetDefaultConfig())
-}
+// ---------------------------------------------------------------------------
+// Context binding
+// ---------------------------------------------------------------------------
 
-func GetLogger() *Logger {
-	if L == nil {
-		L, _ = NewLogger(config.GetDefaultConfig())
-	}
-	return L
-}
-
-func GetLoggerWithContext(ctx context.Context) *Logger {
-	return GetLogger().WithContext(ctx)
-}
-
-// sanitizeValue converts error objects to strings for msgpack serialization
-// Also handles nested structures (maps and slices) that may contain errors
-func sanitizeValue(v interface{}) interface{} {
-	// Convert error objects to strings
-	if err, ok := v.(error); ok {
-		return err.Error()
-	}
-
-	// Handle nested maps
-	if m, ok := v.(map[string]interface{}); ok {
-		sanitized := make(map[string]interface{}, len(m))
-		for k, val := range m {
-			sanitized[k] = sanitizeValue(val)
-		}
-		return sanitized
-	}
-
-	// Handle slices/arrays
-	if s, ok := v.([]interface{}); ok {
-		sanitized := make([]interface{}, len(s))
-		for i, val := range s {
-			sanitized[i] = sanitizeValue(val)
-		}
-		return sanitized
-	}
-
-	return v
-}
-
-// sendToFluentd sends structured log data to Fluentd
-func (l *Logger) sendToFluentd(level string, msg string, fields map[string]interface{}) {
-	if l.fluentdLogger == nil {
-		return // Fluentd not configured, skip
-	}
-
-	logData := map[string]interface{}{
-		"level":     level,
-		"message":   msg,
-		"service":   l.serviceName,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	// Merge additional fields, converting error objects to strings
-	for k, v := range fields {
-		logData[k] = sanitizeValue(v)
-	}
-
-	// Post to Fluentd asynchronously (non-blocking)
-	// Tag format: app.logs
-	err := l.fluentdLogger.Post("app.logs", logData)
-	if err != nil {
-		// If Fluentd fails, log to stderr but don't block the application
-		l.SugaredLogger.Warnf("Failed to send log to Fluentd: %v", err)
-	}
-}
-
-// Helper methods to make logging more convenient
-func (l *Logger) Debugf(template string, args ...interface{}) {
-	l.SugaredLogger.Debugf(template, args...)
-	msg := l.sprintf(template, args...)
-	l.sendToFluentd("debug", msg, nil)
-	l.sendToSentryLogs(sentry.LogLevelDebug, msg)
-}
-
-func (l *Logger) Infof(template string, args ...interface{}) {
-	l.SugaredLogger.Infof(template, args...)
-	msg := l.sprintf(template, args...)
-	l.sendToFluentd("info", msg, nil)
-	l.sendToSentryLogs(sentry.LogLevelInfo, msg)
-}
-
-func (l *Logger) Warnf(template string, args ...interface{}) {
-	l.SugaredLogger.Warnf(template, args...)
-	msg := l.sprintf(template, args...)
-	l.sendToFluentd("warning", msg, nil)
-	l.sendToSentryLogs(sentry.LogLevelWarn, msg)
-	l.captureToSentry(sentry.LevelWarning, msg)
-}
-
-func (l *Logger) Errorf(template string, args ...interface{}) {
-	l.SugaredLogger.Errorf(template, args...)
-	msg := l.sprintf(template, args...)
-	l.sendToFluentd("error", msg, nil)
-	l.sendToSentryLogs(sentry.LogLevelError, msg)
-	l.captureToSentry(sentry.LevelError, msg)
-}
-
-func (l *Logger) Fatalf(template string, args ...interface{}) {
-	msg := l.sprintf(template, args...)
-	l.sendToFluentd("fatal", msg, nil)
-	l.sendToSentryLogs(sentry.LogLevelFatal, msg)
-	l.SugaredLogger.Fatalf(template, args...)
-}
-
-// sprintf is a helper to format strings
-func (l *Logger) sprintf(template string, args ...interface{}) string {
-	if len(args) == 0 {
-		return template
-	}
-	// Use standard library fmt.Sprintf
-	return fmt.Sprintf(template, args...)
-}
-
+// WithContext binds request-scoped fields and (if present) the active OTel
+// span's trace_id / span_id so logs correlate to traces in SigNoz.
+//
+// Two correlation mechanisms are applied:
+//  1. trace_id / span_id are injected as string fields — visible in stdout JSON
+//     and as OTLP log attributes for human-readable inspection.
+//  2. The context is injected via otelCtxCore so the otelzap bridge sets the
+//     OTLP log record's record-level TraceId and SpanId fields — these are what
+//     SigNoz uses to link logs to their trace in the Span Details "Logs" tab.
 func (l *Logger) WithContext(ctx context.Context) *Logger {
-	requestID := types.GetRequestID(ctx)
-	tenantID := types.GetTenantID(ctx)
-	userID := types.GetUserID(ctx)
+	// Guard against nil ctx: noopJSONContext embeds context.Context as an
+	// interface, so noopJSONContext{nil}.Value(...) panics deep in the OTel SDK.
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	fields := []interface{}{
+		"request_id", types.GetRequestID(ctx),
+		"tenant_id", types.GetTenantID(ctx),
+		"user_id", types.GetUserID(ctx),
+		"environment_id", types.GetEnvironmentID(ctx),
+	}
+
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	if sc.IsValid() {
+		fields = append(fields,
+			"trace_id", sc.TraceID().String(),
+			"span_id", sc.SpanID().String(),
+		)
+	}
+
+	newSugared := l.SugaredLogger.With(fields...)
+
+	// Inject ctx into the otelzap bridge so it can populate the OTLP log record's
+	// record-level TraceId/SpanId (not just string attributes). This enables
+	// SigNoz's native trace-log correlation. We do this even for ended spans —
+	// the span context (TraceId, SpanId) remains valid after span.End().
+	//
+	// Guard: only wrap once. Repeated WithContext calls (e.g. middleware chains
+	// calling Ctx(ctx) on an already-context-bound logger) would otherwise
+	// accumulate nested otelCtxCore layers, producing duplicate _span_ctx fields
+	// on every Write. ctxBound is set on the returned Logger to prevent this.
+	ctxBound := l.ctxBound
+	if sc.IsValid() && !l.ctxBound {
+		newSugared = newSugared.WithOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
+			return &otelCtxCore{Core: c, ctx: ctx}
+		}))
+		ctxBound = true
+	}
 
 	return &Logger{
-		SugaredLogger: l.SugaredLogger.With(
-			"request_id", requestID,
-			"tenant_id", tenantID,
-			"user_id", userID,
-		),
-		fluentdLogger:   l.fluentdLogger,
-		otelLogProvider: l.otelLogProvider,
-		serviceName:     l.serviceName,
-		sentryEnabled:   l.sentryEnabled,
-		sentryCtx:       ctx,
+		SugaredLogger:     newSugared,
+		otelLogProvider:   l.otelLogProvider,
+		captureExceptions: l.captureExceptions,
+		ctxBound:          ctxBound,
 	}
 }
 
-// Ctx is a short alias for WithContext — use at the top of service methods to get a
-// request-scoped logger that carries the correct Sentry trace ID:
+// Ctx is a short alias for WithContext — use at the top of service methods to
+// get a request-scoped logger that carries the correct OTel trace ID:
 //
 //	log := s.Logger.Ctx(ctx)
 //	log.Errorw("failed", "error", err)
@@ -396,188 +398,132 @@ func (l *Logger) Ctx(ctx context.Context) *Logger {
 	return l.WithContext(ctx)
 }
 
-// sendToSentryLogs sends a structured log record to Sentry Logs (requires EnableLogs: true).
-// This is separate from captureToSentry — it feeds the Sentry Logs product, not the Issues/Events stream.
-// It respects the configured zap log level, so debug logs won't be sent in production.
-func (l *Logger) sendToSentryLogs(level sentry.LogLevel, msg string, keysAndValues ...interface{}) {
-	if !l.sentryEnabled {
+// ---------------------------------------------------------------------------
+// ctx-first logging API (preferred)
+// ---------------------------------------------------------------------------
+
+// Debug logs at debug level with auto-bound context fields.
+func (l *Logger) Debug(ctx context.Context, msg string, fields ...any) {
+	l.WithContext(ctx).SugaredLogger.Debugw(msg, fields...)
+}
+
+// Info logs at info level with auto-bound context fields.
+func (l *Logger) Info(ctx context.Context, msg string, fields ...any) {
+	l.WithContext(ctx).SugaredLogger.Infow(msg, fields...)
+}
+
+// Warn logs at warn level. Only use in bootstrap/startup code.
+func (l *Logger) Warn(ctx context.Context, msg string, fields ...any) {
+	l.WithContext(ctx).SugaredLogger.Warnw(msg, fields...)
+}
+
+// Error logs at error level with auto-bound context fields. When OTel exception
+// capture is enabled and ctx carries a recording span, the error is also
+// recorded as an "exception" span event so it appears in SigNoz's Exceptions tab
+// (Sentry-parity auto-capture, near-zero call-site churn).
+func (l *Logger) Error(ctx context.Context, msg string, fields ...any) {
+	l.WithContext(ctx).SugaredLogger.Errorw(msg, fields...)
+	l.logErrorToSpan(ctx, msg, fields...)
+}
+
+// logErrorToSpan records an error-level log as an OTel exception span event.
+// It derives exception.type / exception.message from the structured "error" and
+// "error_type" fields the codebase already emits via logger.Err(err); the field
+// value may be a raw error or its string form (both call styles exist). No-op
+// when capture is disabled or ctx has no recording span (spanerr handles the
+// latter) — spanless errors reach the Exceptions tab via CaptureException.
+func (l *Logger) logErrorToSpan(ctx context.Context, msg string, fields ...any) {
+	if !l.captureExceptions || ctx == nil {
 		return
 	}
-	if zapLevel, ok := sentryToZapLevel[level]; ok {
-		if !l.SugaredLogger.Desugar().Core().Enabled(zapLevel) {
-			return
-		}
-	}
-	hub := sentry.GetHubFromContext(l.sentryCtx)
-	if hub == nil {
-		hub = sentry.CurrentHub()
-	}
-	if hub.Client() == nil {
-		return
-	}
-
-	sl := sentry.NewLogger(l.sentryCtx)
-	var entry sentry.LogEntry
-	switch level {
-	case sentry.LogLevelDebug:
-		entry = sl.Debug()
-	case sentry.LogLevelInfo:
-		entry = sl.Info()
-	case sentry.LogLevelWarn:
-		entry = sl.Warn()
-	case sentry.LogLevelError:
-		entry = sl.Error()
-	default:
-		entry = sl.Info()
-	}
-
-	for i := 0; i+1 < len(keysAndValues); i += 2 {
-		key, ok := keysAndValues[i].(string)
+	errType, message := "", ""
+	for i := 0; i+1 < len(fields); i += 2 {
+		key, ok := fields[i].(string)
 		if !ok {
 			continue
 		}
-		switch v := keysAndValues[i+1].(type) {
-		case string:
-			entry = entry.String(key, v)
-		case int:
-			entry = entry.Int(key, v)
-		case int64:
-			entry = entry.Int64(key, v)
-		case float64:
-			entry = entry.Float64(key, v)
-		case bool:
-			entry = entry.Bool(key, v)
-		case error:
-			entry = entry.String(key, v.Error())
-		default:
-			entry = entry.String(key, fmt.Sprintf("%v", v))
-		}
-	}
-
-	entry.Emit(msg)
-}
-
-// captureToSentry sends an event to Sentry if enabled.
-// It looks for an "error" key in keysAndValues and uses CaptureException;
-// otherwise it falls back to CaptureMessage.
-func (l *Logger) captureToSentry(level sentry.Level, msg string, keysAndValues ...interface{}) {
-	if !l.sentryEnabled {
-		return
-	}
-	// Use the per-request hub if available (set by sentrygin on c.Request.Context()),
-	// otherwise fall back to the global hub.
-	hub := sentry.GetHubFromContext(l.sentryCtx)
-	if hub == nil {
-		hub = sentry.CurrentHub()
-	}
-	if hub.Client() == nil {
-		return
-	}
-
-	// Look for an error value in key-value pairs
-	for i := 1; i < len(keysAndValues); i += 2 {
-		if err, ok := keysAndValues[i].(error); ok {
-			hub.WithScope(func(scope *sentry.Scope) {
-				scope.SetLevel(level)
-				scope.SetExtra("message", msg)
-				for j := 0; j < len(keysAndValues)-1; j += 2 {
-					if key, ok := keysAndValues[j].(string); ok {
-						scope.SetExtra(key, keysAndValues[j+1])
-					}
+		switch key {
+		case "error":
+			switch v := fields[i+1].(type) {
+			case error:
+				message = v.Error()
+				if errType == "" {
+					errType = fmt.Sprintf("%T", v)
 				}
-				hub.CaptureException(err)
-			})
-			return
-		}
-	}
-
-	hub.WithScope(func(scope *sentry.Scope) {
-		scope.SetLevel(level)
-		for i := 0; i < len(keysAndValues)-1; i += 2 {
-			if key, ok := keysAndValues[i].(string); ok {
-				scope.SetExtra(key, keysAndValues[i+1])
+			case string:
+				message = v
+			}
+		case "error_type":
+			if v, ok := fields[i+1].(string); ok && v != "" {
+				errType = v
 			}
 		}
-		hub.CaptureMessage(msg)
-	})
+	}
+	if message == "" {
+		message = msg
+	}
+	spanerr.RecordException(ctx, errType, message)
 }
 
-// Structured logging methods that include context fields
+// Fatal logs at fatal level then calls os.Exit(1). Use only in cmd/.
+func (l *Logger) Fatal(ctx context.Context, msg string, fields ...any) {
+	l.WithContext(ctx).SugaredLogger.Fatalw(msg, fields...)
+}
+
+// ---------------------------------------------------------------------------
+// Legacy w-variants (kept for gradual migration, do not use in new code)
+// ---------------------------------------------------------------------------
+
+// Debugw logs at debug level with key-value pairs.
 func (l *Logger) Debugw(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Debugw(msg, keysAndValues...)
-	l.sendToFluentd("debug", msg, l.keysAndValuesToMap(keysAndValues...))
-	l.sendToSentryLogs(sentry.LogLevelDebug, msg, keysAndValues...)
 }
 
+// Infow logs at info level with key-value pairs.
 func (l *Logger) Infow(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Infow(msg, keysAndValues...)
-	l.sendToFluentd("info", msg, l.keysAndValuesToMap(keysAndValues...))
-	l.sendToSentryLogs(sentry.LogLevelInfo, msg, keysAndValues...)
 }
 
+// Warnw logs at warn level with key-value pairs.
 func (l *Logger) Warnw(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Warnw(msg, keysAndValues...)
-	l.sendToFluentd("warning", msg, l.keysAndValuesToMap(keysAndValues...))
-	l.sendToSentryLogs(sentry.LogLevelWarn, msg, keysAndValues...)
-	l.captureToSentry(sentry.LevelWarning, msg, keysAndValues...)
 }
 
+// Errorw logs at error level with key-value pairs.
 func (l *Logger) Errorw(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Errorw(msg, keysAndValues...)
-	l.sendToFluentd("error", msg, l.keysAndValuesToMap(keysAndValues...))
-	l.sendToSentryLogs(sentry.LogLevelError, msg, keysAndValues...)
-	l.captureToSentry(sentry.LevelError, msg, keysAndValues...)
 }
 
-// Context-aware logging methods — these bind the request context for Sentry trace correlation.
-// Use these in service/repository methods instead of the plain variants:
-//
-//	s.Logger.ErrorwCtx(ctx, "failed", "error", err)   instead of   s.Logger.Errorw("failed", "error", err)
-func (l *Logger) DebugwCtx(ctx context.Context, msg string, keysAndValues ...interface{}) {
-	l.WithContext(ctx).Debugw(msg, keysAndValues...)
-}
+// ---------------------------------------------------------------------------
+// Structured field helpers
+// ---------------------------------------------------------------------------
 
-func (l *Logger) InfowCtx(ctx context.Context, msg string, keysAndValues ...interface{}) {
-	l.WithContext(ctx).Infow(msg, keysAndValues...)
-}
-
-func (l *Logger) WarnwCtx(ctx context.Context, msg string, keysAndValues ...interface{}) {
-	l.WithContext(ctx).Warnw(msg, keysAndValues...)
-}
-
-func (l *Logger) ErrorwCtx(ctx context.Context, msg string, keysAndValues ...interface{}) {
-	l.WithContext(ctx).Errorw(msg, keysAndValues...)
-}
-
-func (l *Logger) DebugfCtx(ctx context.Context, template string, args ...interface{}) {
-	l.WithContext(ctx).Debugf(template, args...)
-}
-
-func (l *Logger) InfofCtx(ctx context.Context, template string, args ...interface{}) {
-	l.WithContext(ctx).Infof(template, args...)
-}
-
-func (l *Logger) WarnfCtx(ctx context.Context, template string, args ...interface{}) {
-	l.WithContext(ctx).Warnf(template, args...)
-}
-
-func (l *Logger) ErrorfCtx(ctx context.Context, template string, args ...interface{}) {
-	l.WithContext(ctx).Errorf(template, args...)
-}
-
-// keysAndValuesToMap converts variadic key-value pairs to a map
-func (l *Logger) keysAndValuesToMap(keysAndValues ...interface{}) map[string]interface{} {
-	fields := make(map[string]interface{})
-	for i := 0; i < len(keysAndValues); i += 2 {
-		if i+1 < len(keysAndValues) {
-			if key, ok := keysAndValues[i].(string); ok {
-				// Convert error objects to strings for msgpack serialization
-				fields[key] = sanitizeValue(keysAndValues[i+1])
-			}
-		}
+// Err produces structured fields for an error. Always use on log.Error calls.
+func Err(err error) []any {
+	if err == nil {
+		return []any{"error", "<nil>", "error_type", "<nil>"}
 	}
-	return fields
+	return []any{"error", err.Error(), "error_type", fmt.Sprintf("%T", err)}
 }
+
+// Op produces a structured "operation" field. Value should be "<entity>.<verb_past>".
+func Op(name string) []any {
+	return []any{"operation", name}
+}
+
+// Event produces "entity", "action", and "operation" fields.
+func Event(entity, action string) []any {
+	return []any{"entity", entity, "action", action, "operation", entity + "." + action}
+}
+
+// Entity produces an "<entity>_id" field.
+func Entity(name, id string) []any {
+	return []any{name + "_id", id}
+}
+
+// ---------------------------------------------------------------------------
+// Framework adapter loggers
+// ---------------------------------------------------------------------------
 
 // retryableHTTPLogger adapts our Logger to go-retryablehttp's logging interface
 type retryableHTTPLogger struct {
@@ -591,24 +537,22 @@ func (l *Logger) GetRetryableHTTPLogger() *retryableHTTPLogger {
 
 // Printf implements the Logger interface for go-retryablehttp
 func (r *retryableHTTPLogger) Printf(format string, v ...interface{}) {
-	r.logger.Infof(format, v...)
+	r.logger.Info(context.Background(), fmt.Sprintf(format, v...))
 }
 
-// GetEntLogger returns an ent-compatible logger function
-func (l *Logger) GetEntLogger() func(...any) {
+// GetEntLogger returns an ent-compatible logger function bound to the given ctx.
+func (l *Logger) GetEntLogger(ctx context.Context) func(...any) {
 	return func(args ...any) {
-		// Ent typically passes query strings, format them properly
-		if len(args) > 0 {
-			// If args is a single string, use it as the query
-			if len(args) == 1 {
-				if query, ok := args[0].(string); ok {
-					l.Debugw("ent_query", "query", query)
-					return
-				}
-			}
-			// Otherwise, format all args as a single query string
-			l.Debugw("ent_query", "query", args)
+		if len(args) == 0 {
+			return
 		}
+		if len(args) == 1 {
+			if query, ok := args[0].(string); ok {
+				l.Debug(ctx, "ent_query", "query", query)
+				return
+			}
+		}
+		l.Debug(ctx, "ent_query", "query", fmt.Sprint(args...))
 	}
 }
 
@@ -624,6 +568,6 @@ func (l *Logger) GetGinLogger() *ginLogger {
 
 // Write implements the io.Writer interface for gin
 func (g *ginLogger) Write(p []byte) (n int, err error) {
-	g.logger.Info(string(p))
+	g.logger.Info(context.Background(), string(p))
 	return len(p), nil
 }

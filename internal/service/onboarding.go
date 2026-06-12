@@ -29,7 +29,7 @@ import (
 type OnboardingService interface {
 	GenerateEvents(ctx context.Context, req *dto.OnboardingEventsRequest) (*dto.OnboardingEventsResponse, error)
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
-	OnboardNewUserWithTenant(ctx context.Context, userID, email, tenantName, tenantID string) error
+	OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error
 	SetupSandboxEnvironment(ctx context.Context, tenantID, userID, envID string) error
 }
 
@@ -52,7 +52,7 @@ func NewOnboardingService(
 		params.Config.OnboardingEvents.ConsumerGroup,
 	)
 	if err != nil {
-		params.Logger.Warnw("failed to create pubsub for onboarding events, event generation will be unavailable", "error", err)
+		params.Logger.Info(context.Background(), "failed to create pubsub for onboarding events, event generation will be unavailable", "error", err)
 	} else {
 		svc.pubSub = pubSub
 	}
@@ -150,7 +150,7 @@ func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.Onboard
 	watermillMsg.Metadata.Set("environment_id", types.GetEnvironmentID(ctx))
 	watermillMsg.Metadata.Set("user_id", types.GetUserID(ctx))
 
-	s.Logger.InfowCtx(ctx, "publishing onboarding events message",
+	s.Logger.Info(ctx, "publishing onboarding events message",
 		"message_id", messageID,
 		"customer_id", customerID,
 		"feature_id", selectedFeature.ID,
@@ -160,7 +160,7 @@ func (s *onboardingService) GenerateEvents(ctx context.Context, req *dto.Onboard
 
 	topic := s.Config.OnboardingEvents.Topic
 	if s.pubSub == nil {
-		s.Logger.Infow("onboarding events pubsub unavailable, skipping message publication")
+		s.Logger.Info(ctx, "onboarding events pubsub unavailable, skipping message publication")
 	}
 	if err := s.pubSub.Publish(ctx, topic, watermillMsg); err != nil {
 		return nil, ierr.WithError(err).
@@ -203,15 +203,15 @@ func createMeterInfoFromMeter(m *dto.MeterResponse) types.MeterInfo {
 // RegisterHandler registers a handler for onboarding events
 func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
 	if !cfg.OnboardingEvents.Enabled {
-		s.Logger.Info("onboarding events handler disabled by configuration, skipping registration")
+		s.Logger.Info(context.Background(), "onboarding events handler disabled by configuration, skipping registration")
 		return
 	}
 	if s.pubSub == nil {
-		s.Logger.Errorw("onboarding events pubsub is nil, skipping handler registration — check Kafka connectivity at startup")
+		s.Logger.Info(context.Background(), "onboarding events pubsub is nil, skipping handler registration — check Kafka connectivity at startup")
 	}
 	rateLimit := cfg.OnboardingEvents.RateLimit
 	if rateLimit <= 0 {
-		s.Logger.Errorw("onboarding events rate limit is invalid", "rate_limit", rateLimit)
+		s.Logger.Info(context.Background(), "onboarding events rate limit is invalid", "rate_limit", rateLimit)
 		return
 	}
 	throttle := middleware.NewThrottle(rateLimit, time.Second)
@@ -224,7 +224,7 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 		throttle.Middleware,
 	)
 
-	s.Logger.Debugw("registered onboarding events handler",
+	s.Logger.Debug(context.Background(), "registered onboarding events handler",
 		"topic", cfg.OnboardingEvents.Topic,
 		"consumer_group", cfg.OnboardingEvents.ConsumerGroup,
 		"rate_limit", rateLimit,
@@ -235,19 +235,19 @@ func (s *onboardingService) RegisterHandler(router *pubsubRouter.Router, cfg *co
 func (s *onboardingService) processMessage(msg *message.Message) error {
 	// We don't need the message context anymore since we're using a background context
 	// Just log the message UUID for tracing
-	s.Logger.Debugw("received onboarding event message", "message_uuid", msg.UUID)
+	s.Logger.Debug(context.Background(), "received onboarding event message", "message_uuid", msg.UUID)
 
 	// Unmarshal the message
 	var eventMsg types.OnboardingEventsMessage
 	if err := eventMsg.Unmarshal(msg.Payload); err != nil {
-		s.Logger.Errorw("failed to unmarshal onboarding event message",
+		s.Logger.Error(context.Background(), "failed to unmarshal onboarding event message",
 			"error", err,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on unmarshal errors
 	}
 
-	s.Logger.Infow("processing onboarding events",
+	s.Logger.Info(context.Background(), "processing onboarding events",
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"subscription_id", eventMsg.SubscriptionID,
@@ -274,14 +274,14 @@ func (s *onboardingService) processMessage(msg *message.Message) error {
 
 // generateEvents generates events at a rate of 1 per second
 func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.OnboardingEventsMessage) {
-	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config, s.TracingSvc)
 
 	// Calculate total events to generate
 	totalEvents := eventMsg.Duration * 5
 	numMeters := len(eventMsg.Meters)
 
 	if numMeters == 0 {
-		s.Logger.WarnwCtx(ctx, "no meters found, skipping event generation",
+		s.Logger.Info(ctx, "no meters found, skipping event generation",
 			"customer_id", eventMsg.CustomerID,
 			"feature_id", eventMsg.FeatureID,
 		)
@@ -296,7 +296,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 	successCount := 0
 	errorCount := 0
 
-	s.Logger.InfowCtx(ctx, "starting event generation",
+	s.Logger.Info(ctx, "starting event generation",
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"duration", eventMsg.Duration,
@@ -318,7 +318,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 			eventsForThisMeter++ // Give +1 extra event to first 'remainder' meters
 		}
 
-		s.Logger.InfowCtx(ctx, "generating events for meter",
+		s.Logger.Info(ctx, "generating events for meter",
 			"meter_index", meterIdx+1,
 			"meter_name", meter.EventName,
 			"events_to_generate", eventsForThisMeter,
@@ -334,7 +334,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 				// Ingest the event
 				if err := eventService.CreateEvent(ctx, &eventReq); err != nil {
 					errorCount++
-					s.Logger.ErrorwCtx(ctx, "failed to create event",
+					s.Logger.Error(ctx, "failed to create event",
 						"error", err,
 						"customer_id", eventMsg.CustomerID,
 						"event_name", meter.EventName,
@@ -346,7 +346,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 				}
 
 				successCount++
-				s.Logger.InfowCtx(ctx, "created onboarding event",
+				s.Logger.Info(ctx, "created onboarding event",
 					"customer_id", eventMsg.CustomerID,
 					"event_name", meter.EventName,
 					"event_id", eventReq.EventID,
@@ -355,7 +355,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 					"total_events_for_meter", eventsForThisMeter,
 				)
 			case <-ctx.Done():
-				s.Logger.WarnwCtx(ctx, "context cancelled, stopping event generation",
+				s.Logger.Info(ctx, "context cancelled, stopping event generation",
 					"customer_id", eventMsg.CustomerID,
 					"feature_id", eventMsg.FeatureID,
 					"events_generated", successCount,
@@ -368,7 +368,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 		}
 	}
 
-	s.Logger.InfowCtx(ctx, "completed generating onboarding events",
+	s.Logger.Info(ctx, "completed generating onboarding events",
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"duration", eventMsg.Duration,
@@ -413,8 +413,8 @@ func (s *onboardingService) createEventRequest(eventMsg *types.OnboardingEventsM
 }
 
 // OnboardNewUserWithTenant creates a new tenant, assigns it to the user, and sets up default environments
-func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID, email, tenantName, tenantID string) error {
-	// Use default tenant name if not provided
+func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, req dto.OnboardNewUserWithTenantRequest) error {
+	tenantName := req.TenantName
 	if tenantName == "" {
 		tenantName = "Flexprice"
 	}
@@ -422,24 +422,26 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 	tenantService := NewTenantService(s.ServiceParams)
 
 	resp, err := tenantService.CreateTenant(ctx, dto.CreateTenantRequest{
-		Name: tenantName,
-		ID:   tenantID,
+		Name:     tenantName,
+		ID:       req.TenantID,
+		Metadata: req.Metadata,
 	})
 	if err != nil {
 		return err
 	}
 
-	tenantID = resp.ID
+	tenantID := resp.ID
 
 	// Create a new user without a tenant ID initially
 	newUser := &user.User{
-		ID:    userID,
-		Email: email,
+		ID:       req.UserID,
+		Email:    req.Email,
+		Metadata: req.Metadata,
 		BaseModel: types.BaseModel{
 			TenantID:  tenantID,
 			Status:    types.StatusPublished,
-			CreatedBy: userID,
-			UpdatedBy: userID,
+			CreatedBy: req.UserID,
+			UpdatedBy: req.UserID,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
@@ -462,8 +464,8 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 			BaseModel: types.BaseModel{
 				TenantID:  tenantID,
 				Status:    types.StatusPublished,
-				CreatedBy: userID,
-				UpdatedBy: userID,
+				CreatedBy: req.UserID,
+				UpdatedBy: req.UserID,
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			},
@@ -474,14 +476,14 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 		}
 
 		// if envType == types.EnvironmentDevelopment {
-		// 	if err := s.SetupSandboxEnvironment(ctx, tenantID, userID, env.ID); err != nil {
+		// 	if err := s.SetupSandboxEnvironment(ctx, tenantID, req.UserID, env.ID); err != nil {
 		// 		return err
 		// 	}
 		// }
 	}
 
 	// Send Zapier webhook for onboarding (never fails - errors are logged internally)
-	_ = s.sendZapierWebhook(ctx, email)
+	_ = s.sendZapierWebhook(ctx, req.Email)
 
 	return nil
 }
@@ -511,7 +513,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 
 	// create a db transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		s.Logger.InfowCtx(ctx, "setting up sandbox environment with generic AI pricing model for hackathon",
+		s.Logger.Info(ctx, "setting up sandbox environment with generic AI pricing model for hackathon",
 			"tenant_id", tenantID,
 			"user_id", userID,
 			"environment_id", envID,
@@ -547,7 +549,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 			return err
 		}
 
-		s.Logger.InfowCtx(ctx, "successfully set up sandbox environment with generic AI pricing model",
+		s.Logger.Info(ctx, "successfully set up sandbox environment with generic AI pricing model",
 			"tenant_id", tenantID,
 			"user_id", userID,
 			"environment_id", envID,
@@ -560,7 +562,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 }
 
 func (s *onboardingService) createDefaultMeters(ctx context.Context) ([]*meter.Meter, error) {
-	s.Logger.InfowCtx(ctx, "creating AI-focused meters for hackathon environment")
+	s.Logger.Info(ctx, "creating AI-focused meters for hackathon environment")
 
 	// Create a meter service instance
 	meterService := NewMeterService(s.MeterRepo)
@@ -588,13 +590,13 @@ func (s *onboardingService) createDefaultMeters(ctx context.Context) ([]*meter.M
 	if err != nil {
 		return nil, err
 	}
-	s.Logger.InfowCtx(ctx, "created LLM usage meter", "meter_id", llmUsageResp.ID)
+	s.Logger.Info(ctx, "created LLM usage meter", "meter_id", llmUsageResp.ID)
 
 	return []*meter.Meter{llmUsageResp}, nil
 }
 
 func (s *onboardingService) createDefaultFeatures(ctx context.Context, meters []*meter.Meter) ([]*dto.FeatureResponse, error) {
-	s.Logger.InfowCtx(ctx, "creating simple LLM usage feature for hackathon environment")
+	s.Logger.Info(ctx, "creating simple LLM usage feature for hackathon environment")
 
 	var llmUsageMeter *meter.Meter
 	for _, m := range meters {
@@ -621,7 +623,7 @@ func (s *onboardingService) createDefaultFeatures(ctx context.Context, meters []
 	if err != nil {
 		return nil, err
 	}
-	s.Logger.InfowCtx(ctx, "created feature",
+	s.Logger.Info(ctx, "created feature",
 		"feature_id", resp.ID,
 		"feature_name", resp.Name,
 		"feature_type", resp.Type,
@@ -631,7 +633,7 @@ func (s *onboardingService) createDefaultFeatures(ctx context.Context, meters []
 }
 
 func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*dto.FeatureResponse, meters []*meter.Meter) ([]*dto.CreatePlanResponse, error) {
-	s.Logger.InfowCtx(ctx, "creating AI-focused plans for hackathon environment")
+	s.Logger.Info(ctx, "creating AI-focused plans for hackathon environment")
 
 	// Create a plan service instance with all required dependencies
 	planService := NewPlanService(
@@ -664,7 +666,7 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 		if err != nil {
 			return nil, err
 		}
-		s.Logger.InfowCtx(ctx, "created plan",
+		s.Logger.Info(ctx, "created plan",
 			"plan_id", resp.ID,
 			"plan_name", resp.Name,
 		)
@@ -684,7 +686,7 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 
 // createDefaultPrices creates prices for plans using the new flow (separate from plan creation)
 func (s *onboardingService) createDefaultPrices(ctx context.Context, planResponses []*dto.CreatePlanResponse, priceService PriceService) error {
-	s.Logger.InfowCtx(ctx, "creating AI-focused prices for hackathon environment")
+	s.Logger.Info(ctx, "creating AI-focused prices for hackathon environment")
 
 	// Find plans by name
 	var starterPlan, basicPlan, proPlan *dto.CreatePlanResponse
@@ -772,12 +774,12 @@ func (s *onboardingService) createDefaultPrices(ctx context.Context, planRespons
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.InfowCtx(ctx, "created prices for all plans")
+	s.Logger.Info(ctx, "created prices for all plans")
 	return nil
 }
 
 func (s *onboardingService) createDefaultCustomers(ctx context.Context) ([]*dto.CustomerResponse, error) {
-	s.Logger.InfowCtx(ctx, "creating default customers for Cursor pricing model")
+	s.Logger.Info(ctx, "creating default customers for Cursor pricing model")
 
 	// Create a customer service instance
 	customerService := NewCustomerService(s.ServiceParams)
@@ -794,7 +796,7 @@ func (s *onboardingService) createDefaultCustomers(ctx context.Context) ([]*dto.
 		return nil, err
 	}
 
-	s.Logger.InfowCtx(ctx, "created customer",
+	s.Logger.Info(ctx, "created customer",
 		"customer_id", resp.ID,
 		"customer_name", resp.Name,
 		"customer_email", resp.Email,
@@ -804,7 +806,7 @@ func (s *onboardingService) createDefaultCustomers(ctx context.Context) ([]*dto.
 }
 
 func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, customers []*dto.CustomerResponse, plans []*dto.CreatePlanResponse) error {
-	s.Logger.InfowCtx(ctx, "creating default subscriptions for Cursor pricing model")
+	s.Logger.Info(ctx, "creating default subscriptions for Cursor pricing model")
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 
 	// Validate that we have at least one customer
@@ -849,7 +851,7 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 		return err
 	}
 
-	s.Logger.InfowCtx(ctx, "created subscription",
+	s.Logger.Info(ctx, "created subscription",
 		"subscription_id", resp.ID,
 		"subscription_status", resp.Status,
 	)
@@ -870,7 +872,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 
 	// Skip if webhook URL is not configured
 	if zapierWebhookURL == "" {
-		s.Logger.DebugwCtx(ctx, "Zapier webhook URL not configured, skipping webhook")
+		s.Logger.Debug(ctx, "Zapier webhook URL not configured, skipping webhook")
 		return nil
 	}
 
@@ -882,7 +884,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 	// Marshal payload to JSON
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to marshal Zapier webhook payload",
+		s.Logger.Error(ctx, "failed to marshal Zapier webhook payload",
 			"error", err,
 			"email", email,
 		)
@@ -903,13 +905,13 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 	}
 
 	// Send request
-	s.Logger.InfowCtx(ctx, "sending Zapier webhook",
+	s.Logger.Info(ctx, "sending Zapier webhook",
 		"email", email,
 	)
 
 	resp, err := httpClient.Send(ctx, req)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to send Zapier webhook",
+		s.Logger.Error(ctx, "failed to send Zapier webhook",
 			"error", err,
 			"email", email,
 		)
@@ -918,7 +920,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 
 	// Check response
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.Logger.ErrorwCtx(ctx, "Zapier webhook request failed with non-2xx status",
+		s.Logger.Info(ctx, "Zapier webhook request failed with non-2xx status",
 			"status_code", resp.StatusCode,
 			"response_body", string(resp.Body),
 			"email", email,
@@ -926,7 +928,7 @@ func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string)
 		return nil // Don't fail onboarding
 	}
 
-	s.Logger.InfowCtx(ctx, "successfully sent Zapier webhook",
+	s.Logger.Info(ctx, "successfully sent Zapier webhook",
 		"email", email,
 		"status_code", resp.StatusCode,
 	)

@@ -38,7 +38,7 @@ func (a *InvoiceSyncActivities) MarkWhopInvoicePaid(
 	ctx context.Context,
 	input models.WhopInvoiceMarkPaidWorkflowInput,
 ) error {
-	a.logger.Infow("marking Whop invoice as paid",
+	a.logger.Info(ctx, "marking Whop invoice as paid",
 		"invoice_id", input.InvoiceID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
@@ -59,7 +59,7 @@ func (a *InvoiceSyncActivities) MarkWhopInvoicePaid(
 	}
 
 	if err := whopIntegration.InvoiceSyncSvc.MarkInvoicePaidInWhop(ctx, input.InvoiceID); err != nil {
-		a.logger.Errorw("failed to mark Whop invoice as paid",
+		a.logger.Error(ctx, "failed to mark Whop invoice as paid",
 			"error", err,
 			"invoice_id", input.InvoiceID)
 		return err
@@ -73,7 +73,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToWhop(
 	ctx context.Context,
 	input models.WhopInvoiceSyncWorkflowInput,
 ) error {
-	a.logger.Infow("syncing invoice to Whop",
+	a.logger.Info(ctx, "syncing invoice to Whop",
 		"invoice_id", input.InvoiceID,
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
@@ -84,7 +84,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToWhop(
 	whopIntegration, err := a.integrationFactory.GetWhopIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debugw("Whop connection not configured",
+			a.logger.Debug(ctx, "Whop connection not configured",
 				"invoice_id", input.InvoiceID)
 			return temporal.NewNonRetryableApplicationError(
 				"Whop connection not configured",
@@ -92,7 +92,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToWhop(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get Whop integration",
+		a.logger.Error(ctx, "failed to get Whop integration",
 			"error", err,
 			"invoice_id", input.InvoiceID)
 		return err
@@ -104,13 +104,13 @@ func (a *InvoiceSyncActivities) SyncInvoiceToWhop(
 
 	_, err = whopIntegration.InvoiceSyncSvc.SyncInvoiceToWhop(ctx, syncReq, a.customerService)
 	if err != nil {
-		a.logger.Errorw("failed to sync invoice to Whop",
+		a.logger.Error(ctx, "failed to sync invoice to Whop",
 			"error", err,
 			"invoice_id", input.InvoiceID)
 		return err
 	}
 
-	a.logger.Infow("successfully synced invoice to Whop",
+	a.logger.Info(ctx, "successfully synced invoice to Whop",
 		"invoice_id", input.InvoiceID)
 
 	return nil

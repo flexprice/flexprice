@@ -185,6 +185,11 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			GoType(types.BillingPeriod("")),
+		field.JSON("commitment_time_buckets", types.TimeOfDayBuckets{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
 	}
 }
 

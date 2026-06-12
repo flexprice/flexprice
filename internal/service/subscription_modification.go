@@ -432,7 +432,7 @@ func (s *subscriptionModificationService) executeQuantityChange(
 
 			// Skip no-op: quantity unchanged avoids unnecessary DB writes and a spurious invoice.
 			if change.Quantity.Equal(lineItem.Quantity) {
-				sp.Logger.Debugw("skipping quantity change: quantity is unchanged",
+				sp.Logger.Debug(ctx, "skipping quantity change: quantity is unchanged",
 					"line_item_id", change.ID, "quantity", change.Quantity)
 				continue
 			}
@@ -676,7 +676,7 @@ func (s *subscriptionModificationService) previewQuantityChange(
 			}
 			inv, err := s.previewQuantityChangeProration(ctx, sub, lineItem, previewNewItem, effectiveDate)
 			if err != nil {
-				sp.Logger.Warnw("failed to preview proration for quantity change", "error", err, "line_item_id", lineItem.ID)
+				sp.Logger.Info(context.Background(), "failed to preview proration for quantity change", "error", err, "line_item_id", lineItem.ID)
 			} else if inv != nil {
 				changedInvoices = append(changedInvoices, *inv)
 			}
@@ -802,13 +802,13 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 			LineItems:      lineItems,
 		})
 		if err != nil {
-			sp.Logger.Errorw("failed to create delta proration invoice for quantity change", "error", err)
+			sp.Logger.Error(ctx, "failed to create delta proration invoice for quantity change", "error", err)
 			return nil, err
 		}
 		// CreateInvoice with InvoiceTypeOneOff already finalizes the invoice internally.
 		// Attempt payment (credits + payment method charge).
 		if err := invoiceSvc.AttemptPayment(ctx, inv.ID); err != nil {
-			sp.Logger.Warnw("failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
+			sp.Logger.Info(context.Background(), "failed to attempt payment for delta proration invoice", "error", err, "invoice_id", inv.ID)
 		}
 		// Re-fetch to get latest payment status after finalize+payment attempt.
 		latest, fetchErr := invoiceSvc.GetInvoice(ctx, inv.ID)
@@ -831,7 +831,7 @@ func (s *subscriptionModificationService) handleQuantityChangeProration(
 	idempotencyKey := fmt.Sprintf("proration_credit_%s_%s_%s", sub.ID, oldItem.ID, effectiveDate.Format(time.RFC3339))
 	walletTx, err := walletSvc.TopUpWalletForProratedCharge(ctx, billingCustomer, creditAmount, sub.Currency, idempotencyKey)
 	if err != nil {
-		sp.Logger.Errorw("failed to top up wallet for downgrade proration", "error", err)
+		sp.Logger.Error(ctx, "failed to top up wallet for downgrade proration", "error", err)
 		return nil, err
 	}
 	changedID := "(wallet_credit)"
@@ -1062,7 +1062,29 @@ func (s *subscriptionModificationService) previewQuantityChangeProration(
 
 // resolveExternalCustomersForInheritance resolves published customers by external ID and validates
 // they may receive an inherited subscription.
-func (s *subscriptionModificationService) resolveExternalCustomersForInheritance(ctx context.Context, subscriberCustomerID string, externalIDs []string) ([]string, error) {
+func (s *subscriptionModificationService) resolveExternalCustomersForInheritance(ctx context.Context, parentCustomerID string, externalIDs []string) ([]string, error) {
+	// Step 1: fetch all subscription IDs belonging to the parent customer.
+	// These are used to distinguish "already under this parent" (allowed) from
+	// "under a different parent" (blocked).
+	parentSubFilter := types.NewNoLimitSubscriptionFilter()
+	parentSubFilter.CustomerID = parentCustomerID
+	parentSubFilter.Status = lo.ToPtr(types.StatusPublished)
+	parentSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusTrialing,
+	}
+	parentSubFilter.WithLineItems = false
+	parentSubs, err := s.serviceParams.SubRepo.List(ctx, parentSubFilter)
+	if err != nil {
+		return nil, err
+	}
+	parentSubIDs := make(map[string]bool, len(parentSubs))
+	for _, sub := range parentSubs {
+		parentSubIDs[sub.ID] = true
+	}
+
+	// Step 2: resolve child customers by external ID.
 	childFilter := types.NewNoLimitCustomerFilter()
 	childFilter.ExternalIDs = externalIDs
 	childFilter.Status = lo.ToPtr(types.StatusPublished)
@@ -1085,7 +1107,7 @@ func (s *subscriptionModificationService) resolveExternalCustomersForInheritance
 				WithReportableDetails(map[string]interface{}{"external_id": extID}).
 				Mark(ierr.ErrNotFound)
 		}
-		if cust.ID == subscriberCustomerID {
+		if cust.ID == parentCustomerID {
 			return nil, ierr.NewError("cannot inherit onto itself").
 				WithHint("The subscriber cannot appear in external_customer_ids_to_inherit_subscription").
 				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
@@ -1097,6 +1119,43 @@ func (s *subscriptionModificationService) resolveExternalCustomersForInheritance
 				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
 				Mark(ierr.ErrValidation)
 		}
+
+		// Step 3: fetch all active/draft/trialing published subscriptions for the child.
+		childSubFilter := types.NewNoLimitSubscriptionFilter()
+		childSubFilter.CustomerID = cust.ID
+		childSubFilter.Status = lo.ToPtr(types.StatusPublished)
+		childSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusDraft,
+			types.SubscriptionStatusTrialing,
+		}
+		childSubFilter.WithLineItems = false
+		childSubs, err := s.serviceParams.SubRepo.List(ctx, childSubFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		// Step 4: check each subscription of the child.
+		// Block if:
+		//   - subscription has no parent (child has their own standalone/parent subscription), OR
+		//   - subscription's parent belongs to a different parent customer (not parentSubIDs)
+		for _, childSub := range childSubs {
+			if childSub.ParentSubscriptionID == nil {
+				// Child has a standalone or parent subscription of their own
+				return nil, ierr.NewError("child customer has standalone or parent subscriptions").
+					WithHint("The child customer cannot have standalone or parent subscriptions").
+					WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+					Mark(ierr.ErrValidation)
+			}
+			if !parentSubIDs[*childSub.ParentSubscriptionID] {
+				// Child is already inherited under a different parent
+				return nil, ierr.NewError("child customer already has a parent subscription").
+					WithHint("A customer can only be inherited under one parent").
+					WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
 		childCustomerIDs = append(childCustomerIDs, cust.ID)
 	}
 	return childCustomerIDs, nil
@@ -1169,7 +1228,7 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 
 	webhookPayload, err := json.Marshal(eventPayload)
 	if err != nil {
-		s.serviceParams.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		s.serviceParams.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -1185,6 +1244,6 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 		EntityID:      subscriptionID,
 	}
 	if err := s.serviceParams.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.serviceParams.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.serviceParams.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }

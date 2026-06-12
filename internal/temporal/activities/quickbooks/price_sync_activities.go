@@ -77,7 +77,7 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 	quickbooksIntegration, err := a.integrationFactory.GetQuickBooksIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debugw("QuickBooks connection not configured",
+			a.logger.Debug(ctx, "QuickBooks connection not configured",
 				"price_id", input.PriceID)
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return nil, temporal.NewNonRetryableApplicationError(
@@ -121,7 +121,7 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 
 	// Sync to QuickBooks
 	if err := quickbooksIntegration.ItemSyncSvc.SyncPriceToQuickBooks(ctx, plan, priceModel); err != nil {
-		a.logger.Errorw("failed to sync price to QuickBooks",
+		a.logger.Error(ctx, "failed to sync price to QuickBooks",
 			"price_id", input.PriceID,
 			"plan_id", input.PlanID,
 			"error", err)
@@ -135,7 +135,7 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 			Mark(ierr.ErrInternal)
 	}
 
-	a.logger.Infow("price synced to QuickBooks successfully",
+	a.logger.Info(ctx, "price synced to QuickBooks successfully",
 		"price_id", input.PriceID,
 		"plan_id", input.PlanID)
 

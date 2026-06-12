@@ -15,13 +15,13 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	entRepo "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
 	temporalModels "github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	temporalWorker "github.com/flexprice/flexprice/internal/temporal/worker"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -102,13 +102,13 @@ func setupDraftInvoices(params setupDraftInvoicesParams) error {
 		return fmt.Errorf("failed to create logger: %w", err)
 	}
 
-	sentryService := sentry.NewSentryService(cfg, appLogger)
+	sentryService := tracing.NewService(cfg, appLogger)
 
 	entClient, err := postgres.NewEntClients(cfg, appLogger)
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
-	client := postgres.NewClient(entClient, appLogger, sentry.NewSentryService(cfg, appLogger))
+	client := postgres.NewClient(entClient, appLogger, tracing.NewService(cfg, appLogger))
 	cacheClient := cache.NewInMemoryCache()
 
 	subscriptionRepo := entRepo.NewSubscriptionRepository(client, appLogger, cacheClient)

@@ -375,7 +375,7 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 	}
 
 	// Sync prices to integrations if available and prices are for a plan
-	s.Logger.DebugwCtx(ctx, "Bulk price sync check",
+	s.Logger.Debug(ctx, "Bulk price sync check",
 		"response_nil", response == nil,
 		"response_items_count", func() int {
 			if response == nil {
@@ -433,7 +433,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		meterService := NewMeterService(s.MeterRepo)
 		meter, err := meterService.GetMeter(ctx, price.MeterID)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to fetch meter", "meter_id", price.MeterID, "error", err)
+			s.Logger.Info(ctx, "failed to fetch meter", "meter_id", price.MeterID, "error", err)
 			return nil, err
 		}
 		response.Meter = dto.ToMeterResponse(meter)
@@ -443,7 +443,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		groupService := NewGroupService(s.ServiceParams)
 		group, err := groupService.GetGroup(ctx, price.GroupID)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to fetch group", "group_id", price.GroupID, "error", err)
+			s.Logger.Info(ctx, "failed to fetch group", "group_id", price.GroupID, "error", err)
 			// Don't fail the request if group fetch fails, just continue
 		} else {
 			response.Group = group
@@ -454,7 +454,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		priceUnitService := NewPriceUnitService(s.ServiceParams)
 		priceUnit, err := priceUnitService.GetPriceUnit(ctx, lo.FromPtr(price.PriceUnitID))
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to fetch price unit", "price_unit", *price.PriceUnit, "error", err)
+			s.Logger.Info(ctx, "failed to fetch price unit", "price_unit", *price.PriceUnit, "error", err)
 		} else {
 			response.PricingUnit = priceUnit
 		}
@@ -474,6 +474,10 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, req dto.GetPricesB
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
 		WithAllowExpiredPrices(req.AllowExpired).
 		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandGroups) + "," + string(types.ExpandPriceUnit))
+
+	if len(req.BillingPeriods) > 0 {
+		priceFilter = priceFilter.WithBillingPeriods(req.BillingPeriods)
+	}
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -597,7 +601,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 			metersByID[m.ID] = m
 		}
 
-		s.Logger.DebugwCtx(ctx, "fetched meters for prices", "count", len(metersResponse.Items))
+		s.Logger.Debug(ctx, "fetched meters for prices", "count", len(metersResponse.Items))
 	}
 
 	// Collect entity IDs based on entity type for efficient bulk fetching
@@ -681,7 +685,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 
 		groupsResponse, err := groupService.ListGroups(ctx, groupFilter)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to fetch groups in bulk", "error", err)
+			s.Logger.Info(ctx, "failed to fetch groups in bulk", "error", err)
 			// Don't fail the request, just continue without groups
 			groupsByID = make(map[string]*dto.GroupResponse)
 		} else {
@@ -705,7 +709,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 
 		priceUnitsResponse, err := priceUnitService.ListPriceUnits(ctx, priceUnitFilter)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "failed to fetch price units in bulk", "error", err)
+			s.Logger.Info(ctx, "failed to fetch price units in bulk", "error", err)
 			// Don't fail the request, just continue without price units
 			priceUnitsByID = make(map[string]*dto.PriceUnitResponse)
 		} else {
@@ -874,7 +878,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			return nil, err
 		}
 
-		s.Logger.InfowCtx(ctx, "price updated with termination and recreation",
+		s.Logger.Info(ctx, "price updated with termination and recreation",
 			"old_price_id", existingPrice.ID,
 			"new_price_id", newPriceResp.ID,
 			"termination_end_date", terminationEndDate,
@@ -1079,7 +1083,7 @@ func (s *priceService) CalculateCostFromUsageResults(ctx context.Context, price 
 func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {
 	cost := decimal.Zero
 	if len(price.Tiers) == 0 {
-		s.Logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
+		s.Logger.Info(ctx, "no tiers found for price", "price_id", price.ID)
 		return cost
 	}
 
@@ -1115,12 +1119,11 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 		// Calculate tier cost with full precision and handling of flat amount
 		tierCost := selectedTier.CalculateTierAmount(quantity, price.Currency)
 
-		s.Logger.WithContext(ctx).Debugf(
-			"volume tier total cost for quantity %s: %s price: %s tier : %+v",
-			quantity.String(),
-			tierCost.String(),
-			price.ID,
-			selectedTier,
+		s.Logger.Debug(ctx, "volume tier total cost",
+			"quantity", quantity.String(),
+			"cost", tierCost.String(),
+			"price_id", price.ID,
+			"tier", selectedTier,
 		)
 
 		cost = cost.Add(tierCost)
@@ -1148,12 +1151,11 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 			cost = cost.Add(tierCost)
 			remainingQuantity = remainingQuantity.Sub(tierQuantity)
 
-			s.Logger.WithContext(ctx).Debugf(
-				"slab tier total cost for quantity %s: %s price: %s tier : %+v",
-				quantity.String(),
-				tierCost.String(),
-				price.ID,
-				tier,
+			s.Logger.Debug(ctx, "slab tier total cost",
+				"quantity", quantity.String(),
+				"cost", tierCost.String(),
+				"price_id", price.ID,
+				"tier", tier,
 			)
 
 			if remainingQuantity.LessThanOrEqual(decimal.Zero) {
@@ -1161,7 +1163,7 @@ func (s *priceService) calculateTieredCost(ctx context.Context, price *price.Pri
 			}
 		}
 	default:
-		s.Logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
+		s.Logger.Info(ctx, "invalid tier mode", "tier_mode", price.TierMode)
 		return decimal.Zero
 	}
 
@@ -1241,7 +1243,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 	}
 
 	if len(price.Tiers) == 0 {
-		s.Logger.WithContext(ctx).Errorf("no tiers found for price %s", price.ID)
+		s.Logger.Info(ctx, "no tiers found for price", "price_id", price.ID)
 		return result
 	}
 
@@ -1283,12 +1285,11 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			result.EffectiveUnitCost = decimal.Zero
 		}
 
-		s.Logger.WithContext(ctx).Debugf(
-			"volume tier total cost for quantity %s: %s price: %s tier : %+v",
-			quantity.String(),
-			result.FinalCost.String(),
-			price.ID,
-			selectedTier,
+		s.Logger.Debug(ctx, "volume tier total cost",
+			"quantity", quantity.String(),
+			"cost", result.FinalCost.String(),
+			"price_id", price.ID,
+			"tier", selectedTier,
 		)
 
 	case types.BILLING_TIER_SLAB:
@@ -1321,12 +1322,11 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 
 			remainingQuantity = remainingQuantity.Sub(tierQuantity)
 
-			s.Logger.WithContext(ctx).Debugf(
-				"slab tier total cost for quantity %s: %s price: %s tier : %+v",
-				quantity.String(),
-				tierCost.String(),
-				price.ID,
-				tier,
+			s.Logger.Debug(ctx, "slab tier total cost",
+				"quantity", quantity.String(),
+				"cost", tierCost.String(),
+				"price_id", price.ID,
+				"tier", tier,
 			)
 
 			if remainingQuantity.LessThanOrEqual(decimal.Zero) {
@@ -1341,7 +1341,7 @@ func (s *priceService) calculateTieredCostWithBreakup(ctx context.Context, price
 			result.EffectiveUnitCost = decimal.Zero
 		}
 	default:
-		s.Logger.WithContext(ctx).Errorf("invalid tier mode: %s", price.TierMode)
+		s.Logger.Info(ctx, "invalid tier mode", "tier_mode", price.TierMode)
 	}
 
 	return result
@@ -1393,7 +1393,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 	// Get Chargebee integration
 	chargebeeIntegration, err := s.IntegrationFactory.GetChargebeeIntegration(ctx)
 	if err != nil {
-		s.Logger.DebugwCtx(ctx, "Chargebee integration not available, skipping sync",
+		s.Logger.Debug(ctx, "Chargebee integration not available, skipping sync",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
@@ -1402,7 +1402,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 
 	// Check if Chargebee connection exists
 	if !chargebeeIntegration.Client.HasChargebeeConnection(ctx) {
-		s.Logger.DebugwCtx(ctx, "Chargebee connection not configured, skipping sync",
+		s.Logger.Debug(ctx, "Chargebee connection not configured, skipping sync",
 			"price_id", priceID,
 			"plan_id", planID)
 		return
@@ -1411,7 +1411,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 	// Get plan using repository
 	plan, err := s.PlanRepo.Get(ctx, planID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get plan for Chargebee sync",
+		s.Logger.Error(ctx, "failed to get plan for Chargebee sync",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
@@ -1421,7 +1421,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 	// Get price using repository
 	priceModel, err := s.PriceRepo.Get(ctx, priceID)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to get price for Chargebee sync",
+		s.Logger.Error(ctx, "failed to get price for Chargebee sync",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
@@ -1430,12 +1430,12 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 
 	// Sync to Chargebee (non-blocking - log errors but don't fail)
 	if syncErr := chargebeeIntegration.PlanSyncSvc.SyncPlanToChargebee(ctx, plan, []*price.Price{priceModel}); syncErr != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to sync price to Chargebee",
+		s.Logger.Error(ctx, "failed to sync price to Chargebee",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", syncErr)
 	} else {
-		s.Logger.InfowCtx(ctx, "successfully synced price to Chargebee",
+		s.Logger.Info(ctx, "successfully synced price to Chargebee",
 			"price_id", priceID,
 			"plan_id", planID)
 	}
@@ -1542,7 +1542,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 		p.DisplayPriceUnitAmount = p.GetDisplayPriceUnitAmount(priceUnit.Symbol)
 	}
 
-	s.Logger.InfowCtx(ctx, "applied price unit conversion to price object",
+	s.Logger.Info(ctx, "applied price unit conversion to price object",
 		"price_unit_id", priceUnit.ID,
 		"price_unit_code", priceUnit.Code,
 		"conversion_rate", priceUnit.ConversionRate.String(),
@@ -1561,7 +1561,7 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 	// Get global Temporal service
 	temporalSvc := temporalService.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		s.Logger.DebugwCtx(ctx, "Temporal service not available, skipping QuickBooks sync",
+		s.Logger.Debug(ctx, "Temporal service not available, skipping QuickBooks sync",
 			"price_id", priceID)
 		return
 	}
@@ -1576,12 +1576,12 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			// Connection not configured - skip silently
-			s.Logger.DebugwCtx(ctx, "QB TEMPORAL SYNC - connection not found, skipping",
+			s.Logger.Debug(ctx, "QB TEMPORAL SYNC - connection not found, skipping",
 				"price_id", priceID)
 			return
 		}
 		// Actual error - log but don't fail
-		s.Logger.ErrorwCtx(ctx, "error checking QuickBooks connection",
+		s.Logger.Error(ctx, "error checking QuickBooks connection",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
@@ -1600,14 +1600,14 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 		workflowInput,
 	)
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to start QuickBooks sync workflow",
+		s.Logger.Error(ctx, "failed to start QuickBooks sync workflow",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
 		return
 	}
 
-	s.Logger.DebugwCtx(ctx, "QuickBooks sync workflow started",
+	s.Logger.Debug(ctx, "QuickBooks sync workflow started",
 		"price_id", priceID,
 		"plan_id", planID,
 		"workflow_id", workflowRun.GetID(),

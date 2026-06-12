@@ -154,7 +154,7 @@ func NewPlanSyncService(params PlanSyncServiceParams) ChargebeePlanSyncService {
 
 // CreateItemFamily creates a new item family in Chargebee
 func (s *ItemFamilyService) CreateItemFamily(ctx context.Context, req *ItemFamilyCreateRequest) (*ItemFamilyResponse, error) {
-	s.Logger.Infow("creating item family in Chargebee",
+	s.Logger.Info(ctx, "creating item family in Chargebee",
 		"family_id", req.ID,
 		"name", req.Name)
 
@@ -171,7 +171,7 @@ func (s *ItemFamilyService) CreateItemFamily(ctx context.Context, req *ItemFamil
 	// Create item family using client wrapper
 	result, err := s.Client.CreateItemFamily(ctx, createParams)
 	if err != nil {
-		s.Logger.Errorw("failed to create item family in Chargebee",
+		s.Logger.Error(ctx, "failed to create item family in Chargebee",
 			"family_id", req.ID,
 			"error", err)
 		return nil, ierr.NewError("failed to create item family in Chargebee").
@@ -185,7 +185,7 @@ func (s *ItemFamilyService) CreateItemFamily(ctx context.Context, req *ItemFamil
 
 	itemFamily := result.ItemFamily
 
-	s.Logger.Infow("successfully created item family in Chargebee",
+	s.Logger.Info(ctx, "successfully created item family in Chargebee",
 		"family_id", itemFamily.Id,
 		"name", itemFamily.Name)
 
@@ -204,7 +204,7 @@ func (s *ItemFamilyService) CreateItemFamily(ctx context.Context, req *ItemFamil
 
 // ListItemFamilies retrieves all item families from Chargebee
 func (s *ItemFamilyService) ListItemFamilies(ctx context.Context) ([]*ItemFamilyResponse, error) {
-	s.Logger.Infow("listing item families from Chargebee")
+	s.Logger.Info(ctx, "listing item families from Chargebee")
 
 	// List all item families using client wrapper
 	result, err := s.Client.ListItemFamilies(ctx, &itemfamily.ListRequestParams{
@@ -212,7 +212,7 @@ func (s *ItemFamilyService) ListItemFamilies(ctx context.Context) ([]*ItemFamily
 	})
 
 	if err != nil {
-		s.Logger.Errorw("failed to list item families from Chargebee",
+		s.Logger.Error(ctx, "failed to list item families from Chargebee",
 			"error", err)
 		return nil, ierr.NewError("failed to list item families from Chargebee").
 			WithReportableDetails(map[string]interface{}{
@@ -236,7 +236,7 @@ func (s *ItemFamilyService) ListItemFamilies(ctx context.Context) ([]*ItemFamily
 		})
 	}
 
-	s.Logger.Infow("successfully listed item families from Chargebee",
+	s.Logger.Info(ctx, "successfully listed item families from Chargebee",
 		"count", len(families))
 
 	return families, nil
@@ -263,7 +263,7 @@ func (s *ItemFamilyService) GetLatestItemFamily(ctx context.Context) (*ItemFamil
 		}
 	}
 
-	s.Logger.Infow("found latest item family",
+	s.Logger.Info(ctx, "found latest item family",
 		"family_id", latest.ID,
 		"name", latest.Name,
 		"updated_at", latest.UpdatedAt)
@@ -277,7 +277,7 @@ func (s *ItemFamilyService) GetLatestItemFamily(ctx context.Context) (*ItemFamil
 
 // CreateItem creates a new item in Chargebee
 func (s *ItemService) CreateItem(ctx context.Context, req *ItemCreateRequest) (*ItemResponse, error) {
-	s.Logger.Infow("creating item in Chargebee",
+	s.Logger.Info(ctx, "creating item in Chargebee",
 		"item_id", req.ID,
 		"name", req.Name,
 		"type", req.Type,
@@ -303,7 +303,7 @@ func (s *ItemService) CreateItem(ctx context.Context, req *ItemCreateRequest) (*
 	// Create item using client wrapper
 	result, err := s.Client.CreateItem(ctx, createParams)
 	if err != nil {
-		s.Logger.Errorw("failed to create item in Chargebee",
+		s.Logger.Error(ctx, "failed to create item in Chargebee",
 			"item_id", req.ID,
 			"error", err)
 		return nil, ierr.NewError("failed to create item in Chargebee").
@@ -317,7 +317,7 @@ func (s *ItemService) CreateItem(ctx context.Context, req *ItemCreateRequest) (*
 
 	itemData := result.Item
 
-	s.Logger.Infow("successfully created item in Chargebee",
+	s.Logger.Info(ctx, "successfully created item in Chargebee",
 		"item_id", itemData.Id,
 		"name", itemData.Name,
 		"type", itemData.Type)
@@ -340,13 +340,13 @@ func (s *ItemService) CreateItem(ctx context.Context, req *ItemCreateRequest) (*
 
 // RetrieveItem retrieves an item from Chargebee
 func (s *ItemService) RetrieveItem(ctx context.Context, itemID string) (*ItemResponse, error) {
-	s.Logger.Infow("retrieving item from Chargebee",
+	s.Logger.Info(ctx, "retrieving item from Chargebee",
 		"item_id", itemID)
 
 	// Retrieve item using client wrapper
 	result, err := s.Client.RetrieveItem(ctx, itemID)
 	if err != nil {
-		s.Logger.Errorw("failed to retrieve item from Chargebee",
+		s.Logger.Error(ctx, "failed to retrieve item from Chargebee",
 			"item_id", itemID,
 			"error", err)
 		return nil, ierr.NewError("failed to retrieve item from Chargebee").
@@ -360,7 +360,7 @@ func (s *ItemService) RetrieveItem(ctx context.Context, itemID string) (*ItemRes
 
 	itemData := result.Item
 
-	s.Logger.Infow("successfully retrieved item from Chargebee",
+	s.Logger.Info(ctx, "successfully retrieved item from Chargebee",
 		"item_id", itemData.Id,
 		"name", itemData.Name)
 
@@ -386,7 +386,7 @@ func (s *ItemService) RetrieveItem(ctx context.Context, itemID string) (*ItemRes
 
 // CreateItemPrice creates a new item price in Chargebee
 func (s *ItemPriceService) CreateItemPrice(ctx context.Context, req *ItemPriceCreateRequest) (*ItemPriceResponse, error) {
-	s.Logger.Infow("creating item price in Chargebee",
+	s.Logger.Info(ctx, "creating item price in Chargebee",
 		"item_price_id", req.ID,
 		"item_id", req.ItemID,
 		"pricing_model", req.PricingModel,
@@ -442,7 +442,7 @@ func (s *ItemPriceService) CreateItemPrice(ctx context.Context, req *ItemPriceCr
 	// Create item price using client wrapper
 	result, err := s.Client.CreateItemPrice(ctx, createParams)
 	if err != nil {
-		s.Logger.Errorw("failed to create item price in Chargebee",
+		s.Logger.Error(ctx, "failed to create item price in Chargebee",
 			"item_price_id", req.ID,
 			"item_id", req.ItemID,
 			"error", err)
@@ -458,7 +458,7 @@ func (s *ItemPriceService) CreateItemPrice(ctx context.Context, req *ItemPriceCr
 
 	itemPrice := result.ItemPrice
 
-	s.Logger.Infow("successfully created item price in Chargebee",
+	s.Logger.Info(ctx, "successfully created item price in Chargebee",
 		"item_price_id", itemPrice.Id,
 		"item_id", itemPrice.ItemId,
 		"pricing_model", string(itemPrice.PricingModel),
@@ -485,13 +485,13 @@ func (s *ItemPriceService) CreateItemPrice(ctx context.Context, req *ItemPriceCr
 
 // RetrieveItemPrice retrieves an item price from Chargebee
 func (s *ItemPriceService) RetrieveItemPrice(ctx context.Context, itemPriceID string) (*ItemPriceResponse, error) {
-	s.Logger.Infow("retrieving item price from Chargebee",
+	s.Logger.Info(ctx, "retrieving item price from Chargebee",
 		"item_price_id", itemPriceID)
 
 	// Retrieve item price using client wrapper
 	result, err := s.Client.RetrieveItemPrice(ctx, itemPriceID)
 	if err != nil {
-		s.Logger.Errorw("failed to retrieve item price from Chargebee",
+		s.Logger.Error(ctx, "failed to retrieve item price from Chargebee",
 			"item_price_id", itemPriceID,
 			"error", err)
 		return nil, ierr.NewError("failed to retrieve item price from Chargebee").
@@ -505,7 +505,7 @@ func (s *ItemPriceService) RetrieveItemPrice(ctx context.Context, itemPriceID st
 
 	itemPrice := result.ItemPrice
 
-	s.Logger.Infow("successfully retrieved item price from Chargebee",
+	s.Logger.Info(ctx, "successfully retrieved item price from Chargebee",
 		"item_price_id", itemPrice.Id,
 		"item_id", itemPrice.ItemId)
 
@@ -613,7 +613,7 @@ func (s *PlanSyncService) getDisplayNameForPrice(ctx context.Context, p *price.P
 	// Try to get meter
 	meter, err := s.MeterRepo.GetMeter(ctx, meterID)
 	if err != nil {
-		s.Logger.Debugw("failed to get meter for price, using plan name",
+		s.Logger.Debug(ctx, "failed to get meter for price, using plan name",
 			"price_id", p.ID,
 			"meter_id", meterID,
 			"error", err)
@@ -625,7 +625,7 @@ func (s *PlanSyncService) getDisplayNameForPrice(ctx context.Context, p *price.P
 	featureFilter.MeterIDs = []string{meterID}
 	features, err := s.FeatureRepo.List(ctx, featureFilter)
 	if err != nil || len(features) == 0 {
-		s.Logger.Debugw("failed to get feature for meter, using meter name",
+		s.Logger.Debug(ctx, "failed to get feature for meter, using meter name",
 			"price_id", p.ID,
 			"meter_id", meterID,
 			"error", err)
@@ -653,7 +653,7 @@ func (s *PlanSyncService) getDisplayNameForPrice(ctx context.Context, p *price.P
 // SyncPlanToChargebee syncs a FlexPrice plan and its prices to Chargebee
 // Creates a separate charge item for each price to avoid currency conflicts
 func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Plan, prices []*price.Price) error {
-	s.Logger.Infow("syncing plan to Chargebee",
+	s.Logger.Info(ctx, "syncing plan to Chargebee",
 		"plan_id", plan.ID,
 		"plan_name", plan.Name,
 		"prices_count", len(prices))
@@ -661,7 +661,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 	// Step 1: Get or select the latest item family
 	itemFamily, err := s.itemFamilyService.GetLatestItemFamily(ctx)
 	if err != nil {
-		s.Logger.Errorw("failed to get item family from Chargebee",
+		s.Logger.Error(ctx, "failed to get item family from Chargebee",
 			"plan_id", plan.ID,
 			"error", err)
 		return ierr.WithError(err).
@@ -669,7 +669,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 			Mark(ierr.ErrNotFound)
 	}
 
-	s.Logger.Infow("using item family for plan",
+	s.Logger.Info(ctx, "using item family for plan",
 		"plan_id", plan.ID,
 		"item_family_id", itemFamily.ID,
 		"item_family_name", itemFamily.Name)
@@ -703,7 +703,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 
 		item, err := s.itemService.CreateItem(ctx, itemReq)
 		if err != nil {
-			s.Logger.Errorw("failed to create item in Chargebee",
+			s.Logger.Error(ctx, "failed to create item in Chargebee",
 				"plan_id", plan.ID,
 				"price_id", p.ID,
 				"item_id", itemID,
@@ -712,7 +712,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 			continue
 		}
 
-		s.Logger.Infow("successfully created item in Chargebee",
+		s.Logger.Info(ctx, "successfully created item in Chargebee",
 			"plan_id", plan.ID,
 			"price_id", p.ID,
 			"item_id", item.ID)
@@ -753,7 +753,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 				}
 			}
 			itemPriceReq.Tiers = convertTiersForChargebee(tiers, p.Currency)
-			s.Logger.Infow("syncing tiered pricing to Chargebee",
+			s.Logger.Info(ctx, "syncing tiered pricing to Chargebee",
 				"price_id", p.ID,
 				"tier_mode", p.TierMode,
 				"tier_count", len(p.Tiers))
@@ -777,7 +777,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 
 		itemPrice, err := s.itemPriceService.CreateItemPrice(ctx, itemPriceReq)
 		if err != nil {
-			s.Logger.Errorw("failed to create item price in Chargebee",
+			s.Logger.Error(ctx, "failed to create item price in Chargebee",
 				"plan_id", plan.ID,
 				"price_id", p.ID,
 				"item_price_id", itemPriceID,
@@ -787,7 +787,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 			continue
 		}
 
-		s.Logger.Infow("successfully created item price in Chargebee",
+		s.Logger.Info(ctx, "successfully created item price in Chargebee",
 			"plan_id", plan.ID,
 			"price_id", p.ID,
 			"item_price_id", itemPrice.ID,
@@ -814,7 +814,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 
 		err = s.EntityIntegrationMappingRepo.Create(ctx, mapping)
 		if err != nil {
-			s.Logger.Errorw("failed to save price entity mapping",
+			s.Logger.Error(ctx, "failed to save price entity mapping",
 				"price_id", p.ID,
 				"chargebee_item_price_id", itemPrice.ID,
 				"chargebee_item_id", item.ID,
@@ -825,7 +825,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *plan.Pl
 		successCount++
 	}
 
-	s.Logger.Infow("successfully synced plan to Chargebee",
+	s.Logger.Info(ctx, "successfully synced plan to Chargebee",
 		"plan_id", plan.ID,
 		"total_prices", len(prices),
 		"successfully_synced", successCount)

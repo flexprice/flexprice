@@ -46,7 +46,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 	var creditNote *creditnote.CreditNote
 
 	err := s.DB.WithTx(ctx, func(tx context.Context) error {
-		s.Logger.Infow("creating credit note",
+		s.Logger.Info(ctx, "creating credit note",
 			"invoice_id", req.InvoiceID,
 			"reason", req.Reason,
 			"line_items_count", len(req.LineItems))
@@ -81,7 +81,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 		}
 
 		if existingCreditNote, err := s.CreditNoteRepo.GetByIdempotencyKey(tx, *req.IdempotencyKey); err == nil {
-			s.Logger.Infow("returning existing credit note for idempotency key",
+			s.Logger.Info(ctx, "returning existing credit note for idempotency key",
 				"idempotency_key", *req.IdempotencyKey,
 				"existing_credit_note_id", existingCreditNote.ID)
 			creditNote = existingCreditNote
@@ -98,8 +98,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 			return err
 		}
 
-		s.Logger.Infow(
-			"credit note created successfully",
+		s.Logger.Info(ctx, "credit note created successfully",
 			"credit_note_id", cn.ID,
 			"credit_note_number", req.CreditNoteNumber,
 			"invoice_id", req.InvoiceID,
@@ -111,8 +110,7 @@ func (s *creditNoteService) CreateCreditNote(ctx context.Context, req *dto.Creat
 	})
 
 	if err != nil {
-		s.Logger.Errorw(
-			"failed to create credit note",
+		s.Logger.Error(ctx, "failed to create credit note",
 			"error", err,
 			"invoice_id", req.InvoiceID,
 			"reason", req.Reason,
@@ -345,7 +343,7 @@ func (s *creditNoteService) VoidCreditNote(ctx context.Context, id string) error
 		sp := s.ServiceParams
 		invoiceService := service.NewInvoiceService(sp)
 		if err := invoiceService.RecalculateInvoiceAmounts(ctx, cn.InvoiceID); err != nil {
-			s.Logger.Errorw("failed to recalculate invoice amounts after credit note void",
+			s.Logger.Error(ctx, "failed to recalculate invoice amounts after credit note void",
 				"error", err, "credit_note_id", cn.ID, "invoice_id", cn.InvoiceID)
 		}
 	}
@@ -585,7 +583,7 @@ func (s *creditNoteService) publishSystemEvent(ctx context.Context, eventType st
 		TenantID:     types.GetTenantID(ctx),
 	})
 	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 	webhookEvent := &types.WebhookEvent{
@@ -600,6 +598,6 @@ func (s *creditNoteService) publishSystemEvent(ctx context.Context, eventType st
 		EntityID:      creditNoteID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorw("failed to publish webhook event", "error", err, "event_name", eventType)
+		s.Logger.Error(ctx, "failed to publish webhook event", "error", err, "event_name", eventType)
 	}
 }

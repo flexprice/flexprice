@@ -164,7 +164,7 @@ func (s *supabaseAuth) AssignUserToTenant(ctx context.Context, userID string, te
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Debugw("assigned tenant to user",
+	s.logger.Debug(ctx, "assigned tenant to user",
 		"user_id", userID,
 		"tenant_id", tenantID,
 		"response", resp,

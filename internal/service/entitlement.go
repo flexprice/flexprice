@@ -100,7 +100,7 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 				}).
 				Mark(ierr.ErrNotFound)
 		}
-		s.Logger.InfowCtx(ctx, "creating subscription-scoped entitlement",
+		s.Logger.Info(ctx, "creating subscription-scoped entitlement",
 			"subscription_id", entityID,
 			"feature_id", req.FeatureID,
 			"parent_entitlement_id", req.ParentEntitlementID)
@@ -176,7 +176,7 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		response.PlanID = entityID // Keep for backward compatibility
 	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
 		// For subscription entitlements, we don't add the full subscription object to avoid circular deps
-		s.Logger.InfowCtx(ctx, "subscription-scoped entitlement created",
+		s.Logger.Info(ctx, "subscription-scoped entitlement created",
 			"entitlement_id", result.ID,
 			"subscription_id", entityID)
 	}
@@ -376,7 +376,7 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 				entResp.Addon = &dto.AddonResponse{Addon: addon}
 			case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
 				// For subscription entitlements, we don't add the full subscription object to avoid circular deps
-				s.Logger.InfowCtx(ctx, "subscription-scoped entitlement created in bulk",
+				s.Logger.Info(ctx, "subscription-scoped entitlement created in bulk",
 					"entitlement_id", ent.ID,
 					"subscription_id", ent.EntityID)
 			}
@@ -490,7 +490,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					featuresByID[f.ID] = f
 				}
 
-				s.Logger.DebugwCtx(ctx, "fetched features for entitlements", "count", len(features))
+				s.Logger.Debug(ctx, "fetched features for entitlements", "count", len(features))
 			}
 		}
 
@@ -514,7 +514,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					metersByID[m.ID] = m
 				}
 
-				s.Logger.DebugwCtx(ctx, "fetched meters for entitlements", "count", len(meters))
+				s.Logger.Debug(ctx, "fetched meters for entitlements", "count", len(meters))
 			}
 		}
 
@@ -537,7 +537,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					plansByID[p.ID] = p
 				}
 
-				s.Logger.DebugwCtx(ctx, "fetched plans for entitlements", "count", len(plans))
+				s.Logger.Debug(ctx, "fetched plans for entitlements", "count", len(plans))
 			}
 		}
 
@@ -560,7 +560,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					addonsByID[a.ID] = a
 				}
 
-				s.Logger.DebugwCtx(ctx, "fetched addons for entitlements", "count", len(addons))
+				s.Logger.Debug(ctx, "fetched addons for entitlements", "count", len(addons))
 			}
 		}
 	}
@@ -722,7 +722,7 @@ func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName t
 		TenantID:      types.GetTenantID(ctx),
 	})
 	if err != nil {
-		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
+		s.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -738,6 +738,6 @@ func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName t
 		EntityID:      entitlementID,
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }

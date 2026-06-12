@@ -70,7 +70,7 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 
 		existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 		if err == nil && existingMappings != nil && len(existingMappings) > 0 {
-			s.logger.Infow("customer already mapped to HubSpot contact, skipping creation",
+			s.logger.Info(ctx, "customer already mapped to HubSpot contact, skipping creation",
 				"hubspot_contact_id", hubspotContact.ID,
 				"customer_id", existingMappings[0].EntityID)
 			return nil
@@ -87,13 +87,13 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 		existingCustomers, err := customerService.GetCustomers(ctx, filter)
 		if err == nil && existingCustomers != nil && len(existingCustomers.Items) > 0 {
 			existingCustomer := existingCustomers.Items[0]
-			s.logger.Infow("customer with same email already exists, creating mapping",
+			s.logger.Info(ctx, "customer with same email already exists, creating mapping",
 				"customer_id", existingCustomer.ID,
 				"hubspot_contact_id", hubspotContact.ID)
 
 			// Create entity mapping for existing customer
 			if err := s.createEntityIntegrationMapping(ctx, existingCustomer.ID, hubspotContact, dealID); err != nil {
-				s.logger.Warnw("failed to create mapping for existing customer",
+				s.logger.Info(context.Background(), "failed to create mapping for existing customer",
 					"error", err,
 					"customer_id", existingCustomer.ID,
 					"hubspot_contact_id", hubspotContact.ID)
@@ -143,13 +143,13 @@ func (s *CustomerService) CreateCustomerFromHubSpot(
 			Mark(ierr.ErrInternal)
 	}
 
-	s.logger.Infow("successfully created customer from HubSpot contact",
+	s.logger.Info(ctx, "successfully created customer from HubSpot contact",
 		"customer_id", customerResp.ID,
 		"hubspot_contact_id", hubspotContact.ID)
 
 	// Create entity mapping for new customer
 	if err := s.createEntityIntegrationMapping(ctx, customerResp.ID, hubspotContact, dealID); err != nil {
-		s.logger.Warnw("failed to create mapping for new customer",
+		s.logger.Info(context.Background(), "failed to create mapping for new customer",
 			"error", err,
 			"customer_id", customerResp.ID,
 			"hubspot_contact_id", hubspotContact.ID)
@@ -186,14 +186,14 @@ func (s *CustomerService) createEntityIntegrationMapping(
 
 	err := s.entityIntegrationMappingRepo.Create(ctx, mapping)
 	if err != nil {
-		s.logger.Warnw("failed to create entity mapping for customer",
+		s.logger.Info(context.Background(), "failed to create entity mapping for customer",
 			"error", err,
 			"customer_id", customerID,
 			"hubspot_contact_id", hubspotContact.ID)
 		return err
 	}
 
-	s.logger.Infow("created entity integration mapping",
+	s.logger.Info(ctx, "created entity integration mapping",
 		"flexprice_customer_id", customerID,
 		"hubspot_contact_id", hubspotContact.ID)
 

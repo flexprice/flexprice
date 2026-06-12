@@ -92,13 +92,13 @@ func (o *ClientOptions) ToSDKOptions() client.Options {
 // ToSDKOptions converts WorkerOptions to Temporal SDK worker.Options
 func (o *WorkerOptions) ToSDKOptions() worker.Options {
 	return worker.Options{
-		MaxConcurrentActivityExecutionSize:      o.MaxConcurrentActivityExecutionSize,
-		MaxConcurrentWorkflowTaskExecutionSize:  o.MaxConcurrentWorkflowTaskExecutionSize,
-		WorkerActivitiesPerSecond:               o.WorkerActivitiesPerSecond,
-		TaskQueueActivitiesPerSecond:            o.TaskQueueActivitiesPerSecond,
-		WorkerStopTimeout:                       o.WorkerStopTimeout,
-		EnableLoggingInReplay:                   o.EnableLoggingInReplay,
-		Interceptors:                            o.Interceptors,
+		MaxConcurrentActivityExecutionSize:     o.MaxConcurrentActivityExecutionSize,
+		MaxConcurrentWorkflowTaskExecutionSize: o.MaxConcurrentWorkflowTaskExecutionSize,
+		WorkerActivitiesPerSecond:              o.WorkerActivitiesPerSecond,
+		TaskQueueActivitiesPerSecond:           o.TaskQueueActivitiesPerSecond,
+		WorkerStopTimeout:                      o.WorkerStopTimeout,
+		EnableLoggingInReplay:                  o.EnableLoggingInReplay,
+		Interceptors:                           o.Interceptors,
 	}
 }
 

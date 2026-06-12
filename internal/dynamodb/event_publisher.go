@@ -9,7 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"go.uber.org/zap"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -70,10 +69,10 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 	}
 
 	p.logger.With(
-		zap.String("event_id", event.ID),
-		zap.String("tenant_id", event.TenantID),
-		zap.String("event_name", event.EventName),
-		zap.String("environment_id", event.EnvironmentID),
+		"event_id", event.ID,
+		"tenant_id", event.TenantID,
+		"event_name", event.EventName,
+		"environment_id", event.EnvironmentID,
 	).Debug("publishing event to dynamodb")
 
 	_, err = p.client.db.PutItem(ctx, input)

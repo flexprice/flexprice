@@ -5,10 +5,11 @@ import (
 )
 
 type SignUpRequest struct {
-	Email      string `json:"email" binding:"required,email" validate:"email"`
-	Password   string `json:"password" binding:"omitempty,min=8" validate:"omitempty,min=8"`
-	TenantName string `json:"tenant_name" binding:"omitempty" validate:"omitempty"`
-	Token      string `json:"token" binding:"omitempty" validate:"omitempty"`
+	Email      string            `json:"email" binding:"required,email" validate:"email"`
+	Password   string            `json:"password" binding:"omitempty,min=8" validate:"omitempty,min=8"`
+	TenantName string            `json:"tenant_name" binding:"omitempty" validate:"omitempty"`
+	Token      string            `json:"token" binding:"omitempty" validate:"omitempty"`
+	Metadata   map[string]string `json:"metadata,omitempty" binding:"omitempty" validate:"omitempty"`
 }
 
 type LoginRequest struct {

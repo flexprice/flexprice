@@ -47,9 +47,10 @@ func TestAllTemporalServerScheduleIDs_covers_all_consts(t *testing.T) {
 		ScheduleIDSubscriptionTrialEndDue,
 		ScheduleIDSubscriptionAutoInvoiceThresholdBilling,
 		ScheduleIDOutboundWebhookStaleRetry,
+		ScheduleIDPaddleInvoicePullSync,
 	} {
 		_, ok := seen[c]
 		require.True(t, ok, "const %q must appear in AllTemporalServerScheduleIDs", c)
 	}
-	require.Equal(t, 8, len(ids), "expected eight managed server schedule ids")
+	require.Equal(t, 9, len(ids), "expected nine managed server schedule ids")
 }

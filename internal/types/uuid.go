@@ -110,6 +110,7 @@ const (
 	UUID_PREFIX_SUBSCRIPTION_ENTITLEMENT   = "sub_ent"
 	UUID_PREFIX_SUBSCRIPTION_PHASE         = "phase"
 	UUID_PREFIX_SYSTEM_EVENT               = "sys_event"
+	UUID_PREFIX_COMMITMENT_BUCKET          = "bucket"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

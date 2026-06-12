@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/getsentry/sentry-go"
+	"github.com/flexprice/flexprice/internal/tracing"
 )
 
 // UnmarshalCacheValue attempts to convert a cache value to the specified type.
@@ -36,55 +36,30 @@ func UnmarshalCacheValue[T any](value interface{}) (*T, bool) {
 	return nil, false
 }
 
-// StartCache	Span creates a new span for a cache operation
-// Returns nil if Sentry is not available in the context
-func StartCacheSpan(ctx context.Context, cache, operation string, params map[string]interface{}) *sentry.Span {
-	// Get the hub from the context
-	// hub := sentry.GetHubFromContext(ctx)
-	// if hub == nil {
-	// 	return nil
-	// }
-
-	// // Create a new span for this operation
-	// span := sentry.StartSpan(ctx, "cache."+cache+"."+operation)
-	// if span != nil {
-	// 	span.Description = "cache." + cache + "." + operation
-	// 	span.Op = "db.cache"
-
-	// 	// Add repository data
-	// 	span.SetData("cache", cache)
-	// 	span.SetData("operation", operation)
-
-	// 	// Add additional parameters
-	// 	for k, v := range params {
-	// 		span.SetData(k, v)
-	// 	}
-	// }
-
-	// return span
+// StartCacheSpan creates a span for a cache operation.
+//
+// Currently a no-op; cache-level spans are not yet config-gated.
+// Set FLEXPRICE_OTEL_TRACES_STORAGE_SPANS_ENABLED=true to enable DB and
+// ClickHouse storage spans; per-cache spans will follow in a future pass.
+func StartCacheSpan(ctx context.Context, cache, operation string, params map[string]interface{}) *tracing.Span {
+	_ = ctx
+	_ = cache
+	_ = operation
+	_ = params
 	return nil
 }
 
-// FinishSpan safely finishes a span, handling nil spans
-func FinishSpan(span *sentry.Span) {
-	if span != nil {
-		span.Finish()
-	}
+// FinishSpan safely finishes a span, handling nil spans.
+func FinishSpan(span *tracing.Span) {
+	span.Finish()
 }
 
-// SetSpanError marks a span as failed and adds error information
-func SetSpanError(span *sentry.Span, err error) {
-	if span == nil || err == nil {
-		return
-	}
-
-	span.Status = sentry.SpanStatusInternalError
-	span.SetData("error", err.Error())
+// SetSpanError marks a span as failed and adds error information.
+func SetSpanError(span *tracing.Span, err error) {
+	span.SetStatusError(err)
 }
 
-// SetSpanSuccess marks a span as successful
-func SetSpanSuccess(span *sentry.Span) {
-	if span != nil {
-		span.Status = sentry.SpanStatusOK
-	}
+// SetSpanSuccess marks a span as successful.
+func SetSpanSuccess(span *tracing.Span) {
+	span.SetStatusOK()
 }

@@ -47,7 +47,7 @@ func (h *SecretHandler) ListAPIKeys(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindQuery(filter); err != nil {
-		h.logger.Errorw("failed to bind query", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to bind query", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Please check the query parameters").
 			Mark(ierr.ErrValidation))
@@ -56,7 +56,7 @@ func (h *SecretHandler) ListAPIKeys(c *gin.Context) {
 
 	secrets, err := h.service.ListAPIKeys(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.Errorw("failed to list secrets", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to list secrets", "error", err)
 		c.Error(err)
 		return
 	}
@@ -80,7 +80,7 @@ func (h *SecretHandler) ListAPIKeys(c *gin.Context) {
 func (h *SecretHandler) CreateAPIKey(c *gin.Context) {
 	var req dto.CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Errorw("failed to bind request", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to bind request", "error", err)
 		c.Error(ierr.WithError(err).
 			WithHint("Please check the request payload").
 			Mark(ierr.ErrValidation))
@@ -89,7 +89,7 @@ func (h *SecretHandler) CreateAPIKey(c *gin.Context) {
 
 	secret, apiKey, err := h.service.CreateAPIKey(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.Errorw("failed to create api key", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to create api key", "error", err)
 		c.Error(err)
 		return
 	}
@@ -116,11 +116,10 @@ func (h *SecretHandler) CreateAPIKey(c *gin.Context) {
 func (h *SecretHandler) DeleteAPIKey(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
-		h.logger.Errorw("failed to delete api key", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to delete api key", "error", err)
 		c.Error(err)
 		return
 	}
 
 	c.Status(http.StatusNoContent)
 }
-

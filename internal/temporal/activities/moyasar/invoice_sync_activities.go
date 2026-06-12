@@ -39,7 +39,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 	ctx context.Context,
 	input models.MoyasarInvoiceSyncWorkflowInput,
 ) error {
-	a.logger.Infow("syncing invoice to Moyasar",
+	a.logger.Info(ctx, "syncing invoice to Moyasar",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID,
 		"tenant_id", input.TenantID,
@@ -53,7 +53,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 	moyasarIntegration, err := a.integrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			a.logger.Debugw("Moyasar connection not configured",
+			a.logger.Debug(ctx, "Moyasar connection not configured",
 				"invoice_id", input.InvoiceID,
 				"customer_id", input.CustomerID)
 			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
@@ -63,7 +63,7 @@ func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 				err,
 			)
 		}
-		a.logger.Errorw("failed to get Moyasar integration",
+		a.logger.Error(ctx, "failed to get Moyasar integration",
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
@@ -77,13 +77,13 @@ func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 
 	_, err = moyasarIntegration.InvoiceSyncSvc.SyncInvoiceToMoyasar(ctx, syncReq, a.customerService)
 	if err != nil {
-		a.logger.Errorw("failed to sync invoice to Moyasar",
+		a.logger.Error(ctx, "failed to sync invoice to Moyasar",
 			"error", err,
 			"invoice_id", input.InvoiceID)
 		return err
 	}
 
-	a.logger.Infow("successfully synced invoice to Moyasar",
+	a.logger.Info(ctx, "successfully synced invoice to Moyasar",
 		"invoice_id", input.InvoiceID,
 		"customer_id", input.CustomerID)
 

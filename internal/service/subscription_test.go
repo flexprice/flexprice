@@ -1520,6 +1520,166 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionInheritanceChildEqualsS
 	s.Contains(err.Error(), "cannot inherit onto itself")
 }
 
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionInheritanceChildAlreadyHasParent() {
+	ctx := s.GetContext()
+
+	// Create a child customer that already has an active inherited subscription under another parent
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_already_has_parent",
+		Name:       "Child Already Has Parent",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	existingParentSub := *s.testData.subscription
+	existingParentSub.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, &existingParentSub))
+
+	inherited := &subscription.Subscription{
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		CustomerID:           child.ID,
+		PlanID:               existingParentSub.PlanID,
+		Currency:             existingParentSub.Currency,
+		SubscriptionStatus:   types.SubscriptionStatusActive,
+		BillingAnchor:        existingParentSub.BillingAnchor,
+		BillingCycle:         existingParentSub.BillingCycle,
+		StartDate:            existingParentSub.StartDate,
+		EndDate:              existingParentSub.EndDate,
+		CurrentPeriodStart:   existingParentSub.CurrentPeriodStart,
+		CurrentPeriodEnd:     existingParentSub.CurrentPeriodEnd,
+		BillingPeriod:        existingParentSub.BillingPeriod,
+		BillingPeriodCount:   existingParentSub.BillingPeriodCount,
+		Version:              1,
+		EnvironmentID:        existingParentSub.EnvironmentID,
+		ParentSubscriptionID: &existingParentSub.ID,
+		SubscriptionType:     types.SubscriptionTypeInherited,
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, inherited))
+
+	// Now a second parent tries to add the same child
+	newParent := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_new_parent_blocked",
+		Name:       "New Parent Blocked",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, newParent))
+
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         newParent.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	}
+	_, err := s.service.CreateSubscription(ctx, req)
+	s.Require().Error(err)
+	s.True(ierr.IsValidation(err), "expected validation error, got %v", err)
+	s.Contains(err.Error(), "already has a parent")
+}
+
+// TestCreateSubscriptionSameParentCanReInheritChild verifies that the SAME parent customer
+// CAN inherit the same child via a second new subscription (different subscription, same parent).
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionSameParentCanReInheritChild() {
+	ctx := s.GetContext()
+
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_same_parent_reinherit_ok",
+		Name:       "Child Same Parent Re-Inherit OK",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	inheritReq := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	}
+
+	_, err := s.service.CreateSubscription(ctx, inheritReq)
+	s.Require().NoError(err)
+
+	// Same parent, second subscription inheriting same child — must succeed
+	_, err = s.service.CreateSubscription(ctx, inheritReq)
+	s.Require().NoError(err)
+}
+
+// TestCreateSubscriptionDifferentParentBlockedFromInheritingChild verifies that a DIFFERENT
+// parent cannot inherit a child already under another parent.
+func (s *SubscriptionServiceSuite) TestCreateSubscriptionDifferentParentBlockedFromInheritingChild() {
+	ctx := s.GetContext()
+
+	child := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_child_diff_parent_blocked",
+		Name:       "Child Different Parent Blocked",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, child))
+
+	// Original parent inherits child
+	_, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	})
+	s.Require().NoError(err)
+
+	// Different parent tries to steal the child — must be blocked
+	differentParent := &customer.Customer{
+		ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+		ExternalID: "ext_diff_parent_steal",
+		Name:       "Different Parent",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, differentParent))
+
+	_, err = s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         differentParent.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(s.testData.now),
+		EndDate:            lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		Inheritance: &dto.SubscriptionInheritanceConfig{
+			ExternalCustomerIDsToInheritSubscription: []string{child.ExternalID},
+		},
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "already has a parent")
+}
+
 func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCollectionMethod() {
 	// Test cases specifically for collection method functionality
 	testCases := []struct {
@@ -1811,6 +1971,138 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Validatio
 			s.Contains(err.Error(), tt.wantErrCont)
 		})
 	}
+}
+
+// TestCreateSubscription_LineItemWithBuckets_MaterializesPrices verifies that when
+// CreateSubscription is called with a LineItems entry that carries CommitmentTimeBuckets,
+// the bucket prices are materialized (PriceID and ID populated) on the resulting
+// subscription line item. This exercises the path:
+//
+//	CreateSubscription → AddSubscriptionLineItem → resolveBucketPrices
+func (s *SubscriptionServiceSuite) TestCreateSubscription_LineItemWithBuckets_MaterializesPrices() {
+	ctx := s.GetContext()
+
+	// Create a meter with BucketSize set; CommitmentWindowed=true requires it.
+	bucketMeter := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "Bucket Meter For Sub Create",
+		EventName: "bucket_sub_event",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			Field:      "value",
+			BucketSize: types.WindowSizeHour,
+		},
+		ResetUsage: types.ResetUsageBillingPeriod,
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketMeter))
+
+	// Create a SUBSCRIPTION-scoped usage price that will be used as the line item's base price.
+	// The line item must reference an existing price_id when CommitmentWindowed=true so that
+	// the service can derive MeterID from it.
+	// NOTE: We create it as PLAN-scoped under s.testData.plan so the plan price lookup works.
+	usagePriceForBucketSub := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		MeterID:            bucketMeter.ID,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, usagePriceForBucketSub))
+
+	overageFactor := decimal.NewFromFloat(1.5)
+	commitmentAmount := decimal.NewFromInt(500)
+	bucketPriceAmount := decimal.NewFromInt(20)
+
+	start := s.testData.now
+	req := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          &start,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		// Add a line item with CommitmentTimeBuckets — this goes through AddSubscriptionLineItem
+		// which calls resolveBucketPrices inside the transaction.
+		LineItems: []dto.CreateSubscriptionLineItemRequest{
+			{
+				PriceID:                 usagePriceForBucketSub.ID,
+				SkipEntitlementCheck:    true,
+				CommitmentAmount:        &commitmentAmount,
+				CommitmentType:          types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentOverageFactor: &overageFactor,
+				CommitmentWindowed:      true,
+				CommitmentTimeBuckets: []dto.CommitmentBucketRequest{
+					{
+						Start: types.Bucket{Hour: 9, Minute: 0},
+						End:   types.Bucket{Hour: 17, Minute: 0},
+						Price: &dto.CreatePriceRequest{
+							Amount:               lo.ToPtr(bucketPriceAmount),
+							Currency:             "usd",
+							EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+							Type:                 types.PRICE_TYPE_FIXED,
+							PriceUnitType:        types.PRICE_UNIT_TYPE_FIAT,
+							BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+							BillingPeriodCount:   1,
+							BillingModel:         types.BILLING_MODEL_FLAT_FEE,
+							InvoiceCadence:       types.InvoiceCadenceAdvance,
+							LookupKey:            "sub_create_bucket_price",
+							SkipEntityValidation: true,
+						},
+						CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+						CommitmentValue: decimal.NewFromInt(300),
+						OverageFactor:   lo.ToPtr(decimal.NewFromFloat(1.5)),
+						TrueUpEnabled:   true,
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := s.service.CreateSubscription(ctx, req)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	s.NotEmpty(resp.ID)
+
+	// Fetch the subscription with line items expanded.
+	got, err := s.service.GetSubscription(ctx, resp.ID)
+	s.NoError(err)
+	s.Require().NotNil(got)
+
+	// Find the line item that has CommitmentTimeBuckets (the one added via req.LineItems,
+	// not the plan-scoped line item for the same price which has no buckets).
+	var bucketLineItem *subscription.SubscriptionLineItem
+	for _, li := range got.Subscription.LineItems {
+		if li.PriceID == usagePriceForBucketSub.ID && len(li.CommitmentTimeBuckets) > 0 {
+			bucketLineItem = li
+			break
+		}
+	}
+	s.Require().NotNil(bucketLineItem, "line item with CommitmentTimeBuckets must exist after CreateSubscription")
+
+	// The line item must carry exactly one materialized bucket.
+	s.Require().Len(bucketLineItem.CommitmentTimeBuckets, 1, "expected 1 materialized bucket on the line item")
+
+	bucket := bucketLineItem.CommitmentTimeBuckets[0]
+
+	// PriceID and ID must be non-empty after resolveBucketPrices ran.
+	s.NotEmpty(bucket.PriceID, "bucket.PriceID must be set by resolveBucketPrices")
+	s.NotEmpty(bucket.ID, "bucket.ID must be set by resolveBucketPrices")
+
+	// The created price must be stored and scoped to the subscription.
+	createdPrice, getErr := s.GetStores().PriceRepo.Get(ctx, bucket.PriceID)
+	s.NoError(getErr)
+	s.Equal(types.PRICE_ENTITY_TYPE_SUBSCRIPTION, createdPrice.EntityType)
+	s.Equal(resp.ID, createdPrice.EntityID, "bucket price must be scoped to the new subscription")
+	s.True(createdPrice.Amount.Equal(bucketPriceAmount), "bucket price amount must match request")
 }
 
 // Helper function to create invoice service for testing
@@ -3939,6 +4231,89 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			})
 		}
 	})
+
+	s.Run("TestBackdatedImmediateCancellation", func() {
+		periodStart := s.testData.now.Add(-7 * 24 * time.Hour)
+		periodEnd := s.testData.now.Add(23 * 24 * time.Hour)
+		backdateSub := &subscription.Subscription{
+			ID:                 "sub_backdate_test",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: periodStart,
+			CurrentPeriodEnd:   periodEnd,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+			LineItems:          []*subscription.SubscriptionLineItem{},
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), backdateSub, backdateSub.LineItems))
+
+		// Valid backdated cancellation — 3 days into the current period
+		validBackdate := periodStart.Add(3 * 24 * time.Hour)
+		resp, err := s.service.CancelSubscription(s.GetContext(), backdateSub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			CancelAt:          &validBackdate,
+			Reason:            "test_backdated",
+		})
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, resp.Status)
+		s.True(resp.EffectiveDate.Equal(validBackdate), "effective date should match cancel_at")
+
+		// Verify persisted state
+		updated, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), backdateSub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, updated.SubscriptionStatus)
+		s.NotNil(updated.EndDate)
+		s.True(updated.EndDate.Equal(validBackdate), "EndDate should equal cancel_at")
+		s.NotNil(updated.CancelAt)
+		s.True(updated.CancelAt.Equal(validBackdate), "CancelAt should equal cancel_at")
+
+		s.T().Logf("✅ Backdated immediate cancellation completed successfully")
+	})
+
+	s.Run("TestBackdatedCancellationAtPeriodStartRejected", func() {
+		periodStart := s.testData.now.Add(-7 * 24 * time.Hour)
+		periodEnd := s.testData.now.Add(23 * 24 * time.Hour)
+		subAtBoundary := &subscription.Subscription{
+			ID:                 "sub_boundary_test",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: periodStart,
+			CurrentPeriodEnd:   periodEnd,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+			LineItems:          []*subscription.SubscriptionLineItem{},
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), subAtBoundary, subAtBoundary.LineItems))
+
+		// cancel_at == current_period_start → rejected
+		atStart := periodStart
+		_, err := s.service.CancelSubscription(s.GetContext(), subAtBoundary.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			CancelAt:          &atStart,
+		})
+		s.Error(err, "cancel_at == current_period_start should be rejected")
+
+		// cancel_at before current_period_start → rejected
+		beforeStart := periodStart.Add(-1 * time.Hour)
+		_, err = s.service.CancelSubscription(s.GetContext(), subAtBoundary.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			CancelAt:          &beforeStart,
+		})
+		s.Error(err, "cancel_at before current_period_start should be rejected")
+
+		s.T().Logf("✅ Backdated cancellation boundary rejection completed successfully")
+	})
 }
 
 func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
@@ -4042,18 +4417,27 @@ func (s *SubscriptionServiceSuite) TestCancelSubscriptionScheduledDate() {
 		s.T().Logf("✅ scheduled_date: missing cancel_at rejected")
 	})
 
-	s.Run("validation rejects past cancel_at", func() {
+	s.Run("backdated past cancel_at is accepted", func() {
 		sub := newActiveSub("sub_sched_past_date")
 		pastDate := s.testData.now.Add(-24 * time.Hour)
 
-		_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		resp, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
 			CancellationType: types.CancellationTypeScheduledDate,
 			CancelAt:         &pastDate,
+			Reason:           "backdated_cancel",
 		})
-		s.Error(err)
-		s.True(ierr.IsValidation(err), "expected validation error")
-		s.Contains(err.Error(), "future")
-		s.T().Logf("✅ scheduled_date: past cancel_at rejected")
+		s.NoError(err)
+		s.True(resp.EffectiveDate.Equal(pastDate), "effective date should match cancel_at")
+
+		updated, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.NoError(err)
+		s.NotNil(updated.CancelAt)
+		s.WithinDuration(pastDate, *updated.CancelAt, time.Second)
+		s.NotNil(updated.EndDate, "end_date must be set to the backdated cancellation date")
+		s.WithinDuration(pastDate, *updated.EndDate, time.Second)
+		s.True(updated.CancelAtPeriodEnd, "cancel_at_period_end must be true")
+		s.Equal(types.SubscriptionStatusActive, updated.SubscriptionStatus, "status stays active until schedule fires")
+		s.T().Logf("✅ scheduled_date: past cancel_at accepted for backdated cancellation")
 	})
 
 	s.Run("errors if subscription is already scheduled to cancel via end_of_period", func() {

@@ -89,6 +89,10 @@ type MeterUsageDetailedAnalyticsParams struct {
 	Expand []string
 	// IncludeChildren mirrors dto.GetUsageAnalyticsRequest.IncludeChildren.
 	IncludeChildren bool
+	// BreakdownBucket mirrors dto.GetUsageAnalyticsRequest.BreakdownBucket: when
+	// true, each point is stamped with its BucketID/PriceID and per-bucket
+	// summaries are appended. Requires WindowSize to be set.
+	BreakdownBucket bool
 }
 
 // MeterUsageDetailedResult holds aggregated analytics for a single group combination
@@ -142,4 +146,7 @@ type MeterUsageRepository interface {
 
 	// GetMeterUsageForExport retrieves meter usage data for export in batches
 	GetMeterUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*MeterUsage, error)
+
+	// GetByEventID returns the meter_usage record for a single event, or nil if not yet processed.
+	GetByEventID(ctx context.Context, tenantID, environmentID, eventID string) (*MeterUsage, error)
 }

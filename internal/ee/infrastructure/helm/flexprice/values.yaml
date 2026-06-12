@@ -652,12 +652,26 @@ temporalConfig:
 logging:
   level: "info"    # "debug", "info", "warn", "error"
   format: "json"   # "json" or "text"
-  otel:
+  environment: ""  # OTel resource deployment.environment (e.g. "staging-gcp", "production"); empty → unset
+  otel:            # OTLP LOG export
     enabled: false
     endpoint: ""           # e.g. "ingest.in2.signoz.cloud:443"
     insecure: false        # set true for non-TLS endpoints
     authHeader: ""         # e.g. "signoz-ingestion-key"
     authValue: ""          # Set via secret in production
+
+# OpenTelemetry TRACES export (distinct from logging.otel, which is logs).
+# Traces drive the APM/RED metrics (request rate, error rate, latency) in SigNoz.
+# The traces auth value is read from the existingSecret key `logging-otel-auth-value`
+# (the shared SigNoz ingestion key — same one logging.otel uses above).
+otel:
+  enabled: false
+  serviceName: ""     # empty → app falls back to FLEXPRICE_DEPLOYMENT_MODE per component (api/consumer/temporal_worker)
+  traces:
+    enabled: false
+    endpoint: ""        # e.g. "ingest.in2.signoz.cloud:443"
+    authHeader: ""      # e.g. "signoz-ingestion-key"
+    sampleRate: ""      # empty → app default (1.0 = 100%); e.g. "0.2" to sample 20%
 
 # Sentry configuration
 sentry:
@@ -730,17 +744,23 @@ redisExtended:
   poolSize: 10          # connection pool size
 
 # Event processing configuration
+# `enabled` gates whether the consumer subscribes to each topic. The Go struct
+# defaults are true, but viper ignores Go `default` tags on Unmarshal, so they
+# must be set here or the events→ClickHouse consumers never start.
 eventProcessing:
+  enabled: true
   topic: "events"
   rateLimit: 12
   consumerGroup: "flexprice-consumer"
 
 eventProcessingLazy:
+  enabled: true
   topic: "events_lazy"
   rateLimit: 12
   consumerGroup: "v1_event_processing_lazy"
 
 eventPostProcessing:
+  enabled: true
   topic: "events_post_processing"
   rateLimit: 12
   consumerGroup: "v1_events_post_processing"
@@ -749,6 +769,7 @@ eventPostProcessing:
   consumerGroupBackfill: "v1_events_post_processing_backfill"
 
 featureUsageTracking:
+  enabled: true
   topic: "events"
   rateLimit: 1
   consumerGroup: "v1_feature_tracking_service"
@@ -757,9 +778,22 @@ featureUsageTracking:
   consumerGroupBackfill: "v1_feature_tracking_service_backfill"
 
 featureUsageTrackingLazy:
+  enabled: true
   topic: "events_lazy"
   rateLimit: 1
   consumerGroup: "v1_feature_tracking_service_lazy"
+
+# Onboarding event-generator (POST /v1/portal/onboarding/events).
+# The app's OnboardingEvents.Topic resolves to empty if this is not rendered
+# into the mounted config.yaml: viper ignores the Go `default` struct tag and
+# AutomaticEnv won't bind the nested onboarding_events.topic key. An empty
+# topic makes the publish fail with a broker "invalid topic" error (a 400).
+onboardingEvents:
+  enabled: true
+  topic: "onboarding_events"
+  rateLimit: 10
+  consumerGroup: "onboarding_events_consumer"
+  maxRetries: 3
 
 # Raw event consumption configuration
 rawEventConsumption:
@@ -875,7 +909,7 @@ webhook:
 #   pyroscope-basic-auth-password  required if pyroscope.basicAuthUser is set
 #   email-resend-api-key           required if email.enabled=true
 #   svix-auth-token                required if webhook.svixConfig.enabled=true
-#   logging-otel-auth-value        required if logging.otel.enabled=true
+#   logging-otel-auth-value        required if logging.otel.enabled=true OR otel.traces.enabled=true
 #   redis-password                 required if redisConfig.password is set
 #
 # ── Dev fallback ──────────────────────────────────────────────────────────────

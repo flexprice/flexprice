@@ -56,8 +56,8 @@ func NewClient(config *config.Configuration, log *logger.Logger) (*Client, error
 		return nil, fmt.Errorf("failed to create redis client: %w", err)
 	}
 
-	log.Infow("PING result", "result", result, "cluster_mode", config.Redis.ClusterMode)
-	log.Infow("Connected to Redis successfully", "addr", opts.Addrs, "cluster_mode", config.Redis.ClusterMode)
+	log.Info(ctx, "PING result", "result", result, "cluster_mode", config.Redis.ClusterMode)
+	log.Info(ctx, "Connected to Redis successfully", "addr", opts.Addrs, "cluster_mode", config.Redis.ClusterMode)
 
 	return &Client{
 		rdb: rdb,

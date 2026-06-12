@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -111,7 +112,13 @@ func nextBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *ti
 	}
 }
 
-// commitmentCalculator handles commitment-based pricing calculations for line items
+// commitmentCalculator handles commitment-based pricing calculations for line items.
+//
+// It is STATELESS — constructing one per call site is free. The bucket price
+// cache is deliberately NOT held here: it is a local map created inside each
+// applyWindowCommitmentPerBucket pass, so prices are fetched once per bucket per
+// pass (one pass per line item) and a long-lived calculator can never serve
+// stale prices.
 type commitmentCalculator struct {
 	logger       *logger.Logger
 	priceService PriceService
@@ -149,166 +156,211 @@ func (c *commitmentCalculator) normalizeCommitmentToAmount(
 	return decimal.Zero, nil
 }
 
-// applyCommitmentToLineItem applies commitment logic to a single line item's charges
-// Returns the adjusted amount and commitment info about the commitment application
+// applyCommitmentToLineItem applies commitment logic to a single line item's
+// aggregate charge (non-windowed). Returns the adjusted amount and commitment info.
 func (c *commitmentCalculator) applyCommitmentToLineItem(
 	ctx context.Context,
 	lineItem *subscription.SubscriptionLineItem,
 	usageCost decimal.Decimal,
 	priceObj *price.Price,
 ) (decimal.Decimal, *types.CommitmentInfo, error) {
-	// Normalize commitment to amount for comparison
+	// Normalize commitment to amount for comparison.
 	commitmentAmount, err := c.normalizeCommitmentToAmount(ctx, lineItem, priceObj)
 	if err != nil {
 		return usageCost, nil, err
 	}
 
 	overageFactor := lo.FromPtr(lineItem.CommitmentOverageFactor)
-	info := &types.CommitmentInfo{
-		Type:          lineItem.CommitmentType,
-		Amount:        commitmentAmount,
-		Quantity:      lo.FromPtr(lineItem.CommitmentQuantity),
-		OverageFactor: lineItem.CommitmentOverageFactor,
-		TrueUpEnabled: lineItem.CommitmentTrueUpEnabled,
-		IsWindowed:    false,
-	}
+	charge, utilized, overage, trueUp := computeCommitmentMath(usageCost, commitmentAmount, overageFactor, lineItem.CommitmentTrueUpEnabled)
 
-	// Calculate final charge based on commitment logic
-	var finalCharge decimal.Decimal
-
-	if usageCost.GreaterThanOrEqual(commitmentAmount) {
-		// Usage meets or exceeds commitment
-		// Charge: commitment + (usage - commitment) * overage_factor
-		overage := usageCost.Sub(commitmentAmount)
-		overageCharge := overage.Mul(overageFactor)
-		finalCharge = commitmentAmount.Add(overageCharge)
-
-		info.ComputedCommitmentUtilizedAmount = commitmentAmount
-		info.ComputedOverageAmount = overageCharge
-		info.ComputedTrueUpAmount = decimal.Zero
-
-		c.logger.Debugw("usage exceeds commitment, applying overage",
-			"line_item_id", lineItem.ID,
-			"usage_cost", usageCost,
-			"commitment_amount", commitmentAmount,
-			"overage", overage,
-			"overage_factor", overageFactor,
-			"final_charge", finalCharge)
-	} else {
-		// Usage is less than commitment
-		if lineItem.CommitmentTrueUpEnabled {
-			// Charge full commitment (true-up)
-			finalCharge = commitmentAmount
-			info.ComputedCommitmentUtilizedAmount = usageCost
-			info.ComputedOverageAmount = decimal.Zero
-			info.ComputedTrueUpAmount = commitmentAmount.Sub(usageCost)
-
-			c.logger.Debugw("usage below commitment, applying true-up",
-				"line_item_id", lineItem.ID,
-				"usage_cost", usageCost,
-				"commitment_amount", commitmentAmount,
-				"true_up", info.ComputedTrueUpAmount,
-				"final_charge", finalCharge)
-		} else {
-			// Charge only actual usage (no true-up)
-			finalCharge = usageCost
-			info.ComputedCommitmentUtilizedAmount = usageCost
-			info.ComputedOverageAmount = decimal.Zero
-			info.ComputedTrueUpAmount = decimal.Zero
-
-			c.logger.Debugw("usage below commitment, no true-up",
-				"line_item_id", lineItem.ID,
-				"usage_cost", usageCost,
-				"commitment_amount", commitmentAmount,
-				"final_charge", finalCharge)
-		}
-	}
-
-	return finalCharge, info, nil
+	return charge, &types.CommitmentInfo{
+		Type:                             lineItem.CommitmentType,
+		Amount:                           commitmentAmount,
+		Quantity:                         lo.FromPtr(lineItem.CommitmentQuantity),
+		OverageFactor:                    lineItem.CommitmentOverageFactor,
+		TrueUpEnabled:                    lineItem.CommitmentTrueUpEnabled,
+		IsWindowed:                       false,
+		ComputedCommitmentUtilizedAmount: utilized,
+		ComputedOverageAmount:            overage,
+		ComputedTrueUpAmount:             trueUp,
+	}, nil
 }
 
-// applyWindowCommitmentToLineItem applies window-based commitment logic
-// Processes each bucket individually and applies commitment per window
+// computeCommitmentMath applies the overage / true-up rule for a single charge
+// against a commitment, both already expressed as money. Returns
+// (finalCharge, utilized, overage, trueUp). It is the single source of truth for
+// commitment math — amount- and quantity-typed commitments only differ in how
+// the commitment money is derived before calling this.
+func computeCommitmentMath(usageCharge, commitmentCharge, overageFactor decimal.Decimal, trueUp bool) (decimal.Decimal, decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+	if usageCharge.GreaterThanOrEqual(commitmentCharge) {
+		overage := usageCharge.Sub(commitmentCharge).Mul(overageFactor)
+		return commitmentCharge.Add(overage), commitmentCharge, overage, decimal.Zero
+	}
+	if trueUp {
+		return commitmentCharge, usageCharge, decimal.Zero, commitmentCharge.Sub(usageCharge)
+	}
+	return usageCharge, usageCharge, decimal.Zero, decimal.Zero
+}
+
+// commitmentParts holds the four outputs of a single commitment calculation:
+// final charge plus its utilized / overage / true-up breakdown.
+type commitmentParts struct {
+	charge   decimal.Decimal
+	utilized decimal.Decimal
+	overage  decimal.Decimal
+	trueUp   decimal.Decimal
+}
+
+func (p *commitmentParts) add(o commitmentParts) {
+	p.charge = p.charge.Add(o.charge)
+	p.utilized = p.utilized.Add(o.utilized)
+	p.overage = p.overage.Add(o.overage)
+	p.trueUp = p.trueUp.Add(o.trueUp)
+}
+
+// applyWindowCommitmentToLineItem applies commitment to windowed usage one window
+// at a time and returns the total. Thin wrapper over
+// applyWindowCommitmentPerBucket for callers that don't need the per-window
+// breakdown (billing paths).
 func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	ctx context.Context,
 	lineItem *subscription.SubscriptionLineItem,
-	bucketedValues []decimal.Decimal,
-	priceObj *price.Price,
+	windowValues []decimal.Decimal,
+	windowStarts []time.Time,
+	lineItemPrice *price.Price,
 ) (decimal.Decimal, *types.CommitmentInfo, error) {
-	// Normalize commitment to amount (this is the per-window commitment)
-	commitmentAmountPerWindow, err := c.normalizeCommitmentToAmount(ctx, lineItem, priceObj)
-	if err != nil {
-		return decimal.Zero, nil, err
+	total, _, info, err := c.applyWindowCommitmentPerBucket(ctx, lineItem, windowValues, windowStarts, lineItemPrice)
+	return total, info, err
+}
+
+// applyWindowCommitmentPerBucket applies commitment to windowed usage one window
+// at a time. For each window, if its start falls inside a configured commitment
+// time bucket, that bucket's own price + commitment apply; otherwise the line
+// item's own price + commitment apply (or base rate when the line item carries no
+// commitment). windowValues and windowStarts are 1:1; windowStarts may be nil
+// (single aggregate window), in which case every window uses the line item.
+//
+// Returns the total charge, the per-window breakdown (parts[i] corresponds to
+// windowValues[i]), and the aggregated commitment info — all from a single pass,
+// with bucket prices fetched once per bucket.
+func (c *commitmentCalculator) applyWindowCommitmentPerBucket(
+	ctx context.Context,
+	lineItem *subscription.SubscriptionLineItem,
+	windowValues []decimal.Decimal,
+	windowStarts []time.Time,
+	lineItemPrice *price.Price,
+) (decimal.Decimal, []commitmentParts, *types.CommitmentInfo, error) {
+	if windowStarts != nil && len(windowStarts) != len(windowValues) {
+		return decimal.Zero, nil, nil, ierr.NewError("windowStarts/windowValues length mismatch").
+			WithHint("When windowStarts is non-nil, it must have the same length as windowValues").
+			WithReportableDetails(map[string]interface{}{
+				"window_starts": len(windowStarts),
+				"window_values": len(windowValues),
+			}).
+			Mark(ierr.ErrSystem)
 	}
 
-	overageFactor := lo.FromPtr(lineItem.CommitmentOverageFactor)
-	info := &types.CommitmentInfo{
-		Type:          lineItem.CommitmentType,
-		Amount:        commitmentAmountPerWindow, // This is per window
-		Quantity:      lo.FromPtr(lineItem.CommitmentQuantity),
-		OverageFactor: lineItem.CommitmentOverageFactor,
-		TrueUpEnabled: lineItem.CommitmentTrueUpEnabled,
-		IsWindowed:    true,
-	}
+	buckets := lineItem.CommitmentTimeBuckets
+	// Cache bucket prices so a bucket spanning many windows is fetched once.
+	pricesMap := make(map[string]*price.Price)
 
-	totalCharge := decimal.Zero
-	totalCommitmentUtilized := decimal.Zero
-	totalOverage := decimal.Zero
-	totalTrueUp := decimal.Zero
-	windowsWithOverage := 0
-	windowsWithTrueUp := 0
+	var total commitmentParts
+	perWindow := make([]commitmentParts, len(windowValues))
+	for i, v := range windowValues {
+		var parts commitmentParts
+		var err error
 
-	// Process each window independently
-	for _, bucketValue := range bucketedValues {
-		// Calculate cost for this window
-		windowCost := c.priceService.CalculateCost(ctx, priceObj, bucketValue)
-
-		var windowCharge decimal.Decimal
-
-		if windowCost.GreaterThanOrEqual(commitmentAmountPerWindow) {
-			// Window usage meets or exceeds commitment
-			overage := windowCost.Sub(commitmentAmountPerWindow)
-			overageCharge := overage.Mul(overageFactor)
-			windowCharge = commitmentAmountPerWindow.Add(overageCharge)
-
-			totalCommitmentUtilized = totalCommitmentUtilized.Add(commitmentAmountPerWindow)
-			totalOverage = totalOverage.Add(overageCharge) // Storing charge, not amount
-			windowsWithOverage++
+		if idx, ok := buckets.BucketIndexAt(windowStarts, i); ok {
+			parts, err = c.chargeWindowAtBucket(ctx, buckets[idx], v, pricesMap)
 		} else {
-			// Window usage is less than commitment
-			if lineItem.CommitmentTrueUpEnabled {
-				// Apply true-up for this window
-				windowCharge = commitmentAmountPerWindow
-				trueUp := commitmentAmountPerWindow.Sub(windowCost)
-				totalTrueUp = totalTrueUp.Add(trueUp)
-				windowsWithTrueUp++
-			} else {
-				// Charge only actual usage for this window
-				windowCharge = windowCost
-			}
-
-			totalCommitmentUtilized = totalCommitmentUtilized.Add(windowCost)
+			parts, err = c.chargeWindowAtLineItem(ctx, lineItem, lineItemPrice, v)
+		}
+		if err != nil {
+			return decimal.Zero, nil, nil, err
 		}
 
-		totalCharge = totalCharge.Add(windowCharge)
+		perWindow[i] = parts
+		total.add(parts)
 	}
 
-	info.ComputedCommitmentUtilizedAmount = totalCommitmentUtilized
-	info.ComputedOverageAmount = totalOverage
-	info.ComputedTrueUpAmount = totalTrueUp
+	return total.charge, perWindow, &types.CommitmentInfo{
+		Type:                             lineItem.CommitmentType,
+		Amount:                           lo.FromPtr(lineItem.CommitmentAmount),
+		Quantity:                         lo.FromPtr(lineItem.CommitmentQuantity),
+		OverageFactor:                    lineItem.CommitmentOverageFactor,
+		TrueUpEnabled:                    lineItem.CommitmentTrueUpEnabled,
+		IsWindowed:                       true,
+		ComputedCommitmentUtilizedAmount: total.utilized,
+		ComputedOverageAmount:            total.overage,
+		ComputedTrueUpAmount:             total.trueUp,
+	}, nil
+}
 
-	return totalCharge, info, nil
+// chargeWindowAtBucket bills a single window using the bucket's own price + commitment.
+func (c *commitmentCalculator) chargeWindowAtBucket(
+	ctx context.Context,
+	b types.TimeOfDayBucket,
+	value decimal.Decimal,
+	pricesMap map[string]*price.Price,
+) (commitmentParts, error) {
+	if b.PriceID == "" {
+		return commitmentParts{}, ierr.NewError("bucket is missing its price").
+			WithHint("Every commitment time bucket must be materialized with a price").
+			Mark(ierr.ErrSystem)
+	}
+	bucketPrice, ok := pricesMap[b.PriceID]
+	if !ok {
+		resp, err := c.priceService.GetPrice(ctx, b.PriceID)
+		if err != nil {
+			return commitmentParts{}, err
+		}
+		bucketPrice = resp.Price
+		pricesMap[b.PriceID] = bucketPrice
+	}
+
+	baseCharge := c.priceService.CalculateCost(ctx, bucketPrice, value)
+	of := lo.FromPtr(b.OverageFactor)
+
+	// Derive the commitment as money: AMOUNT is already money; QUANTITY is the
+	// cost of the committed quantity at the bucket price.
+	commitmentCharge := b.CommitmentValue
+	if b.CommitmentType == types.COMMITMENT_TYPE_QUANTITY {
+		commitmentCharge = c.priceService.CalculateCost(ctx, bucketPrice, b.CommitmentValue)
+	}
+	charge, util, ov, tu := computeCommitmentMath(baseCharge, commitmentCharge, of, b.TrueUpEnabled)
+	return commitmentParts{charge: charge, utilized: util, overage: ov, trueUp: tu}, nil
+}
+
+// chargeWindowAtLineItem bills a single out-of-bucket window using the line item's
+// own price + commitment. With no line-item commitment it charges actual usage only.
+func (c *commitmentCalculator) chargeWindowAtLineItem(
+	ctx context.Context,
+	lineItem *subscription.SubscriptionLineItem,
+	lineItemPrice *price.Price,
+	value decimal.Decimal,
+) (commitmentParts, error) {
+	baseCharge := c.priceService.CalculateCost(ctx, lineItemPrice, value)
+	liCommit, err := c.normalizeCommitmentToAmount(ctx, lineItem, lineItemPrice)
+	if err != nil {
+		return commitmentParts{}, err
+	}
+	if liCommit.IsZero() {
+		return commitmentParts{charge: baseCharge, utilized: baseCharge}, nil
+	}
+	of := lo.FromPtr(lineItem.CommitmentOverageFactor)
+	charge, util, ov, tu := computeCommitmentMath(baseCharge, liCommit, of, lineItem.CommitmentTrueUpEnabled)
+	return commitmentParts{charge: charge, utilized: util, overage: ov, trueUp: tu}, nil
 }
 
 // CumulativeSubscriptionCommitmentResult holds the result of applying cumulative subscription commitment
 type CumulativeSubscriptionCommitmentResult struct {
-	TotalCharge            decimal.Decimal
-	CommitmentUtilized     decimal.Decimal
-	OverageAmount          decimal.Decimal
-	TrueUpAmount           decimal.Decimal
-	WithinCommitment       decimal.Decimal
-	OverageBase            decimal.Decimal
-	CommitmentRemaining    decimal.Decimal
+	TotalCharge         decimal.Decimal
+	CommitmentUtilized  decimal.Decimal
+	OverageAmount       decimal.Decimal
+	TrueUpAmount        decimal.Decimal
+	WithinCommitment    decimal.Decimal
+	OverageBase         decimal.Decimal
+	CommitmentRemaining decimal.Decimal
 }
 
 // applyCumulativeSubscriptionCommitment applies cumulative commitment logic at subscription level.
@@ -341,7 +393,7 @@ func applyCumulativeSubscriptionCommitment(
 		}
 	}
 
-	logger.Debugw("applied cumulative subscription commitment",
+	logger.Debug(context.Background(), "applied cumulative subscription commitment",
 		"commitment_amount", commitmentAmount,
 		"total_prior_base", totalPriorBase,
 		"total_current_base", totalCurrentBase,
@@ -408,4 +460,42 @@ func getSubscriptionCommitmentPeriodBounds(
 // isLastPeriodOfCommitmentPeriod returns true when the current invoice period closes or extends past the commitment period end.
 func isLastPeriodOfCommitmentPeriod(periodEnd, commitmentEnd time.Time) bool {
 	return !periodEnd.Before(commitmentEnd)
+}
+
+// bucketIDForPointWindow returns (bucketID, bucketPriceID, ok) for the commitment
+// bucket that FULLY contains the analytics window [windowStart, windowStart+window).
+// A window that straddles a bucket boundary (possible when the requested window
+// size is coarser than the buckets) is left unattributed so per-point breakdown
+// and bucket summaries don't misreport. Used by analytics breakdown only.
+//
+// The check compares the window's UTC start/end against the bucket's bounds on
+// the minute-of-day axis. When the bucket wraps midnight (end <= start) — or the
+// window starts in the bucket's post-midnight part — the times are unwrapped by
+// one day so a plain end-to-end comparison works.
+func bucketIDForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Time, window types.WindowSize) (string, string, bool) {
+	windowMin := window.ToMinutes()
+	if windowMin <= 0 || windowMin > 1440 {
+		// Unknown or multi-day window sizes can never sit inside a single
+		// time-of-day bucket.
+		return "", "", false
+	}
+	idx, ok := buckets.BucketIndexAt([]time.Time{windowStart}, 0)
+	if !ok {
+		return "", "", false
+	}
+	b := buckets[idx]
+
+	utc := windowStart.UTC()
+	winStart := utc.Hour()*60 + utc.Minute()
+	bucketStart, bucketEnd := b.Start.MinuteOfDay(), b.End.MinuteOfDay()
+	if bucketEnd <= bucketStart {
+		bucketEnd += 1440 // bucket wraps midnight, e.g. [22:00, 06:00)
+	}
+	if winStart < bucketStart {
+		winStart += 1440 // window starts in the bucket's post-midnight part
+	}
+	if winStart+windowMin > bucketEnd {
+		return "", "", false
+	}
+	return b.ID, b.PriceID, true
 }

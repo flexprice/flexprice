@@ -334,7 +334,6 @@ func IsBillingPeriodMultiple(longer, shorter BillingPeriod) bool {
 	return lm%sm == 0
 }
 
-
 func (b BillingTier) Validate() error {
 	allowed := []BillingTier{
 		BILLING_TIER_VOLUME,
@@ -392,7 +391,8 @@ func (p PriceScope) Validate() error {
 type PriceFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	PriceIDs []string `json:"price_ids,omitempty" form:"price_ids"`
+	PriceIDs       []string        `json:"price_ids,omitempty" form:"price_ids"`
+	BillingPeriods []BillingPeriod `json:"billing_periods,omitempty" form:"billing_periods"`
 	// Price override filtering fields
 	PlanIDs            []string         `json:"plan_ids,omitempty" form:"plan_ids"`
 	EntityType         *PriceEntityType `json:"entity_type,omitempty" form:"entity_type"`
@@ -525,6 +525,12 @@ func (f *PriceFilter) WithEntityType(entityType PriceEntityType) *PriceFilter {
 // WithEntityIDs adds entity IDs to the filter
 func (f *PriceFilter) WithEntityIDs(entityIDs []string) *PriceFilter {
 	f.EntityIDs = entityIDs
+	return f
+}
+
+// WithBillingPeriods adds billing periods to the filter
+func (f *PriceFilter) WithBillingPeriods(billingPeriods []BillingPeriod) *PriceFilter {
+	f.BillingPeriods = billingPeriods
 	return f
 }
 

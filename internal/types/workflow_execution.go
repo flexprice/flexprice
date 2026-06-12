@@ -18,7 +18,7 @@ type WorkflowExecutionFilter struct {
 	TaskQueue      string `json:"task_queue,omitempty" form:"task_queue"`
 	WorkflowStatus string `json:"workflow_status,omitempty" form:"workflow_status"` // e.g. Running, Completed, Failed
 	Entity         string `json:"entity,omitempty" form:"entity"`                   // e.g. plan, invoice, subscription
-	EntityID       string `json:"entity_id,omitempty" form:"entity_id"`           // e.g. plan_01ABC123
+	EntityID       string `json:"entity_id,omitempty" form:"entity_id"`             // e.g. plan_01ABC123
 }
 
 // NewDefaultWorkflowExecutionFilter returns a filter with default query options (default sort: start_time desc).

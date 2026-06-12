@@ -217,7 +217,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 		// 4. Line-item commitment (windowed or flat)
 		var commitmentInfo *types.CommitmentInfo
-		if item.HasCommitment() && matchingCharge.Price != nil {
+		if item.HasAnyCommitment() && matchingCharge.Price != nil {
 			lineItemAmount, commitmentInfo, err = s.applyMeterUsageCommitment(
 				ctx, item, m, matchingCharge, cachedBucketedUsageResult,
 				sub, extCustomerIDs, periodStart, periodEnd, asOf,
@@ -236,7 +236,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 			displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
 		}
 
-		s.Logger.Debugw("meter usage charges for line item",
+		s.Logger.Debug(ctx, "meter usage charges for line item",
 			"amount", matchingCharge.Amount, "quantity", matchingCharge.Quantity,
 			"is_overage", matchingCharge.IsOverage,
 			"subscription_id", sub.ID, "line_item_id", item.ID, "price_id", item.PriceID)
@@ -502,12 +502,12 @@ func (s *billingService) applyMeterUsageCommitment(
 		}
 	}
 
-	bucketedValues := s.fillBucketedValuesForWindowedCommitment(
+	bucketedValues, bucketStarts := s.fillBucketedValuesForWindowedCommitment(
 		item, usageResult, linePeriodStart, effectiveEnd,
 		m.Aggregation.BucketSize, &sub.BillingAnchor, m.Aggregation.Type,
 	)
 
-	adjustedAmount, info, err := commitmentCalc.applyWindowCommitmentToLineItem(ctx, item, bucketedValues, matchingCharge.Price)
+	adjustedAmount, info, err := commitmentCalc.applyWindowCommitmentToLineItem(ctx, item, bucketedValues, bucketStarts, matchingCharge.Price)
 	if err != nil {
 		return decimal.Zero, nil, err
 	}

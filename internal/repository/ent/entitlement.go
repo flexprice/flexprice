@@ -112,7 +112,7 @@ func (r *entitlementRepository) Get(ctx context.Context, id string) (*domainEnti
 	}
 
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting entitlement",
+	r.log.Debug(ctx, "getting entitlement",
 		"entitlement_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -263,7 +263,7 @@ func (r *entitlementRepository) ListAll(ctx context.Context, filter *types.Entit
 func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating entitlement",
+	r.log.Debug(ctx, "updating entitlement",
 		"entitlement_id", e.ID,
 		"tenant_id", e.TenantID,
 	)
@@ -324,7 +324,7 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting entitlement",
+	r.log.Debug(ctx, "deleting entitlement",
 		"entitlement_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -439,7 +439,7 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 		return nil
 	}
 
-	r.log.Debugw("deleting entitlements in bulk", "count", len(ids))
+	r.log.Debug(ctx, "deleting entitlements in bulk", "count", len(ids))
 
 	_, err := r.client.Writer(ctx).Entitlement.Update().
 		Where(
@@ -478,7 +478,7 @@ func (r *entitlementRepository) ListByPlanIDs(ctx context.Context, planIDs []str
 		return []*domainEntitlement.Entitlement{}, nil
 	}
 
-	r.log.Debugw("listing entitlements by plan IDs", "plan_ids", planIDs)
+	r.log.Debug(ctx, "listing entitlements by plan IDs", "plan_ids", planIDs)
 
 	// Create a filter with plan IDs
 	filter := &types.EntitlementFilter{
@@ -504,7 +504,7 @@ func (r *entitlementRepository) ListByFeatureIDs(ctx context.Context, featureIDs
 		return []*domainEntitlement.Entitlement{}, nil
 	}
 
-	r.log.Debugw("listing entitlements by feature IDs", "feature_ids", featureIDs)
+	r.log.Debug(ctx, "listing entitlements by feature IDs", "feature_ids", featureIDs)
 
 	// Create a filter with feature IDs
 	filter := &types.EntitlementFilter{
@@ -530,7 +530,7 @@ func (r *entitlementRepository) ListByAddonIDs(ctx context.Context, addonIDs []s
 		return []*domainEntitlement.Entitlement{}, nil
 	}
 
-	r.log.Debugw("listing entitlements by addon IDs", "addon_ids", addonIDs)
+	r.log.Debug(ctx, "listing entitlements by addon IDs", "addon_ids", addonIDs)
 
 	// Create a filter with addon IDs
 	filter := &types.EntitlementFilter{

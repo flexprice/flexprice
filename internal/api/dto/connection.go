@@ -15,8 +15,8 @@ type CreateConnectionRequest struct {
 	// Metadata holds provider-specific non-secret settings. For Paddle: use {"redirect_url": "https://..."}
 	// as the success URL where customers are redirected after payment. Backend appends &_success=<redirect_url>
 	// to Paddle checkout URLs before storing/sending them.
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	SyncConfig *types.SyncConfig     `json:"sync_config,omitempty" validate:"omitempty,dive"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	SyncConfig *types.SyncConfig      `json:"sync_config,omitempty" validate:"omitempty,dive"`
 }
 
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure

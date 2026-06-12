@@ -92,9 +92,22 @@ func NewRouter(
 		middleware.RequestIDMiddleware,       // Generate/extract request ID first
 		middleware.LoggingMiddleware(logger), // Use our standard logger for HTTP logging
 		middleware.CORSMiddleware,
-		middleware.SentryMiddleware(cfg),    // Add Sentry middleware
-		middleware.PyroscopeMiddleware(cfg), // Add Pyroscope middleware
 	)
+	// Tracing middleware creates the otelgin span per request (SigNoz / OTLP).
+	// Each handler is added separately because gin's Use signature is variadic
+	// and the slice may be empty.
+	for _, h := range middleware.TracingMiddleware(cfg) {
+		router.Use(h)
+	}
+	// OtelRecoveryMiddleware runs inside the otelgin span so it can record a
+	// panic as an exception span event before re-panicking to gin's outer
+	// recovery (registered above) for the 500 response + log.
+	router.Use(middleware.OtelRecoveryMiddleware())
+	// SpanEnrichmentMiddleware runs after otelgin (span created) and before handlers.
+	// Post-phase executes before otelgin's post-phase (LIFO), so it can set span
+	// status / record errors before the span is ended and exported.
+	router.Use(middleware.SpanEnrichmentMiddleware())
+	router.Use(middleware.PyroscopeMiddleware(cfg)) // Add Pyroscope middleware
 
 	// Initialize permission middleware
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
@@ -127,7 +140,7 @@ func NewRouter(
 	private := router.Group("/", middleware.AuthenticateMiddleware(cfg, secretService, logger))
 	private.Use(middleware.TenantStatusMiddleware(tenantService, logger))
 	private.Use(middleware.EnvAccessMiddleware(envAccessService, logger))
-	private.Use(middleware.SentryTenantContextMiddleware)
+	private.Use(middleware.TenantContextMiddleware)
 
 	v1Private := private.Group("/v1")
 	v1Private.Use(middleware.ErrorHandler())
@@ -342,6 +355,7 @@ func NewRouter(
 			wallet.GET("/:id/transactions", handlers.Wallet.GetWalletTransactions)
 			wallet.POST("/:id/top-up", write("wallet", types.ActionWrite), handlers.Wallet.TopUpWallet)
 			wallet.POST("/:id/terminate", write("wallet", types.ActionWrite), handlers.Wallet.TerminateWallet)
+			wallet.POST("/:id/modify", write("wallet", types.ActionWrite), handlers.Wallet.ModifyWallet)
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
 			wallet.GET("/:id/balance/real-time-cached", handlers.Wallet.GetWalletBalanceForceCached)
 			wallet.PUT("/:id", write("wallet", types.ActionWrite), handlers.Wallet.UpdateWallet)
@@ -521,10 +535,10 @@ func NewRouter(
 			integrations.POST("/sync", handlers.Integration.Sync)
 			integrations.GET("/mappings", handlers.Integration.GetMappings)
 			integrations.GET("/config", handlers.Integration.GetConfig)
-			// 			paddleGroup := integrations.Group("/paddle")
-			// 			{
-			// 				paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
-			// 			}
+			// paddleGroup := integrations.Group("/paddle")
+			// {
+			// 	paddleGroup.POST("/invoices/:invoice_id/sync", handlers.Paddle.SyncInvoice)
+			// }
 		}
 
 		// Coupon routes

@@ -58,11 +58,59 @@ postgres:
   conn_max_lifetime_minutes: 60
   auto_migrate: false
 
+# Sentry is decommissioned: error/exception capture is now OTel-native and lands
+# in SigNoz's Exceptions tab (see otel.traces.capture_exceptions below). These
+# keys are retained, default-off, only for transitional rollback and will be
+# removed in a follow-up.
 sentry:
-  enabled: true
+  enabled: false
   dsn: "" # Set via FLEXPRICE_SENTRY_DSN env var
   environment: "development" # Override via FLEXPRICE_SENTRY_ENVIRONMENT
   sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
+
+# Unified OpenTelemetry exporter — traces and logs share the same SigNoz
+# Cloud backend via OTLP/gRPC. Each signal can override the top-level defaults.
+#
+# Production env vars to set in ECS task definition (per-service):
+#   FLEXPRICE_OTEL_ENABLED=true
+#   FLEXPRICE_OTEL_SERVICE_NAME=flexprice-api   # or flexprice-consumer / flexprice-temporal-worker
+#   ENVIRONMENT=production                       # maps to deployment.environment resource attr
+#
+#   FLEXPRICE_OTEL_TRACES_ENABLED=true
+#   FLEXPRICE_OTEL_TRACES_ENDPOINT=ingest.in2.signoz.cloud:443
+#   FLEXPRICE_OTEL_TRACES_AUTH_HEADER=signoz-ingestion-key
+#   FLEXPRICE_OTEL_TRACES_AUTH_VALUE=<signoz-ingestion-key>
+#
+#   FLEXPRICE_OTEL_LOGS_ENABLED=true
+#   FLEXPRICE_OTEL_LOGS_ENDPOINT=ingest.in2.signoz.cloud:443
+#   FLEXPRICE_OTEL_LOGS_AUTH_HEADER=signoz-ingestion-key
+#   FLEXPRICE_OTEL_LOGS_AUTH_VALUE=<signoz-ingestion-key>
+#
+# Protocol defaults to "grpc" (top-level) — no per-signal override needed for SigNoz.
+# Set FLEXPRICE_OTEL_INSECURE=false (default) for TLS to SigNoz Cloud.
+otel:
+  enabled: true
+  service_name: "flexprice-local"  # Override via FLEXPRICE_OTL_SERVICE_NAME or SERVICE_NAME
+  protocol: "grpc"                 # SigNoz Cloud uses gRPC/TLS — do not change
+  insecure: false                  # false = TLS (required for SigNoz Cloud)
+
+  traces:
+    enabled: false
+    endpoint: ""   # Set via FLEXPRICE_OTEL_TRACES_ENDPOINT (e.g. ingest.in2.signoz.cloud:443)
+    protocol: ""   # Empty = inherit top-level grpc. Override only for HTTP backends.
+    auth_header: "signoz-ingestion-key"  # Set auth_value via FLEXPRICE_OTEL_TRACES_AUTH_VALUE
+    auth_value: ""
+    sample_rate: 1.0
+    # Record errors/panics as OTel "exception" span events (SigNoz Exceptions tab).
+    # Replaces Sentry. Keep sample_rate at 1.0 so error traces aren't sampled away.
+    capture_exceptions: true
+
+  logs:
+    enabled: false
+    endpoint: ""   # Set via FLEXPRICE_OTEL_LOGS_ENDPOINT (e.g. ingest.in2.signoz.cloud:443)
+    protocol: ""   # Empty = inherit top-level grpc.
+    auth_header: "signoz-ingestion-key"  # Set auth_value via FLEXPRICE_OTEL_LOGS_AUTH_VALUE
+    auth_value: ""
 
 pyroscope:
   enabled: false # Set to true to enable continuous profiling
@@ -87,11 +135,16 @@ logging:
   # Service identity — override via SERVICE_NAME and ENVIRONMENT env vars
   service_name: "" # e.g., "flexprice-api"
   environment: "" # e.g., "production", "staging"
-  # Fluentd configuration for centralized logging
-  # When enabled, logs will be sent to Fluentd in addition to stdout
-  fluentd_enabled: false # Set to true to enable Fluentd logging
-  fluentd_host: "" # e.g., "fluentd-forward.kube-system.svc.cluster.local" or "X.X.X.X"
-  fluentd_port: 0 # e.g., 24224
+  # DEPRECATED: configure OTLP log export under `otel.logs.*` (top of file).
+  # The following keys are still read for back-compat and will be removed in a
+  # future release. otel_debug below is still honored for legacy debug runs.
+  # otel_enabled: false
+  # otel_endpoint: ""
+  # otel_protocol: "grpc"
+  # otel_insecure: false
+  # otel_auth_header: ""
+  # otel_auth_value: ""
+  otel_debug: false # synchronous SimpleProcessor for log export; use to confirm delivery
 
 webhook:
   enabled: true
@@ -233,6 +286,12 @@ meter_usage_tracking:
   rate_limit: 1
   consumer_group: "v1_meter_usage_tracking_service"
 
+meter_usage_tracking_lazy:
+  enabled: true
+  topic: "events_lazy"
+  rate_limit: 1
+  consumer_group: "v1_meter_usage_tracking_service_lazy"
+
 usage_benchmark:
   enabled: false
   topic: "staging_benchmarking"
@@ -272,6 +331,9 @@ feature_flag:
   meter_usage_for_preview_invoice_disabled_tenants: []
   meter_usage_for_analytics_enabled_tenants: []
   meter_usage_for_analytics_disabled_tenants: []
+  enable_usage_benchmark: false
+  usage_benchmark_enabled_tenants: []
+  usage_benchmark_disabled_tenants: []
 
 # Google Gemini (server-side AI pricing parse for dashboard). Set FLEXPRICE_GEMINI_API_KEY in secure environments.
 gemini:

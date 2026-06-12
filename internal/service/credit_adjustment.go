@@ -204,7 +204,7 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error) {
 
 	if len(inv.LineItems) == 0 {
-		s.Logger.InfowCtx(ctx, "no line items to apply amounts to, returning zero result", "invoice_id", inv.ID)
+		s.Logger.Info(ctx, "no line items to apply amounts to, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   inv.Currency,
@@ -221,7 +221,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	}
 
 	if len(wallets) == 0 {
-		s.Logger.InfowCtx(ctx, "no wallets available for amount application, returning zero result", "invoice_id", inv.ID)
+		s.Logger.Info(ctx, "no wallets available for amount application, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   inv.Currency,
@@ -262,7 +262,7 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		for walletID, amountToDebit := range amountsToDebitFromWallets {
 			walletToDebit, exists := walletLookupMap[walletID]
 			if !exists {
-				s.Logger.WarnwCtx(ctx, "wallet not found for debit",
+				s.Logger.Info(ctx, "wallet not found for debit",
 					"wallet_id", walletID,
 					"invoice_id", inv.ID)
 				continue

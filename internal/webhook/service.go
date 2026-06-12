@@ -21,8 +21,9 @@ import (
 )
 
 const (
+	newerRecordsBasePeriod  = 48 * time.Hour
 	staleWebhookGracePeriod = 15 * time.Minute
-	staleWebhookPageSize    = 500
+	staleWebhookPageSize    = 1000
 )
 
 // RetryStalePendingWebhooksResult counts bulk retry outcomes for stale undelivered system_events.
@@ -117,7 +118,6 @@ func (s *WebhookService) RetryStalePendingWebhooks(ctx context.Context) (RetrySt
 	limiter := rate.NewLimiter(rate.Limit(rps), rps)
 
 	cutoff := time.Now().UTC().Add(-staleWebhookGracePeriod)
-
 	for {
 		rows, err := s.systemEventRepo.ListStaleUndeliveredWebhooks(ctx, domainsystemevent.ListStaleUndeliveredWebhooksParams{
 			OlderThan:         cutoff,
@@ -140,18 +140,14 @@ func (s *WebhookService) RetryStalePendingWebhooks(ctx context.Context) (RetrySt
 
 			if err := s.RetriggerSystemEvent(ctx, se.TenantID, se.EnvironmentID, se.ID); err != nil {
 				out.Failed++
-				s.logger.Errorw("stale webhook retry failed",
+				s.logger.Error(ctx, "stale webhook retry failed",
 					"error", err,
 					"system_event_id", se.ID,
 					"tenant_id", se.TenantID,
 					"environment_id", se.EnvironmentID,
 				)
-				if dbErr := s.systemEventRepo.OnFailed(ctx, se.ID, err.Error()); dbErr != nil {
-					s.logger.Warnw("failed to persist webhook failure_reason on stale retry",
-						"error", dbErr,
-						"system_event_id", se.ID,
-					)
-				}
+				// NOTE: OnFailed is already called inside DeliverWebhook (handler.go),
+				// so we do NOT call it again here to avoid double-incrementing failure_count.
 				continue
 			}
 			out.Succeeded++
@@ -168,27 +164,27 @@ func (s *WebhookService) RetryStalePendingWebhooks(ctx context.Context) (RetrySt
 // Start starts the webhook service
 func (s *WebhookService) Start(ctx context.Context) error {
 	if !s.config.Webhook.Enabled {
-		s.logger.Info("webhook service disabled")
+		s.logger.Info(ctx, "webhook service disabled")
 		return nil
 	}
 
-	s.logger.Debug("starting webhook service")
+	s.logger.Debug(ctx, "starting webhook service")
 
-	s.logger.Info("webhook service started successfully")
+	s.logger.Info(ctx, "webhook service started successfully")
 	return nil
 }
 
 // Stop stops the webhook service.
 func (s *WebhookService) Stop() error {
-	s.logger.Debug("stopping webhook service")
+	s.logger.Debug(context.Background(), "stopping webhook service")
 
 	// Close publisher only when using in-memory pubsub (Kafka producer is shared and closed)
 	if err := s.publisher.Close(); err != nil {
-		s.logger.Errorw("failed to close webhook publisher", "error", err)
+		s.logger.Error(context.Background(), "failed to close webhook publisher", "error", err)
 		return fmt.Errorf("failed to close webhook publisher: %w", err)
 	}
 
-	s.logger.Info("webhook service stopped successfully")
+	s.logger.Info(context.Background(), "webhook service stopped successfully")
 	return nil
 }
 

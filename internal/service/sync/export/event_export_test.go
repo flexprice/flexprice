@@ -25,7 +25,7 @@ func TestEventExporter_PrepareData_CostColumn(t *testing.T) {
 
 	featureUsageStore := testutil.NewInMemoryFeatureUsageStore()
 	priceStore := testutil.NewInMemoryPriceStore()
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 	now := time.Now().UTC()
 
 	// Create a price: amount 2.5
@@ -83,12 +83,12 @@ func TestEventExporter_PrepareData_CostColumn(t *testing.T) {
 
 	exporter := NewEventExporter(featureUsageStore, nil, priceStore, nil, nil, log)
 	req := &dto.ExportRequest{
-		TenantID:    tenantID,
-		EnvID:       envID,
-		StartTime:   now.Add(-time.Hour),
-		EndTime:     now.Add(time.Hour),
-		EntityType:  types.ScheduledTaskEntityTypeEvents,
-		JobConfig:   &types.S3JobConfig{},
+		TenantID:   tenantID,
+		EnvID:      envID,
+		StartTime:  now.Add(-time.Hour),
+		EndTime:    now.Add(time.Hour),
+		EntityType: types.ScheduledTaskEntityTypeEvents,
+		JobConfig:  &types.S3JobConfig{},
 	}
 
 	csvBytes, count, err := exporter.PrepareData(ctx, req)
@@ -125,7 +125,7 @@ func TestEventExporter_PrepareData_CostEmptyWhenPriceIDEmpty(t *testing.T) {
 
 	featureUsageStore := testutil.NewInMemoryFeatureUsageStore()
 	priceStore := testutil.NewInMemoryPriceStore()
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 
 	// Usage with empty PriceID
 	usageID := "usage-no-price"
@@ -197,7 +197,7 @@ func TestEventExporter_PrepareData_CostEmptyWhenPriceNotFound(t *testing.T) {
 
 	featureUsageStore := testutil.NewInMemoryFeatureUsageStore()
 	priceStore := testutil.NewInMemoryPriceStore() // no prices created
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 
 	// Usage with non-existent PriceID
 	usageID := "usage-missing-price"
@@ -270,7 +270,7 @@ func TestEventExporter_CSVHeadersIncludeCost(t *testing.T) {
 
 	featureUsageStore := testutil.NewInMemoryFeatureUsageStore()
 	priceStore := testutil.NewInMemoryPriceStore()
-	log := logger.GetLogger()
+	log := logger.NewNoopLogger()
 
 	exporter := NewEventExporter(featureUsageStore, nil, priceStore, nil, nil, log)
 	now := time.Now().UTC()

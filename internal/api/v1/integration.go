@@ -44,7 +44,7 @@ func (h *IntegrationHandler) Sync(c *gin.Context) {
 	}
 
 	if err := h.syncService.SyncEntity(c.Request.Context(), req); err != nil {
-		h.logger.Errorw("failed to trigger integration sync",
+		h.logger.Error(c.Request.Context(), "failed to trigger integration sync",
 			"error", err,
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
@@ -142,7 +142,7 @@ func (h *IntegrationHandler) GetConfig(c *gin.Context) {
 	}
 	connResp, err := h.connectionService.GetConnections(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.Errorw("failed to get connections for integration config", "error", err)
+		h.logger.Error(c.Request.Context(), "failed to get connections for integration config", "error", err)
 		c.Error(err)
 		return
 	}

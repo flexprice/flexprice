@@ -1,0 +1,148 @@
+package middleware
+
+import (
+	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/spanerr"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+)
+
+// TracingMiddleware is the HTTP tracing middleware. It uses otelgin to create a
+// span per request (exported to SigNoz / any OTLP backend). Panic recovery is
+// handled separately by OtelRecoveryMiddleware (records the panic as an
+// exception span event) plus gin's own recovery as the outermost safety net.
+func TracingMiddleware(cfg *config.Configuration) []gin.HandlerFunc {
+	handlers := []gin.HandlerFunc{}
+
+	if cfg.Otel.Enabled && cfg.Otel.Traces.Enabled {
+		handlers = append(handlers, otelgin.Middleware(cfg.Otel.ResolveServiceName(cfg)))
+	}
+
+	return handlers
+}
+
+// OtelRecoveryMiddleware records a panicking request as an OTel "exception" span
+// event (with the unwinding stacktrace) on the active span before re-panicking
+// so gin's outer recovery middleware writes the 500 and logs it. Mount it AFTER
+// TracingMiddleware so otelgin's span is present in the request context when the
+// panic unwinds through this deferred handler.
+func OtelRecoveryMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				spanerr.RecordPanic(c.Request.Context(), r)
+				panic(r) // re-panic: gin's outer Recovery writes 500 + logs
+			}
+		}()
+		c.Next()
+	}
+}
+
+// Gin context keys used to propagate OTel trace context from SpanEnrichmentMiddleware
+// to LoggingMiddleware. otelgin's deferred context-restore fires between the two
+// post-phases, so we stash the span IDs and the pre-restore request context here.
+const (
+	ginKeyTraceID = "_otel_trace_id"
+	ginKeySpanID  = "_otel_span_id"
+	ginKeySpanCtx = "_otel_span_ctx" // full context.Context with active span
+)
+
+// SpanEnrichmentMiddleware runs after otelgin (which creates the span) and
+// before the handler chain. It:
+//  1. Pre-request: stamps app.request_id on the span for cross-signal searching.
+//  2. Post-request: stashes trace_id/span_id and the full span-carrying context
+//     into gin's key-value store while the span is still present, before
+//     otelgin's deferred context-restore fires. LoggingMiddleware (post-phase
+//     runs after otelgin fully returns) reads these to inject trace_id/span_id
+//     into log fields and the OTLP log record — enabling SigNoz trace-log
+//     correlation in the Span Details "Logs" tab.
+//
+// Note: otelgin v0.69.0 already handles 5xx span status marking and gin error
+// recording. This middleware intentionally does NOT duplicate those operations.
+//
+// Middleware execution order:
+//
+//	Registration: [LoggingMW, otelgin, SpanEnrichmentMW, ...]
+//	Pre-phase:    LoggingMW.pre → otelgin.pre (span created) → SpanEnrichment.pre
+//	Post-phase:   SpanEnrichment.post → otelgin.post+defer (span ended, ctx restored) → LoggingMW.post
+func SpanEnrichmentMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
+		span := trace.SpanFromContext(ctx)
+
+		// Pre-request: attach request_id to the span for cross-signal searching.
+		if span.SpanContext().IsValid() {
+			if rid := types.GetRequestID(ctx); rid != "" {
+				span.SetAttributes(attribute.String("app.request_id", rid))
+			}
+		}
+
+		// Seed a per-request exception dedup scope so an error that is both
+		// logged (auto-capture) and explicitly captured within this request
+		// produces a single exception span event rather than two.
+		c.Request = c.Request.WithContext(spanerr.WithDedup(ctx))
+
+		c.Next()
+
+		// Post-request: the span is still in c.Request.Context() here because
+		// otelgin's deferred restore hasn't fired yet (it fires when otelgin's
+		// function returns, which is after our post-phase completes).
+		sc := trace.SpanFromContext(c.Request.Context()).SpanContext()
+		if sc.IsValid() {
+			// Stash IDs and the full span-carrying context in gin's key-value store.
+			// After otelgin's deferred restore fires (which removes the span from
+			// c.Request.Context()), LoggingMiddleware reads these to:
+			//   1. Inject trace_id/span_id as string log fields (stdout + OTLP attributes).
+			//   2. Pass ginKeySpanCtx to logger.WithContext so the otelzap bridge can set
+			//      the OTLP log record's record-level TraceId/SpanId — the fields SigNoz
+			//      uses to link logs to their trace in the Span Details "Logs" tab.
+			c.Set(ginKeyTraceID, sc.TraceID().String())
+			c.Set(ginKeySpanID, sc.SpanID().String())
+			c.Set(ginKeySpanCtx, c.Request.Context()) // save ctx BEFORE otelgin restores it
+		}
+
+		// Note: otelgin v0.69.0 already:
+		//   - calls span.SetStatus(sc.Status(status)) which marks 5xx as codes.Error
+		//   - iterates c.Errors and calls span.RecordError for each
+		// We intentionally do NOT duplicate those here to avoid double span events.
+		// SpanEnrichmentMiddleware's sole additional responsibility is:
+		//   1. app.request_id attribute (set in the pre-phase above)
+		//   2. Stashing the span context for LoggingMiddleware (done above)
+	}
+}
+
+// TenantContextMiddleware enriches the active OTel span with tenant_id,
+// environment_id, and user_id. Mount this after AuthenticateMiddleware
+// and EnvAccessMiddleware so the request context already has these set.
+func TenantContextMiddleware(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	userID := types.GetUserID(ctx)
+
+	// Attach tenant / user attributes to the OTel span.
+	// Note: app.request_id is intentionally omitted here — SpanEnrichmentMiddleware
+	// (which runs on all routes, including unauthenticated ones) already sets it in
+	// its pre-phase, before this middleware runs.
+	if span := trace.SpanFromContext(ctx); span != nil && span.SpanContext().IsValid() {
+		attrs := make([]attribute.KeyValue, 0, 3)
+		if tenantID != "" {
+			attrs = append(attrs, attribute.String("app.tenant_id", tenantID))
+		}
+		if environmentID != "" {
+			attrs = append(attrs, attribute.String("app.environment_id", environmentID))
+		}
+		if userID != "" {
+			attrs = append(attrs, attribute.String("app.user_id", userID))
+		}
+		if len(attrs) > 0 {
+			span.SetAttributes(attrs...)
+		}
+	}
+
+	c.Next()
+}

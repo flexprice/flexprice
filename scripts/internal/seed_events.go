@@ -15,7 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/repository"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 	"golang.org/x/time/rate"
 )
@@ -110,7 +110,7 @@ func SeedEventsFromMeters() error {
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}
-	client := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
+	client := postgres.NewClient(entClient, log, tracing.NewService(cfg, log))
 
 	// Initialize repositories
 	repoParams := repository.RepositoryParams{
@@ -135,7 +135,7 @@ func SeedEventsFromMeters() error {
 		return fmt.Errorf("failed to fetch customers: %v", err)
 	}
 
-	log.Info("Starting event seeding...")
+	log.Info(context.Background(), "Starting event seeding...")
 	log.Infof("Found %d meters to generate events for", len(meters))
 	log.Infof("Sending %d events in batches of %d with rate limit of %d req/s",
 		NUM_EVENTS, BATCH_SIZE, REQUESTS_PER_SEC)
@@ -222,8 +222,8 @@ func SeedEventsFromMeters() error {
 	totalTime := time.Since(start)
 	avgDuration := totalDuration / time.Duration(successCount)
 
-	log.Info("Event seeding completed!")
-	log.Info("Results:")
+	log.Info(context.Background(), "Event seeding completed!")
+	log.Info(context.Background(), "Results:")
 	log.Infof("Total Time: %v", totalTime)
 	log.Infof("Successful Requests: %d", successCount)
 	log.Infof("Failed Requests: %d", errorCount)
@@ -233,7 +233,7 @@ func SeedEventsFromMeters() error {
 	log.Infof("Requests per Second: %.2f", float64(successCount)/totalTime.Seconds())
 
 	// Print batch information
-	log.Info("\nBatch Details:")
+	log.Info(context.Background(), "\nBatch Details:")
 	for _, batch := range batches {
 		log.Infof("Batch %d: Events=%d, Duration=%v, Last Event ID=%s",
 			batch.BatchNumber,

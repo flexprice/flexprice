@@ -35,7 +35,7 @@ func NewCouponApplicationRepository(client postgres.IClient, log *logger.Logger,
 func (r *couponApplicationRepository) Create(ctx context.Context, ca *domainCouponApplication.CouponApplication) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating coupon application",
+	r.log.Debug(ctx, "creating coupon application",
 		"coupon_application_id", ca.ID,
 		"coupon_id", ca.CouponID,
 		"invoice_id", ca.InvoiceID,
@@ -117,7 +117,7 @@ func (r *couponApplicationRepository) Create(ctx context.Context, ca *domainCoup
 func (r *couponApplicationRepository) Get(ctx context.Context, id string) (*domainCouponApplication.CouponApplication, error) {
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("getting coupon application",
+	r.log.Debug(ctx, "getting coupon application",
 		"coupon_application_id", id)
 
 	// Start a span for this repository operation
@@ -128,7 +128,7 @@ func (r *couponApplicationRepository) Get(ctx context.Context, id string) (*doma
 
 	// Try to get from cache first
 	if cached := r.GetCache(ctx, id); cached != nil {
-		r.log.Debugw("found coupon application in cache",
+		r.log.Debug(ctx, "found coupon application in cache",
 			"coupon_application_id", id)
 		return cached, nil
 	}
@@ -172,7 +172,7 @@ func (r *couponApplicationRepository) Get(ctx context.Context, id string) (*doma
 func (r *couponApplicationRepository) Update(ctx context.Context, ca *domainCouponApplication.CouponApplication) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating coupon application",
+	r.log.Debug(ctx, "updating coupon application",
 		"coupon_application_id", ca.ID,
 		"coupon_id", ca.CouponID,
 		"invoice_id", ca.InvoiceID,
@@ -225,7 +225,7 @@ func (r *couponApplicationRepository) Update(ctx context.Context, ca *domainCoup
 func (r *couponApplicationRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting coupon application",
+	r.log.Debug(ctx, "deleting coupon application",
 		"coupon_application_id", id,
 		"tenant_id", types.GetTenantID(ctx))
 
@@ -277,7 +277,7 @@ func (r *couponApplicationRepository) List(ctx context.Context, filter *types.Co
 
 	client := r.client.Reader(ctx)
 
-	r.log.Debugw("listing coupon applications", "filter", filter)
+	r.log.Debug(ctx, "listing coupon applications", "filter", filter)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "coupon_application", "list", map[string]interface{}{

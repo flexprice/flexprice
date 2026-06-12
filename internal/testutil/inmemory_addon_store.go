@@ -206,4 +206,4 @@ func applyAddonFilterCondition(a *addon.Addon, condition *types.FilterCondition)
 func addonSortFn(i, j *addon.Addon) bool {
 	// Default sort by created_at desc
 	return i.CreatedAt.After(j.CreatedAt)
-} 
+}

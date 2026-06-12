@@ -34,7 +34,7 @@ func NewSettingsRepository(client postgres.IClient, log *logger.Logger, cache ca
 func (r *settingsRepository) Create(ctx context.Context, s *domainSettings.Setting) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating setting",
+	r.log.Debug(ctx, "creating setting",
 		"setting_id", s.ID,
 		"tenant_id", s.TenantID,
 		"key", s.Key,
@@ -84,7 +84,7 @@ func (r *settingsRepository) Create(ctx context.Context, s *domainSettings.Setti
 func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setting) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating setting",
+	r.log.Debug(ctx, "updating setting",
 		"setting_id", s.ID,
 		"tenant_id", s.TenantID,
 		"key", s.Key,
@@ -124,7 +124,7 @@ func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setti
 func (r *settingsRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting setting",
+	r.log.Debug(ctx, "deleting setting",
 		"setting_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
@@ -166,7 +166,7 @@ func (r *settingsRepository) Get(ctx context.Context, id string) (*domainSetting
 	}
 
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting setting", "id", id)
+	r.log.Debug(ctx, "getting setting", "id", id)
 
 	s, err := client.Settings.Query().
 		Where(
@@ -201,7 +201,7 @@ func (r *settingsRepository) Get(ctx context.Context, id string) (*domainSetting
 func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
 
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting setting by key", "key", key)
+	r.log.Debug(ctx, "getting setting by key", "key", key)
 
 	s, err := client.Settings.Query().
 		Where(
@@ -234,7 +234,7 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey)
 // This is for settings that apply tenant-wide across all environments
 func (r *settingsRepository) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting tenant-level setting by key", "key", key)
+	r.log.Debug(ctx, "getting tenant-level setting by key", "key", key)
 
 	s, err := client.Settings.Query().
 		Where(
@@ -272,7 +272,7 @@ func (r *settingsRepository) DeleteByKey(ctx context.Context, key types.SettingK
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting setting by key", "key", string(key))
+	r.log.Debug(ctx, "deleting setting by key", "key", string(key))
 
 	_, err = client.Settings.Update().
 		Where(
@@ -314,7 +314,7 @@ func (r *settingsRepository) DeleteTenantLevelSettingByKey(ctx context.Context, 
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting tenant-level setting by key", "key", string(key))
+	r.log.Debug(ctx, "deleting tenant-level setting by key", "key", string(key))
 
 	_, err = client.Settings.Update().
 		Where(
@@ -364,7 +364,7 @@ func (r *settingsRepository) SetCache(ctx context.Context, setting *domainSettin
 	r.cache.Set(ctx, idKey, setting, cache.ExpiryDefaultInMemory)
 	r.cache.Set(ctx, keyKey, setting, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "id_key", idKey, "key_key", keyKey)
+	r.log.Debug(ctx, "cache set", "id_key", idKey, "key_key", keyKey)
 }
 
 func (r *settingsRepository) GetCache(ctx context.Context, key string) *domainSettings.Setting {
@@ -376,7 +376,7 @@ func (r *settingsRepository) GetCache(ctx context.Context, key string) *domainSe
 	cacheKey := cache.GenerateKey(cache.PrefixSettings, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if setting, ok := value.(*domainSettings.Setting); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return setting
 		}
 	}
@@ -398,7 +398,7 @@ func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSet
 	keyKey := cache.GenerateKey(cache.PrefixSettings, tenantID, environmentID, setting.Key)
 	r.cache.Delete(ctx, idKey)
 	r.cache.Delete(ctx, keyKey)
-	r.log.Debugw("cache deleted", "id_key", idKey, "key_key", keyKey)
+	r.log.Debug(ctx, "cache deleted", "id_key", idKey, "key_key", keyKey)
 }
 
 // ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments
@@ -451,14 +451,14 @@ func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Con
 		// Simple conversion: map -> typed struct
 		subscriptionConfig, err := utils.ToStruct[types.SubscriptionConfig](config.Config)
 		if err != nil {
-			r.log.Warnw("failed to convert subscription config",
+			r.log.Info(ctx, "failed to convert subscription config",
 				"tenant_id", config.TenantID,
 				"environment_id", config.EnvironmentID,
 				"error", err)
 			continue
 		}
 
-		r.log.Debugw("processing subscription config",
+		r.log.Debug(ctx, "processing subscription config",
 			"tenant_id", config.TenantID,
 			"environment_id", config.EnvironmentID,
 			"auto_cancellation_enabled", subscriptionConfig.AutoCancellationEnabled,
@@ -472,7 +472,7 @@ func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Con
 				SubscriptionConfig: &subscriptionConfig,
 			})
 		} else {
-			r.log.Infow("skipping subscription config - auto-cancellation disabled",
+			r.log.Info(ctx, "skipping subscription config - auto-cancellation disabled",
 				"tenant_id", config.TenantID,
 				"environment_id", config.EnvironmentID)
 		}

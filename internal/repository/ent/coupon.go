@@ -36,7 +36,7 @@ func NewCouponRepository(client postgres.IClient, log *logger.Logger, cache cach
 func (r *couponRepository) Create(ctx context.Context, c *domainCoupon.Coupon) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("creating coupon",
+	r.log.Debug(ctx, "creating coupon",
 		"coupon_id", c.ID,
 		"tenant_id", c.TenantID,
 		"name", c.Name,
@@ -119,7 +119,7 @@ func (r *couponRepository) Get(ctx context.Context, id string) (*domainCoupon.Co
 	}
 
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting coupon", "coupon_id", id)
+	r.log.Debug(ctx, "getting coupon", "coupon_id", id)
 
 	c, err := client.Coupon.Query().
 		Where(
@@ -154,7 +154,7 @@ func (r *couponRepository) Get(ctx context.Context, id string) (*domainCoupon.Co
 func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("updating coupon",
+	r.log.Debug(ctx, "updating coupon",
 		"coupon_id", c.ID,
 		"tenant_id", c.TenantID,
 		"name", c.Name,
@@ -214,7 +214,7 @@ func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) e
 func (r *couponRepository) Delete(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting coupon",
+	r.log.Debug(ctx, "deleting coupon",
 		"coupon_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
@@ -261,7 +261,7 @@ func (r *couponRepository) Delete(ctx context.Context, id string) error {
 func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) error {
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("incrementing coupon redemptions",
+	r.log.Debug(ctx, "incrementing coupon redemptions",
 		"coupon_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
@@ -483,7 +483,7 @@ func (r *couponRepository) SetCache(ctx context.Context, coupon *domainCoupon.Co
 	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
 	r.cache.Set(ctx, cacheKey, coupon, cache.ExpiryDefaultInMemory)
 
-	r.log.Debugw("cache set", "key", cacheKey)
+	r.log.Debug(ctx, "cache set", "key", cacheKey)
 }
 
 func (r *couponRepository) GetCache(ctx context.Context, key string) *domainCoupon.Coupon {
@@ -495,7 +495,7 @@ func (r *couponRepository) GetCache(ctx context.Context, key string) *domainCoup
 	cacheKey := cache.GenerateKey(cache.PrefixCoupon, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), key)
 	if value, found := r.cache.Get(ctx, cacheKey); found {
 		if coupon, ok := value.(*domainCoupon.Coupon); ok {
-			r.log.Debugw("cache hit", "key", cacheKey)
+			r.log.Debug(ctx, "cache hit", "key", cacheKey)
 			return coupon
 		}
 	}
@@ -513,5 +513,5 @@ func (r *couponRepository) DeleteCache(ctx context.Context, coupon *domainCoupon
 
 	cacheKey := cache.GenerateKey(cache.PrefixCoupon, tenantID, environmentID, coupon.ID)
 	r.cache.Delete(ctx, cacheKey)
-	r.log.Debugw("cache deleted", "key", cacheKey)
+	r.log.Debug(ctx, "cache deleted", "key", cacheKey)
 }

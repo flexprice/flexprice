@@ -108,7 +108,7 @@ func (s *PaymentService) CreatePaymentLink(
 		GivenID:     req.PaymentID, // Use FlexPrice payment ID for idempotency
 	}
 
-	s.logger.Infow("creating Moyasar payment link",
+	s.logger.Info(ctx, "creating Moyasar payment link",
 		"invoice_id", req.InvoiceID,
 		"customer_id", req.CustomerID,
 		"amount", req.Amount.String(),
@@ -118,7 +118,7 @@ func (s *PaymentService) CreatePaymentLink(
 	// Create payment in Moyasar
 	payment, err := s.client.CreatePayment(ctx, paymentReq)
 	if err != nil {
-		s.logger.Errorw("failed to create Moyasar payment",
+		s.logger.Error(ctx, "failed to create Moyasar payment",
 			"invoice_id", req.InvoiceID,
 			"error", err)
 		return nil, err
@@ -135,7 +135,7 @@ func (s *PaymentService) CreatePaymentLink(
 		PaymentID:  req.PaymentID,
 	}
 
-	s.logger.Infow("successfully created Moyasar payment link",
+	s.logger.Info(ctx, "successfully created Moyasar payment link",
 		"moyasar_payment_id", payment.ID,
 		"flexprice_payment_id", req.PaymentID,
 		"status", payment.Status,
@@ -155,21 +155,21 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 	// Get the payment record to find the invoice
 	paymentRecord, err := paymentService.GetPayment(ctx, paymentID)
 	if err != nil {
-		s.logger.Errorw("failed to get payment record for reconciliation",
+		s.logger.Error(ctx, "failed to get payment record for reconciliation",
 			"payment_id", paymentID,
 			"error", err)
 		return err
 	}
 
 	if paymentRecord == nil {
-		s.logger.Warnw("payment record not found for reconciliation",
+		s.logger.Info(context.Background(), "payment record not found for reconciliation",
 			"payment_id", paymentID)
 		return ierr.NewError("payment not found").Mark(ierr.ErrNotFound)
 	}
 
 	// Get the invoice ID from the payment destination
 	if paymentRecord.DestinationType != types.PaymentDestinationTypeInvoice {
-		s.logger.Infow("payment destination is not an invoice, skipping reconciliation",
+		s.logger.Info(ctx, "payment destination is not an invoice, skipping reconciliation",
 			"payment_id", paymentID,
 			"destination_type", paymentRecord.DestinationType)
 		return nil
@@ -177,7 +177,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 
 	invoiceID := paymentRecord.DestinationID
 	if invoiceID == "" {
-		s.logger.Warnw("payment has no invoice destination",
+		s.logger.Info(context.Background(), "payment has no invoice destination",
 			"payment_id", paymentID)
 		return nil
 	}
@@ -185,7 +185,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 	// Update invoice payment status
 	err = invoiceService.ReconcilePaymentStatus(ctx, invoiceID, types.PaymentStatusSucceeded, &paymentAmount)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile invoice payment status",
+		s.logger.Error(ctx, "failed to reconcile invoice payment status",
 			"payment_id", paymentID,
 			"invoice_id", invoiceID,
 			"amount", paymentAmount.String(),
@@ -193,7 +193,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 		return err
 	}
 
-	s.logger.Infow("successfully reconciled payment with invoice",
+	s.logger.Info(ctx, "successfully reconciled payment with invoice",
 		"payment_id", paymentID,
 		"invoice_id", invoiceID,
 		"amount", paymentAmount.String())
@@ -209,7 +209,7 @@ func (s *PaymentService) PaymentExistsByGatewayPaymentID(
 ) (bool, error) {
 	exists, err := paymentService.PaymentExistsByGatewayPaymentID(ctx, gatewayPaymentID)
 	if err != nil {
-		s.logger.Errorw("failed to check if payment exists",
+		s.logger.Error(ctx, "failed to check if payment exists",
 			"gateway_payment_id", gatewayPaymentID,
 			"error", err)
 		return false, err
@@ -226,12 +226,12 @@ func (s *PaymentService) GetPaymentStatus(
 		return nil, ierr.NewError("moyasar_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	s.logger.Debugw("getting payment status from Moyasar",
+	s.logger.Debug(ctx, "getting payment status from Moyasar",
 		"moyasar_payment_id", moyasarPaymentID)
 
 	payment, err := s.client.GetPayment(ctx, moyasarPaymentID)
 	if err != nil {
-		s.logger.Errorw("failed to get payment from Moyasar",
+		s.logger.Error(ctx, "failed to get payment from Moyasar",
 			"moyasar_payment_id", moyasarPaymentID,
 			"error", err)
 		return nil, err
@@ -266,7 +266,7 @@ func (s *PaymentService) GetPaymentStatus(
 		}
 	}
 
-	s.logger.Infow("retrieved payment status from Moyasar",
+	s.logger.Info(ctx, "retrieved payment status from Moyasar",
 		"moyasar_payment_id", moyasarPaymentID,
 		"status", payment.Status,
 		"amount", amount.String())
@@ -284,7 +284,7 @@ func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 ) error {
 	moyasarPaymentID := payment.ID
 
-	s.logger.Infow("no FlexPrice payment ID found, processing as external Moyasar payment",
+	s.logger.Info(ctx, "no FlexPrice payment ID found, processing as external Moyasar payment",
 		"moyasar_payment_id", moyasarPaymentID)
 
 	// Check if invoice ID exists in metadata
@@ -294,14 +294,14 @@ func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 	}
 
 	if flexpriceInvoiceID == "" {
-		s.logger.Infow("no FlexPrice invoice ID found in external payment metadata, skipping",
+		s.logger.Info(ctx, "no FlexPrice invoice ID found in external payment metadata, skipping",
 			"moyasar_payment_id", moyasarPaymentID)
 		return nil
 	}
 
 	// Process external Moyasar payment
 	if err := s.ProcessExternalMoyasarPayment(ctx, payment, flexpriceInvoiceID, paymentService, invoiceService); err != nil {
-		s.logger.Errorw("failed to process external Moyasar payment",
+		s.logger.Error(ctx, "failed to process external Moyasar payment",
 			"error", err,
 			"moyasar_payment_id", moyasarPaymentID,
 			"flexprice_invoice_id", flexpriceInvoiceID)
@@ -310,7 +310,7 @@ func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 			Mark(ierr.ErrSystem)
 	}
 
-	s.logger.Infow("successfully processed external Moyasar payment",
+	s.logger.Info(ctx, "successfully processed external Moyasar payment",
 		"moyasar_payment_id", moyasarPaymentID,
 		"flexprice_invoice_id", flexpriceInvoiceID)
 	return nil
@@ -326,19 +326,19 @@ func (s *PaymentService) ProcessExternalMoyasarPayment(
 ) error {
 	moyasarPaymentID := payment.ID
 
-	s.logger.Infow("processing external Moyasar payment",
+	s.logger.Info(ctx, "processing external Moyasar payment",
 		"moyasar_payment_id", moyasarPaymentID,
 		"flexprice_invoice_id", flexpriceInvoiceID)
 
 	// Step 1: Check if payment already exists (idempotency check)
 	exists, err := s.PaymentExistsByGatewayPaymentID(ctx, moyasarPaymentID, paymentService)
 	if err != nil {
-		s.logger.Errorw("failed to check if payment exists",
+		s.logger.Error(ctx, "failed to check if payment exists",
 			"error", err,
 			"moyasar_payment_id", moyasarPaymentID)
 		return err
 	} else if exists {
-		s.logger.Infow("payment already exists for this Moyasar payment, skipping",
+		s.logger.Info(ctx, "payment already exists for this Moyasar payment, skipping",
 			"moyasar_payment_id", moyasarPaymentID,
 			"flexprice_invoice_id", flexpriceInvoiceID)
 		return nil
@@ -347,7 +347,7 @@ func (s *PaymentService) ProcessExternalMoyasarPayment(
 	// Step 2: Create external payment record
 	err = s.createExternalPaymentRecord(ctx, payment, flexpriceInvoiceID, paymentService)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"moyasar_payment_id", moyasarPaymentID)
 		return err
@@ -358,14 +358,14 @@ func (s *PaymentService) ProcessExternalMoyasarPayment(
 	amount := convertFromSmallestUnit(int64(payment.Amount), payment.Currency)
 	err = s.reconcileInvoice(ctx, flexpriceInvoiceID, amount, invoiceService)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile invoice with external payment",
+		s.logger.Error(ctx, "failed to reconcile invoice with external payment",
 			"error", err,
 			"invoice_id", flexpriceInvoiceID,
 			"amount", amount.String())
 		return err
 	}
 
-	s.logger.Infow("successfully processed external Moyasar payment",
+	s.logger.Info(ctx, "successfully processed external Moyasar payment",
 		"moyasar_payment_id", moyasarPaymentID,
 		"flexprice_invoice_id", flexpriceInvoiceID,
 		"amount", amount.String())
@@ -394,7 +394,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 		}
 	}
 
-	s.logger.Infow("creating external payment record",
+	s.logger.Info(ctx, "creating external payment record",
 		"moyasar_payment_id", moyasarPaymentID,
 		"invoice_id", invoiceID,
 		"amount", amount.String(),
@@ -420,7 +420,7 @@ func (s *PaymentService) createExternalPaymentRecord(
 
 	paymentResp, err := paymentService.CreatePayment(ctx, createReq)
 	if err != nil {
-		s.logger.Errorw("failed to create external payment record",
+		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
 			"moyasar_payment_id", moyasarPaymentID,
 			"invoice_id", invoiceID)
@@ -437,28 +437,28 @@ func (s *PaymentService) createExternalPaymentRecord(
 
 	_, err = paymentService.UpdatePayment(ctx, paymentResp.ID, updateReq)
 	if err != nil {
-		s.logger.Errorw("failed to update external payment status, attempting cleanup",
+		s.logger.Error(ctx, "failed to update external payment status, attempting cleanup",
 			"error", err,
 			"payment_id", paymentResp.ID,
 			"moyasar_payment_id", moyasarPaymentID)
-		
+
 		// Cleanup: Delete the orphaned payment record to prevent inconsistent state
 		// If cleanup fails, log the error but return the original update error
 		if deleteErr := paymentService.DeletePayment(ctx, paymentResp.ID); deleteErr != nil {
-			s.logger.Errorw("failed to cleanup orphaned payment record",
+			s.logger.Error(ctx, "failed to cleanup orphaned payment record",
 				"error", deleteErr,
 				"payment_id", paymentResp.ID,
 				"moyasar_payment_id", moyasarPaymentID)
 		} else {
-			s.logger.Infow("successfully cleaned up orphaned payment record",
+			s.logger.Info(ctx, "successfully cleaned up orphaned payment record",
 				"payment_id", paymentResp.ID,
 				"moyasar_payment_id", moyasarPaymentID)
 		}
-		
+
 		return err
 	}
 
-	s.logger.Infow("successfully created external payment record",
+	s.logger.Info(ctx, "successfully created external payment record",
 		"payment_id", paymentResp.ID,
 		"moyasar_payment_id", moyasarPaymentID,
 		"invoice_id", invoiceID,
@@ -477,14 +477,14 @@ func (s *PaymentService) reconcileInvoice(
 	// Update invoice payment status
 	err := invoiceService.ReconcilePaymentStatus(ctx, invoiceID, types.PaymentStatusSucceeded, &paymentAmount)
 	if err != nil {
-		s.logger.Errorw("failed to reconcile invoice payment status",
+		s.logger.Error(ctx, "failed to reconcile invoice payment status",
 			"invoice_id", invoiceID,
 			"amount", paymentAmount.String(),
 			"error", err)
 		return err
 	}
 
-	s.logger.Infow("successfully reconciled invoice",
+	s.logger.Info(ctx, "successfully reconciled invoice",
 		"invoice_id", invoiceID,
 		"amount", paymentAmount.String())
 
@@ -542,7 +542,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 		metadata["flexprice_invoice_id"] = invoiceID
 	}
 
-	s.logger.Infow("charging saved payment method",
+	s.logger.Info(ctx, "charging saved payment method",
 		"customer_id", customerID,
 		"token_id", tokenID,
 		"amount", amount.String(),
@@ -551,7 +551,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 	// Charge using token
 	payment, err := s.client.ChargeWithToken(ctx, tokenID, int(amountInSmallestUnit), currency, description, metadata, paymentID)
 	if err != nil {
-		s.logger.Errorw("failed to charge saved payment method",
+		s.logger.Error(ctx, "failed to charge saved payment method",
 			"customer_id", customerID,
 			"token_id", tokenID,
 			"error", err)
@@ -569,7 +569,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 		PaymentID:  paymentID,
 	}
 
-	s.logger.Infow("successfully charged saved payment method",
+	s.logger.Info(ctx, "successfully charged saved payment method",
 		"moyasar_payment_id", payment.ID,
 		"status", payment.Status,
 		"customer_id", customerID)
@@ -593,7 +593,7 @@ func (s *PaymentService) SetupIntent(
 		return nil, ierr.NewError("setup intent request is required").Mark(ierr.ErrValidation)
 	}
 
-	s.logger.Infow("creating setup intent for customer",
+	s.logger.Info(ctx, "creating setup intent for customer",
 		"customer_id", customerID,
 		"has_callback_url", req.CallbackURL != "")
 
@@ -614,7 +614,7 @@ func (s *PaymentService) SetupIntent(
 		SetupURL: req.CallbackURL,
 	}
 
-	s.logger.Infow("setup intent created",
+	s.logger.Info(ctx, "setup intent created",
 		"customer_id", customerID,
 		"status", response.Status)
 
@@ -633,20 +633,20 @@ func (s *PaymentService) GetCustomerPaymentMethods(
 		return nil, ierr.NewError("customer_id is required").Mark(ierr.ErrValidation)
 	}
 
-	s.logger.Debugw("getting customer payment methods",
+	s.logger.Debug(ctx, "getting customer payment methods",
 		"customer_id", customerID)
 
 	// Get customer's saved token IDs from entity integration mapping
 	tokenIDs, err := s.customerSvc.GetCustomerTokens(ctx, customerID)
 	if err != nil {
-		s.logger.Errorw("failed to get customer tokens",
+		s.logger.Error(ctx, "failed to get customer tokens",
 			"customer_id", customerID,
 			"error", err)
 		return nil, err
 	}
 
 	if len(tokenIDs) == 0 {
-		s.logger.Infow("no saved payment methods found for customer",
+		s.logger.Info(ctx, "no saved payment methods found for customer",
 			"customer_id", customerID)
 		return []*PaymentMethodInfo{}, nil
 	}
@@ -656,7 +656,7 @@ func (s *PaymentService) GetCustomerPaymentMethods(
 	for i, tokenID := range tokenIDs {
 		token, err := s.client.GetToken(ctx, tokenID)
 		if err != nil {
-			s.logger.Warnw("failed to get token from Moyasar, skipping",
+			s.logger.Info(context.Background(), "failed to get token from Moyasar, skipping",
 				"token_id", tokenID,
 				"error", err)
 			continue
@@ -676,7 +676,7 @@ func (s *PaymentService) GetCustomerPaymentMethods(
 		paymentMethods = append(paymentMethods, paymentMethod)
 	}
 
-	s.logger.Infow("retrieved customer payment methods",
+	s.logger.Info(ctx, "retrieved customer payment methods",
 		"customer_id", customerID,
 		"count", len(paymentMethods))
 

@@ -34,12 +34,12 @@ func main() {
 
 	// Get DSN from config
 	dsn := cfg.Postgres.GetDSN()
-	logger.Infow("Connecting to database", "host", cfg.Postgres.Host)
+	logger.Info(context.Background(), "Connecting to database", "host", cfg.Postgres.Host)
 
 	// Create Ent client
 	client, err := ent.Open("postgres", dsn)
 	if err != nil {
-		logger.Fatalw("Failed to connect to postgres", "error", err)
+		logger.Fatal(context.Background(), "Failed to connect to postgres", "error", err)
 	}
 	defer client.Close()
 
@@ -47,23 +47,23 @@ func main() {
 	defer cancel()
 
 	// Run auto migration
-	logger.Info("Running database migrations...")
+	logger.Info(ctx, "Running database migrations...")
 
 	// Check if we're in dry-run mode
 	if *dryRun {
-		logger.Info("Dry run mode - printing migration SQL without executing")
+		logger.Info(ctx, "Dry run mode - printing migration SQL without executing")
 		// In dry-run mode, we just print the SQL that would be executed
 		err = client.Schema.WriteTo(ctx, os.Stdout)
 		if err != nil {
-			logger.Fatalw("Failed to generate migration SQL", "error", err)
+			logger.Fatal(ctx, "Failed to generate migration SQL", "error", err)
 		}
 	} else {
 		// Run the actual migration
 		err = client.Schema.Create(ctx)
 		if err != nil {
-			logger.Fatalw("Failed to create schema resources", "error", err)
+			logger.Fatal(ctx, "Failed to create schema resources", "error", err)
 		}
-		logger.Info("Migration completed successfully")
+		logger.Info(ctx, "Migration completed successfully")
 	}
 
 	fmt.Println("Migration process completed")

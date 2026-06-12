@@ -12,19 +12,19 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/tracing"
 )
 
 // Router manages all message routing
 type Router struct {
-	router *message.Router
-	logger *logger.Logger
-	sentry *sentry.Service
-	config *config.Webhook
+	router  *message.Router
+	logger  *logger.Logger
+	tracing *tracing.Service
+	config  *config.Webhook
 }
 
 // NewRouter creates a new message router
-func NewRouter(cfg *config.Configuration, logger *logger.Logger, sentry *sentry.Service) (*Router, error) {
+func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tracing.Service) (*Router, error) {
 	router, err := message.NewRouter(
 		message.RouterConfig{},
 		watermill.NewStdLogger(true, false),
@@ -45,12 +45,12 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, sentry *sentry.
 			return nil, err
 		}
 		dlqTopicName = cfg.Kafka.TopicDLQ
-		logger.Infow("DLQ enabled with Kafka", "dlq_topic", cfg.Kafka.TopicDLQ)
+		logger.Info(context.Background(), "DLQ enabled with Kafka", "dlq_topic", cfg.Kafka.TopicDLQ)
 	} else {
 		// Use in-memory DLQ (original behavior) when not configured
 		poisonQueuePublisher = getTempDLQ()
 		dlqTopicName = "poison_queue"
-		logger.Infow("DLQ using in-memory queue (no topic_dlq configured)")
+		logger.Info(context.Background(), "DLQ using in-memory queue (no topic_dlq configured)")
 	}
 
 	// PoisonQueue middleware (always present, just with different publisher)
@@ -73,7 +73,7 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, sentry *sentry.
 			RandomizationFactor: 0.5,
 			Logger:              watermill.NewStdLogger(true, false),
 			OnRetryHook: func(retryNum int, delay time.Duration) {
-				logger.Infow("retrying message",
+				logger.Info(context.Background(), "retrying message",
 					"retry_number", retryNum,
 					"max_retries", 3,
 					"delay", delay,
@@ -83,10 +83,10 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, sentry *sentry.
 	)
 
 	return &Router{
-		router: router,
-		logger: logger,
-		sentry: sentry,
-		config: &cfg.Webhook,
+		router:  router,
+		logger:  logger,
+		tracing: tracingSvc,
+		config:  &cfg.Webhook,
 	}, nil
 }
 
@@ -110,7 +110,7 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 		return nil, err
 	}
 
-	logger.Infow("DLQ publisher initialized", "brokers", cfg.Kafka.Brokers, "dlq_topic", cfg.Kafka.TopicDLQ)
+	logger.Info(context.Background(), "DLQ publisher initialized", "brokers", cfg.Kafka.Brokers, "dlq_topic", cfg.Kafka.TopicDLQ)
 	return publisher, nil
 }
 
@@ -129,8 +129,10 @@ func (r *Router) AddNoPublishHandler(
 		func(msg *message.Message) error {
 			err := handlerFunc(msg)
 			if err != nil {
-				r.sentry.CaptureException(err)
-				r.logger.Errorw("handler failed",
+				// No request span on this watermill callback — CaptureException
+				// synthesizes a span so the failure still reaches SigNoz.
+				r.tracing.CaptureException(context.Background(), err)
+				r.logger.Error(context.Background(), "handler failed",
 					"error", err,
 					"correlation_id", middleware.MessageCorrelationID(msg),
 					"message_uuid", msg.UUID,
@@ -147,15 +149,15 @@ func (r *Router) AddNoPublishHandler(
 
 // Run starts the router
 func (r *Router) Run() error {
-	r.logger.Info("starting router")
 	ctx, cancel := context.WithCancel(context.Background())
+	r.logger.Info(ctx, "starting router")
 	defer cancel()
 	return r.router.Run(ctx)
 }
 
 // Close gracefully shuts down the router
 func (r *Router) Close() error {
-	r.logger.Info("closing router")
+	r.logger.Info(context.Background(), "closing router")
 	return r.router.Close()
 }
 

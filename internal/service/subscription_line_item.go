@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -61,6 +60,23 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		lineItem = resolvedReq.ToSubscriptionLineItem(txCtx, *params)
 		if usedInlinePrice {
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
+		}
+
+		// Materialize bucket prices: create a SUBSCRIPTION-scoped Price for each
+		// CommitmentTimeBuckets entry and assign the resulting slice (with PriceIDs
+		// and stable UUIDs) onto the line item. This must happen inside the
+		// transaction so that any created prices are rolled back on failure.
+		if len(resolvedReq.CommitmentTimeBuckets) > 0 {
+			// ToSubscriptionLineItem already built lineItem.CommitmentTimeBuckets
+			// (IDs + commitment fields, empty PriceID); create a SUBSCRIPTION-scoped
+			// price per bucket and fill in the PriceIDs.
+			if err := s.createBucketPrices(txCtx, lineItem.ID, subscriptionID, resolvedReq.CommitmentTimeBuckets, lineItem.CommitmentTimeBuckets, nil); err != nil {
+				return err
+			}
+			_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
+			if err := s.validateBucketArray(txCtx, lineItem.MeterID, lineItem.CommitmentWindowed, hasCumulative, lineItem.CommitmentTimeBuckets); err != nil {
+				return err
+			}
 		}
 
 		if types.BillingPeriodGreaterThan(sub.BillingPeriod, lineItem.BillingPeriod) {
@@ -124,9 +140,9 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		subCopy.CurrentPeriodEnd = period.End
 
 		prorationReq := LineItemProrationRequest{
-			Subscription:  &subCopy,
-			EffectiveDate: effectiveDate,
-			Behavior:      req.ProrationBehavior,
+			Subscription:   &subCopy,
+			EffectiveDate:  effectiveDate,
+			Behavior:       req.ProrationBehavior,
 			IdempotencyKey: types.GenerateUUIDWithPrefix("proration_add"),
 			Entries: []LineItemProrationEntry{
 				{
@@ -138,7 +154,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			},
 		}
 		if applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
-			s.Logger.WarnwCtx(ctx, "proration apply failed for line item add",
+			s.Logger.Info(ctx, "proration apply failed for line item add",
 				"line_item_id", lineItem.ID, "error", applyErr)
 		}
 	}
@@ -222,6 +238,7 @@ func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context,
 			CommitmentTrueUpEnabled: req.CommitmentTrueUpEnabled,
 			CommitmentWindowed:      req.CommitmentWindowed,
 			CommitmentDuration:      req.CommitmentDuration,
+			CommitmentTimeBuckets:   req.CommitmentTimeBuckets,
 		}
 		return nil, params, resolvedReq, true, &createPriceReq, nil
 	}
@@ -313,7 +330,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 
 		sub, err := s.SubRepo.Get(ctx, lineItem.SubscriptionID)
 		if err != nil {
-			s.Logger.WarnwCtx(ctx, "could not load subscription for delete proration",
+			s.Logger.Info(ctx, "could not load subscription for delete proration",
 				"line_item_id", lineItemID, "error", err)
 		} else {
 			period, err := types.FindPeriodForDate(
@@ -325,13 +342,13 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 				sub.BillingPeriod,
 			)
 			if err != nil {
-				s.Logger.WarnwCtx(ctx, "could not find period for delete proration",
+				s.Logger.Info(ctx, "could not find period for delete proration",
 					"line_item_id", lineItemID, "error", err)
 			} else {
 				priceSvc := NewPriceService(s.ServiceParams)
 				priceResp, err := priceSvc.GetPrice(ctx, lineItem.PriceID)
 				if err != nil {
-					s.Logger.WarnwCtx(ctx, "could not load price for delete proration",
+					s.Logger.Info(ctx, "could not load price for delete proration",
 						"line_item_id", lineItemID, "error", err)
 				} else {
 					subCopy := *sub
@@ -352,7 +369,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 						},
 					}
 					if applyErr := NewLineItemProrationService(s.ServiceParams).Apply(ctx, prorationReq); applyErr != nil {
-						s.Logger.WarnwCtx(ctx, "proration apply failed for line item delete",
+						s.Logger.Info(ctx, "proration apply failed for line item delete",
 							"line_item_id", lineItemID, "error", applyErr)
 					}
 				}
@@ -481,6 +498,27 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			newLineItem = req.ToSubscriptionLineItem(ctx, existingLineItem, newPriceID)
 			newLineItem.StartDate = endDate // Start where the old one ends
 
+			// Materialize bucket prices when the update request carries
+			// commitment_time_buckets: ToSubscriptionLineItem rebuilt
+			// newLineItem.CommitmentTimeBuckets from the request (fresh IDs, empty
+			// PriceIDs). createBucketPrices reuses an existing bucket's price +
+			// ID when that bucket is unchanged, and only creates new prices for
+			// changed/added buckets; old prices for removed/changed buckets are left
+			// intact (still referenced by historical invoices).
+			//
+			// Omitting commitment_time_buckets (nil pointer) inherits the existing
+			// line item's buckets (copied by ToSubscriptionLineItem); supplying an
+			// explicit empty slice clears them.
+			if req.CommitmentTimeBuckets != nil {
+				if err := s.createBucketPrices(ctx, newLineItem.ID, existingLineItem.SubscriptionID, *req.CommitmentTimeBuckets, newLineItem.CommitmentTimeBuckets, existingLineItem.CommitmentTimeBuckets); err != nil {
+					return err
+				}
+				_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
+				if err := s.validateBucketArray(ctx, newLineItem.MeterID, newLineItem.CommitmentWindowed, hasCumulative, newLineItem.CommitmentTimeBuckets); err != nil {
+					return err
+				}
+			}
+
 			// Validate line item commitment if configured
 			if err := s.validateLineItemCommitment(ctx, newLineItem); err != nil {
 				return err
@@ -502,7 +540,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			return nil, err
 		}
 
-		s.Logger.InfowCtx(ctx, "updated subscription line item with price overrides",
+		s.Logger.Info(ctx, "updated subscription line item with price overrides",
 			"subscription_id", sub.ID,
 			"old_line_item_id", existingLineItem.ID,
 			"new_line_item_id", newLineItem.ID,
@@ -552,7 +590,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			return nil, err
 		}
 
-		s.Logger.InfowCtx(ctx, "updated subscription line item",
+		s.Logger.Info(ctx, "updated subscription line item",
 			"subscription_id", sub.ID,
 			"line_item_id", existingLineItem.ID)
 
@@ -566,19 +604,50 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 		return nil
 	}
 
-	// If no commitment is configured, no validation needed
-	if !lineItem.HasCommitment() {
+	// No top-level commitment and no per-bucket commitments — nothing to validate.
+	if !lineItem.HasAnyCommitment() {
 		return nil
 	}
 
-	// Fetch meter details only when needed for window-based commitment validation.
-	var m *meter.Meter
-	if lineItem.CommitmentWindowed && lineItem.MeterID != "" {
-		var err error
-		m, err = s.MeterRepo.GetMeter(ctx, lineItem.MeterID)
+	// Rules shared by top-level and per-bucket commitments ------------------
+
+	// Price must be PRICE_TYPE_USAGE
+	if lineItem.PriceType != types.PRICE_TYPE_USAGE {
+		return ierr.NewError("commitment is only allowed for usage-based pricing").
+			WithHint("Line item must have price_type='usage' to use commitment pricing").
+			WithReportableDetails(map[string]interface{}{
+				"price_type": lineItem.PriceType,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Window commitment requires a meter with a bucket_size.
+	if lineItem.CommitmentWindowed {
+		if lineItem.MeterID == "" {
+			return ierr.NewError("meter is required for window-based commitment").
+				WithHint("Window commitment requires a meter with bucket_size configured").
+				Mark(ierr.ErrValidation)
+		}
+		m, err := s.MeterRepo.GetMeter(ctx, lineItem.MeterID)
 		if err != nil {
 			return err
 		}
+		if !m.HasBucketSize() {
+			return ierr.NewError("window commitment requires meter with bucket_size").
+				WithHint("Configure bucket_size on the meter to use window-based commitment").
+				WithReportableDetails(map[string]interface{}{
+					"meter_id":         m.ID,
+					"aggregation_type": m.Aggregation.Type,
+					"bucket_size":      m.Aggregation.BucketSize,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Rules for the top-level commitment fields only -------------------------
+	// (Per-bucket commitment fields are validated by TimeOfDayBucket.Validate.)
+	if !lineItem.HasCommitment() {
+		return nil
 	}
 
 	// Validate commitment type is valid
@@ -621,39 +690,7 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
-	// Rule 3: Price must be PRICE_TYPE_USAGE
-	if lineItem.PriceType != types.PRICE_TYPE_USAGE {
-		return ierr.NewError("commitment is only allowed for usage-based pricing").
-			WithHint("Line item must have price_type='usage' to use commitment pricing").
-			WithReportableDetails(map[string]interface{}{
-				"price_type": lineItem.PriceType,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Additional validation for window commitment
-	// Window commitment is only supported for certain meters or configurations
-	// but for now, we just allow it if set
-	if lineItem.CommitmentWindowed {
-		if m == nil {
-			return ierr.NewError("meter is required for window-based commitment").
-				WithHint("Window commitment requires a meter with bucket_size configured").
-				Mark(ierr.ErrValidation)
-		}
-
-		if !m.HasBucketSize() {
-			return ierr.NewError("window commitment requires meter with bucket_size").
-				WithHint("Configure bucket_size on the meter to use window-based commitment").
-				WithReportableDetails(map[string]interface{}{
-					"meter_id":         m.ID,
-					"aggregation_type": m.Aggregation.Type,
-					"bucket_size":      m.Aggregation.BucketSize,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Rule 5: Validate commitment type matches what was set
+	// Rule 3: Validate commitment type matches what was set
 	if hasAmountCommitment && lineItem.CommitmentType != types.COMMITMENT_TYPE_AMOUNT {
 		return ierr.NewError("commitment_type mismatch").
 			WithHint("When commitment_amount is set, commitment_type must be 'amount'").
@@ -678,19 +715,25 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 }
 
 // applyLineItemCommitmentFromMap applies commitment config (keyed by price_id) onto a line item
-// and validates the resulting commitment configuration.
+// and validates the resulting commitment configuration. When the config carries
+// per-bucket commitments, a SUBSCRIPTION-scoped price is materialized per bucket.
+//
+// Returns the matched config (nil when the line item has none) so callers can
+// key it by line item ID for createBucketPricesForLineItems — the lookup here
+// uses the line item's CURRENT PriceID, which price overrides may mutate later.
 func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	ctx context.Context,
+	sub *subscription.Subscription,
 	lineItem *subscription.SubscriptionLineItem,
 	commitments map[string]*dto.LineItemCommitmentConfig,
-) error {
+) (*dto.LineItemCommitmentConfig, error) {
 	if lineItem == nil || len(commitments) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	cfg, ok := commitments[lineItem.PriceID]
 	if !ok || cfg == nil {
-		return nil
+		return nil, nil
 	}
 
 	if cfg.CommitmentAmount != nil {
@@ -714,10 +757,56 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	if cfg.CommitmentDuration != nil {
 		lineItem.CommitmentDuration = cfg.CommitmentDuration
 	}
+	if len(cfg.CommitmentTimeBuckets) > 0 {
+		// Build domain buckets (IDs + commitment fields) only. Bucket PRICES are
+		// deliberately NOT created here — this runs while line items are being
+		// assembled, before the persisting transaction starts. The caller must
+		// invoke createBucketPricesForLineItems inside that transaction so price
+		// rows roll back together with the line items.
+		lineItem.CommitmentTimeBuckets = cfg.ToDomainBuckets()
+	}
 	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
-		return err
+		return nil, err
 	}
 
+	return cfg, nil
+}
+
+// createBucketPricesForLineItems creates the bucket price rows for any line item
+// that carries commitment time buckets (built earlier by
+// applyLineItemCommitmentFromMap) and runs array-level bucket validation.
+//
+// cfgs is keyed by LINE ITEM ID (collected from applyLineItemCommitmentFromMap's
+// return), not by price id: price overrides mutate a line item's PriceID after
+// commitments are applied, so a price-id lookup would miss overridden items and
+// leave their buckets unpriced.
+//
+// MUST be called inside the transaction that persists the line items.
+func (s *subscriptionService) createBucketPricesForLineItems(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	lineItems []*subscription.SubscriptionLineItem,
+	cfgs map[string]*dto.LineItemCommitmentConfig,
+) error {
+	if len(cfgs) == 0 {
+		return nil
+	}
+	_, _, hasCumulative := getSubscriptionCommitmentPeriodBounds(sub, sub.CurrentPeriodStart)
+	for _, li := range lineItems {
+		if li == nil || len(li.CommitmentTimeBuckets) == 0 {
+			continue
+		}
+		cfg := cfgs[li.ID]
+		if cfg == nil || len(cfg.CommitmentTimeBuckets) == 0 {
+			continue
+		}
+		if err := s.createBucketPrices(ctx, li.ID, sub.ID, cfg.CommitmentTimeBuckets, li.CommitmentTimeBuckets, nil); err != nil {
+			return err
+		}
+		if err := s.validateBucketArray(ctx, li.MeterID, li.CommitmentWindowed, hasCumulative, li.CommitmentTimeBuckets); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -826,15 +915,147 @@ func (s *subscriptionService) validateMultiCadence(sub *subscription.Subscriptio
 	return nil
 }
 
+// validateBucketArray runs array-level validation on a bucket slice — every
+// bucket priced, overlap detection, meter-window alignment, and
+// cumulative-commitment guard. Called from create and update flows AFTER
+// createBucketPrices, so every bucket is expected to carry its PriceID.
+//
+// When meterID is empty (e.g. line items not tied to a meter), the alignment
+// check is skipped — overlap still runs.
+//
+// hasCumulativeCommitment is computed by the caller (which already holds the
+// subscription) and, when true, rejects per-bucket commitments because the two
+// models are incompatible. Keeping the lookup out of this method leaves it
+// focused on array-level validation only.
+//
+// commitmentWindowed is the line item's *effective* windowed flag (after merging
+// request + inherited values on update). Buckets only bill via the windowed path,
+// so they require commitment_windowed=true; this guard closes the gap left open
+// by the DTO layer, which can only cross-check both fields when supplied together.
+func (s *subscriptionService) validateBucketArray(
+	ctx context.Context,
+	meterID string,
+	commitmentWindowed bool,
+	hasCumulativeCommitment bool,
+	buckets types.TimeOfDayBuckets,
+) error {
+	if len(buckets) == 0 {
+		return nil
+	}
+	if !commitmentWindowed {
+		return ierr.NewError("commitment_time_buckets requires commitment_windowed=true").
+			WithHint("Set commitment_windowed=true to apply commitment only during the configured hours").
+			Mark(ierr.ErrValidation)
+	}
+	if hasCumulativeCommitment {
+		return ierr.NewError("per-bucket commitment cannot be combined with cumulative subscription commitment").
+			WithHint("Pick one model: per-bucket OR cumulative.").
+			Mark(ierr.ErrValidation)
+	}
+	// Billing depends on every bucket carrying its own price; this runs after
+	// createBucketPrices, so an empty PriceID here is a wiring bug.
+	for i, b := range buckets {
+		if b.PriceID == "" {
+			return ierr.NewError("bucket is missing its price").
+				WithHint("Every commitment time bucket must have a price").
+				WithReportableDetails(map[string]interface{}{"bucket_index": i, "bucket_id": b.ID}).
+				Mark(ierr.ErrSystem)
+		}
+	}
+	if err := buckets.ValidateNoOverlap(); err != nil {
+		return err
+	}
+	if meterID != "" {
+		m, err := s.MeterRepo.GetMeter(ctx, meterID)
+		if err != nil {
+			return err
+		}
+		if err := buckets.ValidateWindowAlignment(m.Aggregation.BucketSize.ToMinutes()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// createBucketPrices creates (inserts) a SUBSCRIPTION-scoped price row for each
+// new bucket request and writes the resulting PriceID onto the matching domain
+// bucket. reqs and buckets are positionally aligned (length must match): the DTO
+// layer builds buckets (ID + commitment fields, empty PriceID) and the service
+// fills in the price here.
+//
+// A request that carries an id refers to an existing bucket (update flows): its
+// price is reused from the matching bucket in existing instead of creating a new
+// row. Commitment fields still come from the request, so a bucket's commitment
+// can change while its price is kept. An id that matches no existing bucket is
+// rejected.
+//
+// MUST be called inside the same transaction that persists the line item, so
+// created price rows roll back if the line item write fails.
+func (s *subscriptionService) createBucketPrices(
+	ctx context.Context,
+	lineItemID string,
+	subscriptionID string,
+	reqs []dto.CommitmentBucketRequest,
+	buckets types.TimeOfDayBuckets,
+	existing types.TimeOfDayBuckets,
+) error {
+	if len(reqs) != len(buckets) {
+		return ierr.NewError("bucket request/domain length mismatch").
+			WithHint("Each commitment bucket request must map to exactly one domain bucket").
+			WithReportableDetails(map[string]interface{}{
+				"requests": len(reqs),
+				"buckets":  len(buckets),
+			}).
+			Mark(ierr.ErrSystem)
+	}
+
+	existingByID := make(map[string]types.TimeOfDayBucket, len(existing))
+	for _, ex := range existing {
+		existingByID[ex.ID] = ex
+	}
+
+	priceService := NewPriceService(s.ServiceParams)
+	for i := range reqs {
+		// Reuse: request references an existing bucket by id — keep its price.
+		if reqs[i].ID != "" {
+			ex, ok := existingByID[reqs[i].ID]
+			if !ok {
+				return ierr.NewError("unknown bucket id").
+					WithHint("Bucket id must reference an existing bucket on this line item; omit id (and provide price) to create a new bucket").
+					WithReportableDetails(map[string]interface{}{"bucket_id": reqs[i].ID, "bucket_index": i}).
+					Mark(ierr.ErrValidation)
+			}
+			buckets[i].PriceID = ex.PriceID
+			continue
+		}
+
+		priceReq := *reqs[i].Price
+		priceReq.EntityType = types.PRICE_ENTITY_TYPE_SUBSCRIPTION
+		priceReq.EntityID = subscriptionID
+		priceReq.SkipEntityValidation = true
+		priceReq.Metadata = map[string]string{
+			"sub_line_item_id": lineItemID,
+			"bucket_id":        buckets[i].ID,
+		}
+
+		resp, err := priceService.CreatePrice(ctx, priceReq)
+		if err != nil {
+			return err
+		}
+		buckets[i].PriceID = resp.ID
+	}
+	return nil
+}
+
 // validateSubscriptionLevelCommitment validates that subscription and line items don't both have commitment
 func (s *subscriptionService) validateSubscriptionLevelCommitment(sub *subscription.Subscription) error {
 	if !sub.HasCommitment() {
 		return nil
 	}
 
-	// Check if any line item has commitment
+	// Check if any line item has a commitment (top-level or per-bucket)
 	for _, lineItem := range sub.LineItems {
-		if lineItem.HasCommitment() {
+		if lineItem.HasAnyCommitment() {
 			return ierr.NewError("cannot set commitment on both subscription and line item").
 				WithHint("Use either subscription-level commitment or line-item-level commitment, not both").
 				WithReportableDetails(map[string]interface{}{

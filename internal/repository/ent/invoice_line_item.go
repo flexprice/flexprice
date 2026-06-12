@@ -89,7 +89,7 @@ func (r *invoiceLineItemRepository) Create(ctx context.Context, item *domaininvo
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("creating invoice line item",
+	r.log.Debug(ctx, "creating invoice line item",
 		"line_item_id", item.ID,
 		"invoice_id", item.InvoiceID,
 	)
@@ -170,7 +170,7 @@ func (r *invoiceLineItemRepository) CreateBulk(ctx context.Context, items []*dom
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("creating invoice line items in bulk",
+	r.log.Debug(ctx, "creating invoice line items in bulk",
 		"item_count", len(items),
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -262,7 +262,7 @@ func (r *invoiceLineItemRepository) Get(ctx context.Context, id string) (*domain
 		return cached, nil
 	}
 
-	r.log.Debugw("getting invoice line item",
+	r.log.Debug(ctx, "getting invoice line item",
 		"line_item_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -306,7 +306,7 @@ func (r *invoiceLineItemRepository) Update(ctx context.Context, item *domaininvo
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("updating invoice line item", "line_item_id", item.ID)
+	r.log.Debug(ctx, "updating invoice line item", "line_item_id", item.ID)
 
 	q := r.client.Writer(ctx).InvoiceLineItem.UpdateOneID(item.ID).
 		Where(
@@ -363,7 +363,7 @@ func (r *invoiceLineItemRepository) Delete(ctx context.Context, id string) error
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("deleting invoice line item",
+	r.log.Debug(ctx, "deleting invoice line item",
 		"line_item_id", id,
 		"tenant_id", types.GetTenantID(ctx),
 	)
@@ -408,7 +408,7 @@ func (r *invoiceLineItemRepository) ListByInvoiceID(ctx context.Context, invoice
 	})
 	defer FinishSpan(span)
 
-	r.log.Debugw("listing invoice line items by invoice",
+	r.log.Debug(ctx, "listing invoice line items by invoice",
 		"invoice_id", invoiceID,
 		"tenant_id", types.GetTenantID(ctx),
 	)

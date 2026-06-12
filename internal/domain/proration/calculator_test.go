@@ -409,7 +409,6 @@ func TestCalculator_DaysInDurationWithDST(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			loc, err := time.LoadLocation(tt.timezone)
-			print(loc)
 			require.NoError(t, err)
 
 			days := daysInDurationWithDST(tt.start, tt.end, loc)

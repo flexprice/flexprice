@@ -46,12 +46,12 @@ func (s *InvoiceActivities) ComputeInvoiceActivity(
 	// Pass nil for subscription invoices - coupons/taxes come from billing service
 	skipped, err := invoiceService.ComputeInvoice(ctx, input.InvoiceID, nil)
 	if err != nil {
-		s.logger.Errorw("failed to compute invoice",
+		s.logger.Error(ctx, "failed to compute invoice",
 			"invoice_id", input.InvoiceID,
 			"error", err)
 		return nil, err
 	}
-	s.logger.Infow("computed invoice",
+	s.logger.Info(ctx, "computed invoice",
 		"invoice_id", input.InvoiceID,
 		"skipped", skipped)
 	return &invoiceModels.ComputeInvoiceActivityOutput{
@@ -98,7 +98,7 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 		ctx, input.SubscriptionID, periodStart, periodEnd, types.ReferencePointPeriodEnd,
 	)
 	if err != nil {
-		s.logger.Errorw("failed to create draft invoice for subscription current period",
+		s.logger.Error(ctx, "failed to create draft invoice for subscription current period",
 			"subscription_id", input.SubscriptionID,
 			"error", err)
 		return nil, err
@@ -127,25 +127,25 @@ func (s *InvoiceActivities) FinalizeInvoiceActivity(
 	// Check if finalization delay has elapsed
 	due, err := invoiceService.IsFinalizationDue(ctx, input.InvoiceID)
 	if err != nil {
-		s.logger.Errorw("failed to check finalization delay",
+		s.logger.Error(ctx, "failed to check finalization delay",
 			"invoice_id", input.InvoiceID,
 			"error", err)
 		return nil, err
 	}
 	if !due {
-		s.logger.Infow("finalization delay not yet elapsed, skipping",
+		s.logger.Info(ctx, "finalization delay not yet elapsed, skipping",
 			"invoice_id", input.InvoiceID)
 		return &invoiceModels.FinalizeInvoiceActivityOutput{Success: true, Skipped: true}, nil
 	}
 
 	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID); err != nil {
-		s.logger.Errorw("failed to finalize invoice",
+		s.logger.Error(ctx, "failed to finalize invoice",
 			"invoice_id", input.InvoiceID,
 			"error", err)
 		return nil, err
 	}
 
-	s.logger.Infow("finalized invoice successfully",
+	s.logger.Info(ctx, "finalized invoice successfully",
 		"invoice_id", input.InvoiceID)
 
 	return &invoiceModels.FinalizeInvoiceActivityOutput{
@@ -170,13 +170,13 @@ func (s *InvoiceActivities) SyncInvoiceToVendorActivity(
 	invoiceService := service.NewInvoiceService(s.serviceParams)
 
 	if err := invoiceService.SyncInvoiceToExternalVendors(ctx, input.InvoiceID); err != nil {
-		s.logger.Errorw("failed to sync invoice to external vendor",
+		s.logger.Error(ctx, "failed to sync invoice to external vendor",
 			"invoice_id", input.InvoiceID,
 			"error", err)
 		return nil, err
 	}
 
-	s.logger.Infow("synced invoice to external vendor successfully",
+	s.logger.Info(ctx, "synced invoice to external vendor successfully",
 		"invoice_id", input.InvoiceID)
 
 	return &invoiceModels.SyncInvoiceActivityOutput{
@@ -201,13 +201,13 @@ func (s *InvoiceActivities) AttemptInvoicePaymentActivity(
 	invoiceService := service.NewInvoiceService(s.serviceParams)
 
 	if err := invoiceService.AttemptPayment(ctx, input.InvoiceID); err != nil {
-		s.logger.Errorw("failed to attempt payment for invoice",
+		s.logger.Error(ctx, "failed to attempt payment for invoice",
 			"invoice_id", input.InvoiceID,
 			"error", err)
 		return nil, err
 	}
 
-	s.logger.Infow("attempted payment for invoice successfully",
+	s.logger.Info(ctx, "attempted payment for invoice successfully",
 		"invoice_id", input.InvoiceID)
 
 	return &invoiceModels.PaymentActivityOutput{
@@ -232,7 +232,7 @@ func (s *InvoiceActivities) RecalculateInvoiceActivity(
 
 	newInv, err := invSvc.RecalculateInvoice(ctx, input.InvoiceID)
 	if err != nil {
-		s.logger.Errorw("failed to recalculate invoice",
+		s.logger.Error(ctx, "failed to recalculate invoice",
 			"invoice_id", input.InvoiceID,
 			"error", err)
 		return nil, err
@@ -242,7 +242,7 @@ func (s *InvoiceActivities) RecalculateInvoiceActivity(
 	if newInv != nil {
 		outID = newInv.ID
 	}
-	s.logger.Infow("recalculated invoice successfully",
+	s.logger.Info(ctx, "recalculated invoice successfully",
 		"invoice_id", input.InvoiceID,
 		"new_invoice_id", outID)
 

@@ -73,9 +73,16 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 		},
 		{
 			ID:        types.ScheduleIDOutboundWebhookStaleRetry,
-			Interval:  15 * time.Minute,
+			Interval:  2 * time.Minute,
 			Workflow:  cronWorkflows.OutboundWebhookStaleRetryWorkflow,
 			Input:     models.OutboundWebhookStaleRetryWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			ID:        types.ScheduleIDPaddleInvoicePullSync,
+			Interval:  1 * time.Hour,
+			Workflow:  cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
+			Input:     models.PaddleInvoicePullSyncCronInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 	}
@@ -88,7 +95,7 @@ func EnsureSchedules(ctx context.Context, tc client.TemporalClient, log *logger.
 		if err := ensureOneSchedule(ctx, tc, cfg); err != nil {
 			return err
 		}
-		log.Infow("schedule ensured", "id", cfg.ID)
+		log.Info(ctx, "schedule ensured", "id", cfg.ID)
 	}
 	return nil
 }
