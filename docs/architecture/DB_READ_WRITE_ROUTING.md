@@ -27,13 +27,14 @@ Routing rules, resolved in `postgres.Client` (`internal/postgres/client.go`):
 | 3 | Writer pin flipped (a write already happened in this unit of work) | writer |
 | 4 | Otherwise | reader (replica) |
 
-The pin is flipped automatically by:
-
-- `Client.Writer(ctx)` — any repository mutation pins the rest of the flow.
-- `Client.WithTx(ctx, fn)` — pins the **parent** context too, so reads issued
-  after the transaction commits still see its writes. (This was the main gap:
-  the old `ForceWriter` flag only covered reads *inside* the transaction
-  callback.)
+The pin is flipped automatically by `Client.Writer(ctx)` — any repository
+mutation pins the rest of the flow. This covers transactions too: a write
+inside `WithTx` calls `Writer(txCtx)`, and because the pin holder is shared
+with the parent context, reads issued **after the transaction commits** still
+route to the writer. (This was the main gap: the old `ForceWriter` flag only
+covered reads *inside* the transaction callback.) Read-only transactions never
+flip the pin, so they don't shift later reads off the replica; a rolled-back
+write leaves the pin set, which is conservative but always correct.
 
 Pure-read flows never flip the pin and keep using the replica, so read
 scalability is preserved.
