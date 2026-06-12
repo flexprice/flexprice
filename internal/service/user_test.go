@@ -27,7 +27,6 @@ func TestUserService(t *testing.T) {
 }
 
 func (s *UserServiceSuite) SetupTest() {
-	// Initialize context and repository
 	s.ctx = testutil.SetupContext()
 	s.userRepo = testutil.NewInMemoryUserStore()
 	s.tenantRepo = testutil.NewInMemoryTenantStore()
@@ -76,7 +75,6 @@ func (s *UserServiceSuite) TestGetUserInfo() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			// Reset repositories and service for each test
 			s.userRepo = testutil.NewInMemoryUserStore()
 			s.userService = &userService{
 				userRepo:     s.userRepo,
@@ -85,19 +83,15 @@ func (s *UserServiceSuite) TestGetUserInfo() {
 				supabaseAuth: nil,
 			}
 
-			// Create a context with the test's user ID
 			ctx := testutil.SetupContext()
 			ctx = context.WithValue(ctx, types.CtxUserID, tc.contextUserID)
 
-			// Execute setup function if provided
 			if tc.setup != nil {
 				tc.setup(ctx)
 			}
 
-			// Call the service method
 			resp, err := s.userService.GetUserInfo(ctx)
 
-			// Assert results
 			if tc.expectedError {
 				s.Error(err)
 				s.Nil(resp)
@@ -115,7 +109,6 @@ func (s *UserServiceSuite) TestCreateUser_TableDriven() {
 	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
 	ctx = context.WithValue(ctx, types.CtxUserID, "test-actor")
 
-	// Path from module root; fallback when CWD is internal/service
 	rbacSvc, _ := rbac.NewRBACService(&config.Configuration{
 		RBAC: config.RBACConfig{RolesConfigPath: "internal/config/rbac/roles.json"},
 	})
@@ -239,16 +232,16 @@ func (s *UserServiceSuite) TestUpdateUser_MetadataMerge() {
 	baseModel.UpdatedBy = "seed-user"
 
 	err := s.userRepo.Create(ctx, &user.User{
-		ID:       "user-1",
-		Email:    "test@example.com",
-		Type:     types.UserTypeUser,
-		Roles:    []string{},
-		Metadata: map[string]string{"region": "us", "plan": "basic"},
+		ID:        "user-1",
+		Email:     "test@example.com",
+		Type:      types.UserTypeUser,
+		Roles:     []string{},
+		Metadata:  map[string]string{"region": "us", "plan": "basic"},
 		BaseModel: baseModel,
 	})
 	s.NoError(err)
 
-	resp, err := s.userService.UpdateUser(ctx, "", &dto.UpdateUserRequest{
+	resp, err := s.userService.UpdateUser(ctx, &dto.UpdateUserRequest{
 		Metadata: map[string]string{"plan": "pro", "team": "growth"},
 	})
 
@@ -259,4 +252,144 @@ func (s *UserServiceSuite) TestUpdateUser_MetadataMerge() {
 	s.Equal("us", resp.Metadata["region"])
 	s.Equal("pro", resp.Metadata["plan"])
 	s.Equal("growth", resp.Metadata["team"])
+}
+
+func (s *UserServiceSuite) TestUpdateServiceAccount() {
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.TenantID = types.DefaultTenantID
+
+	seedSA := func() {
+		s.userRepo = testutil.NewInMemoryUserStore()
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "sa-1",
+			Name:      "old name",
+			Type:      types.UserTypeServiceAccount,
+			BaseModel: baseModel,
+		})
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "user-1",
+			Email:     "u@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo}
+	}
+
+	s.Run("success_name_updated", func() {
+		seedSA()
+		resp, err := s.userService.UpdateServiceAccount(ctx, "sa-1", &dto.UpdateServiceAccountRequest{Name: "new name"})
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal("new name", resp.Name)
+	})
+
+	s.Run("no_op_when_name_unchanged", func() {
+		seedSA()
+		resp, err := s.userService.UpdateServiceAccount(ctx, "sa-1", &dto.UpdateServiceAccountRequest{Name: "old name"})
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal("old name", resp.Name)
+	})
+
+	s.Run("empty_id_returns_validation_error", func() {
+		seedSA()
+		resp, err := s.userService.UpdateServiceAccount(ctx, "", &dto.UpdateServiceAccountRequest{Name: "x"})
+		s.Error(err)
+		s.Nil(resp)
+		s.Contains(err.Error(), "service account ID is required")
+	})
+
+	s.Run("empty_name_returns_validation_error", func() {
+		seedSA()
+		resp, err := s.userService.UpdateServiceAccount(ctx, "sa-1", &dto.UpdateServiceAccountRequest{Name: ""})
+		s.Error(err)
+		s.Nil(resp)
+	})
+
+	s.Run("non_service_account_id_returns_not_found", func() {
+		seedSA()
+		resp, err := s.userService.UpdateServiceAccount(ctx, "user-1", &dto.UpdateServiceAccountRequest{Name: "x"})
+		s.Error(err)
+		s.Nil(resp)
+		s.Contains(err.Error(), "service account not found")
+	})
+
+	s.Run("unknown_id_returns_not_found", func() {
+		seedSA()
+		resp, err := s.userService.UpdateServiceAccount(ctx, "sa-unknown", &dto.UpdateServiceAccountRequest{Name: "x"})
+		s.Error(err)
+		s.Nil(resp)
+	})
+
+	s.Run("archived_service_account_cannot_be_updated", func() {
+		seedSA()
+		_ = s.userService.DeleteUser(ctx, "sa-1")
+		resp, err := s.userService.UpdateServiceAccount(ctx, "sa-1", &dto.UpdateServiceAccountRequest{Name: "new name"})
+		s.Error(err)
+		s.Nil(resp)
+		s.Contains(err.Error(), "archived")
+	})
+}
+
+func (s *UserServiceSuite) TestDeleteUser() {
+	ctx := testutil.SetupContext()
+	ctx = context.WithValue(ctx, types.CtxTenantID, types.DefaultTenantID)
+	ctx = context.WithValue(ctx, types.CtxUserID, "actor-1")
+
+	baseModel := types.GetDefaultBaseModel(ctx)
+	baseModel.TenantID = types.DefaultTenantID
+
+	seedStore := func() {
+		s.userRepo = testutil.NewInMemoryUserStore()
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "sa-1",
+			Type:      types.UserTypeServiceAccount,
+			BaseModel: baseModel,
+		})
+		_ = s.userRepo.Create(ctx, &user.User{
+			ID:        "user-1",
+			Email:     "u@example.com",
+			Type:      types.UserTypeUser,
+			BaseModel: baseModel,
+		})
+		s.userService = &userService{userRepo: s.userRepo, tenantRepo: s.tenantRepo}
+	}
+
+	s.Run("success_service_account_archived", func() {
+		seedStore()
+		err := s.userService.DeleteUser(ctx, "sa-1")
+		s.NoError(err)
+	})
+
+	s.Run("second_delete_returns_not_found", func() {
+		seedStore()
+		_ = s.userService.DeleteUser(ctx, "sa-1")
+		err := s.userService.DeleteUser(ctx, "sa-1")
+		s.Error(err)
+		s.Contains(err.Error(), "not found")
+	})
+
+	s.Run("empty_id_returns_validation_error", func() {
+		seedStore()
+		err := s.userService.DeleteUser(ctx, "")
+		s.Error(err)
+		s.Contains(err.Error(), "service account ID is required")
+	})
+
+	s.Run("non_service_account_returns_validation_error", func() {
+		seedStore()
+		err := s.userService.DeleteUser(ctx, "user-1")
+		s.Error(err)
+		s.Contains(err.Error(), "only service accounts can be deleted")
+	})
+
+	s.Run("unknown_id_returns_not_found", func() {
+		seedStore()
+		err := s.userService.DeleteUser(ctx, "sa-unknown")
+		s.Error(err)
+	})
 }

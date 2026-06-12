@@ -20,8 +20,8 @@ import (
 type UserService interface {
 	GetUserInfo(ctx context.Context) (*dto.UserResponse, error)
 	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error)
-	// UpdateUser updates a user by id; id="" resolves to the authenticated user from context.
-	UpdateUser(ctx context.Context, id string, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error)
+	UpdateUser(ctx context.Context, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error)
+	UpdateServiceAccount(ctx context.Context, id string, req *dto.UpdateServiceAccountRequest) (*dto.UpdateServiceAccountResponse, error)
 	DeleteUser(ctx context.Context, id string) error
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 }
@@ -200,17 +200,13 @@ func (s *userService) ListUsersByFilter(ctx context.Context, filter *types.UserF
 	}, nil
 }
 
-func (s *userService) UpdateUser(ctx context.Context, id string, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error) {
+func (s *userService) UpdateUser(ctx context.Context, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Resolve target user: explicit id overrides the authenticated user from context
-	targetID := id
-	if targetID == "" {
-		targetID = types.GetUserID(ctx)
-	}
-	if targetID == "" {
+	userID := types.GetUserID(ctx)
+	if userID == "" {
 		return nil, ierr.NewError("user ID is required").
 			WithHint("User ID is required").
 			Mark(ierr.ErrValidation)
@@ -223,17 +219,9 @@ func (s *userService) UpdateUser(ctx context.Context, id string, req *dto.Update
 			Mark(ierr.ErrValidation)
 	}
 
-	existingUser, err := s.userRepo.GetByID(ctx, targetID)
+	existingUser, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
-	}
-
-	// Explicit ID — only service accounts are addressable this way.
-	if id != "" && existingUser.Type != types.UserTypeServiceAccount {
-		return nil, ierr.NewError("service account not found").
-			WithHint("The provided ID does not belong to a service account").
-			WithReportableDetails(map[string]interface{}{"id": id}).
-			Mark(ierr.ErrNotFound)
 	}
 
 	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
@@ -248,7 +236,6 @@ func (s *userService) UpdateUser(ctx context.Context, id string, req *dto.Update
 	for key, value := range req.Metadata {
 		mergedMetadata[key] = value
 	}
-
 	existingUser.Metadata = mergedMetadata
 
 	if req.Name != "" {
@@ -263,6 +250,58 @@ func (s *userService) UpdateUser(ctx context.Context, id string, req *dto.Update
 	}
 
 	return &dto.UpdateUserResponse{UserResponse: dto.NewUserResponse(existingUser, tenant)}, nil
+}
+
+func (s *userService) UpdateServiceAccount(ctx context.Context, id string, req *dto.UpdateServiceAccountRequest) (*dto.UpdateServiceAccountResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("service account ID is required").
+			WithHint("Provide a valid service account ID").
+			Mark(ierr.ErrValidation)
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		return nil, ierr.NewError("tenant ID is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	existingUser, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existingUser.Type != types.UserTypeServiceAccount {
+		return nil, ierr.NewError("service account not found").
+			WithHint("The provided ID does not belong to a service account").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+	if existingUser.Status == types.StatusArchived {
+		return nil, ierr.NewError("service account is archived").
+			WithHint("Archived service accounts cannot be updated").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(ierr.ErrValidation)
+	}
+
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != existingUser.Name {
+		existingUser.Name = req.Name
+		existingUser.UpdatedBy = types.GetUserID(ctx)
+		existingUser.UpdatedAt = types.GetDefaultBaseModel(ctx).UpdatedAt
+
+		if err := s.userRepo.Update(ctx, existingUser); err != nil {
+			return nil, err
+		}
+	}
+
+	return &dto.UpdateServiceAccountResponse{UserResponse: dto.NewUserResponse(existingUser, tenant)}, nil
 }
 
 // InviteUser invites a user to the tenant

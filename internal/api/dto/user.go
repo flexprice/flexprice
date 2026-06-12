@@ -98,5 +98,23 @@ type UpdateUserResponse struct {
 	*UserResponse
 }
 
+// UpdateServiceAccountRequest is the request body for PUT /users/:id (service accounts only)
+type UpdateServiceAccountRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func (r *UpdateServiceAccountRequest) Validate() error {
+	if r.Name == "" {
+		return ierr.NewError("name is required").
+			WithHint("Service account name cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+type UpdateServiceAccountResponse struct {
+	*UserResponse
+}
+
 // ListUsersResponse is the response type for listing users with pagination
 type ListUsersResponse = types.ListResponse[*UserResponse] // @name ListUsersResponse

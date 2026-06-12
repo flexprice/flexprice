@@ -95,7 +95,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.userService.UpdateUser(c.Request.Context(), "", &req)
+	resp, err := h.userService.UpdateUser(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.Errorw("failed to update user", "error", err)
 		c.Error(err)
@@ -149,21 +149,21 @@ func (h *UserHandler) QueryUsers(c *gin.Context) {
 
 // @Summary Update service account
 // @ID updateServiceAccount
-// @Description Update a service account by ID. Supports name and metadata updates.
+// @Description Update a service account by ID (name only).
 // @Tags Users
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Service Account ID"
-// @Param request body dto.UpdateUserRequest true "Update service account request"
-// @Success 200 {object} dto.UpdateUserResponse
+// @Param request body dto.UpdateServiceAccountRequest true "Update service account request"
+// @Success 200 {object} dto.UpdateServiceAccountResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /users/{id} [put]
 func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
 	id := c.Param("id")
-	var req dto.UpdateUserRequest
+	var req dto.UpdateServiceAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Errorw("invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
@@ -172,7 +172,7 @@ func (h *UserHandler) UpdateServiceAccount(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.userService.UpdateUser(c.Request.Context(), id, &req)
+	resp, err := h.userService.UpdateServiceAccount(c.Request.Context(), id, &req)
 	if err != nil {
 		h.logger.Errorw("failed to update service account", "error", err)
 		c.Error(err)
