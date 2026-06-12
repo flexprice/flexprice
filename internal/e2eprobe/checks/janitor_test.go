@@ -118,3 +118,65 @@ func TestJanitor_SweepOrphans(t *testing.T) {
 		t.Errorf("fresh customer %s was incorrectly deleted", freshID)
 	}
 }
+
+// TestJanitor_SweepOrphans_DetectsByNameOrPrefix verifies the ephemeral
+// identification is loose: external_id prefix OR name match OR metadata,
+// any of which is sufficient. Customers in the wild may lack the metadata
+// tag if they were created by an older e2eprobe version.
+func TestJanitor_SweepOrphans_DetectsByNameOrPrefix(t *testing.T) {
+	oldTime := time.Now().Add(-5 * time.Hour).UTC().Format(time.RFC3339)
+
+	fc := newFakeClient()
+	fc.customers.queryResult = []types.DtoCustomerResponse{
+		// Detected by external_id prefix only (no metadata, no helpful name).
+		{
+			ID:         strPtr("by-prefix"),
+			ExternalID: strPtr("e2eprobe-cust-eph-prefix-only"),
+			CreatedAt:  strPtr(oldTime),
+		},
+		// Detected by name only (no metadata, no prefix).
+		{
+			ID:         strPtr("by-name"),
+			ExternalID: strPtr("some-other-id"),
+			Name:       strPtr("E2EProbe Ephemeral random"),
+			CreatedAt:  strPtr(oldTime),
+		},
+		// Persistent — must NOT match (no Ephemeral in name, persistent prefix).
+		{
+			ID:         strPtr("persistent"),
+			ExternalID: strPtr("e2eprobe-cust-persistent-0"),
+			Name:       strPtr("E2EProbe Persistent 0"),
+			CreatedAt:  strPtr(oldTime),
+		},
+		// Unrelated tenant customer — must NOT match.
+		{
+			ID:         strPtr("unrelated"),
+			ExternalID: strPtr("some-real-customer"),
+			Name:       strPtr("Acme Corp"),
+			CreatedAt:  strPtr(oldTime),
+		},
+	}
+
+	reg := e2eprobe.NewRegistry()
+	j := NewJanitor(fc, reg, 1*time.Hour, "run-detect")
+	if err := j.Run(context.Background()); err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+
+	deleted := map[string]bool{}
+	for _, id := range fc.customers.deleted {
+		deleted[id] = true
+	}
+	if !deleted["by-prefix"] {
+		t.Errorf("customer detected by external_id prefix was not deleted")
+	}
+	if !deleted["by-name"] {
+		t.Errorf("customer detected by name match was not deleted")
+	}
+	if deleted["persistent"] {
+		t.Errorf("persistent customer was incorrectly deleted")
+	}
+	if deleted["unrelated"] {
+		t.Errorf("unrelated customer was incorrectly deleted")
+	}
+}

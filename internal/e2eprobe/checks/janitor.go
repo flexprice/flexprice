@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
@@ -106,9 +107,33 @@ func (j *Janitor) archive(ctx context.Context, e e2eprobe.EphemeralEntity) error
 }
 
 // sweepOrphans queries Flexprice for all customers, filters client-side for
-// those tagged e2eprobe_role=ephemeral and older than cutoff, then deletes them.
-// This handles restart-leakage where the in-memory registry was wiped but the
-// customers were never cleaned up.
+// e2eprobe ephemerals older than cutoff, then deletes them. This handles
+// restart-leakage where the in-memory registry was wiped but the customers
+// were never cleaned up.
+//
+// "Ephemeral" identification is intentionally loose to handle data created
+// before metadata was added: a customer is treated as ephemeral if ANY of
+// these hold:
+//   - external_id starts with `e2eprobe-cust-eph-` (programmatic prefix)
+//   - name contains "Ephemeral" (literal name we set on create)
+//   - metadata.e2eprobe_role == "ephemeral" (the legacy tag)
+//
+// Persistent seed customers use the prefix `e2eprobe-cust-persistent-` and
+// the name "E2EProbe Persistent N" — both substrings are distinct enough
+// that none of the three checks fires on them.
+func isEphemeralCustomer(c types.DtoCustomerResponse) bool {
+	if c.ExternalID != nil && strings.HasPrefix(*c.ExternalID, "e2eprobe-cust-eph-") {
+		return true
+	}
+	if c.Name != nil && strings.Contains(*c.Name, "Ephemeral") {
+		return true
+	}
+	if c.Metadata != nil && c.Metadata["e2eprobe_role"] == "ephemeral" {
+		return true
+	}
+	return false
+}
+
 func (j *Janitor) sweepOrphans(ctx context.Context, cutoff time.Time) error {
 	resp, err := j.client.Customers().Query(ctx, types.CustomerFilter{})
 	if err != nil {
@@ -123,8 +148,7 @@ func (j *Janitor) sweepOrphans(ctx context.Context, cutoff time.Time) error {
 
 	deleted := 0
 	for _, cust := range items {
-		// Must have e2eprobe_role = "ephemeral" metadata tag.
-		if cust.Metadata == nil || cust.Metadata["e2eprobe_role"] != "ephemeral" {
+		if !isEphemeralCustomer(cust) {
 			continue
 		}
 		// Must be older than cutoff.
