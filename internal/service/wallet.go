@@ -471,7 +471,7 @@ func (s *walletService) loadUsersForExpansion(ctx context.Context, expand types.
 	}
 
 	// Fetch users in bulk
-	userService := NewUserService(s.UserRepo, s.TenantRepo, nil, nil, nil, nil, nil, s.Logger)
+	userService := NewUserService(s.UserRepo, s.TenantRepo, nil, nil, nil, nil, nil, nil, s.Logger)
 	userFilter := &types.UserFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),
 		UserIDs:     userIDs,
@@ -746,9 +746,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 		// Create the transaction
 		if err := s.WalletRepo.CreateTransaction(ctx, tx); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to create wallet transaction").
-				Mark(ierr.ErrInternal)
+			return err
 		}
 
 		// If auto-complete is enabled, update wallet balance immediately

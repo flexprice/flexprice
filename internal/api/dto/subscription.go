@@ -101,10 +101,18 @@ type LineItemCommitmentConfig struct {
 	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
-	// CommitmentTimeBuckets restricts commitment treatment to windows whose start
-	// UTC hour falls within one of the configured buckets. Empty/omitted = no
-	// restriction (commitment applies 24/7). Requires IsWindowCommitment=true.
-	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	// CommitmentTimeBuckets defines per-bucket commitment + inline price for
+	// windows whose start UTC hour falls within each configured bucket. Each
+	// bucket carries its own price (materialized by the service). Requires
+	// IsWindowCommitment=true.
+	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
+}
+
+// ToDomainBuckets maps the config's bucket requests to domain buckets (IDs +
+// commitment fields, empty PriceIDs); the service materializes a price per
+// bucket and fills in the PriceIDs.
+func (c *LineItemCommitmentConfig) ToDomainBuckets() types.TimeOfDayBuckets {
+	return bucketRequestsToDomain(c.CommitmentTimeBuckets)
 }
 
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.

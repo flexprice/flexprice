@@ -9,6 +9,24 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.1.0] - 2026-06-11
+
+### Added
+- Native OpenTelemetry **trace** export (`otel.traces.*`) for shipping APM/RED
+  metrics (request rate, error rate, latency) to any OTLP backend (SigNoz,
+  Tempo, Datadog). Mirrors the existing `logging.otel` (logs) wiring; the traces
+  auth value reuses the `logging-otel-auth-value` secret key.
+- `logging.environment` to set the OTel resource `deployment.environment`
+  (rendered as the `FLEXPRICE_LOGGING_ENVIRONMENT` env var).
+
+### Fixed
+- `extraEnv` rendered invalid YAML when non-empty — `{{- toYaml . }}` left-chomped
+  the preceding newline and glued the first env var onto the previous line. Now
+  uses `{{ toYaml . | trim }}`.
+- Chart-managed (dev) Secret now renders the shared `logging-otel-auth-value` key
+  when `otel.traces.enabled` (not only `logging.otel.enabled`), so a traces-only
+  config doesn't fail pods with a missing secret key (`CreateContainerConfigError`).
+
 ## [1.0.0] - 2026-05-11
 
 Initial GA release of the FlexPrice Helm chart. Production-ready packaging

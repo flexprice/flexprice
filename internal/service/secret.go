@@ -147,6 +147,7 @@ func (s *secretService) CreateAPIKey(ctx context.Context, req *dto.CreateAPIKeyR
 		ExpiresAt:     req.ExpiresAt,
 		Roles:         roles,
 		UserType:      userType,
+		UserID:        userID,
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 

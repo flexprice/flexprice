@@ -161,6 +161,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	subscriptionResponse := &dto.SubscriptionResponse{Subscription: sub}
 	planResponse := &dto.PlanResponse{Plan: plan}
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
+	// Bucket configs keyed by line item ID — captured here (while PriceID is the
+	// plan price the commitment map is keyed by) because price overrides mutate
+	// PriceID before bucket prices are created inside the transaction.
+	lineItemBucketCfgs := make(map[string]*dto.LineItemCommitmentConfig)
 
 	for _, priceResponse := range validPrices {
 		lineItemReq := &dto.CreateSubscriptionLineItemRequest{PriceID: priceResponse.Price.ID}
@@ -212,8 +216,12 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 
 		// Apply commitment configuration if provided for this price
-		if err := s.applyLineItemCommitmentFromMap(ctx, item, req.LineItemCommitments); err != nil {
+		cfg, err := s.applyLineItemCommitmentFromMap(ctx, sub, item, req.LineItemCommitments)
+		if err != nil {
 			return nil, err
+		}
+		if cfg != nil && len(cfg.CommitmentTimeBuckets) > 0 {
+			lineItemBucketCfgs[item.ID] = cfg
 		}
 
 		if priceResponse.Price.StartDate != nil && priceResponse.Price.StartDate.After(startDate) {
@@ -284,6 +292,12 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 
 		if err := s.validateAutoInvoiceThresholdForCreate(sub); err != nil {
+			return err
+		}
+
+		// Create bucket price rows for line items carrying commitment time
+		// buckets, inside this transaction so they roll back with the line items.
+		if err := s.createBucketPricesForLineItems(ctx, sub, sub.LineItems, lineItemBucketCfgs); err != nil {
 			return err
 		}
 
@@ -4362,6 +4376,7 @@ func (s *subscriptionService) addAddonToSubscription(
 
 	// Create line items for addon prices
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
+	lineItemBucketCfgs := make(map[string]*dto.LineItemCommitmentConfig)
 	for _, priceResponse := range validPrices {
 		lineItem := s.createLineItemFromPrice(ctx, priceResponse, sub, req.AddonID, a.Addon.Name, addonAssociation.ID, addonRequestedStart)
 
@@ -4371,8 +4386,12 @@ func (s *subscriptionService) addAddonToSubscription(
 			lineItem.EndDate = onetimePeriodEnd
 		}
 
-		if err := s.applyLineItemCommitmentFromMap(ctx, lineItem, req.LineItemCommitments); err != nil {
+		cfg, err := s.applyLineItemCommitmentFromMap(ctx, sub, lineItem, req.LineItemCommitments)
+		if err != nil {
 			return nil, err
+		}
+		if cfg != nil && len(cfg.CommitmentTimeBuckets) > 0 {
+			lineItemBucketCfgs[lineItem.ID] = cfg
 		}
 		lineItems = append(lineItems, lineItem)
 	}
@@ -4390,6 +4409,12 @@ func (s *subscriptionService) addAddonToSubscription(
 		// Create subscription addon association
 		err = s.AddonAssociationRepo.Create(ctx, addonAssociation)
 		if err != nil {
+			return err
+		}
+
+		// Create bucket price rows for line items carrying commitment time
+		// buckets, inside this transaction so they roll back with the line items.
+		if err := s.createBucketPricesForLineItems(ctx, sub, lineItems, lineItemBucketCfgs); err != nil {
 			return err
 		}
 
@@ -7099,7 +7124,29 @@ func (s *subscriptionService) cancelAllLineItemsForSubscription(
 
 // resolveExternalCustomersForInheritance resolves published customers by external ID and validates
 // they may receive an inherited subscription (same rules as subscription create).
-func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context.Context, subscriberCustomerID string, externalIDs []string) ([]string, error) {
+func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context.Context, parentCustomerID string, externalIDs []string) ([]string, error) {
+	// Step 1: fetch all subscription IDs belonging to the parent customer.
+	// These are used to distinguish "already under this parent" (allowed) from
+	// "under a different parent" (blocked).
+	parentSubFilter := types.NewNoLimitSubscriptionFilter()
+	parentSubFilter.CustomerID = parentCustomerID
+	parentSubFilter.Status = lo.ToPtr(types.StatusPublished)
+	parentSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusDraft,
+		types.SubscriptionStatusTrialing,
+	}
+	parentSubFilter.WithLineItems = false
+	parentSubs, err := s.SubRepo.List(ctx, parentSubFilter)
+	if err != nil {
+		return nil, err
+	}
+	parentSubIDs := make(map[string]bool, len(parentSubs))
+	for _, sub := range parentSubs {
+		parentSubIDs[sub.ID] = true
+	}
+
+	// Step 2: resolve child customers by external ID.
 	childFilter := types.NewNoLimitCustomerFilter()
 	childFilter.ExternalIDs = externalIDs
 	childFilter.Status = lo.ToPtr(types.StatusPublished)
@@ -7122,7 +7169,7 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 				WithReportableDetails(map[string]interface{}{"external_id": extID}).
 				Mark(ierr.ErrNotFound)
 		}
-		if cust.ID == subscriberCustomerID {
+		if cust.ID == parentCustomerID {
 			return nil, ierr.NewError("cannot inherit onto itself").
 				WithHint("The subscriber cannot appear in external_customer_ids_to_inherit_subscription").
 				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
@@ -7135,24 +7182,42 @@ func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context
 				Mark(ierr.ErrValidation)
 		}
 
-		subFilter := types.NewSubscriptionFilter()
-		subFilter.CustomerID = cust.ID
-		subFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeStandalone, types.SubscriptionTypeParent}
-		subFilter.Status = lo.ToPtr(types.StatusPublished)
-		subFilter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusDraft, types.SubscriptionStatusTrialing}
-		subFilter.WithLineItems = false
-		subFilter.Limit = lo.ToPtr(1)
-		count, err := s.SubRepo.Count(ctx, subFilter)
-
+		// Step 3: fetch all active/draft/trialing published subscriptions for the child.
+		childSubFilter := types.NewNoLimitSubscriptionFilter()
+		childSubFilter.CustomerID = cust.ID
+		childSubFilter.Status = lo.ToPtr(types.StatusPublished)
+		childSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
+			types.SubscriptionStatusActive,
+			types.SubscriptionStatusDraft,
+			types.SubscriptionStatusTrialing,
+		}
+		childSubFilter.WithLineItems = false
+		childSubs, err := s.SubRepo.List(ctx, childSubFilter)
 		if err != nil {
 			return nil, err
 		}
-		if count > 0 {
-			return nil, ierr.NewError("child customer has standalone or parent subscriptions").
-				WithHint("The child customer cannot have standalone or parent subscriptions").
-				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
-				Mark(ierr.ErrValidation)
+
+		// Step 4: check each subscription of the child.
+		// Block if:
+		//   - subscription has no parent (child has their own standalone/parent subscription), OR
+		//   - subscription's parent belongs to a different parent customer (not parentSubIDs)
+		for _, childSub := range childSubs {
+			if childSub.ParentSubscriptionID == nil {
+				// Child has a standalone or parent subscription of their own
+				return nil, ierr.NewError("child customer has standalone or parent subscriptions").
+					WithHint("The child customer cannot have standalone or parent subscriptions").
+					WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+					Mark(ierr.ErrValidation)
+			}
+			if !parentSubIDs[*childSub.ParentSubscriptionID] {
+				// Child is already inherited under a different parent
+				return nil, ierr.NewError("child customer already has a parent subscription").
+					WithHint("A customer can only be inherited under one parent").
+					WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
+					Mark(ierr.ErrValidation)
+			}
 		}
+
 		childCustomerIDs = append(childCustomerIDs, cust.ID)
 	}
 	return childCustomerIDs, nil

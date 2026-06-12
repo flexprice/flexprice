@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	authProvider "github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	domainAuth "github.com/flexprice/flexprice/internal/domain/auth"
+	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -21,6 +23,8 @@ type UserService interface {
 	GetUserInfo(ctx context.Context) (*dto.UserResponse, error)
 	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error)
 	UpdateUser(ctx context.Context, req *dto.UpdateUserRequest) (*dto.UpdateUserResponse, error)
+	UpdateServiceAccount(ctx context.Context, id string, req *dto.UpdateServiceAccountRequest) (*dto.UpdateServiceAccountResponse, error)
+	DeleteUser(ctx context.Context, id string) error
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 }
 
@@ -28,6 +32,7 @@ type userService struct {
 	userRepo        user.Repository
 	tenantRepo      tenant.Repository
 	authRepo        domainAuth.Repository
+	secretRepo      domainSecret.Repository
 	cfg             *config.Configuration
 	rbacService     *rbac.RBACService
 	supabaseAuth    *supabase.Client
@@ -39,6 +44,7 @@ func NewUserService(
 	userRepo user.Repository,
 	tenantRepo tenant.Repository,
 	authRepo domainAuth.Repository,
+	secretRepo domainSecret.Repository,
 	cfg *config.Configuration,
 	rbacService *rbac.RBACService,
 	supabaseAuth *supabase.Client,
@@ -49,6 +55,7 @@ func NewUserService(
 		userRepo:        userRepo,
 		tenantRepo:      tenantRepo,
 		authRepo:        authRepo,
+		secretRepo:      secretRepo,
 		cfg:             cfg,
 		rbacService:     rbacService,
 		supabaseAuth:    supabaseAuth,
@@ -136,6 +143,7 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		}
 		newUser = &user.User{
 			ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
+			Name:  req.Name,
 			Email: "",
 			Type:  types.UserTypeServiceAccount,
 			Roles: req.Roles,
@@ -233,18 +241,72 @@ func (s *userService) UpdateUser(ctx context.Context, req *dto.UpdateUserRequest
 	for key, value := range req.Metadata {
 		mergedMetadata[key] = value
 	}
-
 	existingUser.Metadata = mergedMetadata
-	existingUser.UpdatedBy = userID
+
+	if req.Name != "" {
+		existingUser.Name = req.Name
+	}
+
+	existingUser.UpdatedBy = types.GetUserID(ctx)
 	existingUser.UpdatedAt = types.GetDefaultBaseModel(ctx).UpdatedAt
 
 	if err := s.userRepo.Update(ctx, existingUser); err != nil {
 		return nil, err
 	}
 
-	return &dto.UpdateUserResponse{
-		UserResponse: dto.NewUserResponse(existingUser, tenant),
-	}, nil
+	return &dto.UpdateUserResponse{UserResponse: dto.NewUserResponse(existingUser, tenant)}, nil
+}
+
+func (s *userService) UpdateServiceAccount(ctx context.Context, id string, req *dto.UpdateServiceAccountRequest) (*dto.UpdateServiceAccountResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("service account ID is required").
+			WithHint("Provide a valid service account ID").
+			Mark(ierr.ErrValidation)
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	if tenantID == "" {
+		return nil, ierr.NewError("tenant ID is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	existingUser, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existingUser.Type != types.UserTypeServiceAccount {
+		return nil, ierr.NewError("service account not found").
+			WithHint("The provided ID does not belong to a service account").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+	if existingUser.Status == types.StatusArchived {
+		return nil, ierr.NewError("service account is archived").
+			WithHint("Archived service accounts cannot be updated").
+			WithReportableDetails(map[string]interface{}{"id": id}).
+			Mark(ierr.ErrValidation)
+	}
+
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Name != existingUser.Name {
+		existingUser.Name = req.Name
+		existingUser.UpdatedBy = types.GetUserID(ctx)
+		existingUser.UpdatedAt = types.GetDefaultBaseModel(ctx).UpdatedAt
+
+		if err := s.userRepo.Update(ctx, existingUser); err != nil {
+			return nil, err
+		}
+	}
+
+	return &dto.UpdateServiceAccountResponse{UserResponse: dto.NewUserResponse(existingUser, tenant)}, nil
 }
 
 // InviteUser invites a user to the tenant
@@ -337,4 +399,41 @@ func (s *userService) InviteUser(ctx context.Context, req *dto.CreateUserRequest
 		return nil, nil, err
 	}
 	return newUser, &password, nil
+}
+
+func (s *userService) DeleteUser(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("service account ID is required").
+			WithHint("Provide a valid service account ID").
+			Mark(ierr.ErrValidation)
+	}
+	existingUser, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if existingUser.Type != types.UserTypeServiceAccount {
+		return ierr.NewError("only service accounts can be deleted").
+			WithHint("Deletion is supported for service accounts only").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Block archive if the service account has active (published, non-expired) API keys.
+	now := time.Now().UTC()
+	activeCount, err := s.secretRepo.Count(ctx, &types.SecretFilter{
+		QueryFilter: &types.QueryFilter{
+			Status: lo.ToPtr(types.StatusPublished),
+		},
+		UserID:       &id,
+		NotExpiredAt: &now,
+	})
+	if err != nil {
+		return err
+	}
+	if activeCount > 0 {
+		return ierr.NewError("service account has active API keys").
+			WithHint("Revoke all API keys before archiving this service account").
+			Mark(ierr.ErrValidation)
+	}
+
+	return s.userRepo.Delete(ctx, id)
 }
