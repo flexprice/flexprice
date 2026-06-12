@@ -47,6 +47,8 @@ const (
 	FieldRoles = "roles"
 	// FieldUserType holds the string denoting the user_type field in the database.
 	FieldUserType = "user_type"
+	// FieldUserID holds the string denoting the user_id field in the database.
+	FieldUserID = "user_id"
 	// Table holds the table name of the secret in the database.
 	Table = "secrets"
 )
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldProviderData,
 	FieldRoles,
 	FieldUserType,
+	FieldUserID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -189,4 +192,9 @@ func ByLastUsedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUserType orders the results by the user_type field.
 func ByUserType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUserType, opts...).ToFunc()
+}
+
+// ByUserID orders the results by the user_id field.
+func ByUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUserID, opts...).ToFunc()
 }

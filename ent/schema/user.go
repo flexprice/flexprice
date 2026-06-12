@@ -36,6 +36,12 @@ func (User) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 		// RBAC Fields
+		field.String("name").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Nillable(),
 		field.String("type").
 			Default("user"),
 		field.Strings("roles").
