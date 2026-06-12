@@ -112,6 +112,12 @@ func (a *entityIntegrationMappingAdapter) LinkIntegrationMapping(ctx context.Con
 		Mark(ierr.ErrValidation)
 }
 
+func (a *entityIntegrationMappingAdapter) DelinkIntegrationMapping(ctx context.Context, req apidto.DelinkIntegrationMappingRequest) (*apidto.DelinkIntegrationMappingResponse, error) {
+	return nil, ierr.NewError("DelinkIntegrationMapping not supported via integration factory adapter").
+		WithHint("Use the service layer directly for this operation").
+		Mark(ierr.ErrValidation)
+}
+
 // toMappingResponse converts a domain mapping to a DTO response.
 func toMappingResponse(m *entityintegrationmapping.EntityIntegrationMapping) *apidto.EntityIntegrationMappingResponse {
 	return &apidto.EntityIntegrationMappingResponse{

@@ -268,6 +268,47 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 	}, nil
 }
 
+func (s *entityIntegrationMappingService) DelinkIntegrationMapping(ctx context.Context, req dto.DelinkIntegrationMappingRequest) (*dto.DelinkIntegrationMappingResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	filter := &types.EntityIntegrationMappingFilter{
+		QueryFilter: types.NewNoLimitPublishedQueryFilter(),
+		EntityID:    req.EntityID,
+		EntityType:  req.EntityType,
+		ProviderTypes: []string{
+			req.ProviderType,
+		},
+	}
+	mappings, err := s.EntityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(mappings) == 0 {
+		return nil, ierr.NewError("no entity integration mapping found to delink").
+			WithHint("No active mapping exists for the given entity and provider").
+			WithReportableDetails(map[string]any{
+				"entity_id":     req.EntityID,
+				"entity_type":   req.EntityType,
+				"provider_type": req.ProviderType,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	for _, mapping := range mappings {
+		if err := s.EntityIntegrationMappingRepo.Delete(ctx, mapping); err != nil {
+			return nil, err
+		}
+	}
+
+	return &dto.DelinkIntegrationMappingResponse{
+		Success:  true,
+		Archived: len(mappings),
+	}, nil
+}
+
 func (s *entityIntegrationMappingService) upsertEntityMapping(ctx context.Context, req dto.LinkIntegrationMappingRequest) (*entityintegrationmapping.EntityIntegrationMapping, error) {
 	filter := &types.EntityIntegrationMappingFilter{
 		QueryFilter: types.NewNoLimitQueryFilter(),

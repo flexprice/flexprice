@@ -117,6 +117,10 @@ func (s *inMemoryMappingService) LinkIntegrationMapping(ctx context.Context, req
 	return nil, nil
 }
 
+func (s *inMemoryMappingService) DelinkIntegrationMapping(ctx context.Context, req apidto.DelinkIntegrationMappingRequest) (*apidto.DelinkIntegrationMappingResponse, error) {
+	return nil, nil
+}
+
 func toTestMappingResponse(m *entityintegrationmapping.EntityIntegrationMapping) *apidto.EntityIntegrationMappingResponse {
 	return &apidto.EntityIntegrationMappingResponse{
 		ID:               m.ID,
