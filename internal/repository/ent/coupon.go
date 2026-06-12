@@ -77,9 +77,8 @@ func (r *couponRepository) Create(ctx context.Context, c *domainCoupon.Coupon) e
 		SetNillableDurationInPeriods(c.DurationInPeriods)
 
 	// Handle optional fields
-	if c.CouponCode != nil && *c.CouponCode != "" {
-		normalised := strings.ToLower(strings.TrimSpace(*c.CouponCode))
-		createQuery = createQuery.SetCouponCode(normalised)
+	if code := strings.ToLower(strings.TrimSpace(lo.FromPtr(c.CouponCode))); code != "" {
+		createQuery = createQuery.SetCouponCode(code)
 	}
 	if c.Rules != nil {
 		createQuery = createQuery.SetRules(*c.Rules)
