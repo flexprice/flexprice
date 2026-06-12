@@ -434,123 +434,123 @@ func (s *UserServiceSuite) TestDeleteUser() {
 	})
 }
 
-// // ---------------------------------------------------------------------------
-// // RBAC permission tests
-// // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// RBAC permission tests
+// ---------------------------------------------------------------------------
 
-// type RBACPermissionSuite struct {
-// 	suite.Suite
-// 	rbacSvc *rbac.RBACService
-// }
+type RBACPermissionSuite struct {
+	suite.Suite
+	rbacSvc *rbac.RBACService
+}
 
-// func TestRBACPermissions(t *testing.T) {
-// 	suite.Run(t, new(RBACPermissionSuite))
-// }
+func TestRBACPermissions(t *testing.T) {
+	suite.Run(t, new(RBACPermissionSuite))
+}
 
-// func (s *RBACPermissionSuite) SetupSuite() {
-// 	svc, err := rbac.NewRBACService(&config.Configuration{
-// 		RBAC: config.RBACConfig{RolesConfigPath: "../../internal/config/rbac/roles.json"},
-// 	})
-// 	if err != nil || svc == nil {
-// 		svc, err = rbac.NewRBACService(&config.Configuration{
-// 			RBAC: config.RBACConfig{RolesConfigPath: "internal/config/rbac/roles.json"},
-// 		})
-// 	}
-// 	s.Require().NotNil(svc, "RBAC service must load — check roles.json path")
-// 	s.rbacSvc = svc
-// }
+func (s *RBACPermissionSuite) SetupSuite() {
+	svc, err := rbac.NewRBACService(&config.Configuration{
+		RBAC: config.RBACConfig{RolesConfigPath: "../../internal/config/rbac/roles.json"},
+	})
+	if err != nil || svc == nil {
+		svc, err = rbac.NewRBACService(&config.Configuration{
+			RBAC: config.RBACConfig{RolesConfigPath: "internal/config/rbac/roles.json"},
+		})
+	}
+	s.Require().NotNil(svc, "RBAC service must load — check roles.json path")
+	s.rbacSvc = svc
+}
 
-// func (s *RBACPermissionSuite) TestSuperAdmin_CanDoEverything() {
-// 	roles := []string{"super_admin"}
-// 	checks := []struct{ entity, action string }{
-// 		{"event", "read"},
-// 		{"event", "write"},
-// 		{"customer", "read"},
-// 		{"customer", "write"},
-// 		{"invoice", "read"},
-// 		{"invoice", "write"},
-// 		{"subscription", "read"},
-// 		{"subscription", "write"},
-// 		{"meter", "write"},
-// 		{"anything", "delete"},
-// 	}
-// 	for _, c := range checks {
-// 		s.True(s.rbacSvc.HasPermission(roles, c.entity, c.action),
-// 			"super_admin should have %s:%s", c.entity, c.action)
-// 	}
-// }
+func (s *RBACPermissionSuite) TestSuperAdmin_CanDoEverything() {
+	roles := []string{"super_admin"}
+	checks := []struct{ entity, action string }{
+		{"event", "read"},
+		{"event", "write"},
+		{"customer", "read"},
+		{"customer", "write"},
+		{"invoice", "read"},
+		{"invoice", "write"},
+		{"subscription", "read"},
+		{"subscription", "write"},
+		{"meter", "write"},
+		{"anything", "delete"},
+	}
+	for _, c := range checks {
+		s.True(s.rbacSvc.HasPermission(roles, c.entity, c.action),
+			"super_admin should have %s:%s", c.entity, c.action)
+	}
+}
 
-// func (s *RBACPermissionSuite) TestEventIngestor_CanOnlyWriteEvents() {
-// 	roles := []string{"event_ingestor"}
+func (s *RBACPermissionSuite) TestEventIngestor_CanOnlyWriteEvents() {
+	roles := []string{"event_ingestor"}
 
-// 	// allowed
-// 	s.True(s.rbacSvc.HasPermission(roles, "event", "write"), "event_ingestor can write events")
+	// allowed
+	s.True(s.rbacSvc.HasPermission(roles, "event", "write"), "event_ingestor can write events")
 
-// 	// denied
-// 	denied := []struct{ entity, action string }{
-// 		{"event", "read"},
-// 		{"customer", "read"},
-// 		{"customer", "write"},
-// 		{"invoice", "read"},
-// 		{"subscription", "read"},
-// 		{"meter", "write"},
-// 	}
-// 	for _, c := range denied {
-// 		s.False(s.rbacSvc.HasPermission(roles, c.entity, c.action),
-// 			"event_ingestor should NOT have %s:%s", c.entity, c.action)
-// 	}
-// }
+	// denied
+	denied := []struct{ entity, action string }{
+		{"event", "read"},
+		{"customer", "read"},
+		{"customer", "write"},
+		{"invoice", "read"},
+		{"subscription", "read"},
+		{"meter", "write"},
+	}
+	for _, c := range denied {
+		s.False(s.rbacSvc.HasPermission(roles, c.entity, c.action),
+			"event_ingestor should NOT have %s:%s", c.entity, c.action)
+	}
+}
 
-// func (s *RBACPermissionSuite) TestEventReader_CanOnlyReadEvents() {
-// 	roles := []string{"event_reader"}
+func (s *RBACPermissionSuite) TestEventReader_CanOnlyReadEvents() {
+	roles := []string{"event_reader"}
 
-// 	// allowed
-// 	s.True(s.rbacSvc.HasPermission(roles, "event", "read"), "event_reader can read events")
+	// allowed
+	s.True(s.rbacSvc.HasPermission(roles, "event", "read"), "event_reader can read events")
 
-// 	// denied
-// 	denied := []struct{ entity, action string }{
-// 		{"event", "write"},
-// 		{"customer", "read"},
-// 		{"customer", "write"},
-// 		{"invoice", "write"},
-// 		{"subscription", "write"},
-// 	}
-// 	for _, c := range denied {
-// 		s.False(s.rbacSvc.HasPermission(roles, c.entity, c.action),
-// 			"event_reader should NOT have %s:%s", c.entity, c.action)
-// 	}
-// }
+	// denied
+	denied := []struct{ entity, action string }{
+		{"event", "write"},
+		{"customer", "read"},
+		{"customer", "write"},
+		{"invoice", "write"},
+		{"subscription", "write"},
+	}
+	for _, c := range denied {
+		s.False(s.rbacSvc.HasPermission(roles, c.entity, c.action),
+			"event_reader should NOT have %s:%s", c.entity, c.action)
+	}
+}
 
-// func (s *RBACPermissionSuite) TestMultipleRoles_UnionOfPermissions() {
-// 	roles := []string{"event_ingestor", "event_reader"}
+func (s *RBACPermissionSuite) TestMultipleRoles_UnionOfPermissions() {
+	roles := []string{"event_ingestor", "event_reader"}
 
-// 	s.True(s.rbacSvc.HasPermission(roles, "event", "write"), "union: can write events")
-// 	s.True(s.rbacSvc.HasPermission(roles, "event", "read"), "union: can read events")
-// 	s.False(s.rbacSvc.HasPermission(roles, "customer", "read"), "union: cannot read customers")
-// }
+	s.True(s.rbacSvc.HasPermission(roles, "event", "write"), "union: can write events")
+	s.True(s.rbacSvc.HasPermission(roles, "event", "read"), "union: can read events")
+	s.False(s.rbacSvc.HasPermission(roles, "customer", "read"), "union: cannot read customers")
+}
 
-// func (s *RBACPermissionSuite) TestUnknownRole_DeniedEverything() {
-// 	roles := []string{"nonexistent_role"}
-// 	s.False(s.rbacSvc.HasPermission(roles, "event", "read"))
-// 	s.False(s.rbacSvc.HasPermission(roles, "customer", "write"))
-// }
+func (s *RBACPermissionSuite) TestUnknownRole_DeniedEverything() {
+	roles := []string{"nonexistent_role"}
+	s.False(s.rbacSvc.HasPermission(roles, "event", "read"))
+	s.False(s.rbacSvc.HasPermission(roles, "customer", "write"))
+}
 
-// func (s *RBACPermissionSuite) TestNoRoles_FullAccess() {
-// 	// Empty roles = backward-compatible full access (see HasPermission implementation)
-// 	s.True(s.rbacSvc.HasPermission([]string{}, "event", "read"))
-// 	s.True(s.rbacSvc.HasPermission([]string{}, "customer", "write"))
-// }
+func (s *RBACPermissionSuite) TestNoRoles_FullAccess() {
+	// Empty roles = backward-compatible full access (see HasPermission implementation)
+	s.True(s.rbacSvc.HasPermission([]string{}, "event", "read"))
+	s.True(s.rbacSvc.HasPermission([]string{}, "customer", "write"))
+}
 
-// func (s *RBACPermissionSuite) TestSuperAdmin_CombinedWithOtherRoles_StillFullAccess() {
-// 	roles := []string{"event_reader", "super_admin"}
-// 	s.True(s.rbacSvc.HasPermission(roles, "customer", "write"),
-// 		"super_admin in role set grants full access regardless of other roles")
-// }
+func (s *RBACPermissionSuite) TestSuperAdmin_CombinedWithOtherRoles_StillFullAccess() {
+	roles := []string{"event_reader", "super_admin"}
+	s.True(s.rbacSvc.HasPermission(roles, "customer", "write"),
+		"super_admin in role set grants full access regardless of other roles")
+}
 
-// func (s *RBACPermissionSuite) TestValidateRole() {
-// 	s.True(s.rbacSvc.ValidateRole("super_admin"))
-// 	s.True(s.rbacSvc.ValidateRole("event_ingestor"))
-// 	s.True(s.rbacSvc.ValidateRole("event_reader"))
-// 	s.False(s.rbacSvc.ValidateRole("nonexistent"))
-// 	s.False(s.rbacSvc.ValidateRole(""))
-// }
+func (s *RBACPermissionSuite) TestValidateRole() {
+	s.True(s.rbacSvc.ValidateRole("super_admin"))
+	s.True(s.rbacSvc.ValidateRole("event_ingestor"))
+	s.True(s.rbacSvc.ValidateRole("event_reader"))
+	s.False(s.rbacSvc.ValidateRole("nonexistent"))
+	s.False(s.rbacSvc.ValidateRole(""))
+}
