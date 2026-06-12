@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
@@ -179,6 +180,25 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 				Mark(ierr.ErrValidation)
 		}
 
+		// For repeated cadence with no explicit end_date, derive end_date from
+		// duration_in_periods so the ActiveOnly date filter handles expiry without
+		// counting CouponApplication rows on every invoice.
+		if coupon.Cadence == types.CouponCadenceRepeated &&
+			coupon.DurationInPeriods != nil &&
+			couponReq.EndDate == nil {
+			endDate, err := computeCouponEndDate(
+				couponReq.StartDate,
+				subscription.BillingAnchor,
+				subscription.BillingPeriod,
+				subscription.BillingPeriodCount,
+				*coupon.DurationInPeriods,
+			)
+			if err != nil {
+				return err
+			}
+			couponReq.EndDate = &endDate
+		}
+
 		// Create coupon association request
 		// LineItemID is used directly if provided (coupon applies to specific line item)
 		// If omitted, coupon applies at subscription level
@@ -207,4 +227,21 @@ func (s *couponAssociationService) toCouponAssociationResponse(ca *coupon_associ
 	return &dto.CouponAssociationResponse{
 		CouponAssociation: ca,
 	}
+}
+
+// computeCouponEndDate advances startDate through n billing periods using the
+// subscription's billing anchor and period configuration (same logic as invoice
+// scheduling), then subtracts 1s so the result is strictly before the (n+1)th
+// period start — ensuring the ActiveOnly filter (end_date >= period_start) does
+// not match that next period.
+func computeCouponEndDate(startDate, billingAnchor time.Time, period types.BillingPeriod, periodCount, n int) (time.Time, error) {
+	current := startDate
+	for i := 0; i < n; i++ {
+		next, err := types.NextBillingDate(current, billingAnchor, periodCount, period, nil)
+		if err != nil {
+			return startDate, err
+		}
+		current = next
+	}
+	return current.Add(-time.Second), nil
 }
