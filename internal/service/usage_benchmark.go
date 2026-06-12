@@ -178,7 +178,7 @@ func (s *usageBenchmarkService) ProcessMessageForTest(msg *message.Message) erro
 		return nil
 	}
 
-	ctx := context.Background()
+	ctx := types.WithForceWriter(msg.Context())
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 

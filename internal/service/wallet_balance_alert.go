@@ -202,8 +202,8 @@ func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 		"published_at", event.Timestamp,
 	)
 
-	// Create context with tenant and environment IDs
-	ctx := context.Background()
+	// Build the context from the message so shutdown cancellation and trace values propagate.
+	ctx := types.WithForceWriter(msg.Context())
 	if event.TenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, event.TenantID)
 	}
