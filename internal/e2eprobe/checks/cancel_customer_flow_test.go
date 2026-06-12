@@ -2,6 +2,7 @@ package checks
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -70,6 +71,43 @@ func TestCancelCustomerFlow_NoEphemeralsIsNoOp(t *testing.T) {
 	}
 	if len(fc.subs.cancelled) != 0 {
 		t.Errorf("expected 0 cancels")
+	}
+}
+
+// TestCancelCustomerFlow_CancelErrorButAlreadyCancelled_IsSuccess covers the
+// partial-success retry case. A previous tick reached the server (cancelled
+// the sub) but the response was lost (TCP reset post-write). The current tick
+// retries Cancel, the upstream returns an error (typically `{}` from a 4xx
+// "already cancelled"), and the probe must detect the sub is in fact CANCELLED
+// and treat the run as successful — archiving the ephemeral so future ticks
+// don't keep re-alerting on the same stuck sub.
+func TestCancelCustomerFlow_CancelErrorButAlreadyCancelled_IsSuccess(t *testing.T) {
+	fc := newFakeClient()
+	reg := e2eprobe.NewRegistry()
+	reg.RegisterEphemeral("subscription", "sub_already_cancelled", time.Now().Add(-time.Hour))
+
+	// Upstream Cancel rejects (mimics `{}` 4xx for already-cancelled).
+	fc.subs.cancelErr = errors.New("{}")
+	// But Get reports the sub IS cancelled — that's the partial-success state.
+	cancelled := types.SubscriptionStatusCancelled
+	fc.subs.subs = map[string]types.DtoSubscriptionResponse{
+		"sub_already_cancelled": {
+			ID:                 strPtr("sub_already_cancelled"),
+			SubscriptionStatus: &cancelled,
+		},
+	}
+
+	s := NewCancelCustomerFlow(fc, reg, "run-1", InvoicePoll{Timeout: 30 * time.Millisecond, Interval: 5 * time.Millisecond})
+	if err := s.Run(context.Background()); err != nil {
+		t.Fatalf("Run should succeed when sub is already cancelled; got: %v", err)
+	}
+	// Ephemeral must be archived so the next tick doesn't keep re-alerting on
+	// the same sub forever.
+	remaining := reg.Ephemerals("subscription")
+	for _, e := range remaining {
+		if e.ID == "sub_already_cancelled" {
+			t.Errorf("ephemeral sub_already_cancelled still in registry — would cause perpetual re-alerting")
+		}
 	}
 }
 

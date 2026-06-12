@@ -54,6 +54,15 @@ func (s *CancelCustomerFlow) Run(ctx context.Context) error {
 		ProrationBehavior: &prorate,
 		Reason:            strPtr("e2eprobe-cancel-customer-flow"),
 	}); err != nil {
+		// A previous tick may have already cancelled the sub server-side (e.g.
+		// the network call partially succeeded — TCP reset after the write,
+		// before the response). The upstream returns `{}` on a retry of an
+		// already-cancelled sub. Check the actual state: if already cancelled,
+		// the work is done — archive and continue without alerting.
+		if statusErr := s.checkAlreadyCancelled(ctx, target.ID); statusErr == nil {
+			s.reg.ArchiveEphemeral("subscription", target.ID)
+			return nil
+		}
 		return e2eprobe.Errorf(map[string]string{"subscription_id": target.ID}, "cancel %s: %w", target.ID, err)
 	}
 
@@ -88,6 +97,21 @@ func (s *CancelCustomerFlow) Run(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// checkAlreadyCancelled returns nil if the subscription is already in the
+// CANCELLED state. Any other state (or read error) returns a non-nil error so
+// the caller can decide what to do. This is the idempotency check for retries
+// after a partial-success failure (e.g. TCP reset post-write).
+func (s *CancelCustomerFlow) checkAlreadyCancelled(ctx context.Context, subID string) error {
+	resp, err := s.client.Subscriptions().Get(ctx, subID)
+	if err != nil {
+		return err
+	}
+	if isCancelled(resp) {
+		return nil
+	}
+	return fmt.Errorf("sub %s not cancelled (observed: %s)", subID, observedSubStatus(resp))
 }
 
 // pollSubStatusCancelled polls Subscriptions.Get until the subscription reaches

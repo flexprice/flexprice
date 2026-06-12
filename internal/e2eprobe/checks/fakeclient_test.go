@@ -227,6 +227,7 @@ type fakeSubscriptions struct {
 	nextID    int
 	subs      map[string]types.DtoSubscriptionResponse
 	subErr    error
+	cancelErr error
 }
 
 func (f *fakeSubscriptions) Create(_ context.Context, req types.DtoCreateSubscriptionRequest) (*dtos.CreateSubscriptionResponse, error) {
@@ -264,6 +265,9 @@ func (f *fakeSubscriptions) Get(_ context.Context, id string) (*dtos.GetSubscrip
 func (f *fakeSubscriptions) Cancel(_ context.Context, id string, _ types.DtoCancelSubscriptionRequest) (*dtos.CancelSubscriptionResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.cancelErr != nil {
+		return nil, f.cancelErr
+	}
 	f.cancelled = append(f.cancelled, id)
 	return &dtos.CancelSubscriptionResponse{}, nil
 }
