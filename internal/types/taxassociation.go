@@ -17,9 +17,11 @@ type TaxAssociationFilter struct {
 	ExternalCustomerID string            `json:"external_customer_id,omitempty" form:"external_customer_id"`
 	Currency           string            `json:"currency,omitempty" form:"currency"`
 	AutoApply          *bool             `json:"auto_apply,omitempty" form:"auto_apply"`
-	// ActiveAt, when set, restricts results to associations active at that point in time:
-	// start_date <= ActiveAt AND (end_date IS NULL OR end_date > ActiveAt)
-	ActiveAt *time.Time `json:"active_at,omitempty" form:"active_at"`
+	// StartDate and EndDate, when both set, restrict results to associations that
+	// overlap the given period (interval-overlap check):
+	// start_date <= EndDate AND (end_date IS NULL OR end_date > StartDate)
+	StartDate *time.Time `json:"start_date,omitempty"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
 }
 
 // EntityHierarchy defines the hierarchy levels for tax associations

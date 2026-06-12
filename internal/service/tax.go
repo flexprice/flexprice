@@ -954,15 +954,11 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 		filter.EntityType = types.TaxRateEntityTypeSubscription
 		filter.EntityID = lo.FromPtr(req.SubscriptionID)
 		filter.AutoApply = lo.ToPtr(true)
-		// Filter to associations active at the start of the billing period so that
-		// soft-deleted (end_date set) and future (start_date not yet reached) associations
-		// are excluded. Falls back to time.Now() when no billing period is available.
 		if req.PeriodStart != nil {
-			t := req.PeriodStart.UTC()
-			filter.ActiveAt = &t
-		} else {
-			now := time.Now().UTC()
-			filter.ActiveAt = &now
+			filter.StartDate = lo.ToPtr(req.PeriodStart.UTC())
+		}
+		if req.PeriodEnd != nil {
+			filter.EndDate = lo.ToPtr(req.PeriodEnd.UTC())
 		}
 
 		taxAssociations, err := s.ListTaxAssociations(ctx, filter)

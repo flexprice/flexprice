@@ -404,13 +404,12 @@ func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f
 			query = query.Where(entTaxConfig.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
 		}
 	}
-	if f.ActiveAt != nil {
-		t := lo.FromPtr(f.ActiveAt)
+	if f.StartDate != nil && f.EndDate != nil {
 		query = query.Where(
-			entTaxConfig.StartDateLTE(t),
+			entTaxConfig.StartDateLTE(lo.FromPtr(f.EndDate)),
 			entTaxConfig.Or(
 				entTaxConfig.EndDateIsNil(),
-				entTaxConfig.EndDateGT(t),
+				entTaxConfig.EndDateGT(lo.FromPtr(f.StartDate)),
 			),
 		)
 	}
