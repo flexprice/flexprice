@@ -200,12 +200,13 @@ func NewClient(clients *EntClients, logger *logger.Logger, tracingSvc *tracing.S
 
 // WithTx wraps the given function in a transaction
 // Transactions ALWAYS use the writer connection to ensure consistency
+//
+// Note on writer pinning: WithTx does not pin by itself, so read-only
+// transactions keep later reads on the replica. Any actual write inside the
+// transaction goes through Writer(txCtx), and because the pin holder is shared
+// with the parent context, reads issued AFTER the transaction commits still
+// route to the writer despite replica lag.
 func (c *Client) WithTx(ctx context.Context, fn func(ctx context.Context) error) error {
-	// A transaction implies writes: pin the surrounding unit of work to the
-	// writer so reads issued AFTER the transaction commits (on the parent
-	// context) still see its effects despite replica lag.
-	types.PinWriter(ctx)
-
 	// If we're already in a transaction, reuse it and do not start a new one or commit it
 	if tx := c.TxFromContext(ctx); tx != nil {
 		return fn(ctx)
