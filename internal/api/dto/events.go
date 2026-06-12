@@ -39,6 +39,9 @@ func (r *IngestEventRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
 	}
+	// Security: reject negative, non-finite, and extreme values to prevent billing
+	// manipulation via metered-usage aggregations (CVE-FLEXPRICE-004).
+	// If a meter legitimately needs signed deltas, validate at the meter level instead.
 	for k, v := range r.Properties {
 		if num, ok := v.(float64); ok {
 			if num < 0 {

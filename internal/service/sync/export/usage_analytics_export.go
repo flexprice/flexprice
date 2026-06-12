@@ -312,23 +312,23 @@ func (e *UsageAnalyticsExporter) buildRow(record *usageAnalyticsRecord, metadata
 		sanitizeCSVField(record.CustomerExternalID),
 		record.StartTime.Format(time.RFC3339),
 		record.EndTime.Format(time.RFC3339),
-		record.FeatureName,
-		record.FeatureID,
-		record.FeatureGroupName,
-		record.EventName,
+		sanitizeCSVField(record.FeatureName),
+		sanitizeCSVField(record.FeatureID),
+		sanitizeCSVField(record.FeatureGroupName),
+		sanitizeCSVField(record.EventName),
 		strconv.FormatInt(record.EventCount, 10),
-		record.AggregationField,
+		sanitizeCSVField(record.AggregationField),
 		record.TotalUsage.String(),
 		record.TotalCost.String(),
 		record.Currency,
-		record.Source,
+		sanitizeCSVField(record.Source),
 	)
 	for _, f := range metadataFields {
 		var val string
 		if f.EntityType == types.ExportMetadataEntityTypeCustomer {
 			val = record.CustomerMetadata[f.FieldKey]
 		}
-		row = append(row, val)
+		row = append(row, sanitizeCSVField(val))
 	}
 	return row
 }

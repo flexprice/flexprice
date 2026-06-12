@@ -311,6 +311,7 @@ func main() {
 func provideHandlers(
 	cfg *config.Configuration,
 	logger *logger.Logger,
+	appCache cache.Cache,
 	meterService service.MeterService,
 	eventService service.EventService,
 	eventPostProcessingService service.EventPostProcessingService,
@@ -404,7 +405,7 @@ func provideHandlers(
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService, appCache),
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),

@@ -732,7 +732,8 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	// 1. per_group CTE: max per group per bucket (e.g., MAX per krn per hour)
 	// 2. Return each group's value with group_key; total is sum of all group values for backward compat
 	if params.GroupByProperty != "" && validateGroupByProperty(params.GroupByProperty) == nil {
-		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", escapeClickHouseString(params.GroupByProperty))
+		// params.GroupByProperty is already escaped by sanitizeUsageParamsForSQL — do not double-escape.
+		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", params.GroupByProperty)
 
 		return fmt.Sprintf(`
 			WITH per_group AS (

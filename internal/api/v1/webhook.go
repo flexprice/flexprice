@@ -53,7 +53,9 @@ type WebhookHandler struct {
 	cache                           cache.Cache
 }
 
-// NewWebhookHandler creates a new webhook handler
+// NewWebhookHandler creates a new webhook handler.
+// sharedCache must be the application-level cache (Redis in production) so that
+// webhook-id deduplication state is shared across all replicas and survives restarts.
 func NewWebhookHandler(
 	cfg *config.Configuration,
 	svixClient *svix.Client,
@@ -67,6 +69,7 @@ func NewWebhookHandler(
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService,
 	db postgres.IClient,
 	webhookService *flexwebhook.WebhookService,
+	sharedCache cache.Cache,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		config:                          cfg,
@@ -81,7 +84,7 @@ func NewWebhookHandler(
 		entityIntegrationMappingService: entityIntegrationMappingService,
 		db:                              db,
 		webhookService:                  webhookService,
-		cache:                           cache.NewInMemoryCache(),
+		cache:                           sharedCache,
 	}
 }
 

@@ -102,9 +102,13 @@ func (c *compiler) Compile(opts CompileOpts) (string, error) {
 	// Determine output file path
 	safeFile := filepath.Base(opts.OutputFile)
 	outputFile := filepath.Join(c.outputDir, safeFile)
-	// Verify the output file is within the expected directory
-	if opts.OutputFile != "" && !strings.HasPrefix(outputFile, filepath.Clean(c.outputDir)+string(filepath.Separator)) {
-		return "", ierr.NewError("invalid output file path").Mark(ierr.ErrValidation)
+	// Verify the output file stays within the output directory using filepath.Rel,
+	// which handles edge cases (e.g. "/" or ".") that strings.HasPrefix misses.
+	if opts.OutputFile != "" {
+		rel, err := filepath.Rel(filepath.Clean(c.outputDir), filepath.Clean(outputFile))
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", ierr.NewError("invalid output file path").Mark(ierr.ErrValidation)
+		}
 	}
 	if opts.OutputFile == "" {
 		tmpFilePath := filepath.Join(c.outputDir, fmt.Sprintf("typst-%d.pdf", time.Now().UnixMilli()))

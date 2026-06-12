@@ -222,7 +222,7 @@ func (e *CreditUsageExporter) buildRow(record *CreditUsageExportData, metadataFi
 		strconv.Itoa(record.NumberOfWallets),
 	)
 	for _, f := range metadataFields {
-		row = append(row, record.Metadata[string(f.EntityType)+metadataKeyDelimiter+f.FieldKey])
+		row = append(row, sanitizeCSVField(record.Metadata[string(f.EntityType)+metadataKeyDelimiter+f.FieldKey]))
 	}
 	return row
 }
