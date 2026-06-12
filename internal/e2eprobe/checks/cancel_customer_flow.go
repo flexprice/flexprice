@@ -2,11 +2,15 @@ package checks
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
+	sdkdtos "github.com/flexprice/go-sdk/v2/models/dtos"
+	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -57,6 +61,32 @@ func (s *CancelCustomerFlow) Run(ctx context.Context) error {
 		return err
 	}
 	s.reg.ArchiveEphemeral("subscription", target.ID)
+
+	// Also delete the customer — cancel alone leaves a zombie customer in Flexprice.
+	// Best-effort: if the delete fails we log a warning but don't fail the check
+	// because the subscription cancellation already succeeded.
+	subResp, err := s.client.Subscriptions().Get(ctx, target.ID)
+	if err == nil {
+		internalCustID := extractSubCustomerID(subResp)
+		extCustID := extractSubExternalCustomerID(subResp)
+		if internalCustID != "" {
+			if _, delErr := s.client.Customers().Delete(ctx, internalCustID); delErr != nil {
+				// 404 means janitor already cleaned it — treat as success.
+				var apiErr *sdkerrors.APIError
+				if !errors.As(delErr, &apiErr) || apiErr.StatusCode != http.StatusNotFound {
+					// Log the failure as a warning attribute but don't return an error.
+					_ = e2eprobe.Errorf(map[string]string{
+						"subscription_id":      target.ID,
+						"internal_customer_id": internalCustID,
+						"external_customer_id": extCustID,
+					}, "delete customer %s (best-effort): %w", internalCustID, delErr)
+				}
+			}
+			if extCustID != "" {
+				s.reg.ArchiveEphemeral("customer", extCustID)
+			}
+		}
+	}
 	return nil
 }
 
@@ -130,4 +160,18 @@ func observedSubStatus(resp interface{}) string {
 		return "unknown"
 	}
 	return fmt.Sprintf("%v", *inner.SubscriptionStatus)
+}
+
+// extractSubExternalCustomerID reads the external customer ID from the embedded
+// Customer object in a GetSubscriptionResponse. Returns "" when unavailable.
+func extractSubExternalCustomerID(resp interface{}) string {
+	r, ok := resp.(*sdkdtos.GetSubscriptionResponse)
+	if !ok || r == nil {
+		return ""
+	}
+	inner := r.GetDtoSubscriptionResponse()
+	if inner == nil || inner.Customer == nil || inner.Customer.ExternalID == nil {
+		return ""
+	}
+	return *inner.Customer.ExternalID
 }

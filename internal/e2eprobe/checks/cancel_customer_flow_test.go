@@ -15,13 +15,26 @@ func TestCancelCustomerFlow_CancelsOldest(t *testing.T) {
 	reg := e2eprobe.NewRegistry()
 	old := time.Now().Add(-time.Hour)
 	mid := time.Now().Add(-30 * time.Minute)
+
+	// Register customer ephemeral with external ID "e2eprobe-cust-eph-old".
+	reg.RegisterEphemeral("customer", "e2eprobe-cust-eph-old", old)
 	reg.RegisterEphemeral("subscription", "sub_old", old)
 	reg.RegisterEphemeral("subscription", "sub_mid", mid)
 
-	// Populate subs so Get returns a CANCELLED status after cancel call.
+	// Track the external customer ID in byExt so GetByExternalID works if called.
+	fc.customers.byExt["e2eprobe-cust-eph-old"] = "cust-internal-old"
+
+	// Populate subs so Get returns a CANCELLED status with customer ID info.
 	cancelled := types.SubscriptionStatusCancelled
+	extCustID := "e2eprobe-cust-eph-old"
+	internalCustID := "cust-internal-old"
 	fc.subs.subs = map[string]types.DtoSubscriptionResponse{
-		"sub_old": {ID: strPtr("sub_old"), SubscriptionStatus: &cancelled},
+		"sub_old": {
+			ID:                 strPtr("sub_old"),
+			SubscriptionStatus: &cancelled,
+			CustomerID:         strPtr(internalCustID),
+			Customer:           &types.DtoCustomerResponse{ExternalID: strPtr(extCustID)},
+		},
 		"sub_mid": {ID: strPtr("sub_mid")},
 	}
 
@@ -35,6 +48,17 @@ func TestCancelCustomerFlow_CancelsOldest(t *testing.T) {
 	// Verify Get was called (pollSubStatusCancelled must have fired).
 	if fc.subs.gets == 0 {
 		t.Errorf("expected at least 1 Get call, got 0")
+	}
+	// Verify the customer was also deleted (best-effort cleanup).
+	if len(fc.customers.deleted) != 1 || fc.customers.deleted[0] != internalCustID {
+		t.Errorf("customer deleted=%v, want [%s]", fc.customers.deleted, internalCustID)
+	}
+	// Verify the customer ephemeral was archived from the registry.
+	remaining := reg.Ephemerals("customer")
+	for _, e := range remaining {
+		if e.ID == extCustID {
+			t.Errorf("customer ephemeral %q still in registry after cancel; should have been archived", extCustID)
+		}
 	}
 }
 

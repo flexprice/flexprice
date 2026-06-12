@@ -49,10 +49,12 @@ func (c *fakeClient) NewAsyncEventClient() e2eprobe.AsyncEventClient {
 // --- Customers ---
 
 type fakeCustomers struct {
-	mu      sync.Mutex
-	created []types.DtoCreateCustomerRequest
-	byExt   map[string]string
-	getErr  error
+	mu          sync.Mutex
+	created     []types.DtoCreateCustomerRequest
+	byExt       map[string]string
+	getErr      error
+	deleted     []string // internal customer IDs passed to Delete
+	queryResult []types.DtoCustomerResponse
 }
 
 func (f *fakeCustomers) Create(_ context.Context, req types.DtoCreateCustomerRequest) (*dtos.CreateCustomerResponse, error) {
@@ -96,8 +98,21 @@ func (f *fakeCustomers) GetUsageSummary(_ context.Context, _ dtos.GetCustomerUsa
 func (f *fakeCustomers) Update(_ context.Context, _ types.DtoUpdateCustomerRequest, _, _ *string) (*dtos.UpdateCustomerResponse, error) {
 	return &dtos.UpdateCustomerResponse{}, nil
 }
-func (f *fakeCustomers) Delete(_ context.Context, _ string) (*dtos.DeleteCustomerResponse, error) {
+func (f *fakeCustomers) Delete(_ context.Context, id string) (*dtos.DeleteCustomerResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleted = append(f.deleted, id)
 	return &dtos.DeleteCustomerResponse{}, nil
+}
+func (f *fakeCustomers) Query(_ context.Context, _ types.CustomerFilter) (*dtos.QueryCustomerResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.queryResult) == 0 {
+		return &dtos.QueryCustomerResponse{}, nil
+	}
+	return &dtos.QueryCustomerResponse{
+		DtoListCustomersResponse: &types.DtoListCustomersResponse{Items: f.queryResult},
+	}, nil
 }
 
 // --- Plans ---

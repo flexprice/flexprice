@@ -52,6 +52,7 @@ Adding a new probe: write `internal/e2eprobe/checks/<name>.go` implementing `Che
 | `E2EPROBE_SLACK_CHANNEL` | Override channel | empty |
 | `E2EPROBE_OTEL_ENABLED` | Emit OTEL spans | `true` |
 | `E2EPROBE_HEARTBEAT_INTERVAL` | How often a structured heartbeat summary is logged (`0` disables) | `5m` |
+| `E2EPROBE_JANITOR_MAX_AGE` | Minimum age of an ephemeral entity before the janitor deletes it (applies to both in-memory sweep and Flexprice orphan scan) | `1h` |
 | `E2EPROBE_CHECK_<NAME>_ENABLED` | Per-check kill switch | `true` |
 | `E2EPROBE_CHECK_<NAME>_INTERVAL` | Per-check interval override (Go duration) | per-check default |
 
@@ -69,10 +70,10 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | probe | cycle-invoice-probe | 15m | Auto-invoice freshness invariant |
 | probe | entitlement-and-usage-probe | 5m | Entitlements + usage rollup |
 | scenario | new-customer-lifecycle | 10m | Ephemeral customer/sub + events |
-| scenario | cancel-customer-flow | 30m | Cancel ephemeral + poll invoice |
+| scenario | cancel-customer-flow | 10m | Cancel oldest ephemeral sub + delete its customer |
 | scenario | subscription-modification-flow | 20m | Add line item; verify |
 | listener | low-wallet-alert-listener | webhook | Asserts low-balance webhook payloads |
-| maintenance | janitor | 1h | Archive e2eprobe-tagged ephemerals > 4h |
+| maintenance | janitor | 1h | Archive in-memory ephemerals > 1h; also scans Flexprice for orphan ephemeral customers from prior restarts and deletes them |
 
 ## Webhook wiring (low-wallet-alert-listener)
 

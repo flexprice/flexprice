@@ -27,6 +27,10 @@ type Config struct {
 	// line is emitted summarising run counts and success rate. Set to 0 to disable.
 	HeartbeatInterval time.Duration // E2EPROBE_HEARTBEAT_INTERVAL, default 5m
 
+	// JanitorMaxAge is the minimum age of an ephemeral entity before the janitor
+	// deletes it. Also controls the Flexprice-wide orphan scan sweep.
+	JanitorMaxAge time.Duration // E2EPROBE_JANITOR_MAX_AGE, default 1h
+
 	Slack SlackConfig
 	OTEL  OTELConfig
 
@@ -79,7 +83,7 @@ var checkDefaultIntervals = map[string]time.Duration{
 	"CYCLE_INVOICE_PROBE":            15 * time.Minute,
 	"ENTITLEMENT_AND_USAGE_PROBE":    5 * time.Minute,
 	"NEW_CUSTOMER_LIFECYCLE":         10 * time.Minute,
-	"CANCEL_CUSTOMER_FLOW":           30 * time.Minute,
+	"CANCEL_CUSTOMER_FLOW":           10 * time.Minute,
 	"SUBSCRIPTION_MODIFICATION_FLOW": 20 * time.Minute,
 	"LOW_WALLET_ALERT_LISTENER":      0, // listener — not a ticker
 	"JANITOR":                        1 * time.Hour,
@@ -98,6 +102,7 @@ func LoadConfig() (*Config, error) {
 		TenantID:          os.Getenv("E2EPROBE_TENANT_ID"),
 		EnvironmentID:     os.Getenv("E2EPROBE_ENVIRONMENT_ID"),
 		HeartbeatInterval: getDuration(&warnings, "E2EPROBE_HEARTBEAT_INTERVAL", 5*time.Minute),
+		JanitorMaxAge:     getDuration(&warnings, "E2EPROBE_JANITOR_MAX_AGE", 1*time.Hour),
 		Slack: SlackConfig{
 			WebhookURL: os.Getenv("E2EPROBE_SLACK_WEBHOOK_URL"),
 			Channel:    os.Getenv("E2EPROBE_SLACK_CHANNEL"),

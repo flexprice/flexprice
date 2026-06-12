@@ -28,6 +28,7 @@ type CustomerOps interface {
 	GetUsageSummary(ctx context.Context, req dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error)
 	Update(ctx context.Context, body types.DtoUpdateCustomerRequest, id, externalID *string) (*dtos.UpdateCustomerResponse, error)
 	Delete(ctx context.Context, id string) (*dtos.DeleteCustomerResponse, error)
+	Query(ctx context.Context, filter types.CustomerFilter) (*dtos.QueryCustomerResponse, error)
 }
 
 type PlanOps interface {
@@ -131,6 +132,9 @@ func (o customerOps) Update(ctx context.Context, body types.DtoUpdateCustomerReq
 }
 func (o customerOps) Delete(ctx context.Context, id string) (*dtos.DeleteCustomerResponse, error) {
 	return o.s.DeleteCustomer(ctx, id)
+}
+func (o customerOps) Query(ctx context.Context, filter types.CustomerFilter) (*dtos.QueryCustomerResponse, error) {
+	return o.s.QueryCustomer(ctx, filter)
 }
 
 type planOps struct{ s *flexprice.Plans }

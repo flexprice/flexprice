@@ -22,7 +22,7 @@ type NewCustomerLifecycleOpts struct {
 
 func defaultLifecycleOpts() NewCustomerLifecycleOpts {
 	return NewCustomerLifecycleOpts{
-		MaxEphemerals: 20,
+		MaxEphemerals: 5,
 		AnalyticsPoll: NewCustomerLifecyclePoll{Timeout: 90 * time.Second, Interval: 5 * time.Second},
 	}
 }

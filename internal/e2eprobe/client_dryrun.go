@@ -97,6 +97,9 @@ func (d *dryRunCustomers) Delete(ctx context.Context, id string) (*dtos.DeleteCu
 	dryLog(ctx, d.lg, "Customers.Delete", "id", id)
 	return &dtos.DeleteCustomerResponse{}, nil
 }
+func (d *dryRunCustomers) Query(ctx context.Context, filter types.CustomerFilter) (*dtos.QueryCustomerResponse, error) {
+	return d.inner.Query(ctx, filter)
+}
 
 // ── Plans ─────────────────────────────────────────────────────────────
 

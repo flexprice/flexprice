@@ -3,11 +3,13 @@ package checks
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/e2eprobe"
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
+	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
 type Janitor struct {
@@ -19,7 +21,7 @@ type Janitor struct {
 
 func NewJanitor(c e2eprobe.Client, r e2eprobe.Registry, maxAge time.Duration, runID string) *Janitor {
 	if maxAge == 0 {
-		maxAge = 4 * time.Hour
+		maxAge = 1 * time.Hour
 	}
 	return &Janitor{client: c, reg: r, maxAge: maxAge, runID: runID}
 }
@@ -29,6 +31,8 @@ func (j *Janitor) Kind() e2eprobe.Kind { return e2eprobe.KindMaintenance }
 
 func (j *Janitor) Run(ctx context.Context) error {
 	cutoff := time.Now().Add(-j.maxAge)
+
+	// Phase 1: sweep the in-memory registry (current-process ephemerals).
 	for _, kind := range []string{"customer", "subscription"} {
 		for _, e := range j.reg.Ephemerals(kind) {
 			if e.CreatedAt.After(cutoff) {
@@ -39,6 +43,14 @@ func (j *Janitor) Run(ctx context.Context) error {
 			}
 			j.reg.ArchiveEphemeral(kind, e.ID)
 		}
+	}
+
+	// Phase 2: scan Flexprice for orphan ephemeral customers that survived prior
+	// process restarts (registry wipe). CustomerFilter has no metadata equality
+	// field, so we fetch all customers and filter client-side. The synthetic
+	// tenant is bounded so this is safe.
+	if err := j.sweepOrphans(ctx, cutoff); err != nil {
+		return err
 	}
 	return nil
 }
@@ -91,4 +103,73 @@ func (j *Janitor) archive(ctx context.Context, e e2eprobe.EphemeralEntity) error
 		// Flexprice which retains cancelled subs). Accept this as success.
 	}
 	return nil
+}
+
+// sweepOrphans queries Flexprice for all customers, filters client-side for
+// those tagged e2eprobe_role=ephemeral and older than cutoff, then deletes them.
+// This handles restart-leakage where the in-memory registry was wiped but the
+// customers were never cleaned up.
+func (j *Janitor) sweepOrphans(ctx context.Context, cutoff time.Time) error {
+	resp, err := j.client.Customers().Query(ctx, types.CustomerFilter{})
+	if err != nil {
+		return e2eprobe.Errorf(map[string]string{}, "janitor sweepOrphans: query customers: %w", err)
+	}
+
+	listResp := resp.GetDtoListCustomersResponse()
+	if listResp == nil {
+		return nil
+	}
+	items := listResp.GetItems()
+
+	deleted := 0
+	for _, cust := range items {
+		// Must have e2eprobe_role = "ephemeral" metadata tag.
+		if cust.Metadata == nil || cust.Metadata["e2eprobe_role"] != "ephemeral" {
+			continue
+		}
+		// Must be older than cutoff.
+		if cust.CreatedAt == nil {
+			continue
+		}
+		createdAt, parseErr := parseRFC3339(*cust.CreatedAt)
+		if parseErr != nil {
+			continue
+		}
+		if createdAt.After(cutoff) {
+			continue // too fresh — leave it
+		}
+
+		custID := ""
+		if cust.ID != nil {
+			custID = *cust.ID
+		}
+		extID := ""
+		if cust.ExternalID != nil {
+			extID = *cust.ExternalID
+		}
+		if custID == "" {
+			continue
+		}
+
+		if _, delErr := j.client.Customers().Delete(ctx, custID); delErr != nil {
+			if isNotFound(delErr) {
+				continue // already gone — concurrent cleanup
+			}
+			return e2eprobe.Errorf(map[string]string{
+				"customer_id":          custID,
+				"external_customer_id": extID,
+			}, "janitor sweepOrphans: delete customer %s: %w", custID, delErr)
+		}
+		deleted++
+	}
+
+	if deleted > 0 {
+		slog.InfoContext(ctx, "janitor swept orphan ephemeral customers", "count", deleted)
+	}
+	return nil
+}
+
+// parseRFC3339 is a small wrapper so the callers stay readable.
+func parseRFC3339(s string) (time.Time, error) {
+	return time.Parse(time.RFC3339, s)
 }

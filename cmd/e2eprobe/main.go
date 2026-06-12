@@ -147,7 +147,7 @@ func main() {
 	}
 
 	if cfg.Checks["JANITOR"].Enabled {
-		jn := checks_pkg.NewJanitor(client, reg, 4*time.Hour, runID)
+		jn := checks_pkg.NewJanitor(client, reg, cfg.JanitorMaxAge, runID)
 		runner.Add(jn, e2eprobe.NewTickerScheduler(jn, cfg.Checks["JANITOR"].Interval))
 	}
 

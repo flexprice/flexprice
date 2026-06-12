@@ -38,6 +38,9 @@ func (f *fakeCustomerOps) Delete(_ context.Context, _ string) (*dtos.DeleteCusto
 	atomic.AddInt32(&f.createCalled, 1)
 	return &dtos.DeleteCustomerResponse{}, nil
 }
+func (f *fakeCustomerOps) Query(_ context.Context, _ types.CustomerFilter) (*dtos.QueryCustomerResponse, error) {
+	return &dtos.QueryCustomerResponse{}, nil
+}
 
 type fakePlanOps struct{ createCalled int32 }
 
