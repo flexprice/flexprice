@@ -67,6 +67,8 @@ func (c *TracingClient) Reader(ctx context.Context) *ent.Client {
 		actualTarget = "writer_via_tx"
 	} else if types.ShouldForceWriter(ctx) {
 		actualTarget = "writer_forced"
+	} else if types.IsWriterPinned(ctx) {
+		actualTarget = "writer_pinned"
 	}
 
 	if span := c.tracing.GetSpanFromContext(ctx); span != nil {

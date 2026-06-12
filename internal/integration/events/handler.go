@@ -146,7 +146,7 @@ func (h *handler) processIntegrationError(err error, event *types.WebhookEvent, 
 // processMessage unmarshals types.WebhookEvent (same envelope as customer webhooks).
 // It dispatches to event-specific processors; unknown events are ACKed and ignored.
 func (h *handler) processMessage(msg *message.Message) error {
-	ctx := msg.Context()
+	ctx := types.WithWriterPinning(msg.Context())
 	var event types.WebhookEvent
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
 		h.deps.Logger.Error(context.Background(), "integration_events: failed to unmarshal WebhookEvent, dropping message",

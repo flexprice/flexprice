@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 )
 
 // ContextKey is a type for the keys of values stored in the context
@@ -16,6 +17,7 @@ const (
 	CtxEnvironmentID ContextKey = "ctx_environment_id"
 	CtxDBTransaction ContextKey = "ctx_db_transaction"
 	CtxForceWriter   ContextKey = "ctx_force_writer" // Force DB operations to use writer connection
+	CtxWriterPin     ContextKey = "ctx_writer_pin"   // Mutable read-your-writes pin, installed per unit of work
 	CtxRoles         ContextKey = "ctx_roles"        // RBAC roles array for permission checks
 
 	// Default values
@@ -133,6 +135,45 @@ func WithForceWriter(ctx context.Context) context.Context {
 func ShouldForceWriter(ctx context.Context) bool {
 	if forceWriter, ok := ctx.Value(CtxForceWriter).(bool); ok {
 		return forceWriter
+	}
+	return false
+}
+
+// writerPin is a mutable flag shared by every context derived from the one it
+// was installed on. Unlike a plain context value, flipping it inside a nested
+// call is visible to all later reads in the same unit of work, which is what
+// makes automatic read-your-writes routing possible: the first write anywhere
+// in a request pins every subsequent read to the writer endpoint, so replica
+// lag can never make a just-written row invisible.
+type writerPin struct {
+	pinned atomic.Bool
+}
+
+// WithWriterPinning installs a writer pin on the context. Call this once at
+// the root of each unit of work (HTTP request, Kafka message, Temporal
+// activity, background job). If a pin is already installed, the context is
+// returned unchanged so nested scopes share the outer pin.
+func WithWriterPinning(ctx context.Context) context.Context {
+	if _, ok := ctx.Value(CtxWriterPin).(*writerPin); ok {
+		return ctx
+	}
+	return context.WithValue(ctx, CtxWriterPin, &writerPin{})
+}
+
+// PinWriter flips the writer pin for the current unit of work, routing all
+// subsequent reads on this context (and its descendants) to the writer.
+// No-op when no pin is installed.
+func PinWriter(ctx context.Context) {
+	if pin, ok := ctx.Value(CtxWriterPin).(*writerPin); ok {
+		pin.pinned.Store(true)
+	}
+}
+
+// IsWriterPinned reports whether a write has occurred in the current unit of
+// work, meaning reads must go to the writer for read-after-write consistency.
+func IsWriterPinned(ctx context.Context) bool {
+	if pin, ok := ctx.Value(CtxWriterPin).(*writerPin); ok {
+		return pin.pinned.Load()
 	}
 	return false
 }
