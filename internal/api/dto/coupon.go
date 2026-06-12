@@ -29,9 +29,8 @@ type CreateCouponRequest struct {
 
 // UpdateCouponRequest represents the request to update an existing coupon
 type UpdateCouponRequest struct {
-	Name       *string            `json:"name,omitempty"`
-	CouponCode *string            `json:"coupon_code,omitempty"`
-	Metadata   *map[string]string `json:"metadata,omitempty"`
+	Name     *string            `json:"name,omitempty"`
+	Metadata *map[string]string `json:"metadata,omitempty"`
 }
 
 // Validate validates the CreateCouponRequest

@@ -70,10 +70,6 @@ func (s *couponService) UpdateCoupon(ctx context.Context, id string, req dto.Upd
 		c.Name = *req.Name
 	}
 
-	if req.CouponCode != nil {
-		c.CouponCode = req.CouponCode
-	}
-
 	if req.Metadata != nil {
 		c.Metadata = req.Metadata
 	}
