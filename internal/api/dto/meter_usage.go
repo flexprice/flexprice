@@ -137,6 +137,7 @@ type MeterUsageDetailedAnalyticsRequest struct {
 	Expand             []string            `json:"expand,omitempty" example:"price"`
 	IncludeChildren    bool                `json:"include_children,omitempty" example:"false"` // folds child customers' usage into the single aggregated total
 	BillingAnchor      *time.Time          `json:"billing_anchor,omitempty"`
+	BreakdownBucket    bool                `json:"breakdown_bucket,omitempty"`
 }
 
 func (r *MeterUsageDetailedAnalyticsRequest) Validate() error {
@@ -160,6 +161,7 @@ func (r *MeterUsageDetailedAnalyticsRequest) ToParams(tenantID, environmentID st
 		Expand:             r.Expand,
 		IncludeChildren:    r.IncludeChildren,
 		BillingAnchor:      r.BillingAnchor,
+		BreakdownBucket:    r.BreakdownBucket,
 	}
 }
 
