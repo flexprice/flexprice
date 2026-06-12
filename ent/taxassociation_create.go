@@ -269,10 +269,6 @@ func (tac *TaxAssociationCreate) defaults() {
 		v := taxassociation.DefaultAutoApply
 		tac.mutation.SetAutoApply(v)
 	}
-	if _, ok := tac.mutation.StartDate(); !ok {
-		v := taxassociation.DefaultStartDate()
-		tac.mutation.SetStartDate(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -328,9 +324,6 @@ func (tac *TaxAssociationCreate) check() error {
 		if err := taxassociation.CurrencyValidator(v); err != nil {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "TaxAssociation.currency": %w`, err)}
 		}
-	}
-	if _, ok := tac.mutation.StartDate(); !ok {
-		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "TaxAssociation.start_date"`)}
 	}
 	return nil
 }
@@ -425,7 +418,7 @@ func (tac *TaxAssociationCreate) createSpec() (*TaxAssociation, *sqlgraph.Create
 	}
 	if value, ok := tac.mutation.StartDate(); ok {
 		_spec.SetField(taxassociation.FieldStartDate, field.TypeTime, value)
-		_node.StartDate = value
+		_node.StartDate = &value
 	}
 	if value, ok := tac.mutation.EndDate(); ok {
 		_spec.SetField(taxassociation.FieldEndDate, field.TypeTime, value)

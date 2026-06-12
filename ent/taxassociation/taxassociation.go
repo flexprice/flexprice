@@ -105,8 +105,6 @@ var (
 	DefaultAutoApply bool
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
-	// DefaultStartDate holds the default value on creation for the "start_date" field.
-	DefaultStartDate func() time.Time
 )
 
 // OrderOption defines the ordering options for the TaxAssociation queries.

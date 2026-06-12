@@ -47,7 +47,7 @@ type TaxAssociation struct {
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// When this tax association becomes effective
-	StartDate time.Time `json:"start_date,omitempty"`
+	StartDate *time.Time `json:"start_date,omitempty"`
 	// When this tax association stops being effective
 	EndDate      *time.Time `json:"end_date,omitempty"`
 	selectValues sql.SelectValues
@@ -179,7 +179,8 @@ func (ta *TaxAssociation) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field start_date", values[i])
 			} else if value.Valid {
-				ta.StartDate = value.Time
+				ta.StartDate = new(time.Time)
+				*ta.StartDate = value.Time
 			}
 		case taxassociation.FieldEndDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -266,8 +267,10 @@ func (ta *TaxAssociation) String() string {
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", ta.Metadata))
 	builder.WriteString(", ")
-	builder.WriteString("start_date=")
-	builder.WriteString(ta.StartDate.Format(time.ANSIC))
+	if v := ta.StartDate; v != nil {
+		builder.WriteString("start_date=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := ta.EndDate; v != nil {
 		builder.WriteString("end_date=")

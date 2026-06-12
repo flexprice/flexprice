@@ -2081,7 +2081,7 @@ var (
 		{Name: "auto_apply", Type: field.TypeBool, Default: true},
 		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "start_date", Type: field.TypeTime},
+		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 	}
 	// TaxAssociationsTable holds the schema information for the "tax_associations" table.

@@ -61733,7 +61733,7 @@ func (m *TaxAssociationMutation) StartDate() (r time.Time, exists bool) {
 // OldStartDate returns the old "start_date" field's value of the TaxAssociation entity.
 // If the TaxAssociation object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TaxAssociationMutation) OldStartDate(ctx context.Context) (v time.Time, err error) {
+func (m *TaxAssociationMutation) OldStartDate(ctx context.Context) (v *time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldStartDate is only allowed on UpdateOne operations")
 	}
@@ -61747,9 +61747,22 @@ func (m *TaxAssociationMutation) OldStartDate(ctx context.Context) (v time.Time,
 	return oldValue.StartDate, nil
 }
 
+// ClearStartDate clears the value of the "start_date" field.
+func (m *TaxAssociationMutation) ClearStartDate() {
+	m.start_date = nil
+	m.clearedFields[taxassociation.FieldStartDate] = struct{}{}
+}
+
+// StartDateCleared returns if the "start_date" field was cleared in this mutation.
+func (m *TaxAssociationMutation) StartDateCleared() bool {
+	_, ok := m.clearedFields[taxassociation.FieldStartDate]
+	return ok
+}
+
 // ResetStartDate resets all changes to the "start_date" field.
 func (m *TaxAssociationMutation) ResetStartDate() {
 	m.start_date = nil
+	delete(m.clearedFields, taxassociation.FieldStartDate)
 }
 
 // SetEndDate sets the "end_date" field.
@@ -62146,6 +62159,9 @@ func (m *TaxAssociationMutation) ClearedFields() []string {
 	if m.FieldCleared(taxassociation.FieldMetadata) {
 		fields = append(fields, taxassociation.FieldMetadata)
 	}
+	if m.FieldCleared(taxassociation.FieldStartDate) {
+		fields = append(fields, taxassociation.FieldStartDate)
+	}
 	if m.FieldCleared(taxassociation.FieldEndDate) {
 		fields = append(fields, taxassociation.FieldEndDate)
 	}
@@ -62177,6 +62193,9 @@ func (m *TaxAssociationMutation) ClearField(name string) error {
 		return nil
 	case taxassociation.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case taxassociation.FieldStartDate:
+		m.ClearStartDate()
 		return nil
 	case taxassociation.FieldEndDate:
 		m.ClearEndDate()

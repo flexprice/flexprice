@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"time"
-
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -89,8 +87,8 @@ func (TaxAssociation) Fields() []ent.Field {
 			}),
 
 		field.Time("start_date").
-			Immutable().
-			Default(time.Now).
+			Optional().
+			Nillable().
 			Comment("When this tax association becomes effective"),
 
 		field.Time("end_date").
@@ -115,6 +113,5 @@ func (TaxAssociation) Indexes() []ent.Index {
 		// Tax rate reverse lookup: find entities using specific tax rate
 		index.Fields("tenant_id", "environment_id", "tax_rate_id").
 			StorageKey(Idx_tax_rate_id_tenant_id_environment_id),
-
 	}
 }

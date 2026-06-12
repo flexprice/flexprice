@@ -944,6 +944,16 @@ func StartDateLTE(v time.Time) predicate.TaxAssociation {
 	return predicate.TaxAssociation(sql.FieldLTE(FieldStartDate, v))
 }
 
+// StartDateIsNil applies the IsNil predicate on the "start_date" field.
+func StartDateIsNil() predicate.TaxAssociation {
+	return predicate.TaxAssociation(sql.FieldIsNull(FieldStartDate))
+}
+
+// StartDateNotNil applies the NotNil predicate on the "start_date" field.
+func StartDateNotNil() predicate.TaxAssociation {
+	return predicate.TaxAssociation(sql.FieldNotNull(FieldStartDate))
+}
+
 // EndDateEQ applies the EQ predicate on the "end_date" field.
 func EndDateEQ(v time.Time) predicate.TaxAssociation {
 	return predicate.TaxAssociation(sql.FieldEQ(FieldEndDate, v))
