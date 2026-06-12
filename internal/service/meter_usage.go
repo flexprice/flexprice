@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -133,6 +135,11 @@ type lineItemWithMeter struct {
 	Item    *subscription.SubscriptionLineItem
 	MeterID string
 }
+
+// validBucketedUserGroupByKey matches safe property names (alphanumeric, underscores, dots).
+// Mirrors clickhouse.validMeterUsageGroupByPattern; redeclared here so the service
+// layer can validate without importing the repository package.
+var validBucketedUserGroupByKey = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
 // ---------------------------------------------------------------------------
 // Simple passthrough methods
@@ -320,7 +327,33 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		}
 	}
 
-	// 9. Split bucketed vs standard meters
+	// 9. Split bucketed vs standard meters.
+	//
+	// Both MAX-bucketed and SUM-bucketed meters stay on the bucketed path
+	// regardless of whether user req.GroupBy is set. The bucketed path threads
+	// user group_by through bucketedUserGroupBy and queryBucketedMeterUsage so
+	// per-group rows are returned, and step 11 fans them out into per-group
+	// LineItemMeterUsage entries. When a MAX-bucketed meter also has a
+	// meter-config GroupBy, the query builder stacks both: inner MAX is per
+	// (bucket × meter-key × user-keys), outer SUM collapses the meter-key
+	// dimension (mirrors feature_usage's getMaxBucketAnalytics).
+	hasExtraGroupBy := false
+	for _, g := range req.GroupBy {
+		if g != "" && g != "meter_id" {
+			hasExtraGroupBy = true
+			break
+		}
+	}
+
+	// Extract the user-supplied property keys (stripped of "properties." prefix)
+	// for the bucketed path. nil for billing callers. Strict validation: any
+	// non-properties / invalid-property entry → ErrValidation (mirrors
+	// feature_usage's policy; see validateBucketedUserGroupBy doc for rationale).
+	bucketedUserGroupBy, err := validateBucketedUserGroupBy(req.GroupBy)
+	if err != nil {
+		return nil, err
+	}
+
 	bucketedMeterIDs := make(map[string]bool)
 	for meterID, m := range result.MeterMap {
 		if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
@@ -368,13 +401,6 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			// If yes, split the batch: commitment line items query with meter_id only
 			// (clean aggregate for applyLineItemCommitment), non-commitment items query
 			// with the full group_by (per-group breakdown in the response).
-			hasExtraGroupBy := false
-			for _, g := range req.GroupBy {
-				if g != "" && g != "meter_id" {
-					hasExtraGroupBy = true
-					break
-				}
-			}
 
 			var commitmentLIs, nonCommitmentLIs []*lineItemWithMeter
 			if hasExtraGroupBy {
@@ -457,6 +483,17 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 			continue
 		}
 		items := meterToLineItems[meterID]
+
+		// User-supplied group_by applies to both MAX-bucketed and SUM-bucketed.
+		// For MAX-bucketed with meter-config GroupBy, the query builder stacks
+		// both keys (inner MAX per all-keys, outer SUM collapses meter-key);
+		// only the user keys appear in result GroupKey. For SUM-bucketed, the
+		// query simply groups by user keys (SUM is associative).
+		var userKeys []string
+		if (m.IsBucketedMaxMeter() || m.IsBucketedSumMeter()) && len(bucketedUserGroupBy) > 0 {
+			userKeys = bucketedUserGroupBy
+		}
+
 		for _, item := range items {
 			itemStart := item.GetPeriodStart(usageStartTime)
 			itemEnd := item.GetPeriodEnd(usageEndTime)
@@ -465,12 +502,20 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				ctx, m, externalCustomerIDs,
 				itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
 				req.PropertyFilters, req.Sources,
+				userKeys,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
 			}
 
 			if skipBucketedZeros && (bucketedResult == nil || len(bucketedResult.Results) == 0) {
+				continue
+			}
+
+			// Fan out per group when user group_by is in effect: each (item, group)
+			// becomes its own LineItemMeterUsage with per-group sub-result + Properties.
+			if len(userKeys) > 0 && bucketedResult != nil && len(bucketedResult.Results) > 0 {
+				appendBucketedGroupFanOut(result, m, item, itemStart, itemEnd, bucketedResult, userKeys)
 				continue
 			}
 
@@ -663,9 +708,146 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 	return nil
 }
 
+// appendBucketedGroupFanOut splits a bucketed query result into per-group
+// LineItemMeterUsage entries. Used only when analytics req.GroupBy is in effect
+// for a MAX-bucketed meter. Each distinct GroupKey becomes one entry carrying:
+//   - a per-group sub-result (Value = SUM of that group's bucket MAXes) so
+//     calculateBucketedMeterCost applies tier pricing on the right slice
+//   - a synthesized MeterUsageDetailedResult with Properties parsed from the
+//     concat-encoded GroupKey, so downstream analytics merge sees a uniform
+//     shape across standard, SUM-routed, and bucketed-with-group_by paths
+//   - per-bucket Points scoped to the group
+func appendBucketedGroupFanOut(
+	result *SubscriptionMeterUsage,
+	m *meter.Meter,
+	item *subscription.SubscriptionLineItem,
+	itemStart, itemEnd time.Time,
+	bucketedResult *events.AggregationResult,
+	userKeys []string,
+) {
+	type groupAgg struct {
+		rows  []events.UsageResult
+		total decimal.Decimal
+	}
+	byGroup := make(map[string]*groupAgg)
+	order := make([]string, 0)
+	for _, r := range bucketedResult.Results {
+		g, ok := byGroup[r.GroupKey]
+		if !ok {
+			g = &groupAgg{}
+			byGroup[r.GroupKey] = g
+			order = append(order, r.GroupKey)
+		}
+		g.rows = append(g.rows, r)
+		g.total = g.total.Add(r.Value)
+	}
+
+	for _, gk := range order {
+		g := byGroup[gk]
+
+		props := make(map[string]string, len(userKeys))
+		parts := strings.Split(gk, "\x1f")
+		for i, key := range userKeys {
+			if i < len(parts) {
+				props[key] = parts[i]
+			}
+		}
+
+		subResult := &events.AggregationResult{
+			Type:      bucketedResult.Type,
+			MeterID:   bucketedResult.MeterID,
+			EventName: bucketedResult.EventName,
+			Value:     g.total,
+			Results:   g.rows,
+		}
+
+		points := make([]events.MeterUsageDetailedPoint, 0, len(g.rows))
+		for _, r := range g.rows {
+			p := events.MeterUsageDetailedPoint{WindowStart: r.WindowSize}
+			if m.IsBucketedMaxMeter() {
+				p.MaxUsage = r.Value
+				p.TotalUsage = r.Value
+			} else {
+				p.TotalUsage = r.Value
+			}
+			points = append(points, p)
+		}
+
+		analyticsResult := &events.MeterUsageDetailedResult{
+			MeterID:    m.ID,
+			Properties: props,
+			TotalUsage: g.total,
+			Points:     points,
+		}
+
+		result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+			LineItem:        item,
+			MeterID:         m.ID,
+			Meter:           m,
+			Price:           result.PriceMap[item.PriceID],
+			PeriodStart:     itemStart,
+			PeriodEnd:       itemEnd,
+			Usage:           g.total,
+			Points:          points,
+			BucketedResult:  subResult,
+			AnalyticsResult: analyticsResult,
+		})
+	}
+}
+
+// validateBucketedUserGroupBy validates the analytics req.GroupBy for the
+// bucketed query path and returns the property keys (stripped of "properties.")
+// in caller order. Validation matches feature_usage's strict policy:
+//
+//   - "meter_id" and empty string are skipped (no-op).
+//   - "properties.<key>" with <key> matching validBucketedUserGroupByKey is
+//     accepted and added to the output.
+//   - Anything else (bare identifiers like "source"/"feature_id", or
+//     "properties.<key>" where <key> is empty or contains unsafe characters)
+//     is rejected with ErrValidation. Silent stripping would leave the caller
+//     thinking they got a per-group breakdown when they didn't, and routing
+//     to the standard analytics path would corrupt MAX-bucketed totals
+//     (MAX(qty over period) ≠ SUM(MAX per bucket)).
+//
+// The returned slice ordering is how response Properties keys are
+// reconstructed downstream when the bucketed result fans out per group.
+func validateBucketedUserGroupBy(groupBy []string) ([]string, error) {
+	const propPrefix = "properties."
+	out := make([]string, 0, len(groupBy))
+	for _, g := range groupBy {
+		if g == "" || g == "meter_id" {
+			continue
+		}
+		if !strings.HasPrefix(g, propPrefix) {
+			return nil, ierr.NewError("unsupported group_by value for bucketed meter").
+				WithHint("Valid group_by values are 'meter_id' or 'properties.<field_name>'").
+				WithReportableDetails(map[string]interface{}{
+					"group_by": g,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		stripped := strings.TrimPrefix(g, propPrefix)
+		if !validBucketedUserGroupByKey.MatchString(stripped) {
+			return nil, ierr.NewError("invalid group_by property name").
+				WithHint("Property names must contain only letters, digits, underscores, or dots").
+				WithReportableDetails(map[string]interface{}{
+					"group_by": g,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		out = append(out, stripped)
+	}
+	return out, nil
+}
+
 // queryBucketedMeterUsage queries the meter_usage table for a single bucketed meter,
 // returning a per-bucket AggregationResult. propertyFilters and sources are forwarded
 // from analytics callers; pass nil for billing callers that don't use them.
+// userGroupByKeys (already stripped of "properties." prefix) is forwarded only by
+// the analytics path on MAX-bucketed meters. When the meter also has a meter-config
+// GroupBy, both flow to the query builder and the inner CTE groups by all keys; the
+// outer CTE collapses the meter-key dimension via SUM so result rows are keyed by
+// the user keys (mirrors feature_usage's getMaxBucketAnalytics).
 func (s *meterUsageService) queryBucketedMeterUsage(
 	ctx context.Context,
 	m *meter.Meter,
@@ -675,12 +857,14 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	useFinal bool,
 	propertyFilters map[string][]string,
 	sources []string,
+	userGroupByKeys []string,
 ) (*events.AggregationResult, error) {
 	aggType := m.Aggregation.Type
-	groupBy := m.Aggregation.GroupBy
+	meterConfigKey := m.Aggregation.GroupBy
+	userKeys := userGroupByKeys
 	if m.IsBucketedSumMeter() {
 		aggType = types.AggregationSum
-		groupBy = ""
+		meterConfigKey = "" // SUM-bucketed can't have meter-config GroupBy (validated)
 	}
 	return s.repo.GetUsageForBucketedMeters(ctx, &events.MeterUsageQueryParams{
 		TenantID:            types.GetTenantID(ctx),
@@ -692,7 +876,8 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 		AggregationType:     aggType,
 		WindowSize:          m.Aggregation.BucketSize,
 		BillingAnchor:       billingAnchor,
-		GroupByProperty:     groupBy,
+		GroupByProperty:     meterConfigKey, // legacy single-key: meter-config (inner-only when stacked)
+		GroupByProperties:   userKeys,       // analytics keys: outer keys when set
 		UseFinal:            useFinal,
 		PropertyFilters:     propertyFilters,
 		Sources:             sources,
@@ -800,6 +985,13 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			Sources:         params.Sources,
 		})
 		if err != nil {
+			// Validation errors are caller-fixable (e.g. conflicting group_by on a
+			// bucketed meter) and apply identically to every subscription in the
+			// loop — propagate so the user sees them. Other errors are likely
+			// transient or per-sub; log and skip to keep partial results usable.
+			if ierr.IsValidation(err) {
+				return nil, err
+			}
 			s.logger.Info(ctx, "failed to get subscription meter usage, skipping",
 				"error", err,
 				"subscription_id", sub.ID,

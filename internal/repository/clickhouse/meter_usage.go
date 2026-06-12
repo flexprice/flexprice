@@ -309,7 +309,7 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 	result.Type = params.AggregationType
 	result.MeterID = params.MeterID
 
-	hasGroupBy := params.GroupByProperty != "" && validMeterUsageGroupByPattern.MatchString(params.GroupByProperty)
+	hasGroupBy := len(bucketedInnerGroupKeys(params)) > 0
 
 	for rows.Next() {
 		var total decimal.Decimal

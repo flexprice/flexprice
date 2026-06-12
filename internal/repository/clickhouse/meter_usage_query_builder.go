@@ -12,6 +12,78 @@ import (
 // validMeterUsageGroupByPattern matches safe property names (alphanumeric, underscores, dots).
 var validMeterUsageGroupByPattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
 
+// bucketedInnerGroupKeys returns the de-duplicated key list used by the inner
+// CTE's GROUP BY. It unions the meter-config key (GroupByProperty) and the
+// analytics keys (GroupByProperties) so the inner MAX is taken per
+// (bucket × all keys).
+func bucketedInnerGroupKeys(params *events.MeterUsageQueryParams) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, 1+len(params.GroupByProperties))
+	if params.GroupByProperty != "" && validMeterUsageGroupByPattern.MatchString(params.GroupByProperty) {
+		seen[params.GroupByProperty] = struct{}{}
+		out = append(out, params.GroupByProperty)
+	}
+	for _, k := range params.GroupByProperties {
+		if k == "" || !validMeterUsageGroupByPattern.MatchString(k) {
+			continue
+		}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	return out
+}
+
+// bucketedOuterGroupKeys returns the de-duplicated key list that appears in the
+// outer CTE GROUP BY and in the result GroupKey. User-supplied keys take
+// precedence; the meter-config single key is the fallback (billing/event paths).
+// Dedup mirrors bucketedInnerGroupKeys so the stacked-mode check
+// (len(innerKeys) == len(outerKeys)) and bucketedGroupByExpr both see a clean
+// key list — duplicate entries in GroupByProperties would otherwise inflate the
+// outer length and trigger the wrong CTE form.
+func bucketedOuterGroupKeys(params *events.MeterUsageQueryParams) []string {
+	if len(params.GroupByProperties) > 0 {
+		seen := make(map[string]struct{}, len(params.GroupByProperties))
+		out := make([]string, 0, len(params.GroupByProperties))
+		for _, k := range params.GroupByProperties {
+			if k == "" || !validMeterUsageGroupByPattern.MatchString(k) {
+				continue
+			}
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			out = append(out, k)
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	if params.GroupByProperty != "" && validMeterUsageGroupByPattern.MatchString(params.GroupByProperty) {
+		return []string{params.GroupByProperty}
+	}
+	return nil
+}
+
+// bucketedGroupByExpr returns the SQL expression that evaluates to the group key
+// for a row: a single JSONExtractString for one key, or a concat with \x1f
+// (ASCII Unit Separator) delimiters for multiple keys.
+func bucketedGroupByExpr(keys []string) string {
+	if len(keys) == 1 {
+		return fmt.Sprintf("JSONExtractString(properties, '%s')", keys[0])
+	}
+	parts := make([]string, 0, 2*len(keys)-1)
+	for i, k := range keys {
+		if i > 0 {
+			parts = append(parts, "'\\x1f'")
+		}
+		parts = append(parts, fmt.Sprintf("JSONExtractString(properties, '%s')", k))
+	}
+	return fmt.Sprintf("concat(%s)", strings.Join(parts, ", "))
+}
+
 // MeterUsageQueryBuilder constructs SQL queries for the meter_usage table.
 // It encapsulates WHERE clause construction, FINAL handling, and window grouping
 // so that aggregators only need to specify their aggregation expression.
@@ -187,6 +259,20 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 	where, args := qb.BuildWhereClause(params)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
+	// Every bucketed query gets the 90GB per-query memory cap.
+	// without it, a worst-case bucketed scan could exhaust ClickHouse server
+	// memory. Splice into the existing SETTINGS clause when present (from
+	// useFinal), otherwise emit a fresh SETTINGS clause.
+	const maxMemSetting = "max_memory_usage = 96636764160"
+	switch {
+	case settings == "":
+		settings = "SETTINGS " + maxMemSetting
+	case strings.HasPrefix(settings, "SETTINGS"):
+		settings = settings + ", " + maxMemSetting
+	default:
+		settings = settings + " SETTINGS " + maxMemSetting
+	}
+
 	// Determine aggregation function based on type (default MAX for backward compat)
 	aggFunc := "MAX"
 	bucketTableName := "bucket_maxes"
@@ -202,30 +288,80 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		tableRef = "meter_usage " + finalClause
 	}
 
-	// With GroupBy: 3-level aggregation
-	if params.GroupByProperty != "" && validMeterUsageGroupByPattern.MatchString(params.GroupByProperty) {
-		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", params.GroupByProperty)
+	// With GroupBy: aggregation per group per bucket.
+	// Two shapes depending on whether keys come from one source or two:
+	//
+	//   Single-source (innerKeys == outerKeys): one set of keys (either
+	//   meter-config GroupByProperty or analytics GroupByProperties). Existing
+	//   2-CTE form: per_group → outer SELECT.
+	//
+	//   Stacked (innerKeys ⊃ outerKeys): both meter-config and analytics keys
+	//   present. Inner CTE groups by all keys (so MAX is per finest tuple);
+	//   middle CTE collapses the meter-key dimension via SUM per (bucket,
+	//   outer-key); outer SELECT exposes per-(bucket, outer-key) rows.
+	//   Mirrors feature_usage's getMaxBucketAnalytics semantic.
+	//
+	// Result rows carry outer-key values concatenated by \x1f in slice order;
+	// downstream code splits on \x1f to recover individual values.
+	innerKeys := bucketedInnerGroupKeys(params)
+	outerKeys := bucketedOuterGroupKeys(params)
+	if len(innerKeys) > 0 {
+		if len(innerKeys) == len(outerKeys) {
+			// Single-source — existing 2-CTE form.
+			groupByExpr := bucketedGroupByExpr(outerKeys)
+			query := fmt.Sprintf(`
+				WITH per_group AS (
+					SELECT
+						%s as bucket_start,
+						%s as group_key,
+						%s(qty_total) as group_value
+					FROM %s
+					WHERE %s
+					GROUP BY bucket_start, group_key
+				)
+				SELECT
+					(SELECT sum(group_value) FROM per_group) as total,
+					bucket_start as timestamp,
+					group_value as value,
+					group_key
+				FROM per_group
+				ORDER BY bucket_start, group_key
+				%s
+			`, bucketWindow, groupByExpr, aggFunc, tableRef, where, settings)
+			return query, args
+		}
 
+		// Stacked — 3-CTE form.
+		innerExpr := bucketedGroupByExpr(innerKeys)
+		outerExpr := bucketedGroupByExpr(outerKeys)
 		query := fmt.Sprintf(`
-			WITH per_group AS (
+			WITH per_inner AS (
 				SELECT
 					%s as bucket_start,
-					%s as group_key,
-					%s(qty_total) as group_value
+					%s as inner_key,
+					%s as outer_key,
+					%s(qty_total) as inner_value
 				FROM %s
 				WHERE %s
-				GROUP BY bucket_start, group_key
+				GROUP BY bucket_start, inner_key, outer_key
+			),
+			per_outer AS (
+				SELECT
+					bucket_start,
+					outer_key,
+					sum(inner_value) as group_value
+				FROM per_inner
+				GROUP BY bucket_start, outer_key
 			)
 			SELECT
-				(SELECT sum(group_value) FROM per_group) as total,
+				(SELECT sum(group_value) FROM per_outer) as total,
 				bucket_start as timestamp,
 				group_value as value,
-				group_key
-			FROM per_group
-			ORDER BY bucket_start, group_key
+				outer_key as group_key
+			FROM per_outer
+			ORDER BY bucket_start, outer_key
 			%s
-		`, bucketWindow, groupByExpr, aggFunc, tableRef, where, settings)
-
+		`, bucketWindow, innerExpr, outerExpr, aggFunc, tableRef, where, settings)
 		return query, args
 	}
 
