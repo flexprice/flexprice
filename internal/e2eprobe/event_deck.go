@@ -60,10 +60,18 @@ func (d *EventDeck) Next() EventDraw {
 		name = d.opts.EventNames[int(n)%len(d.opts.EventNames)]
 	}
 
-	cust := d.opts.Customers[int(n)%len(d.opts.Customers)]
-	source := deckSources[int(n)%len(deckSources)]
-	region := deckRegions[int(n)%len(deckRegions)]
-	amount := deckAmounts[int(n)%len(deckAmounts)]
+	// Customer, source, region, and amount are sampled from the PRNG instead
+	// of using `n%len(...)`. Round-robin via modular indexing creates parity
+	// correlations: with 10 customers and 4 sources, gcd(10,4)=2 means odd-
+	// indexed customers can never receive even-indexed sources (and vice
+	// versa). That permanently zeroed out filtered meters like sum_filtered
+	// (source=api) for half the customer pool, defeating the point of the
+	// filter probe. The PRNG is seeded so draws stay deterministic across
+	// runs given the same seed.
+	cust := d.opts.Customers[d.rnd.Intn(len(d.opts.Customers))]
+	source := deckSources[d.rnd.Intn(len(deckSources))]
+	region := deckRegions[d.rnd.Intn(len(deckRegions))]
+	amount := deckAmounts[d.rnd.Intn(len(deckAmounts))]
 	user := fmt.Sprintf("e2eprobe_user_%d", d.rnd.Intn(deckUserPool))
 	durMs := strconv.Itoa(1 + d.rnd.Intn(500))
 

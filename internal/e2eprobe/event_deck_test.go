@@ -74,6 +74,36 @@ func TestEventDeck_SometimesAddsRandomExtras(t *testing.T) {
 	}
 }
 
+// TestEventDeck_AllCustomerSourceCombinationsReachable guards against the
+// modular-correlation bug where customer and source were both indexed by
+// `n % len(...)`. With 10 customers and 4 sources, gcd(10,4)=2 meant odd-
+// indexed customers could never receive even-indexed sources (and vice
+// versa). That permanently zeroed out source-filtered meters like
+// e2eprobe_sum_filtered for half the customer pool.
+func TestEventDeck_AllCustomerSourceCombinationsReachable(t *testing.T) {
+	customers := []string{"c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9"}
+	d := NewEventDeck(EventDeckOpts{
+		Customers:  customers,
+		EventNames: []string{"e1"},
+		Seed:       12345,
+	})
+	seen := map[string]map[string]bool{}
+	for _, c := range customers {
+		seen[c] = map[string]bool{}
+	}
+	for i := 0; i < 5000; i++ {
+		ev := d.Next()
+		seen[ev.ExternalCustomerID][ev.Source] = true
+	}
+	for _, c := range customers {
+		for _, s := range []string{"api", "web", "mobile", "batch"} {
+			if !seen[c][s] {
+				t.Errorf("(customer=%s, source=%s) never reached in 5000 draws — modular-correlation regression", c, s)
+			}
+		}
+	}
+}
+
 func TestEventDeck_EmitsOrphanWhenConfigured(t *testing.T) {
 	d := NewEventDeck(EventDeckOpts{
 		Customers:        []string{"c0"},
