@@ -21,12 +21,15 @@ field.String("coupon_code").
     Comment("Human-readable coupon code (e.g. SUMMER20). Unique per tenant+environment."),
 ```
 
-Add a unique index:
+Add a partial unique index (same pattern as `customer.external_id`):
 ```go
-index.Fields("tenant_id", "environment_id", "coupon_code").Unique(),
+index.Fields("tenant_id", "environment_id", "coupon_code").
+    Unique().
+    Annotations(entsql.IndexWhere("coupon_code IS NOT NULL AND coupon_code != '' AND status = 'published'")).
+    StorageKey("idx_coupon_tenant_environment_coupon_code_unique"),
 ```
 
-Stored **lowercase** (normalised on write). Looked up case-insensitively via `LOWER(coupon_code) = LOWER($1)` or by always lowercasing before storage.
+Uniqueness is only enforced for published coupons — draft/archived coupons may share a code. Stored **lowercase** (normalised on write); looked up case-insensitively by normalising the input to lowercase before the query.
 
 ### Domain model (`internal/domain/coupon/model.go`)
 Add `CouponCode *string` field.
@@ -105,8 +108,9 @@ Old modify path stays unchanged for backward compatibility.
 ## Section 5 — Testing
 
 ### Uniqueness tests
-- Create two coupons with same `coupon_code` in same `tenant_id + environment_id` → conflict/duplicate error
-- Same code in different `environment_id` → succeeds (unique index is scoped)
+- Two **published** coupons with same `coupon_code` in same `tenant_id + environment_id` → conflict error
+- Two **draft** coupons with same `coupon_code` in same tenant+env → succeeds (partial index only covers published)
+- Same code in different `environment_id` → succeeds (index is scoped to tenant+env)
 - `coupon_code` stored and matched case-insensitively (`"SUMMER20"` == `"summer20"`)
 
 ### Resolution tests (unit, service layer)
