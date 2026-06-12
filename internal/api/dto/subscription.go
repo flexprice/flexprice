@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -554,7 +555,7 @@ type CancelSubscriptionRequest struct {
 	CancellationType types.CancellationType `json:"cancellation_type" validate:"required"`
 
 	// CancelImmediatelyInvoicePolicy controls whether to generate a final invoice on immediate cancellation. Defaults to skip.
-	CancelImmediatelyInvoicePolicy types.CancelImmediatelyInvoicePolicy `json:"cancel_immediately_inovice_policy,omitempty"`
+	CancelImmediatelyInvoicePolicy types.CancelImmediatelyInvoicePolicy `json:"cancel_immediately_invoice_policy,omitempty"`
 
 	// Reason for cancellation (for audit and business intelligence)
 	Reason string `json:"reason,omitempty"`
@@ -570,6 +571,25 @@ type CancelSubscriptionRequest struct {
 
 	// SkipProrationWalletCredit skips TopUpWalletForProratedCharge when the same proration is settled on the new subscription's opening invoice (immediate plan change).
 	SkipProrationWalletCredit bool `json:"-"`
+}
+
+// UnmarshalJSON accepts the legacy misspelled key "cancel_immediately_inovice_policy"
+// alongside the corrected "cancel_immediately_invoice_policy"; existing clients still send the typo.
+func (r *CancelSubscriptionRequest) UnmarshalJSON(data []byte) error {
+	type alias CancelSubscriptionRequest
+	aux := struct {
+		*alias
+		LegacyCancelImmediatelyInvoicePolicy types.CancelImmediatelyInvoicePolicy `json:"cancel_immediately_inovice_policy,omitempty"`
+	}{alias: (*alias)(r)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	if r.CancelImmediatelyInvoicePolicy == "" {
+		r.CancelImmediatelyInvoicePolicy = aux.LegacyCancelImmediatelyInvoicePolicy
+	}
+	return nil
 }
 
 // CancelSubscriptionResponse represents the enhanced cancellation response
