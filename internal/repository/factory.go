@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -117,6 +118,10 @@ func NewSubscriptionPhaseRepository(p RepositoryParams) subscription.Subscriptio
 
 func NewSubscriptionScheduleRepository(p RepositoryParams) subscription.SubscriptionScheduleRepository {
 	return entRepo.NewSubscriptionScheduleRepository(p.EntClient, p.Logger)
+}
+
+func NewCheckoutRepository(p RepositoryParams) checkout.Repository {
+	return entRepo.NewCheckoutRepository(p.EntClient, p.Logger)
 }
 
 func NewWalletRepository(p RepositoryParams) wallet.Repository {

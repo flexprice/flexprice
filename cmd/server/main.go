@@ -175,6 +175,7 @@ func main() {
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSubscriptionPhaseRepository,
 			repository.NewSubscriptionScheduleRepository,
+			repository.NewCheckoutRepository,
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
 			repository.NewSystemEventRepository,
