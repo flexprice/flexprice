@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -301,19 +302,39 @@ steps:
   - id: d
     call: Customers.UpdateCustomer
     with: { name: x }
+  - name: capture-without-id
+    call: Customers.GetCustomer
+    with: cust_1
+    capture: { customer_id: id }
+  - id: f
+    call: Customers.GetCustomer
+    with: cust_1
+    until: [{ path: name, equals: x }]
+    timeout: 5x
 `
 	j := loadJourneyFromString(t, bad)
 	errs := ValidateJourney(j, exec.Dispatcher)
-	if len(errs) < 4 {
-		t.Fatalf("expected >= 4 validation errors, got %d: %v", len(errs), errs)
+	if len(errs) < 6 {
+		t.Fatalf("expected >= 6 validation errors, got %d: %v", len(errs), errs)
 	}
 	all := ""
 	for _, e := range errs {
 		all += e.Error() + "\n"
 	}
-	for _, want := range []string{"no method", "unknown field", ".steps.zzz", "takes 3 argument"} {
+	for _, want := range []string{"no method", "unknown field", ".steps.zzz", "takes 3 argument", "'capture' requires an 'id'", "not a positive Go duration"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("validation errors should mention %q:\n%s", want, all)
 		}
+	}
+}
+
+func TestExpectErrorStatusUnavailableFails(t *testing.T) {
+	rc := NewRenderCtx(nil, "test")
+	ee := &ErrorExpectation{Status: 409}
+	if err := ee.MatchError(fmt.Errorf("connection refused"), 0, rc); err == nil {
+		t.Fatal("expect_error.status must fail when no status can be extracted")
+	}
+	if err := ee.MatchError(fmt.Errorf("conflict"), 409, rc); err != nil {
+		t.Fatalf("matching status should pass: %v", err)
 	}
 }

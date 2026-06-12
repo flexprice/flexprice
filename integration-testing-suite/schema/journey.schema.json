@@ -87,6 +87,13 @@
       "oneOf": [
         { "required": ["call"] },
         { "required": ["http"] }
+      ],
+      "allOf": [
+        { "not": { "required": ["with", "args"] } },
+        {
+          "if": { "required": ["expect_error"] },
+          "then": { "not": { "anyOf": [{ "required": ["expect"] }, { "required": ["until"] }] } }
+        }
       ]
     },
     "http": {
@@ -106,6 +113,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["path"],
+      "oneOf": [
+        { "required": ["equals"] }, { "required": ["not_equals"] }, { "required": ["exists"] },
+        { "required": ["contains"] }, { "required": ["not_empty"] }, { "required": ["matches"] },
+        { "required": ["gt"] }, { "required": ["gte"] }, { "required": ["lt"] }, { "required": ["lte"] },
+        { "required": ["len_eq"] }, { "required": ["len_gte"] }, { "required": ["approx"] },
+        { "required": ["any_eq"] }, { "required": ["any_gt"] }
+      ],
       "properties": {
         "path": { "type": "string", "description": "Dotted path; * is an array wildcard (items.*.id)." },
         "equals": {},
@@ -124,7 +138,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["value", "epsilon"],
-          "properties": { "value": {}, "epsilon": { "type": "number" } }
+          "properties": { "value": {}, "epsilon": { "type": "number", "minimum": 0 } }
         },
         "any_eq": {},
         "any_gt": {}

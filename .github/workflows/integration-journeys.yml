@@ -4,7 +4,7 @@
 #
 # Jobs:
 #   validate — static checks + engine unit tests + coverage summary.
-#              Runs on every PR touching the suite. No secrets needed.
+#              Runs on PRs into develop and main. No secrets needed.
 #   run      — executes sanity-tagged journeys against staging.
 #              Runs on PRs into main (develop→main promotions: deploy.yml
 #              keeps staging deployed from develop, so the release PR is
@@ -14,7 +14,7 @@ name: integration-journeys
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     - cron: "30 2 * * *" # nightly drift detection against staging
   workflow_dispatch:
@@ -39,6 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v5
         with:
@@ -68,6 +70,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v5
         with:
@@ -91,10 +95,12 @@ jobs:
         working-directory: integration-testing-suite/runner
         env:
           FLEXPRICE_TARGETS: ${{ secrets.INTEGRATION_TARGETS_JSON }}
+          JOURNEY_TAGS: ${{ github.event.inputs.tags || 'sanity' }}
+          JOURNEY_PARALLEL: ${{ github.event.inputs.parallel || '4' }}
         run: |
           go run . -dir ../journeys \
-            -tags "${{ github.event.inputs.tags || 'sanity' }}" \
-            -parallel "${{ github.event.inputs.parallel || '4' }}" \
+            -tags "$JOURNEY_TAGS" \
+            -parallel "$JOURNEY_PARALLEL" \
             -report-json report.json -junit junit.xml
 
       - name: Upload reports

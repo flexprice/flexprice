@@ -328,6 +328,10 @@ steps:
     args:
       - "{{ .steps.subscription.subscription_id }}"
       - cancellation_type: immediate
+        # NOT a typo in this journey: the API/SDK field itself is misspelled
+        # ("inovice") — see CancelSubscriptionRequest in the Go SDK and
+        # internal/api/dto/subscription.go. journeys-validate enforces the
+        # SDK's actual field names, so this must match until fixed upstream.
         cancel_immediately_inovice_policy: generate_invoice
         reason: Integration test cancellation
 

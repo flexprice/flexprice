@@ -201,8 +201,13 @@ func (ee *ErrorExpectation) MatchError(err error, status int, rc *RenderCtx) err
 			return fmt.Errorf("error %q does not contain %q", truncateStr(err.Error(), 200), needle)
 		}
 	}
-	if ee.Status != 0 && status != 0 && status != ee.Status {
-		return fmt.Errorf("expected error status %d, got %d (error: %s)", ee.Status, status, truncateStr(err.Error(), 200))
+	if ee.Status != 0 {
+		if status == 0 {
+			return fmt.Errorf("expected error status %d, but no status could be extracted from the error (error: %s)", ee.Status, truncateStr(err.Error(), 200))
+		}
+		if status != ee.Status {
+			return fmt.Errorf("expected error status %d, got %d (error: %s)", ee.Status, status, truncateStr(err.Error(), 200))
+		}
 	}
 	return nil
 }

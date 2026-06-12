@@ -103,17 +103,22 @@ func main() {
 			strings.Repeat("█", 62), ti+1, len(targets), target.label(), target.host(), target.maskedKey(),
 			strings.Repeat("█", 62))
 
-		reports = append(reports, runTarget(target, selected, dispatcher, *parallel, *stepTimeout, *jTimeout))
+		reports = append(reports, runTarget(target, selected, *parallel, *stepTimeout, *jTimeout))
 	}
 
+	// A requested report artifact that cannot be written is a CI contract
+	// failure — surface both errors, then exit non-zero.
+	reportFailed := false
 	if *reportJSON != "" {
 		if err := WriteJSONReport(*reportJSON, reports); err != nil {
-			fmt.Fprintf(os.Stderr, "write JSON report: %v\n", err)
+			fmt.Fprintf(os.Stderr, "error: write JSON report: %v\n", err)
+			reportFailed = true
 		}
 	}
 	if *junitPath != "" {
 		if err := WriteJUnitReport(*junitPath, reports); err != nil {
-			fmt.Fprintf(os.Stderr, "write JUnit report: %v\n", err)
+			fmt.Fprintf(os.Stderr, "error: write JUnit report: %v\n", err)
+			reportFailed = true
 		}
 	}
 
@@ -125,10 +130,13 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	if reportFailed {
+		os.Exit(1)
+	}
 }
 
 // runTarget executes the selected journeys (in parallel) against one target.
-func runTarget(target Target, journeys []*Journey, dispatcher *Dispatcher, parallelism int, stepTimeout, journeyTimeout time.Duration) *TargetReport {
+func runTarget(target Target, journeys []*Journey, parallelism int, stepTimeout, journeyTimeout time.Duration) *TargetReport {
 	serverURL := target.serverURL()
 	client := flexprice.New(
 		flexprice.WithServerURL(serverURL),
@@ -136,7 +144,6 @@ func runTarget(target Target, journeys []*Journey, dispatcher *Dispatcher, paral
 	)
 	// Each target needs its own dispatcher bound to its authenticated client.
 	targetDispatcher := NewDispatcher(client)
-	_ = dispatcher
 
 	exec := &Executor{
 		Dispatcher:  targetDispatcher,

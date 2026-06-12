@@ -101,6 +101,10 @@ func parseTargets(data []byte, source string) ([]Target, error) {
 		return nil, fmt.Errorf("%s contains no targets", source)
 	}
 	for i, t := range targets {
+		t.Name = strings.TrimSpace(t.Name)
+		t.APIHost = strings.TrimSpace(t.APIHost)
+		t.APIKey = strings.TrimSpace(t.APIKey)
+		targets[i] = t
 		if t.APIKey == "" {
 			return nil, fmt.Errorf("%s: target #%d (%s) is missing api_key", source, i+1, t.label())
 		}

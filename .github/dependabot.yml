@@ -1,7 +1,10 @@
-# Keeps the integration journey runner pinned to the latest published Go SDK.
-# Each weekly bump PR triggers the integration-journeys validate job, whose
-# coverage summary lists any new SDK operations that have no journey yet —
-# the signal to add steps for them (see integration-testing-suite/CLAUDE.md).
+# Keeps the integration journey runner's dependencies fresh — most
+# importantly the published Go SDK: each weekly bump PR triggers the
+# integration-journeys validate job, whose coverage summary lists any new SDK
+# operations that have no journey yet — the signal to add steps for them
+# (see integration-testing-suite/CLAUDE.md). Other deps (yaml, testify) are
+# included so security updates flow too; Dependabot forbids a second entry
+# for the same ecosystem+directory, so one unrestricted entry covers both.
 version: 2
 updates:
   - package-ecosystem: gomod
@@ -11,5 +14,3 @@ updates:
     labels: [integration-suite]
     commit-message:
       prefix: "chore(integration-suite)"
-    allow:
-      - dependency-name: github.com/flexprice/go-sdk/v2

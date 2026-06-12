@@ -9,7 +9,7 @@ Each journey doubles as a **worked integration example** — if you are a
 customer wondering "what calls do I make to run usage-based billing end to
 end?", read [journeys/billing-lifecycle.yaml](journeys/billing-lifecycle.yaml).
 
-```
+```text
 integration-testing-suite/
 ├── journeys/        # the tests: one YAML file per customer workflow
 ├── runner/          # Go engine that executes journeys via the Go SDK
@@ -130,9 +130,9 @@ Full schema reference: [CLAUDE.md](CLAUDE.md) ·
 
 `.github/workflows/integration-journeys.yml`:
 
-- **Pull requests touching this suite** → build + unit tests + static
+- **Pull requests into `develop` or `main`** → build + unit tests + static
   validation + coverage summary (no secrets needed).
-- **Pull requests into `main`** (develop → main promotions) → runs
+- **Pull requests into `main`** (develop → main promotions) → additionally runs
   `sanity`-tagged journeys against staging, which `deploy.yml` keeps deployed
   from develop — so release PRs are verified against the exact code being
   promoted. Requires the `INTEGRATION_TARGETS_JSON` secret

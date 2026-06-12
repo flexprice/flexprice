@@ -294,6 +294,17 @@ func ValidateJourney(j *Journey, dispatcher *Dispatcher) []error {
 		if s.Repeat < 0 {
 			addf("%s: 'repeat' must be >= 0", label)
 		}
+		if len(s.Capture) > 0 && s.ID == "" {
+			addf("%s: 'capture' requires an 'id' — captured values are only reachable via .steps.<id>.<name>", label)
+		}
+		for _, d := range []struct{ field, val string }{{"timeout", s.Timeout}, {"interval", s.Interval}} {
+			if d.val == "" {
+				continue
+			}
+			if parsed, err := time.ParseDuration(d.val); err != nil || parsed <= 0 {
+				addf("%s: %s %q is not a positive Go duration (e.g. 30s, 2m)", label, d.field, d.val)
+			}
+		}
 
 		// Resolve the SDK call and check arg shapes.
 		if hasCall {
@@ -354,12 +365,8 @@ func ValidateJourney(j *Journey, dispatcher *Dispatcher) []error {
 			declared[s.ID] = true
 		}
 	}
-	// For teardown reference checks, all step ids are in scope.
-	for _, s := range j.Steps {
-		if s.ID != "" {
-			declared[s.ID] = true
-		}
-	}
+	// All step ids are in `declared` now, so teardown steps may reference any
+	// of them (and additionally skip the ordering check via the teardown flag).
 	for _, s := range j.Teardown {
 		validateStep(s, "teardown", true)
 	}
