@@ -185,7 +185,7 @@ func (h *handler) absorbDeliveryError(ctx context.Context, transport string, err
 // processMessage processes a single webhook message from the system_events topic:
 // 1) unmarshal and verify, 2) call deliverSvix/deliverNative to send to Svix or native HTTP.
 func (h *handler) processMessage(msg *message.Message) error {
-	ctx := msg.Context()
+	ctx := types.WithWriterPinning(msg.Context())
 
 	h.logger.Debug(context.Background(), "context",
 		"tenant_id", types.GetTenantID(ctx),
