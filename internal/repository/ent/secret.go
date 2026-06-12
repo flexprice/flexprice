@@ -63,6 +63,7 @@ func (r *secretRepository) Create(ctx context.Context, s *domainSecret.Secret) e
 		SetEnvironmentID(s.EnvironmentID).
 		SetRoles(s.Roles).
 		SetUserType(s.UserType).
+		SetUserID(s.UserID).
 		SetStatus(string(s.Status)).
 		SetCreatedAt(s.CreatedAt).
 		SetUpdatedAt(s.UpdatedAt).
@@ -378,6 +379,19 @@ func (o SecretQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 	// Apply key filter if specified
 	if f.Provider != nil {
 		query = query.Where(secret.Provider(string(*f.Provider)))
+	}
+
+	// Apply user ID filter if specified
+	if f.UserID != nil {
+		query = query.Where(secret.UserID(*f.UserID))
+	}
+
+	if f.NotExpiredAt != nil {
+		t := *f.NotExpiredAt
+		query = query.Where(secret.Or(
+			secret.ExpiresAtIsNil(),
+			secret.ExpiresAtGT(t),
+		))
 	}
 
 	// Apply time range filters if specified

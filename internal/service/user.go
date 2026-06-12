@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	authProvider "github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/config"
 	domainAuth "github.com/flexprice/flexprice/internal/domain/auth"
+	domainSecret "github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -30,6 +32,7 @@ type userService struct {
 	userRepo        user.Repository
 	tenantRepo      tenant.Repository
 	authRepo        domainAuth.Repository
+	secretRepo      domainSecret.Repository
 	cfg             *config.Configuration
 	rbacService     *rbac.RBACService
 	supabaseAuth    *supabase.Client
@@ -41,6 +44,7 @@ func NewUserService(
 	userRepo user.Repository,
 	tenantRepo tenant.Repository,
 	authRepo domainAuth.Repository,
+	secretRepo domainSecret.Repository,
 	cfg *config.Configuration,
 	rbacService *rbac.RBACService,
 	supabaseAuth *supabase.Client,
@@ -51,6 +55,7 @@ func NewUserService(
 		userRepo:        userRepo,
 		tenantRepo:      tenantRepo,
 		authRepo:        authRepo,
+		secretRepo:      secretRepo,
 		cfg:             cfg,
 		rbacService:     rbacService,
 		supabaseAuth:    supabaseAuth,
@@ -411,5 +416,24 @@ func (s *userService) DeleteUser(ctx context.Context, id string) error {
 			WithHint("Deletion is supported for service accounts only").
 			Mark(ierr.ErrValidation)
 	}
+
+	// Block archive if the service account has active (published, non-expired) API keys.
+	now := time.Now().UTC()
+	activeCount, err := s.secretRepo.Count(ctx, &types.SecretFilter{
+		QueryFilter: &types.QueryFilter{
+			Status: lo.ToPtr(types.StatusPublished),
+		},
+		UserID:       &id,
+		NotExpiredAt: &now,
+	})
+	if err != nil {
+		return err
+	}
+	if activeCount > 0 {
+		return ierr.NewError("service account has active API keys").
+			WithHint("Revoke all API keys before archiving this service account").
+			Mark(ierr.ErrValidation)
+	}
+
 	return s.userRepo.Delete(ctx, id)
 }

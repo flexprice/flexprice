@@ -1544,6 +1544,7 @@ var (
 		{Name: "provider_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "roles", Type: field.TypeJSON, Nullable: true},
 		{Name: "user_type", Type: field.TypeString, Nullable: true, Default: "user"},
+		{Name: "user_id", Type: field.TypeString, Nullable: true},
 	}
 	// SecretsTable holds the schema information for the "secrets" table.
 	SecretsTable = &schema.Table{
