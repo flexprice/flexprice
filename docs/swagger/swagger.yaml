@@ -560,6 +560,15 @@ definitions:
       wallet:
         $ref: '#/definitions/WalletResponse'
     type: object
+  AttributedToCustomerResult:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorResponse'
+      meter_usage:
+        $ref: '#/definitions/MeterUsageAttribution'
+      status:
+        $ref: '#/definitions/types.DebugTrackerStatus'
+    type: object
   BillingCycleInfo:
     properties:
       billing_anchor:
@@ -1040,6 +1049,8 @@ definitions:
         type: string
       cadence:
         $ref: '#/definitions/types.CouponCadence'
+      coupon_code:
+        type: string
       created_at:
         type: string
       created_by:
@@ -1226,6 +1237,8 @@ definitions:
         - once
         - repeated
         - forever
+      coupon_code:
+        type: string
       currency:
         type: string
       duration_in_periods:
@@ -2137,6 +2150,7 @@ definitions:
         description: CommitmentDuration is the time frame of the commitment (e.g.,
           ANNUAL commitment on MONTHLY billing)
       coupons:
+        description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
           type: string
         type: array
@@ -2186,6 +2200,7 @@ definitions:
           items:
             type: string
           type: array
+        description: 'Deprecated: use SubscriptionCoupons instead.'
         type: object
       line_items:
         description: LineItems are extra line items to add at creation (each with
@@ -2243,6 +2258,13 @@ definitions:
           This is IGNORED when the billing cycle is anniversary.
       start_date:
         type: string
+      subscription_coupons:
+        description: |-
+          SubscriptionCoupons is the preferred way to attach coupons at creation.
+          Accepts coupon_code; optionally targets a line item via price_id.
+        items:
+          $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
       subscription_status:
         allOf:
         - $ref: '#/definitions/types.SubscriptionStatus'
@@ -2841,6 +2863,8 @@ definitions:
     type: object
   DebugTracker:
     properties:
+      attributed_to_customer:
+        $ref: '#/definitions/AttributedToCustomerResult'
       customer_lookup:
         $ref: '#/definitions/CustomerLookupResult'
       failure_point:
@@ -4229,6 +4253,15 @@ definitions:
         example: "2024-03-20T15:04:05Z"
         type: string
     type: object
+  MeterUsageAttribution:
+    properties:
+      external_customer_id:
+        type: string
+      meter_id:
+        type: string
+      qty_total:
+        type: string
+    type: object
   OverrideEntitlementRequest:
     properties:
       entitlement_id:
@@ -4804,11 +4837,23 @@ definitions:
         description: Required when action="remove". ID of the CouponAssociation to
           soft-delete.
         type: string
+      coupon_code:
+        description: CouponCode is the preferred way to identify the coupon for action="add".
+        type: string
       coupon_id:
-        description: Required when action="add". ID of the coupon to attach.
+        description: 'Deprecated: use coupon_code instead.'
         type: string
       effective_date:
         description: Optional. When to apply the change; defaults to now if omitted.
+        type: string
+      end_date:
+        description: Optional. When the coupon association ends; overrides duration_in_periods.
+        type: string
+      price_id:
+        description: Optional. Price ID of the line item to target; omit for subscription-level.
+        type: string
+      start_date:
+        description: Optional. When the coupon association starts; defaults to EffectiveDate.
         type: string
     required:
     - action
@@ -5036,6 +5081,27 @@ definitions:
     - proration_behavior
     - target_plan_id
     type: object
+  SubscriptionCouponInput:
+    properties:
+      coupon_code:
+        description: CouponCode is the coupon's human-readable code (case-insensitive).
+          Required.
+        type: string
+      end_date:
+        description: EndDate is when the coupon ends; overrides duration_in_periods
+          calculation.
+        type: string
+      price_id:
+        description: PriceID is the price ID of the line item to target; omit for
+          subscription-level.
+        type: string
+      start_date:
+        description: StartDate is when the coupon starts; defaults to subscription/phase
+          StartDate.
+        type: string
+    required:
+    - coupon_code
+    type: object
   SubscriptionEntitlementsResponse:
     properties:
       features:
@@ -5202,8 +5268,7 @@ definitions:
   SubscriptionPhaseCreateRequest:
     properties:
       coupons:
-        description: Coupons represents subscription-level coupons to be applied to
-          this phase
+        description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
           type: string
         type: array
@@ -5214,8 +5279,7 @@ definitions:
           items:
             type: string
           type: array
-        description: LineItemCoupons represents line item-level coupons (map of line_item_id
-          to coupon IDs)
+        description: 'Deprecated: use SubscriptionCoupons instead.'
         type: object
       line_items:
         description: |-
@@ -5237,6 +5301,12 @@ definitions:
         type: array
       start_date:
         type: string
+      subscription_coupons:
+        description: SubscriptionCoupons is the preferred way to attach coupons to
+          this phase.
+        items:
+          $ref: '#/definitions/SubscriptionCouponInput'
+        type: array
     required:
     - start_date
     type: object
@@ -6227,6 +6297,8 @@ definitions:
     type: object
   UpdateCouponRequest:
     properties:
+      coupon_code:
+        type: string
       metadata:
         additionalProperties:
           type: string
@@ -7069,6 +7141,8 @@ definitions:
         type: string
       cadence:
         $ref: '#/definitions/types.CouponCadence'
+      coupon_code:
+        type: string
       created_at:
         type: string
       created_by:
@@ -7813,12 +7887,16 @@ definitions:
     - not_found
     - found
     - error
+    - processing
+    - attributed
     type: string
     x-enum-varnames:
     - DebugTrackerStatusUnprocessed
     - DebugTrackerStatusNotFound
     - DebugTrackerStatusFound
     - DebugTrackerStatusError
+    - DebugTrackerStatusProcessing
+    - DebugTrackerStatusAttributed
   types.EntitlementEntityType:
     enum:
     - PLAN
@@ -7973,12 +8051,14 @@ definitions:
     - meter_lookup
     - price_lookup
     - subscription_line_item_lookup
+    - attributed_to_customer
     type: string
     x-enum-varnames:
     - FailurePointTypeCustomerLookup
     - FailurePointTypeMeterLookup
     - FailurePointTypePriceLookup
     - FailurePointTypeSubscriptionLineItemLookup
+    - FailurePointTypeAttributedToCustomer
   types.FeatureFilter:
     properties:
       end_time:
@@ -11069,7 +11149,6 @@ paths:
         in: query
         items:
           type: string
-        maxItems: 100
         name: subscription_ids
         type: array
       - collectionFormat: csv
@@ -11077,7 +11156,6 @@ paths:
         in: query
         items:
           type: string
-        maxItems: 100
         name: coupon_ids
         type: array
       - description: Return only currently active associations

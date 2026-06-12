@@ -8,6 +8,7 @@ import (
 	coupon_association "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 func (s *subscriptionModificationService) executeCouponModification(
@@ -21,7 +22,7 @@ func (s *subscriptionModificationService) executeCouponModification(
 	}
 	switch params.Action {
 	case dto.SubModifyCouponActionAdd:
-		return s.executeAddCoupon(ctx, subscriptionID, *params.CouponID, effectiveDate)
+		return s.executeAddCoupon(ctx, subscriptionID, params, effectiveDate)
 	case dto.SubModifyCouponActionRemove:
 		return s.executeRemoveCoupon(ctx, subscriptionID, *params.AssociationID, effectiveDate)
 	default:
@@ -33,7 +34,7 @@ func (s *subscriptionModificationService) executeCouponModification(
 func (s *subscriptionModificationService) executeAddCoupon(
 	ctx context.Context,
 	subscriptionID string,
-	couponID string,
+	params *dto.SubModifyCouponParams,
 	effectiveDate time.Time,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
@@ -45,18 +46,49 @@ func (s *subscriptionModificationService) executeAddCoupon(
 		return nil, err
 	}
 
-	c, err := sp.CouponRepo.Get(ctx, couponID)
-	if err != nil {
-		return nil, ierr.NewError("coupon not found or inactive").
-			WithHint("Provide a valid, active coupon_id").
-			WithReportableDetails(map[string]interface{}{"coupon_id": couponID}).
-			Mark(ierr.ErrValidation)
+	// Resolve coupon: prefer coupon_code; fall back to deprecated coupon_id
+	var couponID string
+	if params.CouponCode != nil && *params.CouponCode != "" {
+		c, err := sp.CouponRepo.GetByCode(ctx, *params.CouponCode)
+		if err != nil {
+			return nil, ierr.NewError("coupon not found").
+				WithHintf("No published coupon with code '%s'", *params.CouponCode).
+				Mark(ierr.ErrValidation)
+		}
+		if c.Status != types.StatusPublished {
+			return nil, ierr.NewError("coupon not found or inactive").
+				Mark(ierr.ErrValidation)
+		}
+		couponID = c.ID
+	} else {
+		c, err := sp.CouponRepo.Get(ctx, *params.CouponID)
+		if err != nil || c.Status != types.StatusPublished {
+			return nil, ierr.NewError("coupon not found or inactive").
+				WithHint("Provide a valid, active coupon_id or coupon_code").
+				Mark(ierr.ErrValidation)
+		}
+		couponID = c.ID
 	}
-	if c.Status != types.StatusPublished {
-		return nil, ierr.NewError("coupon not found or inactive").
-			WithHint("The specified coupon is not currently active").
-			WithReportableDetails(map[string]interface{}{"coupon_id": couponID, "status": c.Status}).
-			Mark(ierr.ErrValidation)
+
+	// Resolve price_id → line_item_id
+	var lineItemID *string
+	if params.PriceID != nil {
+		priceToLI := make(map[string]string)
+		for _, li := range subResp.LineItems {
+			priceToLI[li.PriceID] = li.ID
+		}
+		if liID, ok := priceToLI[*params.PriceID]; ok {
+			lineItemID = lo.ToPtr(liID)
+		} else {
+			sp.Logger.Info(ctx, "modify coupon price_id not found in line items, applying at subscription level",
+				"price_id", *params.PriceID,
+				"subscription_id", subscriptionID)
+		}
+	}
+
+	startDate := effectiveDate
+	if params.StartDate != nil {
+		startDate = params.StartDate.UTC()
 	}
 
 	filter := &types.CouponAssociationFilter{
@@ -83,12 +115,14 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	}
 
 	assoc := &coupon_association.CouponAssociation{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
-		CouponID:       couponID,
-		SubscriptionID: subscriptionID,
-		StartDate:      effectiveDate,
-		EnvironmentID:  types.GetEnvironmentID(ctx),
-		BaseModel:      types.GetDefaultBaseModel(ctx),
+		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
+		CouponID:               couponID,
+		SubscriptionID:         subscriptionID,
+		SubscriptionLineItemID: lineItemID,
+		StartDate:              startDate,
+		EndDate:                params.EndDate,
+		EnvironmentID:          types.GetEnvironmentID(ctx),
+		BaseModel:              types.GetDefaultBaseModel(ctx),
 	}
 	if err := sp.DB.WithTx(ctx, func(txCtx context.Context) error {
 		return sp.CouponAssociationRepo.Create(txCtx, assoc)
@@ -182,7 +216,7 @@ func (s *subscriptionModificationService) previewCouponModification(
 	}
 	switch params.Action {
 	case dto.SubModifyCouponActionAdd:
-		return s.previewAddCoupon(ctx, subscriptionID, *params.CouponID, effectiveDate)
+		return s.previewAddCoupon(ctx, subscriptionID, params, effectiveDate)
 	case dto.SubModifyCouponActionRemove:
 		return s.previewRemoveCoupon(ctx, subscriptionID, *params.AssociationID, effectiveDate)
 	default:
@@ -194,22 +228,33 @@ func (s *subscriptionModificationService) previewCouponModification(
 func (s *subscriptionModificationService) previewAddCoupon(
 	ctx context.Context,
 	subscriptionID string,
-	couponID string,
+	params *dto.SubModifyCouponParams,
 	effectiveDate time.Time,
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
 
-	c, err := sp.CouponRepo.Get(ctx, couponID)
-	if err != nil {
-		return nil, ierr.NewError("coupon not found or inactive").
-			WithHint("Provide a valid, active coupon_id").
-			WithReportableDetails(map[string]interface{}{"coupon_id": couponID}).
-			Mark(ierr.ErrValidation)
-	}
-	if c.Status != types.StatusPublished {
-		return nil, ierr.NewError("coupon not found or inactive").
-			WithReportableDetails(map[string]interface{}{"coupon_id": couponID, "status": c.Status}).
-			Mark(ierr.ErrValidation)
+	// Resolve coupon: prefer coupon_code; fall back to deprecated coupon_id
+	var couponID string
+	if params.CouponCode != nil && *params.CouponCode != "" {
+		c, err := sp.CouponRepo.GetByCode(ctx, *params.CouponCode)
+		if err != nil {
+			return nil, ierr.NewError("coupon not found").
+				WithHintf("No published coupon with code '%s'", *params.CouponCode).
+				Mark(ierr.ErrValidation)
+		}
+		if c.Status != types.StatusPublished {
+			return nil, ierr.NewError("coupon not found or inactive").
+				Mark(ierr.ErrValidation)
+		}
+		couponID = c.ID
+	} else {
+		c, err := sp.CouponRepo.Get(ctx, *params.CouponID)
+		if err != nil || c.Status != types.StatusPublished {
+			return nil, ierr.NewError("coupon not found or inactive").
+				WithHint("Provide a valid, active coupon_id or coupon_code").
+				Mark(ierr.ErrValidation)
+		}
+		couponID = c.ID
 	}
 
 	filter := &types.CouponAssociationFilter{

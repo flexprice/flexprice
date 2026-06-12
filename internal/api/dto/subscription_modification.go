@@ -161,24 +161,33 @@ func (r *SubModifyGroupedInvoicingParams) Validate() error {
 }
 
 // SubModifyCouponParams is the payload for coupon association changes on a subscription.
-// Conditional required fields: coupon_id is required when action="add"; association_id is required when action="remove".
+// Conditional required fields: coupon_code (or deprecated coupon_id) required when action="add"; association_id required when action="remove".
 type SubModifyCouponParams struct {
 	// Required. "add" to attach a coupon; "remove" to detach an existing association.
 	Action SubModifyCouponAction `json:"action" binding:"required"`
-	// Required when action="add". ID of the coupon to attach.
+	// CouponCode is the preferred way to identify the coupon for action="add".
+	CouponCode *string `json:"coupon_code,omitempty"`
+	// Deprecated: use coupon_code instead.
 	CouponID *string `json:"coupon_id,omitempty"`
 	// Required when action="remove". ID of the CouponAssociation to soft-delete.
 	AssociationID *string `json:"association_id,omitempty"`
 	// Optional. When to apply the change; defaults to now if omitted.
 	EffectiveDate *time.Time `json:"effective_date,omitempty"`
+	// Optional. When the coupon association starts; defaults to EffectiveDate.
+	StartDate *time.Time `json:"start_date,omitempty"`
+	// Optional. When the coupon association ends; overrides duration_in_periods.
+	EndDate *time.Time `json:"end_date,omitempty"`
+	// Optional. Price ID of the line item to target; omit for subscription-level.
+	PriceID *string `json:"price_id,omitempty"`
 }
 
 func (r *SubModifyCouponParams) Validate() error {
 	switch r.Action {
 	case SubModifyCouponActionAdd:
-		if r.CouponID == nil || *r.CouponID == "" {
-			return ierr.NewError("coupon_id is required for action 'add'").
-				WithHint("Provide a valid coupon_id").
+		if (r.CouponCode == nil || *r.CouponCode == "") &&
+			(r.CouponID == nil || *r.CouponID == "") {
+			return ierr.NewError("coupon_code (or deprecated coupon_id) is required for action 'add'").
+				WithHint("Provide a valid coupon_code").
 				Mark(ierr.ErrValidation)
 		}
 	case SubModifyCouponActionRemove:

@@ -6922,6 +6922,7 @@ type CouponMutation struct {
 	addduration_in_periods     *int
 	currency                   *string
 	metadata                   *map[string]string
+	coupon_code                *string
 	clearedFields              map[string]struct{}
 	coupon_associations        map[string]struct{}
 	removedcoupon_associations map[string]struct{}
@@ -7976,6 +7977,55 @@ func (m *CouponMutation) ResetMetadata() {
 	delete(m.clearedFields, coupon.FieldMetadata)
 }
 
+// SetCouponCode sets the "coupon_code" field.
+func (m *CouponMutation) SetCouponCode(s string) {
+	m.coupon_code = &s
+}
+
+// CouponCode returns the value of the "coupon_code" field in the mutation.
+func (m *CouponMutation) CouponCode() (r string, exists bool) {
+	v := m.coupon_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCouponCode returns the old "coupon_code" field's value of the Coupon entity.
+// If the Coupon object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CouponMutation) OldCouponCode(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCouponCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCouponCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCouponCode: %w", err)
+	}
+	return oldValue.CouponCode, nil
+}
+
+// ClearCouponCode clears the value of the "coupon_code" field.
+func (m *CouponMutation) ClearCouponCode() {
+	m.coupon_code = nil
+	m.clearedFields[coupon.FieldCouponCode] = struct{}{}
+}
+
+// CouponCodeCleared returns if the "coupon_code" field was cleared in this mutation.
+func (m *CouponMutation) CouponCodeCleared() bool {
+	_, ok := m.clearedFields[coupon.FieldCouponCode]
+	return ok
+}
+
+// ResetCouponCode resets all changes to the "coupon_code" field.
+func (m *CouponMutation) ResetCouponCode() {
+	m.coupon_code = nil
+	delete(m.clearedFields, coupon.FieldCouponCode)
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by ids.
 func (m *CouponMutation) AddCouponAssociationIDs(ids ...string) {
 	if m.coupon_associations == nil {
@@ -8118,7 +8168,7 @@ func (m *CouponMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CouponMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 21)
 	if m.tenant_id != nil {
 		fields = append(fields, coupon.FieldTenantID)
 	}
@@ -8179,6 +8229,9 @@ func (m *CouponMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, coupon.FieldMetadata)
 	}
+	if m.coupon_code != nil {
+		fields = append(fields, coupon.FieldCouponCode)
+	}
 	return fields
 }
 
@@ -8227,6 +8280,8 @@ func (m *CouponMutation) Field(name string) (ent.Value, bool) {
 		return m.Currency()
 	case coupon.FieldMetadata:
 		return m.Metadata()
+	case coupon.FieldCouponCode:
+		return m.CouponCode()
 	}
 	return nil, false
 }
@@ -8276,6 +8331,8 @@ func (m *CouponMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldCurrency(ctx)
 	case coupon.FieldMetadata:
 		return m.OldMetadata(ctx)
+	case coupon.FieldCouponCode:
+		return m.OldCouponCode(ctx)
 	}
 	return nil, fmt.Errorf("unknown Coupon field %s", name)
 }
@@ -8425,6 +8482,13 @@ func (m *CouponMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetadata(v)
 		return nil
+	case coupon.FieldCouponCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCouponCode(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Coupon field %s", name)
 }
@@ -8530,6 +8594,9 @@ func (m *CouponMutation) ClearedFields() []string {
 	if m.FieldCleared(coupon.FieldMetadata) {
 		fields = append(fields, coupon.FieldMetadata)
 	}
+	if m.FieldCleared(coupon.FieldCouponCode) {
+		fields = append(fields, coupon.FieldCouponCode)
+	}
 	return fields
 }
 
@@ -8579,6 +8646,9 @@ func (m *CouponMutation) ClearField(name string) error {
 		return nil
 	case coupon.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case coupon.FieldCouponCode:
+		m.ClearCouponCode()
 		return nil
 	}
 	return fmt.Errorf("unknown Coupon nullable field %s", name)
@@ -8647,6 +8717,9 @@ func (m *CouponMutation) ResetField(name string) error {
 		return nil
 	case coupon.FieldMetadata:
 		m.ResetMetadata()
+		return nil
+	case coupon.FieldCouponCode:
+		m.ResetCouponCode()
 		return nil
 	}
 	return fmt.Errorf("unknown Coupon field %s", name)

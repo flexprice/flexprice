@@ -1142,8 +1142,7 @@
               "type": "array",
               "items": {
                 "type": "string"
-              },
-              "maxItems": 100
+              }
             }
           },
           {
@@ -1156,8 +1155,7 @@
               "type": "array",
               "items": {
                 "type": "string"
-              },
-              "maxItems": 100
+              }
             }
           },
           {
@@ -14374,6 +14372,20 @@
           }
         }
       },
+      "AttributedToCustomerResult": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/errors.ErrorResponse"
+          },
+          "meter_usage": {
+            "$ref": "#/components/schemas/MeterUsageAttribution"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.DebugTrackerStatus"
+          }
+        }
+      },
       "BillingCycleInfo": {
         "type": "object",
         "properties": {
@@ -15015,6 +15027,9 @@
           "cadence": {
             "$ref": "#/components/schemas/types.CouponCadence"
           },
+          "coupon_code": {
+            "type": "string"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -15294,6 +15309,9 @@
           },
           "cadence": {
             "$ref": "#/components/schemas/types.CouponCadence"
+          },
+          "coupon_code": {
+            "type": "string"
           },
           "currency": {
             "type": "string"
@@ -16384,6 +16402,7 @@
           },
           "coupons": {
             "type": "array",
+            "description": "Deprecated: use SubscriptionCoupons instead.",
             "items": {
               "type": "string"
             }
@@ -16438,7 +16457,8 @@
               "items": {
                 "type": "string"
               }
-            }
+            },
+            "description": "Deprecated: use SubscriptionCoupons instead."
           },
           "line_items": {
             "type": "array",
@@ -16496,6 +16516,13 @@
           "start_date": {
             "type": "string",
             "format": "date-time"
+          },
+          "subscription_coupons": {
+            "type": "array",
+            "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
           },
           "subscription_status": {
             "$ref": "#/components/schemas/types.SubscriptionStatus"
@@ -17238,6 +17265,9 @@
       "DebugTracker": {
         "type": "object",
         "properties": {
+          "attributed_to_customer": {
+            "$ref": "#/components/schemas/AttributedToCustomerResult"
+          },
           "customer_lookup": {
             "$ref": "#/components/schemas/CustomerLookupResult"
           },
@@ -19118,6 +19148,20 @@
           }
         }
       },
+      "MeterUsageAttribution": {
+        "type": "object",
+        "properties": {
+          "external_customer_id": {
+            "type": "string"
+          },
+          "meter_id": {
+            "type": "string"
+          },
+          "qty_total": {
+            "type": "string"
+          }
+        }
+      },
       "OverrideEntitlementRequest": {
         "required": [
           "entitlement_id"
@@ -19914,13 +19958,31 @@
             "type": "string",
             "description": "Required when action=\"remove\". ID of the CouponAssociation to soft-delete."
           },
+          "coupon_code": {
+            "type": "string",
+            "description": "CouponCode is the preferred way to identify the coupon for action=\"add\"."
+          },
           "coupon_id": {
             "type": "string",
-            "description": "Required when action=\"add\". ID of the coupon to attach."
+            "description": "Deprecated: use coupon_code instead."
           },
           "effective_date": {
             "type": "string",
             "description": "Optional. When to apply the change; defaults to now if omitted.",
+            "format": "date-time"
+          },
+          "end_date": {
+            "type": "string",
+            "description": "Optional. When the coupon association ends; overrides duration_in_periods.",
+            "format": "date-time"
+          },
+          "price_id": {
+            "type": "string",
+            "description": "Optional. Price ID of the line item to target; omit for subscription-level."
+          },
+          "start_date": {
+            "type": "string",
+            "description": "Optional. When the coupon association starts; defaults to EffectiveDate.",
             "format": "date-time"
           }
         }
@@ -20166,6 +20228,32 @@
         },
         "description": "Request object for changing a subscription plan (upgrade/downgrade)"
       },
+      "SubscriptionCouponInput": {
+        "required": [
+          "coupon_code"
+        ],
+        "type": "object",
+        "properties": {
+          "coupon_code": {
+            "type": "string",
+            "description": "CouponCode is the coupon's human-readable code (case-insensitive). Required."
+          },
+          "end_date": {
+            "type": "string",
+            "description": "EndDate is when the coupon ends; overrides duration_in_periods calculation.",
+            "format": "date-time"
+          },
+          "price_id": {
+            "type": "string",
+            "description": "PriceID is the price ID of the line item to target; omit for subscription-level."
+          },
+          "start_date": {
+            "type": "string",
+            "description": "StartDate is when the coupon starts; defaults to subscription/phase StartDate.",
+            "format": "date-time"
+          }
+        }
+      },
       "SubscriptionEntitlementsResponse": {
         "type": "object",
         "properties": {
@@ -20399,7 +20487,7 @@
         "properties": {
           "coupons": {
             "type": "array",
-            "description": "Coupons represents subscription-level coupons to be applied to this phase",
+            "description": "Deprecated: use SubscriptionCoupons instead.",
             "items": {
               "type": "string"
             }
@@ -20416,7 +20504,7 @@
                 "type": "string"
               }
             },
-            "description": "LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)"
+            "description": "Deprecated: use SubscriptionCoupons instead."
           },
           "line_items": {
             "type": "array",
@@ -20441,6 +20529,13 @@
           "start_date": {
             "type": "string",
             "format": "date-time"
+          },
+          "subscription_coupons": {
+            "type": "array",
+            "description": "SubscriptionCoupons is the preferred way to attach coupons to this phase.",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionCouponInput"
+            }
           }
         }
       },
@@ -21741,6 +21836,9 @@
       "UpdateCouponRequest": {
         "type": "object",
         "properties": {
+          "coupon_code": {
+            "type": "string"
+          },
           "metadata": {
             "type": "object",
             "additionalProperties": {
@@ -22866,6 +22964,9 @@
           "cadence": {
             "$ref": "#/components/schemas/types.CouponCadence"
           },
+          "coupon_code": {
+            "type": "string"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -23950,13 +24051,17 @@
           "unprocessed",
           "not_found",
           "found",
-          "error"
+          "error",
+          "processing",
+          "attributed"
         ],
         "x-enum-varnames": [
           "DebugTrackerStatusUnprocessed",
           "DebugTrackerStatusNotFound",
           "DebugTrackerStatusFound",
-          "DebugTrackerStatusError"
+          "DebugTrackerStatusError",
+          "DebugTrackerStatusProcessing",
+          "DebugTrackerStatusAttributed"
         ],
         "x-speakeasy-name-override": "DebugTrackerStatus"
       },
@@ -24179,13 +24284,15 @@
           "customer_lookup",
           "meter_lookup",
           "price_lookup",
-          "subscription_line_item_lookup"
+          "subscription_line_item_lookup",
+          "attributed_to_customer"
         ],
         "x-enum-varnames": [
           "FailurePointTypeCustomerLookup",
           "FailurePointTypeMeterLookup",
           "FailurePointTypePriceLookup",
-          "FailurePointTypeSubscriptionLineItemLookup"
+          "FailurePointTypeSubscriptionLineItemLookup",
+          "FailurePointTypeAttributedToCustomer"
         ],
         "x-speakeasy-name-override": "FailurePointType"
       },

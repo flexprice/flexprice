@@ -156,6 +156,10 @@ func (s *couponValidationService) validateCouponDateRange(coupon coupon.Coupon) 
 
 // Currency validation
 func (s *couponValidationService) validateCouponCurrency(coupon coupon.Coupon, targetCurrency string) error {
+	// Percentage coupons are currency-agnostic; skip currency check
+	if coupon.Type == types.CouponTypePercentage {
+		return nil
+	}
 	// If coupon has specific currency, it must match target currency
 	if coupon.Currency != "" {
 		if !strings.EqualFold(coupon.Currency, targetCurrency) {

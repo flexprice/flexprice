@@ -956,7 +956,6 @@ const docTemplate = `{
                         "items": {
                             "type": "string"
                         },
-                        "maxItems": 100,
                         "collectionFormat": "csv",
                         "description": "Filter by subscription IDs (max 100)",
                         "name": "subscription_ids",
@@ -967,7 +966,6 @@ const docTemplate = `{
                         "items": {
                             "type": "string"
                         },
-                        "maxItems": 100,
                         "collectionFormat": "csv",
                         "description": "Filter by coupon IDs (max 100)",
                         "name": "coupon_ids",
@@ -12331,6 +12329,20 @@ const docTemplate = `{
                 }
             }
         },
+        "AttributedToCustomerResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/errors.ErrorResponse"
+                },
+                "meter_usage": {
+                    "$ref": "#/definitions/MeterUsageAttribution"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.DebugTrackerStatus"
+                }
+            }
+        },
         "BillingCycleInfo": {
             "type": "object",
             "properties": {
@@ -13041,6 +13053,9 @@ const docTemplate = `{
                 "cadence": {
                     "$ref": "#/definitions/types.CouponCadence"
                 },
+                "coupon_code": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -13324,6 +13339,9 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.CouponCadence"
                         }
                     ]
+                },
+                "coupon_code": {
+                    "type": "string"
                 },
                 "currency": {
                     "type": "string"
@@ -14490,6 +14508,7 @@ const docTemplate = `{
                     ]
                 },
                 "coupons": {
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -14543,6 +14562,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_coupons": {
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
                     "type": "object",
                     "additionalProperties": {
                         "type": "array",
@@ -14621,6 +14641,13 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
+                },
+                "subscription_coupons": {
+                    "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
                 },
                 "subscription_status": {
                     "description": "SubscriptionStatus determines the initial status of the subscription\nIf set to \"draft\", the subscription will be created as a draft (skips invoice creation and payment processing)",
@@ -15415,6 +15442,9 @@ const docTemplate = `{
         "DebugTracker": {
             "type": "object",
             "properties": {
+                "attributed_to_customer": {
+                    "$ref": "#/definitions/AttributedToCustomerResult"
+                },
                 "customer_lookup": {
                     "$ref": "#/definitions/CustomerLookupResult"
                 },
@@ -17301,6 +17331,20 @@ const docTemplate = `{
                 }
             }
         },
+        "MeterUsageAttribution": {
+            "type": "object",
+            "properties": {
+                "external_customer_id": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "qty_total": {
+                    "type": "string"
+                }
+            }
+        },
         "OverrideEntitlementRequest": {
             "type": "object",
             "required": [
@@ -18112,12 +18156,28 @@ const docTemplate = `{
                     "description": "Required when action=\"remove\". ID of the CouponAssociation to soft-delete.",
                     "type": "string"
                 },
+                "coupon_code": {
+                    "description": "CouponCode is the preferred way to identify the coupon for action=\"add\".",
+                    "type": "string"
+                },
                 "coupon_id": {
-                    "description": "Required when action=\"add\". ID of the coupon to attach.",
+                    "description": "Deprecated: use coupon_code instead.",
                     "type": "string"
                 },
                 "effective_date": {
                     "description": "Optional. When to apply the change; defaults to now if omitted.",
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "Optional. When the coupon association ends; overrides duration_in_periods.",
+                    "type": "string"
+                },
+                "price_id": {
+                    "description": "Optional. Price ID of the line item to target; omit for subscription-level.",
+                    "type": "string"
+                },
+                "start_date": {
+                    "description": "Optional. When the coupon association starts; defaults to EffectiveDate.",
                     "type": "string"
                 }
             }
@@ -18454,6 +18514,30 @@ const docTemplate = `{
                 }
             }
         },
+        "SubscriptionCouponInput": {
+            "type": "object",
+            "required": [
+                "coupon_code"
+            ],
+            "properties": {
+                "coupon_code": {
+                    "description": "CouponCode is the coupon's human-readable code (case-insensitive). Required.",
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "EndDate is when the coupon ends; overrides duration_in_periods calculation.",
+                    "type": "string"
+                },
+                "price_id": {
+                    "description": "PriceID is the price ID of the line item to target; omit for subscription-level.",
+                    "type": "string"
+                },
+                "start_date": {
+                    "description": "StartDate is when the coupon starts; defaults to subscription/phase StartDate.",
+                    "type": "string"
+                }
+            }
+        },
         "SubscriptionEntitlementsResponse": {
             "type": "object",
             "properties": {
@@ -18692,7 +18776,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "coupons": {
-                    "description": "Coupons represents subscription-level coupons to be applied to this phase",
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -18702,7 +18786,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "line_item_coupons": {
-                    "description": "LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)",
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
                     "type": "object",
                     "additionalProperties": {
                         "type": "array",
@@ -18733,6 +18817,13 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
+                },
+                "subscription_coupons": {
+                    "description": "SubscriptionCoupons is the preferred way to attach coupons to this phase.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
                 }
             }
         },
@@ -20070,6 +20161,9 @@ const docTemplate = `{
         "UpdateCouponRequest": {
             "type": "object",
             "properties": {
+                "coupon_code": {
+                    "type": "string"
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": {
@@ -21258,6 +21352,9 @@ const docTemplate = `{
                 "cadence": {
                     "$ref": "#/definitions/types.CouponCadence"
                 },
+                "coupon_code": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -22291,13 +22388,17 @@ const docTemplate = `{
                 "unprocessed",
                 "not_found",
                 "found",
-                "error"
+                "error",
+                "processing",
+                "attributed"
             ],
             "x-enum-varnames": [
                 "DebugTrackerStatusUnprocessed",
                 "DebugTrackerStatusNotFound",
                 "DebugTrackerStatusFound",
-                "DebugTrackerStatusError"
+                "DebugTrackerStatusError",
+                "DebugTrackerStatusProcessing",
+                "DebugTrackerStatusAttributed"
             ]
         },
         "types.EntitlementEntityType": {
@@ -22512,13 +22613,15 @@ const docTemplate = `{
                 "customer_lookup",
                 "meter_lookup",
                 "price_lookup",
-                "subscription_line_item_lookup"
+                "subscription_line_item_lookup",
+                "attributed_to_customer"
             ],
             "x-enum-varnames": [
                 "FailurePointTypeCustomerLookup",
                 "FailurePointTypeMeterLookup",
                 "FailurePointTypePriceLookup",
-                "FailurePointTypeSubscriptionLineItemLookup"
+                "FailurePointTypeSubscriptionLineItemLookup",
+                "FailurePointTypeAttributedToCustomer"
             ]
         },
         "types.FeatureFilter": {
