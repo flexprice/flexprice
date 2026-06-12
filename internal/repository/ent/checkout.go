@@ -2,12 +2,12 @@ package ent
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	entcheckout "github.com/flexprice/flexprice/ent/checkout"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -36,7 +36,9 @@ func (r *checkoutRepository) Create(ctx context.Context, c *domainCheckout.Check
 	configMap, err := c.GetConfigurationMap()
 	if err != nil {
 		SetSpanError(span, err)
-		return fmt.Errorf("failed to serialize configuration: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to serialize checkout configuration").
+			Mark(ierr.ErrValidation)
 	}
 
 	builder := client.Checkout.Create().
@@ -77,7 +79,9 @@ func (r *checkoutRepository) Create(ctx context.Context, c *domainCheckout.Check
 
 	if _, err := builder.Save(ctx); err != nil {
 		SetSpanError(span, err)
-		return fmt.Errorf("failed to create checkout: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to create checkout").
+			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
 	return nil
@@ -90,14 +94,22 @@ func (r *checkoutRepository) Get(ctx context.Context, id string) (*domainCheckou
 	defer FinishSpan(span)
 
 	entity, err := client.Checkout.Query().
-		Where(entcheckout.IDEQ(id)).
+		Where(
+			entcheckout.IDEQ(id),
+			entcheckout.TenantIDEQ(types.GetTenantID(ctx)),
+			entcheckout.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
+		).
 		Only(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("checkout not found: %w", err)
+			return nil, ierr.WithError(err).
+				WithHintf("Checkout with ID %s was not found", id).
+				Mark(ierr.ErrNotFound)
 		}
-		return nil, fmt.Errorf("failed to get checkout: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get checkout").
+			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
 	return domainCheckout.FromEnt(entity), nil
@@ -134,7 +146,9 @@ func (r *checkoutRepository) Update(ctx context.Context, c *domainCheckout.Check
 
 	if _, err := builder.Save(ctx); err != nil {
 		SetSpanError(span, err)
-		return fmt.Errorf("failed to update checkout: %w", err)
+		return ierr.WithError(err).
+			WithHint("Failed to update checkout").
+			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
 	return nil
@@ -161,6 +175,8 @@ func (r *checkoutRepository) GetPendingByEntity(
 			entcheckout.EntityIDEQ(entityID),
 			entcheckout.ObjectiveEQ(objective),
 			entcheckout.CheckoutStatusEQ(types.CheckoutStatusPending),
+			entcheckout.TenantIDEQ(types.GetTenantID(ctx)),
+			entcheckout.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
 		).
 		Only(ctx)
 	if err != nil {
@@ -169,12 +185,18 @@ func (r *checkoutRepository) GetPendingByEntity(
 			return nil, nil
 		}
 		SetSpanError(span, err)
-		return nil, fmt.Errorf("failed to get pending checkout by entity: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get pending checkout by entity").
+			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
 	return domainCheckout.FromEnt(entity), nil
 }
 
+// ListPendingExpired performs a system-wide (cross-tenant/cross-environment) sweep
+// of pending, expired checkouts for the cleanup cron. It is intentionally NOT
+// tenant/environment scoped — the expiry worker is a maintenance job; any
+// per-environment iteration is the caller's responsibility.
 func (r *checkoutRepository) ListPendingExpired(ctx context.Context, cutoff time.Time) ([]*domainCheckout.Checkout, error) {
 	client := r.client.Reader(ctx)
 
@@ -189,7 +211,9 @@ func (r *checkoutRepository) ListPendingExpired(ctx context.Context, cutoff time
 		All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return nil, fmt.Errorf("failed to list pending expired checkouts: %w", err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list pending expired checkouts").
+			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
 	return domainCheckout.FromEntList(entities), nil
