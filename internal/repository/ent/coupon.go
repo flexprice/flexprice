@@ -175,6 +175,7 @@ func (r *couponRepository) GetByCode(ctx context.Context, code string) (*domainC
 			coupon.CouponCode(normalised),
 			coupon.TenantID(types.GetTenantID(ctx)),
 			coupon.EnvironmentID(types.GetEnvironmentID(ctx)),
+			coupon.Status(string(types.StatusPublished)),
 		).
 		Only(ctx)
 
