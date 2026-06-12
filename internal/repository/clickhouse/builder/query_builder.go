@@ -10,6 +10,12 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// escapeClickHouseString escapes single quotes in a string to prevent SQL injection
+// in ClickHouse queries by doubling them (ClickHouse SQL string literal escaping).
+func escapeClickHouseString(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
+
 type QueryBuilder struct {
 	baseQuery    string
 	filterQuery  string
@@ -33,27 +39,27 @@ func (qb *QueryBuilder) getDeduplicationKey() string {
 
 func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.UsageParams) *QueryBuilder {
 	conditions := []string{
-		fmt.Sprintf("event_name = '%s'", params.EventName),
+		fmt.Sprintf("event_name = '%s'", escapeClickHouseString(params.EventName)),
 	}
 
 	tenantID := types.GetTenantID(ctx)
 	if tenantID != "" {
-		conditions = append(conditions, fmt.Sprintf("tenant_id = '%s'", tenantID))
+		conditions = append(conditions, fmt.Sprintf("tenant_id = '%s'", escapeClickHouseString(tenantID)))
 	}
 
 	// Add environment_id filter if present in context
 	environmentID := types.GetEnvironmentID(ctx)
 	if environmentID != "" {
-		conditions = append(conditions, fmt.Sprintf("environment_id = '%s'", environmentID))
+		conditions = append(conditions, fmt.Sprintf("environment_id = '%s'", escapeClickHouseString(environmentID)))
 	}
 
 	conditions = append(conditions, parseTimeConditions(params)...)
 
 	if params.ExternalCustomerID != "" {
-		conditions = append(conditions, fmt.Sprintf("external_customer_id = '%s'", params.ExternalCustomerID))
+		conditions = append(conditions, fmt.Sprintf("external_customer_id = '%s'", escapeClickHouseString(params.ExternalCustomerID)))
 	}
 	if params.CustomerID != "" {
-		conditions = append(conditions, fmt.Sprintf("customer_id = '%s'", params.CustomerID))
+		conditions = append(conditions, fmt.Sprintf("customer_id = '%s'", escapeClickHouseString(params.CustomerID)))
 	}
 
 	if params.Filters != nil {
@@ -61,15 +67,15 @@ func (qb *QueryBuilder) WithBaseFilters(ctx context.Context, params *events.Usag
 			if len(values) > 0 {
 				var condition string
 				if len(values) == 1 {
-					condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", property, values[0])
+					condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", escapeClickHouseString(property), escapeClickHouseString(values[0]))
 				} else {
 					quotedValues := make([]string, len(values))
 					for i, v := range values {
-						quotedValues[i] = fmt.Sprintf("'%s'", v)
+						quotedValues[i] = fmt.Sprintf("'%s'", escapeClickHouseString(v))
 					}
 					condition = fmt.Sprintf(
 						"JSONExtractString(properties, '%s') IN (%s)",
-						property,
+						escapeClickHouseString(property),
 						strings.Join(quotedValues, ","),
 					)
 				}
@@ -106,15 +112,15 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 			}
 			var condition string
 			if len(values) == 1 {
-				condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", property, values[0])
+				condition = fmt.Sprintf("JSONExtractString(properties, '%s') = '%s'", escapeClickHouseString(property), escapeClickHouseString(values[0]))
 			} else {
 				quotedValues := make([]string, len(values))
 				for i, v := range values {
-					quotedValues[i] = fmt.Sprintf("'%s'", v)
+					quotedValues[i] = fmt.Sprintf("'%s'", escapeClickHouseString(v))
 				}
 				condition = fmt.Sprintf(
 					"JSONExtractString(properties, '%s') IN (%s)",
-					property,
+					escapeClickHouseString(property),
 					strings.Join(quotedValues, ","),
 				)
 			}
@@ -125,7 +131,7 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 		if len(conditions) > 0 {
 			filterConditions = append(filterConditions, fmt.Sprintf(
 				"('%s', %d, (%s))",
-				group.ID,
+				escapeClickHouseString(group.ID),
 				group.Priority,
 				strings.Join(conditions, " AND "),
 			))
@@ -133,7 +139,7 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 			// For empty filter groups, use a constant true condition
 			filterConditions = append(filterConditions, fmt.Sprintf(
 				"('%s', %d, 1)",
-				group.ID,
+				escapeClickHouseString(group.ID),
 				group.Priority,
 			))
 		}
@@ -184,11 +190,11 @@ func (qb *QueryBuilder) WithAggregation(ctx context.Context, aggType types.Aggre
 	case types.AggregationCount:
 		aggClause = "COUNT(*)"
 	case types.AggregationSum:
-		aggClause = fmt.Sprintf("SUM(CAST(JSONExtractString(properties, '%s') AS Float64))", propertyName)
+		aggClause = fmt.Sprintf("SUM(CAST(JSONExtractString(properties, '%s') AS Float64))", escapeClickHouseString(propertyName))
 	case types.AggregationAvg:
-		aggClause = fmt.Sprintf("AVG(CAST(JSONExtractString(properties, '%s') AS Float64))", propertyName)
+		aggClause = fmt.Sprintf("AVG(CAST(JSONExtractString(properties, '%s') AS Float64))", escapeClickHouseString(propertyName))
 	case types.AggregationCountUnique:
-		aggClause = fmt.Sprintf("COUNT(DISTINCT JSONExtractString(properties, '%s'))", propertyName)
+		aggClause = fmt.Sprintf("COUNT(DISTINCT JSONExtractString(properties, '%s'))", escapeClickHouseString(propertyName))
 	}
 
 	qb.finalQuery = fmt.Sprintf("SELECT best_match_group as filter_group_id, %s as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group", aggClause)

@@ -24,9 +24,10 @@ const (
 
 // WhopConfig holds decrypted Whop credentials from the connection
 type WhopConfig struct {
-	APIKey    string
-	CompanyID string
-	ProductID string
+	APIKey               string
+	CompanyID            string
+	ProductID            string
+	WebhookSigningSecret string
 }
 
 // --- Product ---

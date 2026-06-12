@@ -1,6 +1,9 @@
 package middleware
 
 import (
+	"fmt"
+	"net/http"
+
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
@@ -26,30 +29,30 @@ func NewPermissionMiddleware(rbacService *rbac.RBACService, logger *logger.Logge
 // handles both RBAC and tenant access control.
 func (pm *PermissionMiddleware) RequirePermission(entity string, action types.Action) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// ctx := c.Request.Context()
+		ctx := c.Request.Context()
 
-		// if action == types.ActionWrite && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
-		// 	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-		// 		"error": "tenant account is suspended",
-		// 	})
-		// 	return
-		// }
+		if action == types.ActionWrite && types.GetTenantInternalStatus(ctx) == types.TenantInternalStatusSuspended {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "tenant account is suspended",
+			})
+			return
+		}
 
-		// roles := types.GetRoles(ctx)
-		// if !pm.rbacService.HasPermission(roles, entity, string(action)) {
-		// 	pm.logger.Info("Permission denied",
-		// 		"user_id", types.GetUserID(ctx),
-		// 		"roles", roles,
-		// 		"entity", entity,
-		// 		"action", action,
-		// 		"path", c.Request.URL.Path,
-		// 	)
-		// 	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-		// 		"error":   "Forbidden",
-		// 		"message": fmt.Sprintf("Insufficient permissions to %s %s", action, entity),
-		// 	})
-		// 	return
-		// }
+		roles := types.GetRoles(ctx)
+		if !pm.rbacService.HasPermission(roles, entity, string(action)) {
+			pm.logger.Info(ctx, "Permission denied",
+				"user_id", types.GetUserID(ctx),
+				"roles", roles,
+				"entity", entity,
+				"action", action,
+				"path", c.Request.URL.Path,
+			)
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":   "Forbidden",
+				"message": fmt.Sprintf("Insufficient permissions to %s %s", action, entity),
+			})
+			return
+		}
 
 		c.Next()
 	}

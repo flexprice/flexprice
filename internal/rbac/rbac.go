@@ -72,9 +72,8 @@ func NewRBACService(cfg *config.Configuration) (*RBACService, error) {
 // Complexity: O(roles) with O(1) lookups = ~3 operations for typical use
 // NOTE: Never touches role.Name or role.Description - zero overhead
 func (s *RBACService) HasPermission(roles []string, entity string, action string) bool {
-	// Empty roles = full access (backward compatibility)
 	if len(roles) == 0 {
-		return true
+		return false
 	}
 
 	// Check each role - if ANY role grants permission, allow

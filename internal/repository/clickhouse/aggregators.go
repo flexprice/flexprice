@@ -73,6 +73,23 @@ func getDeduplicationKey() string {
 	return "id"
 }
 
+// escapeClickHouseString escapes single quotes for safe embedding in ClickHouse
+// string literals by doubling them (the standard SQL / ClickHouse convention).
+func escapeClickHouseString(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
+
+// sanitizeUsageParamsForSQL returns a shallow copy of params with all user-controlled
+// string fields escaped for safe interpolation into ClickHouse SQL string literals.
+// Always call this at the start of GetQuery methods before building SQL.
+func sanitizeUsageParamsForSQL(params *events.UsageParams) events.UsageParams {
+	sp := *params
+	sp.EventName = escapeClickHouseString(params.EventName)
+	sp.PropertyName = escapeClickHouseString(params.PropertyName)
+	sp.GroupByProperty = escapeClickHouseString(params.GroupByProperty)
+	return sp
+}
+
 // buildUsageEventCustomerFilters returns PREWHERE fragments for external_customer_id and FlexPrice customer_id.
 // Params may be nil. External merges ExternalCustomerID and ExternalCustomerIDs (deduped); internal uses CustomerID only.
 func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustomerFilter string, customerFilter string) {
@@ -92,17 +109,17 @@ func buildUsageEventCustomerFilters(params *events.UsageParams) (externalCustome
 	case 0:
 		externalCustomerFilter = ""
 	case 1:
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", extUnique[0])
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", escapeClickHouseString(extUnique[0]))
 	default:
 		quoted := make([]string, len(extUnique))
 		for i, id := range extUnique {
-			quoted[i] = fmt.Sprintf("'%s'", id)
+			quoted[i] = fmt.Sprintf("'%s'", escapeClickHouseString(id))
 		}
 		externalCustomerFilter = fmt.Sprintf("AND external_customer_id IN (%s)", strings.Join(quoted, ", "))
 	}
 
 	if params.CustomerID != "" {
-		customerFilter = fmt.Sprintf("AND customer_id = '%s'", params.CustomerID)
+		customerFilter = fmt.Sprintf("AND customer_id = '%s'", escapeClickHouseString(params.CustomerID))
 	}
 	return externalCustomerFilter, customerFilter
 }
@@ -191,12 +208,12 @@ func buildFilterConditions(filters map[string][]string) string {
 
 		quotedValues := make([]string, len(values))
 		for i, v := range values {
-			quotedValues[i] = fmt.Sprintf("'%s'", v)
+			quotedValues[i] = fmt.Sprintf("'%s'", escapeClickHouseString(v))
 		}
 
 		conditions = append(conditions, fmt.Sprintf(
 			"JSONExtractString(properties, '%s') IN (%s)",
-			key,
+			escapeClickHouseString(key),
 			strings.Join(quotedValues, ","),
 		))
 	}
@@ -240,6 +257,8 @@ func parseTimeConditions(params *events.UsageParams) []string {
 type SumAggregator struct{}
 
 func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	// If bucket_size is specified, use windowed aggregation
 	if params.BucketSize != "" {
 		return a.getWindowedQuery(ctx, params)
@@ -351,6 +370,8 @@ func (a *SumAggregator) GetType() types.AggregationType {
 type CountAggregator struct{}
 
 func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	groupByClause := ""
@@ -398,6 +419,8 @@ func (a *CountAggregator) GetType() types.AggregationType {
 type CountUniqueAggregator struct{}
 
 func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
@@ -457,6 +480,8 @@ func (a *CountUniqueAggregator) GetType() types.AggregationType {
 type AvgAggregator struct{}
 
 func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
@@ -516,6 +541,8 @@ func (a *AvgAggregator) GetType() types.AggregationType {
 type LatestAggregator struct{}
 
 func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	windowClause := ""
 	groupByClause := ""
@@ -564,6 +591,8 @@ func (a *LatestAggregator) GetType() types.AggregationType {
 type SumWithMultiAggregator struct{}
 
 func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""
@@ -629,6 +658,8 @@ func (a *SumWithMultiAggregator) GetType() types.AggregationType {
 type MaxAggregator struct{}
 
 func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	// If bucket_size is specified, use windowed aggregation
 	if params.BucketSize != "" {
 		return a.getWindowedQuery(ctx, params)
@@ -701,6 +732,7 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	// 1. per_group CTE: max per group per bucket (e.g., MAX per krn per hour)
 	// 2. Return each group's value with group_key; total is sum of all group values for backward compat
 	if params.GroupByProperty != "" && validateGroupByProperty(params.GroupByProperty) == nil {
+		// params.GroupByProperty is already escaped by sanitizeUsageParamsForSQL — do not double-escape.
 		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", params.GroupByProperty)
 
 		return fmt.Sprintf(`
@@ -782,6 +814,8 @@ func (a *MaxAggregator) GetType() types.AggregationType {
 type WeightedSumAggregator struct{}
 
 func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
+	sp := sanitizeUsageParamsForSQL(params)
+	params = &sp
 	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
 	selectClause := ""
 	windowClause := ""

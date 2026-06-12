@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -99,7 +100,16 @@ func DefaultCompiler(logger *logger.Logger) Compiler {
 // Compile compiles a Typst document to PDF
 func (c *compiler) Compile(opts CompileOpts) (string, error) {
 	// Determine output file path
-	outputFile := filepath.Join(c.outputDir, opts.OutputFile)
+	safeFile := filepath.Base(opts.OutputFile)
+	outputFile := filepath.Join(c.outputDir, safeFile)
+	// Verify the output file stays within the output directory using filepath.Rel,
+	// which handles edge cases (e.g. "/" or ".") that strings.HasPrefix misses.
+	if opts.OutputFile != "" {
+		rel, err := filepath.Rel(filepath.Clean(c.outputDir), filepath.Clean(outputFile))
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", ierr.NewError("invalid output file path").Mark(ierr.ErrValidation)
+		}
+	}
 	if opts.OutputFile == "" {
 		tmpFilePath := filepath.Join(c.outputDir, fmt.Sprintf("typst-%d.pdf", time.Now().UnixMilli()))
 		tmpFile, err := os.Create(tmpFilePath)

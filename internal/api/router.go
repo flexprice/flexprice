@@ -113,13 +113,10 @@ func NewRouter(
 	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
 	write := permissionMW.RequirePermission // shorthand used on every write route
 
-	// Add middleware to set swagger host dynamically
-	router.Use(func(c *gin.Context) {
-		if swagger.SwaggerInfo != nil {
-			swagger.SwaggerInfo.Host = c.Request.Host
-		}
-		c.Next()
-	})
+	// Set swagger host once from config at startup, not from request headers
+	if swagger.SwaggerInfo != nil {
+		swagger.SwaggerInfo.Host = cfg.Server.Address
+	}
 
 	// Health check
 	router.GET("/health", handlers.Health.Health)
@@ -250,7 +247,7 @@ func NewRouter(
 			customer.GET("/wallets", handlers.Wallet.GetCustomerWallets)
 
 			// Customer Dashboard - Session creation (requires tenant auth)
-			customer.GET("/portal/:external_id", handlers.CustomerPortal.CreateSession)
+			customer.GET("/portal/:external_id", write("customer_portal", types.ActionWrite), handlers.CustomerPortal.CreateSession)
 		}
 
 		plan := v1Private.Group("/plans")

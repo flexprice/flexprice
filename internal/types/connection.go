@@ -325,9 +325,10 @@ func (s *StripeConnectionMetadata) Validate() error {
 
 // WhopConnectionMetadata represents Whop-specific connection metadata
 type WhopConnectionMetadata struct {
-	APIKey    string `json:"api_key"`              // Whop API key / Bearer token (encrypted)
-	CompanyID string `json:"company_id"`           // Whop company ID (biz_...)
-	ProductID string `json:"product_id,omitempty"` // Whop product ID (prod_...) - created on first sync if empty
+	APIKey               string `json:"api_key"`                         // Whop API key / Bearer token (encrypted)
+	CompanyID            string `json:"company_id"`                      // Whop company ID (biz_...)
+	ProductID            string `json:"product_id,omitempty"`            // Whop product ID (prod_...) - created on first sync if empty
+	WebhookSigningSecret string `json:"webhook_signing_secret,omitempty"` // HMAC-SHA256 signing secret for webhook verification
 }
 
 // Validate validates the Whop connection metadata

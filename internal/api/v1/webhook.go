@@ -2,14 +2,19 @@ package v1
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -45,9 +50,12 @@ type WebhookHandler struct {
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService
 	db                              postgres.IClient
 	webhookService                  *flexwebhook.WebhookService
+	cache                           cache.Cache
 }
 
-// NewWebhookHandler creates a new webhook handler
+// NewWebhookHandler creates a new webhook handler.
+// sharedCache must be the application-level cache (Redis in production) so that
+// webhook-id deduplication state is shared across all replicas and survives restarts.
 func NewWebhookHandler(
 	cfg *config.Configuration,
 	svixClient *svix.Client,
@@ -61,6 +69,7 @@ func NewWebhookHandler(
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService,
 	db postgres.IClient,
 	webhookService *flexwebhook.WebhookService,
+	sharedCache cache.Cache,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		config:                          cfg,
@@ -75,6 +84,7 @@ func NewWebhookHandler(
 		entityIntegrationMappingService: entityIntegrationMappingService,
 		db:                              db,
 		webhookService:                  webhookService,
+		cache:                           sharedCache,
 	}
 }
 
@@ -352,16 +362,11 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	}
 
 	// Construct the full URL that HubSpot called
-	// When behind a proxy (like ngrok), check X-Forwarded-Proto
-	var scheme string
-	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
-	} else if c.Request.TLS != nil {
-		scheme = "https"
-	} else {
-		scheme = "http"
-	}
-	fullURL := scheme + "://" + c.Request.Host + c.Request.URL.String()
+	// Use configured base URL instead of trusting user-supplied headers (X-Forwarded-Proto, Host)
+	// to prevent header injection attacks on the HubSpot signature verification.
+	scheme := "https"
+	host := h.config.Server.Address
+	fullURL := scheme + "://" + host + c.Request.URL.String()
 
 	h.logger.Debug(context.Background(), "verifying v3 signature",
 		"method", c.Request.Method,
@@ -695,26 +700,20 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 		return
 	}
 
-	// Verify webhook signature (if signature provided)
-	if signature != "" {
-		err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature)
-		if err != nil {
-			h.logger.Error(context.Background(), "failed to verify QuickBooks webhook signature",
-				"tenant_id", tenantID,
-				"error", err,
-				"environment_id", environmentID)
-			// Don't return 401 - QuickBooks expects 200
-			return
-		}
-		h.logger.Debug(context.Background(), "QuickBooks webhook signature verified",
-			"tenant_id", tenantID,
-			"environment_id", environmentID)
-	} else {
-		h.logger.Info(context.Background(), "QuickBooks webhook received without signature",
+	// Verify QuickBooks webhook signature. VerifyWebhookSignature handles the case
+	// where no verifier token is configured (development mode — it returns nil).
+	// When a verifier token IS configured, an empty or wrong signature causes rejection.
+	if err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature); err != nil {
+		h.logger.Error(context.Background(), "QuickBooks webhook signature verification failed",
 			"tenant_id", tenantID,
 			"environment_id", environmentID,
-			"note", "Consider configuring webhook verifier token for security")
+			"has_signature", signature != "",
+			"error", err)
+		return
 	}
+	h.logger.Debug(context.Background(), "QuickBooks webhook signature verified",
+		"tenant_id", tenantID,
+		"environment_id", environmentID)
 
 	// Create service dependencies for webhook handler
 	serviceDeps := &quickbookswebhook.ServiceDependencies{
@@ -1199,6 +1198,17 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		return
 	}
 
+	// Replay protection: check if this webhook-id has already been processed
+	webhookID := c.GetHeader("webhook-id")
+	if webhookID != "" {
+		cacheKey := "whop_webhook:" + webhookID
+		if _, found := h.cache.ForceCacheGet(context.Background(), cacheKey); found {
+			h.logger.Info(context.Background(), "duplicate Whop webhook received, skipping",
+				"webhook_id", webhookID)
+			return
+		}
+	}
+
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		h.logger.Error(context.Background(), "failed to read Whop webhook body", "error", err)
@@ -1207,6 +1217,72 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 
 	ctx := types.SetTenantID(c.Request.Context(), tenantID)
 	ctx = types.SetEnvironmentID(ctx, environmentID)
+
+	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
+	if err != nil {
+		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
+		return
+	}
+
+	// Verify Standard Webhooks HMAC-SHA256 signature when a signing secret is configured.
+	// Whop follows the Standard Webhooks spec: https://www.standardwebhooks.com/
+	// Message = "<webhook-id>\n<webhook-timestamp>\n<body>"
+	// Signature header format: "v1,<base64(HMAC-SHA256(secret, message))>"
+	whopConfig, err := whopIntegration.Client.GetWhopConfig(ctx)
+	if err != nil {
+		h.logger.Error(context.Background(), "failed to retrieve Whop config — rejecting webhook",
+			"error", err,
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+	if whopConfig.WebhookSigningSecret != "" {
+		msgID := c.GetHeader("webhook-id")
+		msgTimestamp := c.GetHeader("webhook-timestamp")
+		sigHeader := c.GetHeader("whop-signature")
+		if msgID == "" || msgTimestamp == "" || sigHeader == "" {
+			h.logger.Error(context.Background(), "missing required Whop Standard Webhooks headers",
+				"has_webhook_id", msgID != "",
+				"has_webhook_timestamp", msgTimestamp != "",
+				"has_whop_signature", sigHeader != "",
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			return
+		}
+
+		// Decode the secret (Standard Webhooks secrets are base64-encoded with optional "base64:" prefix)
+		secretB64 := strings.TrimPrefix(whopConfig.WebhookSigningSecret, "base64:")
+		secretBytes, decErr := base64.StdEncoding.DecodeString(secretB64)
+		if decErr != nil {
+			// Fallback: treat as raw bytes if base64 decode fails
+			secretBytes = []byte(whopConfig.WebhookSigningSecret)
+		}
+
+		toSign := msgID + "\n" + msgTimestamp + "\n" + string(body)
+		mac := hmac.New(sha256.New, secretBytes)
+		mac.Write([]byte(toSign))
+		computedSig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+		// Header may contain multiple space-separated "v1,<base64>" entries
+		verified := false
+		for _, part := range strings.Fields(sigHeader) {
+			if strings.HasPrefix(part, "v1,") {
+				if hmac.Equal([]byte(strings.TrimPrefix(part, "v1,")), []byte(computedSig)) {
+					verified = true
+					break
+				}
+			}
+		}
+		if !verified {
+			h.logger.Error(context.Background(), "Whop webhook signature verification failed",
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			return
+		}
+		h.logger.Debug(context.Background(), "Whop webhook signature verified",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+	}
 
 	var event whopwebhook.WhopWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
@@ -1218,12 +1294,6 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		"type", event.Type,
 		"tenant_id", tenantID,
 		"environment_id", environmentID)
-
-	whopIntegration, err := h.integrationFactory.GetWhopIntegration(ctx)
-	if err != nil {
-		h.logger.Error(context.Background(), "failed to get Whop integration", "error", err)
-		return
-	}
 
 	serviceDeps := &whopwebhook.ServiceDependencies{
 		CustomerService:                 h.customerService,
@@ -1239,5 +1309,12 @@ func (h *WebhookHandler) HandleWhopWebhook(c *gin.Context) {
 		h.logger.Error(context.Background(), "failed to handle Whop webhook event",
 			"error", err,
 			"type", event.Type)
+		return
+	}
+
+	// Store webhook-id in cache to prevent replay attacks (24-hour TTL)
+	if webhookID != "" {
+		cacheKey := "whop_webhook:" + webhookID
+		h.cache.ForceCacheSet(context.Background(), cacheKey, true, 24*time.Hour)
 	}
 }

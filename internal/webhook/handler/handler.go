@@ -1,8 +1,14 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -329,14 +335,33 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 		"payload", string(webHookPayload),
 	)
 
-	req := &httpclient.Request{
-		Method:  "POST",
-		URL:     tenantCfg.Endpoint,
-		Headers: tenantCfg.Headers,
-		Body:    webHookPayload,
+	// Build a safe HTTP client whose DialContext resolves the hostname once,
+	// validates every returned IP against private/loopback ranges, and dials
+	// directly to the pinned IP — preventing both SSRF and DNS-rebinding attacks.
+	safeClient, err := newSafeWebhookHTTPClient(tenantCfg.Endpoint)
+	if err != nil {
+		return err
 	}
 
-	resp, err := h.client.Send(ctx, req)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, tenantCfg.Endpoint, nil)
+	if err != nil {
+		return ierr.WithError(err).WithHint("failed to build webhook request").Mark(ierr.ErrInvalidOperation)
+	}
+	for k, v := range tenantCfg.Headers {
+		httpReq.Header.Set(k, v)
+	}
+	if len(webHookPayload) > 0 {
+		httpReq.Body = io.NopCloser(bytes.NewReader(webHookPayload))
+		httpReq.ContentLength = int64(len(webHookPayload))
+	}
+
+	httpResp, err := safeClient.Do(httpReq)
+	if err != nil {
+		return ierr.WithError(err).WithHint("webhook delivery failed").Mark(ierr.ErrInvalidOperation)
+	}
+	defer httpResp.Body.Close()
+
+	resp := &httpclient.Response{StatusCode: httpResp.StatusCode}
 	if err != nil {
 		return err
 	}
@@ -358,4 +383,70 @@ func (h *handler) deliverNative(ctx context.Context, event *types.WebhookEvent, 
 	}
 
 	return nil
+}
+
+// isPrivateIP returns true if the given IP is loopback, link-local, or an RFC-1918/ULA range.
+func isPrivateIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	if ip.Equal(net.IPv6loopback) {
+		return true
+	}
+	for _, cidr := range []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"} {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// newSafeWebhookHTTPClient returns an *http.Client whose DialContext resolves the
+// endpoint hostname once, validates every returned IP against private/loopback
+// ranges, and dials directly to the first validated IP — preventing both SSRF
+// and DNS-rebinding attacks (the previous pre-check + separate dial approach
+// left a rebinding window because the HTTP client resolved DNS a second time).
+func newSafeWebhookHTTPClient(rawURL string) (*http.Client, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, ierr.NewError("invalid webhook URL").
+			WithHint("The configured webhook endpoint URL is malformed").
+			Mark(ierr.ErrValidation)
+	}
+	host := parsed.Hostname()
+
+	// Resolve once and pin the IP so the dial step cannot re-query DNS.
+	ips, err := net.DefaultResolver.LookupIPAddr(context.Background(), host)
+	if err != nil || len(ips) == 0 {
+		return nil, ierr.NewError("failed to resolve webhook URL hostname").
+			WithHint("The webhook endpoint hostname could not be resolved").
+			Mark(ierr.ErrValidation)
+	}
+	for _, ipAddr := range ips {
+		if isPrivateIP(ipAddr.IP) {
+			return nil, ierr.NewError("webhook URL resolves to a private IP address").
+				WithHint("Webhook endpoints must not target internal network addresses").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	pinnedIP := ips[0].IP.String()
+
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			_, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("webhook dial: bad addr %q: %w", addr, err)
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(pinnedIP, port))
+		},
+	}
+	return &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: transport,
+	}, nil
 }

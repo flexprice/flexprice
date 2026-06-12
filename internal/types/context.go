@@ -70,7 +70,7 @@ func GetRoles(ctx context.Context) []string {
 	if roles, ok := ctx.Value(CtxRoles).([]string); ok {
 		return roles
 	}
-	return []string{} // Empty roles = full access
+	return []string{}
 }
 
 // GetCustomerID returns the customer ID from the context

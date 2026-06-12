@@ -118,10 +118,20 @@ func (c *Client) GetDecryptedWhopConfig(conn *connection.Connection) (*WhopConfi
 		return nil, ierr.NewError("failed to decrypt Whop company ID").Mark(ierr.ErrInternal)
 	}
 
+	webhookSigningSecret := ""
+	if w.WebhookSigningSecret != "" {
+		webhookSigningSecret, err = c.encryptionService.Decrypt(w.WebhookSigningSecret)
+		if err != nil {
+			c.logger.Error(context.Background(), "failed to decrypt Whop webhook signing secret", "connection_id", conn.ID, "error", err)
+			return nil, ierr.NewError("failed to decrypt Whop webhook signing secret").Mark(ierr.ErrInternal)
+		}
+	}
+
 	return &WhopConfig{
-		APIKey:    apiKey,
-		CompanyID: companyID,
-		ProductID: w.ProductID,
+		APIKey:               apiKey,
+		CompanyID:            companyID,
+		ProductID:            w.ProductID,
+		WebhookSigningSecret: webhookSigningSecret,
 	}, nil
 }
 
