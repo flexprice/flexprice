@@ -90,6 +90,7 @@ func NewRouter(
 	// Add our custom middleware in order
 	router.Use(
 		middleware.RequestIDMiddleware,       // Generate/extract request ID first
+		middleware.DBWriterPinMiddleware,     // Per-request read-your-writes pin for DB routing
 		middleware.LoggingMiddleware(logger), // Use our standard logger for HTTP logging
 		middleware.CORSMiddleware,
 	)

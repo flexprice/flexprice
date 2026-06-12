@@ -41,6 +41,7 @@ type IClient interface {
 	// Routing:
 	// - Inside transaction: returns transaction client (writer) for read-your-writes consistency
 	// - Force writer flag set: returns writer client for read-after-write consistency
+	// - Writer pinned (a write already happened in this unit of work): returns writer client
 	// - Otherwise: returns reader client (read replica if available)
 	//
 	// Use for: Get, List, Count, Query operations
@@ -199,6 +200,12 @@ func NewClient(clients *EntClients, logger *logger.Logger, tracingSvc *tracing.S
 
 // WithTx wraps the given function in a transaction
 // Transactions ALWAYS use the writer connection to ensure consistency
+//
+// Note on writer pinning: WithTx does not pin by itself, so read-only
+// transactions keep later reads on the replica. Any actual write inside the
+// transaction goes through Writer(txCtx), and because the pin holder is shared
+// with the parent context, reads issued AFTER the transaction commits still
+// route to the writer despite replica lag.
 func (c *Client) WithTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	// If we're already in a transaction, reuse it and do not start a new one or commit it
 	if tx := c.TxFromContext(ctx); tx != nil {
@@ -264,6 +271,10 @@ func (c *Client) TxFromContext(ctx context.Context) *ent.Tx {
 //
 // Use this for: Create, Update, Delete, Save, Exec operations
 func (c *Client) Writer(ctx context.Context) *ent.Client {
+	// A write is about to happen: pin this unit of work to the writer so all
+	// subsequent reads on this context see the write (read-your-writes).
+	types.PinWriter(ctx)
+
 	// If in a transaction, return the transaction client (which is on writer)
 	if tx := c.TxFromContext(ctx); tx != nil {
 		return tx.Client()
@@ -288,7 +299,13 @@ func (c *Client) Reader(ctx context.Context) *ent.Client {
 		return c.writerClient
 	}
 
-	// Priority 3: Default to reader for scalability
+	// Priority 3: If a write already happened in this unit of work, use writer
+	// so the just-written rows are visible despite replica lag
+	if types.IsWriterPinned(ctx) {
+		return c.writerClient
+	}
+
+	// Priority 4: Default to reader for scalability
 	return c.readerClient
 }
 

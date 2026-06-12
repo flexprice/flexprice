@@ -319,10 +319,12 @@ func (s *temporalService) buildWorkerOptions() *models.WorkerOptions {
 		options.Interceptors = []interceptor.WorkerInterceptor{
 			temporalInterceptor.NewTracingInterceptor(s.tracing),
 			temporalInterceptor.NewWorkflowTrackingInterceptor(),
+			temporalInterceptor.NewWriterPinInterceptor(),
 		}
 	} else {
 		options.Interceptors = []interceptor.WorkerInterceptor{
 			temporalInterceptor.NewWorkflowTrackingInterceptor(),
+			temporalInterceptor.NewWriterPinInterceptor(),
 		}
 	}
 

@@ -259,7 +259,7 @@ func (s *onboardingService) processMessage(msg *message.Message) error {
 
 	// Create a new background context instead of using the message context
 	// This prevents the event generation from being cancelled when the HTTP request completes
-	bgCtx := context.Background()
+	bgCtx := types.WithWriterPinning(context.Background())
 
 	// Copy tenant ID from original context to background context
 	bgCtx = context.WithValue(bgCtx, types.CtxTenantID, eventMsg.TenantID)
