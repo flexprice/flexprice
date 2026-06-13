@@ -76,7 +76,7 @@ func (h *SubscriptionModificationHandler) Execute(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @x-scope "write"
+// @x-scope "read"
 // @Param id path string true "Subscription ID"
 // @Param request body dto.ExecuteSubscriptionModifyRequest true "Modification preview request"
 // @Success 200 {object} dto.SubscriptionModifyResponse
