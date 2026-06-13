@@ -55,6 +55,8 @@ const (
 	FieldCurrency = "currency"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldCouponCode holds the string denoting the coupon_code field in the database.
+	FieldCouponCode = "coupon_code"
 	// EdgeCouponAssociations holds the string denoting the coupon_associations edge name in mutations.
 	EdgeCouponAssociations = "coupon_associations"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -100,6 +102,7 @@ var Columns = []string{
 	FieldDurationInPeriods,
 	FieldCurrency,
 	FieldMetadata,
+	FieldCouponCode,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -239,6 +242,11 @@ func ByDurationInPeriods(opts ...sql.OrderTermOption) OrderOption {
 // ByCurrency orders the results by the currency field.
 func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
+}
+
+// ByCouponCode orders the results by the coupon_code field.
+func ByCouponCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCouponCode, opts...).ToFunc()
 }
 
 // ByCouponAssociationsCount orders the results by coupon_associations count.

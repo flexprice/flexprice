@@ -41,6 +41,10 @@ const (
 	FieldCurrency = "currency"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldStartDate holds the string denoting the start_date field in the database.
+	FieldStartDate = "start_date"
+	// FieldEndDate holds the string denoting the end_date field in the database.
+	FieldEndDate = "end_date"
 	// Table holds the table name of the taxassociation in the database.
 	Table = "tax_associations"
 )
@@ -62,6 +66,8 @@ var Columns = []string{
 	FieldAutoApply,
 	FieldCurrency,
 	FieldMetadata,
+	FieldStartDate,
+	FieldEndDate,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -172,4 +178,14 @@ func ByAutoApply(opts ...sql.OrderTermOption) OrderOption {
 // ByCurrency orders the results by the currency field.
 func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
+}
+
+// ByStartDate orders the results by the start_date field.
+func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartDate, opts...).ToFunc()
+}
+
+// ByEndDate orders the results by the end_date field.
+func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
 }

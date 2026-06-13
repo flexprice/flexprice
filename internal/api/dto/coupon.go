@@ -13,6 +13,7 @@ import (
 // CreateCouponRequest represents the request to create a new coupon
 type CreateCouponRequest struct {
 	Name              string                  `json:"name" validate:"required"`
+	CouponCode        *string                 `json:"coupon_code,omitempty"`
 	RedeemAfter       *time.Time              `json:"redeem_after,omitempty"`
 	RedeemBefore      *time.Time              `json:"redeem_before,omitempty"`
 	MaxRedemptions    *int                    `json:"max_redemptions,omitempty"`
@@ -122,7 +123,7 @@ func (r *UpdateCouponRequest) Validate() error {
 // ToCoupon converts the request to a domain coupon
 func (r *CreateCouponRequest) ToCoupon(ctx context.Context) *coupon.Coupon {
 	currency := ""
-	if r.Currency != nil {
+	if r.Type != types.CouponTypePercentage && r.Currency != nil {
 		currency = *r.Currency
 	}
 
@@ -141,6 +142,7 @@ func (r *CreateCouponRequest) ToCoupon(ctx context.Context) *coupon.Coupon {
 		DurationInPeriods: r.DurationInPeriods,
 		Metadata:          r.Metadata,
 		Currency:          currency,
+		CouponCode:        r.CouponCode,
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 	}

@@ -64,6 +64,8 @@ func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfi
 		SetCreatedBy(t.CreatedBy).
 		SetTenantID(t.TenantID).
 		SetUpdatedBy(t.UpdatedBy).
+		SetStartDate(t.StartDate).
+		SetNillableEndDate(t.EndDate).
 		Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -145,7 +147,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 	})
 	defer FinishSpan(span)
 
-	_, err := client.TaxAssociation.Update().
+	update := client.TaxAssociation.Update().
 		Where(
 			entTaxConfig.ID(t.ID),
 			entTaxConfig.TenantID(types.GetTenantID(ctx)),
@@ -156,8 +158,10 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 		SetAutoApply(t.AutoApply).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetMetadata(t.Metadata).
-		Save(ctx)
+		SetNillableEndDate(t.EndDate).
+		SetMetadata(t.Metadata)
+
+	_, err := update.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		if ent.IsNotFound(err) {
@@ -399,6 +403,15 @@ func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f
 		if f.TimeRangeFilter.EndTime != nil {
 			query = query.Where(entTaxConfig.CreatedAtLTE(*f.TimeRangeFilter.EndTime))
 		}
+	}
+	if f.StartDate != nil && f.EndDate != nil {
+		query = query.Where(
+			entTaxConfig.StartDateLTE(lo.FromPtr(f.EndDate)),
+			entTaxConfig.Or(
+				entTaxConfig.EndDateIsNil(),
+				entTaxConfig.EndDateGT(lo.FromPtr(f.StartDate)),
+			),
+		)
 	}
 	return query, nil
 }
