@@ -954,6 +954,12 @@ func (s *taxService) PrepareTaxRatesForInvoice(ctx context.Context, req dto.Crea
 		filter.EntityType = types.TaxRateEntityTypeSubscription
 		filter.EntityID = lo.FromPtr(req.SubscriptionID)
 		filter.AutoApply = lo.ToPtr(true)
+		if req.PeriodStart != nil {
+			filter.StartDate = lo.ToPtr(req.PeriodStart.UTC())
+		}
+		if req.PeriodEnd != nil {
+			filter.EndDate = lo.ToPtr(req.PeriodEnd.UTC())
+		}
 
 		taxAssociations, err := s.ListTaxAssociations(ctx, filter)
 		if err != nil {

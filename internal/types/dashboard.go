@@ -5,8 +5,8 @@ import (
 )
 
 const (
-	// DefaultWindowSize is the default window size for revenue trend
-	DefaultWindowSize = WindowSizeMonth
+	// DefaultWindowSize is the default window size for revenue trend (string alias, not a WindowSize enum value).
+	DefaultWindowSize string = string(WindowSizeMonth)
 	// DefaultWindowCount is the default window count for revenue trend
 	DefaultWindowCount = 3
 )

@@ -934,6 +934,133 @@ const docTemplate = `{
                 }
             }
         },
+        "/coupons/associations": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List coupon associations with optional filters. Coupon associations are created and removed via the subscription modify API.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Coupon Associations"
+                ],
+                "summary": "List coupon associations",
+                "operationId": "listCouponAssociations",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by subscription IDs (max 100)",
+                        "name": "subscription_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Filter by coupon IDs (max 100)",
+                        "name": "coupon_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Return only currently active associations",
+                        "name": "active_only",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListCouponAssociationsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/coupons/associations/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a single coupon association by ID. Coupon associations are created and removed via the subscription modify API.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Coupon Associations"
+                ],
+                "summary": "Get coupon association",
+                "operationId": "getCouponAssociation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Coupon Association ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CouponAssociationResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/coupons/search": {
             "post": {
                 "security": [
@@ -7485,7 +7612,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Execute a mid-cycle subscription modification (inheritance or quantity change).",
+                "description": "Execute a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax).",
                 "consumes": [
                     "application/json"
                 ],
@@ -7551,7 +7678,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Preview the impact of a mid-cycle subscription modification without committing changes.",
+                "description": "Preview the impact of a mid-cycle subscription modification (inheritance, quantity change, grouped invoicing, trial end, coupon, or tax) without committing changes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7607,7 +7734,7 @@ const docTemplate = `{
                         }
                     }
                 },
-                "x-scope": "read"
+                "x-scope": "write"
             }
         },
         "/subscriptions/{id}/v2": {
@@ -12202,6 +12329,20 @@ const docTemplate = `{
                 }
             }
         },
+        "AttributedToCustomerResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/errors.ErrorResponse"
+                },
+                "meter_usage": {
+                    "$ref": "#/definitions/MeterUsageAttribution"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.DebugTrackerStatus"
+                }
+            }
+        },
         "BillingCycleInfo": {
             "type": "object",
             "properties": {
@@ -12318,6 +12459,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "cancel_at": {
+                    "description": "CancelAt is the exact date/time when the subscription should be cancelled.\nRequired for cancellation_type \"scheduled_date\"; optional for \"immediate\" (past dates only — backdated cancellation).\nFor \"scheduled_date\", accepts both future dates (deferred cancellation) and past dates (backdated cancellation).\nFor \"immediate\", accepts past/current dates only; use \"scheduled_date\" for future dates.",
                     "type": "string"
                 },
                 "cancel_immediately_inovice_policy": {
@@ -12911,6 +13053,9 @@ const docTemplate = `{
                 "cadence": {
                     "$ref": "#/definitions/types.CouponCadence"
                 },
+                "coupon_code": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -13194,6 +13339,9 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.CouponCadence"
                         }
                     ]
+                },
+                "coupon_code": {
+                    "type": "string"
                 },
                 "currency": {
                     "type": "string"
@@ -14243,6 +14391,12 @@ const docTemplate = `{
                 "commitment_quantity": {
                     "type": "number"
                 },
+                "commitment_time_buckets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
+                },
                 "commitment_true_up_enabled": {
                     "type": "boolean"
                 },
@@ -14354,6 +14508,7 @@ const docTemplate = `{
                     ]
                 },
                 "coupons": {
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -14407,6 +14562,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_coupons": {
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
                     "type": "object",
                     "additionalProperties": {
                         "type": "array",
@@ -14486,6 +14642,13 @@ const docTemplate = `{
                 "start_date": {
                     "type": "string"
                 },
+                "subscription_coupons": {
+                    "description": "SubscriptionCoupons is the preferred way to attach coupons at creation.\nAccepts coupon_code; optionally targets a line item via price_id.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
+                },
                 "subscription_status": {
                     "description": "SubscriptionStatus determines the initial status of the subscription\nIf set to \"draft\", the subscription will be created as a draft (skips invoice creation and payment processing)",
                     "allOf": [
@@ -14549,6 +14712,10 @@ const docTemplate = `{
                 "currency": {
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "EndDate sets when this association expires. Must be after StartDate when both are provided.",
+                    "type": "string"
+                },
                 "entity_id": {
                     "type": "string"
                 },
@@ -14566,6 +14733,10 @@ const docTemplate = `{
                 },
                 "priority": {
                     "type": "integer"
+                },
+                "start_date": {
+                    "description": "StartDate sets when this association becomes active. Defaults to now if omitted.",
+                    "type": "string"
                 },
                 "tax_rate_code": {
                     "type": "string"
@@ -15271,6 +15442,9 @@ const docTemplate = `{
         "DebugTracker": {
             "type": "object",
             "properties": {
+                "attributed_to_customer": {
+                    "$ref": "#/definitions/AttributedToCustomerResult"
+                },
                 "customer_lookup": {
                     "$ref": "#/definitions/CustomerLookupResult"
                 },
@@ -15553,6 +15727,9 @@ const docTemplate = `{
                 "type"
             ],
             "properties": {
+                "coupon_params": {
+                    "$ref": "#/definitions/SubModifyCouponParams"
+                },
                 "grouped_invoicing_params": {
                     "$ref": "#/definitions/SubModifyGroupedInvoicingParams"
                 },
@@ -15561,6 +15738,9 @@ const docTemplate = `{
                 },
                 "quantity_change_params": {
                     "$ref": "#/definitions/SubModifyQuantityChangeRequest"
+                },
+                "tax_params": {
+                    "$ref": "#/definitions/SubModifyTaxParams"
                 },
                 "trial_end_params": {
                     "$ref": "#/definitions/SubModifyTrialEndRequest"
@@ -16845,6 +17025,13 @@ const docTemplate = `{
                     "description": "CommitmentQuantity is the minimum quantity committed for this line item",
                     "type": "number"
                 },
+                "commitment_time_buckets": {
+                    "description": "CommitmentTimeBuckets restricts commitment treatment to windows whose start\nUTC hour falls within one of the configured buckets. Empty/omitted = no\nrestriction (commitment applies 24/7). Requires IsWindowCommitment=true.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
+                },
                 "commitment_type": {
                     "description": "CommitmentType specifies whether commitment is based on amount or quantity",
                     "allOf": [
@@ -16945,6 +17132,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CostsheetResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListCouponAssociationsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CouponAssociationResponse"
                     }
                 },
                 "pagination": {
@@ -17127,6 +17328,20 @@ const docTemplate = `{
                 "updated_at": {
                     "type": "string",
                     "example": "2024-03-20T15:04:05Z"
+                }
+            }
+        },
+        "MeterUsageAttribution": {
+            "type": "object",
+            "properties": {
+                "external_customer_id": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "qty_total": {
+                    "type": "string"
                 }
             }
         },
@@ -17912,6 +18127,61 @@ const docTemplate = `{
                 }
             }
         },
+        "SubModifyCouponAction": {
+            "type": "string",
+            "enum": [
+                "add",
+                "remove"
+            ],
+            "x-enum-varnames": [
+                "SubModifyCouponActionAdd",
+                "SubModifyCouponActionRemove"
+            ]
+        },
+        "SubModifyCouponParams": {
+            "type": "object",
+            "required": [
+                "action"
+            ],
+            "properties": {
+                "action": {
+                    "description": "Required. \"add\" to attach a coupon; \"remove\" to detach an existing association.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/SubModifyCouponAction"
+                        }
+                    ]
+                },
+                "association_id": {
+                    "description": "Required when action=\"remove\". ID of the CouponAssociation to soft-delete.",
+                    "type": "string"
+                },
+                "coupon_code": {
+                    "description": "CouponCode is the preferred way to identify the coupon for action=\"add\".",
+                    "type": "string"
+                },
+                "coupon_id": {
+                    "description": "Deprecated: use coupon_code instead.",
+                    "type": "string"
+                },
+                "effective_date": {
+                    "description": "Optional. When to apply the change; defaults to now if omitted.",
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "Optional. When the coupon association ends; overrides duration_in_periods.",
+                    "type": "string"
+                },
+                "price_id": {
+                    "description": "Optional. Price ID of the line item to target; omit for subscription-level.",
+                    "type": "string"
+                },
+                "start_date": {
+                    "description": "Optional. When the coupon association starts; defaults to EffectiveDate.",
+                    "type": "string"
+                }
+            }
+        },
         "SubModifyGroupedInvoicingParams": {
             "type": "object",
             "required": [
@@ -17961,6 +18231,45 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/LineItemQuantityChange"
                     }
+                }
+            }
+        },
+        "SubModifyTaxAction": {
+            "type": "string",
+            "enum": [
+                "add",
+                "remove"
+            ],
+            "x-enum-varnames": [
+                "SubModifyTaxActionAdd",
+                "SubModifyTaxActionRemove"
+            ]
+        },
+        "SubModifyTaxParams": {
+            "type": "object",
+            "required": [
+                "action"
+            ],
+            "properties": {
+                "action": {
+                    "description": "Required. \"add\" to attach a tax rate; \"remove\" to detach an existing association.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/SubModifyTaxAction"
+                        }
+                    ]
+                },
+                "association_id": {
+                    "description": "Required when action=\"remove\". ID of the TaxAssociation to soft-delete.",
+                    "type": "string"
+                },
+                "effective_date": {
+                    "description": "Optional. When to apply the change; defaults to now if omitted.",
+                    "type": "string"
+                },
+                "tax_rate_id": {
+                    "description": "Required when action=\"add\". ID of the active tax rate to attach.",
+                    "type": "string"
                 }
             }
         },
@@ -18205,6 +18514,30 @@ const docTemplate = `{
                 }
             }
         },
+        "SubscriptionCouponInput": {
+            "type": "object",
+            "required": [
+                "coupon_code"
+            ],
+            "properties": {
+                "coupon_code": {
+                    "description": "CouponCode is the coupon's human-readable code (case-insensitive). Required.",
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "EndDate is when the coupon ends; overrides duration_in_periods calculation.",
+                    "type": "string"
+                },
+                "price_id": {
+                    "description": "PriceID is the price ID of the line item to target; omit for subscription-level.",
+                    "type": "string"
+                },
+                "start_date": {
+                    "description": "StartDate is when the coupon starts; defaults to subscription/phase StartDate.",
+                    "type": "string"
+                }
+            }
+        },
         "SubscriptionEntitlementsResponse": {
             "type": "object",
             "properties": {
@@ -18291,6 +18624,12 @@ const docTemplate = `{
                 },
                 "commitment_quantity": {
                     "type": "string"
+                },
+                "commitment_time_buckets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
                 },
                 "commitment_true_up_enabled": {
                     "type": "boolean"
@@ -18417,13 +18756,17 @@ const docTemplate = `{
                 "inheritance",
                 "quantity_change",
                 "grouped_invoicing",
-                "trial_end"
+                "trial_end",
+                "coupon",
+                "tax"
             ],
             "x-enum-varnames": [
                 "SubscriptionModifyTypeInheritance",
                 "SubscriptionModifyTypeQuantityChange",
                 "SubscriptionModifyTypeGroupedInvoicing",
-                "SubscriptionModifyTypeTrialEnd"
+                "SubscriptionModifyTypeTrialEnd",
+                "SubscriptionModifyTypeCoupon",
+                "SubscriptionModifyTypeTax"
             ]
         },
         "SubscriptionPhaseCreateRequest": {
@@ -18433,7 +18776,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "coupons": {
-                    "description": "Coupons represents subscription-level coupons to be applied to this phase",
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -18443,7 +18786,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "line_item_coupons": {
-                    "description": "LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)",
+                    "description": "Deprecated: use SubscriptionCoupons instead.",
                     "type": "object",
                     "additionalProperties": {
                         "type": "array",
@@ -18474,6 +18817,13 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
+                },
+                "subscription_coupons": {
+                    "description": "SubscriptionCoupons is the preferred way to attach coupons to this phase.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SubscriptionCouponInput"
+                    }
                 }
             }
         },
@@ -19429,6 +19779,10 @@ const docTemplate = `{
                     "description": "Currency",
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "EndDate is the optional date until which this association is active",
+                    "type": "string"
+                },
                 "entity_id": {
                     "description": "ID of the entity this tax rate applies to",
                     "type": "string"
@@ -19459,6 +19813,10 @@ const docTemplate = `{
                 "priority": {
                     "description": "Priority for tax resolution (lower number = higher priority)",
                     "type": "integer"
+                },
+                "start_date": {
+                    "description": "StartDate is the date from which this association is active",
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -19803,6 +20161,9 @@ const docTemplate = `{
         "UpdateCouponRequest": {
             "type": "object",
             "properties": {
+                "coupon_code": {
+                    "type": "string"
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": {
@@ -20144,6 +20505,13 @@ const docTemplate = `{
                 },
                 "commitment_quantity": {
                     "type": "number"
+                },
+                "commitment_time_buckets": {
+                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
                 },
                 "commitment_true_up_enabled": {
                     "type": "boolean"
@@ -20984,6 +21352,9 @@ const docTemplate = `{
                 "cadence": {
                     "$ref": "#/definitions/types.CouponCadence"
                 },
+                "coupon_code": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -21622,6 +21993,21 @@ const docTemplate = `{
                 "BILLING_TIER_SLAB"
             ]
         },
+        "types.Bucket": {
+            "type": "object",
+            "properties": {
+                "hour": {
+                    "type": "integer",
+                    "maximum": 24,
+                    "minimum": 0
+                },
+                "minute": {
+                    "type": "integer",
+                    "maximum": 59,
+                    "minimum": 0
+                }
+            }
+        },
         "types.CancelImmediatelyInvoicePolicy": {
             "type": "string",
             "enum": [
@@ -22002,13 +22388,17 @@ const docTemplate = `{
                 "unprocessed",
                 "not_found",
                 "found",
-                "error"
+                "error",
+                "processing",
+                "attributed"
             ],
             "x-enum-varnames": [
                 "DebugTrackerStatusUnprocessed",
                 "DebugTrackerStatusNotFound",
                 "DebugTrackerStatusFound",
-                "DebugTrackerStatusError"
+                "DebugTrackerStatusError",
+                "DebugTrackerStatusProcessing",
+                "DebugTrackerStatusAttributed"
             ]
         },
         "types.EntitlementEntityType": {
@@ -22223,13 +22613,15 @@ const docTemplate = `{
                 "customer_lookup",
                 "meter_lookup",
                 "price_lookup",
-                "subscription_line_item_lookup"
+                "subscription_line_item_lookup",
+                "attributed_to_customer"
             ],
             "x-enum-varnames": [
                 "FailurePointTypeCustomerLookup",
                 "FailurePointTypeMeterLookup",
                 "FailurePointTypePriceLookup",
-                "FailurePointTypeSubscriptionLineItemLookup"
+                "FailurePointTypeSubscriptionLineItemLookup",
+                "FailurePointTypeAttributedToCustomer"
             ]
         },
         "types.FeatureFilter": {
@@ -22909,6 +23301,12 @@ const docTemplate = `{
                 "allow_expired_prices": {
                     "type": "boolean",
                     "default": false
+                },
+                "billing_periods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.BillingPeriod"
+                    }
                 },
                 "end_time": {
                     "type": "string"
@@ -24305,7 +24703,6 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
-                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
@@ -24318,8 +24715,7 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth",
-                "DefaultWindowSize"
+                "WindowSizeMonth"
             ]
         },
         "types.WorkflowExecutionFilter": {
@@ -24932,6 +25328,12 @@ const docTemplate = `{
                 "commitment_quantity": {
                     "type": "string"
                 },
+                "commitment_time_buckets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                    }
+                },
                 "commitment_true_up_enabled": {
                     "type": "boolean"
                 },
@@ -25170,6 +25572,17 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "types.TimeOfDayBucket": {
+            "type": "object",
+            "properties": {
+                "end": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "start": {
+                    "$ref": "#/definitions/types.Bucket"
+                }
             }
         },
         "webhookDto.AlertWebhookPayload": {

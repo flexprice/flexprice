@@ -550,6 +550,12 @@ func NewRouter(
 			coupon.PUT("/:id", write("coupon", types.ActionWrite), handlers.Coupon.UpdateCoupon)
 			coupon.DELETE("/:id", write("coupon", types.ActionWrite), handlers.Coupon.DeleteCoupon)
 			coupon.POST("/search", handlers.Coupon.QueryCoupons)
+
+			couponAssociations := coupon.Group("/associations")
+			{
+				couponAssociations.GET("", handlers.Coupon.ListCouponAssociations)
+				couponAssociations.GET("/:id", handlers.Coupon.GetCouponAssociation)
+			}
 		}
 
 		// Admin routes (API Key only)
