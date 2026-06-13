@@ -532,6 +532,7 @@ func NewRouter(
 		integrations := v1Private.Group("/integrations")
 		{
 			integrations.POST("/link", handlers.Integration.Link)
+			integrations.POST("/delink", handlers.Integration.Delink)
 			integrations.POST("/sync", handlers.Integration.Sync)
 			integrations.GET("/mappings", handlers.Integration.GetMappings)
 			integrations.GET("/config", handlers.Integration.GetConfig)
