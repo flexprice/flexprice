@@ -860,6 +860,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 	// If auto-completed, publish webhook event immediately
 	if autoCompleteEnabled {
+		s.invalidateWalletRealtimeBalanceCache(ctx, walletID)
 		s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, walletTransactionID)
 	}
 
@@ -3494,6 +3495,19 @@ func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, wal
 	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
 	redisCache.ForceCacheSet(ctx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
+}
+
+func (s *walletService) invalidateWalletRealtimeBalanceCache(ctx context.Context, walletID string) {
+	if walletID == "" {
+		return
+	}
+
+	redisCache := cache.NewRedisCache()
+	if redisCache == nil {
+		return
+	}
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+	redisCache.Delete(ctx, cacheKey)
 }
 
 func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) *decimal.Decimal {

@@ -1382,10 +1382,12 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 			}
 		}
 
-		// Window size: bucketed meters expose their bucket size; others use the request.
+		// Window size reflects the granularity Points were computed at. Bucketed
+		// meters cannot be subdivided below their bucket size, so points are at
+		// max(request window, bucket size); non-bucketed meters use the request.
 		if m, ok := meterMap[analytic.MeterID]; ok {
 			if m.HasBucketSize() {
-				item.WindowSize = m.Aggregation.BucketSize
+				item.WindowSize = params.WindowSize.Max(m.Aggregation.BucketSize)
 			} else {
 				item.WindowSize = params.WindowSize
 			}

@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -8,17 +9,50 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// SubModifyInheritanceRequest is the payload for adding
-// inherited child subscriptions to a parent subscription.
+// InheritanceAction identifies whether children are being added to or removed from inheritance.
+type InheritanceAction string
+
+const (
+	// InheritanceActionAdd adds inherited child subscriptions to a parent.
+	InheritanceActionAdd InheritanceAction = "add"
+	// InheritanceActionRemove schedules inherited child subscriptions for cancellation at period end.
+	InheritanceActionRemove InheritanceAction = "remove"
+)
+
+// SubModifyInheritanceRequest is the payload for adding or removing
+// inherited child subscriptions from a parent subscription.
 type SubModifyInheritanceRequest struct {
+	// Action is "add" or "remove". Defaults to "add" when omitted — fully backward-compatible.
+	Action InheritanceAction `json:"action,omitempty"`
+
+	// ExternalCustomerIDsToInheritSubscription is used for action="add".
 	ExternalCustomerIDsToInheritSubscription []string `json:"external_customer_ids_to_inherit_subscription,omitempty"`
+
+	// ExternalCustomerIDsToRemove is used for action="remove".
+	ExternalCustomerIDsToRemove []string `json:"external_customer_ids_to_remove,omitempty"`
 }
 
 func (r *SubModifyInheritanceRequest) Validate() error {
-	if len(r.ExternalCustomerIDsToInheritSubscription) == 0 {
-		return ierr.NewError("at least one external customer ID is required").
-			WithHint("Provide external_customer_ids_to_inherit_subscription with at least one non-empty value").
-			Mark(ierr.ErrValidation)
+	switch r.Action {
+	case InheritanceActionRemove:
+		if len(r.ExternalCustomerIDsToRemove) == 0 {
+			return ierr.NewError("at least one external customer ID is required for remove").
+				WithHint("Provide external_customer_ids_to_remove with at least one non-empty value").
+				Mark(ierr.ErrValidation)
+		}
+		for _, id := range r.ExternalCustomerIDsToRemove {
+			if strings.TrimSpace(id) == "" {
+				return ierr.NewError("external customer ID must not be empty").
+					WithHint("Remove any empty strings from external_customer_ids_to_remove").
+					Mark(ierr.ErrValidation)
+			}
+		}
+	default: // "" or "add"
+		if len(r.ExternalCustomerIDsToInheritSubscription) == 0 {
+			return ierr.NewError("at least one external customer ID is required").
+				WithHint("Provide external_customer_ids_to_inherit_subscription with at least one non-empty value").
+				Mark(ierr.ErrValidation)
+		}
 	}
 	return nil
 }
@@ -161,33 +195,39 @@ func (r *SubModifyGroupedInvoicingParams) Validate() error {
 }
 
 // SubModifyCouponParams is the payload for coupon association changes on a subscription.
-// Conditional required fields: coupon_code (or deprecated coupon_id) required when action="add"; association_id required when action="remove".
+// For action="add": coupon_code is required; provide either subscription_id (sub-level) or
+// subscription_line_item_id (line-item level), but not both.
+// For action="remove": association_id is required.
 type SubModifyCouponParams struct {
 	// Required. "add" to attach a coupon; "remove" to detach an existing association.
 	Action SubModifyCouponAction `json:"action" binding:"required"`
-	// CouponCode is the preferred way to identify the coupon for action="add".
+	// Required for action="add". Coupon code of the coupon to attach.
 	CouponCode *string `json:"coupon_code,omitempty"`
-	// Deprecated: use coupon_code instead.
-	CouponID *string `json:"coupon_id,omitempty"`
 	// Required when action="remove". ID of the CouponAssociation to soft-delete.
 	AssociationID *string `json:"association_id,omitempty"`
 	// Optional. When to apply the change; defaults to now if omitted.
 	EffectiveDate *time.Time `json:"effective_date,omitempty"`
 	// Optional. When the coupon association starts; defaults to EffectiveDate.
 	StartDate *time.Time `json:"start_date,omitempty"`
-	// Optional. When the coupon association ends; overrides duration_in_periods.
+	// Optional. When the coupon association ends.
 	EndDate *time.Time `json:"end_date,omitempty"`
-	// Optional. Price ID of the line item to target; omit for subscription-level.
-	PriceID *string `json:"price_id,omitempty"`
+	// Optional. Apply at subscription level. Mutually exclusive with SubscriptionLineItemID.
+	SubscriptionID *string `json:"subscription_id,omitempty"`
+	// Optional. Apply at a specific line item. Mutually exclusive with SubscriptionID.
+	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 }
 
 func (r *SubModifyCouponParams) Validate() error {
 	switch r.Action {
 	case SubModifyCouponActionAdd:
-		if (r.CouponCode == nil || *r.CouponCode == "") &&
-			(r.CouponID == nil || *r.CouponID == "") {
-			return ierr.NewError("coupon_code (or deprecated coupon_id) is required for action 'add'").
+		if r.CouponCode == nil || *r.CouponCode == "" {
+			return ierr.NewError("coupon_code is required for action 'add'").
 				WithHint("Provide a valid coupon_code").
+				Mark(ierr.ErrValidation)
+		}
+		if r.SubscriptionID != nil && r.SubscriptionLineItemID != nil {
+			return ierr.NewError("subscription_id and subscription_line_item_id are mutually exclusive").
+				WithHint("Provide at most one of subscription_id or subscription_line_item_id").
 				Mark(ierr.ErrValidation)
 		}
 	case SubModifyCouponActionRemove:

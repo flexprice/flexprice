@@ -3249,3 +3249,50 @@ func (s *MeterUsageServiceSuite) TestBucketedMeter_OmitsPointsWhenWindowSizeUnse
 	s.Empty(item.Points,
 		"points must be omitted from response when window_size is not specified")
 }
+
+// TestBucketedMeter_WindowSizeReflectsPointGranularity: for a bucketed meter the
+// response window_size must report the granularity the points were rolled up to —
+// the request window when it is coarser than the meter's bucket size — not the
+// meter's bucket size.
+func (s *MeterUsageServiceSuite) TestBucketedMeter_WindowSizeReflectsPointGranularity() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_wsday",
+		Name:      "Bucketed SUM window-size",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_wsday", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_wsday", bucketedMeter.ID, bucketedPrice.ID)
+
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID,
+		time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC), 10)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeDay,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_wsday" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+	s.Equal(types.WindowSizeDay, item.WindowSize,
+		"window_size must reflect the request window the points were rolled up to, not the meter bucket size")
+}

@@ -385,7 +385,7 @@ type UsageAnalyticItem struct {
 	Points               []UsageAnalyticPoint               `json:"points,omitempty"`
 	AddOnID              string                             `json:"add_on_id,omitempty"`
 	PlanID               string                             `json:"plan_id,omitempty"`
-	WindowSize           types.WindowSize                   `json:"window_size,omitempty"` // Window size for bucketed meters (only set if meter is bucketed)
+	WindowSize           types.WindowSize                   `json:"window_size,omitempty"` // Granularity of Points: max(request window_size, meter bucket_size) for bucketed meters; the request window_size otherwise
 	Group                *group.Group                       `json:"group,omitempty"`       // Group when the feature belongs to a group (object includes id)
 	// BucketSummaries is populated only when BreakdownBucket=true. Contains one
 	// entry per defined CommitmentTimeBucket plus one for out-of-bucket usage.
