@@ -26,6 +26,7 @@ type Handlers struct {
 	Connection               *v1.ConnectionHandler
 	Plan                     *v1.PlanHandler
 	Subscription             *v1.SubscriptionHandler
+	Checkout                 *v1.CheckoutHandler
 	SubscriptionChange       *v1.SubscriptionChangeHandler
 	SubscriptionModification *v1.SubscriptionModificationHandler
 	SubscriptionSchedule     *v1.SubscriptionScheduleHandler
@@ -343,6 +344,12 @@ func NewRouter(
 				schedules.POST("/:schedule_id/cancel", write("subscription", types.ActionWrite), handlers.SubscriptionSchedule.CancelSchedule)
 				schedules.POST("/cancel", write("subscription", types.ActionWrite), handlers.SubscriptionSchedule.CancelSchedule)
 			}
+		}
+
+		checkout := v1Private.Group("/checkouts")
+		{
+			checkout.POST("", write("checkout", types.ActionWrite), handlers.Checkout.CreateCheckout)
+			checkout.GET("/:id", handlers.Checkout.GetCheckout)
 		}
 
 		wallet := v1Private.Group("/wallets")

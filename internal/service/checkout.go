@@ -18,6 +18,8 @@ type CheckoutService interface {
 	// Complete marks a checkout completed (idempotent). Subscription activation is
 	// driven by the existing payment-completion hook, not here.
 	Complete(ctx context.Context, checkoutID string) error
+	// Get returns a checkout by ID.
+	Get(ctx context.Context, id string) (*dto.CheckoutResponse, error)
 }
 
 type checkoutService struct {
@@ -167,4 +169,16 @@ func (s *checkoutService) Complete(ctx context.Context, checkoutID string) error
 	chk.Status = types.CheckoutStatusCompleted
 	chk.CompletedAt = &now
 	return s.CheckoutRepo.Update(ctx, chk)
+}
+
+func (s *checkoutService) Get(ctx context.Context, id string) (*dto.CheckoutResponse, error) {
+	chk, err := s.CheckoutRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.CheckoutResponse{
+		ID:          chk.ID,
+		Status:      string(chk.Status),
+		CheckoutURL: lo.FromPtr(chk.CheckoutURL),
+	}, nil
 }
