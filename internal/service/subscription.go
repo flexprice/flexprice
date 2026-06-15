@@ -404,7 +404,10 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 							phase0PriceToLIMap[li.PriceID] = li.ID
 						}
 					}
-					phase0Coupons := s.normalizePhaseCoupons(ctx, phase0Req, phases[0].ID, phase0PriceToLIMap)
+					phase0Coupons, err := s.normalizePhaseCoupons(ctx, phase0Req, phases[0].ID, phase0PriceToLIMap)
+					if err != nil {
+						return err
+					}
 					if len(phase0Coupons) > 0 {
 						couponSvc := NewCouponAssociationService(s.ServiceParams)
 						if err = couponSvc.ApplyCouponsToSubscription(ctx, sub, phase0Coupons); err != nil {
@@ -1078,7 +1081,10 @@ func (s *subscriptionService) handleSubscriptionPhases(
 
 		// Handle phase coupons - transform simple coupons to SubscriptionCouponRequest format
 		couponAssociationService := NewCouponAssociationService(s.ServiceParams)
-		phaseCoupons := s.normalizePhaseCoupons(ctx, phaseReq, phase.ID, phasePriceToLineItemMap)
+		phaseCoupons, err := s.normalizePhaseCoupons(ctx, phaseReq, phase.ID, phasePriceToLineItemMap)
+		if err != nil {
+			return err
+		}
 		if len(phaseCoupons) > 0 {
 			err := couponAssociationService.ApplyCouponsToSubscription(ctx, sub, phaseCoupons)
 			if err != nil {
@@ -1097,7 +1103,7 @@ func (s *subscriptionService) normalizePhaseCoupons(
 	phaseReq dto.SubscriptionPhaseCreateRequest,
 	phaseID string,
 	phasePriceToLineItemMap map[string]string,
-) []dto.SubscriptionCouponRequest {
+) ([]dto.SubscriptionCouponRequest, error) {
 	var subscriptionCoupons []dto.SubscriptionCouponRequest
 
 	// Convert subscription-level coupons
@@ -1141,12 +1147,12 @@ func (s *subscriptionService) normalizePhaseCoupons(
 		if input.CouponCode == "" {
 			continue
 		}
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
 		c, err := s.CouponRepo.GetByCode(ctx, input.CouponCode)
 		if err != nil {
-			s.Logger.Info(ctx, "phase subscription_coupons code not found, skipping",
-				"coupon_code", input.CouponCode,
-				"phase_id", phaseID)
-			continue
+			return nil, err
 		}
 		startDate := phaseReq.StartDate
 		if input.StartDate != nil {
@@ -1176,7 +1182,7 @@ func (s *subscriptionService) normalizePhaseCoupons(
 		subscriptionCoupons = append(subscriptionCoupons, couponReq)
 	}
 
-	return subscriptionCoupons
+	return subscriptionCoupons, nil
 }
 
 // createPhaseExtraLineItems creates extra line items defined in a phase request (e.g. one-time charges).
