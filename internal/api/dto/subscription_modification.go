@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -8,17 +9,50 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// SubModifyInheritanceRequest is the payload for adding
-// inherited child subscriptions to a parent subscription.
+// InheritanceAction identifies whether children are being added to or removed from inheritance.
+type InheritanceAction string
+
+const (
+	// InheritanceActionAdd adds inherited child subscriptions to a parent.
+	InheritanceActionAdd InheritanceAction = "add"
+	// InheritanceActionRemove schedules inherited child subscriptions for cancellation at period end.
+	InheritanceActionRemove InheritanceAction = "remove"
+)
+
+// SubModifyInheritanceRequest is the payload for adding or removing
+// inherited child subscriptions from a parent subscription.
 type SubModifyInheritanceRequest struct {
+	// Action is "add" or "remove". Defaults to "add" when omitted — fully backward-compatible.
+	Action InheritanceAction `json:"action,omitempty"`
+
+	// ExternalCustomerIDsToInheritSubscription is used for action="add".
 	ExternalCustomerIDsToInheritSubscription []string `json:"external_customer_ids_to_inherit_subscription,omitempty"`
+
+	// ExternalCustomerIDsToRemove is used for action="remove".
+	ExternalCustomerIDsToRemove []string `json:"external_customer_ids_to_remove,omitempty"`
 }
 
 func (r *SubModifyInheritanceRequest) Validate() error {
-	if len(r.ExternalCustomerIDsToInheritSubscription) == 0 {
-		return ierr.NewError("at least one external customer ID is required").
-			WithHint("Provide external_customer_ids_to_inherit_subscription with at least one non-empty value").
-			Mark(ierr.ErrValidation)
+	switch r.Action {
+	case InheritanceActionRemove:
+		if len(r.ExternalCustomerIDsToRemove) == 0 {
+			return ierr.NewError("at least one external customer ID is required for remove").
+				WithHint("Provide external_customer_ids_to_remove with at least one non-empty value").
+				Mark(ierr.ErrValidation)
+		}
+		for _, id := range r.ExternalCustomerIDsToRemove {
+			if strings.TrimSpace(id) == "" {
+				return ierr.NewError("external customer ID must not be empty").
+					WithHint("Remove any empty strings from external_customer_ids_to_remove").
+					Mark(ierr.ErrValidation)
+			}
+		}
+	default: // "" or "add"
+		if len(r.ExternalCustomerIDsToInheritSubscription) == 0 {
+			return ierr.NewError("at least one external customer ID is required").
+				WithHint("Provide external_customer_ids_to_inherit_subscription with at least one non-empty value").
+				Mark(ierr.ErrValidation)
+		}
 	}
 	return nil
 }
