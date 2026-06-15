@@ -74,6 +74,7 @@ const (
 	UUID_PREFIX_INVOICE                    = "inv"
 	UUID_PREFIX_INVOICE_LINE_ITEM          = "inv_line"
 	UUID_PREFIX_SUBSCRIPTION               = "subs"
+	UUID_PREFIX_CHECKOUT                   = "checkout"
 	UUID_PREFIX_SUBSCRIPTION_LINE_ITEM     = "subs_line"
 	UUID_PREFIX_SUBSCRIPTION_PAUSE         = "pause"
 	UUID_PREFIX_SUBSCRIPTION_CHANGE        = "subsc"
