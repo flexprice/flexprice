@@ -67,6 +67,7 @@ func (s *subscriptionModificationService) executeAddCoupon(
 		}
 		if lineItem.SubscriptionID != subscriptionID {
 			return nil, ierr.NewError("subscription_line_item_id does not belong to this subscription").
+				WithHint("Ensure the line item belongs to this subscription").
 				WithReportableDetails(map[string]interface{}{
 					"subscription_line_item_id": *params.SubscriptionLineItemID,
 					"subscription_id":           subscriptionID,
@@ -76,6 +77,7 @@ func (s *subscriptionModificationService) executeAddCoupon(
 		lineItemID = params.SubscriptionLineItemID
 	} else if params.SubscriptionID != nil && *params.SubscriptionID != subscriptionID {
 		return nil, ierr.NewError("subscription_id does not match the subscription being modified").
+			WithHint("subscription_id must match the subscription in the URL").
 			WithReportableDetails(map[string]interface{}{
 				"provided_subscription_id": *params.SubscriptionID,
 				"subscription_id":          subscriptionID,
@@ -251,6 +253,7 @@ func (s *subscriptionModificationService) previewAddCoupon(
 		}
 		if lineItem.SubscriptionID != subscriptionID {
 			return nil, ierr.NewError("subscription_line_item_id does not belong to this subscription").
+				WithHint("Ensure the line item belongs to this subscription").
 				WithReportableDetails(map[string]interface{}{
 					"subscription_line_item_id": *params.SubscriptionLineItemID,
 					"subscription_id":           subscriptionID,
@@ -259,6 +262,7 @@ func (s *subscriptionModificationService) previewAddCoupon(
 		}
 	} else if params.SubscriptionID != nil && *params.SubscriptionID != subscriptionID {
 		return nil, ierr.NewError("subscription_id does not match the subscription being modified").
+			WithHint("subscription_id must match the subscription in the URL").
 			WithReportableDetails(map[string]interface{}{
 				"provided_subscription_id": *params.SubscriptionID,
 				"subscription_id":          subscriptionID,
