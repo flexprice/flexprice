@@ -1,0 +1,28 @@
+# topics.yaml — base/reference topic spec, baked into the image at /app/topics.yaml.
+# Used only when FLEXPRICE_KAFKA_TOPICS (a JSON spec, same schema) is NOT set;
+# when that env-var is present it FULLY REPLACES this file (no merge).
+# This base mirrors the 9 staging GMK topics (staging/us-west1 TF kafka.topics).
+# Map key = the Kafka topic name. Partition counts are per-env; prod supplies its
+# own JSON override with the real prod_* names + tuned counts.
+defaults:
+  replicationFactor: 3
+  retentionMs: 604800000   # 7d
+topics:
+  events:
+    partitions: 6
+  events_lazy:
+    partitions: 6
+  events_dlq:
+    partitions: 3
+  events_backfill:
+    partitions: 6
+  events_post_processing:
+    partitions: 6
+  events_post_processing_backfill:
+    partitions: 6
+  system_events:
+    partitions: 3
+  wallet_alert:
+    partitions: 3
+  onboarding_events:
+    partitions: 3
