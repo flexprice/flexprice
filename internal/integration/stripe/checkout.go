@@ -8,6 +8,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/stripe/stripe-go/v82"
 )
 
 // StripeCheckoutProvider implements checkout.CheckoutProvider for Stripe.
@@ -75,9 +76,66 @@ func (s *StripeCheckoutProvider) createPaymentSession(ctx context.Context, req c
 	}, nil
 }
 
-// createSetupSession is implemented in Task 3 (next).
+// createSetupSession creates a Stripe Checkout Session in "setup" mode
+// (SetupIntent-backed). It captures a card without charging the customer; the
+// resulting checkout.session.completed webhook resolves the flexprice checkout
+// via the flexprice_checkout_id metadata.
 func (s *StripeCheckoutProvider) createSetupSession(ctx context.Context, req checkout.CheckoutSessionRequest) (*checkout.CheckoutSessionResponse, error) {
-	return nil, ierr.NewError("setup checkout not implemented").
-		WithHint("Setup-mode checkout is implemented in Task 3").
-		Mark(ierr.ErrInvalidOperation)
+	// Acquire the Stripe client (same pattern as PaymentService.CreatePaymentLink, payment.go:63).
+	stripeClient, _, err := s.payment.client.GetStripeClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve the Stripe customer id from the flexprice customer id
+	// (same pattern as payment.go:127-146).
+	customerResp, err := s.payment.customerSvc.EnsureCustomerSyncedToStripe(ctx, req.CustomerID, s.customer)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to sync customer to Stripe").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": req.CustomerID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	stripeCustomerID, exists := customerResp.Customer.Metadata["stripe_customer_id"]
+	if !exists || stripeCustomerID == "" {
+		return nil, ierr.NewError("customer does not have Stripe customer ID after sync").
+			WithHint("Failed to sync customer to Stripe").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": req.CustomerID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Build session metadata; flexprice_checkout_id is required so the
+	// checkout.session.completed webhook can resolve the checkout by id.
+	metadata := map[string]string{}
+	for k, v := range req.Metadata {
+		metadata[k] = v
+	}
+	metadata["flexprice_checkout_id"] = req.CheckoutID
+
+	// Setup mode differs from payment mode: no LineItems and no PaymentIntentData.
+	params := &stripe.CheckoutSessionCreateParams{
+		Mode:       stripe.String(stripeModeForObjective(req.Objective)),
+		Customer:   stripe.String(stripeCustomerID),
+		SuccessURL: stripe.String(req.SuccessURL),
+		CancelURL:  stripe.String(req.CancelURL),
+		Metadata:   metadata,
+	}
+
+	session, err := stripeClient.V1CheckoutSessions.Create(ctx, params)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create Stripe setup checkout session").
+			Mark(ierr.ErrSystem)
+	}
+
+	return &checkout.CheckoutSessionResponse{
+		SessionID: session.ID,
+		URL:       session.URL,
+		Status:    string(session.Status),
+	}, nil
 }
