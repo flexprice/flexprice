@@ -3110,14 +3110,13 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			}
 		}
 
-		// Set window size in response:
-		// - For bucketed features: show the feature's bucket size (underlying granularity)
-		// - For non-bucketed features: show the request window size
+		// Window size reflects the granularity Points were computed at. Bucketed
+		// features cannot be subdivided below their bucket size, so points are at
+		// max(request window, bucket size); non-bucketed features use the request.
 		if analytic.MeterID != "" {
 			if meter, ok := data.Meters[analytic.MeterID]; ok {
 				if meter.HasBucketSize() {
-					// Bucketed feature: show bucket size
-					item.WindowSize = meter.Aggregation.BucketSize
+					item.WindowSize = req.WindowSize.Max(meter.Aggregation.BucketSize)
 				} else {
 					// Non-bucketed feature: show request window size
 					item.WindowSize = req.WindowSize
