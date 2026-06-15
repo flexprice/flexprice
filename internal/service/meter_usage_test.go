@@ -2492,6 +2492,108 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_MultipleBuckets_WithTrueUp
 			Add(item.CommitmentInfo.ComputedTrueUpAmount)))
 }
 
+// TestWindowCommitment_ZeroUsage_BucketTrueUp reproduces the production report
+// where an addon line item with a per-bucket true-up commitment but NO usage in
+// the period returns total_cost 0 and computed_true_up_amount 0. With zero usage
+// the item routes through processSingleBucket, which must still fill the empty
+// windows inside the bucket and charge each one up to the committed minimum.
+//
+// Setup: MINUTE bucketed SUM meter; line item scoped to a single day; one bucket
+// [11:00,11:30) with $1/u price, $3 amount commitment, true-up ON, no top-level
+// commitment. No events at all. No window_size on the request (mirrors the report).
+//
+//	30 empty minute windows × $3 true-up = $90.
+func (s *MeterUsageServiceSuite) TestWindowCommitment_ZeroUsage_BucketTrueUp() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "meter_zero_tu",
+		Name:      "Minute SUM (zero-usage bucket true-up)",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeMinute,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+
+	linePrice := &price.Price{
+		ID: "price_zero_tu_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, linePrice))
+
+	bucketPrice := &price.Price{
+		ID: "price_zero_tu_bucket", Amount: decimal.NewFromInt(1), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, bucketPrice))
+
+	overage := decimal.NewFromInt(2)
+	li := &subscription.SubscriptionLineItem{
+		ID:             "li_zero_tu",
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.customer.ID,
+		PriceID:        linePrice.ID,
+		PriceType:      types.PRICE_TYPE_USAGE,
+		MeterID:        bucketedMeter.ID,
+		Currency:       "usd",
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear,
+		// Single day so the fill grid is 1440 minute windows.
+		StartDate:          time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		EndDate:            time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC),
+		Quantity:           decimal.NewFromInt(1),
+		CommitmentWindowed: true, // buckets only; no top-level commitment / true-up
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{
+				ID: "bkt_tu", Start: types.Bucket{Hour: 11, Minute: 0}, End: types.Bucket{Hour: 11, Minute: 30},
+				PriceID: bucketPrice.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(3), OverageFactor: &overage, TrueUpEnabled: true,
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// NO usage events at all.
+
+	// No window_size — mirrors the production request.
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		EndTime:            time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC),
+		BreakdownBucket:    true,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_zero_tu" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item, "expected analytic for zero-usage true-up line item")
+
+	// 30 empty minute windows inside [11:00,11:30), each trued up to $3 = $90.
+	s.Require().NotNil(item.CommitmentInfo, "windowed commitment must record commitment info")
+	s.True(item.CommitmentInfo.ComputedTrueUpAmount.Equal(decimal.NewFromInt(90)),
+		"expected true-up $90 (30 empty windows × $3); got %s", item.CommitmentInfo.ComputedTrueUpAmount)
+	s.True(item.TotalCost.Equal(decimal.NewFromInt(90)),
+		"expected total cost $90 from true-up alone; got %s", item.TotalCost)
+}
+
 // TestWindowCommitment_Bucket_SlabPricing_OverageFactorOne verifies a bucket
 // whose price is TIERED/SLAB and whose overage factor is exactly 1.0 (allowed
 // for buckets): usage beyond the commitment bills at the slab rate with no

@@ -2150,7 +2150,10 @@ func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context,
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasAnyCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
-	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
+	// Use HasTrueUpEnabled() (top-level OR any bucket) — a bucket-level-only true-up
+	// must still engage the window fill, otherwise empty windows inside a true-up
+	// bucket are never charged the committed minimum. Mirrors meter_usage.
+	hasTrueUp := isWindowed && lineItem.HasTrueUpEnabled()
 
 	var cost decimal.Decimal
 

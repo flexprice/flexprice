@@ -7,8 +7,11 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	eventsDomain "github.com/flexprice/flexprice/internal/domain/events"
+	meterDomain "github.com/flexprice/flexprice/internal/domain/meter"
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	subscriptionDomain "github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
@@ -272,4 +275,99 @@ func TestAnalytics_BreakdownBucketFlag_NoLineItem(t *testing.T) {
 	summaries := buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
 	// No defined buckets => no summaries (out-of-bucket usage is not summarized).
 	require.Empty(t, summaries, "expect no summaries when no buckets defined")
+}
+
+// TestFeatureUsage_ZeroUsage_BucketTrueUp reproduces the production report where
+// an addon line item with a per-bucket true-up commitment but NO top-level
+// commitment returned total_cost 0 / true_up 0 through the FEATURE-USAGE path.
+//
+// The gate that engages the zero-usage window fill used the top-level
+// CommitmentTrueUpEnabled flag only, so a bucket-level-only true-up never fired —
+// the calculation fell through to applyLineItemCommitment(nil,nil), yielding the
+// empty is_windowed commitment info the customer saw.
+//
+// Setup mirrors the report: MINUTE bucketed SUM meter, line item scoped to a
+// single day, one bucket [11:00,11:30) with $3 amount commitment + true-up ON, no
+// usage. 30 empty minute windows × $3 true-up = $90.
+func TestFeatureUsage_ZeroUsage_BucketTrueUp(t *testing.T) {
+	ctx := testutil.SetupContext()
+	log := logger.NewNoopLogger()
+	priceStore := testutil.NewInMemoryPriceStore()
+	params := ServiceParams{
+		Logger:        log,
+		DB:            testutil.NewMockPostgresClient(log),
+		PriceRepo:     priceStore,
+		MeterRepo:     testutil.NewInMemoryMeterStore(),
+		PlanRepo:      testutil.NewInMemoryPlanStore(),
+		PriceUnitRepo: testutil.NewInMemoryPriceUnitStore(),
+		AddonRepo:     testutil.NewInMemoryAddonStore(),
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+	}
+	svc := &featureUsageTrackingService{ServiceParams: params}
+	priceSvc := NewPriceService(params)
+
+	bucketPrice := &priceDomain.Price{
+		ID: "price_fu_bkt", Amount: decimal.NewFromInt(1), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, bucketPrice))
+
+	linePrice := &priceDomain.Price{
+		ID: "price_fu_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, linePrice))
+
+	dayStart := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	dayEnd := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	overage := decimal.NewFromInt(2)
+	lineItem := &subscriptionDomain.SubscriptionLineItem{
+		ID:                 "li_fu_zero_tu",
+		SubscriptionID:     "sub_fu",
+		PriceID:            linePrice.ID,
+		PriceType:          types.PRICE_TYPE_USAGE,
+		MeterID:            "meter_fu",
+		StartDate:          dayStart,
+		EndDate:            dayEnd,
+		CommitmentWindowed: true, // buckets only; no top-level commitment / true-up
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{{
+			ID: "bkt_fu", Start: types.Bucket{Hour: 11, Minute: 0}, End: types.Bucket{Hour: 11, Minute: 30},
+			PriceID: bucketPrice.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+			CommitmentValue: decimal.NewFromInt(3), OverageFactor: &overage, TrueUpEnabled: true,
+		}},
+	}
+
+	bucketedMeter := &meterDomain.Meter{
+		ID: "meter_fu",
+		Aggregation: meterDomain.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeMinute,
+		},
+	}
+
+	item := &eventsDomain.DetailedUsageAnalytic{
+		MeterID:         "meter_fu",
+		PriceID:         linePrice.ID,
+		SubLineItemID:   "li_fu_zero_tu",
+		SubscriptionID:  "sub_fu",
+		AggregationType: types.AggregationSum,
+		// zero usage, no points
+	}
+
+	data := &AnalyticsData{
+		SubscriptionLineItems: map[string]*subscriptionDomain.SubscriptionLineItem{"li_fu_zero_tu": lineItem},
+		SubscriptionsMap: map[string]*subscriptionDomain.Subscription{
+			"sub_fu": {ID: "sub_fu", BillingAnchor: dayStart},
+		},
+		Prices: map[string]*priceDomain.Price{linePrice.ID: linePrice},
+		Params: &eventsDomain.UsageAnalyticsParams{StartTime: dayStart, EndTime: dayEnd},
+	}
+
+	svc.calculateBucketedCost(ctx, priceSvc, item, linePrice, bucketedMeter, data, false)
+
+	require.NotNil(t, item.CommitmentInfo, "windowed commitment must record commitment info")
+	assert.True(t, item.CommitmentInfo.ComputedTrueUpAmount.Equal(decimal.NewFromInt(90)),
+		"expected true-up $90 (30 empty minute windows × $3); got %s", item.CommitmentInfo.ComputedTrueUpAmount)
+	assert.True(t, item.TotalCost.Equal(decimal.NewFromInt(90)),
+		"expected total cost $90 from bucket true-up; got %s", item.TotalCost)
 }
