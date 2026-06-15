@@ -410,3 +410,55 @@ func TestApplyWindowCommitment_TimeBuckets_LengthMismatch(t *testing.T) {
 	_, _, err := calc.applyWindowCommitmentToLineItem(ctx, lineItem, bucketedValues, bucketStarts, p)
 	require.Error(t, err, "mismatched bucketStarts/bucketedValues must be rejected")
 }
+
+// TestFillBucketedValuesForWindowedCommitment_BucketLevelTrueUp verifies the
+// invoice-billing fill gate engages for a line item whose true-up is ONLY on a
+// commitment time bucket (no top-level CommitmentTrueUpEnabled). The fill must
+// expand to one value per expected window (zeros for empty windows) so the
+// bucket's committed minimum is billed — not collapse to just the used windows.
+func TestFillBucketedValuesForWindowedCommitment_BucketLevelTrueUp(t *testing.T) {
+	s := &billingService{}
+	overage2x := decimal.NewFromInt(2)
+	periodStart := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	periodEnd := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC) // one day → 24 hourly windows
+
+	// Usage only in a single hour.
+	usage := &events.AggregationResult{
+		Type: types.AggregationSum,
+		Results: []events.UsageResult{
+			{WindowSize: time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), Value: decimal.NewFromInt(5)},
+		},
+	}
+
+	bucketOnlyTrueUp := &subscription.SubscriptionLineItem{
+		ID:                      "li_bucket_trueup",
+		CommitmentWindowed:      true,
+		CommitmentTrueUpEnabled: false, // no top-level true-up
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{{
+			ID: "b1", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12},
+			CommitmentType: types.COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(5),
+			OverageFactor: &overage2x, TrueUpEnabled: true,
+		}},
+	}
+
+	values, starts := s.fillBucketedValuesForWindowedCommitment(
+		bucketOnlyTrueUp, usage, periodStart, periodEnd, types.WindowSizeHour, &periodStart, types.AggregationSum)
+
+	// Filled to the full 24-window grid so empty bucket windows can be trued up.
+	require.Len(t, values, 24, "bucket-level true-up must fill every window")
+	require.Len(t, starts, 24)
+
+	// Contrast: no true-up anywhere → only the used window is returned.
+	noTrueUp := &subscription.SubscriptionLineItem{
+		ID:                 "li_no_trueup",
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{{
+			ID: "b1", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12},
+			CommitmentType: types.COMMITMENT_TYPE_AMOUNT, CommitmentValue: decimal.NewFromInt(5),
+			OverageFactor: &overage2x, TrueUpEnabled: false,
+		}},
+	}
+	values2, _ := s.fillBucketedValuesForWindowedCommitment(
+		noTrueUp, usage, periodStart, periodEnd, types.WindowSizeHour, &periodStart, types.AggregationSum)
+	require.Len(t, values2, 1, "no true-up → only windows with usage, no fill")
+}

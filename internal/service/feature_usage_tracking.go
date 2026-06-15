@@ -3207,8 +3207,9 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 				// Per-point bucket identity: every bucket the rolled-up window
 				// overlaps (informational hint only — see dto.UsageAnalyticPoint).
 				if lineItemForBucket != nil {
+					windowMin := effectivePointWindowMinutes(req.WindowSize, data.Meters[analytic.MeterID])
 					ids, priceIDs := bucketIDsForPointWindow(
-						lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, req.WindowSize)
+						lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, windowMin)
 					for i := range ids {
 						dtoPoint.Buckets = append(dtoPoint.Buckets, dto.PointBucket{BucketID: ids[i], PriceID: priceIDs[i]})
 					}
