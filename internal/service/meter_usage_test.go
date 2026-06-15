@@ -42,6 +42,15 @@ func TestMeterUsageService(t *testing.T) {
 	suite.Run(t, new(MeterUsageServiceSuite))
 }
 
+// pointBucketIDs extracts the bucket ids from a point's Buckets list.
+func pointBucketIDs(buckets []dto.PointBucket) []string {
+	ids := make([]string, len(buckets))
+	for i, b := range buckets {
+		ids[i] = b.BucketID
+	}
+	return ids
+}
+
 func (s *MeterUsageServiceSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 
@@ -2212,9 +2221,10 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_PerBucket_BreakdownAndSumm
 	// Per-point bucket identity: the 10:00 window overlaps the bucket.
 	var inBucketPoints int
 	for _, pt := range item.Points {
-		if slices.Contains(pt.BucketIDs, "bkt_morning") {
+		if slices.Contains(pointBucketIDs(pt.Buckets), "bkt_morning") {
 			inBucketPoints++
-			s.Contains(pt.BucketPriceIDs, bucketPrice.ID, "in-bucket point must carry the bucket price id")
+			s.Contains(pt.Buckets, dto.PointBucket{BucketID: "bkt_morning", PriceID: bucketPrice.ID},
+				"in-bucket point must carry the bucket id + price")
 		}
 	}
 	s.Positive(inBucketPoints, "expected at least one point stamped with the bucket id")
@@ -2689,9 +2699,10 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_MultipleBucketsPerPoint_Co
 		if pt.Cost.GreaterThan(decimal.Zero) {
 			dayPoints++
 			s.True(pt.Cost.Equal(decimal.NewFromInt(101)), "the day point should sum to $101; got %s", pt.Cost)
-			// The DAY window overlaps BOTH buckets → bucket_ids lists both (array).
-			s.Contains(pt.BucketIDs, "bkt_a", "day point overlaps bucket A")
-			s.Contains(pt.BucketIDs, "bkt_b", "day point overlaps bucket B")
+			// The DAY window overlaps BOTH buckets → buckets lists both.
+			ids := pointBucketIDs(pt.Buckets)
+			s.Contains(ids, "bkt_a", "day point overlaps bucket A")
+			s.Contains(ids, "bkt_b", "day point overlaps bucket B")
 		}
 	}
 	s.Equal(1, dayPoints, "DAY window should collapse the three hours into one point")
@@ -2787,7 +2798,7 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_MultiplePointsPerBucket_Co
 	// Three in-bucket hourly points, each attributed to the bucket.
 	inBucket := 0
 	for _, pt := range item.Points {
-		if slices.Contains(pt.BucketIDs, "bkt_one") {
+		if slices.Contains(pointBucketIDs(pt.Buckets), "bkt_one") {
 			inBucket++
 		}
 	}
@@ -2879,7 +2890,8 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_BucketTrueUp_NoOutOfBucket
 	// Only the 30 in-bucket windows are emitted — no out-of-bucket all-zero noise.
 	s.Equal(30, len(item.Points), "expected exactly 30 in-bucket points, got %d", len(item.Points))
 	for _, pt := range item.Points {
-		s.Equal([]string{"bkt_noise"}, pt.BucketIDs, "every emitted point must be in-bucket; found out-of-bucket fill at %s", pt.Timestamp)
+		s.Equal([]dto.PointBucket{{BucketID: "bkt_noise", PriceID: bucketPrice.ID}}, pt.Buckets,
+			"every emitted point must be in-bucket; found out-of-bucket fill at %s", pt.Timestamp)
 	}
 }
 
@@ -2963,7 +2975,8 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_BucketPartiallyOverlapsDis
 	// though its single cost mixes in- and out-of-bucket — so per-bucket cost must
 	// come from bucket_summaries, never from this point.
 	s.Require().Len(item.Points, 1)
-	s.Equal([]string{"bkt_po"}, item.Points[0].BucketIDs, "the HOUR point overlaps the bucket → bucket_ids lists it")
+	s.Equal([]dto.PointBucket{{BucketID: "bkt_po", PriceID: bucketPrice.ID}}, item.Points[0].Buckets,
+		"the HOUR point overlaps the bucket → buckets lists it")
 
 	// Yet the SUMMARY is exact — built from minute-grain attribution, not the point.
 	s.Require().Len(item.BucketSummaries, 1)
@@ -3087,7 +3100,7 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_Bucket_SlabPricing_Overage
 	// Per-point: the 10:00 point bills $13 with $8 overage at no premium.
 	var inBucketPoint *dto.UsageAnalyticPoint
 	for i := range item.Points {
-		if slices.Contains(item.Points[i].BucketIDs, "bkt_slab") && item.Points[i].Usage.Equal(decimal.NewFromInt(8)) {
+		if slices.Contains(pointBucketIDs(item.Points[i].Buckets), "bkt_slab") && item.Points[i].Usage.Equal(decimal.NewFromInt(8)) {
 			inBucketPoint = &item.Points[i]
 			break
 		}

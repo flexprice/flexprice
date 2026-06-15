@@ -1445,8 +1445,11 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 				// Per-point bucket identity: every bucket the rolled-up window
 				// overlaps (informational hint only — see dto.UsageAnalyticPoint).
 				if lineItemForBucket != nil {
-					dtoPoint.BucketIDs, dtoPoint.BucketPriceIDs = bucketIDsForPointWindow(
+					ids, priceIDs := bucketIDsForPointWindow(
 						lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, params.WindowSize)
+					for i := range ids {
+						dtoPoint.Buckets = append(dtoPoint.Buckets, dto.PointBucket{BucketID: ids[i], PriceID: priceIDs[i]})
+					}
 				}
 				item.Points = append(item.Points, dtoPoint)
 			}
