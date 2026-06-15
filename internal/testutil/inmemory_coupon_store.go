@@ -105,6 +105,9 @@ func (s *InMemoryCouponStore) GetByCode(ctx context.Context, code string) (*coup
 		if !CheckEnvironmentFilter(ctx, c.EnvironmentID) {
 			return false
 		}
+		if c.Status != types.StatusPublished {
+			return false
+		}
 		return strings.ToLower(strings.TrimSpace(*c.CouponCode)) == normalised
 	}, nil)
 	if err != nil {

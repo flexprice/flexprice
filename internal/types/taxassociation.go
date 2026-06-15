@@ -73,6 +73,16 @@ func (f *TaxAssociationFilter) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	}
+	if f.StartDate != nil && f.EndDate != nil && f.StartDate.After(*f.EndDate) {
+		return ierr.NewError("start_date must not be after end_date").
+			WithHint("Please provide a valid date range").
+			WithReportableDetails(
+				map[string]any{
+					"end_date": "must be on or after start_date",
+				},
+			).
+			Mark(ierr.ErrValidation)
+	}
 	if f.EntityType != "" {
 		if err := f.EntityType.Validate(); err != nil {
 			return ierr.WithError(err).
