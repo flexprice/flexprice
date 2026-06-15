@@ -2594,6 +2594,291 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_ZeroUsage_BucketTrueUp() {
 		"expected total cost $90 from true-up alone; got %s", item.TotalCost)
 }
 
+// TestWindowCommitment_MultipleBucketsPerPoint_Cost verifies cost when a single
+// rolled-up display point spans MULTIPLE buckets: the request window (DAY) is
+// coarser than the buckets, so one DAY point contains hours from bucket A, bucket
+// B, and out-of-bucket time. Cost is computed per meter window (HOUR) and summed —
+// each hour attributed to its own bucket (or the line item) independently.
+//
+//	bucket A [09:00,11:00): $2/u, commit $5/window, 2x        09:00 10u → $5+($15×2)=$35
+//	bucket B [14:00,16:00): $3/u, commit $4/window, 2x        14:00 10u → $4+($26×2)=$56
+//	line item: $1/u, no commitment (out-of-bucket base)       20:00 10u → $10
+//
+// Total = $101, returned as ONE day point.
+func (s *MeterUsageServiceSuite) TestWindowCommitment_MultipleBucketsPerPoint_Cost() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID: "meter_multi_per_point", Name: "Hourly SUM (multi-bucket/point)", EventName: "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeHour},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+
+	linePrice := &price.Price{
+		ID: "price_mpp_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, linePrice))
+	bucketPriceA := &price.Price{
+		ID: "price_mpp_a", Amount: decimal.NewFromInt(2), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, bucketPriceA))
+	bucketPriceB := &price.Price{
+		ID: "price_mpp_b", Amount: decimal.NewFromInt(3), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, bucketPriceB))
+
+	overage := decimal.NewFromInt(2)
+	li := &subscription.SubscriptionLineItem{
+		ID: "li_multi_per_point", SubscriptionID: s.sub.ID, CustomerID: s.customer.ID,
+		PriceID: linePrice.ID, PriceType: types.PRICE_TYPE_USAGE, MeterID: bucketedMeter.ID,
+		Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate: s.periodStart, EndDate: s.periodEnd, Quantity: decimal.NewFromInt(1),
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{ID: "bkt_a", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 11},
+				PriceID: bucketPriceA.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(5), OverageFactor: &overage},
+			{ID: "bkt_b", Start: types.Bucket{Hour: 14}, End: types.Bucket{Hour: 16},
+				PriceID: bucketPriceB.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(4), OverageFactor: &overage},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC), 10)
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 14, 0, 0, 0, time.UTC), 10)
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 20, 0, 0, 0, time.UTC), 10)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{bucketedMeter.ID},
+		StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeDay, BreakdownBucket: true,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_multi_per_point" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+	// $35 (A) + $56 (B) + $10 (out-of-bucket) = $101.
+	s.True(item.TotalCost.Equal(decimal.NewFromInt(101)),
+		"expected $101 (A $35 + B $56 + out $10); got %s", item.TotalCost)
+
+	// One DAY point carries the summed cost of all three meter-hour windows.
+	dayPoints := 0
+	for _, pt := range item.Points {
+		if pt.Cost.GreaterThan(decimal.Zero) {
+			dayPoints++
+			s.True(pt.Cost.Equal(decimal.NewFromInt(101)), "the day point should sum to $101; got %s", pt.Cost)
+		}
+	}
+	s.Equal(1, dayPoints, "DAY window should collapse the three hours into one point")
+
+	// Per-bucket summaries stay correct at bucket grain.
+	byBucket := map[string]dto.BucketSummary{}
+	for _, bs := range item.BucketSummaries {
+		byBucket[bs.BucketID] = bs
+	}
+	s.Require().Len(item.BucketSummaries, 2)
+	s.True(byBucket["bkt_a"].TotalUsage.Equal(decimal.NewFromInt(10)))
+	s.True(byBucket["bkt_a"].ComputedOverage.Equal(decimal.NewFromInt(30)), "A overage ($15×2); got %s", byBucket["bkt_a"].ComputedOverage)
+	s.True(byBucket["bkt_b"].TotalUsage.Equal(decimal.NewFromInt(10)))
+	s.True(byBucket["bkt_b"].ComputedOverage.Equal(decimal.NewFromInt(52)), "B overage ($26×2); got %s", byBucket["bkt_b"].ComputedOverage)
+}
+
+// TestWindowCommitment_MultiplePointsPerBucket_Cost verifies cost when a single
+// bucket spans MULTIPLE meter windows: bucket [09:00,12:00) over an HOUR meter is
+// three windows (09,10,11). Each window applies the bucket's commitment
+// independently and the costs sum.
+//
+//	09:00 10u → 10×$2=$20 → $5+($15×2)=$35
+//	10:00  4u →  4×$2=$8  → $5+($3×2)=$11
+//	11:00 10u → 10×$2=$20 → $5+($15×2)=$35
+//
+// Total = $81 (utilized $15, overage $66, true-up $0).
+func (s *MeterUsageServiceSuite) TestWindowCommitment_MultiplePointsPerBucket_Cost() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID: "meter_multi_per_bucket", Name: "Hourly SUM (multi-point/bucket)", EventName: "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeHour},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+
+	linePrice := &price.Price{
+		ID: "price_mpb_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, linePrice))
+	bucketPrice := &price.Price{
+		ID: "price_mpb_bkt", Amount: decimal.NewFromInt(2), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, bucketPrice))
+
+	overage := decimal.NewFromInt(2)
+	li := &subscription.SubscriptionLineItem{
+		ID: "li_multi_per_bucket", SubscriptionID: s.sub.ID, CustomerID: s.customer.ID,
+		PriceID: linePrice.ID, PriceType: types.PRICE_TYPE_USAGE, MeterID: bucketedMeter.ID,
+		Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate: s.periodStart, EndDate: s.periodEnd, Quantity: decimal.NewFromInt(1),
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{ID: "bkt_one", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12},
+				PriceID: bucketPrice.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(5), OverageFactor: &overage},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC), 10)
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 4)
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 11, 0, 0, 0, time.UTC), 10)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{bucketedMeter.ID},
+		StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeHour, BreakdownBucket: true,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_multi_per_bucket" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+	// $35 + $11 + $35 = $81.
+	s.True(item.TotalCost.Equal(decimal.NewFromInt(81)),
+		"expected $81 (windows $35 + $11 + $35); got %s", item.TotalCost)
+
+	// Three in-bucket hourly points, each attributed to the bucket.
+	inBucket := 0
+	for _, pt := range item.Points {
+		if pt.BucketID == "bkt_one" {
+			inBucket++
+		}
+	}
+	s.Equal(3, inBucket, "expected 3 in-bucket hourly points")
+
+	s.Require().Len(item.BucketSummaries, 1)
+	bs := item.BucketSummaries[0]
+	s.True(bs.TotalUsage.Equal(decimal.NewFromInt(24)), "bucket usage 10+4+10=24; got %s", bs.TotalUsage)
+	s.True(bs.ComputedUtilized.Equal(decimal.NewFromInt(15)), "utilized $5×3; got %s", bs.ComputedUtilized)
+	s.True(bs.ComputedOverage.Equal(decimal.NewFromInt(66)), "overage $30+$6+$30; got %s", bs.ComputedOverage)
+}
+
+// TestWindowCommitment_BucketTrueUp_NoOutOfBucketFillPoints verifies that when the
+// ONLY true-up is bucket-level (no top-level line-item commitment), empty windows
+// OUTSIDE every bucket are not synthesized as all-zero fill points — only windows
+// inside a true-up bucket are filled. Cost is unaffected (out-of-bucket empty
+// windows bill $0) but the response no longer carries 1440 noise points/day.
+//
+// MINUTE meter, bucket [11:00,11:30) amount commit $3 + true-up, zero usage, line
+// item scoped to one day. Expect exactly 30 in-bucket points, no out-of-bucket noise.
+func (s *MeterUsageServiceSuite) TestWindowCommitment_BucketTrueUp_NoOutOfBucketFillPoints() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID: "meter_no_noise", Name: "Minute SUM (no out-of-bucket fill)", EventName: "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeMinute},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+
+	linePrice := &price.Price{
+		ID: "price_noise_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, linePrice))
+	bucketPrice := &price.Price{
+		ID: "price_noise_bkt", Amount: decimal.NewFromInt(1), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, bucketPrice))
+
+	overage := decimal.NewFromInt(2)
+	li := &subscription.SubscriptionLineItem{
+		ID: "li_no_noise", SubscriptionID: s.sub.ID, CustomerID: s.customer.ID,
+		PriceID: linePrice.ID, PriceType: types.PRICE_TYPE_USAGE, MeterID: bucketedMeter.ID,
+		Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		EndDate:   time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC),
+		Quantity:  decimal.NewFromInt(1),
+		// Bucket-level true-up only; no top-level commitment.
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{ID: "bkt_noise", Start: types.Bucket{Hour: 11, Minute: 0}, End: types.Bucket{Hour: 11, Minute: 30},
+				PriceID: bucketPrice.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(3), OverageFactor: &overage, TrueUpEnabled: true},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// No usage. Request MINUTE windows so points are exposed at bucket grain.
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{bucketedMeter.ID},
+		StartTime:  time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		EndTime:    time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC),
+		WindowSize: types.WindowSizeMinute, BreakdownBucket: true,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_no_noise" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+
+	// Cost is the 30 bucket minutes trued up to $3 = $90 (unchanged by the fill scoping).
+	s.True(item.TotalCost.Equal(decimal.NewFromInt(90)), "expected $90; got %s", item.TotalCost)
+
+	// Only the 30 in-bucket windows are emitted — no out-of-bucket all-zero noise.
+	s.Equal(30, len(item.Points), "expected exactly 30 in-bucket points, got %d", len(item.Points))
+	for _, pt := range item.Points {
+		s.Equal("bkt_noise", pt.BucketID, "every emitted point must be in-bucket; found out-of-bucket fill at %s", pt.Timestamp)
+	}
+}
+
 // TestWindowCommitment_Bucket_SlabPricing_OverageFactorOne verifies a bucket
 // whose price is TIERED/SLAB and whose overage factor is exactly 1.0 (allowed
 // for buckets): usage beyond the commitment bills at the slab rate with no

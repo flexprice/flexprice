@@ -1854,17 +1854,22 @@ type meterUsageBucketedCostParams struct {
 }
 
 // shouldFillWindow reports whether an EMPTY window starting at t needs a
-// synthetic zero-usage fill point. Filling only matters where commitment math
-// can produce a charge for an empty window: any window when the line item
-// carries its own (top-level) commitment, or windows inside a commitment time
-// bucket otherwise. Empty windows outside both bill $0 regardless, so filling
-// them would only add noise points.
+// synthetic zero-usage fill point. Fill only where commitment math can charge an
+// empty window — anywhere else the window bills $0 and a fill is pure noise:
+//
+//   - Inside a bucket, the bucket's own commitment governs the window (it
+//     overrides the line item), so an empty in-bucket window is charged only when
+//     that bucket has true-up.
+//   - Outside every bucket, only the line item's own commitment can charge an
+//     empty window, and only when it has true-up. A bucket-level-only true-up
+//     (no top-level commitment) therefore fills its bucket windows but NOT the
+//     out-of-bucket remainder — which previously produced 1440 all-zero
+//     points/day for a MINUTE meter.
 func shouldFillWindow(lineItem *subscription.SubscriptionLineItem, t time.Time) bool {
-	if lineItem.HasTrueUpEnabled() {
-		return true
+	if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{t}, 0); ok {
+		return lineItem.CommitmentTimeBuckets[idx].TrueUpEnabled
 	}
-	_, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{t}, 0)
-	return ok
+	return lineItem.CommitmentTrueUpEnabled && lineItem.HasCommitment()
 }
 
 // calculateBucketedCost calculates cost for bucketed max/sum meters.
