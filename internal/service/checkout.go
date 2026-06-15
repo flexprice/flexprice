@@ -24,11 +24,18 @@ type CheckoutService interface {
 
 type checkoutService struct {
 	ServiceParams
+	// providerFn resolves the checkout provider; overridable in tests.
+	providerFn func(ctx context.Context, provider string) (checkout.CheckoutProvider, error)
 }
 
 // NewCheckoutService creates a new checkout service.
 func NewCheckoutService(params ServiceParams) CheckoutService {
-	return &checkoutService{ServiceParams: params}
+	s := &checkoutService{ServiceParams: params}
+	s.providerFn = func(ctx context.Context, provider string) (checkout.CheckoutProvider, error) {
+		return s.IntegrationFactory.GetCheckoutProvider(ctx, provider,
+			NewCustomerService(s.ServiceParams), NewInvoiceService(s.ServiceParams))
+	}
+	return s
 }
 
 func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
@@ -77,6 +84,7 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 			DestinationType:   types.PaymentDestinationTypeInvoice,
 			DestinationID:     inv.ID,
 			PaymentMethodType: types.PaymentMethodTypePaymentLink,
+			PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeStripe),
 			Amount:            amount,
 			Currency:          req.Currency,
 			Metadata:          types.Metadata(req.Metadata),
@@ -107,12 +115,7 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 		}
 
 		// 5. Resolve the provider and open the hosted session.
-		provider, err := s.IntegrationFactory.GetCheckoutProvider(
-			txCtx,
-			chk.Provider,
-			NewCustomerService(s.ServiceParams),
-			NewInvoiceService(s.ServiceParams),
-		)
+		provider, err := s.providerFn(txCtx, chk.Provider)
 		if err != nil {
 			return err
 		}
