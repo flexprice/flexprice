@@ -740,6 +740,12 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			"error", err)
 	}
 
+	// If the paid invoice belongs to a pending checkout, complete it.
+	if err := p.handleCheckoutCompletion(ctx, invoice); err != nil {
+		p.Logger.Error(ctx, "failed to complete checkout after invoice payment",
+			"invoice_id", invoice.ID, "error", err)
+	}
+
 	// Invoice is fully paid — dispatch Whop mark-paid directly if a mapping exists.
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		p.dispatchWhopMarkPaid(ctx, invoice.ID)
@@ -1001,4 +1007,23 @@ func (p *paymentProcessor) handleIncompleteSubscriptionPayment(ctx context.Conte
 		"subscription_id", *invoice.SubscriptionID)
 
 	return nil
+}
+
+// handleCheckoutCompletion marks a pending payment-objective checkout as completed
+// when its gated invoice is fully paid. The subscription itself is activated by
+// handleIncompleteSubscriptionPayment; this only closes out the checkout record.
+func (p *paymentProcessor) handleCheckoutCompletion(ctx context.Context, inv *invoice.Invoice) error {
+	if inv.SubscriptionID == nil || !inv.AmountRemaining.IsZero() {
+		return nil
+	}
+	chk, err := p.CheckoutRepo.GetPendingByEntity(ctx,
+		types.CheckoutEntityTypeSubscription, *inv.SubscriptionID, types.CheckoutObjectivePayment)
+	if err != nil {
+		return err
+	}
+	if chk == nil {
+		return nil
+	}
+	checkoutSvc := NewCheckoutService(p.ServiceParams)
+	return checkoutSvc.Complete(ctx, chk.ID)
 }
