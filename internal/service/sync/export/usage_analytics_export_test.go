@@ -3,6 +3,7 @@ package export
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -480,49 +481,64 @@ func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 
 // TestGetDistinctCustomerIDsWithCommitmentTrueUp_BucketLevel verifies the customer
 // sweep that drives the export (so zero-event true-up customers are still billed)
-// includes a customer whose true-up is ONLY on a commitment time bucket, not just
-// the top-level commitment_true_up_enabled flag.
+// keys off true-up enabled at EITHER the line-item level or on any commitment time
+// bucket — not just the top-level commitment_true_up_enabled flag.
 func TestGetDistinctCustomerIDsWithCommitmentTrueUp_BucketLevel(t *testing.T) {
-	ctx := context.Background()
-	ctx = types.SetTenantID(ctx, "tenant-x")
-	ctx = types.SetEnvironmentID(ctx, "env-x")
-	store := testutil.NewInMemorySubscriptionLineItemStore()
+	tests := []struct {
+		name        string
+		topTrueUp   bool
+		buckets     types.TimeOfDayBuckets
+		wantInclude bool
+	}{
+		{
+			name:        "top-level true-up is included",
+			topTrueUp:   true,
+			wantInclude: true,
+		},
+		{
+			name:      "bucket-level-only true-up is included",
+			topTrueUp: false,
+			buckets: types.TimeOfDayBuckets{
+				{ID: "b1", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12}, TrueUpEnabled: true},
+			},
+			wantInclude: true,
+		},
+		{
+			name:      "no true-up anywhere is excluded",
+			topTrueUp: false,
+			buckets: types.TimeOfDayBuckets{
+				{ID: "b1", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12}, TrueUpEnabled: false},
+			},
+			wantInclude: false,
+		},
+	}
 
-	mk := func(id, customerID string, topTrueUp bool, buckets types.TimeOfDayBuckets) {
-		err := store.Create(ctx, &subscription.SubscriptionLineItem{
-			ID: id, CustomerID: customerID, SubscriptionID: "sub-" + id, PriceID: "p1",
-			EnvironmentID: "env-x", BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-			CommitmentTrueUpEnabled: topTrueUp, CommitmentTimeBuckets: buckets,
-			BaseModel: types.BaseModel{TenantID: "tenant-x", Status: types.StatusPublished},
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctx = types.SetTenantID(ctx, "tenant-x")
+			ctx = types.SetEnvironmentID(ctx, "env-x")
+			store := testutil.NewInMemorySubscriptionLineItemStore()
+
+			err := store.Create(ctx, &subscription.SubscriptionLineItem{
+				ID: "li-1", CustomerID: "cust-1", SubscriptionID: "sub-1", PriceID: "p1",
+				EnvironmentID: "env-x", BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+				CommitmentTrueUpEnabled: tc.topTrueUp, CommitmentTimeBuckets: tc.buckets,
+				BaseModel: types.BaseModel{TenantID: "tenant-x", Status: types.StatusPublished},
+			})
+			if err != nil {
+				t.Fatalf("create line item: %v", err)
+			}
+
+			ids, err := store.GetDistinctCustomerIDsWithCommitmentTrueUp(ctx)
+			if err != nil {
+				t.Fatalf("GetDistinctCustomerIDsWithCommitmentTrueUp: %v", err)
+			}
+
+			included := slices.Contains(ids, "cust-1")
+			if included != tc.wantInclude {
+				t.Errorf("customer included = %v, want %v (ids=%v)", included, tc.wantInclude, ids)
+			}
 		})
-		if err != nil {
-			t.Fatalf("create %s: %v", id, err)
-		}
-	}
-
-	mk("li-top", "cust-top", true, nil)                           // top-level true-up
-	mk("li-bucket", "cust-bucket", false, types.TimeOfDayBuckets{ // bucket-only true-up
-		{ID: "b1", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12}, TrueUpEnabled: true},
-	})
-	mk("li-none", "cust-none", false, types.TimeOfDayBuckets{ // no true-up anywhere
-		{ID: "b1", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12}, TrueUpEnabled: false},
-	})
-
-	ids, err := store.GetDistinctCustomerIDsWithCommitmentTrueUp(ctx)
-	if err != nil {
-		t.Fatalf("GetDistinctCustomerIDsWithCommitmentTrueUp: %v", err)
-	}
-	set := map[string]bool{}
-	for _, id := range ids {
-		set[id] = true
-	}
-	if !set["cust-top"] {
-		t.Errorf("expected top-level true-up customer to be included")
-	}
-	if !set["cust-bucket"] {
-		t.Errorf("expected bucket-level-only true-up customer to be included")
-	}
-	if set["cust-none"] {
-		t.Errorf("customer with no true-up must NOT be included")
 	}
 }
