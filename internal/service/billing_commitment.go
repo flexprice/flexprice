@@ -467,18 +467,22 @@ func isLastPeriodOfCommitmentPeriod(periodEnd, commitmentEnd time.Time) bool {
 }
 
 // bucketIDsForPointWindow returns the ids and prices of every commitment bucket
-// that OVERLAPS the analytics display window [windowStart, windowStart+window) —
-// any intersection counts, in either direction (the bucket partially inside the
+// that OVERLAPS the display window [windowStart, windowStart+windowMin) — any
+// intersection counts, in either direction (the bucket partially inside the
 // window, or the window partially inside the bucket). The two slices are aligned
 // by index (ids[i] ↔ priceIDs[i]). Used only to annotate the rolled-up display
 // points; it never feeds bucket summaries (those use the exact per-meter-window
 // attribution, where each window sits in exactly one bucket).
 //
+// windowMin must be the point's EFFECTIVE span — max(request window, meter bucket
+// size) — because the roll-up cannot subdivide below the meter bucket, so when the
+// request window is finer than the meter bucket the displayed point still spans a
+// whole meter bucket (see effectivePointWindowMinutes).
+//
 // Overlap is computed on the minute-of-day axis. A window of a full day or more
 // touches every configured bucket. Sub-day windows and midnight-wrapping buckets
 // are each unrolled into up to two linear [lo,hi) segments and tested pairwise.
-func bucketIDsForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Time, window types.WindowSize) ([]string, []string) {
-	windowMin := window.ToMinutes()
+func bucketIDsForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Time, windowMin int) ([]string, []string) {
 	if windowMin <= 0 {
 		return nil, nil
 	}

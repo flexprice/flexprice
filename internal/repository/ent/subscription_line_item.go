@@ -596,13 +596,24 @@ func (r *subscriptionLineItemRepository) GetDistinctCustomerIDsWithCommitmentTru
 	})
 	defer FinishSpan(span)
 
+	// True-up can be enabled either at the line-item level (commitment_true_up_enabled)
+	// or on any individual commitment time bucket (the true_up_enabled flag inside the
+	// commitment_time_buckets jsonb array). Both must surface the customer so their
+	// committed minimum is billed even with no usage in the window.
 	const query = `
 		SELECT DISTINCT customer_id
 		FROM subscription_line_items
 		WHERE tenant_id = $1
 			AND environment_id = $2
 			AND status = $3
-			AND commitment_true_up_enabled = true
+			AND (
+				commitment_true_up_enabled = true
+				OR EXISTS (
+					SELECT 1
+					FROM jsonb_array_elements(COALESCE(commitment_time_buckets, '[]'::jsonb)) AS bucket
+					WHERE (bucket->>'true_up_enabled')::boolean = true
+				)
+			)
 	`
 
 	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, tenantID, envID, string(types.StatusPublished))

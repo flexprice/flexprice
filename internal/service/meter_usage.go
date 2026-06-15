@@ -1447,8 +1447,9 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 				// Per-point bucket identity: every bucket the rolled-up window
 				// overlaps (informational hint only — see dto.UsageAnalyticPoint).
 				if lineItemForBucket != nil {
+					windowMin := effectivePointWindowMinutes(params.WindowSize, meterMap[analytic.MeterID])
 					ids, priceIDs := bucketIDsForPointWindow(
-						lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, params.WindowSize)
+						lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, windowMin)
 					for i := range ids {
 						dtoPoint.Buckets = append(dtoPoint.Buckets, dto.PointBucket{BucketID: ids[i], PriceID: priceIDs[i]})
 					}
@@ -1928,6 +1929,21 @@ func (s *meterUsageService) processPointsWithBuckets(
 	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
 
 	return cost
+}
+
+// effectivePointWindowMinutes returns the span (in minutes) a displayed point
+// actually covers: the request window, or the meter's bucket size when that is
+// coarser. mergeBucketPointsByWindow cannot subdivide below the meter bucket, so a
+// request window finer than the bucket leaves points at meter-bucket grain — the
+// overlap check must use that coarser span, not the (smaller) request window.
+func effectivePointWindowMinutes(requestWindow types.WindowSize, m *meter.Meter) int {
+	minutes := requestWindow.ToMinutes()
+	if m != nil && m.HasBucketSize() {
+		if bm := m.Aggregation.BucketSize.ToMinutes(); bm > minutes {
+			minutes = bm
+		}
+	}
+	return minutes
 }
 
 // captureBucketPoints snapshots the bucket-grain points (with their per-window
