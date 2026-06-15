@@ -43,6 +43,7 @@ type WebhookHandler struct {
 	planService                     interfaces.PlanService
 	subscriptionService             interfaces.SubscriptionService
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService
+	checkoutService                 interfaces.CheckoutService
 	db                              postgres.IClient
 	webhookService                  *flexwebhook.WebhookService
 }
@@ -59,6 +60,7 @@ func NewWebhookHandler(
 	planService interfaces.PlanService,
 	subscriptionService interfaces.SubscriptionService,
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService,
+	checkoutService interfaces.CheckoutService,
 	db postgres.IClient,
 	webhookService *flexwebhook.WebhookService,
 ) *WebhookHandler {
@@ -73,6 +75,7 @@ func NewWebhookHandler(
 		planService:                     planService,
 		subscriptionService:             subscriptionService,
 		entityIntegrationMappingService: entityIntegrationMappingService,
+		checkoutService:                 checkoutService,
 		db:                              db,
 		webhookService:                  webhookService,
 	}
@@ -242,6 +245,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 		PlanService:                     h.planService,
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		CheckoutService:                 h.checkoutService,
 		DB:                              h.db,
 	}
 
