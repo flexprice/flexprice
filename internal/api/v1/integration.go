@@ -94,7 +94,7 @@ func (h *IntegrationHandler) Link(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.DelinkIntegrationMappingRequest true "Delink mapping request"
-// @Success 200 {object} dto.DelinkIntegrationMappingResponse
+// @Success 200 {object} dto.SuccessResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse

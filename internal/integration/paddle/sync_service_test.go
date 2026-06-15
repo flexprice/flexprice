@@ -118,7 +118,7 @@ func (s *inMemoryMappingService) LinkIntegrationMapping(ctx context.Context, req
 	return nil, nil
 }
 
-func (s *inMemoryMappingService) DelinkIntegrationMapping(ctx context.Context, req apidto.DelinkIntegrationMappingRequest) (*apidto.DelinkIntegrationMappingResponse, error) {
+func (s *inMemoryMappingService) DelinkIntegrationMapping(ctx context.Context, req apidto.DelinkIntegrationMappingRequest) (*apidto.SuccessResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -146,9 +146,8 @@ func (s *inMemoryMappingService) DelinkIntegrationMapping(ctx context.Context, r
 		}
 	}
 
-	return &apidto.DelinkIntegrationMappingResponse{
-		Success:  true,
-		Archived: len(mappings),
+	return &apidto.SuccessResponse{
+		Message: "Integration mapping delinked successfully",
 	}, nil
 }
 
@@ -461,8 +460,7 @@ func TestDelinkIntegrationMapping_ArchivesExistingMappings(t *testing.T) {
 		ProviderType: string(types.SecretProviderPaddle),
 	})
 	require.NoError(t, err)
-	assert.True(t, resp.Success)
-	assert.Equal(t, 1, resp.Archived)
+	assert.Equal(t, "Integration mapping delinked successfully", resp.Message)
 
 	// The mapping must no longer be returned by a published-only query.
 	remaining, err := mappingStore.List(ctx, &types.EntityIntegrationMappingFilter{

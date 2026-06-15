@@ -89,10 +89,6 @@ type DelinkIntegrationMappingRequest struct {
 	ProviderType string                      `json:"provider_type" validate:"required"`
 }
 
-type DelinkIntegrationMappingResponse struct {
-	Success  bool `json:"success"`
-	Archived int  `json:"archived"`
-}
 
 func (r *DelinkIntegrationMappingRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {

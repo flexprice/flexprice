@@ -268,7 +268,7 @@ func (s *entityIntegrationMappingService) LinkIntegrationMapping(ctx context.Con
 	}, nil
 }
 
-func (s *entityIntegrationMappingService) DelinkIntegrationMapping(ctx context.Context, req dto.DelinkIntegrationMappingRequest) (*dto.DelinkIntegrationMappingResponse, error) {
+func (s *entityIntegrationMappingService) DelinkIntegrationMapping(ctx context.Context, req dto.DelinkIntegrationMappingRequest) (*dto.SuccessResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -308,9 +308,8 @@ func (s *entityIntegrationMappingService) DelinkIntegrationMapping(ctx context.C
 		return nil, err
 	}
 
-	return &dto.DelinkIntegrationMappingResponse{
-		Success:  true,
-		Archived: len(mappings),
+	return &dto.SuccessResponse{
+		Message: "Integration mapping delinked successfully",
 	}, nil
 }
 
