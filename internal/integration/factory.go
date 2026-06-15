@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -175,6 +176,30 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		InvoiceSyncSvc: invoiceSyncSvc,
 		WebhookHandler: webhookHandler,
 	}, nil
+}
+
+// GetCheckoutProvider returns a checkout-session provider for the named payment
+// provider. customerSvc/invoiceSvc are supplied by the caller (same pattern as
+// PaymentSvc.CreatePaymentLink), since the factory does not own a customer service.
+func (f *Factory) GetCheckoutProvider(
+	ctx context.Context,
+	provider string,
+	customerSvc interfaces.CustomerService,
+	invoiceSvc interfaces.InvoiceService,
+) (checkout.CheckoutProvider, error) {
+	switch types.SecretProvider(provider) {
+	case types.SecretProviderStripe:
+		si, err := f.GetStripeIntegration(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return stripe.NewStripeCheckoutProvider(si.PaymentSvc, customerSvc, invoiceSvc), nil
+	default:
+		return nil, ierr.NewError("unsupported checkout provider").
+			WithHint("Only 'stripe' is supported for checkout").
+			WithReportableDetails(map[string]any{"provider": provider}).
+			Mark(ierr.ErrValidation)
+	}
 }
 
 // GetHubSpotIntegration returns a complete HubSpot integration setup
