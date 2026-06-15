@@ -1299,9 +1299,9 @@ func (s *subscriptionModificationService) resolveCustomersByExternalIDs(ctx cont
 	return result, nil
 }
 
-// findInheritedSubForChild returns active, trialing, or paused inherited subscriptions
-// for a given child customer under the specified parent subscription.
-func (s *subscriptionModificationService) findInheritedSubForChild(ctx context.Context, parentSubID, childCustomerID string) ([]*subscription.Subscription, error) {
+// getInheritedSubscriptionsForChildCustomer returns active, trialing, or paused inherited
+// subscriptions for a child customer under the specified parent subscription.
+func (s *subscriptionModificationService) getInheritedSubscriptionsForChildCustomer(ctx context.Context, parentSubID, childCustomerID string) ([]*subscription.Subscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.ParentSubscriptionIDs = []string{parentSubID}
 	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
@@ -1326,6 +1326,36 @@ func (s *subscriptionModificationService) findInheritedSubForChild(ctx context.C
 			Mark(ierr.ErrNotFound)
 	}
 	return subs, nil
+}
+
+func (s *subscriptionModificationService) getInheritedSubscriptionsForChildCustomers(
+	ctx context.Context,
+	parentSubID string,
+	childCustomerIDs []string,
+) ([]*subscription.Subscription, error) {
+	childSubs := make([]*subscription.Subscription, 0, len(childCustomerIDs))
+	for _, childCustomerID := range childCustomerIDs {
+		subs, err := s.getInheritedSubscriptionsForChildCustomer(ctx, parentSubID, childCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		childSubs = append(childSubs, subs...)
+	}
+	return childSubs, nil
+}
+
+func validateInheritedSubscriptionsNotScheduledForRemoval(subs []*subscription.Subscription) error {
+	if sub, found := lo.Find(subs, func(sub *subscription.Subscription) bool {
+		return sub.CancelAt != nil
+	}); found {
+		return ierr.NewError("inherited subscription is already scheduled for removal").
+			WithHint("The inherited subscription already has a scheduled cancellation").
+			WithReportableDetails(map[string]interface{}{
+				"child_subscription_id": sub.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 func (s *subscriptionModificationService) executeRemoveInheritance(
@@ -1368,23 +1398,12 @@ func (s *subscriptionModificationService) executeRemoveInheritance(
 	}
 
 	// 3. Find each child's inherited sub and guard against double-scheduling
-	childSubs := make([]*subscription.Subscription, 0, len(childCustomerIDs))
-	for _, childCustomerID := range childCustomerIDs {
-		subs, err := s.findInheritedSubForChild(ctx, subscriptionID, childCustomerID)
-		if err != nil {
-			return nil, err
-		}
-		for _, sub := range subs {
-			if sub.CancelAt != nil {
-				return nil, ierr.NewError("inherited subscription is already scheduled for removal").
-					WithHint("The inherited subscription already has a scheduled cancellation").
-					WithReportableDetails(map[string]interface{}{
-						"child_subscription_id": sub.ID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-		}
-		childSubs = append(childSubs, subs...)
+	childSubs, err := s.getInheritedSubscriptionsForChildCustomers(ctx, subscriptionID, childCustomerIDs)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateInheritedSubscriptionsNotScheduledForRemoval(childSubs); err != nil {
+		return nil, err
 	}
 
 	// 4. Effective date = parent's current period end
@@ -1395,8 +1414,7 @@ func (s *subscriptionModificationService) executeRemoveInheritance(
 	err = sp.DB.WithTx(ctx, func(txCtx context.Context) error {
 		changedSubs = nil
 		for _, childSub := range childSubs {
-			cancelDate := effectiveDate // local copy to avoid pointer aliasing
-			childSub.CancelAt = &cancelDate
+			childSub.CancelAt = lo.ToPtr(effectiveDate)
 			childSub.CancelAtPeriodEnd = true
 			if err := sp.SubRepo.Update(txCtx, childSub); err != nil {
 				return ierr.WithError(err).
@@ -1410,7 +1428,7 @@ func (s *subscriptionModificationService) executeRemoveInheritance(
 				ID:               childSub.ID,
 				Action:           dto.ChangedSubscriptionActionUpdated,
 				Status:           childSub.SubscriptionStatus,
-				CurrentPeriodEnd: &cancelDate,
+				CurrentPeriodEnd: lo.ToPtr(effectiveDate),
 			})
 		}
 		return nil
@@ -1478,30 +1496,21 @@ func (s *subscriptionModificationService) previewRemoveInheritance(
 
 	// Validate children and build preview response (no DB mutations)
 	effectiveDate := parentSub.CurrentPeriodEnd
-	changedSubs := make([]dto.ChangedSubscription, 0, len(childCustomerIDs))
-	for _, childCustomerID := range childCustomerIDs {
-		childSubsForCustomer, err := s.findInheritedSubForChild(ctx, subscriptionID, childCustomerID)
-		if err != nil {
-			return nil, err
-		}
-		for _, childSub := range childSubsForCustomer {
-			if childSub.CancelAt != nil {
-				return nil, ierr.NewError("inherited subscription is already scheduled for removal").
-					WithHint("The inherited subscription already has a scheduled cancellation").
-					WithReportableDetails(map[string]interface{}{
-						"child_subscription_id": childSub.ID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-			periodEnd := effectiveDate // local copy to avoid pointer aliasing
-			changedSubs = append(changedSubs, dto.ChangedSubscription{
-				ID:               childSub.ID,
-				Action:           dto.ChangedSubscriptionActionUpdated,
-				Status:           childSub.SubscriptionStatus,
-				CurrentPeriodEnd: &periodEnd,
-			})
-		}
+	childSubs, err := s.getInheritedSubscriptionsForChildCustomers(ctx, subscriptionID, childCustomerIDs)
+	if err != nil {
+		return nil, err
 	}
+	if err := validateInheritedSubscriptionsNotScheduledForRemoval(childSubs); err != nil {
+		return nil, err
+	}
+	changedSubs := lo.Map(childSubs, func(childSub *subscription.Subscription, _ int) dto.ChangedSubscription {
+		return dto.ChangedSubscription{
+			ID:               childSub.ID,
+			Action:           dto.ChangedSubscriptionActionUpdated,
+			Status:           childSub.SubscriptionStatus,
+			CurrentPeriodEnd: lo.ToPtr(effectiveDate),
+		}
+	})
 
 	subSvc := NewSubscriptionService(sp)
 	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
