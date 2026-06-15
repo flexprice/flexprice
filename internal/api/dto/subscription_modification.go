@@ -205,9 +205,7 @@ type SubModifyCouponParams struct {
 	CouponCode *string `json:"coupon_code,omitempty"`
 	// Required when action="remove". ID of the CouponAssociation to soft-delete.
 	AssociationID *string `json:"association_id,omitempty"`
-	// Optional. When to apply the change; defaults to now if omitted.
-	EffectiveDate *time.Time `json:"effective_date,omitempty"`
-	// Optional. When the coupon association starts; defaults to EffectiveDate.
+	// Optional. When the coupon association starts; defaults to now.
 	StartDate *time.Time `json:"start_date,omitempty"`
 	// Optional. When the coupon association ends.
 	EndDate *time.Time `json:"end_date,omitempty"`

@@ -16,9 +16,6 @@ func (s *subscriptionModificationService) executeCouponModification(
 	params *dto.SubModifyCouponParams,
 ) (*dto.SubscriptionModifyResponse, error) {
 	effectiveDate := time.Now().UTC()
-	if params.EffectiveDate != nil {
-		effectiveDate = params.EffectiveDate.UTC()
-	}
 	switch params.Action {
 	case dto.SubModifyCouponActionAdd:
 		return s.executeAddCoupon(ctx, subscriptionID, params, effectiveDate)
@@ -104,11 +101,11 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	}
 	if len(existing) > 0 {
 		return nil, ierr.NewError("coupon already active on this subscription for the given date range").
-			WithHint("Remove the existing coupon association before adding it again, or use a different effective_date").
+			WithHint("Remove the existing coupon association before adding it again, or use a different start_date").
 			WithReportableDetails(map[string]interface{}{
 				"coupon_id":       couponID,
 				"subscription_id": subscriptionID,
-				"effective_date":  effectiveDate,
+				"checked_at":      effectiveDate,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -178,12 +175,12 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 	}
 
 	if effectiveDate.Before(assoc.StartDate) {
-		return nil, ierr.NewError("effective_date cannot be before association start_date").
-			WithHint("Use an effective_date on or after the association start date").
+		return nil, ierr.NewError("cannot remove coupon association before it has started").
+			WithHint("The coupon association has not started yet; wait until after its start_date").
 			WithReportableDetails(map[string]interface{}{
 				"association_id": associationID,
 				"start_date":     assoc.StartDate,
-				"effective_date": effectiveDate,
+				"now":            effectiveDate,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -209,9 +206,6 @@ func (s *subscriptionModificationService) previewCouponModification(
 	params *dto.SubModifyCouponParams,
 ) (*dto.SubscriptionModifyResponse, error) {
 	effectiveDate := time.Now().UTC()
-	if params.EffectiveDate != nil {
-		effectiveDate = params.EffectiveDate.UTC()
-	}
 	switch params.Action {
 	case dto.SubModifyCouponActionAdd:
 		return s.previewAddCoupon(ctx, subscriptionID, params, effectiveDate)
@@ -333,12 +327,12 @@ func (s *subscriptionModificationService) previewRemoveCoupon(
 	}
 
 	if effectiveDate.Before(assoc.StartDate) {
-		return nil, ierr.NewError("effective_date cannot be before association start_date").
-			WithHint("Use an effective_date on or after the association start date").
+		return nil, ierr.NewError("cannot remove coupon association before it has started").
+			WithHint("The coupon association has not started yet; wait until after its start_date").
 			WithReportableDetails(map[string]interface{}{
 				"association_id": associationID,
 				"start_date":     assoc.StartDate,
-				"effective_date": effectiveDate,
+				"now":            effectiveDate,
 			}).
 			Mark(ierr.ErrValidation)
 	}
