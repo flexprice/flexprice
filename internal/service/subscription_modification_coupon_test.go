@@ -7,7 +7,6 @@ import (
 	coupon_domain "github.com/flexprice/flexprice/internal/domain/coupon"
 	coupon_association "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -19,14 +18,12 @@ import (
 func (s *SubscriptionModificationServiceSuite) createCoupon() *coupon_domain.Coupon {
 	ctx := s.GetContext()
 	pct := decimal.NewFromInt(10)
-	id := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON)
 	c := &coupon_domain.Coupon{
-		ID:            id,
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON),
 		Name:          "Test Coupon",
 		Type:          types.CouponTypePercentage,
 		Cadence:       types.CouponCadenceForever,
 		PercentageOff: &pct,
-		CouponCode:    lo.ToPtr(id),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
@@ -61,8 +58,8 @@ func (s *SubscriptionModificationServiceSuite) createCouponAssociation(
 
 func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 	type tc struct {
-		name string
-		run  func()
+		name      string
+		run       func()
 	}
 
 	cases := []tc{
@@ -79,7 +76,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
 						Action:        dto.SubModifyCouponActionAdd,
-						CouponCode:    c.CouponCode,
+						CouponID:      &c.ID,
 						EffectiveDate: &past,
 					},
 				}
@@ -113,7 +110,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
 						Action:        dto.SubModifyCouponActionAdd,
-						CouponCode:    c.CouponCode,
+						CouponID:      &c.ID,
 						EffectiveDate: &future,
 					},
 				}
@@ -146,8 +143,8 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:     dto.SubModifyCouponActionAdd,
-						CouponCode: c.CouponCode,
+						Action:   dto.SubModifyCouponActionAdd,
+						CouponID: &c.ID,
 						// EffectiveDate is nil → should default to now
 					},
 				}
@@ -184,7 +181,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
 						Action:        dto.SubModifyCouponActionAdd,
-						CouponCode:    c.CouponCode,
+						CouponID:      &c.ID,
 						EffectiveDate: &now,
 					},
 				}
@@ -198,16 +195,17 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				ctx := s.GetContext()
 				cust := s.createCustomer("coup-add-notfound")
 				sub := s.createActiveSub(cust.ID)
+				bogusID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON)
 
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:     dto.SubModifyCouponActionAdd,
-						CouponCode: lo.ToPtr("BOGUS-NONEXISTENT-CODE-XYZ"),
+						Action:   dto.SubModifyCouponActionAdd,
+						CouponID: &bogusID,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub.ID, req)
-				s.Require().Error(err, "unknown coupon code should return error")
+				s.Require().Error(err, "unknown coupon ID should return error")
 			},
 		},
 		{
@@ -388,7 +386,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
 						Action:        dto.SubModifyCouponActionAdd,
-						CouponCode:    c.CouponCode,
+						CouponID:      &c.ID,
 						EffectiveDate: &future,
 					},
 				}
@@ -408,156 +406,6 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				s.Empty(assocs, "Preview must not persist any coupon association")
 			},
 		},
-		// ── New test cases for subscription_id / subscription_line_item_id targeting ──
-		{
-			name: "add coupon at subscription level via subscription_id",
-			run: func() {
-				ctx := s.GetContext()
-				cust := s.createCustomer("coup-add-sub-id")
-				sub := s.createActiveSub(cust.ID)
-				c := s.createCoupon()
-
-				req := dto.ExecuteSubscriptionModifyRequest{
-					Type: dto.SubscriptionModifyTypeCoupon,
-					CouponParams: &dto.SubModifyCouponParams{
-						Action:         dto.SubModifyCouponActionAdd,
-						CouponCode:     c.CouponCode,
-						SubscriptionID: &sub.ID,
-					},
-				}
-				resp, err := s.service.Execute(ctx, sub.ID, req)
-				s.Require().NoError(err)
-				s.Require().NotNil(resp)
-
-				filter := &types.CouponAssociationFilter{
-					QueryFilter:     types.NewNoLimitQueryFilter(),
-					SubscriptionIDs: []string{sub.ID},
-					CouponIDs:       []string{c.ID},
-				}
-				assocs, err := s.GetStores().CouponAssociationRepo.List(ctx, filter)
-				s.Require().NoError(err)
-				s.Require().Len(assocs, 1)
-				s.Nil(assocs[0].SubscriptionLineItemID, "should be subscription-level (no line item)")
-			},
-		},
-		{
-			name: "add coupon at line-item level via subscription_line_item_id",
-			run: func() {
-				ctx := s.GetContext()
-				cust := s.createCustomer("coup-add-li-id")
-				sub := s.createActiveSub(cust.ID)
-				li := s.createFixedLineItem(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceArrear)
-				c := s.createCoupon()
-
-				req := dto.ExecuteSubscriptionModifyRequest{
-					Type: dto.SubscriptionModifyTypeCoupon,
-					CouponParams: &dto.SubModifyCouponParams{
-						Action:                 dto.SubModifyCouponActionAdd,
-						CouponCode:             c.CouponCode,
-						SubscriptionLineItemID: &li.ID,
-					},
-				}
-				resp, err := s.service.Execute(ctx, sub.ID, req)
-				s.Require().NoError(err)
-				s.Require().NotNil(resp)
-
-				filter := &types.CouponAssociationFilter{
-					QueryFilter:     types.NewNoLimitQueryFilter(),
-					SubscriptionIDs: []string{sub.ID},
-					CouponIDs:       []string{c.ID},
-				}
-				assocs, err := s.GetStores().CouponAssociationRepo.List(ctx, filter)
-				s.Require().NoError(err)
-				s.Require().Len(assocs, 1)
-				s.Require().NotNil(assocs[0].SubscriptionLineItemID)
-				s.Equal(li.ID, *assocs[0].SubscriptionLineItemID)
-			},
-		},
-		{
-			name: "add coupon — both subscription_id and subscription_line_item_id provided",
-			run: func() {
-				ctx := s.GetContext()
-				cust := s.createCustomer("coup-add-both-fields")
-				sub := s.createActiveSub(cust.ID)
-				c := s.createCoupon()
-				fakeLineItemID := types.GenerateUUIDWithPrefix("sli")
-
-				req := dto.ExecuteSubscriptionModifyRequest{
-					Type: dto.SubscriptionModifyTypeCoupon,
-					CouponParams: &dto.SubModifyCouponParams{
-						Action:                 dto.SubModifyCouponActionAdd,
-						CouponCode:             c.CouponCode,
-						SubscriptionID:         &sub.ID,
-						SubscriptionLineItemID: &fakeLineItemID,
-					},
-				}
-				_, err := s.service.Execute(ctx, sub.ID, req)
-				s.Require().Error(err, "providing both subscription_id and subscription_line_item_id should fail validation")
-			},
-		},
-		{
-			name: "add coupon — subscription_line_item_id not on this subscription",
-			run: func() {
-				ctx := s.GetContext()
-				cust := s.createCustomer("coup-add-wrong-li")
-				sub1 := s.createActiveSub(cust.ID)
-				sub2 := s.createActiveSub(cust.ID)
-				// Create a line item belonging to sub2
-				li := s.createFixedLineItem(sub2.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceArrear)
-				c := s.createCoupon()
-
-				req := dto.ExecuteSubscriptionModifyRequest{
-					Type: dto.SubscriptionModifyTypeCoupon,
-					CouponParams: &dto.SubModifyCouponParams{
-						Action:                 dto.SubModifyCouponActionAdd,
-						CouponCode:             c.CouponCode,
-						SubscriptionLineItemID: &li.ID,
-					},
-				}
-				// Apply to sub1, but li belongs to sub2
-				_, err := s.service.Execute(ctx, sub1.ID, req)
-				s.Require().Error(err, "line item from different subscription should be rejected")
-			},
-		},
-		{
-			name: "add coupon — subscription_id mismatch",
-			run: func() {
-				ctx := s.GetContext()
-				cust := s.createCustomer("coup-add-sub-mismatch")
-				sub1 := s.createActiveSub(cust.ID)
-				sub2 := s.createActiveSub(cust.ID)
-				c := s.createCoupon()
-
-				req := dto.ExecuteSubscriptionModifyRequest{
-					Type: dto.SubscriptionModifyTypeCoupon,
-					CouponParams: &dto.SubModifyCouponParams{
-						Action:         dto.SubModifyCouponActionAdd,
-						CouponCode:     c.CouponCode,
-						SubscriptionID: &sub2.ID, // mismatch: sub2 != sub1
-					},
-				}
-				_, err := s.service.Execute(ctx, sub1.ID, req)
-				s.Require().Error(err, "subscription_id mismatch should return error")
-			},
-		},
-		{
-			name: "add coupon — coupon_code required",
-			run: func() {
-				ctx := s.GetContext()
-				cust := s.createCustomer("coup-add-no-code")
-				sub := s.createActiveSub(cust.ID)
-
-				req := dto.ExecuteSubscriptionModifyRequest{
-					Type: dto.SubscriptionModifyTypeCoupon,
-					CouponParams: &dto.SubModifyCouponParams{
-						Action:     dto.SubModifyCouponActionAdd,
-						CouponCode: nil, // no code provided
-					},
-				}
-				_, err := s.service.Execute(ctx, sub.ID, req)
-				s.Require().Error(err, "missing coupon_code should fail validation")
-			},
-		},
 	}
 
 	for _, tc := range cases {
@@ -566,3 +414,4 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 		})
 	}
 }
+

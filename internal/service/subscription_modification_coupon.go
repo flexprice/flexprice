@@ -8,6 +8,7 @@ import (
 	coupon_association "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 func (s *subscriptionModificationService) executeCouponModification(
@@ -39,48 +40,50 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	sp := s.serviceParams
 
 	// Validate subscription exists before any mutation.
-	sub, err := sp.SubRepo.Get(ctx, subscriptionID)
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Resolve coupon by coupon_code only.
-	c, err := sp.CouponRepo.GetByCode(ctx, *params.CouponCode)
-	if err != nil {
-		return nil, ierr.NewError("coupon not found").
-			WithHintf("No published coupon with code '%s'", *params.CouponCode).
-			Mark(ierr.ErrValidation)
-	}
-	if c.Status != types.StatusPublished {
-		return nil, ierr.NewError("coupon not found or inactive").
-			WithHint("Ensure the coupon is in 'published' status").
-			Mark(ierr.ErrValidation)
-	}
-	couponID := c.ID
-
-	// Resolve target: line-item level or subscription level.
-	var lineItemID *string
-	if params.SubscriptionLineItemID != nil {
-		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, *params.SubscriptionLineItemID)
+	// Resolve coupon: prefer coupon_code; fall back to deprecated coupon_id
+	var couponID string
+	if params.CouponCode != nil && *params.CouponCode != "" {
+		c, err := sp.CouponRepo.GetByCode(ctx, *params.CouponCode)
 		if err != nil {
-			return nil, err
-		}
-		if lineItem.SubscriptionID != subscriptionID {
-			return nil, ierr.NewError("subscription_line_item_id does not belong to this subscription").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_line_item_id": *params.SubscriptionLineItemID,
-					"subscription_id":           subscriptionID,
-				}).
+			return nil, ierr.NewError("coupon not found").
+				WithHintf("No published coupon with code '%s'", *params.CouponCode).
 				Mark(ierr.ErrValidation)
 		}
-		lineItemID = params.SubscriptionLineItemID
-	} else if params.SubscriptionID != nil && *params.SubscriptionID != subscriptionID {
-		return nil, ierr.NewError("subscription_id does not match the subscription being modified").
-			WithReportableDetails(map[string]interface{}{
-				"provided_subscription_id": *params.SubscriptionID,
-				"subscription_id":          subscriptionID,
-			}).
-			Mark(ierr.ErrValidation)
+		if c.Status != types.StatusPublished {
+			return nil, ierr.NewError("coupon not found or inactive").
+				Mark(ierr.ErrValidation)
+		}
+		couponID = c.ID
+	} else {
+		c, err := sp.CouponRepo.Get(ctx, *params.CouponID)
+		if err != nil || c.Status != types.StatusPublished {
+			return nil, ierr.NewError("coupon not found or inactive").
+				WithHint("Provide a valid, active coupon_id or coupon_code").
+				Mark(ierr.ErrValidation)
+		}
+		couponID = c.ID
+	}
+
+	// Resolve price_id → line_item_id
+	var lineItemID *string
+	if params.PriceID != nil {
+		priceToLI := make(map[string]string)
+		for _, li := range subResp.LineItems {
+			priceToLI[li.PriceID] = li.ID
+		}
+		if liID, ok := priceToLI[*params.PriceID]; ok {
+			lineItemID = lo.ToPtr(liID)
+		} else {
+			sp.Logger.Info(ctx, "modify coupon price_id not found in line items, applying at subscription level",
+				"price_id", *params.PriceID,
+				"subscription_id", subscriptionID)
+		}
 	}
 
 	startDate := effectiveDate
@@ -130,7 +133,7 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
+		Subscription:     subResp,
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -144,7 +147,8 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 	sp := s.serviceParams
 
 	// Validate subscription exists before any mutation.
-	sub, err := sp.SubRepo.Get(ctx, subscriptionID)
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +200,7 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
+		Subscription:     subResp,
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -229,41 +233,28 @@ func (s *subscriptionModificationService) previewAddCoupon(
 ) (*dto.SubscriptionModifyResponse, error) {
 	sp := s.serviceParams
 
-	// Resolve coupon by coupon_code only.
-	c, err := sp.CouponRepo.GetByCode(ctx, *params.CouponCode)
-	if err != nil {
-		return nil, ierr.NewError("coupon not found").
-			WithHintf("No published coupon with code '%s'", *params.CouponCode).
-			Mark(ierr.ErrValidation)
-	}
-	if c.Status != types.StatusPublished {
-		return nil, ierr.NewError("coupon not found or inactive").
-			WithHint("Ensure the coupon is in 'published' status").
-			Mark(ierr.ErrValidation)
-	}
-	couponID := c.ID
-
-	// Resolve target: line-item level or subscription level.
-	if params.SubscriptionLineItemID != nil {
-		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, *params.SubscriptionLineItemID)
+	// Resolve coupon: prefer coupon_code; fall back to deprecated coupon_id
+	var couponID string
+	if params.CouponCode != nil && *params.CouponCode != "" {
+		c, err := sp.CouponRepo.GetByCode(ctx, *params.CouponCode)
 		if err != nil {
-			return nil, err
-		}
-		if lineItem.SubscriptionID != subscriptionID {
-			return nil, ierr.NewError("subscription_line_item_id does not belong to this subscription").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_line_item_id": *params.SubscriptionLineItemID,
-					"subscription_id":           subscriptionID,
-				}).
+			return nil, ierr.NewError("coupon not found").
+				WithHintf("No published coupon with code '%s'", *params.CouponCode).
 				Mark(ierr.ErrValidation)
 		}
-	} else if params.SubscriptionID != nil && *params.SubscriptionID != subscriptionID {
-		return nil, ierr.NewError("subscription_id does not match the subscription being modified").
-			WithReportableDetails(map[string]interface{}{
-				"provided_subscription_id": *params.SubscriptionID,
-				"subscription_id":          subscriptionID,
-			}).
-			Mark(ierr.ErrValidation)
+		if c.Status != types.StatusPublished {
+			return nil, ierr.NewError("coupon not found or inactive").
+				Mark(ierr.ErrValidation)
+		}
+		couponID = c.ID
+	} else {
+		c, err := sp.CouponRepo.Get(ctx, *params.CouponID)
+		if err != nil || c.Status != types.StatusPublished {
+			return nil, ierr.NewError("coupon not found or inactive").
+				WithHint("Provide a valid, active coupon_id or coupon_code").
+				Mark(ierr.ErrValidation)
+		}
+		couponID = c.ID
 	}
 
 	filter := &types.CouponAssociationFilter{
@@ -283,18 +274,17 @@ func (s *subscriptionModificationService) previewAddCoupon(
 			WithReportableDetails(map[string]interface{}{
 				"coupon_id":       couponID,
 				"subscription_id": subscriptionID,
-				"effective_date":  effectiveDate,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	sub, err := sp.SubRepo.Get(ctx, subscriptionID)
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
-
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
+		Subscription:     subResp,
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -339,12 +329,13 @@ func (s *subscriptionModificationService) previewRemoveCoupon(
 			Mark(ierr.ErrValidation)
 	}
 
-	sub, err := sp.SubRepo.Get(ctx, subscriptionID)
+	subSvc := NewSubscriptionService(sp)
+	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
+		Subscription:     subResp,
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
