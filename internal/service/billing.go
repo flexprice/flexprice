@@ -1091,15 +1091,24 @@ func (s *billingService) fillBucketedValuesForWindowedCommitment(
 	if len(expectedStarts) == 0 {
 		return nil, nil
 	}
+	// Always bill every window that has real usage. For EMPTY windows, only fill the
+	// ones that can actually true-up: inside a true-up bucket, or out-of-bucket only
+	// when the line item's own commitment has true-up (shouldFillWindow). Empty
+	// windows that cannot charge bill $0 regardless, so filling them would just
+	// inflate the calculation — and for partial bucket configs would synthesize
+	// out-of-bucket windows that shouldn't be billed at all.
 	bucketedValues := make([]decimal.Decimal, 0, len(expectedStarts))
+	bucketStarts := make([]time.Time, 0, len(expectedStarts))
 	for _, t := range expectedStarts {
 		if v, ok := usageByWindow[t]; ok {
 			bucketedValues = append(bucketedValues, v)
-		} else {
+			bucketStarts = append(bucketStarts, t)
+		} else if shouldFillWindow(item, t) {
 			bucketedValues = append(bucketedValues, decimal.Zero)
+			bucketStarts = append(bucketStarts, t)
 		}
 	}
-	return bucketedValues, expectedStarts
+	return bucketedValues, bucketStarts
 }
 
 func (s *billingService) CalculateFeatureUsageCharges(
