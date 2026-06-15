@@ -85,8 +85,8 @@ func (r *LinkIntegrationMappingRequest) Validate() error {
 
 type DelinkIntegrationMappingRequest struct {
 	EntityType   types.IntegrationEntityType `json:"entity_type" validate:"required"`
-	EntityID     string                      `json:"entity_id" validate:"required,max=255"`
-	ProviderType string                      `json:"provider_type" validate:"required,max=50"`
+	EntityID     string                      `json:"entity_id" validate:"required"`
+	ProviderType string                      `json:"provider_type" validate:"required"`
 }
 
 type DelinkIntegrationMappingResponse struct {

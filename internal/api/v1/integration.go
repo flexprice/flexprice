@@ -98,15 +98,11 @@ func (h *IntegrationHandler) Link(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /integrations/delink [post]
+// @Router /integrations/link [delete]
 func (h *IntegrationHandler) Delink(c *gin.Context) {
 	var req dto.DelinkIntegrationMappingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).WithHint("Invalid request body").Mark(ierr.ErrValidation))
-		return
-	}
-	if err := req.Validate(); err != nil {
-		c.Error(err)
 		return
 	}
 	resp, err := h.mappingService.DelinkIntegrationMapping(c.Request.Context(), req)

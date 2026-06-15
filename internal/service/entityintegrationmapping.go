@@ -297,10 +297,15 @@ func (s *entityIntegrationMappingService) DelinkIntegrationMapping(ctx context.C
 			Mark(ierr.ErrNotFound)
 	}
 
-	for _, mapping := range mappings {
-		if err := s.EntityIntegrationMappingRepo.Delete(ctx, mapping); err != nil {
-			return nil, err
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		for _, mapping := range mappings {
+			if err := s.EntityIntegrationMappingRepo.Delete(txCtx, mapping); err != nil {
+				return err
+			}
 		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return &dto.DelinkIntegrationMappingResponse{
