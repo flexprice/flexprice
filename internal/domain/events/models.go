@@ -67,6 +67,13 @@ type DetailedUsageAnalytic struct {
 	CommitmentInfo  *types.CommitmentInfo // Stores commitment info if applicable
 	Points          []UsageAnalyticPoint
 
+	// BucketPoints holds the bucket-grain (meter BucketSize) points BEFORE they are
+	// rolled up to the requested window in Points. Each carries its BucketID from the
+	// commitment pass. It is populated only for line items with commitment time
+	// buckets, so per-bucket summaries can be built at the grain where bucket
+	// attribution is exact — independent of how coarse the requested window_size is.
+	BucketPoints []UsageAnalyticPoint
+
 	// All aggregation values - we fetch all and use the appropriate one based on meter type
 	MaxUsage         decimal.Decimal `swaggertype:"string"` // MAX(qty_total * sign)
 	LatestUsage      decimal.Decimal `swaggertype:"string"` // argMax(qty_total, timestamp)
@@ -80,6 +87,11 @@ type UsageAnalyticPoint struct {
 	Usage       decimal.Decimal `swaggertype:"string"`
 	Cost        decimal.Decimal `swaggertype:"string"`
 	EventCount  uint64          // Number of events in this time window
+
+	// BucketID is the commitment time bucket this window's start falls in (empty
+	// when out-of-bucket). Stamped during the windowed-commitment pass at bucket
+	// grain; used to build per-bucket summaries before the request-window roll-up.
+	BucketID string
 
 	// Commitment breakdown (for windowed commitments)
 	ComputedCommitmentUtilizedAmount decimal.Decimal `swaggertype:"string"` // Amount of commitment utilized

@@ -413,10 +413,21 @@ type UsageAnalyticPoint struct {
 	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitempty" swaggertype:"string"`
 	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitempty" swaggertype:"string"`
 
-	// Bucket identity (only populated when BreakdownBucket=true and the line item
-	// has CommitmentTimeBuckets). Empty strings indicate out-of-bucket windows.
-	BucketID string `json:"bucket_id,omitempty"`
-	PriceID  string `json:"bucket_price_id,omitempty"`
+	// Buckets lists every commitment bucket this (possibly rolled-up) window
+	// overlaps — only populated when BreakdownBucket=true and the line item has
+	// CommitmentTimeBuckets. A coarse window can overlap more than one bucket, and
+	// only partially, so this is a list. Empty when the window touches no bucket.
+	// It is an informational HINT only: the point's single cost/computed_* totals
+	// mix all overlapped buckets and out-of-bucket time and CANNOT be split per
+	// bucket — read bucket_summaries for exact per-bucket cost.
+	Buckets []PointBucket `json:"buckets,omitempty"`
+}
+
+// PointBucket identifies one commitment bucket a usage point overlaps, with that
+// bucket's own price.
+type PointBucket struct {
+	BucketID string `json:"bucket_id"`
+	PriceID  string `json:"price_id"`
 }
 
 // BucketSummary holds per-bucket aggregated usage and commitment math for

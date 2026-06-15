@@ -7,8 +7,11 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	eventsDomain "github.com/flexprice/flexprice/internal/domain/events"
+	meterDomain "github.com/flexprice/flexprice/internal/domain/meter"
 	priceDomain "github.com/flexprice/flexprice/internal/domain/price"
 	subscriptionDomain "github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
@@ -74,12 +77,14 @@ func (f *flatRatePriceService) GetByLookupKey(_ context.Context, _ string) (*dto
 	panic("not implemented")
 }
 
-// buildHourlyPoints returns a slice of 24 dto.UsageAnalyticPoints at hourly boundaries
-// starting at baseDate. Each point carries 10 units of usage and no bucket attribution.
-func buildHourlyPoints(baseDate time.Time) []dto.UsageAnalyticPoint {
-	pts := make([]dto.UsageAnalyticPoint, 24)
+// buildHourlyPoints returns 24 bucket-grain (domain) points at hourly boundaries
+// starting at baseDate. Each carries 10 units of usage and no bucket attribution.
+// buildBucketSummaries consumes the domain points (exact single attribution), not
+// the display DTO points.
+func buildHourlyPoints(baseDate time.Time) []eventsDomain.UsageAnalyticPoint {
+	pts := make([]eventsDomain.UsageAnalyticPoint, 24)
 	for i := 0; i < 24; i++ {
-		pts[i] = dto.UsageAnalyticPoint{
+		pts[i] = eventsDomain.UsageAnalyticPoint{
 			Timestamp: baseDate.Add(time.Duration(i) * time.Hour),
 			Usage:     decimal.NewFromInt(10),
 		}
@@ -123,23 +128,20 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 	baseDate := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
 	points := buildHourlyPoints(baseDate)
 
-	// Stamp the points with bucket attribution.
+	// Stamp the bucket-grain points with their (single) bucket attribution.
 	for i := range points {
 		if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{points[i].Timestamp}, 0); ok {
 			points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
-			points[i].PriceID = lineItem.CommitmentTimeBuckets[idx].PriceID
 		}
 	}
 
 	// Assert: hours 0-8 and 17-23 are out-of-bucket (empty BucketID).
 	for i := 0; i < 9; i++ {
 		assert.Empty(t, points[i].BucketID, "hour %d should be out-of-bucket", i)
-		assert.Empty(t, points[i].PriceID, "hour %d should have no bucket PriceID", i)
 	}
 	// Assert: hours 9-16 are in-bucket.
 	for i := 9; i < 17; i++ {
 		assert.Equal(t, bucketID, points[i].BucketID, "hour %d should be in-bucket", i)
-		assert.Equal(t, bucketPriceID, points[i].PriceID, "hour %d should have bucket PriceID", i)
 	}
 	// Assert: hours 17-23 are out-of-bucket again.
 	for i := 17; i < 24; i++ {
@@ -210,7 +212,6 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 	for i := range points {
 		if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{points[i].Timestamp}, 0); ok {
 			points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
-			points[i].PriceID = lineItem.CommitmentTimeBuckets[idx].PriceID
 			points[i].ComputedCommitmentUtilizedAmount = decimal.NewFromInt(5)
 			points[i].ComputedOverageAmount = decimal.NewFromInt(15)
 		}
@@ -272,4 +273,200 @@ func TestAnalytics_BreakdownBucketFlag_NoLineItem(t *testing.T) {
 	summaries := buildBucketSummaries(ctx, &flatRatePriceService{}, points, lineItem, data)
 	// No defined buckets => no summaries (out-of-bucket usage is not summarized).
 	require.Empty(t, summaries, "expect no summaries when no buckets defined")
+}
+
+// TestFeatureUsage_ZeroUsage_BucketTrueUp reproduces the production report where
+// an addon line item with a per-bucket true-up commitment but NO top-level
+// commitment returned total_cost 0 / true_up 0 through the FEATURE-USAGE path.
+//
+// The gate that engages the zero-usage window fill used the top-level
+// CommitmentTrueUpEnabled flag only, so a bucket-level-only true-up never fired —
+// the calculation fell through to applyLineItemCommitment(nil,nil), yielding the
+// empty is_windowed commitment info the customer saw.
+//
+// Setup mirrors the report: MINUTE bucketed SUM meter, line item scoped to a
+// single day, one bucket [11:00,11:30) with $3 amount commitment + true-up ON, no
+// usage. 30 empty minute windows × $3 true-up = $90.
+func TestFeatureUsage_ZeroUsage_BucketTrueUp(t *testing.T) {
+	ctx := testutil.SetupContext()
+	log := logger.NewNoopLogger()
+	priceStore := testutil.NewInMemoryPriceStore()
+	params := ServiceParams{
+		Logger:        log,
+		DB:            testutil.NewMockPostgresClient(log),
+		PriceRepo:     priceStore,
+		MeterRepo:     testutil.NewInMemoryMeterStore(),
+		PlanRepo:      testutil.NewInMemoryPlanStore(),
+		PriceUnitRepo: testutil.NewInMemoryPriceUnitStore(),
+		AddonRepo:     testutil.NewInMemoryAddonStore(),
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+	}
+	svc := &featureUsageTrackingService{ServiceParams: params}
+	priceSvc := NewPriceService(params)
+
+	bucketPrice := &priceDomain.Price{
+		ID: "price_fu_bkt", Amount: decimal.NewFromInt(1), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, bucketPrice))
+
+	linePrice := &priceDomain.Price{
+		ID: "price_fu_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, linePrice))
+
+	dayStart := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	dayEnd := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	overage := decimal.NewFromInt(2)
+	lineItem := &subscriptionDomain.SubscriptionLineItem{
+		ID:                 "li_fu_zero_tu",
+		SubscriptionID:     "sub_fu",
+		PriceID:            linePrice.ID,
+		PriceType:          types.PRICE_TYPE_USAGE,
+		MeterID:            "meter_fu",
+		StartDate:          dayStart,
+		EndDate:            dayEnd,
+		CommitmentWindowed: true, // buckets only; no top-level commitment / true-up
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{{
+			ID: "bkt_fu", Start: types.Bucket{Hour: 11, Minute: 0}, End: types.Bucket{Hour: 11, Minute: 30},
+			PriceID: bucketPrice.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+			CommitmentValue: decimal.NewFromInt(3), OverageFactor: &overage, TrueUpEnabled: true,
+		}},
+	}
+
+	bucketedMeter := &meterDomain.Meter{
+		ID: "meter_fu",
+		Aggregation: meterDomain.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeMinute,
+		},
+	}
+
+	item := &eventsDomain.DetailedUsageAnalytic{
+		MeterID:         "meter_fu",
+		PriceID:         linePrice.ID,
+		SubLineItemID:   "li_fu_zero_tu",
+		SubscriptionID:  "sub_fu",
+		AggregationType: types.AggregationSum,
+		// zero usage, no points
+	}
+
+	data := &AnalyticsData{
+		SubscriptionLineItems: map[string]*subscriptionDomain.SubscriptionLineItem{"li_fu_zero_tu": lineItem},
+		SubscriptionsMap: map[string]*subscriptionDomain.Subscription{
+			"sub_fu": {ID: "sub_fu", BillingAnchor: dayStart},
+		},
+		Prices: map[string]*priceDomain.Price{linePrice.ID: linePrice},
+		Params: &eventsDomain.UsageAnalyticsParams{StartTime: dayStart, EndTime: dayEnd},
+	}
+
+	svc.calculateBucketedCost(ctx, priceSvc, item, linePrice, bucketedMeter, data, false)
+
+	require.NotNil(t, item.CommitmentInfo, "windowed commitment must record commitment info")
+	assert.True(t, item.CommitmentInfo.ComputedTrueUpAmount.Equal(decimal.NewFromInt(90)),
+		"expected true-up $90 (30 empty minute windows × $3); got %s", item.CommitmentInfo.ComputedTrueUpAmount)
+	assert.True(t, item.TotalCost.Equal(decimal.NewFromInt(90)),
+		"expected total cost $90 from bucket true-up; got %s", item.TotalCost)
+}
+
+// TestFeatureUsage_CoarseRequestWindow_BucketSummariesNonZero verifies the ported
+// coarse-window summary fix on the feature-usage path: with a MINUTE-bucketed
+// meter and a HOUR request window (coarser than the buckets), per-bucket summaries
+// must still reflect the bucket's usage/commitment instead of rolling up to zero.
+func TestFeatureUsage_CoarseRequestWindow_BucketSummariesNonZero(t *testing.T) {
+	ctx := testutil.SetupContext()
+	log := logger.NewNoopLogger()
+	priceStore := testutil.NewInMemoryPriceStore()
+	params := ServiceParams{
+		Logger:        log,
+		DB:            testutil.NewMockPostgresClient(log),
+		PriceRepo:     priceStore,
+		MeterRepo:     testutil.NewInMemoryMeterStore(),
+		PlanRepo:      testutil.NewInMemoryPlanStore(),
+		PriceUnitRepo: testutil.NewInMemoryPriceUnitStore(),
+		AddonRepo:     testutil.NewInMemoryAddonStore(),
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+	}
+	svc := &featureUsageTrackingService{ServiceParams: params}
+	priceSvc := NewPriceService(params)
+
+	bucketPrice := &priceDomain.Price{
+		ID: "price_fu_cw_bkt", Amount: decimal.NewFromInt(2), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, bucketPrice))
+	linePrice := &priceDomain.Price{
+		ID: "price_fu_cw_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, linePrice))
+
+	dayStart := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	dayEnd := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	overage := decimal.NewFromInt(2)
+	lineItem := &subscriptionDomain.SubscriptionLineItem{
+		ID:                 "li_fu_cw",
+		SubscriptionID:     "sub_fu_cw",
+		PriceID:            linePrice.ID,
+		PriceType:          types.PRICE_TYPE_USAGE,
+		MeterID:            "meter_fu_cw",
+		StartDate:          dayStart,
+		EndDate:            dayEnd,
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{{
+			ID: "bkt_fu_cw", Start: types.Bucket{Hour: 11, Minute: 0}, End: types.Bucket{Hour: 11, Minute: 30},
+			PriceID: bucketPrice.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+			CommitmentValue: decimal.NewFromInt(5), OverageFactor: &overage, TrueUpEnabled: false,
+		}},
+	}
+	bucketedMeter := &meterDomain.Meter{
+		ID:          "meter_fu_cw",
+		Aggregation: meterDomain.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeMinute},
+	}
+
+	// One in-bucket minute point at 11:15 with 10 units (bucket grain).
+	item := &eventsDomain.DetailedUsageAnalytic{
+		MeterID:         "meter_fu_cw",
+		PriceID:         linePrice.ID,
+		SubLineItemID:   "li_fu_cw",
+		SubscriptionID:  "sub_fu_cw",
+		AggregationType: types.AggregationSum,
+		Points: []eventsDomain.UsageAnalyticPoint{{
+			Timestamp:   time.Date(2026, 1, 5, 11, 15, 0, 0, time.UTC),
+			WindowStart: time.Date(2026, 1, 5, 11, 15, 0, 0, time.UTC),
+			Usage:       decimal.NewFromInt(10),
+		}},
+	}
+
+	data := &AnalyticsData{
+		SubscriptionLineItems: map[string]*subscriptionDomain.SubscriptionLineItem{"li_fu_cw": lineItem},
+		SubscriptionsMap: map[string]*subscriptionDomain.Subscription{
+			"sub_fu_cw": {ID: "sub_fu_cw", BillingAnchor: dayStart},
+		},
+		Prices: map[string]*priceDomain.Price{linePrice.ID: linePrice, bucketPrice.ID: bucketPrice},
+		// HOUR request window — coarser than the MINUTE bucket.
+		Params: &eventsDomain.UsageAnalyticsParams{StartTime: dayStart, EndTime: dayEnd, WindowSize: types.WindowSizeHour},
+	}
+
+	svc.calculateBucketedCost(ctx, priceSvc, item, linePrice, bucketedMeter, data, false)
+
+	// The fix: bucket-grain points are captured (with BucketID) before the HOUR
+	// roll-up, and summaries are built from them.
+	require.NotEmpty(t, item.BucketPoints, "bucket-grain points must be captured for summary building")
+	require.Equal(t, "bkt_fu_cw", item.BucketPoints[0].BucketID, "bucket-grain point must carry its BucketID")
+
+	// Summaries are built directly from the bucket-grain points (exact per-window
+	// attribution), so they stay correct even though the request window (HOUR) is
+	// coarser than the MINUTE bucket.
+	summaries := buildBucketSummaries(ctx, priceSvc, item.BucketPoints, lineItem, data)
+	require.Len(t, summaries, 1, "expected one summary per configured bucket")
+	bs := summaries[0]
+	assert.Equal(t, "bkt_fu_cw", bs.BucketID)
+	assert.True(t, bs.TotalUsage.Equal(decimal.NewFromInt(10)),
+		"bucket usage should be 10 even with HOUR request window, got %s", bs.TotalUsage)
+	assert.True(t, bs.ComputedUtilized.Equal(decimal.NewFromInt(5)),
+		"bucket utilized should be $5, got %s", bs.ComputedUtilized)
+	assert.True(t, bs.ComputedOverage.Equal(decimal.NewFromInt(30)),
+		"bucket overage should be $30 (($20-$5)×2), got %s", bs.ComputedOverage)
 }
