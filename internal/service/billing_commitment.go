@@ -209,6 +209,9 @@ type commitmentParts struct {
 	utilized decimal.Decimal
 	overage  decimal.Decimal
 	trueUp   decimal.Decimal
+	// bucketID is the commitment time bucket this window was billed under (empty
+	// for out-of-bucket windows). Per-window identity — NOT summed by add().
+	bucketID string
 }
 
 func (p *commitmentParts) add(o commitmentParts) {
@@ -272,6 +275,7 @@ func (c *commitmentCalculator) applyWindowCommitmentPerBucket(
 
 		if idx, ok := buckets.BucketIndexAt(windowStarts, i); ok {
 			parts, err = c.chargeWindowAtBucket(ctx, buckets[idx], v, pricesMap)
+			parts.bucketID = buckets[idx].ID
 		} else {
 			parts, err = c.chargeWindowAtLineItem(ctx, lineItem, lineItemPrice, v)
 		}

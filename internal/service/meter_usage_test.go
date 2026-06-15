@@ -2228,6 +2228,133 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_PerBucket_BreakdownAndSumm
 	s.True(bucketSummary.ComputedOverage.GreaterThan(decimal.Zero), "bucket overage should be positive, got %s", bucketSummary.ComputedOverage)
 }
 
+// TestWindowCommitment_CoarseRequestWindow_BucketSummariesNonZero reproduces the
+// production report where a customer's per-bucket commitment looked "not applied":
+// the meter buckets at MINUTE grain (forced by a sub-hour bucket like [11:00,11:30)),
+// but analytics is requested with window_size=HOUR — coarser than the bucket.
+//
+// The per-minute commitment IS applied to TotalCost (billing is correct), but the
+// bucket summaries must ALSO reflect it. Before the fix, mergeBucketPointsByWindow
+// collapsed the minute points into one hourly point and dropped bucket identity, so
+// bucketIDForPointWindow could never fit a 60-min window inside the 30-min bucket and
+// every summary rolled up to zero.
+//
+// Setup: MINUTE SUM meter; one bucket [11:00,12:00)→ use [11:00,11:30) (sub-hour),
+// bucket price $2/u, $5 amount commitment, 2x overage. Single event 11:15 → 10u.
+//
+//	in-bucket: 10u × $2 = $20 base → $5 + ($15×2) = $35
+//
+// TotalCost = $35 AND the bucket summary must report usage 10 / utilized $5 / overage $30.
+func (s *MeterUsageServiceSuite) TestWindowCommitment_CoarseRequestWindow_BucketSummariesNonZero() {
+	ctx := s.GetContext()
+
+	// Minute-grained bucketed SUM meter — the bucket below is sub-hour so it only
+	// aligns to a 1-minute meter window.
+	bucketedMeter := &meter.Meter{
+		ID:        "meter_coarse_win",
+		Name:      "Minute Bucketed SUM (coarse request)",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeMinute,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+
+	linePrice := &price.Price{
+		ID: "price_coarse_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, linePrice))
+
+	bucketPrice := &price.Price{
+		ID: "price_coarse_bucket", Amount: decimal.NewFromInt(2), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, bucketPrice))
+
+	overageFactor := decimal.NewFromInt(2)
+	li := &subscription.SubscriptionLineItem{
+		ID:                 "li_coarse_win",
+		SubscriptionID:     s.sub.ID,
+		CustomerID:         s.customer.ID,
+		PriceID:            linePrice.ID,
+		PriceType:          types.PRICE_TYPE_USAGE,
+		MeterID:            bucketedMeter.ID,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		StartDate:          s.periodStart,
+		EndDate:            s.periodEnd,
+		Quantity:           decimal.NewFromInt(1),
+		CommitmentWindowed: true, // required for buckets; no top-level commitment
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{
+				ID:              "bkt_sub_hour",
+				Start:           types.Bucket{Hour: 11, Minute: 0},
+				End:             types.Bucket{Hour: 11, Minute: 30},
+				PriceID:         bucketPrice.ID,
+				CommitmentType:  types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(5),
+				OverageFactor:   &overageFactor,
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	// Single event at 11:15 UTC (inside the [11:00,11:30) bucket), 10 units.
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID,
+		time.Date(2026, 1, 5, 11, 15, 0, 0, time.UTC), 10)
+
+	// Request HOUR windows — COARSER than the minute bucket.
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeHour,
+		BreakdownBucket:    true,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_coarse_win" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item, "expected analytic for coarse-window line item")
+
+	// Commitment IS applied to the cost regardless of request grain.
+	s.True(item.TotalCost.Equal(decimal.NewFromInt(35)),
+		"expected $35 (10u × $2 = $20 → $5 + $15×2); got %s", item.TotalCost)
+
+	// The bug: with a coarser request window the bucket summary must STILL reflect
+	// the per-bucket usage and commitment — not roll up to zero.
+	s.Require().Len(item.BucketSummaries, 1, "expected one summary per configured bucket")
+	bs := item.BucketSummaries[0]
+	s.Equal("bkt_sub_hour", bs.BucketID)
+	s.True(bs.TotalUsage.Equal(decimal.NewFromInt(10)),
+		"bucket usage should be 10 even with HOUR request window, got %s", bs.TotalUsage)
+	s.True(bs.BaseCharge.Equal(decimal.NewFromInt(20)),
+		"bucket base charge should be $20 (10u × $2), got %s", bs.BaseCharge)
+	s.True(bs.ComputedUtilized.Equal(decimal.NewFromInt(5)),
+		"bucket utilized should be $5, got %s", bs.ComputedUtilized)
+	s.True(bs.ComputedOverage.Equal(decimal.NewFromInt(30)),
+		"bucket overage should be $30 ($15×2), got %s", bs.ComputedOverage)
+}
+
 // TestWindowCommitment_MultipleBuckets_WithTrueUp verifies two commitment
 // buckets with bucket-level true-up: empty windows inside each bucket are
 // filled and trued up to that bucket's commitment, even though the line item's
