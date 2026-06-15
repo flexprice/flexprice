@@ -466,40 +466,69 @@ func isLastPeriodOfCommitmentPeriod(periodEnd, commitmentEnd time.Time) bool {
 	return !periodEnd.Before(commitmentEnd)
 }
 
-// bucketIDForPointWindow returns (bucketID, bucketPriceID, ok) for the commitment
-// bucket that FULLY contains the analytics window [windowStart, windowStart+window).
-// A window that straddles a bucket boundary (possible when the requested window
-// size is coarser than the buckets) is left unattributed so per-point breakdown
-// and bucket summaries don't misreport. Used by analytics breakdown only.
+// bucketIDsForPointWindow returns the ids and prices of every commitment bucket
+// that OVERLAPS the analytics display window [windowStart, windowStart+window) —
+// any intersection counts, in either direction (the bucket partially inside the
+// window, or the window partially inside the bucket). The two slices are aligned
+// by index (ids[i] ↔ priceIDs[i]). Used only to annotate the rolled-up display
+// points; it never feeds bucket summaries (those use the exact per-meter-window
+// attribution, where each window sits in exactly one bucket).
 //
-// The check compares the window's UTC start/end against the bucket's bounds on
-// the minute-of-day axis. When the bucket wraps midnight (end <= start) — or the
-// window starts in the bucket's post-midnight part — the times are unwrapped by
-// one day so a plain end-to-end comparison works.
-func bucketIDForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Time, window types.WindowSize) (string, string, bool) {
+// Overlap is computed on the minute-of-day axis. A window of a full day or more
+// touches every configured bucket. Sub-day windows and midnight-wrapping buckets
+// are each unrolled into up to two linear [lo,hi) segments and tested pairwise.
+func bucketIDsForPointWindow(buckets types.TimeOfDayBuckets, windowStart time.Time, window types.WindowSize) ([]string, []string) {
 	windowMin := window.ToMinutes()
-	if windowMin <= 0 || windowMin > 1440 {
-		// Unknown or multi-day window sizes can never sit inside a single
-		// time-of-day bucket.
-		return "", "", false
+	if windowMin <= 0 {
+		return nil, nil
 	}
-	idx, ok := buckets.BucketIndexAt([]time.Time{windowStart}, 0)
-	if !ok {
-		return "", "", false
+
+	var ids, priceIDs []string
+	// A window spanning a full day (or more) covers every minute-of-day, so it
+	// overlaps every bucket.
+	if windowMin >= 1440 {
+		for _, b := range buckets {
+			ids = append(ids, b.ID)
+			priceIDs = append(priceIDs, b.PriceID)
+		}
+		return ids, priceIDs
 	}
-	b := buckets[idx]
 
 	utc := windowStart.UTC()
-	winStart := utc.Hour()*60 + utc.Minute()
-	bucketStart, bucketEnd := b.Start.MinuteOfDay(), b.End.MinuteOfDay()
-	if bucketEnd <= bucketStart {
-		bucketEnd += 1440 // bucket wraps midnight, e.g. [22:00, 06:00)
+	winSegs := todSegments(utc.Hour()*60+utc.Minute(), windowMin)
+	for _, b := range buckets {
+		bStart := b.Start.MinuteOfDay()
+		bEnd := b.End.MinuteOfDay()
+		dur := bEnd - bStart
+		if dur <= 0 {
+			dur = 1440 - bStart + bEnd // bucket wraps midnight, e.g. [22:00, 06:00)
+		}
+		if segmentsOverlap(winSegs, todSegments(bStart, dur)) {
+			ids = append(ids, b.ID)
+			priceIDs = append(priceIDs, b.PriceID)
+		}
 	}
-	if winStart < bucketStart {
-		winStart += 1440 // window starts in the bucket's post-midnight part
+	return ids, priceIDs
+}
+
+// todSegments unrolls a time-of-day interval [start, start+length) into up to two
+// linear [lo,hi) segments within [0,1440), splitting it when it wraps past midnight.
+func todSegments(start, length int) [][2]int {
+	end := start + length
+	if end <= 1440 {
+		return [][2]int{{start, end}}
 	}
-	if winStart+windowMin > bucketEnd {
-		return "", "", false
+	return [][2]int{{start, 1440}, {0, end - 1440}}
+}
+
+// segmentsOverlap reports whether any [lo,hi) segment in a intersects any in b.
+func segmentsOverlap(a, b [][2]int) bool {
+	for _, s := range a {
+		for _, t := range b {
+			if s[0] < t[1] && t[0] < s[1] {
+				return true
+			}
+		}
 	}
-	return b.ID, b.PriceID, true
+	return false
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -2208,12 +2209,12 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_PerBucket_BreakdownAndSumm
 	s.True(item.TotalCost.Equal(decimal.NewFromInt(50)),
 		"expected $50 (in-bucket $35 via bucket price + out-of-bucket $15); got %s", item.TotalCost)
 
-	// Per-point bucket identity: the 10:00 window must be stamped with the bucket.
+	// Per-point bucket identity: the 10:00 window overlaps the bucket.
 	var inBucketPoints int
 	for _, pt := range item.Points {
-		if pt.BucketID == "bkt_morning" {
+		if slices.Contains(pt.BucketIDs, "bkt_morning") {
 			inBucketPoints++
-			s.Equal(bucketPrice.ID, pt.PriceID, "in-bucket point must carry the bucket price id")
+			s.Contains(pt.BucketPriceIDs, bucketPrice.ID, "in-bucket point must carry the bucket price id")
 		}
 	}
 	s.Positive(inBucketPoints, "expected at least one point stamped with the bucket id")
@@ -2688,6 +2689,9 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_MultipleBucketsPerPoint_Co
 		if pt.Cost.GreaterThan(decimal.Zero) {
 			dayPoints++
 			s.True(pt.Cost.Equal(decimal.NewFromInt(101)), "the day point should sum to $101; got %s", pt.Cost)
+			// The DAY window overlaps BOTH buckets → bucket_ids lists both (array).
+			s.Contains(pt.BucketIDs, "bkt_a", "day point overlaps bucket A")
+			s.Contains(pt.BucketIDs, "bkt_b", "day point overlaps bucket B")
 		}
 	}
 	s.Equal(1, dayPoints, "DAY window should collapse the three hours into one point")
@@ -2783,7 +2787,7 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_MultiplePointsPerBucket_Co
 	// Three in-bucket hourly points, each attributed to the bucket.
 	inBucket := 0
 	for _, pt := range item.Points {
-		if pt.BucketID == "bkt_one" {
+		if slices.Contains(pt.BucketIDs, "bkt_one") {
 			inBucket++
 		}
 	}
@@ -2875,8 +2879,99 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_BucketTrueUp_NoOutOfBucket
 	// Only the 30 in-bucket windows are emitted — no out-of-bucket all-zero noise.
 	s.Equal(30, len(item.Points), "expected exactly 30 in-bucket points, got %d", len(item.Points))
 	for _, pt := range item.Points {
-		s.Equal("bkt_noise", pt.BucketID, "every emitted point must be in-bucket; found out-of-bucket fill at %s", pt.Timestamp)
+		s.Equal([]string{"bkt_noise"}, pt.BucketIDs, "every emitted point must be in-bucket; found out-of-bucket fill at %s", pt.Timestamp)
 	}
+}
+
+// TestWindowCommitment_BucketPartiallyOverlapsDisplayWindow_SummaryCorrect proves
+// the bucket SUMMARY stays exact even when a bucket only PARTIALLY overlaps a
+// rolled-up display window (so the display point carries no single bucket_id).
+// Summaries are computed from the meter-grain points (each minute is fully inside
+// exactly one bucket), NOT from the rolled-up display points — so partial overlap
+// at the display grain cannot under- or over-count the bucket.
+//
+//	MINUTE meter; bucket [12:00,12:45) $2/u, commit $5/window, 2x, no true-up.
+//	usage 12:30 → 10u (in bucket); 12:50 → 10u (out of bucket, same HOUR).
+//	request window HOUR → one display point [12:00,13:00) mixing both.
+func (s *MeterUsageServiceSuite) TestWindowCommitment_BucketPartiallyOverlapsDisplayWindow_SummaryCorrect() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID: "meter_partial_overlap", Name: "Minute SUM (partial overlap)", EventName: "api_call",
+		Aggregation: meter.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeMinute},
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+
+	linePrice := &price.Price{
+		ID: "price_po_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_1",
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, linePrice))
+	bucketPrice := &price.Price{
+		ID: "price_po_bkt", Amount: decimal.NewFromInt(2), Currency: "usd",
+		EntityType: types.PRICE_ENTITY_TYPE_SUBSCRIPTION, EntityID: s.sub.ID,
+		BillingModel: types.BILLING_MODEL_FLAT_FEE, Type: types.PRICE_TYPE_USAGE,
+		MeterID: bucketedMeter.ID, BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		InvoiceCadence: types.InvoiceCadenceArrear, BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, bucketPrice))
+
+	overage := decimal.NewFromInt(2)
+	li := &subscription.SubscriptionLineItem{
+		ID: "li_partial_overlap", SubscriptionID: s.sub.ID, CustomerID: s.customer.ID,
+		PriceID: linePrice.ID, PriceType: types.PRICE_TYPE_USAGE, MeterID: bucketedMeter.ID,
+		Currency: "usd", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceArrear,
+		StartDate: s.periodStart, EndDate: s.periodEnd, Quantity: decimal.NewFromInt(1),
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{
+			{ID: "bkt_po", Start: types.Bucket{Hour: 12, Minute: 0}, End: types.Bucket{Hour: 12, Minute: 45},
+				PriceID: bucketPrice.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+				CommitmentValue: decimal.NewFromInt(5), OverageFactor: &overage},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, li))
+
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 12, 30, 0, 0, time.UTC), 10)
+	s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID, time.Date(2026, 1, 5, 12, 50, 0, 0, time.UTC), 10)
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID, MeterIDs: []string{bucketedMeter.ID},
+		StartTime: s.periodStart, EndTime: s.periodEnd, WindowSize: types.WindowSizeHour, BreakdownBucket: true,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_partial_overlap" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+
+	// 12:30 in-bucket $35 + 12:50 out-of-bucket $10 = $45.
+	s.True(item.TotalCost.Equal(decimal.NewFromInt(45)), "expected $45; got %s", item.TotalCost)
+
+	// The single HOUR display point mixes in- and out-of-bucket minutes. With the
+	// overlap rule it now LISTS the bucket it partially overlaps (bucket_ids), even
+	// though its single cost mixes in- and out-of-bucket — so per-bucket cost must
+	// come from bucket_summaries, never from this point.
+	s.Require().Len(item.Points, 1)
+	s.Equal([]string{"bkt_po"}, item.Points[0].BucketIDs, "the HOUR point overlaps the bucket → bucket_ids lists it")
+
+	// Yet the SUMMARY is exact — built from minute-grain attribution, not the point.
+	s.Require().Len(item.BucketSummaries, 1)
+	bs := item.BucketSummaries[0]
+	s.True(bs.TotalUsage.Equal(decimal.NewFromInt(10)), "summary must count only the in-bucket 12:30 usage; got %s", bs.TotalUsage)
+	s.True(bs.BaseCharge.Equal(decimal.NewFromInt(20)), "summary base $20 (10×$2); got %s", bs.BaseCharge)
+	s.True(bs.ComputedUtilized.Equal(decimal.NewFromInt(5)), "utilized $5; got %s", bs.ComputedUtilized)
+	s.True(bs.ComputedOverage.Equal(decimal.NewFromInt(30)), "overage $30; got %s", bs.ComputedOverage)
 }
 
 // TestWindowCommitment_Bucket_SlabPricing_OverageFactorOne verifies a bucket
@@ -2992,7 +3087,7 @@ func (s *MeterUsageServiceSuite) TestWindowCommitment_Bucket_SlabPricing_Overage
 	// Per-point: the 10:00 point bills $13 with $8 overage at no premium.
 	var inBucketPoint *dto.UsageAnalyticPoint
 	for i := range item.Points {
-		if item.Points[i].BucketID == "bkt_slab" && item.Points[i].Usage.Equal(decimal.NewFromInt(8)) {
+		if slices.Contains(item.Points[i].BucketIDs, "bkt_slab") && item.Points[i].Usage.Equal(decimal.NewFromInt(8)) {
 			inBucketPoint = &item.Points[i]
 			break
 		}

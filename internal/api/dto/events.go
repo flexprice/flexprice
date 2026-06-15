@@ -414,9 +414,15 @@ type UsageAnalyticPoint struct {
 	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitempty" swaggertype:"string"`
 
 	// Bucket identity (only populated when BreakdownBucket=true and the line item
-	// has CommitmentTimeBuckets). Empty strings indicate out-of-bucket windows.
-	BucketID string `json:"bucket_id,omitempty"`
-	PriceID  string `json:"bucket_price_id,omitempty"`
+	// has CommitmentTimeBuckets). A rolled-up window can overlap more than one
+	// bucket — and only partially — so these are arrays of every bucket the window
+	// touches, aligned by index (BucketIDs[i] ↔ BucketPriceIDs[i]). Empty when the
+	// window touches no bucket. These are an informational HINT only: a point's
+	// single cost/computed_* totals mix all overlapped buckets and out-of-bucket
+	// time and CANNOT be split per bucket — read bucket_summaries for exact
+	// per-bucket cost.
+	BucketIDs      []string `json:"bucket_ids,omitempty"`
+	BucketPriceIDs []string `json:"bucket_price_ids,omitempty"`
 }
 
 // BucketSummary holds per-bucket aggregated usage and commitment math for

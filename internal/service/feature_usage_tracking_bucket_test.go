@@ -77,12 +77,14 @@ func (f *flatRatePriceService) GetByLookupKey(_ context.Context, _ string) (*dto
 	panic("not implemented")
 }
 
-// buildHourlyPoints returns a slice of 24 dto.UsageAnalyticPoints at hourly boundaries
-// starting at baseDate. Each point carries 10 units of usage and no bucket attribution.
-func buildHourlyPoints(baseDate time.Time) []dto.UsageAnalyticPoint {
-	pts := make([]dto.UsageAnalyticPoint, 24)
+// buildHourlyPoints returns 24 bucket-grain (domain) points at hourly boundaries
+// starting at baseDate. Each carries 10 units of usage and no bucket attribution.
+// buildBucketSummaries consumes the domain points (exact single attribution), not
+// the display DTO points.
+func buildHourlyPoints(baseDate time.Time) []eventsDomain.UsageAnalyticPoint {
+	pts := make([]eventsDomain.UsageAnalyticPoint, 24)
 	for i := 0; i < 24; i++ {
-		pts[i] = dto.UsageAnalyticPoint{
+		pts[i] = eventsDomain.UsageAnalyticPoint{
 			Timestamp: baseDate.Add(time.Duration(i) * time.Hour),
 			Usage:     decimal.NewFromInt(10),
 		}
@@ -126,23 +128,20 @@ func TestAnalytics_PerPointBucketAttribution(t *testing.T) {
 	baseDate := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
 	points := buildHourlyPoints(baseDate)
 
-	// Stamp the points with bucket attribution.
+	// Stamp the bucket-grain points with their (single) bucket attribution.
 	for i := range points {
 		if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{points[i].Timestamp}, 0); ok {
 			points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
-			points[i].PriceID = lineItem.CommitmentTimeBuckets[idx].PriceID
 		}
 	}
 
 	// Assert: hours 0-8 and 17-23 are out-of-bucket (empty BucketID).
 	for i := 0; i < 9; i++ {
 		assert.Empty(t, points[i].BucketID, "hour %d should be out-of-bucket", i)
-		assert.Empty(t, points[i].PriceID, "hour %d should have no bucket PriceID", i)
 	}
 	// Assert: hours 9-16 are in-bucket.
 	for i := 9; i < 17; i++ {
 		assert.Equal(t, bucketID, points[i].BucketID, "hour %d should be in-bucket", i)
-		assert.Equal(t, bucketPriceID, points[i].PriceID, "hour %d should have bucket PriceID", i)
 	}
 	// Assert: hours 17-23 are out-of-bucket again.
 	for i := 17; i < 24; i++ {
@@ -213,7 +212,6 @@ func TestAnalytics_BucketSummaries_WithAmountCommitment(t *testing.T) {
 	for i := range points {
 		if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{points[i].Timestamp}, 0); ok {
 			points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
-			points[i].PriceID = lineItem.CommitmentTimeBuckets[idx].PriceID
 			points[i].ComputedCommitmentUtilizedAmount = decimal.NewFromInt(5)
 			points[i].ComputedOverageAmount = decimal.NewFromInt(15)
 		}
@@ -458,7 +456,10 @@ func TestFeatureUsage_CoarseRequestWindow_BucketSummariesNonZero(t *testing.T) {
 	require.NotEmpty(t, item.BucketPoints, "bucket-grain points must be captured for summary building")
 	require.Equal(t, "bkt_fu_cw", item.BucketPoints[0].BucketID, "bucket-grain point must carry its BucketID")
 
-	summaries := buildBucketSummaries(ctx, priceSvc, bucketGrainDTOPoints(item.BucketPoints), lineItem, data)
+	// Summaries are built directly from the bucket-grain points (exact per-window
+	// attribution), so they stay correct even though the request window (HOUR) is
+	// coarser than the MINUTE bucket.
+	summaries := buildBucketSummaries(ctx, priceSvc, item.BucketPoints, lineItem, data)
 	require.Len(t, summaries, 1, "expected one summary per configured bucket")
 	bs := summaries[0]
 	assert.Equal(t, "bkt_fu_cw", bs.BucketID)
@@ -468,32 +469,4 @@ func TestFeatureUsage_CoarseRequestWindow_BucketSummariesNonZero(t *testing.T) {
 		"bucket utilized should be $5, got %s", bs.ComputedUtilized)
 	assert.True(t, bs.ComputedOverage.Equal(decimal.NewFromInt(30)),
 		"bucket overage should be $30 (($20-$5)×2), got %s", bs.ComputedOverage)
-
-	// Contrast: building summaries from the rolled-up HOUR points (the old path)
-	// loses attribution and reports zero — exactly the bug this fix avoids.
-	oldSummaries := buildBucketSummaries(ctx, priceSvc, hourPointsWithLegacyAttribution(item.Points, lineItem), lineItem, data)
-	require.Len(t, oldSummaries, 1)
-	assert.True(t, oldSummaries[0].TotalUsage.IsZero(),
-		"rolled-up HOUR points cannot attribute to a sub-hour bucket; got %s", oldSummaries[0].TotalUsage)
-}
-
-// hourPointsWithLegacyAttribution rebuilds the pre-fix DTO points: rolled-up
-// points whose BucketID is derived via bucketIDForPointWindow (full-containment).
-func hourPointsWithLegacyAttribution(points []eventsDomain.UsageAnalyticPoint, lineItem *subscriptionDomain.SubscriptionLineItem) []dto.UsageAnalyticPoint {
-	out := make([]dto.UsageAnalyticPoint, len(points))
-	for i, p := range points {
-		out[i] = dto.UsageAnalyticPoint{
-			Timestamp:                        p.Timestamp,
-			Usage:                            p.Usage,
-			Cost:                             p.Cost,
-			ComputedCommitmentUtilizedAmount: p.ComputedCommitmentUtilizedAmount,
-			ComputedOverageAmount:            p.ComputedOverageAmount,
-			ComputedTrueUpAmount:             p.ComputedTrueUpAmount,
-		}
-		if id, priceID, ok := bucketIDForPointWindow(lineItem.CommitmentTimeBuckets, p.Timestamp, types.WindowSizeHour); ok {
-			out[i].BucketID = id
-			out[i].PriceID = priceID
-		}
-	}
-	return out
 }
