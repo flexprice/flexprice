@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
+	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -89,6 +90,7 @@ type ServiceParams struct {
 	FeatureRepo                  feature.Repository
 	EntitlementRepo              entitlement.Repository
 	PaymentRepo                  payment.Repository
+	CheckoutRepo                 checkout.Repository
 	SecretRepo                   secret.Repository
 	EnvironmentRepo              environment.Repository
 	TaskRepo                     task.Repository
@@ -165,6 +167,7 @@ func NewServiceParams(
 	creditGrantApplicationRepo creditgrantapplication.Repository,
 	entitlementRepo entitlement.Repository,
 	paymentRepo payment.Repository,
+	checkoutRepo checkout.Repository,
 	secretRepo secret.Repository,
 	environmentRepo environment.Repository,
 	creditGrantRepo creditgrant.Repository,
@@ -228,6 +231,7 @@ func NewServiceParams(
 		FeatureRepo:                  featureRepo,
 		EntitlementRepo:              entitlementRepo,
 		PaymentRepo:                  paymentRepo,
+		CheckoutRepo:                 checkoutRepo,
 		SecretRepo:                   secretRepo,
 		EnvironmentRepo:              environmentRepo,
 		CreditGrantRepo:              creditGrantRepo,
