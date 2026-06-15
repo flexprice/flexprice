@@ -39,7 +39,8 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	sp := s.serviceParams
 
 	// Validate subscription exists before any mutation.
-	if _, err := sp.SubRepo.Get(ctx, subscriptionID); err != nil {
+	sub, err := sp.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -128,14 +129,8 @@ func (s *subscriptionModificationService) executeAddCoupon(
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     subResp,
+		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -149,7 +144,8 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 	sp := s.serviceParams
 
 	// Validate subscription exists before any mutation.
-	if _, err := sp.SubRepo.Get(ctx, subscriptionID); err != nil {
+	sub, err := sp.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -199,14 +195,8 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     subResp,
+		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -298,14 +288,13 @@ func (s *subscriptionModificationService) previewAddCoupon(
 			Mark(ierr.ErrValidation)
 	}
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
+	sub, err := sp.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     subResp,
+		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -350,13 +339,12 @@ func (s *subscriptionModificationService) previewRemoveCoupon(
 			Mark(ierr.ErrValidation)
 	}
 
-	subSvc := NewSubscriptionService(sp)
-	subResp, err := subSvc.GetSubscription(ctx, subscriptionID)
+	sub, err := sp.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     subResp,
+		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
