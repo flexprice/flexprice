@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"time"
 
 	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -19,6 +20,10 @@ type CreateTaxAssociationRequest struct {
 	Currency           string                  `json:"currency" binding:"omitempty"`
 	AutoApply          bool                    `json:"auto_apply" binding:"omitempty"`
 	Metadata           map[string]string       `json:"metadata" binding:"omitempty"`
+	// StartDate sets when this association becomes active. Defaults to now if omitted.
+	StartDate *time.Time `json:"start_date,omitempty"`
+	// EndDate sets when this association expires. Must be after StartDate when both are provided.
+	EndDate *time.Time `json:"end_date,omitempty"`
 }
 
 func (r *CreateTaxAssociationRequest) Validate() error {
@@ -44,11 +49,21 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 		}
 	}
 
+	if r.StartDate != nil && r.EndDate != nil && !r.EndDate.After(*r.StartDate) {
+		return ierr.NewError("end_date must be after start_date").
+			WithHint("Provide an end_date that is strictly after start_date").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
 func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, taxRateID string) *taxassociation.TaxAssociation {
-	return &taxassociation.TaxAssociation{
+	startDate := time.Now().UTC()
+	if r.StartDate != nil {
+		startDate = r.StartDate.UTC()
+	}
+	ta := &taxassociation.TaxAssociation{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TAX_ASSOCIATION),
 		TaxRateID:     taxRateID,
 		EntityType:    r.EntityType,
@@ -59,7 +74,12 @@ func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, taxR
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 		Metadata:      r.Metadata,
+		StartDate:     startDate,
 	}
+	if r.EndDate != nil {
+		ta.EndDate = lo.ToPtr(r.EndDate.UTC())
+	}
+	return ta
 }
 
 type TaxAssociationUpdateRequest struct {

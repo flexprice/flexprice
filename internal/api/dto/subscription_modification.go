@@ -104,6 +104,27 @@ const (
 	SubscriptionModifyTypeTrialEnd         SubscriptionModifyType = "trial_end"
 )
 
+const (
+	SubscriptionModifyTypeCoupon SubscriptionModifyType = "coupon"
+	SubscriptionModifyTypeTax    SubscriptionModifyType = "tax"
+)
+
+// SubModifyCouponAction is the action to perform on a coupon association.
+type SubModifyCouponAction string
+
+const (
+	SubModifyCouponActionAdd    SubModifyCouponAction = "add"
+	SubModifyCouponActionRemove SubModifyCouponAction = "remove"
+)
+
+// SubModifyTaxAction is the action to perform on a tax association.
+type SubModifyTaxAction string
+
+const (
+	SubModifyTaxActionAdd    SubModifyTaxAction = "add"
+	SubModifyTaxActionRemove SubModifyTaxAction = "remove"
+)
+
 // GroupedInvoicingAction identifies whether children are being added to or removed from grouped invoicing.
 type GroupedInvoicingAction string
 
@@ -139,6 +160,85 @@ func (r *SubModifyGroupedInvoicingParams) Validate() error {
 	return nil
 }
 
+// SubModifyCouponParams is the payload for coupon association changes on a subscription.
+// Conditional required fields: coupon_code (or deprecated coupon_id) required when action="add"; association_id required when action="remove".
+type SubModifyCouponParams struct {
+	// Required. "add" to attach a coupon; "remove" to detach an existing association.
+	Action SubModifyCouponAction `json:"action" binding:"required"`
+	// CouponCode is the preferred way to identify the coupon for action="add".
+	CouponCode *string `json:"coupon_code,omitempty"`
+	// Deprecated: use coupon_code instead.
+	CouponID *string `json:"coupon_id,omitempty"`
+	// Required when action="remove". ID of the CouponAssociation to soft-delete.
+	AssociationID *string `json:"association_id,omitempty"`
+	// Optional. When to apply the change; defaults to now if omitted.
+	EffectiveDate *time.Time `json:"effective_date,omitempty"`
+	// Optional. When the coupon association starts; defaults to EffectiveDate.
+	StartDate *time.Time `json:"start_date,omitempty"`
+	// Optional. When the coupon association ends; overrides duration_in_periods.
+	EndDate *time.Time `json:"end_date,omitempty"`
+	// Optional. Price ID of the line item to target; omit for subscription-level.
+	PriceID *string `json:"price_id,omitempty"`
+}
+
+func (r *SubModifyCouponParams) Validate() error {
+	switch r.Action {
+	case SubModifyCouponActionAdd:
+		if (r.CouponCode == nil || *r.CouponCode == "") &&
+			(r.CouponID == nil || *r.CouponID == "") {
+			return ierr.NewError("coupon_code (or deprecated coupon_id) is required for action 'add'").
+				WithHint("Provide a valid coupon_code").
+				Mark(ierr.ErrValidation)
+		}
+	case SubModifyCouponActionRemove:
+		if r.AssociationID == nil || *r.AssociationID == "" {
+			return ierr.NewError("association_id is required for action 'remove'").
+				WithHint("Provide the coupon association ID to remove").
+				Mark(ierr.ErrValidation)
+		}
+	default:
+		return ierr.NewError("unknown coupon action: " + string(r.Action)).
+			WithHint("Valid values: add, remove").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// SubModifyTaxParams is the payload for tax association changes on a subscription.
+// Conditional required fields: tax_rate_id is required when action="add"; association_id is required when action="remove".
+type SubModifyTaxParams struct {
+	// Required. "add" to attach a tax rate; "remove" to detach an existing association.
+	Action SubModifyTaxAction `json:"action" binding:"required"`
+	// Required when action="add". ID of the active tax rate to attach.
+	TaxRateID *string `json:"tax_rate_id,omitempty"`
+	// Required when action="remove". ID of the TaxAssociation to soft-delete.
+	AssociationID *string `json:"association_id,omitempty"`
+	// Optional. When to apply the change; defaults to now if omitted.
+	EffectiveDate *time.Time `json:"effective_date,omitempty"`
+}
+
+func (r *SubModifyTaxParams) Validate() error {
+	switch r.Action {
+	case SubModifyTaxActionAdd:
+		if r.TaxRateID == nil || *r.TaxRateID == "" {
+			return ierr.NewError("tax_rate_id is required for action 'add'").
+				WithHint("Provide a valid tax_rate_id").
+				Mark(ierr.ErrValidation)
+		}
+	case SubModifyTaxActionRemove:
+		if r.AssociationID == nil || *r.AssociationID == "" {
+			return ierr.NewError("association_id is required for action 'remove'").
+				WithHint("Provide the tax association ID to remove").
+				Mark(ierr.ErrValidation)
+		}
+	default:
+		return ierr.NewError("unknown tax action: " + string(r.Action)).
+			WithHint("Valid values: add, remove").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // ExecuteSubscriptionModifyRequest is the unified body for
 // POST /subscriptions/:id/modify/execute and /modify/preview.
 // Exactly one of the *Params fields must be set, matching the type.
@@ -148,6 +248,8 @@ type ExecuteSubscriptionModifyRequest struct {
 	QuantityChangeParams   *SubModifyQuantityChangeRequest  `json:"quantity_change_params,omitempty"`
 	GroupedInvoicingParams *SubModifyGroupedInvoicingParams `json:"grouped_invoicing_params,omitempty"`
 	TrialEndParams         *SubModifyTrialEndRequest        `json:"trial_end_params,omitempty"`
+	CouponParams           *SubModifyCouponParams           `json:"coupon_params,omitempty"`
+	TaxParams              *SubModifyTaxParams              `json:"tax_params,omitempty"`
 }
 
 func (r *ExecuteSubscriptionModifyRequest) Validate() error {
@@ -176,9 +278,21 @@ func (r *ExecuteSubscriptionModifyRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 		return r.TrialEndParams.Validate()
+	case SubscriptionModifyTypeCoupon:
+		if r.CouponParams == nil {
+			return ierr.NewError("coupon_params is required for type 'coupon'").
+				Mark(ierr.ErrValidation)
+		}
+		return r.CouponParams.Validate()
+	case SubscriptionModifyTypeTax:
+		if r.TaxParams == nil {
+			return ierr.NewError("tax_params is required for type 'tax'").
+				Mark(ierr.ErrValidation)
+		}
+		return r.TaxParams.Validate()
 	default:
 		return ierr.NewError("unknown modification type: " + string(r.Type)).
-			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end").
+			WithHint("Valid values: inheritance, quantity_change, grouped_invoicing, trial_end, coupon, tax").
 			Mark(ierr.ErrValidation)
 	}
 }

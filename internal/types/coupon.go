@@ -2,6 +2,8 @@ package types
 
 import (
 	"time"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
 // CouponType represents the type of coupon discount (fixed or percentage)
@@ -113,6 +115,13 @@ func (f *CouponAssociationFilter) Validate() error {
 		if err := sort.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if len(f.SubscriptionIDs) > 100 {
+		return ierr.NewError("subscription_ids exceeds maximum of 100 items").Mark(ierr.ErrValidation)
+	}
+	if len(f.CouponIDs) > 100 {
+		return ierr.NewError("coupon_ids exceeds maximum of 100 items").Mark(ierr.ErrValidation)
 	}
 
 	return nil

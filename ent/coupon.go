@@ -59,6 +59,8 @@ type Coupon struct {
 	Currency *string `json:"currency,omitempty"`
 	// Additional metadata for coupon
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// Human-readable coupon code (e.g. SUMMER20). Stored lowercase. Unique per tenant+environment when published.
+	CouponCode *string `json:"coupon_code,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the CouponQuery when eager-loading is set.
 	Edges        CouponEdges `json:"edges"`
@@ -105,7 +107,7 @@ func (*Coupon) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case coupon.FieldMaxRedemptions, coupon.FieldTotalRedemptions, coupon.FieldDurationInPeriods:
 			values[i] = new(sql.NullInt64)
-		case coupon.FieldID, coupon.FieldTenantID, coupon.FieldStatus, coupon.FieldCreatedBy, coupon.FieldUpdatedBy, coupon.FieldEnvironmentID, coupon.FieldName, coupon.FieldType, coupon.FieldCadence, coupon.FieldCurrency:
+		case coupon.FieldID, coupon.FieldTenantID, coupon.FieldStatus, coupon.FieldCreatedBy, coupon.FieldUpdatedBy, coupon.FieldEnvironmentID, coupon.FieldName, coupon.FieldType, coupon.FieldCadence, coupon.FieldCurrency, coupon.FieldCouponCode:
 			values[i] = new(sql.NullString)
 		case coupon.FieldCreatedAt, coupon.FieldUpdatedAt, coupon.FieldRedeemAfter, coupon.FieldRedeemBefore:
 			values[i] = new(sql.NullTime)
@@ -259,6 +261,13 @@ func (c *Coupon) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
+		case coupon.FieldCouponCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field coupon_code", values[i])
+			} else if value.Valid {
+				c.CouponCode = new(string)
+				*c.CouponCode = value.String
+			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
 		}
@@ -374,6 +383,11 @@ func (c *Coupon) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", c.Metadata))
+	builder.WriteString(", ")
+	if v := c.CouponCode; v != nil {
+		builder.WriteString("coupon_code=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -397,14 +397,17 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 				// req.Phases[0].LineItemCoupons) need to be resolved here using the
 				// just-created items.
 				phase0Req := req.Phases[0]
-				if len(phase0Req.Coupons) > 0 || len(phase0Req.LineItemCoupons) > 0 {
+				if len(phase0Req.Coupons) > 0 || len(phase0Req.LineItemCoupons) > 0 || len(phase0Req.SubscriptionCoupons) > 0 {
 					phase0PriceToLIMap := make(map[string]string)
 					for _, li := range extraItems {
 						if li.PriceID != "" && li.ID != "" {
 							phase0PriceToLIMap[li.PriceID] = li.ID
 						}
 					}
-					phase0Coupons := s.normalizePhaseCoupons(phase0Req, phases[0].ID, phase0PriceToLIMap)
+					phase0Coupons, err := s.normalizePhaseCoupons(ctx, phase0Req, phases[0].ID, phase0PriceToLIMap)
+					if err != nil {
+						return err
+					}
 					if len(phase0Coupons) > 0 {
 						couponSvc := NewCouponAssociationService(s.ServiceParams)
 						if err = couponSvc.ApplyCouponsToSubscription(ctx, sub, phase0Coupons); err != nil {
@@ -1078,7 +1081,10 @@ func (s *subscriptionService) handleSubscriptionPhases(
 
 		// Handle phase coupons - transform simple coupons to SubscriptionCouponRequest format
 		couponAssociationService := NewCouponAssociationService(s.ServiceParams)
-		phaseCoupons := s.normalizePhaseCoupons(phaseReq, phase.ID, phasePriceToLineItemMap)
+		phaseCoupons, err := s.normalizePhaseCoupons(ctx, phaseReq, phase.ID, phasePriceToLineItemMap)
+		if err != nil {
+			return err
+		}
 		if len(phaseCoupons) > 0 {
 			err := couponAssociationService.ApplyCouponsToSubscription(ctx, sub, phaseCoupons)
 			if err != nil {
@@ -1093,10 +1099,11 @@ func (s *subscriptionService) handleSubscriptionPhases(
 // normalizePhaseCoupons converts simple Coupons and LineItemCoupons from phase request to SubscriptionCouponRequest format
 // Sets start/end dates from the phase dates
 func (s *subscriptionService) normalizePhaseCoupons(
+	ctx context.Context,
 	phaseReq dto.SubscriptionPhaseCreateRequest,
 	phaseID string,
 	phasePriceToLineItemMap map[string]string,
-) []dto.SubscriptionCouponRequest {
+) ([]dto.SubscriptionCouponRequest, error) {
 	var subscriptionCoupons []dto.SubscriptionCouponRequest
 
 	// Convert subscription-level coupons
@@ -1135,7 +1142,47 @@ func (s *subscriptionService) normalizePhaseCoupons(
 		}
 	}
 
-	return subscriptionCoupons
+	// Process new SubscriptionCoupons (preferred path)
+	for _, input := range phaseReq.SubscriptionCoupons {
+		if input.CouponCode == "" {
+			continue
+		}
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		c, err := s.CouponRepo.GetByCode(ctx, input.CouponCode)
+		if err != nil {
+			return nil, err
+		}
+		startDate := phaseReq.StartDate
+		if input.StartDate != nil {
+			startDate = *input.StartDate
+		}
+		var endDate *time.Time
+		endDate = phaseReq.EndDate
+		if input.EndDate != nil {
+			endDate = input.EndDate
+		}
+		couponReq := dto.SubscriptionCouponRequest{
+			CouponID:            c.ID,
+			SubscriptionPhaseID: lo.ToPtr(phaseID),
+			StartDate:           startDate,
+			EndDate:             endDate,
+		}
+		if input.PriceID != nil {
+			if lineItemID, exists := phasePriceToLineItemMap[*input.PriceID]; exists {
+				couponReq.LineItemID = lo.ToPtr(lineItemID)
+			} else {
+				s.Logger.Info(ctx, "phase subscription_coupons price_id not found, skipping line-item targeting",
+					"price_id", *input.PriceID,
+					"coupon_code", input.CouponCode,
+					"phase_id", phaseID)
+			}
+		}
+		subscriptionCoupons = append(subscriptionCoupons, couponReq)
+	}
+
+	return subscriptionCoupons, nil
 }
 
 // createPhaseExtraLineItems creates extra line items defined in a phase request (e.g. one-time charges).
@@ -4226,6 +4273,41 @@ func (s *subscriptionService) handleSubCoupons(
 				}
 			}
 		}
+	}
+
+	// Process new SubscriptionCoupons (preferred path): resolve code → ID, price → line item
+	for _, input := range req.SubscriptionCoupons {
+		if err := input.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHint("Invalid subscription_coupons entry").
+				Mark(ierr.ErrValidation)
+		}
+		c, err := s.CouponRepo.GetByCode(ctx, input.CouponCode)
+		if err != nil {
+			return ierr.WithError(err).
+				WithHintf("Coupon with code '%s' not found", input.CouponCode).
+				Mark(ierr.ErrNotFound)
+		}
+		startDate := sub.StartDate
+		if input.StartDate != nil {
+			startDate = *input.StartDate
+		}
+		couponReq := dto.SubscriptionCouponRequest{
+			CouponID:  c.ID,
+			StartDate: startDate,
+			EndDate:   input.EndDate,
+		}
+		if input.PriceID != nil {
+			if lineItemID, exists := originalPriceToLineItemMap[*input.PriceID]; exists {
+				couponReq.LineItemID = lo.ToPtr(lineItemID)
+			} else {
+				s.Logger.Info(ctx, "subscription_coupons price_id not found in line items, skipping line-item targeting",
+					"price_id", *input.PriceID,
+					"coupon_code", input.CouponCode,
+					"subscription_id", sub.ID)
+			}
+		}
+		subscriptionCoupons = append(subscriptionCoupons, couponReq)
 	}
 
 	if len(subscriptionCoupons) == 0 {
