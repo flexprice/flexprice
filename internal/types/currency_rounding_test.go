@@ -302,6 +302,7 @@ func TestCurrencyRounding_PrecisionConfig(t *testing.T) {
 		expectedPrecisions := map[string]int32{
 			"usd": 2, "eur": 2, "gbp": 2, "aud": 2, "cad": 2,
 			"jpy": 0, "krw": 0, "vnd": 0, "clp": 0,
+			"clf": 4, "kwd": 3,
 			"inr": 2, "idr": 2, "sgd": 2, "thb": 2, "myr": 2,
 			"php": 2, "hkd": 2, "nzd": 2, "brl": 2, "chf": 2,
 			"cny": 2, "czk": 2, "dkk": 2, "huf": 2, "ils": 2,
