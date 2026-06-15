@@ -51,7 +51,8 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 		billingPeriodCount = 1
 	}
 
-	var resp *dto.CheckoutResponse
+	var chk *checkout.Checkout
+	var invoiceID, paymentID string
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// 1. Create the subscription in an incomplete, invoice-collected state.
 		subSvc := NewSubscriptionService(s.ServiceParams)
@@ -76,7 +77,7 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 				Mark(ierr.ErrInvalidOperation)
 		}
 		inv := subResp.LatestInvoice
-		amount := inv.AmountDue
+		invoiceID = inv.ID
 
 		// 3. Create the (unprocessed) payment record bound to the invoice.
 		paymentSvc := NewPaymentService(s.ServiceParams)
@@ -85,7 +86,7 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 			DestinationID:     inv.ID,
 			PaymentMethodType: types.PaymentMethodTypePaymentLink,
 			PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeStripe),
-			Amount:            amount,
+			Amount:            inv.AmountDue,
 			Currency:          req.Currency,
 			Metadata:          types.Metadata(req.Metadata),
 			ProcessPayment:    false,
@@ -93,10 +94,13 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 		if err != nil {
 			return err
 		}
+		paymentID = pay.ID
 
-		// 4. Build the checkout aggregate.
+		// 4. Build and persist the pending checkout. The external provider session
+		// is opened AFTER commit (see below) so the Stripe call never holds the DB
+		// transaction open and never orphans a session if the tx rolls back.
 		now := time.Now().UTC()
-		chk := &checkout.Checkout{
+		chk = &checkout.Checkout{
 			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT),
 			CustomerID:    req.CustomerID,
 			EntityType:    types.CheckoutEntityTypeSubscription,
@@ -104,7 +108,7 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 			CheckoutType:  types.CheckoutTypeSubscriptionCreation,
 			Objective:     types.CheckoutObjectivePayment,
 			Status:        types.CheckoutStatusPending,
-			Amount:        amount,
+			Amount:        inv.AmountDue,
 			Currency:      req.Currency,
 			Provider:      string(types.SecretProviderStripe),
 			SuccessURL:    lo.ToPtr(req.SuccessURL),
@@ -113,48 +117,62 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 			EnvironmentID: types.GetEnvironmentID(txCtx),
 			BaseModel:     types.GetDefaultBaseModel(txCtx),
 		}
-
-		// 5. Resolve the provider and open the hosted session.
-		provider, err := s.providerFn(txCtx, chk.Provider)
-		if err != nil {
-			return err
-		}
-
-		sess, err := provider.CreateCheckoutSession(txCtx, checkout.CheckoutSessionRequest{
-			Objective:  types.CheckoutObjectivePayment,
-			CheckoutID: chk.ID,
-			CustomerID: req.CustomerID,
-			InvoiceID:  inv.ID,
-			PaymentID:  pay.ID,
-			Amount:     amount,
-			Currency:   req.Currency,
-			SaveCard:   req.SaveCard,
-			SuccessURL: req.SuccessURL,
-			CancelURL:  req.CancelURL,
-			Metadata:   req.Metadata,
-		})
-		if err != nil {
-			return err
-		}
-
-		// 6. Persist the checkout with the provider session details.
-		chk.ProviderSessionID = &sess.SessionID
-		chk.CheckoutURL = &sess.URL
-		if err := s.CheckoutRepo.Create(txCtx, chk); err != nil {
-			return err
-		}
-
-		resp = &dto.CheckoutResponse{
-			ID:          chk.ID,
-			Status:      string(chk.Status),
-			CheckoutURL: sess.URL,
-		}
-		return nil
+		return s.CheckoutRepo.Create(txCtx, chk)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return resp, nil
+
+	// 5. Post-commit: open the hosted provider session (external call, outside the
+	// transaction). On failure the checkout is marked failed; the parked
+	// subscription/invoice are reaped by the abandonment cron.
+	provider, err := s.providerFn(ctx, chk.Provider)
+	if err != nil {
+		s.failCheckout(ctx, chk, err)
+		return nil, err
+	}
+	sess, err := provider.CreateCheckoutSession(ctx, checkout.CheckoutSessionRequest{
+		Objective:  types.CheckoutObjectivePayment,
+		CheckoutID: chk.ID,
+		CustomerID: req.CustomerID,
+		InvoiceID:  invoiceID,
+		PaymentID:  paymentID,
+		Amount:     chk.Amount,
+		Currency:   req.Currency,
+		SaveCard:   req.SaveCard,
+		SuccessURL: req.SuccessURL,
+		CancelURL:  req.CancelURL,
+		Metadata:   req.Metadata,
+	})
+	if err != nil {
+		s.failCheckout(ctx, chk, err)
+		return nil, err
+	}
+
+	// 6. Persist the session details on the now-committed checkout.
+	chk.ProviderSessionID = &sess.SessionID
+	chk.CheckoutURL = &sess.URL
+	if err := s.CheckoutRepo.Update(ctx, chk); err != nil {
+		return nil, err
+	}
+
+	return &dto.CheckoutResponse{
+		ID:          chk.ID,
+		Status:      string(chk.Status),
+		CheckoutURL: sess.URL,
+	}, nil
+}
+
+// failCheckout best-effort marks a checkout as failed after a post-commit provider
+// error, recording the cause. Errors here are logged, not propagated.
+func (s *checkoutService) failCheckout(ctx context.Context, chk *checkout.Checkout, cause error) {
+	chk.Status = types.CheckoutStatusFailed
+	msg := cause.Error()
+	chk.ErrorMessage = &msg
+	if uerr := s.CheckoutRepo.Update(ctx, chk); uerr != nil {
+		s.Logger.Error(ctx, "failed to mark checkout failed after provider error",
+			"checkout_id", chk.ID, "error", uerr)
+	}
 }
 
 func (s *checkoutService) Complete(ctx context.Context, checkoutID string) error {
