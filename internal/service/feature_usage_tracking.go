@@ -2195,6 +2195,12 @@ func (s *featureUsageTrackingService) processPointsWithBuckets(
 		cost = s.fillMissingWindowsAndRecalculate(p, lineItem)
 	}
 
+	// Snapshot the bucket-grain points (with their BucketID) before the roll-up so
+	// per-bucket summaries can be built at bucket grain regardless of request window.
+	if lineItem != nil && lineItem.HasCommitmentTimeBuckets() {
+		p.item.BucketPoints = p.item.Points
+	}
+
 	// Merge bucket-level points to request window level
 	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType)
 
@@ -2272,6 +2278,11 @@ func (s *featureUsageTrackingService) calculatePointCosts(p *bucketedCostParams,
 			p.item.Points[i].ComputedOverageAmount = info.ComputedOverageAmount
 			p.item.Points[i].ComputedTrueUpAmount = info.ComputedTrueUpAmount
 		}
+		// Stamp the bucket this window's start falls in, so per-bucket summaries can
+		// be built at bucket grain (before the request-window roll-up).
+		if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{p.item.Points[i].Timestamp}, 0); ok {
+			p.item.Points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
+		}
 	}
 }
 
@@ -2328,6 +2339,11 @@ func (s *featureUsageTrackingService) fillZeroUsageWindows(p *bucketedCostParams
 	for _, t := range expectedStarts {
 		bucketPoints = append(bucketPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
 	}
+	// Snapshot bucket-grain points (with BucketID) before the roll-up so per-bucket
+	// summaries are exact even when the request window is coarser than the buckets.
+	if lineItem.HasCommitmentTimeBuckets() {
+		p.item.BucketPoints = bucketPoints
+	}
 	p.item.Points = s.mergeBucketPointsByWindow(bucketPoints, p.aggType)
 
 	return totalCost
@@ -2356,6 +2372,11 @@ func (s *featureUsageTrackingService) createFillPoint(
 		pt.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount
 		pt.ComputedOverageAmount = info.ComputedOverageAmount
 		pt.ComputedTrueUpAmount = info.ComputedTrueUpAmount
+	}
+	// Stamp the bucket this filled window falls in (empty for out-of-bucket fills),
+	// so per-bucket summaries built from the bucket-grain points attribute correctly.
+	if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{timestamp}, 0); ok {
+		pt.BucketID = lineItem.CommitmentTimeBuckets[idx].ID
 	}
 	return pt
 }
@@ -3194,10 +3215,20 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 				item.Points = append(item.Points, dtoPoint)
 			}
 
-			// Bucket-level summaries (Task 19).
+			// Bucket-level summaries (Task 19). Build them from the bucket-grain
+			// points (analytic.BucketPoints), which carry each window's BucketID —
+			// NOT from item.Points, which were rolled up to the request window. When
+			// the request window is coarser than the buckets, a rolled-up point
+			// straddles bucket boundaries and loses attribution, so summarising from
+			// item.Points would report zero. BucketPoints is empty only in the
+			// degenerate no-timestamp aggregate path; fall back to item.Points there.
 			if lineItemForBucket != nil {
 				priceService := NewPriceService(s.ServiceParams)
-				item.BucketSummaries = buildBucketSummaries(ctx, priceService, item.Points, lineItemForBucket, data)
+				summaryPoints := item.Points
+				if len(analytic.BucketPoints) > 0 {
+					summaryPoints = bucketGrainDTOPoints(analytic.BucketPoints)
+				}
+				item.BucketSummaries = buildBucketSummaries(ctx, priceService, summaryPoints, lineItemForBucket, data)
 			}
 		}
 

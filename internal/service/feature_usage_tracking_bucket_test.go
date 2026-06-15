@@ -371,3 +371,129 @@ func TestFeatureUsage_ZeroUsage_BucketTrueUp(t *testing.T) {
 	assert.True(t, item.TotalCost.Equal(decimal.NewFromInt(90)),
 		"expected total cost $90 from bucket true-up; got %s", item.TotalCost)
 }
+
+// TestFeatureUsage_CoarseRequestWindow_BucketSummariesNonZero verifies the ported
+// coarse-window summary fix on the feature-usage path: with a MINUTE-bucketed
+// meter and a HOUR request window (coarser than the buckets), per-bucket summaries
+// must still reflect the bucket's usage/commitment instead of rolling up to zero.
+func TestFeatureUsage_CoarseRequestWindow_BucketSummariesNonZero(t *testing.T) {
+	ctx := testutil.SetupContext()
+	log := logger.NewNoopLogger()
+	priceStore := testutil.NewInMemoryPriceStore()
+	params := ServiceParams{
+		Logger:        log,
+		DB:            testutil.NewMockPostgresClient(log),
+		PriceRepo:     priceStore,
+		MeterRepo:     testutil.NewInMemoryMeterStore(),
+		PlanRepo:      testutil.NewInMemoryPlanStore(),
+		PriceUnitRepo: testutil.NewInMemoryPriceUnitStore(),
+		AddonRepo:     testutil.NewInMemoryAddonStore(),
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+	}
+	svc := &featureUsageTrackingService{ServiceParams: params}
+	priceSvc := NewPriceService(params)
+
+	bucketPrice := &priceDomain.Price{
+		ID: "price_fu_cw_bkt", Amount: decimal.NewFromInt(2), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, bucketPrice))
+	linePrice := &priceDomain.Price{
+		ID: "price_fu_cw_line", Amount: decimal.NewFromInt(1), Currency: "usd",
+		Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_FLAT_FEE,
+	}
+	require.NoError(t, priceStore.Create(ctx, linePrice))
+
+	dayStart := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	dayEnd := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
+	overage := decimal.NewFromInt(2)
+	lineItem := &subscriptionDomain.SubscriptionLineItem{
+		ID:                 "li_fu_cw",
+		SubscriptionID:     "sub_fu_cw",
+		PriceID:            linePrice.ID,
+		PriceType:          types.PRICE_TYPE_USAGE,
+		MeterID:            "meter_fu_cw",
+		StartDate:          dayStart,
+		EndDate:            dayEnd,
+		CommitmentWindowed: true,
+		CommitmentTimeBuckets: types.TimeOfDayBuckets{{
+			ID: "bkt_fu_cw", Start: types.Bucket{Hour: 11, Minute: 0}, End: types.Bucket{Hour: 11, Minute: 30},
+			PriceID: bucketPrice.ID, CommitmentType: types.COMMITMENT_TYPE_AMOUNT,
+			CommitmentValue: decimal.NewFromInt(5), OverageFactor: &overage, TrueUpEnabled: false,
+		}},
+	}
+	bucketedMeter := &meterDomain.Meter{
+		ID:          "meter_fu_cw",
+		Aggregation: meterDomain.Aggregation{Type: types.AggregationSum, BucketSize: types.WindowSizeMinute},
+	}
+
+	// One in-bucket minute point at 11:15 with 10 units (bucket grain).
+	item := &eventsDomain.DetailedUsageAnalytic{
+		MeterID:         "meter_fu_cw",
+		PriceID:         linePrice.ID,
+		SubLineItemID:   "li_fu_cw",
+		SubscriptionID:  "sub_fu_cw",
+		AggregationType: types.AggregationSum,
+		Points: []eventsDomain.UsageAnalyticPoint{{
+			Timestamp:   time.Date(2026, 1, 5, 11, 15, 0, 0, time.UTC),
+			WindowStart: time.Date(2026, 1, 5, 11, 15, 0, 0, time.UTC),
+			Usage:       decimal.NewFromInt(10),
+		}},
+	}
+
+	data := &AnalyticsData{
+		SubscriptionLineItems: map[string]*subscriptionDomain.SubscriptionLineItem{"li_fu_cw": lineItem},
+		SubscriptionsMap: map[string]*subscriptionDomain.Subscription{
+			"sub_fu_cw": {ID: "sub_fu_cw", BillingAnchor: dayStart},
+		},
+		Prices: map[string]*priceDomain.Price{linePrice.ID: linePrice, bucketPrice.ID: bucketPrice},
+		// HOUR request window — coarser than the MINUTE bucket.
+		Params: &eventsDomain.UsageAnalyticsParams{StartTime: dayStart, EndTime: dayEnd, WindowSize: types.WindowSizeHour},
+	}
+
+	svc.calculateBucketedCost(ctx, priceSvc, item, linePrice, bucketedMeter, data, false)
+
+	// The fix: bucket-grain points are captured (with BucketID) before the HOUR
+	// roll-up, and summaries are built from them.
+	require.NotEmpty(t, item.BucketPoints, "bucket-grain points must be captured for summary building")
+	require.Equal(t, "bkt_fu_cw", item.BucketPoints[0].BucketID, "bucket-grain point must carry its BucketID")
+
+	summaries := buildBucketSummaries(ctx, priceSvc, bucketGrainDTOPoints(item.BucketPoints), lineItem, data)
+	require.Len(t, summaries, 1, "expected one summary per configured bucket")
+	bs := summaries[0]
+	assert.Equal(t, "bkt_fu_cw", bs.BucketID)
+	assert.True(t, bs.TotalUsage.Equal(decimal.NewFromInt(10)),
+		"bucket usage should be 10 even with HOUR request window, got %s", bs.TotalUsage)
+	assert.True(t, bs.ComputedUtilized.Equal(decimal.NewFromInt(5)),
+		"bucket utilized should be $5, got %s", bs.ComputedUtilized)
+	assert.True(t, bs.ComputedOverage.Equal(decimal.NewFromInt(30)),
+		"bucket overage should be $30 (($20-$5)×2), got %s", bs.ComputedOverage)
+
+	// Contrast: building summaries from the rolled-up HOUR points (the old path)
+	// loses attribution and reports zero — exactly the bug this fix avoids.
+	oldSummaries := buildBucketSummaries(ctx, priceSvc, hourPointsWithLegacyAttribution(item.Points, lineItem), lineItem, data)
+	require.Len(t, oldSummaries, 1)
+	assert.True(t, oldSummaries[0].TotalUsage.IsZero(),
+		"rolled-up HOUR points cannot attribute to a sub-hour bucket; got %s", oldSummaries[0].TotalUsage)
+}
+
+// hourPointsWithLegacyAttribution rebuilds the pre-fix DTO points: rolled-up
+// points whose BucketID is derived via bucketIDForPointWindow (full-containment).
+func hourPointsWithLegacyAttribution(points []eventsDomain.UsageAnalyticPoint, lineItem *subscriptionDomain.SubscriptionLineItem) []dto.UsageAnalyticPoint {
+	out := make([]dto.UsageAnalyticPoint, len(points))
+	for i, p := range points {
+		out[i] = dto.UsageAnalyticPoint{
+			Timestamp:                        p.Timestamp,
+			Usage:                            p.Usage,
+			Cost:                             p.Cost,
+			ComputedCommitmentUtilizedAmount: p.ComputedCommitmentUtilizedAmount,
+			ComputedOverageAmount:            p.ComputedOverageAmount,
+			ComputedTrueUpAmount:             p.ComputedTrueUpAmount,
+		}
+		if id, priceID, ok := bucketIDForPointWindow(lineItem.CommitmentTimeBuckets, p.Timestamp, types.WindowSizeHour); ok {
+			out[i].BucketID = id
+			out[i].PriceID = priceID
+		}
+	}
+	return out
+}
