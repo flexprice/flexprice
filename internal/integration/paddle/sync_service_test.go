@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	invoice_domain "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -115,6 +116,40 @@ func (s *inMemoryMappingService) DeleteEntityIntegrationMapping(ctx context.Cont
 
 func (s *inMemoryMappingService) LinkIntegrationMapping(ctx context.Context, req apidto.LinkIntegrationMappingRequest) (*apidto.LinkIntegrationMappingResponse, error) {
 	return nil, nil
+}
+
+func (s *inMemoryMappingService) DelinkIntegrationMapping(ctx context.Context, req apidto.DelinkIntegrationMappingRequest) (*apidto.DelinkIntegrationMappingResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	filter := &types.EntityIntegrationMappingFilter{
+		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
+		EntityID:      req.EntityID,
+		EntityType:    req.EntityType,
+		ProviderTypes: []string{req.ProviderType},
+	}
+	mappings, err := s.repo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(mappings) == 0 {
+		return nil, ierr.NewError("no entity integration mapping found to delink").
+			WithHint("No active mapping exists for the given entity and provider").
+			Mark(ierr.ErrNotFound)
+	}
+
+	for _, mapping := range mappings {
+		if err := s.repo.Delete(ctx, mapping); err != nil {
+			return nil, err
+		}
+	}
+
+	return &apidto.DelinkIntegrationMappingResponse{
+		Success:  true,
+		Archived: len(mappings),
+	}, nil
 }
 
 func toTestMappingResponse(m *entityintegrationmapping.EntityIntegrationMapping) *apidto.EntityIntegrationMappingResponse {
@@ -405,6 +440,56 @@ func TestEnsureCustomerSynced_AlreadyMapped(t *testing.T) {
 
 	// The critical assertion: CreateCustomer must NOT have been called.
 	assert.False(t, mockClient.createCustomerCalled, "CreateCustomer must NOT be called when customer is already mapped")
+}
+
+// TestDelinkIntegrationMapping_ArchivesExistingMappings verifies that delinking an
+// entity→provider mapping removes every matching mapping and reports the archived count.
+func TestDelinkIntegrationMapping_ArchivesExistingMappings(t *testing.T) {
+	ctx := buildTestContext()
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	svc := newTestMappingService(mappingStore)
+
+	const customerID = "cust_to_delink"
+
+	// Seed a mapping for the customer → Paddle.
+	seedMapping(ctx, t, mappingStore, customerID, types.IntegrationEntityTypeCustomer, "ctm_existing", nil)
+
+	resp, err := svc.DelinkIntegrationMapping(ctx, apidto.DelinkIntegrationMappingRequest{
+		EntityType:   types.IntegrationEntityTypeCustomer,
+		EntityID:     customerID,
+		ProviderType: string(types.SecretProviderPaddle),
+	})
+	require.NoError(t, err)
+	assert.True(t, resp.Success)
+	assert.Equal(t, 1, resp.Archived)
+
+	// The mapping must no longer be returned by a published-only query.
+	remaining, err := mappingStore.List(ctx, &types.EntityIntegrationMappingFilter{
+		QueryFilter:   types.NewNoLimitPublishedQueryFilter(),
+		EntityID:      customerID,
+		EntityType:    types.IntegrationEntityTypeCustomer,
+		ProviderTypes: []string{string(types.SecretProviderPaddle)},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, remaining, "delinked mapping should not remain active")
+}
+
+// TestDelinkIntegrationMapping_NotFound verifies that delinking when no mapping exists
+// returns a not-found error rather than a success with zero archived.
+func TestDelinkIntegrationMapping_NotFound(t *testing.T) {
+	ctx := buildTestContext()
+
+	mappingStore := testutil.NewInMemoryEntityIntegrationMappingStore()
+	svc := newTestMappingService(mappingStore)
+
+	_, err := svc.DelinkIntegrationMapping(ctx, apidto.DelinkIntegrationMappingRequest{
+		EntityType:   types.IntegrationEntityTypeCustomer,
+		EntityID:     "cust_missing",
+		ProviderType: string(types.SecretProviderPaddle),
+	})
+	require.Error(t, err)
+	assert.True(t, ierr.IsNotFound(err), "expected a not-found error")
 }
 
 // TestEnsureSubscriptionSynced_AlreadyMapped verifies that when a subscription→Paddle mapping

@@ -86,6 +86,33 @@ func (h *IntegrationHandler) Link(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Delink integration mapping
+// @ID delinkIntegrationMapping
+// @Description Soft-delete (archive) the mapping between a FlexPrice entity and a provider entity.
+// @Tags Integrations
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.DelinkIntegrationMappingRequest true "Delink mapping request"
+// @Success 200 {object} dto.DelinkIntegrationMappingResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /integrations/link [delete]
+func (h *IntegrationHandler) Delink(c *gin.Context) {
+	var req dto.DelinkIntegrationMappingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Invalid request body").Mark(ierr.ErrValidation))
+		return
+	}
+	resp, err := h.mappingService.DelinkIntegrationMapping(c.Request.Context(), req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Get entity integration mappings
 // @ID getEntityIntegrationMappings
 // @Description Get integration mappings for a specific entity by entity type and entity ID.
