@@ -83,18 +83,22 @@ jobs:
           # legacy output used by deploy jobs
           echo "tag=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
+          IS_DEVELOP="${{ github.ref_name == 'develop' }}"
+
           {
             echo "ghcr_tags<<TAGS_EOF"
             echo "${GHCR_IMAGE}:${GITHUB_SHA}"
             if [ "$IS_RELEASE" = "true" ]; then
               echo "${GHCR_IMAGE}:${GITHUB_REF_NAME}"
               echo "${GHCR_IMAGE}:latest"
+            elif [ "$IS_DEVELOP" = "true" ]; then
+              echo "${GHCR_IMAGE}:develop"
             fi
             echo "TAGS_EOF"
           } >> $GITHUB_OUTPUT
 
-          if [ "$IS_RELEASE" = "true" ]; then
-            echo "platforms=linux/amd64,linux/arm64,linux/arm/v7" >> $GITHUB_OUTPUT
+          if [ "$IS_RELEASE" = "true" ] || [ "$IS_DEVELOP" = "true" ]; then
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
           else
             echo "platforms=linux/arm64" >> $GITHUB_OUTPUT
           fi
