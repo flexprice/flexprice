@@ -494,6 +494,10 @@ func (o CouponQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 		query = query.Where(coupon.IDIn(f.CouponIDs...))
 	}
 
+	if len(f.CouponCodes) > 0 {
+		query = query.Where(coupon.CouponCodeIn(f.CouponCodes...))
+	}
+
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[CouponQuery, predicate.Coupon](
 			query,
