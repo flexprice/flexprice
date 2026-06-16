@@ -94,7 +94,7 @@ jobs:
           } >> $GITHUB_OUTPUT
 
           if [ "$IS_RELEASE" = "true" ]; then
-            echo "platforms=linux/amd64,linux/arm64,linux/arm/v7" >> $GITHUB_OUTPUT
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
           else
             echo "platforms=linux/arm64" >> $GITHUB_OUTPUT
           fi
