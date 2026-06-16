@@ -3918,3 +3918,64 @@ func (s *MeterUsageServiceSuite) TestBucketedMeter_WindowSizeReflectsPointGranul
 	s.Equal(types.WindowSizeDay, item.WindowSize,
 		"window_size must reflect the request window the points were rolled up to, not the meter bucket size")
 }
+
+// TestBucketedMeter_EventCount pins the regression where bucketed-meter analytics
+// returned event_count=0 at every level even when raw events existed. Bucketed
+// meters route through GetUsageForBucketedMeters, which (pre-fix) selected only
+// (total, bucket_start, value) — COUNT(DISTINCT id) was never queried, so
+// LineItemMeterUsage.EventCount and per-point EventCount stayed zero.
+//
+// Setup: HOUR bucketed SUM meter, 5 events on the same day in different hours.
+// Asserts the top-level EventCount and that the per-point EventCount sums to 5.
+func (s *MeterUsageServiceSuite) TestBucketedMeter_EventCount() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_ec_bucket",
+		Name:      "Bucketed SUM event count",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationSum,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_ec_bucket", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_ec_bucket", bucketedMeter.ID, bucketedPrice.ID)
+
+	// 5 events spread across 5 hours on 2026-01-05.
+	for i := 0; i < 5; i++ {
+		s.insertMeterUsage(ctx, bucketedMeter.ID, s.customer.ExternalID,
+			time.Date(2026, 1, 5, 9+i, 0, 0, 0, time.UTC), 10)
+	}
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeDay,
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_ec_bucket" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+	s.Equal(uint64(5), item.EventCount,
+		"top-level EventCount: expected 5, got %d", item.EventCount)
+
+	var pointEventCount uint64
+	for _, p := range item.Points {
+		pointEventCount += p.EventCount
+	}
+	s.Equal(uint64(5), pointEventCount,
+		"sum of per-point EventCount: expected 5, got %d", pointEventCount)
+}

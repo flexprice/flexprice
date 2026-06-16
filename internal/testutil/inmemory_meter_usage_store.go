@@ -460,9 +460,10 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 	}
 
 	type entry struct {
-		bucket time.Time
-		group  string
-		value  decimal.Decimal
+		bucket     time.Time
+		group      string
+		value      decimal.Decimal
+		eventCount uint64
 	}
 	entries := make([]entry, 0)
 
@@ -474,7 +475,12 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 				byGroup[gk] = append(byGroup[gk], r)
 			}
 			for gk, grecs := range byGroup {
-				entries = append(entries, entry{bucket: bucket, group: gk, value: aggFn(grecs)})
+				entries = append(entries, entry{
+					bucket:     bucket,
+					group:      gk,
+					value:      aggFn(grecs),
+					eventCount: uint64(distinctIDCount(grecs)),
+				})
 			}
 		}
 		sort.Slice(entries, func(i, j int) bool {
@@ -485,14 +491,19 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 		})
 	} else {
 		for bucket, recs := range byBucket {
-			entries = append(entries, entry{bucket: bucket, value: aggFn(recs)})
+			entries = append(entries, entry{
+				bucket:     bucket,
+				value:      aggFn(recs),
+				eventCount: uint64(distinctIDCount(recs)),
+			})
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].bucket.Before(entries[j].bucket) })
 	}
 
 	for _, e := range entries {
 		result.Value = result.Value.Add(e.value)
-		ur := events.UsageResult{WindowSize: e.bucket, Value: e.value}
+		result.EventCount += e.eventCount
+		ur := events.UsageResult{WindowSize: e.bucket, Value: e.value, EventCount: e.eventCount}
 		if hasGroupBy {
 			ur.GroupKey = e.group
 		}
