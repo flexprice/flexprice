@@ -2150,7 +2150,10 @@ func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context,
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 	hasCommitment := !skipCommitment && lineItem != nil && lineItem.HasAnyCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
-	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
+	// Use HasTrueUpEnabled() (top-level OR any bucket) — a bucket-level-only true-up
+	// must still engage the window fill, otherwise empty windows inside a true-up
+	// bucket are never charged the committed minimum. Mirrors meter_usage.
+	hasTrueUp := isWindowed && lineItem.HasTrueUpEnabled()
 
 	var cost decimal.Decimal
 
@@ -2190,6 +2193,12 @@ func (s *featureUsageTrackingService) processPointsWithBuckets(
 	// Fill missing windows for true-up commitments and recalculate total
 	if hasTrueUp && p.bucketSize != "" {
 		cost = s.fillMissingWindowsAndRecalculate(p, lineItem)
+	}
+
+	// Snapshot the bucket-grain points (with their BucketID) before the roll-up so
+	// per-bucket summaries can be built at bucket grain regardless of request window.
+	if lineItem != nil && lineItem.HasCommitmentTimeBuckets() {
+		p.item.BucketPoints = p.item.Points
 	}
 
 	// Merge bucket-level points to request window level
@@ -2269,6 +2278,11 @@ func (s *featureUsageTrackingService) calculatePointCosts(p *bucketedCostParams,
 			p.item.Points[i].ComputedOverageAmount = info.ComputedOverageAmount
 			p.item.Points[i].ComputedTrueUpAmount = info.ComputedTrueUpAmount
 		}
+		// Stamp the bucket this window's start falls in, so per-bucket summaries can
+		// be built at bucket grain (before the request-window roll-up).
+		if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{p.item.Points[i].Timestamp}, 0); ok {
+			p.item.Points[i].BucketID = lineItem.CommitmentTimeBuckets[idx].ID
+		}
 	}
 }
 
@@ -2325,6 +2339,11 @@ func (s *featureUsageTrackingService) fillZeroUsageWindows(p *bucketedCostParams
 	for _, t := range expectedStarts {
 		bucketPoints = append(bucketPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
 	}
+	// Snapshot bucket-grain points (with BucketID) before the roll-up so per-bucket
+	// summaries are exact even when the request window is coarser than the buckets.
+	if lineItem.HasCommitmentTimeBuckets() {
+		p.item.BucketPoints = bucketPoints
+	}
 	p.item.Points = s.mergeBucketPointsByWindow(bucketPoints, p.aggType)
 
 	return totalCost
@@ -2353,6 +2372,11 @@ func (s *featureUsageTrackingService) createFillPoint(
 		pt.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount
 		pt.ComputedOverageAmount = info.ComputedOverageAmount
 		pt.ComputedTrueUpAmount = info.ComputedTrueUpAmount
+	}
+	// Stamp the bucket this filled window falls in (empty for out-of-bucket fills),
+	// so per-bucket summaries built from the bucket-grain points attribute correctly.
+	if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{timestamp}, 0); ok {
+		pt.BucketID = lineItem.CommitmentTimeBuckets[idx].ID
 	}
 	return pt
 }
@@ -2946,17 +2970,18 @@ func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflowInternal(ctx
 
 // buildBucketSummaries constructs per-bucket rollup rows by summing the per-point
 // commitment fields the caller already stamped (BucketID + Computed* per point).
-// Because commitment is applied per window/point, the summary is a straight sum of
-// those per-point values — it matches the per-window billing exactly. One summary
-// is produced per CommitmentTimeBucket, plus one aggregate for out-of-bucket
-// points (BucketID == "", priced at the line item's own price + commitment).
+// It takes the BUCKET-GRAIN points (one per meter window, each fully inside a
+// single bucket) — NOT the rolled-up display points, whose windows can straddle
+// bucket boundaries. Because commitment is applied per window, the summary is a
+// straight sum of those per-window values — it matches per-window billing exactly.
+// One summary is produced per CommitmentTimeBucket.
 //
 // It is a package-level helper so both the feature-usage and meter-usage
 // analytics paths produce identical bucket summaries.
 func buildBucketSummaries(
 	ctx context.Context,
 	priceService PriceService,
-	points []dto.UsageAnalyticPoint,
+	points []events.UsageAnalyticPoint,
 	lineItem *subscription.SubscriptionLineItem,
 	data *AnalyticsData,
 ) []dto.BucketSummary {
@@ -2992,7 +3017,7 @@ type bucketPointRollup struct {
 func rollupBucketPoints(
 	ctx context.Context,
 	priceService PriceService,
-	points []dto.UsageAnalyticPoint,
+	points []events.UsageAnalyticPoint,
 	bucketID string,
 	p *price.Price,
 ) bucketPointRollup {
@@ -3179,21 +3204,27 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 					ComputedOverageAmount:            point.ComputedOverageAmount,
 					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
 				}
-				// Per-point bucket identity (only when the point's whole window
-				// fits inside a single bucket).
+				// Per-point bucket identity: every bucket the rolled-up window
+				// overlaps (informational hint only — see dto.UsageAnalyticPoint).
 				if lineItemForBucket != nil {
-					if id, priceID, ok := bucketIDForPointWindow(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, req.WindowSize); ok {
-						dtoPoint.BucketID = id
-						dtoPoint.PriceID = priceID
+					windowMin := effectivePointWindowMinutes(req.WindowSize, data.Meters[analytic.MeterID])
+					ids, priceIDs := bucketIDsForPointWindow(
+						lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, windowMin)
+					for i := range ids {
+						dtoPoint.Buckets = append(dtoPoint.Buckets, dto.PointBucket{BucketID: ids[i], PriceID: priceIDs[i]})
 					}
 				}
 				item.Points = append(item.Points, dtoPoint)
 			}
 
-			// Bucket-level summaries (Task 19).
+			// Bucket-level summaries (Task 19). Always built from the bucket-grain
+			// points (analytic.BucketPoints) — one per meter window, each fully
+			// inside a single bucket — so attribution is exact regardless of the
+			// request window grain. Never from item.Points, whose rolled-up windows
+			// can straddle bucket boundaries.
 			if lineItemForBucket != nil {
 				priceService := NewPriceService(s.ServiceParams)
-				item.BucketSummaries = buildBucketSummaries(ctx, priceService, item.Points, lineItemForBucket, data)
+				item.BucketSummaries = buildBucketSummaries(ctx, priceService, analytic.BucketPoints, lineItemForBucket, data)
 			}
 		}
 

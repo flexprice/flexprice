@@ -3,6 +3,7 @@ package export
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -473,6 +474,70 @@ func TestUsageAnalyticsExporter_PrepareData(t *testing.T) {
 
 			if tc.assertRow != nil {
 				tc.assertRow(t, headers, rows, env)
+			}
+		})
+	}
+}
+
+// TestGetDistinctCustomerIDsWithCommitmentTrueUp_BucketLevel verifies the customer
+// sweep that drives the export (so zero-event true-up customers are still billed)
+// keys off true-up enabled at EITHER the line-item level or on any commitment time
+// bucket — not just the top-level commitment_true_up_enabled flag.
+func TestGetDistinctCustomerIDsWithCommitmentTrueUp_BucketLevel(t *testing.T) {
+	tests := []struct {
+		name        string
+		topTrueUp   bool
+		buckets     types.TimeOfDayBuckets
+		wantInclude bool
+	}{
+		{
+			name:        "top-level true-up is included",
+			topTrueUp:   true,
+			wantInclude: true,
+		},
+		{
+			name:      "bucket-level-only true-up is included",
+			topTrueUp: false,
+			buckets: types.TimeOfDayBuckets{
+				{ID: "b1", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12}, TrueUpEnabled: true},
+			},
+			wantInclude: true,
+		},
+		{
+			name:      "no true-up anywhere is excluded",
+			topTrueUp: false,
+			buckets: types.TimeOfDayBuckets{
+				{ID: "b1", Start: types.Bucket{Hour: 9}, End: types.Bucket{Hour: 12}, TrueUpEnabled: false},
+			},
+			wantInclude: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctx = types.SetTenantID(ctx, "tenant-x")
+			ctx = types.SetEnvironmentID(ctx, "env-x")
+			store := testutil.NewInMemorySubscriptionLineItemStore()
+
+			err := store.Create(ctx, &subscription.SubscriptionLineItem{
+				ID: "li-1", CustomerID: "cust-1", SubscriptionID: "sub-1", PriceID: "p1",
+				EnvironmentID: "env-x", BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+				CommitmentTrueUpEnabled: tc.topTrueUp, CommitmentTimeBuckets: tc.buckets,
+				BaseModel: types.BaseModel{TenantID: "tenant-x", Status: types.StatusPublished},
+			})
+			if err != nil {
+				t.Fatalf("create line item: %v", err)
+			}
+
+			ids, err := store.GetDistinctCustomerIDsWithCommitmentTrueUp(ctx)
+			if err != nil {
+				t.Fatalf("GetDistinctCustomerIDsWithCommitmentTrueUp: %v", err)
+			}
+
+			included := slices.Contains(ids, "cust-1")
+			if included != tc.wantInclude {
+				t.Errorf("customer included = %v, want %v (ids=%v)", included, tc.wantInclude, ids)
 			}
 		})
 	}

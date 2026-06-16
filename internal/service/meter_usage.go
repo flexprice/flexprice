@@ -484,9 +484,10 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				BucketedResult: bucketedResult,
 			}
 
-			// Set scalar usage from bucketed result
+			// Set scalar usage and event count from bucketed result
 			if bucketedResult != nil {
 				usage.Usage = bucketedResult.Value
+				usage.EventCount = bucketedResult.EventCount
 			}
 
 			// Always populate points from bucketed results — cost calculation needs
@@ -497,6 +498,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				for _, r := range bucketedResult.Results {
 					p := events.MeterUsageDetailedPoint{
 						WindowStart: r.WindowSize,
+						EventCount:  r.EventCount,
 					}
 					if m.IsBucketedMaxMeter() {
 						p.MaxUsage = r.Value
@@ -1444,21 +1446,27 @@ func (s *meterUsageService) toUsageAnalyticsResponseDTO(
 					ComputedOverageAmount:            point.ComputedOverageAmount,
 					ComputedTrueUpAmount:             point.ComputedTrueUpAmount,
 				}
-				// Per-point bucket identity (only when the point's whole window
-				// fits inside a single bucket).
+				// Per-point bucket identity: every bucket the rolled-up window
+				// overlaps (informational hint only — see dto.UsageAnalyticPoint).
 				if lineItemForBucket != nil {
-					if id, priceID, ok := bucketIDForPointWindow(lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, params.WindowSize); ok {
-						dtoPoint.BucketID = id
-						dtoPoint.PriceID = priceID
+					windowMin := effectivePointWindowMinutes(params.WindowSize, meterMap[analytic.MeterID])
+					ids, priceIDs := bucketIDsForPointWindow(
+						lineItemForBucket.CommitmentTimeBuckets, point.Timestamp, windowMin)
+					for i := range ids {
+						dtoPoint.Buckets = append(dtoPoint.Buckets, dto.PointBucket{BucketID: ids[i], PriceID: priceIDs[i]})
 					}
 				}
 				item.Points = append(item.Points, dtoPoint)
 			}
 
-			// Bucket-level summaries.
+			// Bucket-level summaries. Always built from the bucket-grain points
+			// (analytic.BucketPoints) — one per meter window, each fully inside a
+			// single bucket — so attribution is exact regardless of the request
+			// window grain. Never from item.Points, whose rolled-up windows can
+			// straddle bucket boundaries.
 			if lineItemForBucket != nil {
 				priceService := NewPriceService(s.ServiceParams)
-				item.BucketSummaries = buildBucketSummaries(ctx, priceService, item.Points, lineItemForBucket, data)
+				item.BucketSummaries = buildBucketSummaries(ctx, priceService, analytic.BucketPoints, lineItemForBucket, data)
 			}
 		}
 
@@ -1545,11 +1553,12 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 	} else {
 		result.TotalUsage = aggResult.Value
 	}
+	result.EventCount = aggResult.EventCount
 
 	if params.WindowSize != "" && len(aggResult.Results) > 0 {
 		points := make([]events.MeterUsageDetailedPoint, 0, len(aggResult.Results))
 		for _, r := range aggResult.Results {
-			p := events.MeterUsageDetailedPoint{WindowStart: r.WindowSize}
+			p := events.MeterUsageDetailedPoint{WindowStart: r.WindowSize, EventCount: r.EventCount}
 			if m.IsBucketedMaxMeter() {
 				p.MaxUsage = r.Value
 				p.TotalUsage = r.Value
@@ -1561,41 +1570,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 		result.Points = points
 	}
 
-	eventCount, err := s.getEventCountForMeter(ctx, params, m.ID)
-	if err != nil {
-		s.logger.Info(context.Background(), "failed to get event count for bucketed meter, defaulting to 0", "error", err, "meter_id", m.ID)
-	} else {
-		result.EventCount = eventCount
-	}
-
 	return []*events.MeterUsageDetailedResult{result}, nil
-}
-
-// getEventCountForMeter fetches the event count for a specific meter.
-func (s *meterUsageService) getEventCountForMeter(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams, meterID string) (uint64, error) {
-	countParams := &events.MeterUsageQueryParams{
-		TenantID:           params.TenantID,
-		EnvironmentID:      params.EnvironmentID,
-		ExternalCustomerID: params.ExternalCustomerID,
-		MeterID:            meterID,
-		StartTime:          params.StartTime,
-		EndTime:            params.EndTime,
-		AggregationType:    types.AggregationCount,
-		UseFinal:           params.UseFinal,
-		PropertyFilters:    params.PropertyFilters,
-		Sources:            params.Sources,
-	}
-
-	if len(params.ExternalCustomerIDs) > 0 {
-		countParams.ExternalCustomerIDs = params.ExternalCustomerIDs
-	}
-
-	result, err := s.repo.GetUsage(ctx, countParams)
-	if err != nil {
-		return 0, err
-	}
-
-	return result.TotalValue.BigInt().Uint64(), nil
 }
 
 // resolveCustomerAndSubscriptions fetches the internal customer and their subscriptions.
@@ -1846,17 +1821,22 @@ type meterUsageBucketedCostParams struct {
 }
 
 // shouldFillWindow reports whether an EMPTY window starting at t needs a
-// synthetic zero-usage fill point. Filling only matters where commitment math
-// can produce a charge for an empty window: any window when the line item
-// carries its own (top-level) commitment, or windows inside a commitment time
-// bucket otherwise. Empty windows outside both bill $0 regardless, so filling
-// them would only add noise points.
+// synthetic zero-usage fill point. Fill only where commitment math can charge an
+// empty window — anywhere else the window bills $0 and a fill is pure noise:
+//
+//   - Inside a bucket, the bucket's own commitment governs the window (it
+//     overrides the line item), so an empty in-bucket window is charged only when
+//     that bucket has true-up.
+//   - Outside every bucket, only the line item's own commitment can charge an
+//     empty window, and only when it has true-up. A bucket-level-only true-up
+//     (no top-level commitment) therefore fills its bucket windows but NOT the
+//     out-of-bucket remainder — which previously produced 1440 all-zero
+//     points/day for a MINUTE meter.
 func shouldFillWindow(lineItem *subscription.SubscriptionLineItem, t time.Time) bool {
-	if lineItem.HasTrueUpEnabled() {
-		return true
+	if idx, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{t}, 0); ok {
+		return lineItem.CommitmentTimeBuckets[idx].TrueUpEnabled
 	}
-	_, ok := lineItem.CommitmentTimeBuckets.BucketIndexAt([]time.Time{t}, 0)
-	return ok
+	return lineItem.CommitmentTrueUpEnabled && lineItem.HasCommitment()
 }
 
 // calculateBucketedCost calculates cost for bucketed max/sum meters.
@@ -1914,9 +1894,36 @@ func (s *meterUsageService) processPointsWithBuckets(
 		s.stampPointCosts(p.ctx, p.priceService, p.item, p.price)
 	}
 
+	s.captureBucketPoints(p.item, lineItem)
 	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
 
 	return cost
+}
+
+// effectivePointWindowMinutes returns the span (in minutes) a displayed point
+// actually covers: the request window, or the meter's bucket size when that is
+// coarser. mergeBucketPointsByWindow cannot subdivide below the meter bucket, so a
+// request window finer than the bucket leaves points at meter-bucket grain — the
+// overlap check must use that coarser span, not the (smaller) request window.
+func effectivePointWindowMinutes(requestWindow types.WindowSize, m *meter.Meter) int {
+	minutes := requestWindow.ToMinutes()
+	if m != nil && m.HasBucketSize() {
+		if bm := m.Aggregation.BucketSize.ToMinutes(); bm > minutes {
+			minutes = bm
+		}
+	}
+	return minutes
+}
+
+// captureBucketPoints snapshots the bucket-grain points (with their per-window
+// BucketID) before mergeBucketPointsByWindow rolls them up to the requested window.
+// Only meaningful for line items with commitment time buckets — that's where the
+// per-bucket summaries are built. The snapshot is the same backing slice; merge
+// returns a new slice and does not mutate it.
+func (s *meterUsageService) captureBucketPoints(item *events.DetailedUsageAnalytic, lineItem *subscription.SubscriptionLineItem) {
+	if lineItem != nil && lineItem.HasCommitmentTimeBuckets() {
+		item.BucketPoints = item.Points
+	}
 }
 
 // processSingleBucket handles the case where there are no time-series points.
@@ -1951,6 +1958,7 @@ func (s *meterUsageService) processSingleBucket(
 
 	if needsWindowedFill && p.bucketSize != "" {
 		cost := s.fillWindowsAndApplyCommitment(p, lineItem)
+		s.captureBucketPoints(p.item, lineItem)
 		p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType, p.data.Params.WindowSize, p.data.Params.BillingAnchor)
 		return cost
 	}
@@ -2006,6 +2014,7 @@ func (s *meterUsageService) applyWindowCommitmentToPoints(
 		points[i].ComputedCommitmentUtilizedAmount = perWindow[i].utilized
 		points[i].ComputedOverageAmount = perWindow[i].overage
 		points[i].ComputedTrueUpAmount = perWindow[i].trueUp
+		points[i].BucketID = perWindow[i].bucketID
 	}
 	p.item.Points = points
 	p.item.CommitmentInfo = info

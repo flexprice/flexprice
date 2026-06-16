@@ -211,15 +211,18 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 				SELECT
 					%s as bucket_start,
 					%s as group_key,
-					%s(qty_total) as group_value
+					%s(qty_total) as group_value,
+					COUNT(DISTINCT id) as group_event_count
 				FROM %s
 				WHERE %s
 				GROUP BY bucket_start, group_key
 			)
 			SELECT
 				(SELECT sum(group_value) FROM per_group) as total,
+				(SELECT sum(group_event_count) FROM per_group) as total_event_count,
 				bucket_start as timestamp,
 				group_value as value,
+				group_event_count as event_count,
 				group_key
 			FROM per_group
 			ORDER BY bucket_start, group_key
@@ -234,7 +237,8 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		WITH %s AS (
 			SELECT
 				%s as bucket_start,
-				%s(qty_total) as %s
+				%s(qty_total) as %s,
+				COUNT(DISTINCT id) as bucket_event_count
 			FROM %s
 			WHERE %s
 			GROUP BY bucket_start
@@ -242,8 +246,10 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		)
 		SELECT
 			(SELECT sum(%s) FROM %s) as total,
+			(SELECT sum(bucket_event_count) FROM %s) as total_event_count,
 			bucket_start as timestamp,
-			%s as value
+			%s as value,
+			bucket_event_count as event_count
 		FROM %s
 		ORDER BY bucket_start
 		%s
@@ -252,6 +258,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQu
 		bucketWindow, aggFunc, bucketColumnName,
 		tableRef, where,
 		bucketColumnName, bucketTableName,
+		bucketTableName,
 		bucketColumnName,
 		bucketTableName,
 		settings)

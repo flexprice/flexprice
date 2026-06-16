@@ -1051,9 +1051,10 @@ func aggregateUsageResultsByWindow(results []events.UsageResult, aggType types.A
 
 // fillBucketedValuesForWindowedCommitment returns one value per expected bucket in the period.
 // When multiple results exist per bucket (e.g. from group_by), they are aggregated into one
-// value per window using aggType (SUM or MAX). When CommitmentTrueUpEnabled is true, fills
-// missing buckets (no usage) with zero so that windowed commitment true-up is applied to
-// every window. Otherwise returns one value per unique window in sorted order.
+// value per window using aggType (SUM or MAX). When true-up is enabled (top-level OR on
+// any commitment time bucket), fills missing buckets (no usage) with zero so that windowed
+// commitment true-up is applied to every window. Otherwise returns one value per unique
+// window in sorted order.
 // fillBucketedValuesForWindowedCommitment returns parallel slices of bucket values
 // and their corresponding window starts. The two slices are 1:1 — bucketStarts[i] is
 // the start timestamp of the window whose usage is bucketedValues[i]. Returns
@@ -1070,7 +1071,10 @@ func (s *billingService) fillBucketedValuesForWindowedCommitment(
 		return nil, nil
 	}
 	usageByWindow := aggregateUsageResultsByWindow(usageResult.Results, aggType)
-	if !item.CommitmentTrueUpEnabled {
+	// HasTrueUpEnabled() covers bucket-level true-up too: a line item whose only
+	// true-up is on a commitment time bucket must still fill empty windows so the
+	// bucket's committed minimum is billed (mirrors the analytics fill gate).
+	if !item.HasTrueUpEnabled() {
 		// Return one value per unique window in sorted order.
 		keys := make([]time.Time, 0, len(usageByWindow))
 		for t := range usageByWindow {
@@ -1087,15 +1091,24 @@ func (s *billingService) fillBucketedValuesForWindowedCommitment(
 	if len(expectedStarts) == 0 {
 		return nil, nil
 	}
+	// Always bill every window that has real usage. For EMPTY windows, only fill the
+	// ones that can actually true-up: inside a true-up bucket, or out-of-bucket only
+	// when the line item's own commitment has true-up (shouldFillWindow). Empty
+	// windows that cannot charge bill $0 regardless, so filling them would just
+	// inflate the calculation — and for partial bucket configs would synthesize
+	// out-of-bucket windows that shouldn't be billed at all.
 	bucketedValues := make([]decimal.Decimal, 0, len(expectedStarts))
+	bucketStarts := make([]time.Time, 0, len(expectedStarts))
 	for _, t := range expectedStarts {
 		if v, ok := usageByWindow[t]; ok {
 			bucketedValues = append(bucketedValues, v)
-		} else {
+			bucketStarts = append(bucketStarts, t)
+		} else if shouldFillWindow(item, t) {
 			bucketedValues = append(bucketedValues, decimal.Zero)
+			bucketStarts = append(bucketStarts, t)
 		}
 	}
-	return bucketedValues, expectedStarts
+	return bucketedValues, bucketStarts
 }
 
 func (s *billingService) CalculateFeatureUsageCharges(
