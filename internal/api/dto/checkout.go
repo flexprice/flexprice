@@ -59,6 +59,12 @@ func (r *CreateCheckoutRequest) Validate() error {
 			return ierr.NewError("subscription_change is required for subscription_change checkout").
 				WithHint("Provide the `subscription_change` object").Mark(ierr.ErrValidation)
 		}
+		// A change checkout is always a payment; reject a mismatched objective
+		// rather than silently overriding it.
+		if r.Objective != "" && r.Objective != types.CheckoutObjectivePayment {
+			return ierr.NewError("objective must be 'payment' (or omitted) for subscription_change").
+				WithHint("Omit objective or set it to payment").Mark(ierr.ErrValidation)
+		}
 	}
 	return nil
 }
