@@ -801,10 +801,29 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
-	// get flexprice_payment_id from metadata
+	// get flexprice_payment_id from metadata. Payment-objective sessions carry one;
+	// setup-objective sessions do not — they complete via flexprice_checkout_id.
 	flexpricePaymentID := checkoutSession.Metadata["flexprice_payment_id"]
 	if flexpricePaymentID == "" {
-		h.logger.Info(ctx, "no flexprice_payment_id found in checkout session metadata", "event_id", event.ID)
+		flexpriceCheckoutID := checkoutSession.Metadata["flexprice_checkout_id"]
+		if flexpriceCheckoutID == "" {
+			h.logger.Info(ctx, "no flexprice_payment_id or flexprice_checkout_id in checkout session metadata", "event_id", event.ID)
+			return nil
+		}
+		if services.CheckoutService == nil {
+			h.logger.Error(ctx, "checkout service not wired into webhook deps, skipping setup completion",
+				"flexprice_checkout_id", flexpriceCheckoutID, "event_id", event.ID)
+			return nil
+		}
+		// Complete is idempotent and activates the parked draft subscription. The
+		// captured card is saved as default separately by handleSetupIntentSucceeded
+		// (via the session's SetupIntentData metadata).
+		if err := services.CheckoutService.Complete(ctx, flexpriceCheckoutID); err != nil {
+			h.logger.Error(ctx, "failed to complete setup checkout",
+				"flexprice_checkout_id", flexpriceCheckoutID, "event_id", event.ID, "error", err)
+			return err // let Stripe retry
+		}
+		h.logger.Info(ctx, "completed setup checkout", "flexprice_checkout_id", flexpriceCheckoutID, "event_id", event.ID)
 		return nil
 	}
 
