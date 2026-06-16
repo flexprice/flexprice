@@ -36,10 +36,12 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 			Mark(ierr.ErrValidation)
 	}
 
+	topic := p.determineTopic(event)
 	p.logger.With(
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"tenant_id", event.TenantID,
+		"topic", topic,
 	).Debug("publishing event to kafka")
 
 	if event.ID == "" {
@@ -61,7 +63,7 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 		TODO: Once we support multiple event import integrations (e.g., S3, Postgres, etc.),
 		route those imported events to the lazy topic.
 	*/
-	if err := p.producer.Publish(p.determineTopic(event), msg); err != nil {
+	if err := p.producer.Publish(topic, msg); err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to publish event").
 			Mark(ierr.ErrValidation)

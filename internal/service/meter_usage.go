@@ -484,9 +484,10 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				BucketedResult: bucketedResult,
 			}
 
-			// Set scalar usage from bucketed result
+			// Set scalar usage and event count from bucketed result
 			if bucketedResult != nil {
 				usage.Usage = bucketedResult.Value
+				usage.EventCount = bucketedResult.EventCount
 			}
 
 			// Always populate points from bucketed results — cost calculation needs
@@ -497,6 +498,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 				for _, r := range bucketedResult.Results {
 					p := events.MeterUsageDetailedPoint{
 						WindowStart: r.WindowSize,
+						EventCount:  r.EventCount,
 					}
 					if m.IsBucketedMaxMeter() {
 						p.MaxUsage = r.Value
@@ -1551,11 +1553,12 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 	} else {
 		result.TotalUsage = aggResult.Value
 	}
+	result.EventCount = aggResult.EventCount
 
 	if params.WindowSize != "" && len(aggResult.Results) > 0 {
 		points := make([]events.MeterUsageDetailedPoint, 0, len(aggResult.Results))
 		for _, r := range aggResult.Results {
-			p := events.MeterUsageDetailedPoint{WindowStart: r.WindowSize}
+			p := events.MeterUsageDetailedPoint{WindowStart: r.WindowSize, EventCount: r.EventCount}
 			if m.IsBucketedMaxMeter() {
 				p.MaxUsage = r.Value
 				p.TotalUsage = r.Value
@@ -1567,41 +1570,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 		result.Points = points
 	}
 
-	eventCount, err := s.getEventCountForMeter(ctx, params, m.ID)
-	if err != nil {
-		s.logger.Info(context.Background(), "failed to get event count for bucketed meter, defaulting to 0", "error", err, "meter_id", m.ID)
-	} else {
-		result.EventCount = eventCount
-	}
-
 	return []*events.MeterUsageDetailedResult{result}, nil
-}
-
-// getEventCountForMeter fetches the event count for a specific meter.
-func (s *meterUsageService) getEventCountForMeter(ctx context.Context, params *events.MeterUsageDetailedAnalyticsParams, meterID string) (uint64, error) {
-	countParams := &events.MeterUsageQueryParams{
-		TenantID:           params.TenantID,
-		EnvironmentID:      params.EnvironmentID,
-		ExternalCustomerID: params.ExternalCustomerID,
-		MeterID:            meterID,
-		StartTime:          params.StartTime,
-		EndTime:            params.EndTime,
-		AggregationType:    types.AggregationCount,
-		UseFinal:           params.UseFinal,
-		PropertyFilters:    params.PropertyFilters,
-		Sources:            params.Sources,
-	}
-
-	if len(params.ExternalCustomerIDs) > 0 {
-		countParams.ExternalCustomerIDs = params.ExternalCustomerIDs
-	}
-
-	result, err := s.repo.GetUsage(ctx, countParams)
-	if err != nil {
-		return 0, err
-	}
-
-	return result.TotalValue.BigInt().Uint64(), nil
 }
 
 // resolveCustomerAndSubscriptions fetches the internal customer and their subscriptions.
