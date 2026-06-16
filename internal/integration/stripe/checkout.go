@@ -118,12 +118,23 @@ func (s *StripeCheckoutProvider) createSetupSession(ctx context.Context, req che
 	metadata["flexprice_checkout_id"] = req.CheckoutID
 
 	// Setup mode differs from payment mode: no LineItems and no PaymentIntentData.
+	// SetupIntentData metadata (set_default + customer_id) drives the existing
+	// handleSetupIntentSucceeded handler to save the captured card as the customer
+	// default once setup_intent.succeeded arrives — no new save-card code needed.
+	// customer_id is the flexprice id (SetDefaultPaymentMethod resolves it to Stripe).
 	params := &stripe.CheckoutSessionCreateParams{
 		Mode:       stripe.String(stripeModeForObjective(req.Objective)),
 		Customer:   stripe.String(stripeCustomerID),
 		SuccessURL: stripe.String(req.SuccessURL),
 		CancelURL:  stripe.String(req.CancelURL),
 		Metadata:   metadata,
+		SetupIntentData: &stripe.CheckoutSessionCreateSetupIntentDataParams{
+			Metadata: map[string]string{
+				"set_default":           "true",
+				"customer_id":           req.CustomerID,
+				"flexprice_checkout_id": req.CheckoutID,
+			},
+		},
 	}
 
 	session, err := stripeClient.V1CheckoutSessions.Create(ctx, params)
