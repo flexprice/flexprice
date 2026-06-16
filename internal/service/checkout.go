@@ -406,7 +406,12 @@ func (s *checkoutService) Complete(ctx context.Context, checkoutID string) error
 	// hook; here we only cancel the old subscription.
 	if chk.CheckoutType == types.CheckoutTypeSubscriptionChange && chk.SourceSubscriptionID != nil {
 		if err := NewSubscriptionChangeService(s.ServiceParams).FinalizeCheckoutChange(ctx, *chk.SourceSubscriptionID); err != nil {
-			return err
+			// Tolerate a retry arriving after the old sub was already cancelled: if it is
+			// already cancelled, treat cancellation as done and complete the checkout.
+			oldSub, getErr := s.SubRepo.Get(ctx, *chk.SourceSubscriptionID)
+			if getErr != nil || oldSub.SubscriptionStatus != types.SubscriptionStatusCancelled {
+				return err
+			}
 		}
 	}
 
