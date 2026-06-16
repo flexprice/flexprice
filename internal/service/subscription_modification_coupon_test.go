@@ -67,7 +67,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 
 	cases := []tc{
 		{
-			name: "add coupon with effective_date in past",
+			name: "add coupon with start_date in past",
 			run: func() {
 				ctx := s.GetContext()
 				cust := s.createCustomer("coup-add-past")
@@ -78,9 +78,9 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionAdd,
-						CouponCode:    c.CouponCode,
-						EffectiveDate: &past,
+						Action:     dto.SubModifyCouponActionAdd,
+						CouponCode: c.CouponCode,
+						StartDate:  &past,
 					},
 				}
 				resp, err := s.service.Execute(ctx, sub.ID, req)
@@ -101,7 +101,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 			},
 		},
 		{
-			name: "add coupon with effective_date in future",
+			name: "add coupon with start_date in future",
 			run: func() {
 				ctx := s.GetContext()
 				cust := s.createCustomer("coup-add-future")
@@ -112,9 +112,9 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionAdd,
-						CouponCode:    c.CouponCode,
-						EffectiveDate: &future,
+						Action:     dto.SubModifyCouponActionAdd,
+						CouponCode: c.CouponCode,
+						StartDate:  &future,
 					},
 				}
 				resp, err := s.service.Execute(ctx, sub.ID, req)
@@ -135,7 +135,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 			},
 		},
 		{
-			name: "add coupon with nil effective_date",
+			name: "add coupon with no start_date defaults to now",
 			run: func() {
 				ctx := s.GetContext()
 				cust := s.createCustomer("coup-add-nil-date")
@@ -148,7 +148,6 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 					CouponParams: &dto.SubModifyCouponParams{
 						Action:     dto.SubModifyCouponActionAdd,
 						CouponCode: c.CouponCode,
-						// EffectiveDate is nil → should default to now
 					},
 				}
 				resp, err := s.service.Execute(ctx, sub.ID, req)
@@ -164,7 +163,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				assocs, err := s.GetStores().CouponAssociationRepo.List(ctx, filter)
 				s.Require().NoError(err)
 				s.Require().Len(assocs, 1)
-				s.True(!assocs[0].StartDate.Before(before), "StartDate should be >= now when EffectiveDate is nil")
+				s.True(!assocs[0].StartDate.Before(before), "StartDate should be >= now when no start_date is provided")
 			},
 		},
 		{
@@ -183,9 +182,8 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionAdd,
-						CouponCode:    c.CouponCode,
-						EffectiveDate: &now,
+						Action:     dto.SubModifyCouponActionAdd,
+						CouponCode: c.CouponCode,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub.ID, req)
@@ -211,74 +209,10 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 			},
 		},
 		{
-			name: "remove coupon with effective_date in past",
+			name: "remove coupon — sets end_date to now",
 			run: func() {
 				ctx := s.GetContext()
-				cust := s.createCustomer("coup-rm-past")
-				sub := s.createActiveSub(cust.ID)
-				c := s.createCoupon()
-
-				now := s.GetNow()
-				past := now.Add(-48 * time.Hour)
-				// Association starting 72h ago, currently open
-				assoc := s.createCouponAssociation(c.ID, sub.ID, now.Add(-72*time.Hour), nil)
-
-				// Remove with past effective date
-				req := dto.ExecuteSubscriptionModifyRequest{
-					Type: dto.SubscriptionModifyTypeCoupon,
-					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionRemove,
-						AssociationID: &assoc.ID,
-						EffectiveDate: &past,
-					},
-				}
-				resp, err := s.service.Execute(ctx, sub.ID, req)
-				s.Require().NoError(err)
-				s.Require().NotNil(resp)
-
-				// Verify EndDate was set to past
-				updated, err := s.GetStores().CouponAssociationRepo.Get(ctx, assoc.ID)
-				s.Require().NoError(err)
-				s.Require().NotNil(updated.EndDate)
-				s.True(updated.EndDate.Equal(past.UTC()))
-			},
-		},
-		{
-			name: "remove coupon with effective_date in future",
-			run: func() {
-				ctx := s.GetContext()
-				cust := s.createCustomer("coup-rm-future")
-				sub := s.createActiveSub(cust.ID)
-				c := s.createCoupon()
-
-				now := s.GetNow()
-				future := now.Add(48 * time.Hour)
-				assoc := s.createCouponAssociation(c.ID, sub.ID, now, nil)
-
-				req := dto.ExecuteSubscriptionModifyRequest{
-					Type: dto.SubscriptionModifyTypeCoupon,
-					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionRemove,
-						AssociationID: &assoc.ID,
-						EffectiveDate: &future,
-					},
-				}
-				resp, err := s.service.Execute(ctx, sub.ID, req)
-				s.Require().NoError(err)
-				s.Require().NotNil(resp)
-
-				// Verify EndDate was set to future
-				updated, err := s.GetStores().CouponAssociationRepo.Get(ctx, assoc.ID)
-				s.Require().NoError(err)
-				s.Require().NotNil(updated.EndDate)
-				s.True(updated.EndDate.Equal(future.UTC()))
-			},
-		},
-		{
-			name: "remove coupon with nil effective_date",
-			run: func() {
-				ctx := s.GetContext()
-				cust := s.createCustomer("coup-rm-nil-date")
+				cust := s.createCustomer("coup-rm-now")
 				sub := s.createActiveSub(cust.ID)
 				c := s.createCoupon()
 
@@ -291,7 +225,6 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 					CouponParams: &dto.SubModifyCouponParams{
 						Action:        dto.SubModifyCouponActionRemove,
 						AssociationID: &assoc.ID,
-						// EffectiveDate nil → defaults to now
 					},
 				}
 				resp, err := s.service.Execute(ctx, sub.ID, req)
@@ -301,7 +234,7 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				updated, err := s.GetStores().CouponAssociationRepo.Get(ctx, assoc.ID)
 				s.Require().NoError(err)
 				s.Require().NotNil(updated.EndDate)
-				s.True(!updated.EndDate.Before(before), "EndDate should be >= now when EffectiveDate is nil")
+				s.True(!updated.EndDate.Before(before), "EndDate should be set to approximately now")
 			},
 		},
 		{
@@ -362,13 +295,11 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				pastEnd := now.Add(-24 * time.Hour)
 				assoc := s.createCouponAssociation(c.ID, sub.ID, pastStart, &pastEnd)
 
-				effectiveDate := now
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
 						Action:        dto.SubModifyCouponActionRemove,
 						AssociationID: &assoc.ID,
-						EffectiveDate: &effectiveDate,
 					},
 				}
 				_, err := s.service.Execute(ctx, sub.ID, req)
@@ -383,13 +314,11 @@ func (s *SubscriptionModificationServiceSuite) TestCouponModification() {
 				sub := s.createActiveSub(cust.ID)
 				c := s.createCoupon()
 
-				future := s.GetNow().Add(24 * time.Hour)
 				req := dto.ExecuteSubscriptionModifyRequest{
 					Type: dto.SubscriptionModifyTypeCoupon,
 					CouponParams: &dto.SubModifyCouponParams{
-						Action:        dto.SubModifyCouponActionAdd,
-						CouponCode:    c.CouponCode,
-						EffectiveDate: &future,
+						Action:     dto.SubModifyCouponActionAdd,
+						CouponCode: c.CouponCode,
 					},
 				}
 				resp, err := s.service.Preview(ctx, sub.ID, req)

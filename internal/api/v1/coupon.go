@@ -90,6 +90,37 @@ func (h *CouponHandler) GetCoupon(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// @Summary Get coupon by code
+// @ID getCouponByCode
+// @Description Use when resolving a coupon by promo code (e.g. checkout or validation).
+// @Tags Coupons
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param code path string true "Coupon code"
+// @Success 200 {object} dto.CouponResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /coupons/code/{code} [get]
+func (h *CouponHandler) GetCouponByCode(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.Error(ierr.NewError("coupon code is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.couponService.GetCouponByCode(c.Request.Context(), code)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // @Summary Update coupon
 // @ID updateCoupon
 // @Description Use when changing coupon config (e.g. value, validity, or usage limits).

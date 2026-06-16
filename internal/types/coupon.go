@@ -31,9 +31,10 @@ const (
 type CouponFilter struct {
 	*QueryFilter
 
-	Filters   []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-	Sort      []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
-	CouponIDs []string           `json:"coupon_ids,omitempty" form:"coupon_ids" validate:"omitempty"`
+	Filters     []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort        []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+	CouponIDs   []string           `json:"coupon_ids,omitempty" form:"coupon_ids" validate:"omitempty"`
+	CouponCodes []string           `json:"coupon_codes,omitempty" form:"coupon_codes" validate:"omitempty"`
 }
 
 // NewCouponFilter creates a new CouponFilter with default values
