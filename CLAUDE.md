@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code when working with the Flexprice backend repository.
 
+## Git Rules
+
+- NEVER push directly to `main`, `develop`, or any upstream branch. Always work on a feature branch and raise a PR.
+- NEVER add `Co-Authored-By` lines to commit messages.
+- Always use `--no-gpg-sign` when committing (GPG signing is not configured in this environment).
+
 ## Project Overview
 
 Flexprice is a monetization infrastructure platform for AI-native and SaaS companies. It provides usage-based metering, credit management, flexible pricing, and automated invoicing.
