@@ -254,6 +254,9 @@ func joinAnalyticsResults(featureItems, meterItems []dto.UsageAnalyticItem) []*e
 		switch {
 		case fOk && mOk:
 			rec.MatchStatus = events.AnalyticsBenchmarkMatchMatched
+			rec.MeterID = fItem.MeterID
+			rec.FeaturePriceID = fItem.PriceID
+			rec.MeterPriceID = mItem.PriceID
 			rec.FeatureTotalUsage = fItem.TotalUsage
 			rec.FeatureTotalCost = fItem.TotalCost
 			rec.FeatureEventCount = fItem.EventCount
@@ -262,11 +265,15 @@ func joinAnalyticsResults(featureItems, meterItems []dto.UsageAnalyticItem) []*e
 			rec.MeterEventCount = mItem.EventCount
 		case fOk:
 			rec.MatchStatus = events.AnalyticsBenchmarkMatchFeatureOnly
+			rec.MeterID = fItem.MeterID
+			rec.FeaturePriceID = fItem.PriceID
 			rec.FeatureTotalUsage = fItem.TotalUsage
 			rec.FeatureTotalCost = fItem.TotalCost
 			rec.FeatureEventCount = fItem.EventCount
 		case mOk:
 			rec.MatchStatus = events.AnalyticsBenchmarkMatchMeterOnly
+			rec.MeterID = mItem.MeterID
+			rec.MeterPriceID = mItem.PriceID
 			rec.MeterTotalUsage = mItem.TotalUsage
 			rec.MeterTotalCost = mItem.TotalCost
 			rec.MeterEventCount = mItem.EventCount

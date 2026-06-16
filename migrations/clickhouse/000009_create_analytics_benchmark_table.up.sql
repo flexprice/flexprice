@@ -20,8 +20,13 @@ CREATE TABLE IF NOT EXISTS flexprice.analytics_benchmark
 
     -- per-item row
     feature_id             String                  NOT NULL DEFAULT '',
+    meter_id               String                  NOT NULL DEFAULT '',
     group_key              String                  NOT NULL DEFAULT '',
     match_status           LowCardinality(String)  NOT NULL,
+
+    -- price ids used by each pipeline (empty when that side did not match)
+    feature_price_id       String                  NOT NULL DEFAULT '',
+    meter_price_id         String                  NOT NULL DEFAULT '',
 
     feature_total_usage    Decimal(25, 15)         NOT NULL DEFAULT 0,
     meter_total_usage      Decimal(25, 15)         NOT NULL DEFAULT 0,

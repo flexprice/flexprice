@@ -39,8 +39,13 @@ type AnalyticsBenchmarkRecord struct {
 
 	// Per-item row
 	FeatureID   string                        `ch:"feature_id"`
+	MeterID     string                        `ch:"meter_id"`
 	GroupKey    string                        `ch:"group_key"`
 	MatchStatus AnalyticsBenchmarkMatchStatus `ch:"match_status"`
+
+	// Price ids used by each pipeline (empty when that side did not match).
+	FeaturePriceID string `ch:"feature_price_id"`
+	MeterPriceID   string `ch:"meter_price_id"`
 
 	FeatureTotalUsage decimal.Decimal `ch:"feature_total_usage"`
 	MeterTotalUsage   decimal.Decimal `ch:"meter_total_usage"`
