@@ -262,6 +262,118 @@ func (s *CheckoutServiceTestSuite) TestCreate_SetupObjective() {
 	assert.Empty(s.T(), invoices, "draft subscription must not raise an opening invoice")
 }
 
+func (s *CheckoutServiceTestSuite) TestCreateChange_Upgrade() {
+	ctx := s.GetContext()
+
+	cust := s.createTestCustomer()
+	basicPlanID := s.createTestPlan("Upgrade Basic", decimal.NewFromFloat(10.00))
+	premiumPlanID := s.createTestPlan("Upgrade Premium", decimal.NewFromFloat(20.00))
+
+	// Seed an ACTIVE subscription on the basic plan (mirrors createTestSubscription
+	// in subscription_change_test.go: recurring/monthly/anniversary, currency usd).
+	subSvc := NewSubscriptionService(s.params)
+	subResp, err := subSvc.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         cust.ID,
+		PlanID:             basicPlanID,
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	})
+	require.NoError(s.T(), err)
+	oldSubID := subResp.Subscription.ID
+
+	oldSub, err := s.GetStores().SubscriptionRepo.Get(ctx, oldSubID)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), types.SubscriptionStatusActive, oldSub.SubscriptionStatus)
+
+	// Create the upgrade checkout.
+	svc := s.newCheckoutService()
+	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
+		CheckoutType: types.CheckoutTypeSubscriptionChange,
+		SubscriptionChange: &dto.SubscriptionChangeCheckoutPayload{
+			SourceSubscriptionID: oldSubID,
+			TargetPlanID:         premiumPlanID,
+			ProrationBehavior:    types.ProrationBehaviorCreateProrations,
+		},
+		SuccessURL: "https://app.test/success",
+		CancelURL:  "https://app.test/cancel",
+	})
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), resp)
+	assert.Equal(s.T(), "https://stripe.test/cs_test", resp.CheckoutURL)
+	assert.Equal(s.T(), string(types.CheckoutStatusPending), resp.Status)
+
+	// Load the persisted checkout: it is a subscription_change bound to the NEW sub,
+	// with the OLD sub recorded as the source.
+	chk, err := s.checkoutRepo.Get(ctx, resp.ID)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), chk)
+	assert.Equal(s.T(), types.CheckoutTypeSubscriptionChange, chk.CheckoutType)
+	require.NotNil(s.T(), chk.SourceSubscriptionID)
+	assert.Equal(s.T(), oldSubID, *chk.SourceSubscriptionID)
+
+	newSubID := chk.EntityID
+	require.NotEmpty(s.T(), newSubID)
+	require.NotEqual(s.T(), oldSubID, newSubID)
+
+	// At create time the OLD sub must remain ACTIVE (cancellation happens on Complete).
+	oldSub, err = s.GetStores().SubscriptionRepo.Get(ctx, oldSubID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), types.SubscriptionStatusActive, oldSub.SubscriptionStatus)
+
+	// The NEW sub is created INCOMPLETE (activated later by the invoice.paid hook).
+	newSub, err := s.GetStores().SubscriptionRepo.Get(ctx, newSubID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), types.SubscriptionStatusIncomplete, newSub.SubscriptionStatus)
+
+	// The NEW sub has an opening invoice raised with billing reason SUBSCRIPTION_UPDATE.
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, &types.InvoiceFilter{
+		QueryFilter:    types.NewDefaultQueryFilter(),
+		SubscriptionID: newSubID,
+	})
+	require.NoError(s.T(), err)
+	require.NotEmpty(s.T(), invoices, "expected an opening invoice for the new subscription")
+	foundUpdate := false
+	for _, inv := range invoices {
+		if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionUpdate) {
+			foundUpdate = true
+			break
+		}
+	}
+	assert.True(s.T(), foundUpdate, "expected an opening invoice with billing reason SUBSCRIPTION_UPDATE")
+
+	// Dedupe view: the pending checkout is reachable by the source subscription.
+	pending, err := s.checkoutRepo.GetPendingBySourceSubscription(ctx, oldSubID)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), pending)
+	assert.Equal(s.T(), resp.ID, pending.ID)
+
+	// Completion. In production the invoice.paid hook activates the NEW sub BEFORE
+	// Complete runs; that hook does not fire in this in-memory unit test, so we
+	// simulate it via ActivateIncompleteSubscription (the same method the hook calls)
+	// to mirror real ordering.
+	require.NoError(s.T(), subSvc.ActivateIncompleteSubscription(ctx, newSubID))
+
+	require.NoError(s.T(), svc.Complete(ctx, resp.ID))
+
+	completed, err := s.checkoutRepo.Get(ctx, resp.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), types.CheckoutStatusCompleted, completed.Status)
+	require.NotNil(s.T(), completed.CompletedAt)
+
+	// Core Complete behavior: the OLD sub is cancelled via FinalizeCheckoutChange.
+	oldSub, err = s.GetStores().SubscriptionRepo.Get(ctx, oldSubID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), types.SubscriptionStatusCancelled, oldSub.SubscriptionStatus)
+
+	// The NEW sub was activated by the simulated invoice.paid hook above.
+	newSub, err = s.GetStores().SubscriptionRepo.Get(ctx, newSubID)
+	require.NoError(s.T(), err)
+	assert.NotEqual(s.T(), types.SubscriptionStatusIncomplete, newSub.SubscriptionStatus)
+}
+
 func (s *CheckoutServiceTestSuite) TestComplete_Idempotent() {
 	ctx := s.GetContext()
 
