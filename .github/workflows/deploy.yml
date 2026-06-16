@@ -92,7 +92,7 @@ jobs:
               echo "${GHCR_IMAGE}:${GITHUB_REF_NAME}"
               echo "${GHCR_IMAGE}:latest"
             elif [ "$IS_DEVELOP" = "true" ]; then
-              echo "${GHCR_IMAGE}:develop"
+              echo "${GHCR_IMAGE}:latest-dev"
             fi
             echo "TAGS_EOF"
           } >> $GITHUB_OUTPUT
