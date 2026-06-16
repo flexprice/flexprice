@@ -37,8 +37,11 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 			external_customer_id, external_customer_ids,
 			feature_ids, sources, group_by, window_size, expand,
 			include_children, has_property_filters, request_json,
-			feature_id, meter_id, group_key, match_status,
+			row_type,
+			feature_id, meter_id, sub_line_item_id, group_key, match_status,
+			diff_reason,
 			feature_price_id, meter_price_id,
+			feature_item_count, meter_item_count,
 			feature_total_usage, meter_total_usage, usage_diff,
 			feature_total_cost, meter_total_cost, cost_diff,
 			feature_event_count, meter_event_count,
@@ -84,6 +87,18 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 			expand = []string{}
 		}
 
+		// Default row_type to line_item for backwards-compat when callers don't set it.
+		rowType := record.RowType
+		if rowType == "" {
+			rowType = events.AnalyticsBenchmarkRowLineItem
+		}
+		// Default diff_reason to none (the column has a default but the binary
+		// protocol requires every column be supplied per row).
+		diffReason := record.DiffReason
+		if diffReason == "" {
+			diffReason = events.AnalyticsBenchmarkDiffNone
+		}
+
 		if err := stmt.Append(
 			record.TenantID,
 			record.EnvironmentID,
@@ -100,12 +115,17 @@ func (r *AnalyticsBenchmarkRepository) BulkInsert(ctx context.Context, records [
 			record.IncludeChildren,
 			record.HasPropertyFilters,
 			record.RequestJSON,
+			string(rowType),
 			record.FeatureID,
 			record.MeterID,
+			record.SubLineItemID,
 			record.GroupKey,
 			string(record.MatchStatus),
+			string(diffReason),
 			record.FeaturePriceID,
 			record.MeterPriceID,
+			record.FeatureItemCount,
+			record.MeterItemCount,
 			record.FeatureTotalUsage,
 			record.MeterTotalUsage,
 			record.UsageDiff,

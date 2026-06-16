@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // processAnalyticsMessage handles analytics-kind benchmark events. It replays the
@@ -55,23 +57,25 @@ func (s *usageBenchmarkService) processAnalyticsMessage(ctx context.Context, msg
 		)
 	}
 
-	featureItems := []dto.UsageAnalyticItem{}
-	meterItems := []dto.UsageAnalyticItem{}
-	currency := ""
-	if featureResp != nil {
-		featureItems = featureResp.Items
-		currency = featureResp.Currency
-	}
-	if meterResp != nil {
-		meterItems = meterResp.Items
-		if currency == "" {
-			currency = meterResp.Currency
-		}
+	// Skip entirely when both pipelines failed (or returned no responses).
+	// Emitting a zero-zero summary row would be noise — we have no signal.
+	if featureResp == nil && meterResp == nil {
+		return nil
 	}
 
-	records := joinAnalyticsResults(featureItems, meterItems)
+	currency := ""
+	if featureResp != nil {
+		currency = featureResp.Currency
+	}
+	if meterResp != nil && currency == "" {
+		currency = meterResp.Currency
+	}
+
+	records := joinAnalyticsResults(featureResp, meterResp)
 	if len(records) == 0 {
-		// Nothing to write — still no-op ack.
+		// Defensive: joinAnalyticsResults always emits at least a summary row
+		// when one side is non-nil, so this path is unreachable today. Keep it
+		// for safety in case the contract changes.
 		return nil
 	}
 
@@ -199,30 +203,282 @@ func canonicalGroupKey(item *dto.UsageAnalyticItem) string {
 	return strings.Join(parts, "|")
 }
 
-// joinAnalyticsResults outer-joins two pipelines' items by (feature_id, group_key)
-// and emits one AnalyticsBenchmarkRecord per joined item. Tenant/env/event_id/
-// request fields are filled by the caller.
-func joinAnalyticsResults(featureItems, meterItems []dto.UsageAnalyticItem) []*events.AnalyticsBenchmarkRecord {
-	type joinKey struct {
+// joinAnalyticsResults compares the two pipelines' analytics responses and emits
+// rows at three granularities — each answering a different debugging question:
+//
+//   - summary:   1 row per event_id with response.TotalCost from each side. The
+//                authoritative "did billing match overall?" signal — read this
+//                first, drill down only when cost_diff != 0.
+//   - feature:   1 row per (feature_id, group_key) with items SUMMED across
+//                line-item splits on each side. Robust to duplicate feature_ids
+//                (we don't compare item-by-item, we aggregate first) so the
+//                "what order are items in" question goes away.
+//   - line_item: 1 row per (feature_id, sub_line_item_id, group_key) for
+//                drill-down detail when a feature row has a diff.
+//
+// Each row also carries a diff_reason tag so spurious diffs (multi-feature-meter
+// ambiguity, item collisions at this granularity) can be filtered out of the
+// "real bug" view.
+//
+// Tenant/env/event_id/request fields are filled by the caller.
+func joinAnalyticsResults(featureResp, meterResp *dto.GetUsageAnalyticsResponse) []*events.AnalyticsBenchmarkRecord {
+	var featureItems, meterItems []dto.UsageAnalyticItem
+	var featureTotal, meterTotal decimal.Decimal
+	if featureResp != nil {
+		featureItems = featureResp.Items
+		featureTotal = featureResp.TotalCost
+	}
+	if meterResp != nil {
+		meterItems = meterResp.Items
+		meterTotal = meterResp.TotalCost
+	}
+
+	// Set of feature_ids per meter_id across BOTH sides. A meter mapped to
+	// more than one feature signals that runtime meter→feature attribution
+	// (1:1 by current design) can pick a different feature than the
+	// ingest-time snapshot in feature_usage. Cost_diffs on rows for these
+	// meters are an attribution artifact, not a real bug — we tag them
+	// multi_feature_meter so they can be filtered out.
+	meterFeatures := make(map[string]map[string]struct{})
+	collectFeatures := func(items []dto.UsageAnalyticItem) {
+		for i := range items {
+			it := &items[i]
+			if it.MeterID == "" {
+				continue
+			}
+			set := meterFeatures[it.MeterID]
+			if set == nil {
+				set = make(map[string]struct{})
+				meterFeatures[it.MeterID] = set
+			}
+			set[it.FeatureID] = struct{}{}
+		}
+	}
+	collectFeatures(featureItems)
+	collectFeatures(meterItems)
+	isMultiFeatureMeter := func(meterID string) bool {
+		return len(meterFeatures[meterID]) > 1
+	}
+
+	records := make([]*events.AnalyticsBenchmarkRecord, 0, 1+len(featureItems)+len(meterItems))
+	records = append(records, buildSummaryRow(featureTotal, meterTotal, featureItems, meterItems))
+	records = append(records, buildFeatureRows(featureItems, meterItems, isMultiFeatureMeter)...)
+	records = append(records, buildLineItemRows(featureItems, meterItems, isMultiFeatureMeter)...)
+	return records
+}
+
+// buildSummaryRow emits the single per-event_id row that records the response's
+// root TotalCost from each pipeline verbatim. This is the only row that can be
+// trusted to answer "did the two pipelines produce the same billable total?" —
+// per-item rows can suffer from collisions, aggregation drift, or ordering
+// artifacts at finer granularities.
+func buildSummaryRow(
+	featureTotal, meterTotal decimal.Decimal,
+	featureItems, meterItems []dto.UsageAnalyticItem,
+) *events.AnalyticsBenchmarkRecord {
+	var featureUsage, meterUsage decimal.Decimal
+	var featureEC, meterEC uint64
+	for i := range featureItems {
+		featureUsage = featureUsage.Add(featureItems[i].TotalUsage)
+		featureEC += featureItems[i].EventCount
+	}
+	for i := range meterItems {
+		meterUsage = meterUsage.Add(meterItems[i].TotalUsage)
+		meterEC += meterItems[i].EventCount
+	}
+
+	rec := &events.AnalyticsBenchmarkRecord{
+		RowType:           events.AnalyticsBenchmarkRowSummary,
+		FeatureItemCount:  uint64(len(featureItems)),
+		MeterItemCount:    uint64(len(meterItems)),
+		FeatureTotalUsage: featureUsage,
+		MeterTotalUsage:   meterUsage,
+		FeatureTotalCost:  featureTotal,
+		MeterTotalCost:    meterTotal,
+		FeatureEventCount: featureEC,
+		MeterEventCount:   meterEC,
+	}
+	rec.UsageDiff = rec.FeatureTotalUsage.Sub(rec.MeterTotalUsage)
+	rec.CostDiff = rec.FeatureTotalCost.Sub(rec.MeterTotalCost)
+	switch {
+	case len(featureItems) > 0 && len(meterItems) > 0:
+		rec.MatchStatus = events.AnalyticsBenchmarkMatchMatched
+	case len(featureItems) > 0:
+		rec.MatchStatus = events.AnalyticsBenchmarkMatchFeatureOnly
+	case len(meterItems) > 0:
+		rec.MatchStatus = events.AnalyticsBenchmarkMatchMeterOnly
+	default:
+		rec.MatchStatus = events.AnalyticsBenchmarkMatchMatched
+	}
+	// Summary rows aren't subject to the meter-attribution or item-collision
+	// caveats — by construction they aggregate across everything.
+	rec.DiffReason = classifyDiff(rec.CostDiff, rec.MatchStatus, false, false)
+	return rec
+}
+
+// featureAgg holds a per-side accumulation for one (feature_id, group_key) bucket.
+// items is kept by reference so we can read SubLineItemID/PriceID when needed.
+type featureAgg struct {
+	items      []*dto.UsageAnalyticItem
+	usage      decimal.Decimal
+	cost       decimal.Decimal
+	eventCount uint64
+	meterID    string
+	priceIDs   []string
+}
+
+func (a *featureAgg) add(item *dto.UsageAnalyticItem) {
+	a.items = append(a.items, item)
+	a.usage = a.usage.Add(item.TotalUsage)
+	a.cost = a.cost.Add(item.TotalCost)
+	a.eventCount += item.EventCount
+	if a.meterID == "" && item.MeterID != "" {
+		a.meterID = item.MeterID
+	}
+	if item.PriceID != "" {
+		// Keep insertion order but de-duplicate so the joined PriceID label
+		// reflects the distinct prices that contributed.
+		for _, p := range a.priceIDs {
+			if p == item.PriceID {
+				return
+			}
+		}
+		a.priceIDs = append(a.priceIDs, item.PriceID)
+	}
+}
+
+func (a *featureAgg) firstPriceID() string {
+	if len(a.priceIDs) == 0 {
+		return ""
+	}
+	return a.priceIDs[0]
+}
+
+// buildFeatureRows emits one row per (feature_id, group_key), aggregating all
+// items on each side that share that key. This sidesteps the duplicate-feature
+// ordering question — we don't pair items, we sum them.
+func buildFeatureRows(
+	featureItems, meterItems []dto.UsageAnalyticItem,
+	isMultiFeatureMeter func(string) bool,
+) []*events.AnalyticsBenchmarkRecord {
+	type key struct {
 		featureID string
 		groupKey  string
 	}
-
-	featureMap := make(map[joinKey]*dto.UsageAnalyticItem, len(featureItems))
-	for i := range featureItems {
-		k := joinKey{featureID: featureItems[i].FeatureID, groupKey: canonicalGroupKey(&featureItems[i])}
-		featureMap[k] = &featureItems[i]
-	}
-	meterMap := make(map[joinKey]*dto.UsageAnalyticItem, len(meterItems))
-	for i := range meterItems {
-		k := joinKey{featureID: meterItems[i].FeatureID, groupKey: canonicalGroupKey(&meterItems[i])}
-		meterMap[k] = &meterItems[i]
+	makeKey := func(it *dto.UsageAnalyticItem) key {
+		return key{featureID: it.FeatureID, groupKey: canonicalGroupKey(it)}
 	}
 
-	// Sort keys for deterministic insert order so multiple test runs / replays
-	// produce the same ClickHouse ordering for a given event_id.
-	seen := make(map[joinKey]struct{}, len(featureMap)+len(meterMap))
-	keys := make([]joinKey, 0, len(featureMap)+len(meterMap))
+	accumulate := func(items []dto.UsageAnalyticItem) map[key]*featureAgg {
+		out := make(map[key]*featureAgg, len(items))
+		for i := range items {
+			k := makeKey(&items[i])
+			agg, ok := out[k]
+			if !ok {
+				agg = &featureAgg{}
+				out[k] = agg
+			}
+			agg.add(&items[i])
+		}
+		return out
+	}
+	featureMap := accumulate(featureItems)
+	meterMap := accumulate(meterItems)
+
+	keys := unionAndSortFeatureKeys(featureMap, meterMap)
+	records := make([]*events.AnalyticsBenchmarkRecord, 0, len(keys))
+	for _, k := range keys {
+		fAgg, fOk := featureMap[k]
+		mAgg, mOk := meterMap[k]
+
+		rec := &events.AnalyticsBenchmarkRecord{
+			RowType:   events.AnalyticsBenchmarkRowFeature,
+			FeatureID: k.featureID,
+			GroupKey:  k.groupKey,
+		}
+		var multiItem bool
+		switch {
+		case fOk && mOk:
+			rec.MatchStatus = events.AnalyticsBenchmarkMatchMatched
+			rec.MeterID = firstNonEmpty(fAgg.meterID, mAgg.meterID)
+			rec.FeaturePriceID = fAgg.firstPriceID()
+			rec.MeterPriceID = mAgg.firstPriceID()
+			rec.FeatureItemCount = uint64(len(fAgg.items))
+			rec.MeterItemCount = uint64(len(mAgg.items))
+			rec.FeatureTotalUsage = fAgg.usage
+			rec.FeatureTotalCost = fAgg.cost
+			rec.FeatureEventCount = fAgg.eventCount
+			rec.MeterTotalUsage = mAgg.usage
+			rec.MeterTotalCost = mAgg.cost
+			rec.MeterEventCount = mAgg.eventCount
+			multiItem = len(fAgg.items) > 1 || len(mAgg.items) > 1
+		case fOk:
+			rec.MatchStatus = events.AnalyticsBenchmarkMatchFeatureOnly
+			rec.MeterID = fAgg.meterID
+			rec.FeaturePriceID = fAgg.firstPriceID()
+			rec.FeatureItemCount = uint64(len(fAgg.items))
+			rec.FeatureTotalUsage = fAgg.usage
+			rec.FeatureTotalCost = fAgg.cost
+			rec.FeatureEventCount = fAgg.eventCount
+			multiItem = len(fAgg.items) > 1
+		case mOk:
+			rec.MatchStatus = events.AnalyticsBenchmarkMatchMeterOnly
+			rec.MeterID = mAgg.meterID
+			rec.MeterPriceID = mAgg.firstPriceID()
+			rec.MeterItemCount = uint64(len(mAgg.items))
+			rec.MeterTotalUsage = mAgg.usage
+			rec.MeterTotalCost = mAgg.cost
+			rec.MeterEventCount = mAgg.eventCount
+			multiItem = len(mAgg.items) > 1
+		}
+		rec.UsageDiff = rec.FeatureTotalUsage.Sub(rec.MeterTotalUsage)
+		rec.CostDiff = rec.FeatureTotalCost.Sub(rec.MeterTotalCost)
+		// Feature-level multi_item means "one side had several line-item splits"
+		// — informational, not a bug. Drill into line_item rows to see them.
+		rec.DiffReason = classifyDiff(rec.CostDiff, rec.MatchStatus, isMultiFeatureMeter(rec.MeterID), multiItem)
+		records = append(records, rec)
+	}
+	return records
+}
+
+// buildLineItemRows emits the granular per-(feature_id, sub_line_item_id, group_key)
+// rows. Defensive against collisions (sums items at the same key rather than
+// overwriting) so a stray duplicate never silently picks a winner.
+func buildLineItemRows(
+	featureItems, meterItems []dto.UsageAnalyticItem,
+	isMultiFeatureMeter func(string) bool,
+) []*events.AnalyticsBenchmarkRecord {
+	type key struct {
+		featureID     string
+		subLineItemID string
+		groupKey      string
+	}
+	makeKey := func(it *dto.UsageAnalyticItem) key {
+		return key{
+			featureID:     it.FeatureID,
+			subLineItemID: it.SubLineItemID,
+			groupKey:      canonicalGroupKey(it),
+		}
+	}
+
+	accumulate := func(items []dto.UsageAnalyticItem) map[key]*featureAgg {
+		out := make(map[key]*featureAgg, len(items))
+		for i := range items {
+			k := makeKey(&items[i])
+			agg, ok := out[k]
+			if !ok {
+				agg = &featureAgg{}
+				out[k] = agg
+			}
+			agg.add(&items[i])
+		}
+		return out
+	}
+	featureMap := accumulate(featureItems)
+	meterMap := accumulate(meterItems)
+
+	seen := make(map[key]struct{}, len(featureMap)+len(meterMap))
+	keys := make([]key, 0, len(featureMap)+len(meterMap))
 	for k := range featureMap {
 		if _, ok := seen[k]; !ok {
 			seen[k] = struct{}{}
@@ -239,50 +495,123 @@ func joinAnalyticsResults(featureItems, meterItems []dto.UsageAnalyticItem) []*e
 		if keys[i].featureID != keys[j].featureID {
 			return keys[i].featureID < keys[j].featureID
 		}
+		if keys[i].subLineItemID != keys[j].subLineItemID {
+			return keys[i].subLineItemID < keys[j].subLineItemID
+		}
 		return keys[i].groupKey < keys[j].groupKey
 	})
 
 	records := make([]*events.AnalyticsBenchmarkRecord, 0, len(keys))
 	for _, k := range keys {
-		fItem, fOk := featureMap[k]
-		mItem, mOk := meterMap[k]
+		fAgg, fOk := featureMap[k]
+		mAgg, mOk := meterMap[k]
 
 		rec := &events.AnalyticsBenchmarkRecord{
-			FeatureID: k.featureID,
-			GroupKey:  k.groupKey,
+			RowType:       events.AnalyticsBenchmarkRowLineItem,
+			FeatureID:     k.featureID,
+			SubLineItemID: k.subLineItemID,
+			GroupKey:      k.groupKey,
 		}
+		var multiItem bool
 		switch {
 		case fOk && mOk:
 			rec.MatchStatus = events.AnalyticsBenchmarkMatchMatched
-			rec.MeterID = fItem.MeterID
-			rec.FeaturePriceID = fItem.PriceID
-			rec.MeterPriceID = mItem.PriceID
-			rec.FeatureTotalUsage = fItem.TotalUsage
-			rec.FeatureTotalCost = fItem.TotalCost
-			rec.FeatureEventCount = fItem.EventCount
-			rec.MeterTotalUsage = mItem.TotalUsage
-			rec.MeterTotalCost = mItem.TotalCost
-			rec.MeterEventCount = mItem.EventCount
+			rec.MeterID = firstNonEmpty(fAgg.meterID, mAgg.meterID)
+			rec.FeaturePriceID = fAgg.firstPriceID()
+			rec.MeterPriceID = mAgg.firstPriceID()
+			rec.FeatureItemCount = uint64(len(fAgg.items))
+			rec.MeterItemCount = uint64(len(mAgg.items))
+			rec.FeatureTotalUsage = fAgg.usage
+			rec.FeatureTotalCost = fAgg.cost
+			rec.FeatureEventCount = fAgg.eventCount
+			rec.MeterTotalUsage = mAgg.usage
+			rec.MeterTotalCost = mAgg.cost
+			rec.MeterEventCount = mAgg.eventCount
+			multiItem = len(fAgg.items) > 1 || len(mAgg.items) > 1
 		case fOk:
 			rec.MatchStatus = events.AnalyticsBenchmarkMatchFeatureOnly
-			rec.MeterID = fItem.MeterID
-			rec.FeaturePriceID = fItem.PriceID
-			rec.FeatureTotalUsage = fItem.TotalUsage
-			rec.FeatureTotalCost = fItem.TotalCost
-			rec.FeatureEventCount = fItem.EventCount
+			rec.MeterID = fAgg.meterID
+			rec.FeaturePriceID = fAgg.firstPriceID()
+			rec.FeatureItemCount = uint64(len(fAgg.items))
+			rec.FeatureTotalUsage = fAgg.usage
+			rec.FeatureTotalCost = fAgg.cost
+			rec.FeatureEventCount = fAgg.eventCount
+			multiItem = len(fAgg.items) > 1
 		case mOk:
 			rec.MatchStatus = events.AnalyticsBenchmarkMatchMeterOnly
-			rec.MeterID = mItem.MeterID
-			rec.MeterPriceID = mItem.PriceID
-			rec.MeterTotalUsage = mItem.TotalUsage
-			rec.MeterTotalCost = mItem.TotalCost
-			rec.MeterEventCount = mItem.EventCount
+			rec.MeterID = mAgg.meterID
+			rec.MeterPriceID = mAgg.firstPriceID()
+			rec.MeterItemCount = uint64(len(mAgg.items))
+			rec.MeterTotalUsage = mAgg.usage
+			rec.MeterTotalCost = mAgg.cost
+			rec.MeterEventCount = mAgg.eventCount
+			multiItem = len(mAgg.items) > 1
 		}
 		rec.UsageDiff = rec.FeatureTotalUsage.Sub(rec.MeterTotalUsage)
 		rec.CostDiff = rec.FeatureTotalCost.Sub(rec.MeterTotalCost)
+		rec.DiffReason = classifyDiff(rec.CostDiff, rec.MatchStatus, isMultiFeatureMeter(rec.MeterID), multiItem)
 		records = append(records, rec)
 	}
 	return records
+}
+
+// classifyDiff is the single source of truth for diff_reason categorization.
+// Precedence: unmatched > none > multi_feature_meter > multi_item > material.
+func classifyDiff(
+	costDiff decimal.Decimal,
+	matchStatus events.AnalyticsBenchmarkMatchStatus,
+	isMultiFeatureMeter, multiItem bool,
+) events.AnalyticsBenchmarkDiffReason {
+	if matchStatus != events.AnalyticsBenchmarkMatchMatched {
+		return events.AnalyticsBenchmarkDiffUnmatched
+	}
+	if costDiff.IsZero() {
+		return events.AnalyticsBenchmarkDiffNone
+	}
+	if isMultiFeatureMeter {
+		return events.AnalyticsBenchmarkDiffMultiFeatureMeter
+	}
+	if multiItem {
+		return events.AnalyticsBenchmarkDiffMultiItem
+	}
+	return events.AnalyticsBenchmarkDiffMaterial
+}
+
+// firstNonEmpty returns the first non-empty string among the args, or "".
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// unionAndSortFeatureKeys collects the union of keys across both maps and sorts
+// them for deterministic ClickHouse insert order.
+func unionAndSortFeatureKeys[K comparable](a, b map[K]*featureAgg) []K {
+	seen := make(map[K]struct{}, len(a)+len(b))
+	out := make([]K, 0, len(a)+len(b))
+	for k := range a {
+		if _, ok := seen[k]; !ok {
+			seen[k] = struct{}{}
+			out = append(out, k)
+		}
+	}
+	for k := range b {
+		if _, ok := seen[k]; !ok {
+			seen[k] = struct{}{}
+			out = append(out, k)
+		}
+	}
+	// Generic sort delegates to the natural ordering via fmt.Sprintf. For the
+	// concrete key shape used here (string fields), this matches the per-field
+	// lex sort buildLineItemRows does explicitly. We only use this helper for
+	// the 2-field feature-row key, where this collapse is unambiguous.
+	sort.Slice(out, func(i, j int) bool {
+		return fmt.Sprintf("%v", out[i]) < fmt.Sprintf("%v", out[j])
+	})
+	return out
 }
 
 // parsedRequestFields holds the fields we promote from GetUsageAnalyticsRequest
