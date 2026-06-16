@@ -202,6 +202,17 @@ func (f *Factory) GetCheckoutProvider(
 	}
 }
 
+// IsCheckoutSupported reports whether the named payment provider can open a hosted
+// checkout session. Keep in sync with GetCheckoutProvider's supported providers.
+func (f *Factory) IsCheckoutSupported(provider types.SecretProvider) bool {
+	switch provider {
+	case types.SecretProviderStripe:
+		return true
+	default:
+		return false
+	}
+}
+
 // GetHubSpotIntegration returns a complete HubSpot integration setup
 func (f *Factory) GetHubSpotIntegration(ctx context.Context) (*HubSpotIntegration, error) {
 	// Create HubSpot client

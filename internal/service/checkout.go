@@ -43,6 +43,24 @@ func NewCheckoutService(params ServiceParams) CheckoutService {
 	return s
 }
 
+// resolveCheckoutProvider picks the active, checkout-capable payment connection for
+// the request's tenant+environment. It does NOT assume any specific provider — the
+// resolved provider is stored on the checkout and later used to open the session.
+func (s *checkoutService) resolveCheckoutProvider(ctx context.Context) (string, error) {
+	conns, err := s.ConnectionRepo.List(ctx, types.NewConnectionFilter())
+	if err != nil {
+		return "", err
+	}
+	for _, c := range conns {
+		if s.IntegrationFactory.IsCheckoutSupported(c.ProviderType) {
+			return string(c.ProviderType), nil
+		}
+	}
+	return "", ierr.NewError("no active payment connection found for checkout").
+		WithHint("Connect a checkout-capable payment provider (e.g. Stripe) for this environment before opening a checkout").
+		Mark(ierr.ErrNotFound)
+}
+
 func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -77,10 +95,18 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 	subReq.CollectionMethod = lo.ToPtr(types.CollectionMethodSendInvoice)
 	subReq.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorDefaultIncomplete)
 
+	// Resolve the payment provider up front (fail fast) from the active tenant/env
+	// connection; the resolved provider is stored on the checkout and later used to
+	// open the hosted session.
+	provider, err := s.resolveCheckoutProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var chk *checkout.Checkout
 	var invoiceID, paymentID string
 	var customerID string
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// 1. Create the subscription in an incomplete, invoice-collected state.
 		subSvc := NewSubscriptionService(s.ServiceParams)
 		subResp, err := subSvc.CreateSubscription(txCtx, subReq)
@@ -119,7 +145,7 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 			Status:        types.CheckoutStatusPending,
 			Amount:        inv.AmountDue,
 			Currency:      subReq.Currency,
-			Provider:      string(types.SecretProviderStripe),
+			Provider:      provider,
 			SuccessURL:    lo.ToPtr(req.SuccessURL),
 			CancelURL:     lo.ToPtr(req.CancelURL),
 			ExpiresAt:     now.Add(24 * time.Hour),
@@ -165,9 +191,17 @@ func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckou
 	subReq.CollectionMethod = lo.ToPtr(types.CollectionMethodChargeAutomatically)
 	subReq.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorAllowIncomplete)
 
+	// Resolve the payment provider up front (fail fast) from the active tenant/env
+	// connection; the resolved provider is stored on the checkout and later used to
+	// open the hosted session.
+	provider, err := s.resolveCheckoutProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var chk *checkout.Checkout
 	var customerID string
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		subSvc := NewSubscriptionService(s.ServiceParams)
 		subResp, err := subSvc.CreateSubscription(txCtx, subReq)
 		if err != nil {
@@ -186,7 +220,7 @@ func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckou
 			Status:        types.CheckoutStatusPending,
 			Amount:        decimal.Zero,
 			Currency:      subReq.Currency,
-			Provider:      string(types.SecretProviderStripe),
+			Provider:      provider,
 			SuccessURL:    lo.ToPtr(req.SuccessURL),
 			CancelURL:     lo.ToPtr(req.CancelURL),
 			ExpiresAt:     now.Add(24 * time.Hour),
@@ -290,6 +324,14 @@ func (s *checkoutService) createChange(ctx context.Context, req dto.CreateChecko
 		prorationBehavior = types.ProrationBehaviorCreateProrations
 	}
 
+	// 4. Resolve the payment provider up front (fail fast) from the active tenant/env
+	// connection; the resolved provider is stored on the checkout and later used to
+	// open the hosted session.
+	provider, err := s.resolveCheckoutProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var chk *checkout.Checkout
 	var invoiceID, paymentID string
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
@@ -338,7 +380,7 @@ func (s *checkoutService) createChange(ctx context.Context, req dto.CreateChecko
 			Status:               types.CheckoutStatusPending,
 			Amount:               inv.AmountDue,
 			Currency:             srcSub.Currency,
-			Provider:             string(types.SecretProviderStripe),
+			Provider:             provider,
 			SuccessURL:           lo.ToPtr(req.SuccessURL),
 			CancelURL:            lo.ToPtr(req.CancelURL),
 			ExpiresAt:            now.Add(24 * time.Hour),

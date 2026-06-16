@@ -6,7 +6,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -100,6 +102,31 @@ func (s *CheckoutServiceTestSuite) setupServices() {
 
 	s.planService = NewPlanService(s.params).(*planService)
 	s.priceService = NewPriceService(s.params).(*priceService)
+
+	// An active, checkout-capable connection is a precondition for every create path
+	// (the provider is resolved from the connection table, not hardcoded). Seed a
+	// published Stripe connection bound to the test ctx's tenant+environment so
+	// resolveCheckoutProvider returns it.
+	s.seedStripeConnection()
+}
+
+// seedStripeConnection seeds a published Stripe connection for the test ctx's
+// tenant+environment so resolveCheckoutProvider can resolve a provider.
+func (s *CheckoutServiceTestSuite) seedStripeConnection() {
+	ctx := s.GetContext()
+	err := s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:            "conn_stripe_checkout_test",
+		Name:          "Stripe",
+		ProviderType:  types.SecretProviderStripe,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		BaseModel: types.BaseModel{
+			TenantID:  types.GetTenantID(ctx),
+			Status:    types.StatusPublished,
+			CreatedBy: types.DefaultUserID,
+			UpdatedBy: types.DefaultUserID,
+		},
+	})
+	require.NoError(s.T(), err)
 }
 
 // newCheckoutService constructs the concrete checkout service with the provider
@@ -453,4 +480,35 @@ func (s *CheckoutServiceTestSuite) TestComplete_SetupActivatesDraft() {
 
 	// Idempotent: a second Complete is a no-op and does not error.
 	require.NoError(s.T(), svc.Complete(ctx, resp.ID))
+}
+
+// TestCreate_NoActiveConnection asserts that with no active checkout-capable
+// connection, Create fails fast with an ErrNotFound (the provider can no longer be
+// hardcoded — it must resolve from the connection table).
+func (s *CheckoutServiceTestSuite) TestCreate_NoActiveConnection() {
+	ctx := s.GetContext()
+
+	// Remove the seeded Stripe connection so no checkout-capable provider resolves.
+	s.GetStores().ConnectionRepo.(*testutil.InMemoryConnectionStore).Clear()
+
+	cust := s.createTestCustomer()
+	planID := s.createTestPlan("No Connection Plan", decimal.NewFromFloat(25.00))
+
+	svc := s.newCheckoutService()
+	_, err := svc.Create(ctx, dto.CreateCheckoutRequest{
+		CheckoutType: types.CheckoutTypeSubscriptionCreation,
+		Objective:    types.CheckoutObjectivePayment,
+		Subscription: &dto.CreateSubscriptionRequest{
+			CustomerID:    cust.ID,
+			PlanID:        planID,
+			Currency:      "usd",
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		},
+		SuccessURL: "https://app.test/success",
+		CancelURL:  "https://app.test/cancel",
+	})
+
+	require.Error(s.T(), err)
+	assert.True(s.T(), ierr.IsNotFound(err), "expected ErrNotFound when no active payment connection exists")
+	assert.Contains(s.T(), err.Error(), "no active payment connection")
 }
