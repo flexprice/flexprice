@@ -1061,6 +1061,60 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/coupons/code/{code}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when resolving a coupon by promo code (e.g. checkout or validation).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Coupons"
+                ],
+                "summary": "Get coupon by code",
+                "operationId": "getCouponByCode",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Coupon code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CouponResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/coupons/search": {
             "post": {
                 "security": [
@@ -3832,6 +3886,62 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Soft-delete (archive) the mapping between a FlexPrice entity and a provider entity.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Delink integration mapping",
+                "operationId": "delinkIntegrationMapping",
+                "parameters": [
+                    {
+                        "description": "Delink mapping request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/DelinkIntegrationMappingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7734,7 +7844,7 @@ const docTemplate = `{
                         }
                     }
                 },
-                "x-scope": "write"
+                "x-scope": "read"
             }
         },
         "/subscriptions/{id}/v2": {
@@ -9544,7 +9654,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update the current authenticated user. Only metadata updates are supported.",
+                "description": "Update the current authenticated user. Supports name and metadata updates.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9558,7 +9668,7 @@ const docTemplate = `{
                 "operationId": "updateUser",
                 "parameters": [
                     {
-                        "description": "Update current user request (metadata only)",
+                        "description": "Update user request",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -9628,6 +9738,119 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a service account by ID (name only).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Update service account",
+                "operationId": "updateServiceAccount",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update service account request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/UpdateServiceAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/UpdateServiceAccountResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Soft-delete (archive) a service account by ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Delete service account",
+                "operationId": "deleteServiceAccount",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No content"
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12396,6 +12619,49 @@ const docTemplate = `{
                 }
             }
         },
+        "BucketSummary": {
+            "type": "object",
+            "properties": {
+                "base_charge": {
+                    "type": "string"
+                },
+                "bucket_id": {
+                    "type": "string"
+                },
+                "commitment_type": {
+                    "type": "string"
+                },
+                "commitment_value": {
+                    "type": "string"
+                },
+                "computed_overage": {
+                    "type": "string"
+                },
+                "computed_true_up": {
+                    "type": "string"
+                },
+                "computed_utilized": {
+                    "type": "string"
+                },
+                "end": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "price_id": {
+                    "description": "PriceID is the bucket's own price (the line item's price for the\nout-of-bucket row).",
+                    "type": "string"
+                },
+                "start": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "subscription_line_item_id": {
+                    "description": "SubscriptionLineItemID is the line item this bucket is configured on.",
+                    "type": "string"
+                },
+                "total_usage": {
+                    "type": "string"
+                }
+            }
+        },
         "BulkIngestEventRequest": {
             "type": "object",
             "required": [
@@ -12774,6 +13040,35 @@ const docTemplate = `{
                 "name": {
                     "description": "Name is required and must be different from the source plan's name",
                     "type": "string"
+                }
+            }
+        },
+        "CommitmentBucketRequest": {
+            "type": "object",
+            "properties": {
+                "commitment_type": {
+                    "$ref": "#/definitions/types.CommitmentType"
+                },
+                "commitment_value": {
+                    "type": "string"
+                },
+                "end": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "overage_factor": {
+                    "type": "string"
+                },
+                "price": {
+                    "$ref": "#/definitions/CreatePriceRequest"
+                },
+                "start": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "true_up_enabled": {
+                    "type": "boolean"
                 }
             }
         },
@@ -14394,7 +14689,7 @@ const docTemplate = `{
                 "commitment_time_buckets": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                        "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
@@ -14805,6 +15100,10 @@ const docTemplate = `{
                     "description": "Required when type is \"user\"",
                     "type": "string"
                 },
+                "name": {
+                    "description": "Display name; optional for service accounts",
+                    "type": "string"
+                },
                 "roles": {
                     "description": "Required when type is \"service_account\"",
                     "type": "array",
@@ -14837,6 +15136,9 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "name": {
+                    "type": "string"
                 },
                 "password": {
                     "type": "string"
@@ -15506,6 +15808,25 @@ const docTemplate = `{
                 }
             }
         },
+        "DelinkIntegrationMappingRequest": {
+            "type": "object",
+            "required": [
+                "entity_id",
+                "entity_type",
+                "provider_type"
+            ],
+            "properties": {
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.IntegrationEntityType"
+                },
+                "provider_type": {
+                    "type": "string"
+                }
+            }
+        },
         "EntitlementResponse": {
             "type": "object",
             "properties": {
@@ -16145,6 +16466,10 @@ const docTemplate = `{
         "GetUsageAnalyticsRequest": {
             "type": "object",
             "properties": {
+                "breakdown_bucket": {
+                    "description": "BreakdownBucket when true augments each time-series point with BucketID/PriceID\nand appends a BucketSummaries rollup to each item. Requires WindowSize to be set\nand the item to be linked to a subscription line item that has CommitmentTimeBuckets.\nDefault: false (opt-in, backward compatible).",
+                    "type": "boolean"
+                },
                 "end_time": {
                     "type": "string"
                 },
@@ -16528,6 +16853,17 @@ const docTemplate = `{
                     "example": "2024-03-20T15:04:05Z"
                 }
             }
+        },
+        "InheritanceAction": {
+            "type": "string",
+            "enum": [
+                "add",
+                "remove"
+            ],
+            "x-enum-varnames": [
+                "InheritanceActionAdd",
+                "InheritanceActionRemove"
+            ]
         },
         "IntegrationConfigEntry": {
             "type": "object",
@@ -17026,10 +17362,10 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "commitment_time_buckets": {
-                    "description": "CommitmentTimeBuckets restricts commitment treatment to windows whose start\nUTC hour falls within one of the configured buckets. Empty/omitted = no\nrestriction (commitment applies 24/7). Requires IsWindowCommitment=true.",
+                    "description": "CommitmentTimeBuckets defines per-bucket commitment + inline price for\nwindows whose start UTC hour falls within each configured bucket. Each\nbucket carries its own price (materialized by the service). Requires\nIsWindowCommitment=true.",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                        "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_type": {
@@ -17637,6 +17973,17 @@ const docTemplate = `{
                 }
             }
         },
+        "PointBucket": {
+            "type": "object",
+            "properties": {
+                "bucket_id": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                }
+            }
+        },
         "PriceLookupResult": {
             "type": "object",
             "properties": {
@@ -18157,27 +18504,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "coupon_code": {
-                    "description": "CouponCode is the preferred way to identify the coupon for action=\"add\".",
-                    "type": "string"
-                },
-                "coupon_id": {
-                    "description": "Deprecated: use coupon_code instead.",
-                    "type": "string"
-                },
-                "effective_date": {
-                    "description": "Optional. When to apply the change; defaults to now if omitted.",
+                    "description": "Required for action=\"add\". Coupon code of the coupon to attach.",
                     "type": "string"
                 },
                 "end_date": {
-                    "description": "Optional. When the coupon association ends; overrides duration_in_periods.",
-                    "type": "string"
-                },
-                "price_id": {
-                    "description": "Optional. Price ID of the line item to target; omit for subscription-level.",
+                    "description": "Optional. When the coupon association ends.",
                     "type": "string"
                 },
                 "start_date": {
-                    "description": "Optional. When the coupon association starts; defaults to EffectiveDate.",
+                    "description": "Optional. When the coupon association starts; defaults to now.",
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "description": "Optional. Apply at subscription level. Mutually exclusive with SubscriptionLineItemID.",
+                    "type": "string"
+                },
+                "subscription_line_item_id": {
+                    "description": "Optional. Apply at a specific line item. Mutually exclusive with SubscriptionID.",
                     "type": "string"
                 }
             }
@@ -18211,7 +18554,23 @@ const docTemplate = `{
         "SubModifyInheritanceRequest": {
             "type": "object",
             "properties": {
+                "action": {
+                    "description": "Action is \"add\" or \"remove\". Defaults to \"add\" when omitted — fully backward-compatible.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/InheritanceAction"
+                        }
+                    ]
+                },
                 "external_customer_ids_to_inherit_subscription": {
+                    "description": "ExternalCustomerIDsToInheritSubscription is used for action=\"add\".",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "external_customer_ids_to_remove": {
+                    "description": "ExternalCustomerIDsToRemove is used for action=\"remove\".",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -20161,9 +20520,6 @@ const docTemplate = `{
         "UpdateCouponRequest": {
             "type": "object",
             "properties": {
-                "coupon_code": {
-                    "type": "string"
-                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": {
@@ -20483,6 +20839,50 @@ const docTemplate = `{
                 }
             }
         },
+        "UpdateServiceAccountRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "UpdateServiceAccountResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "description": "Empty for service accounts",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tenant": {
+                    "$ref": "#/definitions/TenantResponse"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.UserType"
+                }
+            }
+        },
         "UpdateSubscriptionLineItemRequest": {
             "type": "object",
             "properties": {
@@ -20510,7 +20910,7 @@ const docTemplate = `{
                     "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/types.TimeOfDayBucket"
+                        "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
@@ -20641,6 +21041,9 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -20659,6 +21062,9 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "name": {
+                    "type": "string"
                 },
                 "roles": {
                     "type": "array",
@@ -20713,6 +21119,13 @@ const docTemplate = `{
                 },
                 "aggregation_type": {
                     "$ref": "#/definitions/types.AggregationType"
+                },
+                "bucket_summaries": {
+                    "description": "BucketSummaries is populated only when BreakdownBucket=true. Contains one\nentry per defined CommitmentTimeBucket plus one for out-of-bucket usage.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/BucketSummary"
+                    }
                 },
                 "commitment_info": {
                     "$ref": "#/definitions/types.CommitmentInfo"
@@ -20848,7 +21261,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "window_size": {
-                    "description": "Window size for bucketed meters (only set if meter is bucketed)",
+                    "description": "Granularity of Points: max(request window_size, meter bucket_size) for bucketed meters; the request window_size otherwise",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.WindowSize"
@@ -20860,6 +21273,13 @@ const docTemplate = `{
         "UsageAnalyticPoint": {
             "type": "object",
             "properties": {
+                "buckets": {
+                    "description": "Buckets lists every commitment bucket this (possibly rolled-up) window\noverlaps — only populated when BreakdownBucket=true and the line item has\nCommitmentTimeBuckets. A coarse window can overlap more than one bucket, and\nonly partially, so this is a list. Empty when the window touches no bucket.\nIt is an informational HINT only: the point's single cost/computed_* totals\nmix all overlapped buckets and out-of-bucket time and CANNOT be split per\nbucket — read bucket_summaries for exact per-bucket cost.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PointBucket"
+                    }
+                },
                 "computed_commitment_utilized_amount": {
                     "description": "Commitment breakdown (only populated for windowed commitments)",
                     "type": "string"
@@ -20939,6 +21359,9 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
+                },
+                "name": {
+                    "type": "string"
                 },
                 "roles": {
                     "type": "array",
@@ -25577,11 +26000,31 @@ const docTemplate = `{
         "types.TimeOfDayBucket": {
             "type": "object",
             "properties": {
+                "commitment_type": {
+                    "$ref": "#/definitions/types.CommitmentType"
+                },
+                "commitment_value": {
+                    "type": "string"
+                },
                 "end": {
                     "$ref": "#/definitions/types.Bucket"
                 },
+                "id": {
+                    "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID.",
+                    "type": "string"
+                },
+                "overage_factor": {
+                    "type": "number"
+                },
+                "price_id": {
+                    "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item.",
+                    "type": "string"
+                },
                 "start": {
                     "$ref": "#/definitions/types.Bucket"
+                },
+                "true_up_enabled": {
+                    "type": "boolean"
                 }
             }
         },
