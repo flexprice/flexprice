@@ -547,6 +547,7 @@ func NewRouter(
 		{
 			coupon.POST("", write("coupon", types.ActionWrite), handlers.Coupon.CreateCoupon)
 			coupon.GET("", handlers.Coupon.ListCoupons)
+			coupon.GET("/code/:code", handlers.Coupon.GetCouponByCode)
 			coupon.GET("/:id", handlers.Coupon.GetCoupon)
 			coupon.PUT("/:id", write("coupon", types.ActionWrite), handlers.Coupon.UpdateCoupon)
 			coupon.DELETE("/:id", write("coupon", types.ActionWrite), handlers.Coupon.DeleteCoupon)

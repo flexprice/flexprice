@@ -1282,6 +1282,75 @@
         "x-scope": "read"
       }
     },
+    "/coupons/code/{code}": {
+      "get": {
+        "tags": [
+          "Coupons"
+        ],
+        "summary": "Get coupon by code",
+        "description": "Use when resolving a coupon by promo code (e.g. checkout or validation).",
+        "operationId": "getCouponByCode",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Coupon code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/coupons/search": {
       "post": {
         "tags": [
@@ -4595,6 +4664,73 @@
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request"
+      },
+      "delete": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Delink integration mapping",
+        "description": "Soft-delete (archive) the mapping between a FlexPrice entity and a provider entity.",
+        "operationId": "delinkIntegrationMapping",
+        "requestBody": {
+          "description": "Delink mapping request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelinkIntegrationMappingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
@@ -9286,7 +9422,7 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-scope": "write",
+        "x-scope": "read",
         "x-codegen-request-body-name": "request"
       }
     },
@@ -11472,10 +11608,10 @@
           "Users"
         ],
         "summary": "Update current user",
-        "description": "Update the current authenticated user. Only metadata updates are supported.",
+        "description": "Update the current authenticated user. Supports name and metadata updates.",
         "operationId": "updateUser",
         "requestBody": {
-          "description": "Update current user request (metadata only)",
+          "description": "Update user request",
           "content": {
             "application/json": {
               "schema": {
@@ -11582,6 +11718,146 @@
           }
         ],
         "x-codegen-request-body-name": "filter"
+      }
+    },
+    "/users/{id}": {
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update service account",
+        "description": "Update a service account by ID (name only).",
+        "operationId": "updateServiceAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Service Account ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Update service account request",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServiceAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateServiceAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-codegen-request-body-name": "request"
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete service account",
+        "description": "Soft-delete (archive) a service account by ID.",
+        "operationId": "deleteServiceAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Service Account ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content",
+            "content": {}
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/subscription-schedules": {
@@ -14433,6 +14709,49 @@
           }
         }
       },
+      "BucketSummary": {
+        "type": "object",
+        "properties": {
+          "base_charge": {
+            "type": "string"
+          },
+          "bucket_id": {
+            "type": "string"
+          },
+          "commitment_type": {
+            "type": "string"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
+          "computed_overage": {
+            "type": "string"
+          },
+          "computed_true_up": {
+            "type": "string"
+          },
+          "computed_utilized": {
+            "type": "string"
+          },
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "price_id": {
+            "type": "string",
+            "description": "PriceID is the bucket's own price (the line item's price for the\nout-of-bucket row)."
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "SubscriptionLineItemID is the line item this bucket is configured on."
+          },
+          "total_usage": {
+            "type": "string"
+          }
+        }
+      },
       "BulkIngestEventRequest": {
         "required": [
           "events"
@@ -14744,6 +15063,35 @@
           "name": {
             "type": "string",
             "description": "Name is required and must be different from the source plan's name"
+          }
+        }
+      },
+      "CommitmentBucketRequest": {
+        "type": "object",
+        "properties": {
+          "commitment_type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "id": {
+            "type": "string"
+          },
+          "overage_factor": {
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/CreatePriceRequest"
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "true_up_enabled": {
+            "type": "boolean"
           }
         }
       },
@@ -16310,7 +16658,7 @@
           "commitment_time_buckets": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/types.TimeOfDayBucket"
+              "$ref": "#/components/schemas/CommitmentBucketRequest"
             }
           },
           "commitment_true_up_enabled": {
@@ -16667,6 +17015,10 @@
             "type": "string",
             "description": "Required when type is \"user\""
           },
+          "name": {
+            "type": "string",
+            "description": "Display name; optional for service accounts"
+          },
           "roles": {
             "type": "array",
             "description": "Required when type is \"service_account\"",
@@ -16694,6 +17046,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "name": {
+            "type": "string"
           },
           "password": {
             "type": "string"
@@ -17323,6 +17678,25 @@
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
+          }
+        }
+      },
+      "DelinkIntegrationMappingRequest": {
+        "required": [
+          "entity_id",
+          "entity_type",
+          "provider_type"
+        ],
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.IntegrationEntityType"
+          },
+          "provider_type": {
+            "type": "string"
           }
         }
       },
@@ -17978,6 +18352,10 @@
       "GetUsageAnalyticsRequest": {
         "type": "object",
         "properties": {
+          "breakdown_bucket": {
+            "type": "boolean",
+            "description": "BreakdownBucket when true augments each time-series point with BucketID/PriceID\nand appends a BucketSummaries rollup to each item. Requires WindowSize to be set\nand the item to be linked to a subscription line item that has CommitmentTimeBuckets.\nDefault: false (opt-in, backward compatible)."
+          },
           "end_time": {
             "type": "string",
             "format": "date-time"
@@ -18363,6 +18741,17 @@
             "example": "2024-03-20T15:04:05Z"
           }
         }
+      },
+      "InheritanceAction": {
+        "type": "string",
+        "enum": [
+          "add",
+          "remove"
+        ],
+        "x-enum-varnames": [
+          "InheritanceActionAdd",
+          "InheritanceActionRemove"
+        ]
       },
       "IntegrationConfigEntry": {
         "type": "object",
@@ -18844,9 +19233,9 @@
           },
           "commitment_time_buckets": {
             "type": "array",
-            "description": "CommitmentTimeBuckets restricts commitment treatment to windows whose start\nUTC hour falls within one of the configured buckets. Empty/omitted = no\nrestriction (commitment applies 24/7). Requires IsWindowCommitment=true.",
+            "description": "CommitmentTimeBuckets defines per-bucket commitment + inline price for\nwindows whose start UTC hour falls within each configured bucket. Each\nbucket carries its own price (materialized by the service). Requires\nIsWindowCommitment=true.",
             "items": {
-              "$ref": "#/components/schemas/types.TimeOfDayBucket"
+              "$ref": "#/components/schemas/CommitmentBucketRequest"
             }
           },
           "commitment_type": {
@@ -19453,6 +19842,17 @@
           }
         }
       },
+      "PointBucket": {
+        "type": "object",
+        "properties": {
+          "bucket_id": {
+            "type": "string"
+          },
+          "price_id": {
+            "type": "string"
+          }
+        }
+      },
       "PriceLookupResult": {
         "type": "object",
         "properties": {
@@ -19960,30 +20360,25 @@
           },
           "coupon_code": {
             "type": "string",
-            "description": "CouponCode is the preferred way to identify the coupon for action=\"add\"."
-          },
-          "coupon_id": {
-            "type": "string",
-            "description": "Deprecated: use coupon_code instead."
-          },
-          "effective_date": {
-            "type": "string",
-            "description": "Optional. When to apply the change; defaults to now if omitted.",
-            "format": "date-time"
+            "description": "Required for action=\"add\". Coupon code of the coupon to attach."
           },
           "end_date": {
             "type": "string",
-            "description": "Optional. When the coupon association ends; overrides duration_in_periods.",
+            "description": "Optional. When the coupon association ends.",
             "format": "date-time"
-          },
-          "price_id": {
-            "type": "string",
-            "description": "Optional. Price ID of the line item to target; omit for subscription-level."
           },
           "start_date": {
             "type": "string",
-            "description": "Optional. When the coupon association starts; defaults to EffectiveDate.",
+            "description": "Optional. When the coupon association starts; defaults to now.",
             "format": "date-time"
+          },
+          "subscription_id": {
+            "type": "string",
+            "description": "Optional. Apply at subscription level. Mutually exclusive with SubscriptionLineItemID."
+          },
+          "subscription_line_item_id": {
+            "type": "string",
+            "description": "Optional. Apply at a specific line item. Mutually exclusive with SubscriptionID."
           }
         }
       },
@@ -20011,8 +20406,19 @@
       "SubModifyInheritanceRequest": {
         "type": "object",
         "properties": {
+          "action": {
+            "$ref": "#/components/schemas/InheritanceAction"
+          },
           "external_customer_ids_to_inherit_subscription": {
             "type": "array",
+            "description": "ExternalCustomerIDsToInheritSubscription is used for action=\"add\".",
+            "items": {
+              "type": "string"
+            }
+          },
+          "external_customer_ids_to_remove": {
+            "type": "array",
+            "description": "ExternalCustomerIDsToRemove is used for action=\"remove\".",
             "items": {
               "type": "string"
             }
@@ -21836,9 +22242,6 @@
       "UpdateCouponRequest": {
         "type": "object",
         "properties": {
-          "coupon_code": {
-            "type": "string"
-          },
           "metadata": {
             "type": "object",
             "additionalProperties": {
@@ -22141,6 +22544,50 @@
           }
         }
       },
+      "UpdateServiceAccountRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateServiceAccountResponse": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Empty for service accounts"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tenant": {
+            "$ref": "#/components/schemas/TenantResponse"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.UserType"
+          }
+        }
+      },
       "UpdateSubscriptionLineItemRequest": {
         "type": "object",
         "properties": {
@@ -22168,7 +22615,7 @@
             "type": "array",
             "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
             "items": {
-              "$ref": "#/components/schemas/types.TimeOfDayBucket"
+              "$ref": "#/components/schemas/CommitmentBucketRequest"
             }
           },
           "commitment_true_up_enabled": {
@@ -22285,6 +22732,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -22303,6 +22753,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "name": {
+            "type": "string"
           },
           "roles": {
             "type": "array",
@@ -22352,6 +22805,13 @@
           },
           "aggregation_type": {
             "$ref": "#/components/schemas/types.AggregationType"
+          },
+          "bucket_summaries": {
+            "type": "array",
+            "description": "BucketSummaries is populated only when BreakdownBucket=true. Contains one\nentry per defined CommitmentTimeBucket plus one for out-of-bucket usage.",
+            "items": {
+              "$ref": "#/components/schemas/BucketSummary"
+            }
           },
           "commitment_info": {
             "$ref": "#/components/schemas/types.CommitmentInfo"
@@ -22459,6 +22919,13 @@
       "UsageAnalyticPoint": {
         "type": "object",
         "properties": {
+          "buckets": {
+            "type": "array",
+            "description": "Buckets lists every commitment bucket this (possibly rolled-up) window\noverlaps \u2014 only populated when BreakdownBucket=true and the line item has\nCommitmentTimeBuckets. A coarse window can overlap more than one bucket, and\nonly partially, so this is a list. Empty when the window touches no bucket.\nIt is an informational HINT only: the point's single cost/computed_* totals\nmix all overlapped buckets and out-of-bucket time and CANNOT be split per\nbucket \u2014 read bucket_summaries for exact per-bucket cost.",
+            "items": {
+              "$ref": "#/components/schemas/PointBucket"
+            }
+          },
           "computed_commitment_utilized_amount": {
             "type": "string",
             "description": "Commitment breakdown (only populated for windowed commitments)"
@@ -22538,6 +23005,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "name": {
+            "type": "string"
           },
           "roles": {
             "type": "array",
@@ -27275,11 +27745,31 @@
       "types.TimeOfDayBucket": {
         "type": "object",
         "properties": {
+          "commitment_type": {
+            "$ref": "#/components/schemas/types.CommitmentType"
+          },
+          "commitment_value": {
+            "type": "string"
+          },
           "end": {
             "$ref": "#/components/schemas/types.Bucket"
           },
+          "id": {
+            "type": "string",
+            "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID."
+          },
+          "overage_factor": {
+            "type": "number"
+          },
+          "price_id": {
+            "type": "string",
+            "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item."
+          },
           "start": {
             "$ref": "#/components/schemas/types.Bucket"
+          },
+          "true_up_enabled": {
+            "type": "boolean"
           }
         },
         "x-speakeasy-name-override": "TimeOfDayBucket"
