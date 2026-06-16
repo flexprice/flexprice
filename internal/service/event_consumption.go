@@ -224,8 +224,8 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		environmentID = event.EnvironmentID
 	}
 
-	// Create a background context with tenant ID
-	ctx := context.Background()
+	// Build the context from the message so shutdown cancellation and trace values propagate.
+	ctx := types.WithForceWriter(msg.Context())
 	if tenantID != "" {
 		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
