@@ -163,6 +163,16 @@ type SubscriptionChangeExecuteResponse struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
+// PrepareCheckoutChangeResult is returned by PrepareCheckoutChange: the new
+// (incomplete) subscription's id, the old subscription's id, the opening invoice
+// raised for the upgrade, and the resolved change type.
+type PrepareCheckoutChangeResult struct {
+	NewSubscriptionID string
+	OldSubscriptionID string
+	Invoice           *InvoiceResponse
+	ChangeType        types.SubscriptionChangeType
+}
+
 // ProrationDetails contains detailed proration calculations
 type ProrationDetails struct {
 	// credit_amount is the credit amount from the old subscription
