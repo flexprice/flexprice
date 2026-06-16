@@ -163,13 +163,16 @@ func (s *CheckoutServiceTestSuite) TestCreate_PaymentObjective() {
 
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CustomerID:    cust.ID,
-		PlanID:        planID,
-		Currency:      "usd",
-		Objective:     types.CheckoutObjectivePayment,
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-		SuccessURL:    "https://app.test/success",
-		CancelURL:     "https://app.test/cancel",
+		CheckoutType: types.CheckoutTypeSubscriptionCreation,
+		Objective:    types.CheckoutObjectivePayment,
+		Subscription: &dto.CreateSubscriptionRequest{
+			CustomerID:    cust.ID,
+			PlanID:        planID,
+			Currency:      "usd",
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		},
+		SuccessURL: "https://app.test/success",
+		CancelURL:  "https://app.test/cancel",
 	})
 
 	require.NoError(s.T(), err)
@@ -216,13 +219,16 @@ func (s *CheckoutServiceTestSuite) TestCreate_SetupObjective() {
 
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CustomerID:    cust.ID,
-		PlanID:        planID,
-		Currency:      "usd",
-		Objective:     types.CheckoutObjectiveSetup,
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-		SuccessURL:    "https://app.test/success",
-		CancelURL:     "https://app.test/cancel",
+		CheckoutType: types.CheckoutTypeSubscriptionCreation,
+		Objective:    types.CheckoutObjectiveSetup,
+		Subscription: &dto.CreateSubscriptionRequest{
+			CustomerID:    cust.ID,
+			PlanID:        planID,
+			Currency:      "usd",
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		},
+		SuccessURL: "https://app.test/success",
+		CancelURL:  "https://app.test/cancel",
 	})
 
 	require.NoError(s.T(), err)
@@ -264,11 +270,14 @@ func (s *CheckoutServiceTestSuite) TestComplete_Idempotent() {
 
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CustomerID:    cust.ID,
-		PlanID:        planID,
-		Currency:      "usd",
-		Objective:     types.CheckoutObjectivePayment,
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		CheckoutType: types.CheckoutTypeSubscriptionCreation,
+		Objective:    types.CheckoutObjectivePayment,
+		Subscription: &dto.CreateSubscriptionRequest{
+			CustomerID:    cust.ID,
+			PlanID:        planID,
+			Currency:      "usd",
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		},
 	})
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), resp)
@@ -295,13 +304,16 @@ func (s *CheckoutServiceTestSuite) TestComplete_SetupActivatesDraft() {
 
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CustomerID:    cust.ID,
-		PlanID:        planID,
-		Currency:      "usd",
-		Objective:     types.CheckoutObjectiveSetup,
-		BillingPeriod: types.BILLING_PERIOD_MONTHLY,
-		SuccessURL:    "https://app.test/success",
-		CancelURL:     "https://app.test/cancel",
+		CheckoutType: types.CheckoutTypeSubscriptionCreation,
+		Objective:    types.CheckoutObjectiveSetup,
+		Subscription: &dto.CreateSubscriptionRequest{
+			CustomerID:    cust.ID,
+			PlanID:        planID,
+			Currency:      "usd",
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		},
+		SuccessURL: "https://app.test/success",
+		CancelURL:  "https://app.test/cancel",
 	})
 	require.NoError(s.T(), err)
 

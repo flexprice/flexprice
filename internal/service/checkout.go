@@ -14,12 +14,12 @@ import (
 
 // CheckoutService manages hosted checkout sessions for deferred subscription activation.
 type CheckoutService interface {
-	// Create opens a checkout for a new subscription (payment objective in v1).
+	// Create opens a checkout via a discriminated-union request. For
+	// subscription_creation it creates a new subscription (payment or setup
+	// objective); for subscription_change it opens a payment-gated in-place plan
+	// UPGRADE (the new sub is created `incomplete`, opening invoice raised and
+	// proration credit netted, and the OLD subscription stays active until paid).
 	Create(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error)
-	// CreateChange opens a payment-gated checkout for an in-place plan UPGRADE: the new
-	// plan's subscription is created `incomplete` (opening invoice raised, proration credit
-	// netted) and the OLD subscription stays active until the invoice is paid.
-	CreateChange(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionChangeCheckoutRequest) (*dto.CheckoutResponse, error)
 	// Complete marks a checkout completed (idempotent). Subscription activation is
 	// driven by the existing payment-completion hook, not here.
 	Complete(ctx context.Context, checkoutID string) error
@@ -44,42 +44,50 @@ func NewCheckoutService(params ServiceParams) CheckoutService {
 }
 
 func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
-	switch req.Objective {
-	case types.CheckoutObjectivePayment:
-		return s.createPayment(ctx, req)
-	case types.CheckoutObjectiveSetup:
-		return s.createSetup(ctx, req)
-	default:
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	switch req.CheckoutType {
+	case types.CheckoutTypeSubscriptionCreation:
+		switch req.Objective {
+		case types.CheckoutObjectivePayment:
+			return s.createPayment(ctx, req)
+		case types.CheckoutObjectiveSetup:
+			return s.createSetup(ctx, req)
+		}
 		return nil, ierr.NewError("unsupported checkout objective").
 			WithHint("Objective must be 'payment' or 'setup'").
 			WithReportableDetails(map[string]any{"objective": req.Objective}).
+			Mark(ierr.ErrValidation)
+	case types.CheckoutTypeSubscriptionChange:
+		return s.createChange(ctx, req)
+	default:
+		return nil, ierr.NewError("unsupported checkout type").
+			WithHint("checkout_type must be subscription_creation or subscription_change").
+			WithReportableDetails(map[string]any{"checkout_type": req.CheckoutType}).
 			Mark(ierr.ErrValidation)
 	}
 }
 
 func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
-	billingPeriodCount := req.BillingPeriodCount
-	if billingPeriodCount == 0 {
-		billingPeriodCount = 1
-	}
+	// Build the new subscription from the full embedded spec, overriding only the
+	// checkout-specific collection method / payment behavior. CreateSubscription
+	// (and its Validate) handles all other defaulting (e.g. BillingPeriodCount).
+	subReq := *req.Subscription
+	subReq.CollectionMethod = lo.ToPtr(types.CollectionMethodSendInvoice)
+	subReq.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorDefaultIncomplete)
 
 	var chk *checkout.Checkout
 	var invoiceID, paymentID string
+	var customerID string
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// 1. Create the subscription in an incomplete, invoice-collected state.
 		subSvc := NewSubscriptionService(s.ServiceParams)
-		subResp, err := subSvc.CreateSubscription(txCtx, dto.CreateSubscriptionRequest{
-			CustomerID:         req.CustomerID,
-			PlanID:             req.PlanID,
-			Currency:           req.Currency,
-			BillingPeriod:      req.BillingPeriod,
-			BillingPeriodCount: billingPeriodCount,
-			CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
-			PaymentBehavior:    lo.ToPtr(types.PaymentBehaviorDefaultIncomplete),
-		})
+		subResp, err := subSvc.CreateSubscription(txCtx, subReq)
 		if err != nil {
 			return err
 		}
+		customerID = subResp.Subscription.CustomerID
 
 		// 2. Resolve the opening invoice.
 		if subResp.LatestInvoice == nil {
@@ -92,7 +100,7 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 		invoiceID = inv.ID
 
 		// 3. Create the (unprocessed) payment record bound to the invoice.
-		paymentID, err = s.createInvoicePaymentRecord(txCtx, inv, req.Currency, req.Metadata)
+		paymentID, err = s.createInvoicePaymentRecord(txCtx, inv, subReq.Currency, req.Metadata)
 		if err != nil {
 			return err
 		}
@@ -103,14 +111,14 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 		now := time.Now().UTC()
 		chk = &checkout.Checkout{
 			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT),
-			CustomerID:    req.CustomerID,
+			CustomerID:    customerID,
 			EntityType:    types.CheckoutEntityTypeSubscription,
 			EntityID:      subResp.Subscription.ID,
 			CheckoutType:  types.CheckoutTypeSubscriptionCreation,
 			Objective:     types.CheckoutObjectivePayment,
 			Status:        types.CheckoutStatusPending,
 			Amount:        inv.AmountDue,
-			Currency:      req.Currency,
+			Currency:      subReq.Currency,
 			Provider:      string(types.SecretProviderStripe),
 			SuccessURL:    lo.ToPtr(req.SuccessURL),
 			CancelURL:     lo.ToPtr(req.CancelURL),
@@ -130,11 +138,11 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 	return s.openSessionAndRespond(ctx, chk, checkout.CheckoutSessionRequest{
 		Objective:  types.CheckoutObjectivePayment,
 		CheckoutID: chk.ID,
-		CustomerID: req.CustomerID,
+		CustomerID: customerID,
 		InvoiceID:  invoiceID,
 		PaymentID:  paymentID,
 		Amount:     chk.Amount,
-		Currency:   req.Currency,
+		Currency:   subReq.Currency,
 		SaveCard:   req.SaveCard,
 		SuccessURL: req.SuccessURL,
 		CancelURL:  req.CancelURL,
@@ -146,43 +154,38 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 // DRAFT (no invoice raised) and a Stripe setup-mode session captures a card
 // without charging. Activation happens later via Complete -> ActivateDraftSubscription.
 func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
-	billingPeriodCount := req.BillingPeriodCount
-	if billingPeriodCount == 0 {
-		billingPeriodCount = 1
-	}
+	// Build the new subscription from the full embedded spec, overriding only the
+	// checkout-specific status / collection method / payment behavior. On activation
+	// (after the card is captured), charge the saved card and land active on success
+	// / incomplete on failure — the incomplete case self-heals via the invoice.paid
+	// hook. default_active would activate unconditionally and never reach incomplete,
+	// so use allow_incomplete.
+	subReq := *req.Subscription
+	subReq.SubscriptionStatus = types.SubscriptionStatusDraft
+	subReq.CollectionMethod = lo.ToPtr(types.CollectionMethodChargeAutomatically)
+	subReq.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorAllowIncomplete)
 
 	var chk *checkout.Checkout
+	var customerID string
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		subSvc := NewSubscriptionService(s.ServiceParams)
-		subResp, err := subSvc.CreateSubscription(txCtx, dto.CreateSubscriptionRequest{
-			CustomerID:         req.CustomerID,
-			PlanID:             req.PlanID,
-			Currency:           req.Currency,
-			BillingPeriod:      req.BillingPeriod,
-			BillingPeriodCount: billingPeriodCount,
-			SubscriptionStatus: types.SubscriptionStatusDraft,
-			// On activation (after the card is captured), charge the saved card and
-			// land active on success / incomplete on failure — the incomplete case
-			// self-heals via the invoice.paid hook. default_active would activate
-			// unconditionally and never reach incomplete, so use allow_incomplete.
-			CollectionMethod: lo.ToPtr(types.CollectionMethodChargeAutomatically),
-			PaymentBehavior:  lo.ToPtr(types.PaymentBehaviorAllowIncomplete),
-		})
+		subResp, err := subSvc.CreateSubscription(txCtx, subReq)
 		if err != nil {
 			return err
 		}
+		customerID = subResp.Subscription.CustomerID
 
 		now := time.Now().UTC()
 		chk = &checkout.Checkout{
 			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT),
-			CustomerID:    req.CustomerID,
+			CustomerID:    customerID,
 			EntityType:    types.CheckoutEntityTypeSubscription,
 			EntityID:      subResp.Subscription.ID,
 			CheckoutType:  types.CheckoutTypeSubscriptionCreation,
 			Objective:     types.CheckoutObjectiveSetup,
 			Status:        types.CheckoutStatusPending,
 			Amount:        decimal.Zero,
-			Currency:      req.Currency,
+			Currency:      subReq.Currency,
 			Provider:      string(types.SecretProviderStripe),
 			SuccessURL:    lo.ToPtr(req.SuccessURL),
 			CancelURL:     lo.ToPtr(req.CancelURL),
@@ -199,8 +202,8 @@ func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckou
 	return s.openSessionAndRespond(ctx, chk, checkout.CheckoutSessionRequest{
 		Objective:  types.CheckoutObjectiveSetup,
 		CheckoutID: chk.ID,
-		CustomerID: req.CustomerID,
-		Currency:   req.Currency,
+		CustomerID: customerID,
+		Currency:   subReq.Currency,
 		SaveCard:   true,
 		SuccessURL: req.SuccessURL,
 		CancelURL:  req.CancelURL,
@@ -255,11 +258,14 @@ func (s *checkoutService) createInvoicePaymentRecord(ctx context.Context, inv *d
 	return pay.ID, nil
 }
 
-// CreateChange opens a payment-gated checkout for an in-place plan UPGRADE. The new
+// createChange opens a payment-gated checkout for an in-place plan UPGRADE. The new
 // plan's subscription is created `incomplete` (opening invoice raised, proration credit
 // netted) inside the tx; the OLD subscription stays active and is only cancelled in
 // Complete once the invoice is paid.
-func (s *checkoutService) CreateChange(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionChangeCheckoutRequest) (*dto.CheckoutResponse, error) {
+func (s *checkoutService) createChange(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
+	change := req.SubscriptionChange
+	subscriptionID := change.SourceSubscriptionID
+
 	// 1. Dedupe: a pending change-checkout for this source sub must be unique.
 	existing, err := s.CheckoutRepo.GetPendingBySourceSubscription(ctx, subscriptionID)
 	if err != nil {
@@ -279,7 +285,7 @@ func (s *checkoutService) CreateChange(ctx context.Context, subscriptionID strin
 	}
 
 	// 3. Default proration behavior.
-	prorationBehavior := req.ProrationBehavior
+	prorationBehavior := change.ProrationBehavior
 	if prorationBehavior == "" {
 		prorationBehavior = types.ProrationBehaviorCreateProrations
 	}
@@ -291,7 +297,7 @@ func (s *checkoutService) CreateChange(ctx context.Context, subscriptionID strin
 		// opening invoice (proration credit netted). The req carries the inherited
 		// billing fields because PrepareCheckoutChange does NOT call req.Validate().
 		prep, err := NewSubscriptionChangeService(s.ServiceParams).PrepareCheckoutChange(txCtx, subscriptionID, dto.SubscriptionChangeRequest{
-			TargetPlanID:       req.TargetPlanID,
+			TargetPlanID:       change.TargetPlanID,
 			ProrationBehavior:  prorationBehavior,
 			BillingCadence:     srcSub.BillingCadence,
 			BillingPeriod:      srcSub.BillingPeriod,
