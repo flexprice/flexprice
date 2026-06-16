@@ -9,6 +9,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // CheckoutService manages hosted checkout sessions for deferred subscription activation.
@@ -39,13 +40,20 @@ func NewCheckoutService(params ServiceParams) CheckoutService {
 }
 
 func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
-	if req.Objective != types.CheckoutObjectivePayment {
+	switch req.Objective {
+	case types.CheckoutObjectivePayment:
+		return s.createPayment(ctx, req)
+	case types.CheckoutObjectiveSetup:
+		return s.createSetup(ctx, req)
+	default:
 		return nil, ierr.NewError("unsupported checkout objective").
-			WithHint("Only the 'payment' objective is supported in v1").
+			WithHint("Objective must be 'payment' or 'setup'").
 			WithReportableDetails(map[string]any{"objective": req.Objective}).
 			Mark(ierr.ErrValidation)
 	}
+}
 
+func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
 	billingPeriodCount := req.BillingPeriodCount
 	if billingPeriodCount == 0 {
 		billingPeriodCount = 1
@@ -150,6 +158,87 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 	}
 
 	// 6. Persist the session details on the now-committed checkout.
+	chk.ProviderSessionID = &sess.SessionID
+	chk.CheckoutURL = &sess.URL
+	if err := s.CheckoutRepo.Update(ctx, chk); err != nil {
+		return nil, err
+	}
+
+	return &dto.CheckoutResponse{
+		ID:          chk.ID,
+		Status:      string(chk.Status),
+		CheckoutURL: sess.URL,
+	}, nil
+}
+
+// createSetup opens a setup-objective checkout: the subscription is parked in
+// DRAFT (no invoice raised) and a Stripe setup-mode session captures a card
+// without charging. Activation happens later via Complete -> ActivateDraftSubscription.
+func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
+	billingPeriodCount := req.BillingPeriodCount
+	if billingPeriodCount == 0 {
+		billingPeriodCount = 1
+	}
+
+	var chk *checkout.Checkout
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		subSvc := NewSubscriptionService(s.ServiceParams)
+		subResp, err := subSvc.CreateSubscription(txCtx, dto.CreateSubscriptionRequest{
+			CustomerID:         req.CustomerID,
+			PlanID:             req.PlanID,
+			Currency:           req.Currency,
+			BillingPeriod:      req.BillingPeriod,
+			BillingPeriodCount: billingPeriodCount,
+			SubscriptionStatus: types.SubscriptionStatusDraft,
+		})
+		if err != nil {
+			return err
+		}
+
+		now := time.Now().UTC()
+		chk = &checkout.Checkout{
+			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT),
+			CustomerID:    req.CustomerID,
+			EntityType:    types.CheckoutEntityTypeSubscription,
+			EntityID:      subResp.Subscription.ID,
+			CheckoutType:  types.CheckoutTypeSubscriptionCreation,
+			Objective:     types.CheckoutObjectiveSetup,
+			Status:        types.CheckoutStatusPending,
+			Amount:        decimal.Zero,
+			Currency:      req.Currency,
+			Provider:      string(types.SecretProviderStripe),
+			SuccessURL:    lo.ToPtr(req.SuccessURL),
+			CancelURL:     lo.ToPtr(req.CancelURL),
+			ExpiresAt:     now.Add(24 * time.Hour),
+			EnvironmentID: types.GetEnvironmentID(txCtx),
+			BaseModel:     types.GetDefaultBaseModel(txCtx),
+		}
+		return s.CheckoutRepo.Create(txCtx, chk)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	provider, err := s.providerFn(ctx, chk.Provider)
+	if err != nil {
+		s.failCheckout(ctx, chk, err)
+		return nil, err
+	}
+	sess, err := provider.CreateCheckoutSession(ctx, checkout.CheckoutSessionRequest{
+		Objective:  types.CheckoutObjectiveSetup,
+		CheckoutID: chk.ID,
+		CustomerID: req.CustomerID,
+		Currency:   req.Currency,
+		SaveCard:   true,
+		SuccessURL: req.SuccessURL,
+		CancelURL:  req.CancelURL,
+		Metadata:   req.Metadata,
+	})
+	if err != nil {
+		s.failCheckout(ctx, chk, err)
+		return nil, err
+	}
+
 	chk.ProviderSessionID = &sess.SessionID
 	chk.CheckoutURL = &sess.URL
 	if err := s.CheckoutRepo.Update(ctx, chk); err != nil {

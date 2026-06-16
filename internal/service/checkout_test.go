@@ -208,7 +208,7 @@ func (s *CheckoutServiceTestSuite) TestCreate_PaymentObjective() {
 	require.NotEmpty(s.T(), invoices, "expected an opening invoice for the subscription")
 }
 
-func (s *CheckoutServiceTestSuite) TestCreate_SetupObjectiveUnsupported() {
+func (s *CheckoutServiceTestSuite) TestCreate_SetupObjective() {
 	ctx := s.GetContext()
 
 	cust := s.createTestCustomer()
@@ -221,10 +221,39 @@ func (s *CheckoutServiceTestSuite) TestCreate_SetupObjectiveUnsupported() {
 		Currency:      "usd",
 		Objective:     types.CheckoutObjectiveSetup,
 		BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		SuccessURL:    "https://app.test/success",
+		CancelURL:     "https://app.test/cancel",
 	})
 
-	require.Error(s.T(), err)
-	assert.Nil(s.T(), resp)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), resp)
+	assert.NotEmpty(s.T(), resp.ID)
+	assert.Equal(s.T(), "https://stripe.test/cs_test", resp.CheckoutURL)
+	assert.Equal(s.T(), string(types.CheckoutStatusPending), resp.Status)
+
+	chk, err := s.checkoutRepo.Get(ctx, resp.ID)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), chk)
+	assert.Equal(s.T(), types.CheckoutObjectiveSetup, chk.Objective)
+	newSubID := chk.EntityID
+	require.NotEmpty(s.T(), newSubID)
+
+	pending, err := s.checkoutRepo.GetPendingByEntity(
+		ctx, types.CheckoutEntityTypeSubscription, newSubID, types.CheckoutObjectiveSetup)
+	require.NoError(s.T(), err)
+	require.NotNil(s.T(), pending)
+	assert.Equal(s.T(), resp.ID, pending.ID)
+
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, newSubID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), types.SubscriptionStatusDraft, sub.SubscriptionStatus)
+
+	invoices, err := s.GetStores().InvoiceRepo.List(ctx, &types.InvoiceFilter{
+		QueryFilter:    types.NewDefaultQueryFilter(),
+		SubscriptionID: newSubID,
+	})
+	require.NoError(s.T(), err)
+	assert.Empty(s.T(), invoices, "draft subscription must not raise an opening invoice")
 }
 
 func (s *CheckoutServiceTestSuite) TestComplete_Idempotent() {
