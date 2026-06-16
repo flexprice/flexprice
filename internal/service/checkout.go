@@ -190,6 +190,12 @@ func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckou
 			BillingPeriod:      req.BillingPeriod,
 			BillingPeriodCount: billingPeriodCount,
 			SubscriptionStatus: types.SubscriptionStatusDraft,
+			// On activation (after the card is captured), charge the saved card and
+			// land active on success / incomplete on failure — the incomplete case
+			// self-heals via the invoice.paid hook. default_active would activate
+			// unconditionally and never reach incomplete, so use allow_incomplete.
+			CollectionMethod: lo.ToPtr(types.CollectionMethodChargeAutomatically),
+			PaymentBehavior:  lo.ToPtr(types.PaymentBehaviorAllowIncomplete),
 		})
 		if err != nil {
 			return err
@@ -276,6 +282,24 @@ func (s *checkoutService) Complete(ctx context.Context, checkoutID string) error
 	}
 
 	now := time.Now().UTC()
+
+	// Setup objective: activate the parked draft subscription (raises the opening
+	// invoice and charges the now-saved card). Payment objective is already
+	// activated by the invoice.paid hook, so there is nothing to do for it here.
+	if chk.Objective == types.CheckoutObjectiveSetup &&
+		chk.EntityType == types.CheckoutEntityTypeSubscription {
+		subSvc := NewSubscriptionService(s.ServiceParams)
+		if _, err := subSvc.ActivateDraftSubscription(ctx, chk.EntityID,
+			dto.ActivateDraftSubscriptionRequest{StartDate: &now}); err != nil {
+			// Tolerate a retry arriving after the sub was already activated: if it is
+			// no longer draft, treat activation as done and complete the checkout.
+			sub, getErr := s.SubRepo.Get(ctx, chk.EntityID)
+			if getErr != nil || sub.SubscriptionStatus == types.SubscriptionStatusDraft {
+				return err
+			}
+		}
+	}
+
 	chk.Status = types.CheckoutStatusCompleted
 	chk.CompletedAt = &now
 	return s.CheckoutRepo.Update(ctx, chk)

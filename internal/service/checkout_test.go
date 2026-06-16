@@ -286,3 +286,47 @@ func (s *CheckoutServiceTestSuite) TestComplete_Idempotent() {
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), types.CheckoutStatusCompleted, chk2.Status)
 }
+
+func (s *CheckoutServiceTestSuite) TestComplete_SetupActivatesDraft() {
+	ctx := s.GetContext()
+
+	cust := s.createTestCustomer()
+	planID := s.createTestPlan("Setup Complete Plan", decimal.NewFromFloat(25.00))
+
+	svc := s.newCheckoutService()
+	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
+		CustomerID:    cust.ID,
+		PlanID:        planID,
+		Currency:      "usd",
+		Objective:     types.CheckoutObjectiveSetup,
+		BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+		SuccessURL:    "https://app.test/success",
+		CancelURL:     "https://app.test/cancel",
+	})
+	require.NoError(s.T(), err)
+
+	chk, err := s.checkoutRepo.Get(ctx, resp.ID)
+	require.NoError(s.T(), err)
+	subID := chk.EntityID
+
+	// Precondition: subscription is DRAFT.
+	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, subID)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), types.SubscriptionStatusDraft, sub.SubscriptionStatus)
+
+	// Complete -> activates the draft sub and marks the checkout completed.
+	require.NoError(s.T(), svc.Complete(ctx, resp.ID))
+
+	completed, err := s.checkoutRepo.Get(ctx, resp.ID)
+	require.NoError(s.T(), err)
+	assert.Equal(s.T(), types.CheckoutStatusCompleted, completed.Status)
+	require.NotNil(s.T(), completed.CompletedAt)
+
+	// The subscription is no longer DRAFT (activated; active or incomplete).
+	sub, err = s.GetStores().SubscriptionRepo.Get(ctx, subID)
+	require.NoError(s.T(), err)
+	assert.NotEqual(s.T(), types.SubscriptionStatusDraft, sub.SubscriptionStatus)
+
+	// Idempotent: a second Complete is a no-op and does not error.
+	require.NoError(s.T(), svc.Complete(ctx, resp.ID))
+}
