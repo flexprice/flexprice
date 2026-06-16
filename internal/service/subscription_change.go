@@ -738,7 +738,7 @@ func (s *subscriptionChangeService) executeChange(
 	}
 
 	// Create new subscription
-	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, cancelledSubCreditAmount)
+	newSub, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, cancelledSubCreditAmount, newSubCreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -773,6 +773,13 @@ func (s *subscriptionChangeService) executeChange(
 	return out, nil
 }
 
+// newSubCreateOptions controls how the replacement subscription is created.
+type newSubCreateOptions struct {
+	// incomplete=true creates the new sub with send_invoice + default_incomplete
+	// (no server-side charge); the opening invoice is paid out-of-band (checkout).
+	incomplete bool
+}
+
 // createNewSubscription creates a new subscription with the target plan using the existing subscription service
 func (s *subscriptionChangeService) createNewSubscription(
 	ctx context.Context,
@@ -782,6 +789,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
 	cancelledSubTotalCreditAmount decimal.Decimal,
+	opts newSubCreateOptions,
 ) (*subscription.Subscription, error) {
 	// Carry over inherited child subscriptions and invoicing customer via Inheritance config.
 	// ExternalCustomerIDsToInheritSubscription and InvoicingCustomerExternalID are mutually exclusive,
@@ -879,6 +887,14 @@ func (s *subscriptionChangeService) createNewSubscription(
 	// opening invoice as an adjustment.
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !cancelledSubTotalCreditAmount.IsZero() {
 		createSubReq.OpeningInvoiceAdjustmentAmount = &cancelledSubTotalCreditAmount
+	}
+
+	// For the incomplete (no-cancel) checkout case, create the new sub with send_invoice +
+	// default_incomplete so no server-side charge is attempted; the opening invoice is paid
+	// out-of-band via checkout.
+	if opts.incomplete {
+		createSubReq.CollectionMethod = lo.ToPtr(types.CollectionMethodSendInvoice)
+		createSubReq.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorDefaultIncomplete)
 	}
 
 	// Pre-generate the subscription ID so Paddle mapping can be created first,
