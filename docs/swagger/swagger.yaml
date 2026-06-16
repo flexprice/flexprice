@@ -603,6 +603,38 @@ definitions:
       start_time:
         type: string
     type: object
+  BucketSummary:
+    properties:
+      base_charge:
+        type: string
+      bucket_id:
+        type: string
+      commitment_type:
+        type: string
+      commitment_value:
+        type: string
+      computed_overage:
+        type: string
+      computed_true_up:
+        type: string
+      computed_utilized:
+        type: string
+      end:
+        $ref: '#/definitions/types.Bucket'
+      price_id:
+        description: |-
+          PriceID is the bucket's own price (the line item's price for the
+          out-of-bucket row).
+        type: string
+      start:
+        $ref: '#/definitions/types.Bucket'
+      subscription_line_item_id:
+        description: SubscriptionLineItemID is the line item this bucket is configured
+          on.
+        type: string
+      total_usage:
+        type: string
+    type: object
   BulkIngestEventRequest:
     properties:
       events:
@@ -864,6 +896,25 @@ definitions:
         description: Name is required and must be different from the source plan's
           name
         type: string
+    type: object
+  CommitmentBucketRequest:
+    properties:
+      commitment_type:
+        $ref: '#/definitions/types.CommitmentType'
+      commitment_value:
+        type: string
+      end:
+        $ref: '#/definitions/types.Bucket'
+      id:
+        type: string
+      overage_factor:
+        type: string
+      price:
+        $ref: '#/definitions/CreatePriceRequest'
+      start:
+        $ref: '#/definitions/types.Bucket'
+      true_up_enabled:
+        type: boolean
     type: object
   CostAnalyticItem:
     properties:
@@ -2056,7 +2107,7 @@ definitions:
         type: number
       commitment_time_buckets:
         items:
-          $ref: '#/definitions/types.TimeOfDayBucket'
+          $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_true_up_enabled:
         type: boolean
@@ -2384,6 +2435,9 @@ definitions:
       email:
         description: Required when type is "user"
         type: string
+      name:
+        description: Display name; optional for service accounts
+        type: string
       roles:
         description: Required when type is "service_account"
         items:
@@ -2407,6 +2461,8 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      name:
+        type: string
       password:
         type: string
       roles:
@@ -2905,6 +2961,19 @@ definitions:
         description: ProrationBehavior controls mid-period credit issuance. Defaults
           to none.
     type: object
+  DelinkIntegrationMappingRequest:
+    properties:
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.IntegrationEntityType'
+      provider_type:
+        type: string
+    required:
+    - entity_id
+    - entity_type
+    - provider_type
+    type: object
   EntitlementResponse:
     properties:
       addon:
@@ -3349,6 +3418,13 @@ definitions:
     type: object
   GetUsageAnalyticsRequest:
     properties:
+      breakdown_bucket:
+        description: |-
+          BreakdownBucket when true augments each time-series point with BucketID/PriceID
+          and appends a BucketSummaries rollup to each item. Requires WindowSize to be set
+          and the item to be linked to a subscription line item that has CommitmentTimeBuckets.
+          Default: false (opt-in, backward compatible).
+        type: boolean
       end_time:
         type: string
       expand:
@@ -3653,6 +3729,14 @@ definitions:
     - event_name
     - external_customer_id
     type: object
+  InheritanceAction:
+    enum:
+    - add
+    - remove
+    type: string
+    x-enum-varnames:
+    - InheritanceActionAdd
+    - InheritanceActionRemove
   IntegrationConfigEntry:
     properties:
       base_config:
@@ -4043,11 +4127,12 @@ definitions:
         type: number
       commitment_time_buckets:
         description: |-
-          CommitmentTimeBuckets restricts commitment treatment to windows whose start
-          UTC hour falls within one of the configured buckets. Empty/omitted = no
-          restriction (commitment applies 24/7). Requires IsWindowCommitment=true.
+          CommitmentTimeBuckets defines per-bucket commitment + inline price for
+          windows whose start UTC hour falls within each configured bucket. Each
+          bucket carries its own price (materialized by the service). Requires
+          IsWindowCommitment=true.
         items:
-          $ref: '#/definitions/types.TimeOfDayBucket'
+          $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_type:
         allOf:
@@ -4463,6 +4548,13 @@ definitions:
         description: name of the plan
         type: string
     type: object
+  PointBucket:
+    properties:
+      bucket_id:
+        type: string
+      price_id:
+        type: string
+    type: object
   PriceLookupResult:
     properties:
       error:
@@ -4838,22 +4930,21 @@ definitions:
           soft-delete.
         type: string
       coupon_code:
-        description: CouponCode is the preferred way to identify the coupon for action="add".
-        type: string
-      coupon_id:
-        description: 'Deprecated: use coupon_code instead.'
-        type: string
-      effective_date:
-        description: Optional. When to apply the change; defaults to now if omitted.
+        description: Required for action="add". Coupon code of the coupon to attach.
         type: string
       end_date:
-        description: Optional. When the coupon association ends; overrides duration_in_periods.
-        type: string
-      price_id:
-        description: Optional. Price ID of the line item to target; omit for subscription-level.
+        description: Optional. When the coupon association ends.
         type: string
       start_date:
-        description: Optional. When the coupon association starts; defaults to EffectiveDate.
+        description: Optional. When the coupon association starts; defaults to now.
+        type: string
+      subscription_id:
+        description: Optional. Apply at subscription level. Mutually exclusive with
+          SubscriptionLineItemID.
+        type: string
+      subscription_line_item_id:
+        description: Optional. Apply at a specific line item. Mutually exclusive with
+          SubscriptionID.
         type: string
     required:
     - action
@@ -4877,7 +4968,18 @@ definitions:
     type: object
   SubModifyInheritanceRequest:
     properties:
+      action:
+        allOf:
+        - $ref: '#/definitions/InheritanceAction'
+        description: Action is "add" or "remove". Defaults to "add" when omitted —
+          fully backward-compatible.
       external_customer_ids_to_inherit_subscription:
+        description: ExternalCustomerIDsToInheritSubscription is used for action="add".
+        items:
+          type: string
+        type: array
+      external_customer_ids_to_remove:
+        description: ExternalCustomerIDsToRemove is used for action="remove".
         items:
           type: string
         type: array
@@ -6297,8 +6399,6 @@ definitions:
     type: object
   UpdateCouponRequest:
     properties:
-      coupon_code:
-        type: string
       metadata:
         additionalProperties:
           type: string
@@ -6533,6 +6633,35 @@ definitions:
     required:
     - enabled
     type: object
+  UpdateServiceAccountRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  UpdateServiceAccountResponse:
+    properties:
+      email:
+        description: Empty for service accounts
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      tenant:
+        $ref: '#/definitions/TenantResponse'
+      type:
+        $ref: '#/definitions/types.UserType'
+    type: object
   UpdateSubscriptionLineItemRequest:
     properties:
       amount:
@@ -6553,7 +6682,7 @@ definitions:
         description: Pointer so an explicit empty array can clear existing buckets
           (omission keeps them).
         items:
-          $ref: '#/definitions/types.TimeOfDayBucket'
+          $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_true_up_enabled:
         type: boolean
@@ -6644,6 +6773,8 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      name:
+        type: string
     type: object
   UpdateUserResponse:
     properties:
@@ -6656,6 +6787,8 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      name:
+        type: string
       roles:
         items:
           type: string
@@ -6690,6 +6823,13 @@ definitions:
         description: Full addon object (only if expand includes "addon")
       aggregation_type:
         $ref: '#/definitions/types.AggregationType'
+      bucket_summaries:
+        description: |-
+          BucketSummaries is populated only when BreakdownBucket=true. Contains one
+          entry per defined CommitmentTimeBucket plus one for out-of-bucket usage.
+        items:
+          $ref: '#/definitions/BucketSummary'
+        type: array
       commitment_info:
         $ref: '#/definitions/types.CommitmentInfo'
       currency:
@@ -6778,10 +6918,23 @@ definitions:
       window_size:
         allOf:
         - $ref: '#/definitions/types.WindowSize'
-        description: Window size for bucketed meters (only set if meter is bucketed)
+        description: 'Granularity of Points: max(request window_size, meter bucket_size)
+          for bucketed meters; the request window_size otherwise'
     type: object
   UsageAnalyticPoint:
     properties:
+      buckets:
+        description: |-
+          Buckets lists every commitment bucket this (possibly rolled-up) window
+          overlaps — only populated when BreakdownBucket=true and the line item has
+          CommitmentTimeBuckets. A coarse window can overlap more than one bucket, and
+          only partially, so this is a list. Empty when the window touches no bucket.
+          It is an informational HINT only: the point's single cost/computed_* totals
+          mix all overlapped buckets and out-of-bucket time and CANNOT be split per
+          bucket — read bucket_summaries for exact per-bucket cost.
+        items:
+          $ref: '#/definitions/PointBucket'
+        type: array
       computed_commitment_utilized_amount:
         description: Commitment breakdown (only populated for windowed commitments)
         type: string
@@ -6840,6 +6993,8 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      name:
+        type: string
       roles:
         items:
           type: string
@@ -10277,10 +10432,28 @@ definitions:
     type: object
   types.TimeOfDayBucket:
     properties:
+      commitment_type:
+        $ref: '#/definitions/types.CommitmentType'
+      commitment_value:
+        type: string
       end:
         $ref: '#/definitions/types.Bucket'
+      id:
+        description: |-
+          ID is server-assigned. Stable for the lifetime of the line item;
+          invoice breakdown and analytics responses reference this ID.
+        type: string
+      overage_factor:
+        type: number
+      price_id:
+        description: |-
+          PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
+          Immutable post-create; changing pricing requires a successor line item.
+        type: string
       start:
         $ref: '#/definitions/types.Bucket'
+      true_up_enabled:
+        type: boolean
     type: object
   webhookDto.AlertWebhookPayload:
     properties:
@@ -11222,6 +11395,41 @@ paths:
       summary: Get coupon association
       tags:
       - Coupon Associations
+      x-scope: read
+  /coupons/code/{code}:
+    get:
+      description: Use when resolving a coupon by promo code (e.g. checkout or validation).
+      operationId: getCouponByCode
+      parameters:
+      - description: Coupon code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CouponResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get coupon by code
+      tags:
+      - Coupons
       x-scope: read
   /coupons/search:
     post:
@@ -12892,6 +13100,43 @@ paths:
       tags:
       - Integrations
   /integrations/link:
+    delete:
+      consumes:
+      - application/json
+      description: Soft-delete (archive) the mapping between a FlexPrice entity and
+        a provider entity.
+      operationId: delinkIntegrationMapping
+      parameters:
+      - description: Delink mapping request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/DelinkIntegrationMappingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delink integration mapping
+      tags:
+      - Integrations
     post:
       consumes:
       - application/json
@@ -15264,7 +15509,7 @@ paths:
       summary: Preview subscription modification
       tags:
       - Subscriptions
-      x-scope: write
+      x-scope: read
   /subscriptions/{id}/v2:
     get:
       description: Use when you need a subscription with related data (line items,
@@ -16686,6 +16931,79 @@ paths:
       summary: Create user or service account
       tags:
       - Users
+  /users/{id}:
+    delete:
+      description: Soft-delete (archive) a service account by ID.
+      operationId: deleteServiceAccount
+      parameters:
+      - description: Service Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete service account
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Update a service account by ID (name only).
+      operationId: updateServiceAccount
+      parameters:
+      - description: Service Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update service account request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateServiceAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/UpdateServiceAccountResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update service account
+      tags:
+      - Users
   /users/me:
     get:
       description: Use to show the logged-in user's profile in the UI or to check
@@ -16714,11 +17032,11 @@ paths:
     put:
       consumes:
       - application/json
-      description: Update the current authenticated user. Only metadata updates are
-        supported.
+      description: Update the current authenticated user. Supports name and metadata
+        updates.
       operationId: updateUser
       parameters:
-      - description: Update current user request (metadata only)
+      - description: Update user request
         in: body
         name: request
         required: true

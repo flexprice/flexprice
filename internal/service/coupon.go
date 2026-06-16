@@ -14,6 +14,7 @@ type CouponService interface {
 	// Core coupon operations
 	CreateCoupon(ctx context.Context, req dto.CreateCouponRequest) (*dto.CouponResponse, error)
 	GetCoupon(ctx context.Context, id string) (*dto.CouponResponse, error)
+	GetCouponByCode(ctx context.Context, code string) (*dto.CouponResponse, error)
 	UpdateCoupon(ctx context.Context, id string, req dto.UpdateCouponRequest) (*dto.CouponResponse, error)
 	DeleteCoupon(ctx context.Context, id string) error
 	ListCoupons(ctx context.Context, filter *types.CouponFilter) (*dto.ListCouponsResponse, error)
@@ -51,6 +52,22 @@ func (s *couponService) CreateCoupon(ctx context.Context, req dto.CreateCouponRe
 // GetCoupon retrieves a coupon by ID
 func (s *couponService) GetCoupon(ctx context.Context, id string) (*dto.CouponResponse, error) {
 	c, err := s.CouponRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return dto.NewCouponResponse(c), nil
+}
+
+// GetCouponByCode retrieves a coupon by promo code.
+func (s *couponService) GetCouponByCode(ctx context.Context, code string) (*dto.CouponResponse, error) {
+	if code == "" {
+		return nil, ierr.NewError("coupon code is required").
+			WithHint("Please provide a valid coupon code").
+			Mark(ierr.ErrValidation)
+	}
+
+	c, err := s.CouponRepo.GetByCode(ctx, code)
 	if err != nil {
 		return nil, err
 	}
