@@ -16,6 +16,16 @@ type CreateCheckoutRequest struct {
 	Metadata           map[string]string       `json:"metadata,omitempty"`
 }
 
+// CreateSubscriptionChangeCheckoutRequest opens a payment-gated checkout for an
+// in-place plan UPGRADE of an existing subscription.
+type CreateSubscriptionChangeCheckoutRequest struct {
+	TargetPlanID      string                  `json:"target_plan_id" binding:"required"`
+	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
+	SuccessURL        string                  `json:"success_url,omitempty"`
+	CancelURL         string                  `json:"cancel_url,omitempty"`
+	Metadata          map[string]string       `json:"metadata,omitempty"`
+}
+
 type CheckoutResponse struct {
 	ID          string `json:"id"`
 	Status      string `json:"status"`
