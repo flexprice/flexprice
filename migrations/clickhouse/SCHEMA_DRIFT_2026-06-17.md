@@ -23,17 +23,28 @@ in-place reconciliation ALTERs included but commented — heavy, run deliberatel
 
 | Table | Drift observed on prod (not in migrations) |
 |---|---|
-| `events` | column CODECs (ZSTD/Delta); `event_name`/`source` → `LowCardinality`; `customer_id` → `String DEFAULT ''`; **PROJECTION `proj_by_customer_event`**; **3 secondary indexes DROPPED**; `parts_to_*` raised; `deduplicate_merge_projection_mode='rebuild'` |
-| `feature_usage` | column CODECs; indexes `bf_feature_id`/`mm_ts`/`bf_external_customer_id`/`bf_id`; `ReplacingMergeTree(version)` with `version`/`sign` cols |
-| `meter_usage` | heavy `LowCardinality` typing; `DoubleDelta`/`ZSTD` codecs; `min_bytes_for_wide_part`, `enable_mixed_granularity_parts` settings |
-| `costsheet_usage` | `processing_lag_ms` MATERIALIZED column; 6 bloom_filter + set indexes; codecs |
-| `raw_events` | `field1..field10` Nullable columns; `bf_id` index; `version`/`sign` |
-| `analytics_benchmark` | extensive `LowCardinality` + array columns + codecs |
-| `usage_benchmark` | `LowCardinality` + Delta/ZSTD codecs |
+Verified by comparing live-prod `SHOW CREATE` against the committed migration
+for each table (codec / index / projection / LowCardinality / engine counts):
 
-Only `events` is reconciled in `000010` (billing-critical, verified, the
-dominant restore table). The remaining tables should be reconciled the same way
-before the GCP cutover — dump live-prod `SHOW CREATE` and make the repo match,
-OR build the GCP target schema directly from `clickhouse-backup` backup
-metadata. See infrastructure `docs/CH-MIGRATION-PROD-TO-STAGING-REHEARSAL.md`
-(finding R10) and `docs/CH-MIGRATION-DETAIL.md` §1.1.
+| Table | Drift? | repo → prod |
+|---|---|---|
+| `events` | 🔴 **MAJOR** | LowCardinality 0→2, CODEC 0→10, **PROJECTION 0→1** (`proj_by_customer_event`), **INDEX 3→0** (all dropped); `parts_to_*` raised; `deduplicate_merge_projection_mode='rebuild'` |
+| `feature_usage` | 🔴 **YES** | CODEC 1→9, INDEX 3→4 (one extra) |
+| `raw_events` | 🟠 **YES** | INDEX 3→1 (two dropped) |
+| `analytics_benchmark` | 🟠 **minor** | LowCardinality 5→7 (two more cols) |
+| `costsheet_usage` | ✅ match | identical (CODEC 1, INDEX 7, MATERIALIZED 1) |
+| `meter_usage` | ✅ match | identical (LowCardinality 6, CODEC 6) |
+| `usage_benchmark` | ✅ match | identical (`MergeTree()` vs `MergeTree` is cosmetic) |
+| `events_processed` | ⚪ N/A | not present on prod source CH |
+
+**4 of 7 in-scope tables drift** (events, feature_usage, raw_events,
+analytics_benchmark); 3 match; `events_processed` is GCP/staging-only.
+
+Each drifted attribute independently breaks `clickhouse-backup restore --data`
+ATTACH (codecs/projections/indexes must be byte-identical). Only `events` is
+reconciled in `000010` (billing-critical, verified, dominant restore table).
+The other 3 drifted tables must be reconciled the same way before the GCP
+cutover — dump live-prod `SHOW CREATE` and make the repo match, OR build the GCP
+target schema directly from `clickhouse-backup` backup metadata. See
+infrastructure `docs/CH-MIGRATION-PROD-TO-STAGING-REHEARSAL.md` (finding R10) and
+`docs/CH-MIGRATION-DETAIL.md` §1.1.
