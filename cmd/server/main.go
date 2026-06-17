@@ -272,15 +272,6 @@ func main() {
 			service.NewDashboardService,
 			service.NewWorkflowExecutionService,
 			service.NewWorkflowService,
-
-			// Enterprise (ee) services
-			// service.NewEnterpriseParams,
-			// service.NewCreditNoteService,
-			// service.NewCreditGrantService,
-			// service.NewWalletService,
-			// service.NewPrepaidCreditsService,
-			// service.NewBillingTimezoneService,
-			// service.NewInvoiceGracePeriodService,
 		),
 	)
 
