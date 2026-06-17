@@ -285,6 +285,7 @@ var (
 		{Name: "duration_in_periods", Type: field.TypeInt, Nullable: true},
 		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "coupon_code", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 	}
 	// CouponsTable holds the schema information for the "coupons" table.
 	CouponsTable = &schema.Table{
@@ -296,6 +297,14 @@ var (
 				Name:    "coupon_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{CouponsColumns[1], CouponsColumns[7]},
+			},
+			{
+				Name:    "idx_coupon_tenant_environment_coupon_code_unique",
+				Unique:  true,
+				Columns: []*schema.Column{CouponsColumns[1], CouponsColumns[7], CouponsColumns[21]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "coupon_code IS NOT NULL AND coupon_code != '' AND status = 'published'",
+				},
 			},
 		},
 	}
@@ -1544,6 +1553,7 @@ var (
 		{Name: "provider_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "roles", Type: field.TypeJSON, Nullable: true},
 		{Name: "user_type", Type: field.TypeString, Nullable: true, Default: "user"},
+		{Name: "user_id", Type: field.TypeString, Nullable: true},
 	}
 	// SecretsTable holds the schema information for the "secrets" table.
 	SecretsTable = &schema.Table{
@@ -2080,6 +2090,8 @@ var (
 		{Name: "auto_apply", Type: field.TypeBool, Default: true},
 		{Name: "currency", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "start_date", Type: field.TypeTime, Nullable: true},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 	}
 	// TaxAssociationsTable holds the schema information for the "tax_associations" table.
 	TaxAssociationsTable = &schema.Table{
@@ -2096,14 +2108,6 @@ var (
 				Name:    "idx_tax_rate_id_tenant_id_environment_id",
 				Unique:  false,
 				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[8]},
-			},
-			{
-				Name:    "unique_entity_tax_mapping",
-				Unique:  true,
-				Columns: []*schema.Column{TaxAssociationsColumns[1], TaxAssociationsColumns[7], TaxAssociationsColumns[9], TaxAssociationsColumns[10], TaxAssociationsColumns[8]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
 			},
 		},
 	}
@@ -2178,6 +2182,7 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "email", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "name", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "type", Type: field.TypeString, Default: "user"},
 		{Name: "roles", Type: field.TypeJSON, Nullable: true},
 	}
@@ -2198,7 +2203,7 @@ var (
 			{
 				Name:    "idx_user_tenant_status",
 				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[1], UsersColumns[2], UsersColumns[9]},
+				Columns: []*schema.Column{UsersColumns[1], UsersColumns[2], UsersColumns[10]},
 			},
 			{
 				Name:    "idx_user_tenant_created_at",

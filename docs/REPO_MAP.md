@@ -46,7 +46,7 @@ Approved dependency flow (conceptual):
 flowchart TB
   cmd["cmd/server"]
   api["internal/api (+ rest/middleware, dto)"]
-  svc["internal/service"]
+  svc["internal/ee/service"]
   dom["internal/domain"]
   repo["internal/repository"]
   infra["postgres, clickhouse, kafka, pubsub, temporal, integration, webhook"]
@@ -64,7 +64,7 @@ flowchart TB
 
 - **Domain** (`internal/domain/*`): Models and repository **interfaces only** — no Implementations importing Ent.
 - **Repository** (`internal/repository/*`): PostgreSQL via **Ent generated code** under `repository/ent/`, analytics via **`repository/clickhouse/`**.
-- **Service** (`internal/service/*`): Business orchestration; primary consumer of domain interfaces and infrastructure facades.
+- **Service** (`internal/ee/service/*`): Business orchestration; primary consumer of domain interfaces and infrastructure facades.
 - **API** (`internal/api/v1`, `internal/api/cron`, `internal/api/dto`): HTTP adapters; validates and maps DTOs; **no duplicated business rules**.
 - **Enterprise** (`internal/ee/`): Commercial features layered on core; services composed in Fx alongside open-core services (`cmd/server/main.go`).
 
@@ -77,7 +77,7 @@ flowchart TB
 | HTTP surface | `internal/api/v1/` | REST handlers (~one file per bounded context) |
 | Cron HTTP triggers | `internal/api/cron/` | Operational `/v1/cron/...` triggers (schedules primarily Temporal) |
 | Middleware | `internal/rest/middleware/` | Auth (JWT / API key), RBAC permission checks, tenancy headers, observability hooks |
-| Services | `internal/service/` | Core business logic (~50+ cohesive files plus tests) |
+| Services | `internal/ee/service/` | Core business logic (~50+ cohesive files plus tests) |
 | Domain | `internal/domain/` | Interfaces + pure models per aggregate |
 | Repositories | `internal/repository/` | Ent + ClickHouse implementations |
 | Temporal | `internal/temporal/` | Client, worker manager, workflows, activities, registration |
@@ -143,11 +143,11 @@ Exact binding is **per config section** (event processing vs webhook vs integrat
 
 - **`internal/temporal/registration.go`** registers workflows/activities onto task queues derived from **`internal/types`** task queue helpers.
 - **Schedules**: `EnsureSchedules` runs on Temporal worker startup — cron-like automation prefers Temporal over naked OS cron.
-- Activities often call back into **`internal/service`** and **`internal/integration`**.
+- Activities often call back into **`internal/ee/service`** and **`internal/integration`**.
 
 ### Billing core (high cohesion, large files)
 
-- **`internal/service/subscription.go`**, **`invoice.go`**, **`billing.go`** — primary subscription/invoice/rating surfaces (see [`HOTSPOTS.md`](HOTSPOTS.md)).
+- **`internal/ee/service/subscription.go`**, **`invoice.go`**, **`billing.go`** — primary subscription/invoice/rating surfaces (see [`HOTSPOTS.md`](HOTSPOTS.md)).
 
 ### Generated code
 

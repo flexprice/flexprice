@@ -156,7 +156,7 @@ func (r *clickhouseEventRepo) GetAggregatedUsage(ctx context.Context, params Usa
 ```
 
 #### 1.5 Service Layer Updates
-Update `internal/service/feature_usage_tracking.go`:
+Update `internal/ee/service/feature_usage_tracking.go`:
 
 ```go
 func (s *featureUsageTrackingService) processUsageItem(ctx context.Context, item *events.DetailedUsageAnalytic, meter *meter.Meter, price *price.Price) {
@@ -324,7 +324,7 @@ func FromEnt(e *ent.Price) *Price {
 ```
 
 #### 2.4 Price Calculation Logic
-Update `internal/service/price.go` to handle commitment:
+Update `internal/ee/service/price.go` to handle commitment:
 
 ```go
 func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal {

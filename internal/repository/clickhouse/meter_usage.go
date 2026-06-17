@@ -313,32 +313,38 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 
 	for rows.Next() {
 		var total decimal.Decimal
+		var totalEventCount uint64
 		var windowStart time.Time
 		var value decimal.Decimal
+		var eventCount uint64
 
 		if hasGroupBy {
 			var groupKey string
-			if err := rows.Scan(&total, &windowStart, &value, &groupKey); err != nil {
+			if err := rows.Scan(&total, &totalEventCount, &windowStart, &value, &eventCount, &groupKey); err != nil {
 				return nil, ierr.WithError(err).
 					WithHint("Failed to scan bucketed meter usage row (with group_key)").
 					Mark(ierr.ErrDatabase)
 			}
 			result.Value = total
+			result.EventCount = totalEventCount
 			result.Results = append(result.Results, events.UsageResult{
 				WindowSize: windowStart,
 				Value:      value,
+				EventCount: eventCount,
 				GroupKey:   groupKey,
 			})
 		} else {
-			if err := rows.Scan(&total, &windowStart, &value); err != nil {
+			if err := rows.Scan(&total, &totalEventCount, &windowStart, &value, &eventCount); err != nil {
 				return nil, ierr.WithError(err).
 					WithHint("Failed to scan bucketed meter usage row").
 					Mark(ierr.ErrDatabase)
 			}
 			result.Value = total
+			result.EventCount = totalEventCount
 			result.Results = append(result.Results, events.UsageResult{
 				WindowSize: windowStart,
 				Value:      value,
+				EventCount: eventCount,
 			})
 		}
 	}

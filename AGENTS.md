@@ -212,7 +212,7 @@ flexprice/
 - Direct database access (Ent, ClickHouse, etc.)
 - Data mapping and persistence
 
-**Service Layer** (`internal/service/`)
+**Service Layer** (`internal/ee/service/`)
 
 - Business logic orchestration
 - Transaction management
@@ -309,7 +309,7 @@ type clickhouseEventRepository struct { ... }
 1. Define domain model in `internal/domain/<entity>/`
 2. Create/update Ent schema in `ent/schema/<entity>.go`
 3. Implement repository in `internal/repository/<entity>.go`
-4. Implement service in `internal/service/<entity>.go`
+4. Implement service in `internal/ee/service/<entity>.go`
 5. Create API handler in `internal/api/v1/<entity>.go`
 6. Register route in `internal/api/router.go`
 7. Add Swagger annotations to handler (including `@x-scope` for MCP - see below)
@@ -384,7 +384,7 @@ After adding/changing endpoints, regenerate: `make swagger && make sdk-all`
 
 ### Test File Location
 
-Place tests alongside implementation: `internal/service/billing.go` → `internal/service/billing_test.go`
+Place tests alongside implementation: `internal/ee/service/billing.go` → `internal/ee/service/billing_test.go`
 
 ### Test Utilities
 
@@ -413,7 +413,7 @@ tests := []struct {
 
 - Use actual database instances (via testcontainers or docker compose)
 - Avoid mocking Ent client; use real DB for integration tests
-- Tests in `internal/service/*_test.go` often use real dependencies
+- Tests in `internal/ee/service/*_test.go` often use real dependencies
 
 ## Configuration
 
@@ -435,7 +435,7 @@ Environment variables override config.yaml. Example:
 ### Running a Single Test
 
 ```bash
-go test -v -race ./internal/service -run TestBillingService_GenerateInvoice
+go test -v -race ./internal/ee/service -run TestBillingService_GenerateInvoice
 ```
 
 ### Viewing Logs

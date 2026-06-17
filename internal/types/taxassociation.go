@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
@@ -15,6 +17,11 @@ type TaxAssociationFilter struct {
 	ExternalCustomerID string            `json:"external_customer_id,omitempty" form:"external_customer_id"`
 	Currency           string            `json:"currency,omitempty" form:"currency"`
 	AutoApply          *bool             `json:"auto_apply,omitempty" form:"auto_apply"`
+	// StartDate and EndDate, when both set, restrict results to associations that
+	// overlap the given period (interval-overlap check):
+	// start_date <= EndDate AND (end_date IS NULL OR end_date > StartDate)
+	StartDate *time.Time `json:"start_date,omitempty"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
 }
 
 // EntityHierarchy defines the hierarchy levels for tax associations
@@ -65,6 +72,16 @@ func (f *TaxAssociationFilter) Validate() error {
 				WithHint("invalid time range").
 				Mark(ierr.ErrValidation)
 		}
+	}
+	if f.StartDate != nil && f.EndDate != nil && f.StartDate.After(*f.EndDate) {
+		return ierr.NewError("start_date must not be after end_date").
+			WithHint("Please provide a valid date range").
+			WithReportableDetails(
+				map[string]any{
+					"end_date": "must be on or after start_date",
+				},
+			).
+			Mark(ierr.ErrValidation)
 	}
 	if f.EntityType != "" {
 		if err := f.EntityType.Validate(); err != nil {

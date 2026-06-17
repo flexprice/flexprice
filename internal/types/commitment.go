@@ -1,8 +1,10 @@
 package types
 
 import (
+	"fmt"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/shopspring/decimal"
 )
 
@@ -35,8 +37,23 @@ func (ct CommitmentType) String() string {
 // Hour=24 with Minute=0 is allowed so callers can express "end of day"
 // (e.g. {Start: {0, 0}, End: {24, 0}} = the whole day).
 type Bucket struct {
-	Hour   int `json:"hour"`
-	Minute int `json:"minute"`
+	Hour   int `json:"hour" validate:"min=0,max=24"`
+	Minute int `json:"minute" validate:"min=0,max=59"`
+}
+
+// Validate checks that the bucket values satisfy the contract.
+// Hour=24 is only valid when Minute=0 (end-of-day sentinel).
+func (b Bucket) Validate() error {
+	if b.Hour < 0 || b.Hour > 24 {
+		return fmt.Errorf("hour must be in range [0, 24], got %d", b.Hour)
+	}
+	if b.Minute < 0 || b.Minute > 59 {
+		return fmt.Errorf("minute must be in range [0, 59], got %d", b.Minute)
+	}
+	if b.Hour == 24 && b.Minute != 0 {
+		return fmt.Errorf("when hour=24, minute must be 0 (got minute=%d)", b.Minute)
+	}
+	return nil
 }
 
 // MinuteOfDay returns the bucket's position in the day as Hour*60 + Minute,
@@ -45,13 +62,33 @@ func (b Bucket) MinuteOfDay() int {
 	return b.Hour*60 + b.Minute
 }
 
-// TimeOfDayBucket defines a [Start, End) half-open range within a UTC day.
-// When Start.MinuteOfDay() < End.MinuteOfDay(): normal range (e.g. 09:00-17:00).
-// When Start.MinuteOfDay() > End.MinuteOfDay(): wraps midnight (e.g. 22:00-06:00).
-// When equal: empty range — matches nothing.
+// TimeOfDayBucket defines a [Start, End) half-open range within a UTC day with
+// its own commitment + base price. The bucket overrides the line item's
+// price/commitment for any window whose start falls inside [Start, End).
+//
+// Every bucket must carry a commitment (type + value) and a price — filter-only
+// buckets are not supported.
 type TimeOfDayBucket struct {
+	// ID is server-assigned. Stable for the lifetime of the line item;
+	// invoice breakdown and analytics responses reference this ID.
+	ID    string `json:"id,omitempty"`
 	Start Bucket `json:"start"`
 	End   Bucket `json:"end"`
+
+	// PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
+	// Immutable post-create; changing pricing requires a successor line item.
+	PriceID string `json:"price_id,omitempty"`
+
+	CommitmentType  CommitmentType   `json:"commitment_type,omitempty"`
+	CommitmentValue decimal.Decimal  `json:"commitment_value" swaggertype:"string"`
+	OverageFactor   *decimal.Decimal `json:"overage_factor,omitempty"`
+	TrueUpEnabled   bool             `json:"true_up_enabled,omitempty"`
+}
+
+// HasCommitment reports whether the bucket carries a valid commitment config.
+// Valid buckets always do; this is a defensive guard for the billing path.
+func (b TimeOfDayBucket) HasCommitment() bool {
+	return b.CommitmentType != "" && b.CommitmentValue.GreaterThan(decimal.Zero)
 }
 
 // ContainsTime reports whether t falls within this bucket. The check uses the
@@ -83,6 +120,61 @@ func (bs TimeOfDayBuckets) ContainsTime(t time.Time) bool {
 		}
 	}
 	return false
+}
+
+// BucketIndexAt returns the index of the bucket containing window i's start
+// time-of-day, and whether one was found. When starts is nil (no per-window
+// timestamps) no bucket can match.
+func (bs TimeOfDayBuckets) BucketIndexAt(starts []time.Time, i int) (int, bool) {
+	if starts == nil {
+		return 0, false
+	}
+	for idx, b := range bs {
+		if b.ContainsTime(starts[i]) {
+			return idx, true
+		}
+	}
+	return 0, false
+}
+
+// Validate reports per-field issues with the bucket. It does NOT enforce
+// array-level invariants (overlap, window alignment) — those live in the
+// commitment_bucket_validation file and require external context.
+//
+// Every bucket must carry a commitment (type + value > 0) and an overage factor
+// greater than 1.0 — filter-only buckets are not supported.
+func (b TimeOfDayBucket) Validate() error {
+	// Start/End point sanity is enforced by the DTO layer (validateBucketPoint),
+	// but we still need start != end at the type level.
+	if b.Start.Hour == b.End.Hour && b.Start.Minute == b.End.Minute {
+		return ierr.NewError("bucket start must differ from end").
+			WithHint("Empty buckets are not allowed").
+			Mark(ierr.ErrValidation)
+	}
+	if b.CommitmentType == "" || !b.CommitmentType.Validate() {
+		return ierr.NewError("commitment_type is required").
+			WithHint(`Set commitment_type to "amount" or "quantity" on every bucket`).
+			Mark(ierr.ErrValidation)
+	}
+	if !b.CommitmentValue.GreaterThan(decimal.Zero) {
+		return ierr.NewError("commitment_value must be > 0").
+			WithHint("Provide a positive decimal value for commitment_value").
+			Mark(ierr.ErrValidation)
+	}
+	// Overage factor is required and must be at least 1.0. Exactly 1.0 means
+	// usage beyond the commitment bills at the base rate (no premium), which is
+	// a valid bucket configuration.
+	if b.OverageFactor == nil {
+		return ierr.NewError("overage_factor is required").
+			WithHint("Specify an overage_factor of 1.0 or greater on every bucket").
+			Mark(ierr.ErrValidation)
+	}
+	if b.OverageFactor.LessThan(decimal.NewFromInt(1)) {
+		return ierr.NewError("overage_factor must be at least 1.0").
+			WithHint("Overage factor determines the multiplier for usage beyond the bucket commitment").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // CommitmentInfo holds information about a commitment

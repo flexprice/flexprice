@@ -8,7 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
@@ -151,6 +151,8 @@ func NewRouter(
 			user.GET("/me", handlers.User.GetUserInfo)
 			user.POST("", write("user", types.ActionWrite), handlers.User.CreateUser)
 			user.PUT("/me", write("user", types.ActionWrite), handlers.User.UpdateUser)
+			user.PUT("/:id", write("user", types.ActionWrite), handlers.User.UpdateServiceAccount)
+			user.DELETE("/:id", write("user", types.ActionWrite), handlers.User.DeleteUser)
 			user.POST("/search", handlers.User.QueryUsers)
 		}
 
@@ -531,6 +533,7 @@ func NewRouter(
 		integrations := v1Private.Group("/integrations")
 		{
 			integrations.POST("/link", handlers.Integration.Link)
+			integrations.DELETE("/link", handlers.Integration.Delink)
 			integrations.POST("/sync", handlers.Integration.Sync)
 			integrations.GET("/mappings", handlers.Integration.GetMappings)
 			integrations.GET("/config", handlers.Integration.GetConfig)
@@ -545,10 +548,17 @@ func NewRouter(
 		{
 			coupon.POST("", write("coupon", types.ActionWrite), handlers.Coupon.CreateCoupon)
 			coupon.GET("", handlers.Coupon.ListCoupons)
+			coupon.GET("/code/:code", handlers.Coupon.GetCouponByCode)
 			coupon.GET("/:id", handlers.Coupon.GetCoupon)
 			coupon.PUT("/:id", write("coupon", types.ActionWrite), handlers.Coupon.UpdateCoupon)
 			coupon.DELETE("/:id", write("coupon", types.ActionWrite), handlers.Coupon.DeleteCoupon)
 			coupon.POST("/search", handlers.Coupon.QueryCoupons)
+
+			couponAssociations := coupon.Group("/associations")
+			{
+				couponAssociations.GET("", handlers.Coupon.ListCouponAssociations)
+				couponAssociations.GET("/:id", handlers.Coupon.GetCouponAssociation)
+			}
 		}
 
 		// Admin routes (API Key only)

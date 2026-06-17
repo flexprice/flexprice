@@ -11,6 +11,7 @@ import (
 // CreateUserRequest represents the request to create a new user (service account or user)
 type CreateUserRequest struct {
 	Type  types.UserType `json:"type" binding:"required" validate:"required"` // "user" or "service_account"
+	Name  string         `json:"name,omitempty" validate:"omitempty"`         // Display name; optional for service accounts
 	Roles []string       `json:"roles,omitempty" validate:"omitempty"`        // Required when type is "service_account"
 	Email string         `json:"email,omitempty" validate:"omitempty,email"`  // Required when type is "user"
 }
@@ -54,6 +55,7 @@ func (r *CreateUserRequest) Validate() error {
 
 type UserResponse struct {
 	ID       string            `json:"id"`
+	Name     string            `json:"name,omitempty"`
 	Email    string            `json:"email,omitempty"` // Empty for service accounts
 	Type     types.UserType    `json:"type"`
 	Roles    []string          `json:"roles,omitempty"`
@@ -70,6 +72,7 @@ type CreateUserResponse struct {
 func NewUserResponse(u *user.User, tenant *tenant.Tenant) *UserResponse {
 	return &UserResponse{
 		ID:       u.ID,
+		Name:     u.Name,
 		Email:    u.Email,
 		Type:     u.Type,
 		Roles:    u.Roles,
@@ -79,7 +82,8 @@ func NewUserResponse(u *user.User, tenant *tenant.Tenant) *UserResponse {
 }
 
 type UpdateUserRequest struct {
-	Metadata map[string]string `json:"metadata" validate:"omitempty"`
+	Name     string            `json:"name,omitempty" validate:"omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty" validate:"omitempty"`
 }
 
 func (r *UpdateUserRequest) Validate() error {
@@ -91,6 +95,24 @@ func (r *UpdateUserRequest) Validate() error {
 }
 
 type UpdateUserResponse struct {
+	*UserResponse
+}
+
+// UpdateServiceAccountRequest is the request body for PUT /users/:id (service accounts only)
+type UpdateServiceAccountRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func (r *UpdateServiceAccountRequest) Validate() error {
+	if r.Name == "" {
+		return ierr.NewError("name is required").
+			WithHint("Service account name cannot be empty").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+type UpdateServiceAccountResponse struct {
 	*UserResponse
 }
 

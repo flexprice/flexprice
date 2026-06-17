@@ -155,7 +155,7 @@ type DynamicRoleRepository interface {
 **Service Interface**:
 
 ```go
-// internal/service/dynamic_role_service.go
+// internal/ee/service/dynamic_role_service.go
 type DynamicRoleService interface {
     CreateRole(ctx context.Context, req *CreateRoleRequest) (*DynamicRole, error)
     UpdateRole(ctx context.Context, id string, req *UpdateRoleRequest) (*DynamicRole, error)
@@ -187,7 +187,7 @@ type DynamicRoleService interface {
 **Service Interface**:
 
 ```go
-// internal/service/permission_service.go
+// internal/ee/service/permission_service.go
 type PermissionService interface {
     CreatePermission(ctx context.Context, req *CreatePermissionRequest) (*DynamicPermission, error)
     AssignPermissionToRole(ctx context.Context, roleID, permissionID string) error

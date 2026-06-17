@@ -12,22 +12,22 @@ Successfully implemented line item level discount functionality that allows appl
 
 ### 2. Extended Service Layer
 
-#### Coupon Application Service (`internal/service/coupon_application.go`)
+#### Coupon Application Service (`internal/ee/service/coupon_application.go`)
 - **New method `ApplyCouponsOnInvoiceWithLineItems`**: Handles both invoice-level and line item-level coupons
 - **Sophisticated discount calculation logic**: 
   - Applies line item coupons first to individual line items
   - Then applies invoice-level coupons to the remaining total
   - Prevents negative pricing through proper validation
 
-#### Invoice Service (`internal/service/invoice.go`)
+#### Invoice Service (`internal/ee/service/invoice.go`)
 - **Enhanced `applyCouponsToInvoiceWithLineItems`**: New method that utilizes the enhanced coupon application service
 - **Backward compatibility**: Existing `applyCouponsToInvoice` method remains unchanged
 
-#### Billing Service (`internal/service/billing.go`)
+#### Billing Service (`internal/ee/service/billing.go`)
 - **Automatic line item coupon collection**: New `collectLineItemCoupons` method automatically finds and includes line item coupons during subscription invoice generation
 - **Smart coupon association mapping**: Maps subscription line item coupons to invoice line items based on price_id
 
-#### Coupon Association Service (`internal/service/coupon_association.go`)
+#### Coupon Association Service (`internal/ee/service/coupon_association.go`)
 - **New method `GetCouponAssociationsBySubscriptionLineItem`**: Retrieves coupons associated with specific subscription line items
 
 ### 3. Enhanced Repository Interface

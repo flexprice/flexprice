@@ -163,17 +163,19 @@ type GetEventsParams struct {
 type UsageResult struct {
 	WindowSize time.Time       `json:"window_size"`
 	Value      decimal.Decimal `json:"value"`
+	EventCount uint64          `json:"event_count"`         // Distinct event count in this window
 	GroupKey   string          `json:"group_key,omitempty"` // group identifier when group_by is used (e.g., KRN value)
 }
 
 type AggregationResult struct {
-	Results   []UsageResult         `json:"results,omitempty"`
-	Value     decimal.Decimal       `json:"value,omitempty"`
-	EventName string                `json:"event_name"`
-	Type      types.AggregationType `json:"type"`
-	Metadata  map[string]string     `json:"metadata,omitempty"`
-	MeterID   string                `json:"meter_id"`
-	PriceID   string                `json:"price_id"`
+	Results    []UsageResult         `json:"results,omitempty"`
+	Value      decimal.Decimal       `json:"value,omitempty"`
+	EventCount uint64                `json:"event_count"` // Total distinct event count across all results
+	EventName  string                `json:"event_name"`
+	Type       types.AggregationType `json:"type"`
+	Metadata   map[string]string     `json:"metadata,omitempty"`
+	MeterID    string                `json:"meter_id"`
+	PriceID    string                `json:"price_id"`
 }
 
 type EventIterator struct {

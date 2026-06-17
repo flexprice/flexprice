@@ -13,7 +13,7 @@ import (
 	domainevents "github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -410,6 +410,7 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 			WindowSize:          req.WindowSize,
 			Expand:              req.Expand,
 			IncludeChildren:     req.IncludeChildren,
+			BreakdownBucket:     req.BreakdownBucket,
 			// BillingAnchor omitted: service defaults to subscription's billing anchor
 		}
 		response, err = h.meterUsageService.GetDetailedAnalytics(ctx, params)

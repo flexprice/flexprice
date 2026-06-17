@@ -39,7 +39,7 @@ about:
   - This is responsible for interacting with clickhouse database using raw queries with some parsing logic
   - internal/repository/factory.go : all repository factory defined here to choose if using postgres or clickhouse
   - This is responsible for choosing the correct repository based on the configuration
-  - internal/service : all service logic defined here ex events service, meter service
+  - internal/ee/service : all service logic defined here ex events service, meter service
   - This is responsible for calling the repository layer and performing business logic
   - This layer can call other service layers if needed
   - migrations : all migrations defined here

@@ -6,21 +6,23 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
 )
 
 type CouponHandler struct {
-	couponService service.CouponService
-	logger        *logger.Logger
+	couponService            service.CouponService
+	couponAssociationService service.CouponAssociationService
+	logger                   *logger.Logger
 }
 
-func NewCouponHandler(couponService service.CouponService, logger *logger.Logger) *CouponHandler {
+func NewCouponHandler(couponService service.CouponService, couponAssociationService service.CouponAssociationService, logger *logger.Logger) *CouponHandler {
 	return &CouponHandler{
-		couponService: couponService,
-		logger:        logger,
+		couponService:            couponService,
+		couponAssociationService: couponAssociationService,
+		logger:                   logger,
 	}
 }
 
@@ -80,6 +82,37 @@ func (h *CouponHandler) GetCoupon(c *gin.Context) {
 	}
 
 	response, err := h.couponService.GetCoupon(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// @Summary Get coupon by code
+// @ID getCouponByCode
+// @Description Use when resolving a coupon by promo code (e.g. checkout or validation).
+// @Tags Coupons
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param code path string true "Coupon code"
+// @Success 200 {object} dto.CouponResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /coupons/code/{code} [get]
+func (h *CouponHandler) GetCouponByCode(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.Error(ierr.NewError("coupon code is required").
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.couponService.GetCouponByCode(c.Request.Context(), code)
 	if err != nil {
 		c.Error(err)
 		return
@@ -219,4 +252,68 @@ func (h *CouponHandler) QueryCoupons(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// @Summary Get coupon association
+// @ID getCouponAssociation
+// @Description Get a single coupon association by ID. Coupon associations are created and removed via the subscription modify API.
+// @Tags Coupon Associations
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param id path string true "Coupon Association ID"
+// @Success 200 {object} dto.CouponAssociationResponse
+// @Failure 404 {object} ierr.ErrorResponse "Not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /coupons/associations/{id} [get]
+func (h *CouponHandler) GetCouponAssociation(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("coupon association ID is required").
+			WithHint("Please provide a valid coupon association ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.couponAssociationService.GetCouponAssociation(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary List coupon associations
+// @ID listCouponAssociations
+// @Description List coupon associations with optional filters. Coupon associations are created and removed via the subscription modify API.
+// @Tags Coupon Associations
+// @Produce json
+// @Security ApiKeyAuth
+// @x-scope "read"
+// @Param subscription_ids query []string false "Filter by subscription IDs (max 100)"
+// @Param coupon_ids query []string false "Filter by coupon IDs (max 100)"
+// @Param active_only query boolean false "Return only currently active associations"
+// @Param limit query integer false "Page size"
+// @Param offset query integer false "Page offset"
+// @Success 200 {object} dto.ListCouponAssociationsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /coupons/associations [get]
+func (h *CouponHandler) ListCouponAssociations(c *gin.Context) {
+	var filter types.CouponAssociationFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.couponAssociationService.ListCouponAssociations(c.Request.Context(), &filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

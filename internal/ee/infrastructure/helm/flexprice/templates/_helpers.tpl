@@ -531,6 +531,10 @@ All service addresses are resolved via named templates above so this block stays
 {{- /* ---- Logging extended ---- */}}
 - name: FLEXPRICE_LOGGING_FORMAT
   value: {{ .Values.logging.format | default "json" | quote }}
+{{- if .Values.logging.environment }}
+- name: FLEXPRICE_LOGGING_ENVIRONMENT
+  value: {{ .Values.logging.environment | quote }}
+{{- end }}
 {{- if .Values.logging.otel.enabled }}
 - name: FLEXPRICE_LOGGING_OTEL_ENABLED
   value: "true"
@@ -546,6 +550,34 @@ All service addresses are resolved via named templates above so this block stays
       name: {{ include "flexprice.secretName" . }}
       key: logging-otel-auth-value
 {{- end }}
+{{- /* ---- OpenTelemetry traces (APM/RED metrics) ---- */}}
+{{- if .Values.otel.enabled }}
+- name: FLEXPRICE_OTEL_ENABLED
+  value: "true"
+{{- if .Values.otel.serviceName }}
+- name: FLEXPRICE_OTEL_SERVICE_NAME
+  value: {{ .Values.otel.serviceName | quote }}
+{{- end }}
+{{- if .Values.otel.traces.enabled }}
+- name: FLEXPRICE_OTEL_TRACES_ENABLED
+  value: "true"
+- name: FLEXPRICE_OTEL_TRACES_ENDPOINT
+  value: {{ .Values.otel.traces.endpoint | quote }}
+{{- if .Values.otel.traces.authHeader }}
+- name: FLEXPRICE_OTEL_TRACES_AUTH_HEADER
+  value: {{ .Values.otel.traces.authHeader | quote }}
+- name: FLEXPRICE_OTEL_TRACES_AUTH_VALUE
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "flexprice.secretName" . }}
+      key: logging-otel-auth-value
+{{- end }}
+{{- if .Values.otel.traces.sampleRate }}
+- name: FLEXPRICE_OTEL_TRACES_SAMPLE_RATE
+  value: {{ .Values.otel.traces.sampleRate | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- /* ---- App URLs ---- */}}
 {{- if .Values.app.customerPortalUrl }}
 - name: FLEXPRICE_CUSTOMER_PORTAL_URL
@@ -557,6 +589,6 @@ All service addresses are resolved via named templates above so this block stays
 {{- end }}
 {{- /* ---- Extra env vars (passthrough) ---- */}}
 {{- with .Values.extraEnv }}
-{{- toYaml . }}
+{{ toYaml . | trim }}
 {{- end }}
 {{- end }}

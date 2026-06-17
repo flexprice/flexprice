@@ -3,7 +3,7 @@ package cron
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"go.temporal.io/sdk/activity"
 )

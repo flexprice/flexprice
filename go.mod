@@ -20,7 +20,6 @@ require (
 	github.com/cockroachdb/errors v1.11.3
 	github.com/flexprice/go-sdk/v2 v2.0.16
 	github.com/getsentry/sentry-go v0.43.0
-	github.com/getsentry/sentry-go/gin v0.43.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1

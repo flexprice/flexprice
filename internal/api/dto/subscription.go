@@ -21,10 +21,13 @@ type SubscriptionPhaseCreateRequest struct {
 	StartDate time.Time  `json:"start_date" validate:"required"`
 	EndDate   *time.Time `json:"end_date,omitempty"`
 
-	// Coupons represents subscription-level coupons to be applied to this phase
+	// SubscriptionCoupons is the preferred way to attach coupons to this phase.
+	SubscriptionCoupons []SubscriptionCouponInput `json:"subscription_coupons,omitempty"`
+
+	// Deprecated: use SubscriptionCoupons instead.
 	Coupons []string `json:"coupons,omitempty"`
 
-	// LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)
+	// Deprecated: use SubscriptionCoupons instead.
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
 	// OverrideLineItems allows customizing specific prices for this phase
@@ -101,10 +104,18 @@ type LineItemCommitmentConfig struct {
 	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
-	// CommitmentTimeBuckets restricts commitment treatment to windows whose start
-	// UTC hour falls within one of the configured buckets. Empty/omitted = no
-	// restriction (commitment applies 24/7). Requires IsWindowCommitment=true.
-	CommitmentTimeBuckets types.TimeOfDayBuckets `json:"commitment_time_buckets,omitempty"`
+	// CommitmentTimeBuckets defines per-bucket commitment + inline price for
+	// windows whose start UTC hour falls within each configured bucket. Each
+	// bucket carries its own price (materialized by the service). Requires
+	// IsWindowCommitment=true.
+	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
+}
+
+// ToDomainBuckets maps the config's bucket requests to domain buckets (IDs +
+// commitment fields, empty PriceIDs); the service materializes a price per
+// bucket and fills in the PriceIDs.
+func (c *LineItemCommitmentConfig) ToDomainBuckets() types.TimeOfDayBuckets {
+	return bucketRequestsToDomain(c.CommitmentTimeBuckets)
 }
 
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.
@@ -286,6 +297,34 @@ func (r *SubscriptionCouponRequest) Validate() error {
 	return nil
 }
 
+// SubscriptionCouponInput is the preferred coupon attachment request.
+// Identifies a coupon by human-readable code (never internal ID).
+// Optionally targets a specific subscription line item via price_id.
+type SubscriptionCouponInput struct {
+	// CouponCode is the coupon's human-readable code (case-insensitive). Required.
+	CouponCode string `json:"coupon_code" validate:"required"`
+	// StartDate is when the coupon starts; defaults to subscription/phase StartDate.
+	StartDate *time.Time `json:"start_date,omitempty"`
+	// EndDate is when the coupon ends; overrides duration_in_periods calculation.
+	EndDate *time.Time `json:"end_date,omitempty"`
+	// PriceID is the price ID of the line item to target; omit for subscription-level.
+	PriceID *string `json:"price_id,omitempty"`
+}
+
+// Validate validates SubscriptionCouponInput.
+func (r *SubscriptionCouponInput) Validate() error {
+	if r.CouponCode == "" {
+		return ierr.NewError("coupon_code is required").
+			WithHint("Provide a valid coupon code").
+			Mark(ierr.ErrValidation)
+	}
+	if r.EndDate != nil && r.StartDate != nil && r.EndDate.Before(*r.StartDate) {
+		return ierr.NewError("end_date cannot be before start_date").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // SubscriptionInheritanceConfig groups all hierarchy and invoicing-routing fields for
 // subscription creation.
 type SubscriptionInheritanceConfig struct {
@@ -418,8 +457,14 @@ type CreateSubscriptionRequest struct {
 	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
+	// SubscriptionCoupons is the preferred way to attach coupons at creation.
+	// Accepts coupon_code; optionally targets a line item via price_id.
+	SubscriptionCoupons []SubscriptionCouponInput `json:"subscription_coupons,omitempty"`
+
+	// Deprecated: use SubscriptionCoupons instead.
 	Coupons []string `json:"coupons,omitempty"`
 
+	// Deprecated: use SubscriptionCoupons instead.
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
 	// LineItemCommitments allows setting commitment configuration per line item (keyed by price_id)

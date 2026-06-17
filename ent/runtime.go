@@ -2194,11 +2194,11 @@ func init() {
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	user.UpdateDefaultUpdatedAt = userDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// userDescType is the schema descriptor for type field.
-	userDescType := userFields[2].Descriptor()
+	userDescType := userFields[3].Descriptor()
 	// user.DefaultType holds the default value on creation for the type field.
 	user.DefaultType = userDescType.Default.(string)
 	// userDescRoles is the schema descriptor for roles field.
-	userDescRoles := userFields[3].Descriptor()
+	userDescRoles := userFields[4].Descriptor()
 	// user.DefaultRoles holds the default value on creation for the roles field.
 	user.DefaultRoles = userDescRoles.Default.([]string)
 	walletMixin := schema.Wallet{}.Mixin()
