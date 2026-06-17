@@ -170,17 +170,23 @@ type UsageResult struct {
 	GroupKey   string          `json:"group_key,omitempty"` // group identifier when group_by is used (e.g., KRN value)
 }
 
-// FirstGroupByProperty extracts the first "properties.X" entry from a GroupBy
-// list and returns the bare property name. Returns "" when the list is empty
-// or the first dim isn't a "properties.X" form. Legacy SQL paths that only
-// support a single property dim use this helper instead of carrying a separate
-// scalar GroupByProperty field.
+// FirstGroupByProperty extracts the bare property name from the FIRST entry of
+// a GroupBy list when that entry is a "properties.X" form. Returns "" when the
+// list is empty or the first dim isn't a "properties.X" form.
+//
+// Positional semantics matter here: legacy SQL paths only support a single
+// dimension, and the primary dim is whatever the user listed first. Treating
+// later entries as candidates would silently demote the user's primary dim
+// (e.g., ["source", "properties.org_id"] would otherwise group by org_id and
+// drop source, which is the opposite of what the user asked).
 func FirstGroupByProperty(groupBy []string) string {
+	if len(groupBy) == 0 {
+		return ""
+	}
 	const prefix = "properties."
-	for _, g := range groupBy {
-		if len(g) > len(prefix) && g[:len(prefix)] == prefix {
-			return g[len(prefix):]
-		}
+	first := groupBy[0]
+	if len(first) > len(prefix) && first[:len(prefix)] == prefix {
+		return first[len(prefix):]
 	}
 	return ""
 }

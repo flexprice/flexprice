@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -768,6 +769,48 @@ func hasUserBucketedGroupBy(groupBy []string) bool {
 	return false
 }
 
+// analyticsGroupByPropertyName matches safe property names for "properties.X"
+// dims. Same shape as clickhouse.validMeterUsageGroupByPattern so the service
+// layer's validation matches what the SQL builder will actually accept.
+var analyticsGroupByPropertyName = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
+
+// validateAnalyticsGroupBy rejects entries the SQL builder would silently drop.
+// Accepted forms:
+//   - "meter_id"          (no-op at SQL level; implicit at the meter)
+//   - "source"
+//   - "properties.<name>" where name matches a safe identifier pattern
+//
+// Anything else (empty string, "properties." with no name, unknown tokens) is
+// a user error and surfaces as a 400 with a clear hint, rather than being
+// dropped on the floor inside clickhouse.bucketedGroupByDims where it would
+// show up as a successful response with surprising shape.
+func validateAnalyticsGroupBy(groupBy []string) error {
+	for _, g := range groupBy {
+		switch {
+		case g == "meter_id" || g == "source":
+			// ok
+		case strings.HasPrefix(g, "properties."):
+			name := strings.TrimPrefix(g, "properties.")
+			if name == "" || !analyticsGroupByPropertyName.MatchString(name) {
+				return ierr.NewError("invalid group_by entry").
+					WithHintf("group_by entry %q has an invalid property name (allowed: alphanumerics, '_', '.')", g).
+					WithReportableDetails(map[string]interface{}{
+						"group_by_entry": g,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		default:
+			return ierr.NewError("invalid group_by entry").
+				WithHintf("group_by entry %q is not recognized (allowed: 'meter_id', 'source', 'properties.<name>')", g).
+				WithReportableDetails(map[string]interface{}{
+					"group_by_entry": g,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 // queryBucketedMeterAnalyticsDetailed is the analytics-side bucketed query: one
 // MeterUsageDetailedResult per (source, properties) combo, with per-combo
 // Points pre-fetched by the repo. Bypassed entirely for billing — billing
@@ -839,6 +882,13 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			rewritten = append(rewritten, g)
 		}
 		params.GroupBy = lo.Uniq(rewritten)
+		// Reject malformed entries before they hit the SQL builder, where
+		// they'd be silently dropped (debugging nightmare). Accepted forms:
+		// "meter_id" / "source" / "properties.<valid name>". Everything else
+		// is a user error worth surfacing as a 400.
+		if err := validateAnalyticsGroupBy(params.GroupBy); err != nil {
+			return nil, err
+		}
 	}
 
 	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified).
@@ -1622,6 +1672,40 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 	params *events.MeterUsageDetailedAnalyticsParams,
 	m *meter.Meter,
 ) ([]*events.MeterUsageDetailedResult, error) {
+	// Mirror the subscription path: when the request has source/properties.*
+	// dims, fan out via the detailed query so each combo becomes its own
+	// MeterUsageDetailedResult with Source/Properties populated and per-combo
+	// Points. The basic GetUsageForBucketedMeters can't surface those — it
+	// returns a single AggregationResult and the user's request GroupBy would
+	// be silently dropped.
+	if hasUserBucketedGroupBy(params.GroupBy) {
+		bucketParams := &events.MeterUsageQueryParams{
+			TenantID:           params.TenantID,
+			EnvironmentID:      params.EnvironmentID,
+			ExternalCustomerID: params.ExternalCustomerID,
+			MeterID:            m.ID,
+			StartTime:          params.StartTime,
+			EndTime:            params.EndTime,
+			AggregationType:    m.Aggregation.Type,
+			WindowSize:         m.Aggregation.BucketSize,
+			// Intentionally use only params.GroupBy here. Meter-level
+			// Aggregation.GroupBy is a billing concept (per-KRN pricing); the
+			// analytics fan-out shape is owned by the request. Matches the
+			// subscription path's queryBucketedMeterAnalyticsDetailed contract.
+			GroupBy:         params.GroupBy,
+			UseFinal:        params.UseFinal,
+			BillingAnchor:   params.BillingAnchor,
+			PropertyFilters: params.PropertyFilters,
+			Sources:         params.Sources,
+		}
+		if len(params.ExternalCustomerIDs) > 0 {
+			bucketParams.ExternalCustomerIDs = params.ExternalCustomerIDs
+		}
+		return s.repo.GetUsageForBucketedMetersDetailed(ctx, bucketParams)
+	}
+
+	// No user fan-out: use the basic path with meter-level Aggregation.GroupBy
+	// (the billing / KRN-style convention).
 	var bucketParamsGroupBy []string
 	if m.Aggregation.GroupBy != "" {
 		bucketParamsGroupBy = []string{"properties." + m.Aggregation.GroupBy}

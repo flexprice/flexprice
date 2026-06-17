@@ -332,6 +332,14 @@ func (r *MeterUsageRepository) GetUsageForBucketedMeters(ctx context.Context, pa
 			EventCount: eventCount,
 		})
 	}
+	// rows.Next() returns false on both end-of-rows and iteration error.
+	// Without this check we'd silently return partial results as success and
+	// downstream billing totals would be wrong.
+	if err := rows.Err(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating bucketed meter usage rows").
+			Mark(ierr.ErrDatabase)
+	}
 
 	return &result, nil
 }
