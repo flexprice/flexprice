@@ -285,7 +285,7 @@ package task
 
 import (
     "context"
-    "github.com/flexprice/flexprice/internal/service"
+    "github.com/flexprice/flexprice/internal/ee/service"
     ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
@@ -315,7 +315,7 @@ func (a *TaskActivities) ProcessTask(ctx context.Context, input ProcessTaskActiv
 package registry
 
 import (
-    "github.com/flexprice/flexprice/internal/service"
+    "github.com/flexprice/flexprice/internal/ee/service"
     "github.com/flexprice/flexprice/internal/temporal/core"
     "github.com/flexprice/flexprice/internal/temporal/workflows/task"
     "github.com/flexprice/flexprice/internal/temporal/activities/task"

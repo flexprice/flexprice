@@ -144,7 +144,7 @@ func ValidateSettingValue(key string, value map[string]interface{}) error {
 
 ### Step 5: Add Service Layer Switch Cases
 
-**File:** `internal/service/settings.go`
+**File:** `internal/ee/service/settings.go`
 
 Add your setting to **three** switch statements:
 
@@ -256,7 +256,7 @@ func ValidateSettingValue(key string, value map[string]interface{}) error {
     }
 }
 
-// 5. Add to service layer (internal/service/settings.go)
+// 5. Add to service layer (internal/ee/service/settings.go)
 // In GetSettingByKey:
 case types.SettingKeyPaymentConfig:
     return getSettingByKey[types.PaymentConfig](s, ctx, key)
@@ -471,7 +471,7 @@ You only need to:
 | File                                         | What to Add                                   |
 | -------------------------------------------- | --------------------------------------------- |
 | `internal/types/settings.go`                 | Steps 1-4 (key, struct, defaults, validation) |
-| `internal/service/settings.go`               | Step 5 (3 switch cases)                       |
+| `internal/ee/service/settings.go`               | Step 5 (3 switch cases)                       |
 | `internal/types/settings/conversion_test.go` | Tests (optional but recommended)              |
 
 ---
@@ -492,7 +492,7 @@ go test ./internal/types/settings/... -v
 
 **Verify Compilation:**
 ```bash
-go build ./internal/service/... ./internal/repository/ent/...
+go build ./internal/ee/service/... ./internal/repository/ent/...
 ```
 
 That's it! The conversion utilities handle the rest automatically. 🚀

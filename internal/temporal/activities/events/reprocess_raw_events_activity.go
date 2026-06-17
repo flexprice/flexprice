@@ -5,7 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	models "github.com/flexprice/flexprice/internal/temporal/models/events"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/activity"

@@ -50,7 +50,7 @@ This PRD outlines the changes required to add address information and metadata f
   - Add address-related filtering capabilities
 
 ### 5. Service Changes
-- Update `internal/service/customer.go`:
+- Update `internal/ee/service/customer.go`:
   - Update CreateCustomer to handle address fields
   - Update UpdateCustomer to handle address fields
   - Add address validation logic
@@ -63,7 +63,7 @@ This PRD outlines the changes required to add address information and metadata f
   - Add address-related query parameter handling
 
 ### 7. Test Changes
-- Update `internal/service/customer_test.go`:
+- Update `internal/ee/service/customer_test.go`:
   - Add test cases for individual address fields
   - Add address validation test cases
   - Update existing test cases

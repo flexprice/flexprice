@@ -15,11 +15,11 @@
 5. **Amendments** route through layered services (change vs modification vs schedules) emphasizing non-breaking migration of billing anchors.
 6. **Cancellation & dunning semantics** interplay with alerting (`alert_logs`) and wallets where credits applied.
 
-Dominant hotspot: **`internal/service/subscription.go`** (multi-thousand-line orchestrator—see hotspots doc).
+Dominant hotspot: **`internal/ee/service/subscription.go`** (multi-thousand-line orchestrator—see hotspots doc).
 
 ## Modules touched
 
-- `internal/service/subscription*.go`
+- `internal/ee/service/subscription*.go`
 - Related: `billing.go`, `entitlement.go`, `wallet_payment.go`
 - Temporal: `internal/temporal/workflows/subscription/**`, correlated activities (`activities/subscription`)
 - API: `internal/api/v1/subscription*.go`

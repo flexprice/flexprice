@@ -287,7 +287,7 @@ type Repository interface {
 ### Service Layer
 
 ```go
-// in internal/service/secret.go
+// in internal/ee/service/secret.go
 package service
 
 import (

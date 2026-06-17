@@ -130,7 +130,7 @@ type Setting struct {
 - ⚠️ Type conversion happens at repository level for subscription configs (`extractSubscriptionConfig`)
 - ❌ No generic type-safe retrieval
 
-#### 4. **Service Layer** (`internal/service/settings.go`)
+#### 4. **Service Layer** (`internal/ee/service/settings.go`)
 
 **Current Methods:**
 
@@ -978,12 +978,12 @@ func (s *subscriptionService) getSubscriptionConfig(ctx context.Context) (*types
 
 **Tasks**:
 
-1. **Invoice Service** (`internal/service/invoice.go`):
+1. **Invoice Service** (`internal/ee/service/invoice.go`):
    - Replace `GetSettingByKey` + `ConvertToInvoiceConfig`
    - With: `GetSetting[types.InvoiceConfig]`
    - Remove: `dto.ConvertToInvoiceConfig` function (deprecated)
    - Update: ~10 occurrences
-2. **Billing Service** (`internal/service/billing.go`):
+2. **Billing Service** (`internal/ee/service/billing.go`):
    - Replace invoice config retrieval
    - Update: ~5 occurrences
 3. **Repository** (`internal/repository/ent/settings.go`):
@@ -1126,7 +1126,7 @@ If issues arise during migration:
 #### Example 1: Registering All Existing Settings
 
 ```go
-// In internal/service/settings.go - service constructor
+// In internal/ee/service/settings.go - service constructor
 
 func NewSettingsService(params ServiceParams) SettingsService {
     // Create registry
@@ -1216,7 +1216,7 @@ func NewSettingsService(params ServiceParams) SettingsService {
 **Before (Current):**
 
 ```go
-// internal/service/invoice.go
+// internal/ee/service/invoice.go
 func (s *invoiceService) getInvoiceConfig(ctx context.Context) (*types.InvoiceConfig, error) {
     // Step 1: Get untyped response
     invoiceConfigResponse, err := s.SettingsService.GetSettingByKey(
@@ -1250,7 +1250,7 @@ func (s *invoiceService) getInvoiceConfig(ctx context.Context) (*types.InvoiceCo
 **After (With Generics):**
 
 ```go
-// internal/service/invoice.go
+// internal/ee/service/invoice.go
 func (s *invoiceService) getInvoiceConfig(ctx context.Context) (types.InvoiceConfig, error) {
     // Single call - returns typed config!
     config, err := s.SettingsService.GetSetting[types.InvoiceConfig](
@@ -1381,7 +1381,7 @@ type PaymentConfig struct {
 // 2. Add constant - internal/types/settings.go (1 line)
 const SettingKeyPaymentConfig SettingKey = "payment_config"
 
-// 3. Register in service constructor - internal/service/settings.go (15 lines)
+// 3. Register in service constructor - internal/ee/service/settings.go (15 lines)
 registry.Register(
     types.SettingKeyPaymentConfig,
     types.PaymentConfig{
@@ -1415,7 +1415,7 @@ config, err := s.SettingsService.GetSetting[types.PaymentConfig](
 #### Example 5: Service Layer - Complete Implementation
 
 ```go
-// internal/service/settings.go
+// internal/ee/service/settings.go
 
 type settingsService struct {
     ServiceParams

@@ -144,7 +144,7 @@ type OAuthSession struct {
 }
 ```
 
-**2. `internal/service/oauth.go`** - Generic OAuth Service
+**2. `internal/ee/service/oauth.go`** - Generic OAuth Service
 ```go
 type OAuthService interface {
     StoreOAuthSession(ctx, session) error
@@ -156,7 +156,7 @@ type OAuthService interface {
 }
 ```
 
-**3. `internal/service/oauth_provider.go`** - Provider Interface
+**3. `internal/ee/service/oauth_provider.go`** - Provider Interface
 ```go
 type OAuthProvider interface {
     GetProviderType() OAuthProvider
@@ -168,7 +168,7 @@ type OAuthProvider interface {
 
 ### Provider Implementations
 
-**4. `internal/service/oauth_provider_quickbooks.go`** - QuickBooks Provider
+**4. `internal/ee/service/oauth_provider_quickbooks.go`** - QuickBooks Provider
 - Implements `OAuthProvider` interface
 - Handles QuickBooks-specific OAuth URL construction
 - Manages token exchange via `connectionService`
@@ -303,7 +303,7 @@ const (
 )
 ```
 
-**2. Create Provider Implementation** (e.g., `internal/service/oauth_provider_stripe.go`)
+**2. Create Provider Implementation** (e.g., `internal/ee/service/oauth_provider_stripe.go`)
 ```go
 type StripeOAuthProvider struct {
     connectionService ConnectionService

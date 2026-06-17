@@ -94,7 +94,7 @@ GET /v1/subscriptions/{subscriptionId}/entitlements  // List all entitlements fo
 
 ### Usage Service Integration
 ```go
-// define new service in internal/services/usage.go
+// define new service in internal/ee/services/usage.go
 type UsageService interface {
     CheckAccess(ctx context.Context, customerID, featureID string) (bool, error)
     TrackUsage(ctx context.Context, customerID, featureID string, quantity int64) error

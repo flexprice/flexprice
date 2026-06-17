@@ -25,7 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
@@ -46,7 +46,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/security"
-	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/gin-gonic/gin"
 	"github.com/nedpals/supabase-go"
 )
