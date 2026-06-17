@@ -55,27 +55,32 @@ SETTINGS index_granularity = 16384,
     max_bytes_to_merge_at_max_space_in_pool = 5368709120,
     deduplicate_merge_projection_mode = 'rebuild';
 
--- ── Existing env reconciliation (e.g. staging on the 000001 schema) ───────────
--- The statements below bring an EXISTING 000001-era `events` table in line with
--- production. They are HEAVY on large tables (column re-encode + projection
--- materialize rewrite every part) and are therefore NOT auto-applied here —
--- run them deliberately, in a maintenance window, only on envs that still carry
--- the old schema. Left commented so golang-migrate does not execute them.
+-- ── Existing env reconciliation (envs already on the 000001 schema) ───────────
+-- These ALTERs bring an EXISTING events table in line with production. They are
+-- idempotent (IF EXISTS / IF NOT EXISTS, and MODIFY COLUMN to the target type is
+-- a no-op when already that type), so on a FRESH env the CREATE above already
+-- built the final schema and every ALTER below no-ops.
 --
--- ALTER TABLE flexprice.events MODIFY COLUMN event_name LowCardinality(String) CODEC(ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN source LowCardinality(String) DEFAULT '' CODEC(ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN customer_id String DEFAULT '' CODEC(ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN id String CODEC(ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN tenant_id String CODEC(ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN external_customer_id String CODEC(ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN environment_id String CODEC(ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN timestamp DateTime64(3) DEFAULT now() CODEC(Delta(8), ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN ingested_at DateTime64(3) DEFAULT now() CODEC(Delta(8), ZSTD(3));
--- ALTER TABLE flexprice.events MODIFY COLUMN properties String CODEC(ZSTD(6));
--- ALTER TABLE flexprice.events DROP INDEX IF EXISTS external_customer_id_idx;
--- ALTER TABLE flexprice.events DROP INDEX IF EXISTS event_name_idx;
--- ALTER TABLE flexprice.events DROP INDEX IF EXISTS source_idx;
--- ALTER TABLE flexprice.events ADD PROJECTION IF NOT EXISTS proj_by_customer_event
---   (SELECT * ORDER BY tenant_id, environment_id, external_customer_id, event_name, timestamp, id);
--- ALTER TABLE flexprice.events MATERIALIZE PROJECTION proj_by_customer_event;
--- ALTER TABLE flexprice.events MODIFY SETTING parts_to_delay_insert = 2000, parts_to_throw_insert = 4000, deduplicate_merge_projection_mode = 'rebuild';
+-- ⚠️ HEAVY ON LARGE EXISTING TABLES. `MODIFY COLUMN` (codec/LowCardinality change)
+-- and `MATERIALIZE PROJECTION` rewrite every data part in the BACKGROUND. CH
+-- accepts the statements quickly (mutation is async — see system.mutations), but
+-- the actual rewrite of a multi-hundred-GiB events table takes hours of disk I/O.
+-- Schedule the deploy that ships this migration into a low-traffic window and
+-- watch `SELECT * FROM system.mutations WHERE is_done = 0` until it drains.
+ALTER TABLE flexprice.events MODIFY COLUMN event_name LowCardinality(String) CODEC(ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN source LowCardinality(String) DEFAULT '' CODEC(ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN customer_id String DEFAULT '' CODEC(ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN id String CODEC(ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN tenant_id String CODEC(ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN external_customer_id String CODEC(ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN environment_id String CODEC(ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN timestamp DateTime64(3) DEFAULT now() CODEC(Delta(8), ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN ingested_at DateTime64(3) DEFAULT now() CODEC(Delta(8), ZSTD(3));
+ALTER TABLE flexprice.events MODIFY COLUMN properties String CODEC(ZSTD(6));
+ALTER TABLE flexprice.events DROP INDEX IF EXISTS external_customer_id_idx;
+ALTER TABLE flexprice.events DROP INDEX IF EXISTS event_name_idx;
+ALTER TABLE flexprice.events DROP INDEX IF EXISTS source_idx;
+ALTER TABLE flexprice.events ADD PROJECTION IF NOT EXISTS proj_by_customer_event
+  (SELECT * ORDER BY tenant_id, environment_id, external_customer_id, event_name, timestamp, id);
+ALTER TABLE flexprice.events MATERIALIZE PROJECTION proj_by_customer_event;
+ALTER TABLE flexprice.events MODIFY SETTING parts_to_delay_insert = 2000, parts_to_throw_insert = 4000, deduplicate_merge_projection_mode = 'rebuild';
