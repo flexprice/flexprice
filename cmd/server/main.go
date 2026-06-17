@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/dynamodb"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -25,7 +26,6 @@ import (
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
-	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/svix"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
@@ -42,11 +42,10 @@ import (
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/proration"
-	ee "github.com/flexprice/flexprice/internal/ee/service"
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/security"
-	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/gin-gonic/gin"
 	"github.com/nedpals/supabase-go"
 )
@@ -273,15 +272,6 @@ func main() {
 			service.NewDashboardService,
 			service.NewWorkflowExecutionService,
 			service.NewWorkflowService,
-
-			// Enterprise (ee) services
-			ee.NewEnterpriseParams,
-			ee.NewCreditNoteService,
-			ee.NewCreditGrantService,
-			ee.NewWalletService,
-			ee.NewPrepaidCreditsService,
-			ee.NewBillingTimezoneService,
-			ee.NewInvoiceGracePeriodService,
 		),
 	)
 
