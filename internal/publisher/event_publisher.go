@@ -31,6 +31,7 @@ func NewEventPublisher(
 	cfg *config.Configuration,
 	logger *logger.Logger,
 	kafkaProducer *kafka.Producer,
+	secondaryProducer *kafka.SecondaryProducer,
 	dynamoClient *dynamodb.Client,
 ) (EventPublisher, error) {
 	publisher := &eventPublisher{
@@ -43,7 +44,14 @@ func NewEventPublisher(
 		if kafkaProducer == nil {
 			return nil, fmt.Errorf("kafka producer is not initialized but it is one of the publish destinations")
 		}
-		publisher.kafkaPublisher = kafka.NewEventPublisher(kafkaProducer, cfg, logger)
+		// kafkaProducer (local) and secondaryProducer (optional second cluster) are both
+		// fx-provided. The kafka event publisher fans out to every write-enabled cluster
+		// (AWS→GCP migration, GCP-CUTOVER-STEPWISE.md).
+		kafkaPublisher, err := kafka.NewEventPublisher(kafkaProducer, secondaryProducer, cfg, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize kafka event publisher: %w", err)
+		}
+		publisher.kafkaPublisher = kafkaPublisher
 	}
 
 	if cfg.Event.PublishDestination == types.PublishToDynamoDB || cfg.Event.PublishDestination == types.PublishToAll {
