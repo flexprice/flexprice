@@ -111,11 +111,14 @@ type UsageParams struct {
 	// - Custom business cycles (fiscal months, quarterly periods)
 	// - Multi-tenant billing with different anchor dates per customer
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
-	// GroupByProperty is the property name in event.properties to group by before aggregating.
-	// When set, aggregation is applied per unique value of this property within each bucket,
-	// then the per-group results are summed to produce the bucket total.
-	// Currently only supported for MAX aggregation with bucket_size.
-	GroupByProperty string `json:"group_by_property,omitempty"`
+	// GroupBy lists the analytics group_by dimensions.
+	//   - "source"        — group by event source
+	//   - "properties.X"  — group by JSON property X
+	// Naming matches UsageAnalyticsParams.GroupBy + MeterUsageQueryParams.GroupBy.
+	// Currently only supported for MAX aggregation with bucket_size; the events
+	// repo's per-row SQL consumes the first dim for legacy single-property
+	// grouping (multi-dim support is on the bucketed-meter path).
+	GroupBy []string `json:"group_by,omitempty"`
 }
 
 // UsageSummaryParams defines parameters for querying pre-computed usage
@@ -165,6 +168,21 @@ type UsageResult struct {
 	Value      decimal.Decimal `json:"value"`
 	EventCount uint64          `json:"event_count"`         // Distinct event count in this window
 	GroupKey   string          `json:"group_key,omitempty"` // group identifier when group_by is used (e.g., KRN value)
+}
+
+// FirstGroupByProperty extracts the first "properties.X" entry from a GroupBy
+// list and returns the bare property name. Returns "" when the list is empty
+// or the first dim isn't a "properties.X" form. Legacy SQL paths that only
+// support a single property dim use this helper instead of carrying a separate
+// scalar GroupByProperty field.
+func FirstGroupByProperty(groupBy []string) string {
+	const prefix = "properties."
+	for _, g := range groupBy {
+		if len(g) > len(prefix) && g[:len(prefix)] == prefix {
+			return g[len(prefix):]
+		}
+	}
+	return ""
 }
 
 type AggregationResult struct {

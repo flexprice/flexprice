@@ -532,6 +532,12 @@ func (s *billingService) queryBucketedMeterUsageDirect(
 		aggType = types.AggregationSum
 		groupBy = ""
 	}
+	// Translate meter-level Aggregation.GroupBy (a single property name) to the
+	// unified GroupBy []string convention: "properties.<X>".
+	var paramsGroupBy []string
+	if groupBy != "" {
+		paramsGroupBy = []string{"properties." + groupBy}
+	}
 	return s.MeterUsageRepo.GetUsageForBucketedMeters(ctx, &events.MeterUsageQueryParams{
 		TenantID:            types.GetTenantID(ctx),
 		EnvironmentID:       types.GetEnvironmentID(ctx),
@@ -542,7 +548,7 @@ func (s *billingService) queryBucketedMeterUsageDirect(
 		AggregationType:     aggType,
 		WindowSize:          m.Aggregation.BucketSize,
 		BillingAnchor:       &sub.BillingAnchor,
-		GroupByProperty:     groupBy,
+		GroupBy:             paramsGroupBy,
 		UseFinal:            querySource.UseFinal(),
 	})
 }

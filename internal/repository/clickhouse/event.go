@@ -304,9 +304,10 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 				value = decimal.NewFromUint64(countValue)
 			case types.AggregationMax, types.AggregationSum:
 				if params.BucketSize != "" {
+					groupByProperty := events.FirstGroupByProperty(params.GroupBy)
 					hasGroupBy := params.AggregationType == types.AggregationMax &&
-						params.GroupByProperty != "" &&
-						validateGroupByProperty(params.GroupByProperty) == nil
+						groupByProperty != "" &&
+						validateGroupByProperty(groupByProperty) == nil
 
 					bucketTotal, bucketValue, bucketTime, groupKey, err := scanBucketedRow(rows, hasGroupBy)
 					if err != nil {

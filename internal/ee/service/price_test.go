@@ -997,8 +997,10 @@ func (s *PriceServiceSuite) TestCalculateCostFromUsageResults_TieredSlab() {
 	// krn1: 3 × ₹1 = ₹3; krn2: 10×₹1 + 2×₹2 = ₹14; total = ₹17
 	bucketStart := time.Now().Truncate(time.Hour)
 	results := []events.UsageResult{
-		{WindowSize: bucketStart, Value: decimal.NewFromInt(3), GroupKey: "krn1"},
-		{WindowSize: bucketStart, Value: decimal.NewFromInt(12), GroupKey: "krn2"},
+		// Per-group rows: GroupKey no longer carried on UsageResult — the per-row
+		// Value is what CalculateCostFromUsageResults consumes.
+		{WindowSize: bucketStart, Value: decimal.NewFromInt(3)},
+		{WindowSize: bucketStart, Value: decimal.NewFromInt(12)},
 	}
 
 	result := s.priceService.CalculateCostFromUsageResults(s.ctx, price, results)
@@ -1028,8 +1030,8 @@ func (s *PriceServiceSuite) TestCalculateCostFromUsageResults_TieredVolume() {
 	// One bucket: group A max=5 (tier 1 → 5*0.10=$0.50), group B max=15 (tier 2 → 15*0.05=$0.75); total=$1.25
 	bucketStart := time.Now().Truncate(time.Hour)
 	results := []events.UsageResult{
-		{WindowSize: bucketStart, Value: decimal.NewFromInt(5), GroupKey: "A"},
-		{WindowSize: bucketStart, Value: decimal.NewFromInt(15), GroupKey: "B"},
+		{WindowSize: bucketStart, Value: decimal.NewFromInt(5)},
+		{WindowSize: bucketStart, Value: decimal.NewFromInt(15)},
 	}
 
 	result := s.priceService.CalculateCostFromUsageResults(s.ctx, price, results)

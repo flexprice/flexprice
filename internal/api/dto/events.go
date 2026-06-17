@@ -124,7 +124,15 @@ type GetUsageRequest struct {
 	// GroupByProperty is the property name in event.properties to group by before aggregating.
 	// When set, aggregation is applied per unique value of this property within each bucket,
 	// then the per-group results are summed to produce the bucket total.
+	//
+	// Deprecated: prefer GroupBy []string{"properties.<X>"} for parity with
+	// other analytics endpoints. ToUsageParams translates this field into
+	// GroupBy when GroupBy is otherwise empty.
 	GroupByProperty string `form:"group_by_property" json:"group_by_property,omitempty"`
+	// GroupBy lists the analytics group_by dimensions.
+	//   - "source"        — group by event source column
+	//   - "properties.X"  — group by JSON property X
+	GroupBy []string `form:"group_by" json:"group_by,omitempty"`
 }
 
 type GetUsageByMeterRequest struct {
@@ -256,6 +264,13 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 		r.AggregationType = types.AggregationCount
 	}
 
+	// Honor the modern GroupBy slice when set; otherwise translate the
+	// deprecated singular GroupByProperty for backward compat.
+	groupBy := r.GroupBy
+	if len(groupBy) == 0 && r.GroupByProperty != "" {
+		groupBy = []string{"properties." + r.GroupByProperty}
+	}
+
 	return &events.UsageParams{
 		ExternalCustomerID:  r.ExternalCustomerID,
 		ExternalCustomerIDs: r.ExternalCustomerIDs,
@@ -270,7 +285,7 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 		Filters:             r.Filters,
 		Multiplier:          r.Multiplier,
 		BillingAnchor:       r.BillingAnchor,
-		GroupByProperty:     r.GroupByProperty,
+		GroupBy:             groupBy,
 	}
 }
 

@@ -3979,3 +3979,80 @@ func (s *MeterUsageServiceSuite) TestBucketedMeter_EventCount() {
 	s.Equal(uint64(5), pointEventCount,
 		"sum of per-point EventCount: expected 5, got %d", pointEventCount)
 }
+
+// TestBucketedMeter_UserGroupByFansOutSourceAndProperties pins the prod report
+// where a bucketed MAX meter analytics request with
+// group_by=[source, properties.X] returned items with empty source and missing
+// properties. queryBucketedMeterUsage only forwarded the meter-level
+// Aggregation.GroupBy and silently dropped the user's group_by, so the bucketed
+// SQL never grouped by source/properties and the merge stamped one analytic per
+// line item with both fields blank.
+//
+// Setup: HOUR bucketed MAX meter, two events on the same day in different hours
+// with distinct (source, properties.region) combos. Request HOUR window with
+// group_by=[source, properties.region].
+//
+// Expected: two response items, one per combo, each with Source set and
+// Properties carrying the requested key.
+func (s *MeterUsageServiceSuite) TestBucketedMeter_UserGroupByFansOutSourceAndProperties() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_ug_buck",
+		Name:      "Bucketed MAX user group_by",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_ug_buck", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_ug_buck", bucketedMeter.ID, bucketedPrice.ID)
+
+	// Two events in different hours so the bucket maxes are independent.
+	s.insertMeterUsageWithProps(ctx, bucketedMeter.ID, s.customer.ExternalID, "api",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 100,
+		map[string]interface{}{"region": "us-east"})
+	s.insertMeterUsageWithProps(ctx, bucketedMeter.ID, s.customer.ExternalID, "sdk",
+		time.Date(2026, 1, 5, 11, 0, 0, 0, time.UTC), 50,
+		map[string]interface{}{"region": "eu-west"})
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeHour,
+		GroupBy:            []string{"source", "properties.region"},
+	})
+	s.NoError(err)
+
+	byCombo := make(map[string]*dto.UsageAnalyticItem, 2)
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID != "li_ug_buck" {
+			continue
+		}
+		key := resp.Items[i].Source + "|" + resp.Items[i].Properties["region"]
+		byCombo[key] = &resp.Items[i]
+	}
+
+	s.Require().Lenf(byCombo, 2, "expected one item per (source, region) combo (total 2 combos), got %d items total", len(byCombo))
+
+	apiItem, ok := byCombo["api|us-east"]
+	s.Require().True(ok, "missing item for source=api region=us-east")
+	s.Equal("api", apiItem.Source)
+	s.Equal("us-east", apiItem.Properties["region"])
+	s.True(apiItem.TotalUsage.Equal(decimal.NewFromInt(100)),
+		"api/us-east total: expected 100, got %s", apiItem.TotalUsage)
+
+	sdkItem, ok := byCombo["sdk|eu-west"]
+	s.Require().True(ok, "missing item for source=sdk region=eu-west")
+	s.Equal("sdk", sdkItem.Source)
+	s.Equal("eu-west", sdkItem.Properties["region"])
+	s.True(sdkItem.TotalUsage.Equal(decimal.NewFromInt(50)),
+		"sdk/eu-west total: expected 50, got %s", sdkItem.TotalUsage)
+}

@@ -1137,13 +1137,17 @@ func (s *costsheetUsageTrackingService) buildBucketFeaturesFromCostsheet(ctx con
 		if f.MeterID != "" {
 			if m, exists := meterMap[f.MeterID]; exists {
 				if m.IsBucketedMaxMeter() {
+					var featGroupBy []string
+					if m.Aggregation.GroupBy != "" {
+						featGroupBy = []string{"properties." + m.Aggregation.GroupBy}
+					}
 					maxBucketFeatures[f.ID] = &events.MaxBucketFeatureInfo{
-						FeatureID:       f.ID,
-						MeterID:         f.MeterID,
-						BucketSize:      types.WindowSize(m.Aggregation.BucketSize),
-						EventName:       m.EventName,
-						PropertyName:    m.Aggregation.Field,
-						GroupByProperty: m.Aggregation.GroupBy,
+						FeatureID:    f.ID,
+						MeterID:      f.MeterID,
+						BucketSize:   types.WindowSize(m.Aggregation.BucketSize),
+						EventName:    m.EventName,
+						PropertyName: m.Aggregation.Field,
+						GroupBy:      featGroupBy,
 					}
 				} else if m.IsBucketedSumMeter() {
 					sumBucketFeatures[f.ID] = &events.SumBucketFeatureInfo{

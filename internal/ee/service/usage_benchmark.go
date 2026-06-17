@@ -96,7 +96,7 @@ func (s *usageBenchmarkService) PublishEvent(ctx context.Context, event *events.
 	// events remain debuggable; analytics-kind events fall back to a timestamp suffix.
 	msgID := fmt.Sprintf("bench-%s-%d", event.SubscriptionID, time.Now().UnixNano())
 	if event.Kind == events.UsageBenchmarkKindAnalytics {
-		msgID = fmt.Sprintf("bench-analytics-%d", time.Now().UnixNano())
+		msgID = fmt.Sprintf("bench-analytics-%s", types.GenerateUUID())
 	}
 	msg := message.NewMessage(msgID, payload)
 	msg.Metadata.Set("tenant_id", event.TenantID)
