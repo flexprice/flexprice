@@ -449,7 +449,7 @@ func TestRBACPermissions(t *testing.T) {
 
 func (s *RBACPermissionSuite) SetupSuite() {
 	svc, err := rbac.NewRBACService(&config.Configuration{
-		RBAC: config.RBACConfig{RolesConfigPath: "../../internal/config/rbac/roles.json"},
+		RBAC: config.RBACConfig{RolesConfigPath: "../../../internal/config/rbac/roles.json"},
 	})
 	if err != nil || svc == nil {
 		svc, err = rbac.NewRBACService(&config.Configuration{
