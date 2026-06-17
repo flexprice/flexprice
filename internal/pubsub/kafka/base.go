@@ -17,11 +17,15 @@ import (
 )
 
 func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
+	// This stack (webhook pub/sub, DLQ, consumers) operates on the deployment's local
+	// cluster — the one it reads from — not necessarily the AWS write target.
+	kc := &cfg.Kafka
+
 	saramaConfig := sarama.NewConfig()
 	saramaConfig.Version = sarama.V2_1_0_0
 
 	// Configure client ID regardless of SASL
-	saramaConfig.ClientID = cfg.Kafka.ClientID
+	saramaConfig.ClientID = kc.ClientID
 
 	// Set consumer offset reset policy to ensure we don't miss messages
 	// "earliest" ensures that when a consumer starts with no initial offset or
@@ -35,14 +39,14 @@ func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
 	// When rebalancing happens, use the last committed offset
 	saramaConfig.Consumer.Offsets.Retry.Max = 3
 
-	if cfg.Kafka.TLS {
+	if kc.TLS {
 		saramaConfig.Net.TLS.Enable = true
 		saramaConfig.Net.TLS.Config = &tls.Config{
 			InsecureSkipVerify: false,
 		}
 	}
 
-	if !cfg.Kafka.UseSASL {
+	if !kc.UseSASL {
 		return saramaConfig
 	}
 
@@ -51,33 +55,33 @@ func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
 	saramaConfig.Net.TLS.Enable = true
 
 	// sasl configs
-	saramaConfig.Net.SASL.Mechanism = cfg.Kafka.SASLMechanism
+	saramaConfig.Net.SASL.Mechanism = kc.SASLMechanism
 
-	switch cfg.Kafka.SASLMechanism {
+	switch kc.SASLMechanism {
 	case sarama.SASLTypeOAuth:
 		// OAUTHBEARER (e.g. GCP Managed Kafka). Reuse the shared token provider
 		// from internal/kafka so this pubsub path emits the same GMK-format
 		// token. Without this, sarama panics at connect time with "An
 		// AccessTokenProvider instance must be provided to Net.SASL.TokenProvider".
 		// User/Password are not used.
-		provider, err := mainkafka.NewGCPTokenProvider(context.Background(), cfg.Kafka.SASLOAuthScopes)
+		provider, err := mainkafka.NewGCPTokenProvider(context.Background(), kc.SASLOAuthScopes)
 		if err != nil {
-			panic(fmt.Errorf("kafka oauthbearer: init token provider (scopes=%v) — check GCP Application Default Credentials: %w", cfg.Kafka.SASLOAuthScopes, err))
+			panic(fmt.Errorf("kafka oauthbearer: init token provider (scopes=%v) — check GCP Application Default Credentials: %w", kc.SASLOAuthScopes, err))
 		}
 		saramaConfig.Net.SASL.TokenProvider = provider
 
 	case sarama.SASLTypeSCRAMSHA256, sarama.SASLTypeSCRAMSHA512:
-		saramaConfig.Net.SASL.User = cfg.Kafka.SASLUser
-		saramaConfig.Net.SASL.Password = cfg.Kafka.SASLPassword
+		saramaConfig.Net.SASL.User = kc.SASLUser
+		saramaConfig.Net.SASL.Password = kc.SASLPassword
 		// Configure SCRAM client generator for SCRAM mechanisms
 		saramaConfig.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
-			return &XDGSCRAMClient{HashGeneratorFcn: getHashGenerator(cfg.Kafka.SASLMechanism)}
+			return &XDGSCRAMClient{HashGeneratorFcn: getHashGenerator(kc.SASLMechanism)}
 		}
 
 	default:
 		// PLAIN and any other mechanism that uses user+password.
-		saramaConfig.Net.SASL.User = cfg.Kafka.SASLUser
-		saramaConfig.Net.SASL.Password = cfg.Kafka.SASLPassword
+		saramaConfig.Net.SASL.User = kc.SASLUser
+		saramaConfig.Net.SASL.Password = kc.SASLPassword
 	}
 
 	return saramaConfig

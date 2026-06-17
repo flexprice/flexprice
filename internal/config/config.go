@@ -23,6 +23,12 @@ type Configuration struct {
 	Server                     ServerConfig                     `validate:"required"`
 	Auth                       AuthConfig                       `validate:"required"`
 	Kafka                      KafkaConfig                      `validate:"required"`
+	// KafkaSecondary is the optional second Kafka cluster the source event publisher also
+	// writes to during the AWS→GCP migration (the "other" cloud's cluster). When set
+	// (non-nil) every event is published to it in addition to the local `kafka` cluster;
+	// when nil, publishing is single-cluster. The `kafka` block is this deployment's own
+	// local cluster — consumed AND always written. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+	KafkaSecondary             *KafkaConfig                     `mapstructure:"kafka_secondary" validate:"omitempty"`
 	ClickHouse                 ClickHouseConfig                 `validate:"required"`
 	Logging                    LoggingConfig                    `validate:"required"`
 	Postgres                   PostgresConfig                   `validate:"required"`
@@ -711,6 +717,24 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
 	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
+
+	// Explicitly bind the second-cluster keys — their segment (kafka_secondary) contains an
+	// underscore, which AutomaticEnv cannot disambiguate, and kafka_secondary is absent from
+	// the YAML defaults (nil unless configured). Without these binds, FLEXPRICE_KAFKA_SECONDARY_*
+	// are silently ignored and dual-write never turns on. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+	_ = v.BindEnv("kafka_secondary.brokers", "FLEXPRICE_KAFKA_SECONDARY_BROKERS")
+	_ = v.BindEnv("kafka_secondary.consumer_group", "FLEXPRICE_KAFKA_SECONDARY_CONSUMER_GROUP")
+	_ = v.BindEnv("kafka_secondary.topic", "FLEXPRICE_KAFKA_SECONDARY_TOPIC")
+	_ = v.BindEnv("kafka_secondary.topic_lazy", "FLEXPRICE_KAFKA_SECONDARY_TOPIC_LAZY")
+	_ = v.BindEnv("kafka_secondary.topic_dlq", "FLEXPRICE_KAFKA_SECONDARY_TOPIC_DLQ")
+	_ = v.BindEnv("kafka_secondary.tls", "FLEXPRICE_KAFKA_SECONDARY_TLS")
+	_ = v.BindEnv("kafka_secondary.use_sasl", "FLEXPRICE_KAFKA_SECONDARY_USE_SASL")
+	_ = v.BindEnv("kafka_secondary.sasl_mechanism", "FLEXPRICE_KAFKA_SECONDARY_SASL_MECHANISM")
+	_ = v.BindEnv("kafka_secondary.sasl_user", "FLEXPRICE_KAFKA_SECONDARY_SASL_USER")
+	_ = v.BindEnv("kafka_secondary.sasl_password", "FLEXPRICE_KAFKA_SECONDARY_SASL_PASSWORD")
+	_ = v.BindEnv("kafka_secondary.sasl_oauth_scopes", "FLEXPRICE_KAFKA_SECONDARY_SASL_OAUTH_SCOPES")
+	_ = v.BindEnv("kafka_secondary.client_id", "FLEXPRICE_KAFKA_SECONDARY_CLIENT_ID")
+	_ = v.BindEnv("kafka_secondary.route_tenants_on_lazy_mode", "FLEXPRICE_KAFKA_SECONDARY_ROUTE_TENANTS_ON_LAZY_MODE")
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {

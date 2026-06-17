@@ -167,7 +167,8 @@ func SetupDummyBillingCustomer() error {
 		}
 	}()
 
-	eventPublisher, err := publisher.NewEventPublisher(cfg, appLogger, kafkaProducer, nil)
+	// secondaryProducer=nil (no dual-write in this script), dynamoClient=nil (kafka only)
+	eventPublisher, err := publisher.NewEventPublisher(cfg, appLogger, kafkaProducer, nil, nil)
 	if err != nil {
 		return fmt.Errorf("event publisher: %w", err)
 	}
