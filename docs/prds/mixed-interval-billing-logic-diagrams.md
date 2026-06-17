@@ -1,6 +1,6 @@
 # Mixed-Interval Billing – Logic Diagram
 
-Single flowchart for **CalculateFixedCharges** ([internal/service/billing.go](internal/service/billing.go)): inclusion (Algorithm A/B), period and amount per type (F1, F2, F4), date helpers. Scope: [mixed-interval-billing-implementation-scope.md](mixed-interval-billing-implementation-scope.md). Formulas & algorithms: [mixed-interval-billing.md](mixed-interval-billing.md) §5.6, 5.7, 5.9; helpers: [internal/types/date.go](internal/types/date.go).
+Single flowchart for **CalculateFixedCharges** ([internal/ee/service/billing.go](internal/ee/service/billing.go)): inclusion (Algorithm A/B), period and amount per type (F1, F2, F4), date helpers. Scope: [mixed-interval-billing-implementation-scope.md](mixed-interval-billing-implementation-scope.md). Formulas & algorithms: [mixed-interval-billing.md](mixed-interval-billing.md) §5.6, 5.7, 5.9; helpers: [internal/types/date.go](internal/types/date.go).
 
 ```mermaid
 flowchart TB
