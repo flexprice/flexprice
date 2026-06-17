@@ -17,7 +17,7 @@ Temporal integration points noted in hotspots: **`internal/api/v1/invoice`** dir
 
 ## Modules touched
 
-- `internal/service/invoice.go` (dominant orchestrator)
+- `internal/ee/service/invoice.go` (dominant orchestrator)
 - `internal/api/v1/invoice.go`
 - `internal/domain/invoice/**`
 - `internal/repository/ent` invoice + line entities

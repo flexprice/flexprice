@@ -3,7 +3,7 @@ package temporal
 import (
 	"fmt"
 
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	chargebeeActivities "github.com/flexprice/flexprice/internal/temporal/activities/chargebee"
 	cronActivities "github.com/flexprice/flexprice/internal/temporal/activities/cron"
 	customerActivities "github.com/flexprice/flexprice/internal/temporal/activities/customer"

@@ -20,7 +20,7 @@
 ## Modules touched
 
 - `internal/api/v1/*.go`, `internal/api/cron/*.go`, `internal/api/dto/**`
-- `internal/service/**`
+- `internal/ee/service/**`
 - Middleware: `internal/rest/middleware/**`
 
 ## Database operations

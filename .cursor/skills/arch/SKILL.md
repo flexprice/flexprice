@@ -28,7 +28,7 @@ Use when navigating **`cmd/`**, **`internal/`**, **`ent/`** (billing, metering, 
 ## How to analyze architecture quickly
 
 1. **Identify deployment surface** — `cmd/server/main.go` + `deployment.mode`. Determine whether edits affect API-only paths, Kafka consumers, or Temporal workers (`registerRouterHandlers` & `startTemporalWorker` branches).
-2. **Locate the bounded context** — map feature → domain package (`internal/domain/<ctx>`) → repository impl (`repository/ent` vs `repository/clickhouse`) → service (`internal/service/<file>`) → handler (`internal/api/v1`).
+2. **Locate the bounded context** — map feature → domain package (`internal/domain/<ctx>`) → repository impl (`repository/ent` vs `repository/clickhouse`) → service (`internal/ee/service/<file>`) → handler (`internal/api/v1`).
 3. **Check async edges** — list Kafka topics touched (search config keys under `internal/config`) and Temporal workflow names (`internal/temporal/workflows`).
 4. **Assess coupling** — if you need half of `ServiceParams`, consider narrowing new code’s dependencies deliberately.
 

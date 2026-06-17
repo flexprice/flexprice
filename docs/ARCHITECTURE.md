@@ -31,7 +31,7 @@ FlexPrice is monetization infrastructure: **metering**, **pricing**, **subscript
 | ----- | -------- | ------------- | ----------- |
 | **Domain** | `internal/domain/` | Entities, repo interfaces | stdlib / shared primitives only |
 | **Repository** | `internal/repository/` | Persist domain models via Ent / ClickHouse | domain, infra clients |
-| **Service** | `internal/service/` | Business rules orchestration | domain, repos, integrations, Temporal client interfaces, publishers |
+| **Service** | `internal/ee/service/` | Business rules orchestration | domain, repos, integrations, Temporal client interfaces, publishers |
 | **API** | `internal/api/` | HTTP serialization, routing, coarse validation | services, dto, middleware |
 | **Integration** | `internal/integration/` | Third-party adapters | dto/mapping, HTTP clients |
 

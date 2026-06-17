@@ -8,7 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	repoent "github.com/flexprice/flexprice/internal/repository/ent"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
 	"github.com/flexprice/flexprice/internal/webhook/payload"

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"

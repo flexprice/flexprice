@@ -15,7 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
-	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
