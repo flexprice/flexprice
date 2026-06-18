@@ -191,28 +191,22 @@ func (s *secretService) ListAPIKeys(ctx context.Context, filter *types.SecretFil
 
 	items := dto.ToSecretResponseList(secrets)
 
-	serviceAccountNameByID := make(map[string]string)
-	for _, item := range items {
-		if item.UserType == types.UserTypeServiceAccount && item.UserID != "" {
-			serviceAccountNameByID[item.UserID] = ""
-		}
-	}
-	if len(serviceAccountNameByID) > 0 {
-		serviceAccountIDs := make([]string, 0, len(serviceAccountNameByID))
-		for id := range serviceAccountNameByID {
-			serviceAccountIDs = append(serviceAccountIDs, id)
-		}
+	serviceAccountIDs := lo.Uniq(lo.FilterMap(items, func(item *dto.SecretResponse, _ int) (string, bool) {
+		return item.UserID, item.UserType == types.UserTypeServiceAccount && item.UserID != ""
+	}))
+	if len(serviceAccountIDs) > 0 {
 		serviceAccounts, _, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
 			QueryFilter: types.NewNoLimitPublishedQueryFilter(),
 			UserIDs:     serviceAccountIDs,
+			Type:        lo.ToPtr(types.UserTypeServiceAccount),
 		})
 		if err == nil {
-			for _, serviceAccount := range serviceAccounts {
-				serviceAccountNameByID[serviceAccount.ID] = serviceAccount.Name
-			}
-			for _, item := range items {
-				item.ServiceAccountName = serviceAccountNameByID[item.UserID]
-			}
+			nameByID := lo.SliceToMap(serviceAccounts, func(u *user.User) (string, string) {
+				return u.ID, u.Name
+			})
+			lo.ForEach(items, func(item *dto.SecretResponse, _ int) {
+				item.ServiceAccountName = nameByID[item.UserID]
+			})
 		}
 	}
 
