@@ -314,6 +314,7 @@ func (r *paymentMethodRepository) GetDefaultForCustomer(ctx context.Context, cus
 			entpaymentmethod.TenantID(types.GetTenantID(ctx)),
 			entpaymentmethod.EnvironmentID(types.GetEnvironmentID(ctx)),
 			entpaymentmethod.Status(string(types.StatusPublished)),
+			entpaymentmethod.PaymentMethodStatus(string(types.PaymentMethodStatusActive)),
 		).
 		Order(ent.Desc(entpaymentmethod.FieldIsDefault), ent.Desc(entpaymentmethod.FieldCreatedAt)).
 		First(ctx)

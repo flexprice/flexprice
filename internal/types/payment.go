@@ -17,10 +17,18 @@ const (
 	PaymentStatusFailed            PaymentStatus = "FAILED"
 	PaymentStatusRefunded          PaymentStatus = "REFUNDED"
 	PaymentStatusPartiallyRefunded PaymentStatus = "PARTIALLY_REFUNDED"
+	PaymentStatusVoided            PaymentStatus = "VOIDED"
 )
 
 func (s PaymentStatus) String() string {
 	return string(s)
+}
+
+// IsTerminal returns true if no further lifecycle transitions are valid.
+// VOIDED, REFUNDED, and FAILED are terminal. SUCCEEDED is not — AUTH payments
+// can still transition from SUCCEEDED to VOIDED or REFUNDED.
+func (s PaymentStatus) IsTerminal() bool {
+	return s == PaymentStatusVoided || s == PaymentStatusRefunded || s == PaymentStatusFailed
 }
 
 func (s PaymentStatus) Validate() error {
@@ -33,6 +41,7 @@ func (s PaymentStatus) Validate() error {
 		PaymentStatusFailed,
 		PaymentStatusRefunded,
 		PaymentStatusPartiallyRefunded,
+		PaymentStatusVoided,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment status").
@@ -84,6 +93,9 @@ type PaymentDestinationType string
 
 const (
 	PaymentDestinationTypeInvoice PaymentDestinationType = "INVOICE"
+	// PaymentDestinationTypeAuth is used when the payment's purpose is to tokenize
+	// a payment method at the gateway (auth charge that is voided after token is saved).
+	PaymentDestinationTypeAuth PaymentDestinationType = "AUTH"
 )
 
 func (s PaymentDestinationType) String() string {
@@ -93,6 +105,7 @@ func (s PaymentDestinationType) String() string {
 func (s PaymentDestinationType) Validate() error {
 	allowed := []PaymentDestinationType{
 		PaymentDestinationTypeInvoice,
+		PaymentDestinationTypeAuth,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment destination type").
