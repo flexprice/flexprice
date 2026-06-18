@@ -38,8 +38,12 @@ type MeterUsageQueryParams struct {
 	AggregationType     types.AggregationType
 	WindowSize          types.WindowSize
 	BillingAnchor       *time.Time
-	// GroupByProperty is the JSON property key for group-by aggregation (e.g. for bucketed MAX meters)
-	GroupByProperty string
+	// GroupBy is the group_by dimension list. Allowed entries:
+	//   - "source"        — group by event source column
+	//   - "properties.X"  — group by JSON property X
+	// Naming matches UsageAnalyticsParams.GroupBy (feature-usage). Billing
+	// callers populating from meter.Aggregation.GroupBy wrap as "properties.<X>".
+	GroupBy []string
 	// UseFinal enables FINAL for ReplacingMergeTree deduplication (use for billing queries)
 	UseFinal bool
 	// PropertyFilters restrict events whose properties match. e.g. {"model": ["gpt-4"]}
@@ -136,6 +140,12 @@ type MeterUsageRepository interface {
 	// GetUsageForBucketedMeters returns windowed aggregation results for bucketed meters (MAX/SUM with bucket_size).
 	// Returns *AggregationResult (shared type with feature_usage) for compatibility with calculateBucketedMeterCost.
 	GetUsageForBucketedMeters(ctx context.Context, params *MeterUsageQueryParams) (*AggregationResult, error)
+
+	// GetUsageForBucketedMetersDetailed is the analytics-side variant: returns one
+	// MeterUsageDetailedResult per (source, properties) combo when UserGroupBy is
+	// set, with per-combo TotalUsage / EventCount / Points pre-rolled by SQL —
+	// mirrors feature_usage's getMaxBucketTotals + getAnalyticsPoints shape.
+	GetUsageForBucketedMetersDetailed(ctx context.Context, params *MeterUsageQueryParams) ([]*MeterUsageDetailedResult, error)
 
 	// GetDistinctMeterIDs returns the set of meter_ids that have data in the meter_usage table
 	// for the given customer(s) and time range. Used to skip meters with zero usage.

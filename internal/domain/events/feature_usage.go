@@ -104,12 +104,12 @@ type GetFeatureUsageBySubscriptionParams struct {
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation
 type MaxBucketFeatureInfo struct {
-	FeatureID       string
-	MeterID         string
-	BucketSize      types.WindowSize
-	EventName       string
-	PropertyName    string
-	GroupByProperty string // Property name in event.properties to group by before aggregating
+	FeatureID    string
+	MeterID      string
+	BucketSize   types.WindowSize
+	EventName    string
+	PropertyName string
+	GroupBy      []string // GroupBy: "source" or "properties.X"
 }
 
 // SumBucketFeatureInfo contains information about a feature that uses SUM with bucket aggregation

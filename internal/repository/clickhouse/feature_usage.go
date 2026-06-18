@@ -973,11 +973,11 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 
 	// Add meter-level group_by property to inner query GROUP BY
 	// This ensures aggregation is applied per unique value of the group_by property within each bucket
-	if featureInfo.GroupByProperty != "" {
-		if err := validateGroupByProperty(featureInfo.GroupByProperty); err != nil {
+	if meterGroupByProp := events.FirstGroupByProperty(featureInfo.GroupBy); meterGroupByProp != "" {
+		if err := validateGroupByProperty(meterGroupByProp); err != nil {
 			return nil, err
 		}
-		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", featureInfo.GroupByProperty)
+		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", meterGroupByProp)
 		groupByColumns = append(groupByColumns, groupByExpr)
 		innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("%s as meter_group_by", groupByExpr))
 	}
@@ -1295,12 +1295,12 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 
 	// Complete the query with GROUP BY and ORDER BY
 	// Return bucket-level points with window metadata for service-layer merging
-	if featureInfo.GroupByProperty != "" {
+	if meterGroupByProp := events.FirstGroupByProperty(featureInfo.GroupBy); meterGroupByProp != "" {
 		// When group_by is set, add property to GROUP BY and wrap with a SUM across groups
-		if err := validateGroupByProperty(featureInfo.GroupByProperty); err != nil {
+		if err := validateGroupByProperty(meterGroupByProp); err != nil {
 			return nil, err
 		}
-		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", featureInfo.GroupByProperty)
+		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", meterGroupByProp)
 		innerQuery += fmt.Sprintf(" GROUP BY bucket_start, window_start, %s ORDER BY bucket_start", groupByExpr)
 
 		// Wrap the inner query to sum across groups per bucket
@@ -2343,7 +2343,8 @@ func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, 
 	var result events.AggregationResult
 	result.Type = params.UsageParams.AggregationType
 
-	hasGroupBy := params.UsageParams.GroupByProperty != "" && validateGroupByProperty(params.UsageParams.GroupByProperty) == nil
+	usageGroupByProp := events.FirstGroupByProperty(params.UsageParams.GroupBy)
+	hasGroupBy := usageGroupByProp != "" && validateGroupByProperty(usageGroupByProp) == nil
 
 	// For windowed queries, we need to process all rows
 	for rows.Next() {
@@ -2443,8 +2444,8 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 	// 1. Inner CTE: aggregate per group per bucket (e.g., MAX per krn per hour)
 	// 2. Middle CTE: SUM across groups per bucket (e.g., SUM of group maxes per hour)
 	// 3. Outer query: return per-bucket values and overall total
-	if params.UsageParams.GroupByProperty != "" && validateGroupByProperty(params.UsageParams.GroupByProperty) == nil {
-		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", params.UsageParams.GroupByProperty)
+	if usageGroupByProp := events.FirstGroupByProperty(params.UsageParams.GroupBy); usageGroupByProp != "" && validateGroupByProperty(usageGroupByProp) == nil {
+		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", usageGroupByProp)
 
 		return fmt.Sprintf(`
 			WITH per_group AS (

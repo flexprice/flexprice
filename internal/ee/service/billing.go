@@ -1274,6 +1274,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 					aggType = types.AggregationSum
 					groupBy = "" // sum meters don't use per-group pricing
 				}
+				var usageGroupBy []string
+				if groupBy != "" {
+					usageGroupBy = []string{"properties." + groupBy}
+				}
 				usageRequest := &events.FeatureUsageParams{
 					PriceID:       item.PriceID,
 					MeterID:       item.MeterID,
@@ -1286,7 +1290,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 						EndTime:             item.GetPeriodEnd(periodEnd),
 						WindowSize:          meter.Aggregation.BucketSize,
 						BillingAnchor:       &sub.BillingAnchor,
-						GroupByProperty:     groupBy,
+						GroupBy:             usageGroupBy,
 					},
 				}
 				usageResult, err := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
@@ -1603,6 +1607,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 						// ClickHouse round-trip with the same parameters.
 						commitmentUsageResult := cachedBucketedUsageResult
 						if commitmentUsageResult == nil {
+							var commitmentGroupBy []string
+							if meter.Aggregation.GroupBy != "" {
+								commitmentGroupBy = []string{"properties." + meter.Aggregation.GroupBy}
+							}
 							usageRequest := &events.FeatureUsageParams{
 								PriceID:       item.PriceID,
 								MeterID:       item.MeterID,
@@ -1615,7 +1623,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 									EndTime:             effectiveCommitmentEnd,
 									WindowSize:          meter.Aggregation.BucketSize,
 									BillingAnchor:       &sub.BillingAnchor,
-									GroupByProperty:     meter.Aggregation.GroupBy,
+									GroupBy:             commitmentGroupBy,
 								},
 							}
 

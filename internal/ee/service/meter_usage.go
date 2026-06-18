@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -451,6 +453,8 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	// committed line items can have their commitment fire on no usage).
 	skipBucketedZeros := len(req.PropertyFilters) > 0 || len(req.Sources) > 0
 
+	useDetailed := hasUserBucketedGroupBy(req.GroupBy)
+
 	for meterID := range bucketedMeterIDs {
 		m := result.MeterMap[meterID]
 		if m == nil {
@@ -460,6 +464,47 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 		for _, item := range items {
 			itemStart := item.GetPeriodStart(usageStartTime)
 			itemEnd := item.GetPeriodEnd(usageEndTime)
+
+			if useDetailed {
+				// Analytics fan-out: one LineItemMeterUsage per (source, properties)
+				// combo. Repo does the per-combo aggregation in SQL; nothing to
+				// re-group in Go.
+				detailedResults, err := s.queryBucketedMeterAnalyticsDetailed(
+					ctx, m, externalCustomerIDs,
+					itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
+					req.PropertyFilters, req.Sources, req.GroupBy,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("failed to query bucketed meter analytics for meter %s: %w", meterID, err)
+				}
+				if skipBucketedZeros && len(detailedResults) == 0 {
+					continue
+				}
+				for _, dr := range detailedResults {
+					if dr == nil {
+						continue
+					}
+					result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+						LineItem:        item,
+						MeterID:         meterID,
+						Meter:           m,
+						Price:           result.PriceMap[item.PriceID],
+						PeriodStart:     itemStart,
+						PeriodEnd:       itemEnd,
+						Usage:           dr.TotalUsage,
+						EventCount:      dr.EventCount,
+						Points:          dr.Points,
+						AnalyticsResult: dr,
+						// BucketedResult intentionally nil: this LIMU is one
+						// (source, properties) combo, not the line-item total.
+						// Per-combo commitment math would over-charge (commitment
+						// fires once per combo instead of once per line item) —
+						// calculateCosts gates this via skipCommitment when
+						// hasUserBucketedGroupBy(data.Params.GroupBy) is true.
+					})
+				}
+				continue
+			}
 
 			bucketedResult, err := s.queryBucketedMeterUsage(
 				ctx, m, externalCustomerIDs,
@@ -668,6 +713,9 @@ func (s *meterUsageService) queryAndAppendAnalyticsEntries(
 // queryBucketedMeterUsage queries the meter_usage table for a single bucketed meter,
 // returning a per-bucket AggregationResult. propertyFilters and sources are forwarded
 // from analytics callers; pass nil for billing callers that don't use them.
+// For analytics requests with user GroupBy on source/properties, use
+// queryBucketedMeterAnalyticsDetailed instead — this method returns a single
+// line-item total, not per-combo rows.
 func (s *meterUsageService) queryBucketedMeterUsage(
 	ctx context.Context,
 	m *meter.Meter,
@@ -679,10 +727,16 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	sources []string,
 ) (*events.AggregationResult, error) {
 	aggType := m.Aggregation.Type
-	groupBy := m.Aggregation.GroupBy
+	meterGroupBy := m.Aggregation.GroupBy
 	if m.IsBucketedSumMeter() {
 		aggType = types.AggregationSum
-		groupBy = ""
+		meterGroupBy = ""
+	}
+	// Translate meter-level Aggregation.GroupBy (a single property name) to the
+	// unified GroupBy []string convention used by BuildBucketedQuery.
+	var paramsGroupBy []string
+	if meterGroupBy != "" {
+		paramsGroupBy = []string{"properties." + meterGroupBy}
 	}
 	return s.repo.GetUsageForBucketedMeters(ctx, &events.MeterUsageQueryParams{
 		TenantID:            types.GetTenantID(ctx),
@@ -694,10 +748,105 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 		AggregationType:     aggType,
 		WindowSize:          m.Aggregation.BucketSize,
 		BillingAnchor:       billingAnchor,
-		GroupByProperty:     groupBy,
+		GroupBy:             paramsGroupBy,
 		UseFinal:            useFinal,
 		PropertyFilters:     propertyFilters,
 		Sources:             sources,
+	})
+}
+
+// hasUserBucketedGroupBy reports whether the request asks for fan-out on a
+// bucketed-meter analytics result. Mirrors the dim filter in
+// clickhouse.bucketedGroupByDims so the dispatch decision lives next to the
+// call site, and so calculateCosts can use the same predicate to gate
+// commitment math (commitment applied per combo would over-charge).
+func hasUserBucketedGroupBy(groupBy []string) bool {
+	for _, g := range groupBy {
+		if g == "source" || strings.HasPrefix(g, "properties.") {
+			return true
+		}
+	}
+	return false
+}
+
+// analyticsGroupByPropertyName matches safe property names for "properties.X"
+// dims. Same shape as clickhouse.validMeterUsageGroupByPattern so the service
+// layer's validation matches what the SQL builder will actually accept.
+var analyticsGroupByPropertyName = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
+
+// validateAnalyticsGroupBy rejects entries the SQL builder would silently drop.
+// Accepted forms:
+//   - "meter_id"          (no-op at SQL level; implicit at the meter)
+//   - "source"
+//   - "properties.<name>" where name matches a safe identifier pattern
+//
+// Anything else (empty string, "properties." with no name, unknown tokens) is
+// a user error and surfaces as a 400 with a clear hint, rather than being
+// dropped on the floor inside clickhouse.bucketedGroupByDims where it would
+// show up as a successful response with surprising shape.
+func validateAnalyticsGroupBy(groupBy []string) error {
+	for _, g := range groupBy {
+		switch {
+		case g == "meter_id" || g == "source":
+			// ok
+		case strings.HasPrefix(g, "properties."):
+			name := strings.TrimPrefix(g, "properties.")
+			if name == "" || !analyticsGroupByPropertyName.MatchString(name) {
+				return ierr.NewError("invalid group_by entry").
+					WithHintf("group_by entry %q has an invalid property name (allowed: alphanumerics, '_', '.')", g).
+					WithReportableDetails(map[string]interface{}{
+						"group_by_entry": g,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		default:
+			return ierr.NewError("invalid group_by entry").
+				WithHintf("group_by entry %q is not recognized (allowed: 'meter_id', 'source', 'properties.<name>')", g).
+				WithReportableDetails(map[string]interface{}{
+					"group_by_entry": g,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
+// queryBucketedMeterAnalyticsDetailed is the analytics-side bucketed query: one
+// MeterUsageDetailedResult per (source, properties) combo, with per-combo
+// Points pre-fetched by the repo. Bypassed entirely for billing — billing
+// callers use queryBucketedMeterUsage which returns a single line-item total.
+func (s *meterUsageService) queryBucketedMeterAnalyticsDetailed(
+	ctx context.Context,
+	m *meter.Meter,
+	externalCustomerIDs []string,
+	periodStart, periodEnd time.Time,
+	billingAnchor *time.Time,
+	useFinal bool,
+	propertyFilters map[string][]string,
+	sources []string,
+	groupBy []string,
+) ([]*events.MeterUsageDetailedResult, error) {
+	aggType := m.Aggregation.Type
+	if m.IsBucketedSumMeter() {
+		aggType = types.AggregationSum
+	}
+	return s.repo.GetUsageForBucketedMetersDetailed(ctx, &events.MeterUsageQueryParams{
+		TenantID:            types.GetTenantID(ctx),
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		ExternalCustomerIDs: externalCustomerIDs,
+		MeterID:             m.ID,
+		StartTime:           periodStart,
+		EndTime:             periodEnd,
+		AggregationType:     aggType,
+		WindowSize:          m.Aggregation.BucketSize,
+		BillingAnchor:       billingAnchor,
+		// Intentionally do NOT forward m.Aggregation.GroupBy — the analytics
+		// fan-out shape is owned by the request's GroupBy. The meter-level
+		// GroupBy is a billing concept handled by GetUsageForBucketedMeters.
+		GroupBy:         groupBy,
+		UseFinal:        useFinal,
+		PropertyFilters: propertyFilters,
+		Sources:         sources,
 	})
 }
 
@@ -733,6 +882,13 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 			rewritten = append(rewritten, g)
 		}
 		params.GroupBy = lo.Uniq(rewritten)
+		// Reject malformed entries before they hit the SQL builder, where
+		// they'd be silently dropped (debugging nightmare). Accepted forms:
+		// "meter_id" / "source" / "properties.<valid name>". Everything else
+		// is a user error worth surfacing as a 400.
+		if err := validateAnalyticsGroupBy(params.GroupBy); err != nil {
+			return nil, err
+		}
 	}
 
 	// Resolve FeatureIDs → MeterIDs (only when MeterIDs not already specified).
@@ -892,7 +1048,7 @@ func (s *meterUsageService) mergeSubscriptionUsagesToAnalyticsData(
 		maps.Copy(data.Prices, su.PriceMap)
 		maps.Copy(data.Features, su.FeatureMap)
 
-		// Convert each LineItemMeterUsage → DetailedUsageAnalytic.
+		// Convert each LineItemMeterUsage → DetailedUsageAnalytic(s).
 		// Skip line items with zero usage to avoid noise, EXCEPT when the line item
 		// has a commitment — those need to flow through calculateCosts so the
 		// committed minimum (and true-up, if windowed) is applied even with no usage.
@@ -1516,6 +1672,44 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 	params *events.MeterUsageDetailedAnalyticsParams,
 	m *meter.Meter,
 ) ([]*events.MeterUsageDetailedResult, error) {
+	// Mirror the subscription path: when the request has source/properties.*
+	// dims, fan out via the detailed query so each combo becomes its own
+	// MeterUsageDetailedResult with Source/Properties populated and per-combo
+	// Points. The basic GetUsageForBucketedMeters can't surface those — it
+	// returns a single AggregationResult and the user's request GroupBy would
+	// be silently dropped.
+	if hasUserBucketedGroupBy(params.GroupBy) {
+		bucketParams := &events.MeterUsageQueryParams{
+			TenantID:           params.TenantID,
+			EnvironmentID:      params.EnvironmentID,
+			ExternalCustomerID: params.ExternalCustomerID,
+			MeterID:            m.ID,
+			StartTime:          params.StartTime,
+			EndTime:            params.EndTime,
+			AggregationType:    m.Aggregation.Type,
+			WindowSize:         m.Aggregation.BucketSize,
+			// Intentionally use only params.GroupBy here. Meter-level
+			// Aggregation.GroupBy is a billing concept (per-KRN pricing); the
+			// analytics fan-out shape is owned by the request. Matches the
+			// subscription path's queryBucketedMeterAnalyticsDetailed contract.
+			GroupBy:         params.GroupBy,
+			UseFinal:        params.UseFinal,
+			BillingAnchor:   params.BillingAnchor,
+			PropertyFilters: params.PropertyFilters,
+			Sources:         params.Sources,
+		}
+		if len(params.ExternalCustomerIDs) > 0 {
+			bucketParams.ExternalCustomerIDs = params.ExternalCustomerIDs
+		}
+		return s.repo.GetUsageForBucketedMetersDetailed(ctx, bucketParams)
+	}
+
+	// No user fan-out: use the basic path with meter-level Aggregation.GroupBy
+	// (the billing / KRN-style convention).
+	var bucketParamsGroupBy []string
+	if m.Aggregation.GroupBy != "" {
+		bucketParamsGroupBy = []string{"properties." + m.Aggregation.GroupBy}
+	}
 	bucketParams := &events.MeterUsageQueryParams{
 		TenantID:           params.TenantID,
 		EnvironmentID:      params.EnvironmentID,
@@ -1525,7 +1719,7 @@ func (s *meterUsageService) getBucketedMeterAnalytics(
 		EndTime:            params.EndTime,
 		AggregationType:    m.Aggregation.Type,
 		WindowSize:         m.Aggregation.BucketSize,
-		GroupByProperty:    m.Aggregation.GroupBy,
+		GroupBy:            bucketParamsGroupBy,
 		UseFinal:           params.UseFinal,
 		BillingAnchor:      params.BillingAnchor,
 		PropertyFilters:    params.PropertyFilters,
@@ -1779,7 +1973,14 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 	// zero matching events would otherwise show the full commitment as unutilized
 	// and report it as cost). When any analytics-only filter is active, skip
 	// commitment application and report the raw filtered cost.
-	skipCommitment := len(data.Params.PropertyFilters) > 0 || len(data.Params.Sources) > 0
+	//
+	// User group_by also triggers skip: each fanned-out (source, properties)
+	// combo analytic carries its own per-combo Usage and Points, and applying
+	// commitment math per combo would over-charge — the line item's commitment
+	// would fire once per combo instead of once across the whole line item.
+	skipCommitment := len(data.Params.PropertyFilters) > 0 ||
+		len(data.Params.Sources) > 0 ||
+		hasUserBucketedGroupBy(data.Params.GroupBy)
 
 	for _, item := range data.Analytics {
 		// Resolve meter: prefer via feature, fall back to direct MeterID lookup.
