@@ -31,6 +31,7 @@ import (
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/ent/paymentmethod"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -1238,6 +1239,59 @@ func init() {
 	paymentattempt.DefaultAttemptNumber = paymentattemptDescAttemptNumber.Default.(int)
 	// paymentattempt.AttemptNumberValidator is a validator for the "attempt_number" field. It is called by the builders before save.
 	paymentattempt.AttemptNumberValidator = paymentattemptDescAttemptNumber.Validators[0].(func(int) error)
+	paymentmethodMixin := schema.PaymentMethod{}.Mixin()
+	paymentmethodMixinFields0 := paymentmethodMixin[0].Fields()
+	_ = paymentmethodMixinFields0
+	paymentmethodMixinFields1 := paymentmethodMixin[1].Fields()
+	_ = paymentmethodMixinFields1
+	paymentmethodFields := schema.PaymentMethod{}.Fields()
+	_ = paymentmethodFields
+	// paymentmethodDescTenantID is the schema descriptor for tenant_id field.
+	paymentmethodDescTenantID := paymentmethodMixinFields0[0].Descriptor()
+	// paymentmethod.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	paymentmethod.TenantIDValidator = paymentmethodDescTenantID.Validators[0].(func(string) error)
+	// paymentmethodDescStatus is the schema descriptor for status field.
+	paymentmethodDescStatus := paymentmethodMixinFields0[1].Descriptor()
+	// paymentmethod.DefaultStatus holds the default value on creation for the status field.
+	paymentmethod.DefaultStatus = paymentmethodDescStatus.Default.(string)
+	// paymentmethodDescCreatedAt is the schema descriptor for created_at field.
+	paymentmethodDescCreatedAt := paymentmethodMixinFields0[2].Descriptor()
+	// paymentmethod.DefaultCreatedAt holds the default value on creation for the created_at field.
+	paymentmethod.DefaultCreatedAt = paymentmethodDescCreatedAt.Default.(func() time.Time)
+	// paymentmethodDescUpdatedAt is the schema descriptor for updated_at field.
+	paymentmethodDescUpdatedAt := paymentmethodMixinFields0[3].Descriptor()
+	// paymentmethod.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	paymentmethod.DefaultUpdatedAt = paymentmethodDescUpdatedAt.Default.(func() time.Time)
+	// paymentmethod.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	paymentmethod.UpdateDefaultUpdatedAt = paymentmethodDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// paymentmethodDescEnvironmentID is the schema descriptor for environment_id field.
+	paymentmethodDescEnvironmentID := paymentmethodMixinFields1[0].Descriptor()
+	// paymentmethod.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	paymentmethod.DefaultEnvironmentID = paymentmethodDescEnvironmentID.Default.(string)
+	// paymentmethodDescCustomerID is the schema descriptor for customer_id field.
+	paymentmethodDescCustomerID := paymentmethodFields[1].Descriptor()
+	// paymentmethod.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	paymentmethod.CustomerIDValidator = paymentmethodDescCustomerID.Validators[0].(func(string) error)
+	// paymentmethodDescType is the schema descriptor for type field.
+	paymentmethodDescType := paymentmethodFields[2].Descriptor()
+	// paymentmethod.TypeValidator is a validator for the "type" field. It is called by the builders before save.
+	paymentmethod.TypeValidator = paymentmethodDescType.Validators[0].(func(string) error)
+	// paymentmethodDescGateway is the schema descriptor for gateway field.
+	paymentmethodDescGateway := paymentmethodFields[3].Descriptor()
+	// paymentmethod.GatewayValidator is a validator for the "gateway" field. It is called by the builders before save.
+	paymentmethod.GatewayValidator = paymentmethodDescGateway.Validators[0].(func(string) error)
+	// paymentmethodDescGatewayMethodID is the schema descriptor for gateway_method_id field.
+	paymentmethodDescGatewayMethodID := paymentmethodFields[4].Descriptor()
+	// paymentmethod.GatewayMethodIDValidator is a validator for the "gateway_method_id" field. It is called by the builders before save.
+	paymentmethod.GatewayMethodIDValidator = paymentmethodDescGatewayMethodID.Validators[0].(func(string) error)
+	// paymentmethodDescPaymentMethodStatus is the schema descriptor for payment_method_status field.
+	paymentmethodDescPaymentMethodStatus := paymentmethodFields[5].Descriptor()
+	// paymentmethod.DefaultPaymentMethodStatus holds the default value on creation for the payment_method_status field.
+	paymentmethod.DefaultPaymentMethodStatus = paymentmethodDescPaymentMethodStatus.Default.(string)
+	// paymentmethodDescIsDefault is the schema descriptor for is_default field.
+	paymentmethodDescIsDefault := paymentmethodFields[6].Descriptor()
+	// paymentmethod.DefaultIsDefault holds the default value on creation for the is_default field.
+	paymentmethod.DefaultIsDefault = paymentmethodDescIsDefault.Default.(bool)
 	planMixin := schema.Plan{}.Mixin()
 	planMixinFields0 := planMixin[0].Fields()
 	_ = planMixinFields0

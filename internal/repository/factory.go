@@ -25,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -149,6 +150,10 @@ func NewEntitlementRepository(p RepositoryParams) entitlement.Repository {
 
 func NewPaymentRepository(p RepositoryParams) payment.Repository {
 	return entRepo.NewPaymentRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewPaymentMethodRepository(p RepositoryParams) paymentmethod.Repository {
+	return entRepo.NewPaymentMethodRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewTaskRepository(p RepositoryParams) task.Repository {

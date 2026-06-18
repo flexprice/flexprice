@@ -49,6 +49,7 @@ const (
 	PrefixFeature                  = "feature:v1:"
 	PrefixEntitlement              = "entitlement:v1:"
 	PrefixPayment                  = "payment:v1:"
+	PrefixPaymentMethod            = "payment_method:v1:"
 	PrefixCreditGrantApplication   = "creditgrantapplication:v1:"
 	PrefixCreditNote               = "creditnote:v1:"
 	PrefixTaxRate                  = "taxrate:v1:"

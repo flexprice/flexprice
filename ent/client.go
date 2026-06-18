@@ -41,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/ent/paymentmethod"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -123,6 +124,8 @@ type Client struct {
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
 	PaymentAttempt *PaymentAttemptClient
+	// PaymentMethod is the client for interacting with the PaymentMethod builders.
+	PaymentMethod *PaymentMethodClient
 	// Plan is the client for interacting with the Plan builders.
 	Plan *PlanClient
 	// Price is the client for interacting with the Price builders.
@@ -202,6 +205,7 @@ func (c *Client) init() {
 	c.Meter = NewMeterClient(c.config)
 	c.Payment = NewPaymentClient(c.config)
 	c.PaymentAttempt = NewPaymentAttemptClient(c.config)
+	c.PaymentMethod = NewPaymentMethodClient(c.config)
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.PriceUnit = NewPriceUnitClient(c.config)
@@ -341,6 +345,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Meter:                    NewMeterClient(cfg),
 		Payment:                  NewPaymentClient(cfg),
 		PaymentAttempt:           NewPaymentAttemptClient(cfg),
+		PaymentMethod:            NewPaymentMethodClient(cfg),
 		Plan:                     NewPlanClient(cfg),
 		Price:                    NewPriceClient(cfg),
 		PriceUnit:                NewPriceUnitClient(cfg),
@@ -407,6 +412,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Meter:                    NewMeterClient(cfg),
 		Payment:                  NewPaymentClient(cfg),
 		PaymentAttempt:           NewPaymentAttemptClient(cfg),
+		PaymentMethod:            NewPaymentMethodClient(cfg),
 		Plan:                     NewPlanClient(cfg),
 		Price:                    NewPriceClient(cfg),
 		PriceUnit:                NewPriceUnitClient(cfg),
@@ -462,8 +468,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
 		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
 		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
-		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
-		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price, c.PriceUnit,
+		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
 		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
 		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
 		c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
@@ -481,8 +487,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
 		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
 		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
-		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
-		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.Payment, c.PaymentAttempt, c.PaymentMethod, c.Plan, c.Price, c.PriceUnit,
+		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
 		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
 		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
 		c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
@@ -546,6 +552,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Payment.mutate(ctx, m)
 	case *PaymentAttemptMutation:
 		return c.PaymentAttempt.mutate(ctx, m)
+	case *PaymentMethodMutation:
+		return c.PaymentMethod.mutate(ctx, m)
 	case *PlanMutation:
 		return c.Plan.mutate(ctx, m)
 	case *PriceMutation:
@@ -4403,6 +4411,139 @@ func (c *PaymentAttemptClient) mutate(ctx context.Context, m *PaymentAttemptMuta
 	}
 }
 
+// PaymentMethodClient is a client for the PaymentMethod schema.
+type PaymentMethodClient struct {
+	config
+}
+
+// NewPaymentMethodClient returns a client for the PaymentMethod from the given config.
+func NewPaymentMethodClient(c config) *PaymentMethodClient {
+	return &PaymentMethodClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `paymentmethod.Hooks(f(g(h())))`.
+func (c *PaymentMethodClient) Use(hooks ...Hook) {
+	c.hooks.PaymentMethod = append(c.hooks.PaymentMethod, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `paymentmethod.Intercept(f(g(h())))`.
+func (c *PaymentMethodClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PaymentMethod = append(c.inters.PaymentMethod, interceptors...)
+}
+
+// Create returns a builder for creating a PaymentMethod entity.
+func (c *PaymentMethodClient) Create() *PaymentMethodCreate {
+	mutation := newPaymentMethodMutation(c.config, OpCreate)
+	return &PaymentMethodCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PaymentMethod entities.
+func (c *PaymentMethodClient) CreateBulk(builders ...*PaymentMethodCreate) *PaymentMethodCreateBulk {
+	return &PaymentMethodCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PaymentMethodClient) MapCreateBulk(slice any, setFunc func(*PaymentMethodCreate, int)) *PaymentMethodCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PaymentMethodCreateBulk{err: fmt.Errorf("calling to PaymentMethodClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PaymentMethodCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PaymentMethodCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PaymentMethod.
+func (c *PaymentMethodClient) Update() *PaymentMethodUpdate {
+	mutation := newPaymentMethodMutation(c.config, OpUpdate)
+	return &PaymentMethodUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PaymentMethodClient) UpdateOne(pm *PaymentMethod) *PaymentMethodUpdateOne {
+	mutation := newPaymentMethodMutation(c.config, OpUpdateOne, withPaymentMethod(pm))
+	return &PaymentMethodUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PaymentMethodClient) UpdateOneID(id string) *PaymentMethodUpdateOne {
+	mutation := newPaymentMethodMutation(c.config, OpUpdateOne, withPaymentMethodID(id))
+	return &PaymentMethodUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PaymentMethod.
+func (c *PaymentMethodClient) Delete() *PaymentMethodDelete {
+	mutation := newPaymentMethodMutation(c.config, OpDelete)
+	return &PaymentMethodDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PaymentMethodClient) DeleteOne(pm *PaymentMethod) *PaymentMethodDeleteOne {
+	return c.DeleteOneID(pm.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PaymentMethodClient) DeleteOneID(id string) *PaymentMethodDeleteOne {
+	builder := c.Delete().Where(paymentmethod.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PaymentMethodDeleteOne{builder}
+}
+
+// Query returns a query builder for PaymentMethod.
+func (c *PaymentMethodClient) Query() *PaymentMethodQuery {
+	return &PaymentMethodQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePaymentMethod},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PaymentMethod entity by its id.
+func (c *PaymentMethodClient) Get(ctx context.Context, id string) (*PaymentMethod, error) {
+	return c.Query().Where(paymentmethod.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PaymentMethodClient) GetX(ctx context.Context, id string) *PaymentMethod {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PaymentMethodClient) Hooks() []Hook {
+	return c.hooks.PaymentMethod
+}
+
+// Interceptors returns the client interceptors.
+func (c *PaymentMethodClient) Interceptors() []Interceptor {
+	return c.inters.PaymentMethod
+}
+
+func (c *PaymentMethodClient) mutate(ctx context.Context, m *PaymentMethodMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PaymentMethodCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PaymentMethodUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PaymentMethodUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PaymentMethodDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PaymentMethod mutation op: %q", m.Op())
+	}
+}
+
 // PlanClient is a client for the Plan schema.
 type PlanClient struct {
 	config
@@ -7475,22 +7616,22 @@ type (
 		Costsheet, Coupon, CouponApplication, CouponAssociation, CreditGrant,
 		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
 		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
-		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
-		WorkflowExecution []ent.Hook
+		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
+		PaymentMethod, Plan, Price, PriceUnit, ScheduledTask, Secret, Settings,
+		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
+		Tenant, User, Wallet, WalletTransaction, WorkflowExecution []ent.Hook
 	}
 	inters struct {
 		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
 		Costsheet, Coupon, CouponApplication, CouponAssociation, CreditGrant,
 		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
 		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
-		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
-		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
-		WorkflowExecution []ent.Interceptor
+		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt,
+		PaymentMethod, Plan, Price, PriceUnit, ScheduledTask, Secret, Settings,
+		Subscription, SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
+		Tenant, User, Wallet, WalletTransaction, WorkflowExecution []ent.Interceptor
 	}
 )
 
