@@ -189,8 +189,18 @@ func (s *secretService) ListAPIKeys(ctx context.Context, filter *types.SecretFil
 		return nil, err
 	}
 
+	items := dto.ToSecretResponseList(secrets)
+	for _, item := range items {
+		if item.UserType == types.UserTypeServiceAccount && item.UserID != "" {
+			u, err := s.userRepo.GetByID(ctx, item.UserID)
+			if err == nil {
+				item.ServiceAccountName = u.Name
+			}
+		}
+	}
+
 	return &dto.ListSecretsResponse{
-		Items:      dto.ToSecretResponseList(secrets),
+		Items:      items,
 		Pagination: types.NewPaginationResponse(count, filter.GetLimit(), filter.GetOffset()),
 	}, nil
 }
