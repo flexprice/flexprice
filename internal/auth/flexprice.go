@@ -144,8 +144,9 @@ func (f *flexpriceAuth) generateToken(userID, tenantID string) (string, error) {
 }
 
 // GenerateDevToken creates a short-lived JWT for internal developer testing.
-// It embeds tenant_id, user_id, and optionally environment_id in the claims.
-func (f *flexpriceAuth) GenerateDevToken(tenantID, environmentID, userID string, expiryHours int) (string, time.Time, error) {
+// Uses the flexprice claim schema: { user_id, tenant_id, environment_id }.
+// email is accepted for interface compatibility but not embedded in the token.
+func (f *flexpriceAuth) GenerateDevToken(tenantID, environmentID, userID, _ string, expiryHours int) (string, time.Time, error) {
 	if tenantID == "" {
 		return "", time.Time{}, ierr.NewError("tenantID is required").
 			WithHint("Provide a tenant ID to generate a dev token").
