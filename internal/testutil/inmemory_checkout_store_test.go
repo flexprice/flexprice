@@ -18,8 +18,7 @@ func newCheckout(id, entityID string, obj types.CheckoutObjective, status types.
 		Objective:     obj,
 		Status:        status,
 		Provider:      "stripe",
-		ExpiresAt:     expires,
-		EnvironmentID: "env_1",
+		ExpiresAt: expires,
 	}
 }
 
@@ -28,9 +27,15 @@ func TestInMemoryCheckoutStore_GetPendingByEntity(t *testing.T) {
 	store := NewInMemoryCheckoutStore()
 	now := time.Now().UTC()
 
-	_ = store.Create(ctx, newCheckout("chk_pay", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(time.Hour)))
-	_ = store.Create(ctx, newCheckout("chk_setup", "sub_1", types.CheckoutObjectiveSetup, types.CheckoutStatusPending, now.Add(time.Hour)))
-	_ = store.Create(ctx, newCheckout("chk_done", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusCompleted, now.Add(time.Hour)))
+	if err := store.Create(ctx, newCheckout("chk_pay", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(time.Hour))); err != nil {
+		t.Fatalf("Create chk_pay: %v", err)
+	}
+	if err := store.Create(ctx, newCheckout("chk_setup", "sub_1", types.CheckoutObjectiveSetup, types.CheckoutStatusPending, now.Add(time.Hour))); err != nil {
+		t.Fatalf("Create chk_setup: %v", err)
+	}
+	if err := store.Create(ctx, newCheckout("chk_done", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusCompleted, now.Add(time.Hour))); err != nil {
+		t.Fatalf("Create chk_done: %v", err)
+	}
 
 	got, err := store.GetPendingByEntity(ctx, types.CheckoutEntityTypeSubscription, "sub_1", types.CheckoutObjectivePayment)
 	if err != nil {
@@ -54,9 +59,15 @@ func TestInMemoryCheckoutStore_ListPendingExpired(t *testing.T) {
 	store := NewInMemoryCheckoutStore()
 	now := time.Now().UTC()
 
-	_ = store.Create(ctx, newCheckout("chk_old", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(-time.Hour)))
-	_ = store.Create(ctx, newCheckout("chk_future", "sub_2", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(time.Hour)))
-	_ = store.Create(ctx, newCheckout("chk_old_done", "sub_3", types.CheckoutObjectivePayment, types.CheckoutStatusCompleted, now.Add(-time.Hour)))
+	if err := store.Create(ctx, newCheckout("chk_old", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(-time.Hour))); err != nil {
+		t.Fatalf("Create chk_old: %v", err)
+	}
+	if err := store.Create(ctx, newCheckout("chk_future", "sub_2", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(time.Hour))); err != nil {
+		t.Fatalf("Create chk_future: %v", err)
+	}
+	if err := store.Create(ctx, newCheckout("chk_old_done", "sub_3", types.CheckoutObjectivePayment, types.CheckoutStatusCompleted, now.Add(-time.Hour))); err != nil {
+		t.Fatalf("Create chk_old_done: %v", err)
+	}
 
 	got, err := store.ListPendingExpired(ctx, now)
 	if err != nil {

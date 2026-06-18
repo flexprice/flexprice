@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"net/url"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -28,6 +30,21 @@ type CreateCheckoutRequest struct {
 func (r *CreateCheckoutRequest) Validate() error {
 	if err := r.CheckoutType.Validate(); err != nil {
 		return err
+	}
+	if r.SuccessURL == "" || r.CancelURL == "" {
+		return ierr.NewError("success_url and cancel_url are required").
+			WithHint("Provide both success_url and cancel_url").
+			Mark(ierr.ErrValidation)
+	}
+	if _, err := url.ParseRequestURI(r.SuccessURL); err != nil {
+		return ierr.NewError("success_url must be a valid URL").
+			WithHint("Provide a valid success_url").
+			Mark(ierr.ErrValidation)
+	}
+	if _, err := url.ParseRequestURI(r.CancelURL); err != nil {
+		return ierr.NewError("cancel_url must be a valid URL").
+			WithHint("Provide a valid cancel_url").
+			Mark(ierr.ErrValidation)
 	}
 	switch r.CheckoutType {
 	case types.CheckoutTypeSubscriptionCreation:

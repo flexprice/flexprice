@@ -26,6 +26,9 @@ func (m *InMemoryCheckoutStore) Create(ctx context.Context, c *checkout.Checkout
 			WithHint("Checkout cannot be nil and must have an ID").
 			Mark(ierr.ErrValidation)
 	}
+	if c.TenantID == "" {
+		c.TenantID = types.GetTenantID(ctx)
+	}
 	if c.EnvironmentID == "" {
 		c.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
@@ -33,7 +36,16 @@ func (m *InMemoryCheckoutStore) Create(ctx context.Context, c *checkout.Checkout
 }
 
 func (m *InMemoryCheckoutStore) Get(ctx context.Context, id string) (*checkout.Checkout, error) {
-	return m.InMemoryStore.Get(ctx, id)
+	got, err := m.InMemoryStore.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if got.TenantID != types.GetTenantID(ctx) || got.EnvironmentID != types.GetEnvironmentID(ctx) {
+		return nil, ierr.NewError("checkout not found").
+			WithHintf("Checkout with ID %s was not found", id).
+			Mark(ierr.ErrNotFound)
+	}
+	return got, nil
 }
 
 func (m *InMemoryCheckoutStore) Update(ctx context.Context, c *checkout.Checkout) error {
@@ -57,6 +69,8 @@ func (m *InMemoryCheckoutStore) GetPendingByEntity(
 			return c.EntityType == entityType &&
 				c.EntityID == entityID &&
 				c.Objective == objective &&
+				c.TenantID == types.GetTenantID(ctx) &&
+				c.EnvironmentID == types.GetEnvironmentID(ctx) &&
 				c.Status == types.CheckoutStatusPending
 		}, nil)
 	if err != nil {

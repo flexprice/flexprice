@@ -28,6 +28,7 @@ func NewCheckoutHandler(service service.CheckoutService, log *logger.Logger) *Ch
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
+// @x-scope write
 // @Param request body dto.CreateCheckoutRequest true "Create checkout request"
 // @Success 201 {object} dto.CheckoutResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
@@ -58,6 +59,7 @@ func (h *CheckoutHandler) CreateCheckout(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
+// @x-scope read
 // @Param id path string true "Checkout ID"
 // @Success 200 {object} dto.CheckoutResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
