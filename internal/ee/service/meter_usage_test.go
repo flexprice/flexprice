@@ -4056,3 +4056,63 @@ func (s *MeterUsageServiceSuite) TestBucketedMeter_UserGroupByFansOutSourceAndPr
 	s.True(sdkItem.TotalUsage.Equal(decimal.NewFromInt(50)),
 		"sdk/eu-west total: expected 50, got %s", sdkItem.TotalUsage)
 }
+
+// TestBucketedMeter_FanOutOmitsEmptyPropertyValues pins parity with the
+// feature-side scan: when the user requests group_by on a property that's
+// missing from the event, the fan-out result must NOT include that property
+// key with an empty-string value. Feature side already filters this at scan
+// time (clickhouse/feature_usage.go:1175, 1630); meter side was leaving stray
+// empty-string entries that polluted the response and made cross-pipeline
+// comparison noisy.
+//
+// Setup: HOUR bucketed MAX meter, one event with only "region" property set.
+// Request groups by region AND missing_prop (a property the event doesn't carry).
+// Expected: Properties carries {"region": "us-east"} and does NOT carry
+// "missing_prop" at all (not even with "").
+func (s *MeterUsageServiceSuite) TestBucketedMeter_FanOutOmitsEmptyPropertyValues() {
+	ctx := s.GetContext()
+
+	bucketedMeter := &meter.Meter{
+		ID:        "mtr_empty_props",
+		Name:      "Bucketed MAX empty property filter",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type:       types.AggregationMax,
+			BucketSize: types.WindowSizeHour,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().MeterRepo.CreateMeter(ctx, bucketedMeter))
+	bucketedPrice := s.createPriceForMeter(ctx, "pr_empty_props", bucketedMeter.ID, decimal.NewFromInt(1))
+	s.createLineItemForMeter(ctx, "li_empty_props", bucketedMeter.ID, bucketedPrice.ID)
+
+	// Single event carries "region" but not "missing_prop".
+	s.insertMeterUsageWithProps(ctx, bucketedMeter.ID, s.customer.ExternalID, "api",
+		time.Date(2026, 1, 5, 10, 0, 0, 0, time.UTC), 42,
+		map[string]interface{}{"region": "us-east"})
+
+	resp, err := s.svc.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
+		TenantID:           types.GetTenantID(ctx),
+		EnvironmentID:      types.GetEnvironmentID(ctx),
+		ExternalCustomerID: s.customer.ExternalID,
+		MeterIDs:           []string{bucketedMeter.ID},
+		StartTime:          s.periodStart,
+		EndTime:            s.periodEnd,
+		WindowSize:         types.WindowSizeHour,
+		GroupBy:            []string{"properties.region", "properties.missing_prop"},
+	})
+	s.NoError(err)
+
+	var item *dto.UsageAnalyticItem
+	for i := range resp.Items {
+		if resp.Items[i].SubLineItemID == "li_empty_props" {
+			item = &resp.Items[i]
+			break
+		}
+	}
+	s.Require().NotNil(item)
+	s.Equal("us-east", item.Properties["region"])
+	_, present := item.Properties["missing_prop"]
+	s.False(present,
+		"missing property must be omitted from Properties (feature-side parity); got %v", item.Properties)
+}
