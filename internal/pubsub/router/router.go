@@ -38,7 +38,7 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 	var dlqTopicName string
 
 	if cfg.Kafka.TopicDLQ != "" {
-		// Use real Kafka DLQ when configured
+		// Use real Kafka DLQ when configured (on the deployment's local/consume cluster)
 		var err error
 		poisonQueuePublisher, err = createDLQPublisher(cfg, logger)
 		if err != nil {
@@ -91,8 +91,9 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, tracingSvc *tra
 }
 
 func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (message.Publisher, error) {
-	// Use the existing Kafka infrastructure
-	saramaConfig := kafka.GetSaramaConfig(cfg)
+	// DLQ lives on the deployment's local/consume cluster (same one its consumers read).
+	kc := &cfg.Kafka
+	saramaConfig := kafka.GetSaramaConfig(kc)
 	if saramaConfig != nil {
 		saramaConfig.Producer.Return.Successes = true
 		saramaConfig.Producer.Return.Errors = true
@@ -100,7 +101,7 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 
 	publisher, err := watermillKafka.NewPublisher(
 		watermillKafka.PublisherConfig{
-			Brokers:               cfg.Kafka.Brokers,
+			Brokers:               kc.Brokers,
 			Marshaler:             watermillKafka.DefaultMarshaler{},
 			OverwriteSaramaConfig: saramaConfig,
 		},
@@ -110,7 +111,7 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 		return nil, err
 	}
 
-	logger.Info(context.Background(), "DLQ publisher initialized", "brokers", cfg.Kafka.Brokers, "dlq_topic", cfg.Kafka.TopicDLQ)
+	logger.Info(context.Background(), "DLQ publisher initialized", "brokers", kc.Brokers, "dlq_topic", kc.TopicDLQ)
 	return publisher, nil
 }
 

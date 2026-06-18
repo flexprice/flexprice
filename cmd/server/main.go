@@ -119,6 +119,7 @@ func main() {
 
 			// Producers and Consumers
 			kafka.NewProducer,
+			kafka.NewSecondaryProducer,
 			kafka.NewConsumer,
 
 			// Event Publisher

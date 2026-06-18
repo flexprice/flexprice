@@ -34,7 +34,7 @@ func NewMonitoringService(cfg *config.Configuration, log *logger.Logger) *Monito
 // GetConsumerLag calculates the consumer lag for a given topic and consumer group
 func (m *MonitoringService) GetConsumerLag(ctx context.Context, topic string, consumerGroup string) (*ConsumerLag, error) {
 	// Create Sarama config
-	saramaConfig := GetSaramaConfig(m.config)
+	saramaConfig := GetSaramaConfig(&m.config.Kafka)
 	saramaConfig.Consumer.Return.Errors = true
 
 	// Create cluster admin client
