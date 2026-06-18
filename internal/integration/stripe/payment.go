@@ -123,26 +123,9 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 			Mark(ierr.ErrValidation)
 	}
 
-	// Ensure customer is synced to Stripe before creating payment link
-	customerResp, err := s.customerSvc.EnsureCustomerSyncedToStripe(ctx, req.CustomerID, customerService)
+	stripeCustomerID, customerResp, err := s.resolveStripeCustomerID(ctx, req.CustomerID, customerService)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to sync customer to Stripe").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": req.CustomerID,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Get Stripe customer ID (should exist after sync)
-	stripeCustomerID, exists := customerResp.Customer.Metadata["stripe_customer_id"]
-	if !exists || stripeCustomerID == "" {
-		return nil, ierr.NewError("customer does not have Stripe customer ID after sync").
-			WithHint("Failed to sync customer to Stripe").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": req.CustomerID,
-			}).
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 
 	// Convert amount to cents (Stripe expects amounts in smallest currency unit)
@@ -1893,4 +1876,25 @@ func (s *PaymentService) AttachPaymentToStripeInvoiceAndReconcile(
 			"payment_intent_id", paymentIntent.ID,
 			"stripe_invoice_id", stripeInvoiceID)
 	}
+}
+
+// resolveStripeCustomerID syncs the flexprice customer to Stripe and returns the
+// Stripe customer ID along with the customer response. Used by both CreatePaymentLink
+// and createSetupSession to avoid duplicating the sync + extraction logic.
+func (s *PaymentService) resolveStripeCustomerID(ctx context.Context, customerID string, customerSvc interfaces.CustomerService) (string, *dto.CustomerResponse, error) {
+	customerResp, err := s.customerSvc.EnsureCustomerSyncedToStripe(ctx, customerID, customerSvc)
+	if err != nil {
+		return "", nil, ierr.WithError(err).
+			WithHint("Failed to sync customer to Stripe").
+			WithReportableDetails(map[string]interface{}{"customer_id": customerID}).
+			Mark(ierr.ErrValidation)
+	}
+	stripeCustomerID, exists := customerResp.Customer.Metadata["stripe_customer_id"]
+	if !exists || stripeCustomerID == "" {
+		return "", nil, ierr.NewError("customer does not have Stripe customer ID after sync").
+			WithHint("Failed to sync customer to Stripe").
+			WithReportableDetails(map[string]interface{}{"customer_id": customerID}).
+			Mark(ierr.ErrValidation)
+	}
+	return stripeCustomerID, customerResp, nil
 }

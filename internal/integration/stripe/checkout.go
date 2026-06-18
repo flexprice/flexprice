@@ -81,32 +81,14 @@ func (s *StripeCheckoutProvider) createPaymentSession(ctx context.Context, req c
 // resulting checkout.session.completed webhook resolves the flexprice checkout
 // via the flexprice_checkout_id metadata.
 func (s *StripeCheckoutProvider) createSetupSession(ctx context.Context, req checkout.CheckoutSessionRequest) (*checkout.CheckoutSessionResponse, error) {
-	// Acquire the Stripe client (same pattern as PaymentService.CreatePaymentLink, payment.go:63).
 	stripeClient, _, err := s.payment.client.GetStripeClient(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Resolve the Stripe customer id from the flexprice customer id
-	// (same pattern as payment.go:127-146).
-	customerResp, err := s.payment.customerSvc.EnsureCustomerSyncedToStripe(ctx, req.CustomerID, s.customer)
+	stripeCustomerID, _, err := s.payment.resolveStripeCustomerID(ctx, req.CustomerID, s.customer)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to sync customer to Stripe").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": req.CustomerID,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	stripeCustomerID, exists := customerResp.Customer.Metadata["stripe_customer_id"]
-	if !exists || stripeCustomerID == "" {
-		return nil, ierr.NewError("customer does not have Stripe customer ID after sync").
-			WithHint("Failed to sync customer to Stripe").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": req.CustomerID,
-			}).
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 
 	// Build session metadata; flexprice_checkout_id is required so the
