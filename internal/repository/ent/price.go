@@ -634,6 +634,12 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.MeterIDIn(f.MeterIDs...))
 	}
 
+	// billing period filter
+	if len(f.BillingPeriods) > 0 {
+		periods := lo.Map(f.BillingPeriods, func(p types.BillingPeriod, _ int) types.BillingPeriod { return p })
+		query = query.Where(price.BillingPeriodIn(periods...))
+	}
+
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {
