@@ -106,6 +106,8 @@ type Tx struct {
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
 	WalletTransaction *WalletTransactionClient
+	// WebhookRequest is the client for interacting with the WebhookRequest builders.
+	WebhookRequest *WebhookRequestClient
 	// WorkflowExecution is the client for interacting with the WorkflowExecution builders.
 	WorkflowExecution *WorkflowExecutionClient
 
@@ -285,6 +287,7 @@ func (tx *Tx) init() {
 	tx.User = NewUserClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)
 	tx.WalletTransaction = NewWalletTransactionClient(tx.config)
+	tx.WebhookRequest = NewWebhookRequestClient(tx.config)
 	tx.WorkflowExecution = NewWorkflowExecutionClient(tx.config)
 }
 

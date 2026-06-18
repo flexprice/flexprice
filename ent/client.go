@@ -61,6 +61,7 @@ import (
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/flexprice/flexprice/ent/webhookrequest"
 	"github.com/flexprice/flexprice/ent/workflowexecution"
 
 	stdsql "database/sql"
@@ -163,6 +164,8 @@ type Client struct {
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
 	WalletTransaction *WalletTransactionClient
+	// WebhookRequest is the client for interacting with the WebhookRequest builders.
+	WebhookRequest *WebhookRequestClient
 	// WorkflowExecution is the client for interacting with the WorkflowExecution builders.
 	WorkflowExecution *WorkflowExecutionClient
 }
@@ -222,6 +225,7 @@ func (c *Client) init() {
 	c.User = NewUserClient(c.config)
 	c.Wallet = NewWalletClient(c.config)
 	c.WalletTransaction = NewWalletTransactionClient(c.config)
+	c.WebhookRequest = NewWebhookRequestClient(c.config)
 	c.WorkflowExecution = NewWorkflowExecutionClient(c.config)
 }
 
@@ -361,6 +365,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		User:                     NewUserClient(cfg),
 		Wallet:                   NewWalletClient(cfg),
 		WalletTransaction:        NewWalletTransactionClient(cfg),
+		WebhookRequest:           NewWebhookRequestClient(cfg),
 		WorkflowExecution:        NewWorkflowExecutionClient(cfg),
 	}, nil
 }
@@ -427,6 +432,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		User:                     NewUserClient(cfg),
 		Wallet:                   NewWalletClient(cfg),
 		WalletTransaction:        NewWalletTransactionClient(cfg),
+		WebhookRequest:           NewWebhookRequestClient(cfg),
 		WorkflowExecution:        NewWorkflowExecutionClient(cfg),
 	}, nil
 }
@@ -466,7 +472,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
 		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
 		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.User, c.Wallet, c.WalletTransaction, c.WebhookRequest, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -485,7 +491,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
 		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
 		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.User, c.Wallet, c.WalletTransaction, c.WebhookRequest, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -586,6 +592,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Wallet.mutate(ctx, m)
 	case *WalletTransactionMutation:
 		return c.WalletTransaction.mutate(ctx, m)
+	case *WebhookRequestMutation:
+		return c.WebhookRequest.mutate(ctx, m)
 	case *WorkflowExecutionMutation:
 		return c.WorkflowExecution.mutate(ctx, m)
 	default:
@@ -7335,6 +7343,139 @@ func (c *WalletTransactionClient) mutate(ctx context.Context, m *WalletTransacti
 	}
 }
 
+// WebhookRequestClient is a client for the WebhookRequest schema.
+type WebhookRequestClient struct {
+	config
+}
+
+// NewWebhookRequestClient returns a client for the WebhookRequest from the given config.
+func NewWebhookRequestClient(c config) *WebhookRequestClient {
+	return &WebhookRequestClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `webhookrequest.Hooks(f(g(h())))`.
+func (c *WebhookRequestClient) Use(hooks ...Hook) {
+	c.hooks.WebhookRequest = append(c.hooks.WebhookRequest, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `webhookrequest.Intercept(f(g(h())))`.
+func (c *WebhookRequestClient) Intercept(interceptors ...Interceptor) {
+	c.inters.WebhookRequest = append(c.inters.WebhookRequest, interceptors...)
+}
+
+// Create returns a builder for creating a WebhookRequest entity.
+func (c *WebhookRequestClient) Create() *WebhookRequestCreate {
+	mutation := newWebhookRequestMutation(c.config, OpCreate)
+	return &WebhookRequestCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of WebhookRequest entities.
+func (c *WebhookRequestClient) CreateBulk(builders ...*WebhookRequestCreate) *WebhookRequestCreateBulk {
+	return &WebhookRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *WebhookRequestClient) MapCreateBulk(slice any, setFunc func(*WebhookRequestCreate, int)) *WebhookRequestCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &WebhookRequestCreateBulk{err: fmt.Errorf("calling to WebhookRequestClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*WebhookRequestCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &WebhookRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for WebhookRequest.
+func (c *WebhookRequestClient) Update() *WebhookRequestUpdate {
+	mutation := newWebhookRequestMutation(c.config, OpUpdate)
+	return &WebhookRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *WebhookRequestClient) UpdateOne(wr *WebhookRequest) *WebhookRequestUpdateOne {
+	mutation := newWebhookRequestMutation(c.config, OpUpdateOne, withWebhookRequest(wr))
+	return &WebhookRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *WebhookRequestClient) UpdateOneID(id string) *WebhookRequestUpdateOne {
+	mutation := newWebhookRequestMutation(c.config, OpUpdateOne, withWebhookRequestID(id))
+	return &WebhookRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for WebhookRequest.
+func (c *WebhookRequestClient) Delete() *WebhookRequestDelete {
+	mutation := newWebhookRequestMutation(c.config, OpDelete)
+	return &WebhookRequestDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *WebhookRequestClient) DeleteOne(wr *WebhookRequest) *WebhookRequestDeleteOne {
+	return c.DeleteOneID(wr.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *WebhookRequestClient) DeleteOneID(id string) *WebhookRequestDeleteOne {
+	builder := c.Delete().Where(webhookrequest.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &WebhookRequestDeleteOne{builder}
+}
+
+// Query returns a query builder for WebhookRequest.
+func (c *WebhookRequestClient) Query() *WebhookRequestQuery {
+	return &WebhookRequestQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeWebhookRequest},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a WebhookRequest entity by its id.
+func (c *WebhookRequestClient) Get(ctx context.Context, id string) (*WebhookRequest, error) {
+	return c.Query().Where(webhookrequest.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *WebhookRequestClient) GetX(ctx context.Context, id string) *WebhookRequest {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *WebhookRequestClient) Hooks() []Hook {
+	return c.hooks.WebhookRequest
+}
+
+// Interceptors returns the client interceptors.
+func (c *WebhookRequestClient) Interceptors() []Interceptor {
+	return c.inters.WebhookRequest
+}
+
+func (c *WebhookRequestClient) mutate(ctx context.Context, m *WebhookRequestMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&WebhookRequestCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&WebhookRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&WebhookRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&WebhookRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown WebhookRequest mutation op: %q", m.Op())
+	}
+}
+
 // WorkflowExecutionClient is a client for the WorkflowExecution schema.
 type WorkflowExecutionClient struct {
 	config
@@ -7479,7 +7620,7 @@ type (
 		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
 		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
 		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
-		WorkflowExecution []ent.Hook
+		WebhookRequest, WorkflowExecution []ent.Hook
 	}
 	inters struct {
 		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
@@ -7490,7 +7631,7 @@ type (
 		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
 		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
 		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction,
-		WorkflowExecution []ent.Interceptor
+		WebhookRequest, WorkflowExecution []ent.Interceptor
 	}
 )
 

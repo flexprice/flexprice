@@ -2331,6 +2331,47 @@ var (
 			},
 		},
 	}
+	// WebhookRequestsColumns holds the columns for the "webhook_requests" table.
+	WebhookRequestsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "environment_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "method", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "path", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "request_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "headers", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "body", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// WebhookRequestsTable holds the schema information for the "webhook_requests" table.
+	WebhookRequestsTable = &schema.Table{
+		Name:       "webhook_requests",
+		Columns:    WebhookRequestsColumns,
+		PrimaryKey: []*schema.Column{WebhookRequestsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_webhook_requests_tenant_env",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookRequestsColumns[1], WebhookRequestsColumns[2]},
+			},
+			{
+				Name:    "idx_webhook_requests_provider",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookRequestsColumns[3]},
+			},
+			{
+				Name:    "idx_webhook_requests_request_id",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookRequestsColumns[6]},
+			},
+			{
+				Name:    "idx_webhook_requests_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{WebhookRequestsColumns[9]},
+			},
+		},
+	}
 	// WorkflowExecutionsColumns holds the columns for the "workflow_executions" table.
 	WorkflowExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(26)"}},
@@ -2469,6 +2510,7 @@ var (
 		UsersTable,
 		WalletsTable,
 		WalletTransactionsTable,
+		WebhookRequestsTable,
 		WorkflowExecutionsTable,
 		CouponAssociationCouponApplicationsTable,
 	}

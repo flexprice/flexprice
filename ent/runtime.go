@@ -52,6 +52,7 @@ import (
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/flexprice/flexprice/ent/webhookrequest"
 	"github.com/flexprice/flexprice/ent/workflowexecution"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -2317,6 +2318,32 @@ func init() {
 	wallettransactionDescTransactionReason := wallettransactionFields[19].Descriptor()
 	// wallettransaction.DefaultTransactionReason holds the default value on creation for the transaction_reason field.
 	wallettransaction.DefaultTransactionReason = types.TransactionReason(wallettransactionDescTransactionReason.Default.(string))
+	webhookrequestFields := schema.WebhookRequest{}.Fields()
+	_ = webhookrequestFields
+	// webhookrequestDescTenantID is the schema descriptor for tenant_id field.
+	webhookrequestDescTenantID := webhookrequestFields[1].Descriptor()
+	// webhookrequest.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	webhookrequest.TenantIDValidator = webhookrequestDescTenantID.Validators[0].(func(string) error)
+	// webhookrequestDescEnvironmentID is the schema descriptor for environment_id field.
+	webhookrequestDescEnvironmentID := webhookrequestFields[2].Descriptor()
+	// webhookrequest.EnvironmentIDValidator is a validator for the "environment_id" field. It is called by the builders before save.
+	webhookrequest.EnvironmentIDValidator = webhookrequestDescEnvironmentID.Validators[0].(func(string) error)
+	// webhookrequestDescProvider is the schema descriptor for provider field.
+	webhookrequestDescProvider := webhookrequestFields[3].Descriptor()
+	// webhookrequest.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	webhookrequest.ProviderValidator = webhookrequestDescProvider.Validators[0].(func(string) error)
+	// webhookrequestDescMethod is the schema descriptor for method field.
+	webhookrequestDescMethod := webhookrequestFields[4].Descriptor()
+	// webhookrequest.MethodValidator is a validator for the "method" field. It is called by the builders before save.
+	webhookrequest.MethodValidator = webhookrequestDescMethod.Validators[0].(func(string) error)
+	// webhookrequestDescPath is the schema descriptor for path field.
+	webhookrequestDescPath := webhookrequestFields[5].Descriptor()
+	// webhookrequest.PathValidator is a validator for the "path" field. It is called by the builders before save.
+	webhookrequest.PathValidator = webhookrequestDescPath.Validators[0].(func(string) error)
+	// webhookrequestDescCreatedAt is the schema descriptor for created_at field.
+	webhookrequestDescCreatedAt := webhookrequestFields[9].Descriptor()
+	// webhookrequest.DefaultCreatedAt holds the default value on creation for the created_at field.
+	webhookrequest.DefaultCreatedAt = webhookrequestDescCreatedAt.Default.(func() time.Time)
 	workflowexecutionMixin := schema.WorkflowExecution{}.Mixin()
 	workflowexecutionMixinFields0 := workflowexecutionMixin[0].Fields()
 	_ = workflowexecutionMixinFields0

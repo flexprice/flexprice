@@ -561,6 +561,18 @@ func (f WalletTransactionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WalletTransactionMutation", m)
 }
 
+// The WebhookRequestFunc type is an adapter to allow the use of ordinary
+// function as WebhookRequest mutator.
+type WebhookRequestFunc func(context.Context, *ent.WebhookRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WebhookRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.WebhookRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WebhookRequestMutation", m)
+}
+
 // The WorkflowExecutionFunc type is an adapter to allow the use of ordinary
 // function as WorkflowExecution mutator.
 type WorkflowExecutionFunc func(context.Context, *ent.WorkflowExecutionMutation) (ent.Value, error)
