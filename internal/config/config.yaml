@@ -343,6 +343,10 @@ gemini:
 whop:
   base_url: "" # "https://sandbox-api.whop.com" - for sandbox whop testing
 
+webhook_logging:
+  tenant_ids: []
+  environment_ids: []
+
 
 email:
   enabled: false # Set to true to enable email sending (override with FLEXPRICE_EMAIL_ENABLED=true)
