@@ -14,11 +14,7 @@ import (
 
 // CheckoutService manages hosted checkout sessions for deferred subscription activation.
 type CheckoutService interface {
-	// Create opens a checkout via a discriminated-union request. For
-	// subscription_creation it creates a new subscription (payment or setup
-	// objective); for subscription_change it opens a payment-gated in-place plan
-	// UPGRADE (the new sub is created `incomplete`, opening invoice raised and
-	// proration credit netted, and the OLD subscription stays active until paid).
+	// Create opens a checkout for a new subscription (payment or setup objective).
 	Create(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error)
 	// Complete marks a checkout completed (idempotent). Subscription activation is
 	// driven by the existing payment-completion hook, not here.
@@ -77,11 +73,9 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 			WithHint("Objective must be 'payment' or 'setup'").
 			WithReportableDetails(map[string]any{"objective": req.Objective}).
 			Mark(ierr.ErrValidation)
-	case types.CheckoutTypeSubscriptionChange:
-		return s.createChange(ctx, req)
 	default:
 		return nil, ierr.NewError("unsupported checkout type").
-			WithHint("checkout_type must be subscription_creation or subscription_change").
+			WithHint("checkout_type must be subscription_creation").
 			WithReportableDetails(map[string]any{"checkout_type": req.CheckoutType}).
 			Mark(ierr.ErrValidation)
 	}
@@ -292,122 +286,6 @@ func (s *checkoutService) createInvoicePaymentRecord(ctx context.Context, inv *d
 	return pay.ID, nil
 }
 
-// createChange opens a payment-gated checkout for an in-place plan UPGRADE. The new
-// plan's subscription is created `incomplete` (opening invoice raised, proration credit
-// netted) inside the tx; the OLD subscription stays active and is only cancelled in
-// Complete once the invoice is paid.
-func (s *checkoutService) createChange(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
-	change := req.SubscriptionChange
-	subscriptionID := change.SourceSubscriptionID
-
-	// 1. Dedupe: a pending change-checkout for this source sub must be unique.
-	existing, err := s.CheckoutRepo.GetPendingBySourceSubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-	if existing != nil {
-		return nil, ierr.NewError("a checkout is already pending for this subscription change").
-			WithHint("A checkout is already pending for this subscription change").
-			WithReportableDetails(map[string]any{"subscription_id": subscriptionID}).
-			Mark(ierr.ErrAlreadyExists)
-	}
-
-	// 2. Load the source subscription to inherit its billing settings + currency.
-	srcSub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 3. Default proration behavior.
-	prorationBehavior := change.ProrationBehavior
-	if prorationBehavior == "" {
-		prorationBehavior = types.ProrationBehaviorCreateProrations
-	}
-
-	// 4. Resolve the payment provider up front (fail fast) from the active tenant/env
-	// connection; the resolved provider is stored on the checkout and later used to
-	// open the hosted session.
-	provider, err := s.resolveCheckoutProvider(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var chk *checkout.Checkout
-	var invoiceID, paymentID string
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// 3a. Prepare the upgrade: creates the new sub `incomplete` and raises the
-		// opening invoice (proration credit netted). The req carries the inherited
-		// billing fields because PrepareCheckoutChange does NOT call req.Validate().
-		prep, err := NewSubscriptionChangeService(s.ServiceParams).PrepareCheckoutChange(txCtx, subscriptionID, dto.SubscriptionChangeRequest{
-			TargetPlanID:       change.TargetPlanID,
-			ProrationBehavior:  prorationBehavior,
-			BillingCadence:     srcSub.BillingCadence,
-			BillingPeriod:      srcSub.BillingPeriod,
-			BillingPeriodCount: srcSub.BillingPeriodCount,
-			BillingCycle:       srcSub.BillingCycle,
-			Metadata:           req.Metadata,
-		})
-		if err != nil {
-			return err
-		}
-
-		if prep.Invoice == nil {
-			return ierr.NewError("subscription change has no opening invoice").
-				WithHint("Cannot open a payment checkout without an opening invoice").
-				WithReportableDetails(map[string]any{"subscription_id": subscriptionID}).
-				Mark(ierr.ErrInvalidOperation)
-		}
-		inv := prep.Invoice
-		invoiceID = inv.ID
-
-		// 3b. Create the (unprocessed) payment record bound to the opening invoice.
-		paymentID, err = s.createInvoicePaymentRecord(txCtx, inv, srcSub.Currency, req.Metadata)
-		if err != nil {
-			return err
-		}
-
-		// 3c. Build and persist the pending change-checkout. EntityID is the NEW sub;
-		// SourceSubscriptionID is the OLD sub cancelled on completion.
-		now := time.Now().UTC()
-		chk = &checkout.Checkout{
-			ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CHECKOUT),
-			CustomerID:           srcSub.CustomerID,
-			EntityType:           types.CheckoutEntityTypeSubscription,
-			EntityID:             prep.NewSubscriptionID,
-			SourceSubscriptionID: &prep.OldSubscriptionID,
-			CheckoutType:         types.CheckoutTypeSubscriptionChange,
-			Objective:            types.CheckoutObjectivePayment,
-			Status:               types.CheckoutStatusPending,
-			Amount:               inv.AmountDue,
-			Currency:             srcSub.Currency,
-			Provider:             provider,
-			SuccessURL:           lo.ToPtr(req.SuccessURL),
-			CancelURL:            lo.ToPtr(req.CancelURL),
-			ExpiresAt:            now.Add(24 * time.Hour),
-			EnvironmentID:        types.GetEnvironmentID(txCtx),
-			BaseModel:            types.GetDefaultBaseModel(txCtx),
-		}
-		return s.CheckoutRepo.Create(txCtx, chk)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. Post-commit: open the hosted provider session.
-	return s.openSessionAndRespond(ctx, chk, checkout.CheckoutSessionRequest{
-		Objective:  types.CheckoutObjectivePayment,
-		CheckoutID: chk.ID,
-		CustomerID: srcSub.CustomerID,
-		InvoiceID:  invoiceID,
-		PaymentID:  paymentID,
-		Amount:     chk.Amount,
-		Currency:   srcSub.Currency,
-		SuccessURL: req.SuccessURL,
-		CancelURL:  req.CancelURL,
-		Metadata:   req.Metadata,
-	})
-}
-
 // failCheckout best-effort marks a checkout as failed after a post-commit provider
 // error, recording the cause. Errors here are logged, not propagated.
 func (s *checkoutService) failCheckout(ctx context.Context, chk *checkout.Checkout, cause error) {
@@ -445,19 +323,6 @@ func (s *checkoutService) Complete(ctx context.Context, checkoutID string) error
 			// no longer draft, treat activation as done and complete the checkout.
 			sub, getErr := s.SubRepo.Get(ctx, chk.EntityID)
 			if getErr != nil || sub.SubscriptionStatus == types.SubscriptionStatusDraft {
-				return err
-			}
-		}
-	}
-
-	// Subscription change (upgrade): the new sub is already activated by the invoice.paid
-	// hook; here we only cancel the old subscription.
-	if chk.CheckoutType == types.CheckoutTypeSubscriptionChange && chk.SourceSubscriptionID != nil {
-		if err := NewSubscriptionChangeService(s.ServiceParams).FinalizeCheckoutChange(ctx, *chk.SourceSubscriptionID); err != nil {
-			// Tolerate a retry arriving after the old sub was already cancelled: if it is
-			// already cancelled, treat cancellation as done and complete the checkout.
-			oldSub, getErr := s.SubRepo.Get(ctx, *chk.SourceSubscriptionID)
-			if getErr != nil || oldSub.SubscriptionStatus != types.SubscriptionStatusCancelled {
 				return err
 			}
 		}

@@ -18,10 +18,6 @@ type Repository interface {
 	GetPendingByEntity(ctx context.Context, entityType types.CheckoutEntityType,
 		entityID string, objective types.CheckoutObjective) (*Checkout, error)
 
-	// GetPendingBySourceSubscription returns the single pending checkout whose
-	// source_subscription_id matches (used to dedupe change-checkouts). Returns nil, nil if none.
-	GetPendingBySourceSubscription(ctx context.Context, sourceSubscriptionID string) (*Checkout, error)
-
 	// ListPendingExpired returns pending checkouts whose expires_at < cutoff.
 	ListPendingExpired(ctx context.Context, cutoff time.Time) ([]*Checkout, error)
 }

@@ -26,16 +26,15 @@ type CheckoutType string
 
 const (
 	CheckoutTypeSubscriptionCreation CheckoutType = "subscription_creation"
-	CheckoutTypeSubscriptionChange   CheckoutType = "subscription_change"
 )
 
 func (t CheckoutType) Validate() error {
 	switch t {
-	case CheckoutTypeSubscriptionCreation, CheckoutTypeSubscriptionChange:
+	case CheckoutTypeSubscriptionCreation:
 		return nil
 	default:
 		return ierr.NewError("invalid checkout type").
-			WithHint("Checkout type must be 'subscription_creation' or 'subscription_change'").
+			WithHint("Checkout type must be 'subscription_creation'").
 			WithReportableDetails(map[string]any{"checkout_type": t}).
 			Mark(ierr.ErrValidation)
 	}

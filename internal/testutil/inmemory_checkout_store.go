@@ -68,25 +68,6 @@ func (m *InMemoryCheckoutStore) GetPendingByEntity(
 	return items[0], nil
 }
 
-func (m *InMemoryCheckoutStore) GetPendingBySourceSubscription(
-	ctx context.Context,
-	sourceSubscriptionID string,
-) (*checkout.Checkout, error) {
-	items, err := m.InMemoryStore.List(ctx, nil,
-		func(_ context.Context, c *checkout.Checkout, _ interface{}) bool {
-			return c.SourceSubscriptionID != nil &&
-				*c.SourceSubscriptionID == sourceSubscriptionID &&
-				c.Status == types.CheckoutStatusPending
-		}, nil)
-	if err != nil {
-		return nil, err
-	}
-	if len(items) == 0 {
-		return nil, nil
-	}
-	return items[0], nil
-}
-
 func (m *InMemoryCheckoutStore) ListPendingExpired(ctx context.Context, cutoff time.Time) ([]*checkout.Checkout, error) {
 	return m.InMemoryStore.List(ctx, nil,
 		func(_ context.Context, c *checkout.Checkout, _ interface{}) bool {

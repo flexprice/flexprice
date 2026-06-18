@@ -193,39 +193,6 @@ func (r *checkoutRepository) GetPendingByEntity(
 	return domainCheckout.FromEnt(entity), nil
 }
 
-func (r *checkoutRepository) GetPendingBySourceSubscription(
-	ctx context.Context,
-	sourceSubscriptionID string,
-) (*domainCheckout.Checkout, error) {
-	client := r.client.Reader(ctx)
-
-	span := StartRepositorySpan(ctx, "checkout", "get_pending_by_source_subscription", map[string]interface{}{
-		"source_subscription_id": sourceSubscriptionID,
-	})
-	defer FinishSpan(span)
-
-	entity, err := client.Checkout.Query().
-		Where(
-			entcheckout.SourceSubscriptionIDEQ(sourceSubscriptionID),
-			entcheckout.CheckoutStatusEQ(types.CheckoutStatusPending),
-			entcheckout.TenantIDEQ(types.GetTenantID(ctx)),
-			entcheckout.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
-		).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			SetSpanSuccess(span)
-			return nil, nil
-		}
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get pending checkout by source subscription").
-			Mark(ierr.ErrDatabase)
-	}
-	SetSpanSuccess(span)
-	return domainCheckout.FromEnt(entity), nil
-}
-
 // ListPendingExpired performs a system-wide (cross-tenant/cross-environment) sweep
 // of pending, expired checkouts for the cleanup cron. It is intentionally NOT
 // tenant/environment scoped — the expiry worker is a maintenance job; any

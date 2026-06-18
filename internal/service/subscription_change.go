@@ -29,14 +29,6 @@ type SubscriptionChangeService interface {
 	// ExecuteSubscriptionChangeInternal executes a subscription change immediately (used by scheduled execution)
 	ExecuteSubscriptionChangeInternal(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeRequest) (*dto.SubscriptionChangeExecuteResponse, error)
 
-	// PrepareCheckoutChange validates an upgrade, creates the new plan's subscription
-	// in `incomplete` (opening invoice raised, old-plan proration credit netted in) and
-	// leaves the OLD subscription untouched. Returns the new sub id + its opening invoice.
-	PrepareCheckoutChange(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeRequest) (*dto.PrepareCheckoutChangeResult, error)
-
-	// FinalizeCheckoutChange cancels the old subscription after the new one's upgrade
-	// invoice is paid (the new sub is activated by the invoice.paid hook).
-	FinalizeCheckoutChange(ctx context.Context, oldSubscriptionID string) error
 }
 
 type subscriptionChangeService struct {
@@ -281,129 +273,6 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChangeInternal(
 	)
 
 	return response, nil
-}
-
-// PrepareCheckoutChange validates an upgrade, creates the new plan's subscription in
-// `incomplete` (opening invoice raised with old-plan proration credit netted in) and
-// leaves the OLD subscription untouched. Returns the new sub id + its opening invoice.
-// Mirrors the first half of executeChange but skips the CancelSubscription call.
-func (s *subscriptionChangeService) PrepareCheckoutChange(
-	ctx context.Context,
-	subscriptionID string,
-	req dto.SubscriptionChangeRequest,
-) (*dto.PrepareCheckoutChangeResult, error) {
-	logger := s.serviceParams.Logger.With(
-		"subscription_id", subscriptionID,
-		"target_plan_id", req.TargetPlanID,
-	)
-
-	var out *dto.PrepareCheckoutChangeResult
-	err := s.serviceParams.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Get current subscription with line items
-		currentSub, lineItems, err := s.serviceParams.SubRepo.GetWithLineItems(txCtx, subscriptionID)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to retrieve subscription").
-				Mark(ierr.ErrDatabase)
-		}
-
-		// Get current and target plans
-		currentPlan, err := s.serviceParams.PlanRepo.Get(txCtx, currentSub.PlanID)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to retrieve current plan").
-				Mark(ierr.ErrDatabase)
-		}
-
-		targetPlan, err := s.serviceParams.PlanRepo.Get(txCtx, req.TargetPlanID)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to retrieve target plan").
-				Mark(ierr.ErrDatabase)
-		}
-
-		// Validate the change
-		if err := s.validateSubscriptionForChange(currentSub); err != nil {
-			return err
-		}
-
-		if err := s.validateProrationForSubscriptionChange(currentSub, req.ProrationBehavior); err != nil {
-			return err
-		}
-
-		// Determine change type
-		changeType, err := s.determineChangeType(txCtx, currentPlan, targetPlan)
-		if err != nil {
-			return err
-		}
-
-		if changeType != types.SubscriptionChangeTypeUpgrade {
-			return ierr.NewError("only upgrades are supported via checkout").
-				WithHint("Checkout-gated change is for upgrades only").
-				Mark(ierr.ErrValidation)
-		}
-
-		// Calculate effective date
-		effectiveDate := time.Now()
-
-		// Trialing subscriptions have never been charged, so there is no unused credit to apply.
-		// Skip proration entirely to avoid a ghost adjustment (matches executeChange).
-		isTrialing := currentSub.SubscriptionStatus == types.SubscriptionStatusTrialing
-
-		// Net the old subscription's proration credit against the new subscription's opening
-		// invoice (instead of issuing wallet credit). Identical computation to executeChange.
-		cancelledSubCreditAmount := decimal.Zero
-		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !isTrialing {
-			prorationDetails, err := s.calculateProrationPreview(txCtx, currentSub, lineItems, targetPlan, effectiveDate)
-			if err != nil {
-				return err
-			}
-			if prorationDetails != nil {
-				cancelledSubCreditAmount = prorationDetails.CreditAmount
-			}
-		}
-
-		// Create the new subscription as incomplete (no server-side charge). The old
-		// subscription is left untouched; it is cancelled later in FinalizeCheckoutChange.
-		newSub, inv, err := s.createNewSubscription(txCtx, currentSub, lineItems, targetPlan, req, effectiveDate, cancelledSubCreditAmount, newSubCreateOptions{incomplete: true})
-		if err != nil {
-			return err
-		}
-
-		out = &dto.PrepareCheckoutChangeResult{
-			NewSubscriptionID: newSub.ID,
-			OldSubscriptionID: currentSub.ID,
-			Invoice:           inv,
-			ChangeType:        changeType,
-		}
-		return nil
-	})
-
-	if err != nil {
-		logger.Error(ctx, "failed to prepare checkout change", "error", err)
-		return nil, err
-	}
-
-	logger.Info(ctx, "checkout change prepared successfully",
-		"old_subscription_id", out.OldSubscriptionID,
-		"new_subscription_id", out.NewSubscriptionID,
-	)
-
-	return out, nil
-}
-
-// FinalizeCheckoutChange cancels the old subscription after the new one's upgrade
-// invoice is paid. Proration credit was already netted at PrepareCheckoutChange,
-// so the cancellation uses ProrationBehaviorNone to avoid double-crediting.
-func (s *subscriptionChangeService) FinalizeCheckoutChange(ctx context.Context, oldSubscriptionID string) error {
-	subSvc := NewSubscriptionService(s.serviceParams)
-	_, err := subSvc.CancelSubscription(ctx, oldSubscriptionID, &dto.CancelSubscriptionRequest{
-		CancellationType:          types.CancellationTypeImmediate,
-		Reason:                    "subscription_change",
-		ProrationBehavior:         types.ProrationBehaviorNone,
-		SkipProrationWalletCredit: true,
-	})
-	return err
 }
 
 // scheduleChangeForPeriodEnd schedules a plan change to execute at period end
@@ -870,7 +739,7 @@ func (s *subscriptionChangeService) executeChange(
 	}
 
 	// Create new subscription
-	newSub, _, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, cancelledSubCreditAmount, newSubCreateOptions{})
+	newSub, _, err := s.createNewSubscription(ctx, currentSub, lineItems, targetPlan, req, effectiveDate, cancelledSubCreditAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -905,13 +774,6 @@ func (s *subscriptionChangeService) executeChange(
 	return out, nil
 }
 
-// newSubCreateOptions controls how the replacement subscription is created.
-type newSubCreateOptions struct {
-	// incomplete=true creates the new sub with send_invoice + default_incomplete
-	// (no server-side charge); the opening invoice is paid out-of-band (checkout).
-	incomplete bool
-}
-
 // createNewSubscription creates a new subscription with the target plan using the existing subscription service
 func (s *subscriptionChangeService) createNewSubscription(
 	ctx context.Context,
@@ -921,7 +783,6 @@ func (s *subscriptionChangeService) createNewSubscription(
 	req dto.SubscriptionChangeRequest,
 	effectiveDate time.Time,
 	cancelledSubTotalCreditAmount decimal.Decimal,
-	opts newSubCreateOptions,
 ) (*subscription.Subscription, *dto.InvoiceResponse, error) {
 	// Carry over inherited child subscriptions and invoicing customer via Inheritance config.
 	// ExternalCustomerIDsToInheritSubscription and InvoicingCustomerExternalID are mutually exclusive,
@@ -1019,14 +880,6 @@ func (s *subscriptionChangeService) createNewSubscription(
 	// opening invoice as an adjustment.
 	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && !cancelledSubTotalCreditAmount.IsZero() {
 		createSubReq.OpeningInvoiceAdjustmentAmount = &cancelledSubTotalCreditAmount
-	}
-
-	// For the incomplete (no-cancel) checkout case, create the new sub with send_invoice +
-	// default_incomplete so no server-side charge is attempted; the opening invoice is paid
-	// out-of-band via checkout.
-	if opts.incomplete {
-		createSubReq.CollectionMethod = lo.ToPtr(types.CollectionMethodSendInvoice)
-		createSubReq.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorDefaultIncomplete)
 	}
 
 	// Pre-generate the subscription ID so Paddle mapping can be created first,
