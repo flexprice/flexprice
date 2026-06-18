@@ -24,7 +24,7 @@ func TestGenerateDevToken(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("includes environment_id when provided", func(t *testing.T) {
-		token, expiresAt, err := a.GenerateDevToken("t_tenant1", "env_prod", "usr_dev", 1)
+		token, expiresAt, err := a.GenerateDevToken("t_tenant1", "env_prod", "usr_dev", "", 1)
 		require.NoError(t, err)
 		assert.NotEmpty(t, token)
 		assert.WithinDuration(t, time.Now().Add(time.Hour), expiresAt, 5*time.Second)
@@ -37,7 +37,7 @@ func TestGenerateDevToken(t *testing.T) {
 	})
 
 	t.Run("omits environment_id claim when empty", func(t *testing.T) {
-		token, _, err := a.GenerateDevToken("t_tenant1", "", types.DefaultUserID, 1)
+		token, _, err := a.GenerateDevToken("t_tenant1", "", types.DefaultUserID, "", 1)
 		require.NoError(t, err)
 
 		claims, err := a.ValidateToken(ctx, token)
@@ -48,13 +48,13 @@ func TestGenerateDevToken(t *testing.T) {
 	})
 
 	t.Run("respects custom expiry hours", func(t *testing.T) {
-		_, expiresAt, err := a.GenerateDevToken("t_tenant1", "", types.DefaultUserID, 8)
+		_, expiresAt, err := a.GenerateDevToken("t_tenant1", "", types.DefaultUserID, "", 8)
 		require.NoError(t, err)
 		assert.WithinDuration(t, time.Now().Add(8*time.Hour), expiresAt, 5*time.Second)
 	})
 
 	t.Run("returns error when tenantID is empty", func(t *testing.T) {
-		_, _, err := a.GenerateDevToken("", "env_prod", "usr_dev", 1)
+		_, _, err := a.GenerateDevToken("", "env_prod", "usr_dev", "", 1)
 		assert.Error(t, err)
 	})
 }
@@ -64,7 +64,7 @@ func TestValidateToken_ExtractsEnvironmentID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("extracts environment_id from dev token", func(t *testing.T) {
-		token, _, err := a.GenerateDevToken("t_tenant1", "env_staging", types.DefaultUserID, 1)
+		token, _, err := a.GenerateDevToken("t_tenant1", "env_staging", types.DefaultUserID, "", 1)
 		require.NoError(t, err)
 
 		claims, err := a.ValidateToken(ctx, token)

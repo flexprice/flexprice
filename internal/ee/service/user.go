@@ -141,6 +141,11 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 					Mark(ierr.ErrValidation)
 			}
 		}
+		if lo.Contains(req.Roles, "super_admin") && len(req.Roles) > 1 {
+			return nil, ierr.NewError("super admin role need not be combined with other roles").
+				WithHint("When super_admin is selected, no other roles need to be assigned").
+				Mark(ierr.ErrValidation)
+		}
 		newUser = &user.User{
 			ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
 			Name:  req.Name,
