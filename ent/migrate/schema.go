@@ -1326,6 +1326,30 @@ var (
 			},
 		},
 	}
+	// PaymentMethodsColumns holds the columns for the "payment_methods" table.
+	PaymentMethodsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "gateway", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "gateway_method_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "payment_method_status", Type: field.TypeString, Default: "ACTIVE", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "is_default", Type: field.TypeBool, Default: false},
+		{Name: "method_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// PaymentMethodsTable holds the schema information for the "payment_methods" table.
+	PaymentMethodsTable = &schema.Table{
+		Name:       "payment_methods",
+		Columns:    PaymentMethodsColumns,
+		PrimaryKey: []*schema.Column{PaymentMethodsColumns[0]},
+	}
 	// PlansColumns holds the columns for the "plans" table.
 	PlansColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -2449,6 +2473,7 @@ var (
 		MetersTable,
 		PaymentsTable,
 		PaymentAttemptsTable,
+		PaymentMethodsTable,
 		PlansTable,
 		PricesTable,
 		PriceUnitsTable,

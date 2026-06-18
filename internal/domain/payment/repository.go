@@ -17,6 +17,14 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.PaymentFilter) (int, error)
 	GetByIdempotencyKey(ctx context.Context, key string) (*Payment, error)
 
+	// ListSucceededMoyasarAuthPayments returns all SUCCEEDED Moyasar AUTH payments across
+	// all tenants and environments (no tenant/env filter applied).
+	ListSucceededMoyasarAuthPayments(ctx context.Context) ([]*Payment, error)
+
+	// ListPendingMoyasarPayments returns all PENDING Moyasar payments across all tenants
+	// and environments (no tenant/env filter). Used by the reconcile cron.
+	ListPendingMoyasarPayments(ctx context.Context) ([]*Payment, error)
+
 	// Payment attempt operations
 	CreateAttempt(ctx context.Context, attempt *PaymentAttempt) error
 	GetAttempt(ctx context.Context, id string) (*PaymentAttempt, error)

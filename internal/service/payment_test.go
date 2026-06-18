@@ -142,6 +142,58 @@ func (s *PaymentServiceSuite) TestCreatePaymentLink_InitiatedStatus() {
 	s.Equal(string(types.PaymentGatewayTypeStripe), *payment.PaymentGateway)
 }
 
+func (s *PaymentServiceSuite) TestCreateAuthPayment_Succeeds() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+	gateway := types.PaymentGatewayTypeMoyasar
+
+	req := &dto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeAuth,
+		DestinationID:     s.testData.customer.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    &gateway,
+		Amount:            decimal.NewFromFloat(1.0),
+		Currency:          "SAR",
+		ProcessPayment:    false,
+		Metadata:          types.Metadata{"token_id": "tok_test", "auth_type": "card_tokenization"},
+	}
+
+	resp, err := s.service.CreatePayment(ctx, req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(types.PaymentDestinationTypeAuth, resp.DestinationType)
+	s.Equal(s.testData.customer.ID, resp.DestinationID)
+	s.Equal("sar", resp.Currency)
+	s.Equal(decimal.NewFromFloat(1.0), resp.Amount)
+	s.Equal(types.PaymentStatusInitiated, resp.PaymentStatus)
+}
+
+func (s *PaymentServiceSuite) TestCreateAuthPayment_InvalidDestination() {
+	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")
+	gateway := types.PaymentGatewayTypeMoyasar
+
+	// AUTH payment requires a non-empty destination ID
+	req := &dto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeAuth,
+		DestinationID:     "",
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentGateway:    &gateway,
+		Amount:            decimal.NewFromFloat(1.0),
+		Currency:          "SAR",
+	}
+
+	resp, err := s.service.CreatePayment(ctx, req)
+	s.Error(err)
+	s.Nil(resp)
+}
+
+func (s *PaymentServiceSuite) TestPaymentStatusVoided_IsValid() {
+	s.NoError(types.PaymentStatusVoided.Validate())
+}
+
+func (s *PaymentServiceSuite) TestPaymentStatusRefunded_IsValid() {
+	s.NoError(types.PaymentStatusRefunded.Validate())
+}
+
 func (s *PaymentServiceSuite) TestPaymentProcessor_PaymentLinkFlow() {
 	// Add environment ID to context
 	ctx := types.SetEnvironmentID(s.GetContext(), "test-env-id")

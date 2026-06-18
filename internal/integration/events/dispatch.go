@@ -547,11 +547,10 @@ func triggerMoyasarIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderMoyasar) {
-		log.Info(ctx, "integration_events: invoice already synced to Moyasar, skipping", "invoice_id", in.InvoiceID)
-		return nil
-	}
 
+	// Do NOT skip if invoice is already synced — the customer may now have an active
+	// saved token that wasn't present on the first sync. The activity handles idempotency
+	// for the hosted invoice path internally.
 	input := &temporalmodels.MoyasarInvoiceSyncWorkflowInput{
 		InvoiceID:     in.InvoiceID,
 		TenantID:      in.TenantID,

@@ -35,7 +35,7 @@ type MoyasarClient interface {
 	// Token methods
 	CreateToken(ctx context.Context, req *CreateTokenRequest) (*CreateTokenResponse, error)
 	GetToken(ctx context.Context, tokenID string) (*MoyasarToken, error)
-	ChargeWithToken(ctx context.Context, tokenID string, amount int, currency, description string, metadata map[string]string, givenID string) (*CreatePaymentResponse, error)
+	ChargeWithToken(ctx context.Context, tokenID string, amount int, currency, description string, metadata map[string]string, givenID string, moyasarInvoiceID string) (*CreatePaymentResponse, error)
 }
 
 // Client handles Moyasar API client setup and configuration
@@ -564,7 +564,7 @@ func (c *Client) VoidPayment(ctx context.Context, paymentID string) (*MoyasarPay
 	}
 
 	// Create HTTP request to void the payment
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, BaseURL+"/payments/"+paymentID+"/void", nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, BaseURL+"/payments/"+paymentID+"/void", nil)
 	if err != nil {
 		return nil, ierr.NewError("failed to create HTTP request").Mark(ierr.ErrInternal)
 	}
@@ -801,7 +801,7 @@ func (c *Client) GetToken(ctx context.Context, tokenID string) (*MoyasarToken, e
 }
 
 // ChargeWithToken charges a payment using a saved token
-func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int, currency, description string, metadata map[string]string, givenID string) (*CreatePaymentResponse, error) {
+func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int, currency, description string, metadata map[string]string, givenID string, moyasarInvoiceID string) (*CreatePaymentResponse, error) {
 	// Build payment request with token source
 	req := &CreatePaymentRequest{
 		Amount:      amount,
@@ -809,6 +809,7 @@ func (c *Client) ChargeWithToken(ctx context.Context, tokenID string, amount int
 		Description: description,
 		Metadata:    metadata,
 		GivenID:     givenID,
+		InvoiceID:   moyasarInvoiceID,
 		Source: &PaymentSource{
 			Type:  PaymentSourceTypeToken,
 			Token: tokenID,

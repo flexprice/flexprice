@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	paymentmethoddomain "github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -54,6 +55,7 @@ type Factory struct {
 	priceRepo                    price.Repository
 	entityIntegrationMappingRepo entityintegrationmapping.Repository
 	entityIntegrationMappingSvc  interfaces.EntityIntegrationMappingService
+	paymentMethodRepo            paymentmethoddomain.Repository
 	meterRepo                    meter.Repository
 	featureRepo                  feature.Repository
 	encryptionService            security.EncryptionService
@@ -77,6 +79,7 @@ func NewFactory(
 	paymentRepo payment.Repository,
 	priceRepo price.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
+	paymentMethodRepo paymentmethoddomain.Repository,
 	meterRepo meter.Repository,
 	featureRepo feature.Repository,
 	encryptionService security.EncryptionService,
@@ -93,6 +96,7 @@ func NewFactory(
 		priceRepo:                    priceRepo,
 		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		entityIntegrationMappingSvc:  NewEntityIntegrationMappingAdapter(entityIntegrationMappingRepo),
+		paymentMethodRepo:            paymentMethodRepo,
 		meterRepo:                    meterRepo,
 		featureRepo:                  featureRepo,
 		encryptionService:            encryptionService,
@@ -543,6 +547,7 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 	customerSvc := moyasar.NewCustomerService(
 		moyasarClient,
 		f.entityIntegrationMappingRepo,
+		f.paymentMethodRepo,
 		f.logger,
 	)
 

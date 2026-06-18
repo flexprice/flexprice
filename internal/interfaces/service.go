@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -210,4 +211,5 @@ type ServiceDependencies struct {
 	PriceUnitService                PriceUnitService
 	CreditAdjustmentService         CreditAdjustmentService
 	DB                              postgres.IClient
+	PaymentMethodRepo               paymentmethod.Repository
 }

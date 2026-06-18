@@ -11,30 +11,56 @@ import (
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
+
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 )
 
 // InvoiceSyncActivities handles Moyasar invoice sync activities
 type InvoiceSyncActivities struct {
-	integrationFactory *integration.Factory
-	customerService    interfaces.CustomerService
-	logger             *logger.Logger
+	integrationFactory           *integration.Factory
+	customerService              interfaces.CustomerService
+	paymentService               interfaces.PaymentService
+	invoiceService               interfaces.InvoiceService
+	entityIntegrationMappingRepo entityintegrationmapping.Repository
+	logger                       *logger.Logger
 }
 
 // NewInvoiceSyncActivities creates a new Moyasar invoice sync activities handler
 func NewInvoiceSyncActivities(
 	integrationFactory *integration.Factory,
 	customerService interfaces.CustomerService,
+	paymentService interfaces.PaymentService,
+	invoiceService interfaces.InvoiceService,
+	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	logger *logger.Logger,
 ) *InvoiceSyncActivities {
 	return &InvoiceSyncActivities{
-		integrationFactory: integrationFactory,
-		customerService:    customerService,
-		logger:             logger,
+		integrationFactory:           integrationFactory,
+		customerService:              customerService,
+		paymentService:               paymentService,
+		invoiceService:               invoiceService,
+		entityIntegrationMappingRepo: entityIntegrationMappingRepo,
+		logger:                       logger,
 	}
 }
 
+// invoiceAlreadySynced returns true when entity_integration_mappings already has a record
+// for this invoice + Moyasar, meaning the hosted invoice was previously created.
+func (a *InvoiceSyncActivities) invoiceAlreadySynced(ctx context.Context, invoiceID string) bool {
+	filter := &types.EntityIntegrationMappingFilter{
+		EntityID:      invoiceID,
+		EntityType:    types.IntegrationEntityTypeInvoice,
+		ProviderTypes: []string{string(types.SecretProviderMoyasar)},
+	}
+	mappings, err := a.entityIntegrationMappingRepo.List(ctx, filter)
+	if err != nil {
+		a.logger.Error(ctx, "failed to check invoice sync status", "invoice_id", invoiceID, "error", err)
+		return false
+	}
+	return len(mappings) > 0
+}
+
 // SyncInvoiceToMoyasar syncs an invoice to Moyasar
-// This is a thin wrapper around the Moyasar integration service
 func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 	ctx context.Context,
 	input models.MoyasarInvoiceSyncWorkflowInput,
@@ -45,18 +71,15 @@ func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 		"tenant_id", input.TenantID,
 		"environment_id", input.EnvironmentID)
 
-	// Set context values for tenant and environment
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 
-	// Get Moyasar integration with runtime context
 	moyasarIntegration, err := a.integrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			a.logger.Debug(ctx, "Moyasar connection not configured",
 				"invoice_id", input.InvoiceID,
 				"customer_id", input.CustomerID)
-			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
 			return temporal.NewNonRetryableApplicationError(
 				"Moyasar connection not configured",
 				"ConnectionNotFound",
@@ -70,12 +93,35 @@ func (a *InvoiceSyncActivities) SyncInvoiceToMoyasar(
 		return err
 	}
 
-	// Perform the sync using the existing service
-	syncReq := moyasar.MoyasarInvoiceSyncRequest{
-		InvoiceID: input.InvoiceID,
+	// Autopay: always attempt first, regardless of whether the invoice was previously synced.
+	// A customer may have added a saved token after the initial sync.
+	charged, autopayErr := moyasarIntegration.PaymentSvc.ChargeInvoiceWithSavedToken(
+		ctx,
+		input.InvoiceID,
+		a.paymentService,
+		a.invoiceService,
+	)
+	if autopayErr != nil {
+		a.logger.Error(ctx, "autopay failed, falling back to hosted invoice",
+			"error", autopayErr,
+			"invoice_id", input.InvoiceID)
+	} else if charged {
+		a.logger.Info(ctx, "invoice auto-paid with saved token",
+			"invoice_id", input.InvoiceID,
+			"customer_id", input.CustomerID)
+		return nil
 	}
 
-	_, err = moyasarIntegration.InvoiceSyncSvc.SyncInvoiceToMoyasar(ctx, syncReq, a.customerService)
+	// Hosted invoice path: skip if already synced (idempotency).
+	if a.invoiceAlreadySynced(ctx, input.InvoiceID) {
+		a.logger.Info(ctx, "invoice already synced to Moyasar and no saved token, skipping hosted sync",
+			"invoice_id", input.InvoiceID)
+		return nil
+	}
+
+	_, err = moyasarIntegration.InvoiceSyncSvc.SyncInvoiceToMoyasar(ctx, moyasar.MoyasarInvoiceSyncRequest{
+		InvoiceID: input.InvoiceID,
+	}, a.customerService)
 	if err != nil {
 		a.logger.Error(ctx, "failed to sync invoice to Moyasar",
 			"error", err,

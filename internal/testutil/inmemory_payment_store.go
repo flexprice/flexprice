@@ -368,6 +368,33 @@ func (m *InMemoryPaymentStore) GetPaymentsForDestination(ctx context.Context, de
 	return m.List(ctx, filter)
 }
 
+func (m *InMemoryPaymentStore) ListPendingMoyasarPayments(_ context.Context) ([]*payment.Payment, error) {
+	m.InMemoryStore.mu.RLock()
+	defer m.InMemoryStore.mu.RUnlock()
+	var result []*payment.Payment
+	for _, p := range m.InMemoryStore.items {
+		if p.PaymentGateway != nil && *p.PaymentGateway == string(types.PaymentGatewayTypeMoyasar) &&
+			p.PaymentStatus == types.PaymentStatusPending {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
+func (m *InMemoryPaymentStore) ListSucceededMoyasarAuthPayments(_ context.Context) ([]*payment.Payment, error) {
+	m.InMemoryStore.mu.RLock()
+	defer m.InMemoryStore.mu.RUnlock()
+	var result []*payment.Payment
+	for _, p := range m.InMemoryStore.items {
+		if p.DestinationType == types.PaymentDestinationTypeAuth &&
+			p.PaymentGateway != nil && *p.PaymentGateway == string(types.PaymentGatewayTypeMoyasar) &&
+			p.PaymentStatus == types.PaymentStatusSucceeded {
+			result = append(result, p)
+		}
+	}
+	return result, nil
+}
+
 // GetCreatedPayments returns all payments that were created, in order of creation
 // This is a helper method for testing
 func (m *InMemoryPaymentStore) GetCreatedPayments() []*payment.Payment {

@@ -78,7 +78,7 @@ func (s *PaymentService) CreatePaymentLink(
 			metadata[k] = v
 		}
 	}
-	// Add FlexPrice payment ID for webhook reconciliation
+	// Add Flexprice payment ID for webhook reconciliation
 	if req.PaymentID != "" {
 		metadata["flexprice_payment_id"] = req.PaymentID
 	}
@@ -105,7 +105,7 @@ func (s *PaymentService) CreatePaymentLink(
 		Description: description,
 		CallbackURL: callbackURL,
 		Metadata:    metadata,
-		GivenID:     req.PaymentID, // Use FlexPrice payment ID for idempotency
+		GivenID:     req.PaymentID, // Use Flexprice payment ID for idempotency
 	}
 
 	s.logger.Info(ctx, "creating Moyasar payment link",
@@ -162,14 +162,13 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 	}
 
 	if paymentRecord == nil {
-		s.logger.Info(context.Background(), "payment record not found for reconciliation",
+		s.logger.Error(ctx, "payment record not found for reconciliation",
 			"payment_id", paymentID)
 		return ierr.NewError("payment not found").Mark(ierr.ErrNotFound)
 	}
 
-	// Get the invoice ID from the payment destination
 	if paymentRecord.DestinationType != types.PaymentDestinationTypeInvoice {
-		s.logger.Info(ctx, "payment destination is not an invoice, skipping reconciliation",
+		s.logger.Warn(ctx, "payment destination is not an invoice, skipping reconciliation",
 			"payment_id", paymentID,
 			"destination_type", paymentRecord.DestinationType)
 		return nil
@@ -177,7 +176,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 
 	invoiceID := paymentRecord.DestinationID
 	if invoiceID == "" {
-		s.logger.Info(context.Background(), "payment has no invoice destination",
+		s.logger.Warn(ctx, "payment has no invoice destination_id, skipping reconciliation",
 			"payment_id", paymentID)
 		return nil
 	}
@@ -259,10 +258,10 @@ func (s *PaymentService) GetPaymentStatus(
 		}
 	}
 
-	// Extract FlexPrice payment ID from metadata if available
+	// Extract Flexprice payment ID from metadata if available
 	if payment.Metadata != nil {
 		if fpPaymentID, ok := payment.Metadata["flexprice_payment_id"]; ok {
-			response.FlexPricePaymentID = fpPaymentID
+			response.FlexpricePaymentID = fpPaymentID
 		}
 	}
 
@@ -284,7 +283,7 @@ func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 ) error {
 	moyasarPaymentID := payment.ID
 
-	s.logger.Info(ctx, "no FlexPrice payment ID found, processing as external Moyasar payment",
+	s.logger.Info(ctx, "no Flexprice payment ID found, processing as external Moyasar payment",
 		"moyasar_payment_id", moyasarPaymentID)
 
 	// Check if invoice ID exists in metadata
@@ -294,7 +293,7 @@ func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 	}
 
 	if flexpriceInvoiceID == "" {
-		s.logger.Info(ctx, "no FlexPrice invoice ID found in external payment metadata, skipping",
+		s.logger.Warn(ctx, "no flexprice_invoice_id in external payment metadata, skipping",
 			"moyasar_payment_id", moyasarPaymentID)
 		return nil
 	}
@@ -316,7 +315,7 @@ func (s *PaymentService) HandleExternalMoyasarPaymentFromWebhook(
 	return nil
 }
 
-// ProcessExternalMoyasarPayment processes a payment that was made directly in Moyasar (external to FlexPrice)
+// ProcessExternalMoyasarPayment processes a payment that was made directly in Moyasar (external to Flexprice)
 func (s *PaymentService) ProcessExternalMoyasarPayment(
 	ctx context.Context,
 	payment *MoyasarPaymentObject,
@@ -549,7 +548,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 		"currency", currency)
 
 	// Charge using token
-	payment, err := s.client.ChargeWithToken(ctx, tokenID, int(amountInSmallestUnit), currency, description, metadata, paymentID)
+	payment, err := s.client.ChargeWithToken(ctx, tokenID, int(amountInSmallestUnit), currency, description, metadata, paymentID, "")
 	if err != nil {
 		s.logger.Error(ctx, "failed to charge saved payment method",
 			"customer_id", customerID,
@@ -577,108 +576,275 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 	return response, nil
 }
 
-// SetupIntent creates a setup intent to save a payment method for future use
-// In Moyasar, this creates a token that can be used for recurring payments
-// Note: Token creation in Moyasar typically happens on the frontend.
-// This method returns a response with the callback URL for frontend token creation.
+// ChargeInvoiceWithSavedToken attempts to auto-pay an invoice using the customer's
+// saved Moyasar token (autopay). It returns charged=true when the token charge succeeded.
+//
+// Flow:
+//  1. Load invoice; check customer has an ACTIVE saved payment method
+//  2. Create a Flexprice INITIATED payment for destination_type=INVOICE so the webhook
+//     can look it up via flexprice_payment_id (same pattern as the AUTH/card-save flow)
+//  3. Create a Moyasar invoice so the charge appears in the Moyasar dashboard
+//  4. Charge the token — Moyasar fires payment_paid webhook with flexprice_payment_id in metadata
+//  5. Update our payment to PENDING; webhook advances it to SUCCEEDED and reconciles the invoice
+//
+// Returns charged=false (no error) when the customer has no saved token, so the
+// caller falls back to the hosted invoice flow.
+func (s *PaymentService) ChargeInvoiceWithSavedToken(
+	ctx context.Context,
+	invoiceID string,
+	paymentService interfaces.PaymentService,
+	invoiceService interfaces.InvoiceService,
+) (bool, error) {
+	inv, err := invoiceService.GetInvoice(ctx, invoiceID)
+	if err != nil {
+		return false, err
+	}
+	if inv.CustomerID == "" {
+		s.logger.Warn(ctx, "invoice has no customer_id, skipping autopay", "invoice_id", invoiceID)
+		return false, nil
+	}
+
+	paymentMethods, err := s.GetCustomerPaymentMethods(ctx, inv.CustomerID)
+	if err != nil {
+		return false, err
+	}
+	if len(paymentMethods) == 0 {
+		s.logger.Info(ctx, "no saved payment method for customer, skipping autopay",
+			"invoice_id", invoiceID,
+			"customer_id", inv.CustomerID)
+		return false, nil
+	}
+
+	amount := inv.AmountRemaining
+	if amount.IsZero() || amount.IsNegative() {
+		s.logger.Warn(ctx, "invoice has no remaining amount, skipping autopay",
+			"invoice_id", invoiceID,
+			"amount_remaining", amount.String())
+		return false, nil
+	}
+
+	currency := strings.ToUpper(inv.Currency)
+	amountInSmallestUnit, err := convertToSmallestUnit(amount, currency)
+	if err != nil {
+		return false, ierr.WithError(err).
+			WithHint("Failed to convert amount to smallest currency unit").
+			Mark(ierr.ErrInternal)
+	}
+
+	s.logger.Info(ctx, "attempting autopay with saved token",
+		"invoice_id", invoiceID,
+		"customer_id", inv.CustomerID,
+		"amount", amount.String(),
+		"currency", currency,
+		"token_id", paymentMethods[0].ID)
+
+	// Step 1: Create a Flexprice INITIATED payment so the webhook can look it up.
+	// The charge metadata carries flexprice_payment_id → webhook marks SUCCEEDED → reconciles invoice.
+	gatewayType := types.PaymentGatewayTypeMoyasar
+	flexpricePayment, err := paymentService.CreatePayment(ctx, &apidto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     invoiceID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		Amount:            amount,
+		Currency:          currency,
+		PaymentGateway:    &gatewayType,
+		ProcessPayment:    false,
+		Metadata: types.Metadata{
+			"payment_type": "autopay",
+		},
+	})
+	if err != nil {
+		s.logger.Error(ctx, "failed to create Flexprice tracking payment for autopay",
+			"invoice_id", invoiceID,
+			"error", err)
+		return false, err
+	}
+
+	s.logger.Info(ctx, "created Flexprice tracking payment for autopay",
+		"invoice_id", invoiceID,
+		"flexprice_payment_id", flexpricePayment.ID)
+
+	// Step 2: Create a Moyasar invoice so the charge appears in the Moyasar dashboard.
+	var moyasarInvoiceID string
+	syncResp, syncErr := s.invoiceSyncSvc.SyncInvoiceToMoyasar(ctx, MoyasarInvoiceSyncRequest{InvoiceID: invoiceID}, nil)
+	if syncErr != nil {
+		s.logger.Error(ctx, "failed to sync invoice to Moyasar, aborting autopay",
+			"invoice_id", invoiceID,
+			"flexprice_payment_id", flexpricePayment.ID,
+			"error", syncErr)
+		return false, syncErr
+	}
+	if syncResp != nil {
+		moyasarInvoiceID = syncResp.MoyasarInvoiceID
+		s.logger.Info(ctx, "synced invoice to Moyasar",
+			"invoice_id", invoiceID,
+			"moyasar_invoice_id", moyasarInvoiceID)
+	}
+
+	// Step 3: Charge the saved token.
+	// flexprice_payment_id in metadata lets the webhook look up and advance our payment record.
+	description := fmt.Sprintf("%s: %s", DefaultInvoiceLabel, invoiceID)
+	metadata := map[string]string{
+		"flexprice_payment_id":  flexpricePayment.ID,
+		"flexprice_customer_id": inv.CustomerID,
+		"flexprice_invoice_id":  invoiceID,
+		"payment_type":          "autopay",
+	}
+
+	// Step 3: Create the charge in Moyasar.
+	// If this fails, the Flexprice payment stays INITIATED — no PENDING update.
+	charge, err := s.client.ChargeWithToken(ctx, paymentMethods[0].ID, int(amountInSmallestUnit), currency, description, metadata, flexpricePayment.ID, moyasarInvoiceID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to create charge in Moyasar",
+			"invoice_id", invoiceID,
+			"flexprice_payment_id", flexpricePayment.ID,
+			"moyasar_invoice_id", moyasarInvoiceID,
+			"token_id", paymentMethods[0].ID,
+			"error", err)
+		return false, err
+	}
+
+	s.logger.Info(ctx, "charge created in Moyasar",
+		"invoice_id", invoiceID,
+		"flexprice_payment_id", flexpricePayment.ID,
+		"moyasar_invoice_id", moyasarInvoiceID,
+		"moyasar_payment_id", charge.ID,
+		"status", charge.Status)
+
+	// Step 4: Charge exists in Moyasar — move to PENDING.
+	// Webhook payment_paid → SUCCEEDED + reconcile invoice.
+	// Webhook payment_failed → FAILED.
+	_, updateErr := paymentService.UpdatePayment(ctx, flexpricePayment.ID, apidto.UpdatePaymentRequest{
+		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusPending)),
+		GatewayPaymentID: lo.ToPtr(charge.ID),
+	})
+	if updateErr != nil {
+		s.logger.Error(ctx, "failed to update Flexprice payment to pending",
+			"flexprice_payment_id", flexpricePayment.ID,
+			"moyasar_payment_id", charge.ID,
+			"invoice_id", invoiceID,
+			"error", updateErr)
+		// Non-fatal: webhook still carries flexprice_payment_id so reconciliation will work.
+	}
+
+	s.logger.Info(ctx, "autopay charge submitted, waiting for webhook",
+		"invoice_id", invoiceID,
+		"flexprice_payment_id", flexpricePayment.ID,
+		"moyasar_invoice_id", moyasarInvoiceID,
+		"moyasar_payment_id", charge.ID)
+
+	return true, nil
+}
+
+// SetupIntent returns the Moyasar publishable key needed by Moyasar.js to render the
+// card-entry form on the frontend. It also creates an INITIATED auth payment upfront so
+// we have a tracking ID (flexprice_payment_id) to link the Moyasar 1-SAR charge back to.
 func (s *PaymentService) SetupIntent(
 	ctx context.Context,
 	customerID string,
-	req *SetupIntentRequest,
+	paymentService interfaces.PaymentService,
 ) (*SetupIntentResponse, error) {
 	if customerID == "" {
 		return nil, ierr.NewError("customer_id is required").Mark(ierr.ErrValidation)
 	}
-	if req == nil {
-		return nil, ierr.NewError("setup intent request is required").Mark(ierr.ErrValidation)
+
+	cfg, err := s.client.GetMoyasarConfig(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	s.logger.Info(ctx, "creating setup intent for customer",
-		"customer_id", customerID,
-		"has_callback_url", req.CallbackURL != "")
-
-	// Build metadata for the token
-	metadata := make(map[string]string)
-	if req.Metadata != nil {
-		for k, v := range req.Metadata {
-			metadata[k] = v
-		}
+	if cfg.PublishableKey == "" {
+		return nil, ierr.NewError("Moyasar publishable key not configured").
+			WithHint("Add the publishable key to your Moyasar connection in Settings → Integrations").
+			Mark(ierr.ErrValidation)
 	}
-	metadata["flexprice_customer_id"] = customerID
 
-	// Note: Token creation in Moyasar typically happens on the frontend
-	// This setup intent response provides the configuration for frontend token creation
-	response := &SetupIntentResponse{
-		TokenID:  "", // Token ID will be created on frontend
-		Status:   "pending_card_entry",
-		SetupURL: req.CallbackURL,
+	// Create an INITIATED auth payment upfront so we have a tracking ID.
+	gatewayType := types.PaymentGatewayTypeMoyasar
+	authPayment, err := paymentService.CreatePayment(ctx, &apidto.CreatePaymentRequest{
+		DestinationType:   types.PaymentDestinationTypeAuth,
+		DestinationID:     customerID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		Amount:            decimal.NewFromFloat(1.0),
+		Currency:          "SAR",
+		PaymentGateway:    &gatewayType,
+		ProcessPayment:    false,
+		Metadata: types.Metadata{
+			"auth_type": "card_tokenization",
+		},
+	})
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create tracking payment for setup intent").
+			Mark(ierr.ErrInternal)
 	}
 
 	s.logger.Info(ctx, "setup intent created",
 		"customer_id", customerID,
-		"status", response.Status)
+		"flexprice_payment_id", authPayment.ID)
 
-	return response, nil
+	return &SetupIntentResponse{
+		Status:             "pending_card_entry",
+		CustomerID:         customerID,
+		PublishableKey:     cfg.PublishableKey,
+		FlexpricePaymentID: authPayment.ID,
+	}, nil
 }
 
-// GetCustomerPaymentMethods retrieves saved payment methods (tokens) for a customer
-// Note: Moyasar doesn't have a native customer-to-tokens mapping API,
-// so tokens are stored in FlexPrice's entity integration mapping
+// GetCustomerPaymentMethods returns saved payment methods for a customer from the payment_methods table.
+// Token details (brand, last4, etc.) are stored at save time in method_details; no Moyasar API call needed.
 func (s *PaymentService) GetCustomerPaymentMethods(
 	ctx context.Context,
 	customerID string,
-	customerService interfaces.CustomerService,
 ) ([]*PaymentMethodInfo, error) {
 	if customerID == "" {
 		return nil, ierr.NewError("customer_id is required").Mark(ierr.ErrValidation)
 	}
 
-	s.logger.Debug(ctx, "getting customer payment methods",
-		"customer_id", customerID)
+	s.logger.Debug(ctx, "getting customer payment methods", "customer_id", customerID)
 
-	// Get customer's saved token IDs from entity integration mapping
-	tokenIDs, err := s.customerSvc.GetCustomerTokens(ctx, customerID)
+	methods, err := s.customerSvc.GetCustomerPaymentMethods(ctx, customerID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get customer tokens",
-			"customer_id", customerID,
-			"error", err)
+		s.logger.Error(ctx, "failed to get customer payment methods",
+			"customer_id", customerID, "error", err)
 		return nil, err
 	}
 
-	if len(tokenIDs) == 0 {
-		s.logger.Info(ctx, "no saved payment methods found for customer",
-			"customer_id", customerID)
+	if len(methods) == 0 {
 		return []*PaymentMethodInfo{}, nil
 	}
 
-	// Fetch token details from Moyasar
-	var paymentMethods []*PaymentMethodInfo
-	for i, tokenID := range tokenIDs {
-		token, err := s.client.GetToken(ctx, tokenID)
-		if err != nil {
-			s.logger.Info(context.Background(), "failed to get token from Moyasar, skipping",
-				"token_id", tokenID,
-				"error", err)
-			continue
+	result := make([]*PaymentMethodInfo, 0, len(methods))
+	for _, m := range methods {
+		info := &PaymentMethodInfo{
+			ID:        m.GatewayMethodID,
+			IsDefault: m.IsDefault,
+			CreatedAt: m.CreatedAt.String(),
 		}
-
-		paymentMethod := &PaymentMethodInfo{
-			ID:          token.ID,
-			Type:        string(token.Brand),
-			Brand:       token.Brand,
-			Last4:       token.Last4,
-			ExpiryMonth: token.Month,
-			ExpiryYear:  token.Year,
-			Name:        token.Name,
-			IsDefault:   i == 0, // First token is considered default
-			CreatedAt:   token.CreatedAt,
+		// Populate card details from stored method_details
+		if d := m.MethodDetails; d != nil {
+			if v, ok := d["brand"].(string); ok {
+				info.Brand = v
+				info.Type = v
+			}
+			if v, ok := d["last4"].(string); ok {
+				info.Last4 = v
+			}
+			if v, ok := d["exp_month"].(string); ok {
+				info.ExpiryMonth = v
+			}
+			if v, ok := d["exp_year"].(string); ok {
+				info.ExpiryYear = v
+			}
+			if v, ok := d["name"].(string); ok {
+				info.Name = v
+			}
 		}
-		paymentMethods = append(paymentMethods, paymentMethod)
+		result = append(result, info)
 	}
 
 	s.logger.Info(ctx, "retrieved customer payment methods",
-		"customer_id", customerID,
-		"count", len(paymentMethods))
+		"customer_id", customerID, "count", len(result))
 
-	return paymentMethods, nil
+	return result, nil
 }

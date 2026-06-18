@@ -98,6 +98,7 @@ const (
 	UUID_PREFIX_COSTSHEET                  = "cost"
 	UUID_PREFIX_CREDIT_NOTE_LINE_ITEM      = "cn_line"
 	UUID_PREFIX_ENTITY_INTEGRATION_MAPPING = "eim"
+	UUID_PREFIX_PAYMENT_METHOD             = "pm"
 	UUID_PREFIX_COUPON                     = "coupon"
 	UUID_PREFIX_COUPON_ASSOCIATION         = "coupon_assoc"
 	UUID_PREFIX_COUPON_APPLICATION         = "coupon_app"

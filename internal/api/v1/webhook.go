@@ -22,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	whopwebhook "github.com/flexprice/flexprice/internal/integration/whop/webhook"
 	zohowebhook "github.com/flexprice/flexprice/internal/integration/zoho/webhook"
+	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -45,6 +46,7 @@ type WebhookHandler struct {
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService
 	db                              postgres.IClient
 	webhookService                  *flexwebhook.WebhookService
+	paymentMethodRepo               paymentmethod.Repository
 }
 
 // NewWebhookHandler creates a new webhook handler
@@ -61,6 +63,7 @@ func NewWebhookHandler(
 	entityIntegrationMappingService interfaces.EntityIntegrationMappingService,
 	db postgres.IClient,
 	webhookService *flexwebhook.WebhookService,
+	paymentMethodRepo paymentmethod.Repository,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		config:                          cfg,
@@ -75,6 +78,7 @@ func NewWebhookHandler(
 		entityIntegrationMappingService: entityIntegrationMappingService,
 		db:                              db,
 		webhookService:                  webhookService,
+		paymentMethodRepo:               paymentMethodRepo,
 	}
 }
 
@@ -994,6 +998,7 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
 		DB:                              h.db,
+		PaymentMethodRepo:               h.paymentMethodRepo,
 	}
 
 	// Handle the webhook event

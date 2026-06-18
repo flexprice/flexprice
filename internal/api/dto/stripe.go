@@ -182,14 +182,13 @@ func (r *CreateSetupIntentRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	switch r.Provider {
-	case string(types.PaymentMethodProviderStripe):
-	default:
+	provider := types.PaymentMethodProvider(r.Provider)
+	if provider != types.PaymentMethodProviderStripe && provider != types.PaymentMethodProviderMoyasar {
 		return errors.NewError("unsupported payment provider").
-			WithHint("Currently only 'stripe' provider is supported").
+			WithHint("Supported providers: stripe, moyasar").
 			WithReportableDetails(map[string]interface{}{
 				"provider":            r.Provider,
-				"supported_providers": []types.PaymentMethodProvider{types.PaymentMethodProviderStripe},
+				"supported_providers": []types.PaymentMethodProvider{types.PaymentMethodProviderStripe, types.PaymentMethodProviderMoyasar},
 			}).
 			Mark(errors.ErrValidation)
 	}
@@ -291,12 +290,13 @@ func (r *ListPaymentMethodsRequest) Validate() error {
 			Mark(errors.ErrValidation)
 	}
 
-	if r.Provider != string(types.PaymentMethodProviderStripe) {
+	provider := types.PaymentMethodProvider(r.Provider)
+	if provider != types.PaymentMethodProviderStripe && provider != types.PaymentMethodProviderMoyasar {
 		return errors.NewError("unsupported payment provider").
-			WithHint("Currently only 'stripe' provider is supported").
+			WithHint("Supported providers: stripe, moyasar").
 			WithReportableDetails(map[string]interface{}{
 				"provider":            r.Provider,
-				"supported_providers": []types.PaymentMethodProvider{types.PaymentMethodProviderStripe},
+				"supported_providers": []types.PaymentMethodProvider{types.PaymentMethodProviderStripe, types.PaymentMethodProviderMoyasar},
 			}).
 			Mark(errors.ErrValidation)
 	}

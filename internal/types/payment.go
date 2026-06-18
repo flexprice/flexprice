@@ -17,6 +17,7 @@ const (
 	PaymentStatusFailed            PaymentStatus = "FAILED"
 	PaymentStatusRefunded          PaymentStatus = "REFUNDED"
 	PaymentStatusPartiallyRefunded PaymentStatus = "PARTIALLY_REFUNDED"
+	PaymentStatusVoided            PaymentStatus = "VOIDED"
 )
 
 func (s PaymentStatus) String() string {
@@ -33,6 +34,7 @@ func (s PaymentStatus) Validate() error {
 		PaymentStatusFailed,
 		PaymentStatusRefunded,
 		PaymentStatusPartiallyRefunded,
+		PaymentStatusVoided,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment status").
@@ -84,6 +86,9 @@ type PaymentDestinationType string
 
 const (
 	PaymentDestinationTypeInvoice PaymentDestinationType = "INVOICE"
+	// PaymentDestinationTypeAuth is used for card tokenization/verification charges
+	// (e.g. the 1-SAR auth charge during Moyasar autopay setup). destination_id = customer ID.
+	PaymentDestinationTypeAuth PaymentDestinationType = "AUTH"
 )
 
 func (s PaymentDestinationType) String() string {
@@ -93,6 +98,7 @@ func (s PaymentDestinationType) String() string {
 func (s PaymentDestinationType) Validate() error {
 	allowed := []PaymentDestinationType{
 		PaymentDestinationTypeInvoice,
+		PaymentDestinationTypeAuth,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment destination type").
@@ -201,5 +207,36 @@ func (f *PaymentFilter) IsUnlimited() bool {
 type PaymentMethodProvider string
 
 const (
-	PaymentMethodProviderStripe PaymentMethodProvider = "stripe"
+	PaymentMethodProviderStripe  PaymentMethodProvider = "stripe"
+	PaymentMethodProviderMoyasar PaymentMethodProvider = "moyasar"
 )
+
+// PaymentMethodStatus represents the status of a saved payment method
+type PaymentMethodStatus string
+
+const (
+	PaymentMethodStatusActive   PaymentMethodStatus = "ACTIVE"
+	PaymentMethodStatusInactive PaymentMethodStatus = "INACTIVE"
+)
+
+func (s PaymentMethodStatus) Validate() error {
+	allowed := []PaymentMethodStatus{
+		PaymentMethodStatusActive,
+		PaymentMethodStatusInactive,
+	}
+	if !lo.Contains(allowed, s) {
+		return ierr.NewError("invalid payment method status").
+			WithHint("Please provide a valid payment method status").
+			WithReportableDetails(map[string]any{"allowed": allowed}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// PaymentMethodFilter represents the filter for listing payment methods
+type PaymentMethodFilter struct {
+	*QueryFilter
+	CustomerID string
+	Gateway    *string
+	Status     *PaymentMethodStatus
+}

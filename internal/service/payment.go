@@ -40,9 +40,14 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 		return nil, err // Already using ierr in the DTO
 	}
 
+	// AUTH payments (card tokenization charges) skip invoice validation
+	if p.DestinationType == types.PaymentDestinationTypeAuth {
+		return s.createAuthPayment(ctx, p)
+	}
+
 	if p.DestinationType != types.PaymentDestinationTypeInvoice {
 		return nil, ierr.NewError("invalid destination type").
-			WithHint("Only invoice destination type is supported").
+			WithHint("Only invoice and auth destination types are supported").
 			WithReportableDetails(map[string]interface{}{
 				"destination_type": p.DestinationType,
 			}).
@@ -548,4 +553,29 @@ func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, ga
 	}
 
 	return count > 0, nil
+}
+
+// createAuthPayment creates a payment record for a card tokenization/verification charge.
+// AUTH payments bypass invoice validation — destination_id is the customer ID.
+func (s *paymentService) createAuthPayment(ctx context.Context, p *payment.Payment) (*dto.PaymentResponse, error) {
+	if p.IdempotencyKey == "" {
+		p.IdempotencyKey = s.idempGen.GenerateKey(idempotency.ScopePayment, map[string]interface{}{
+			"destination_id": p.DestinationID,
+			"amount":         p.Amount,
+			"currency":       p.Currency,
+			"timestamp":      time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := s.PaymentRepo.Create(ctx, p); err != nil {
+		return nil, err
+	}
+
+	s.publishSystemEvent(ctx, types.WebhookEventPaymentCreated, p.ID)
+
+	return dto.NewPaymentResponse(p), nil
 }

@@ -191,6 +191,37 @@ func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilte
 	return domainPayment.FromEntList(payments), nil
 }
 
+func (r *paymentRepository) ListSucceededMoyasarAuthPayments(ctx context.Context) ([]*domainPayment.Payment, error) {
+	rows, err := r.client.Reader(ctx).Payment.Query().
+		Where(
+			payment.DestinationType(string(types.PaymentDestinationTypeAuth)),
+			payment.PaymentGateway(string(types.PaymentGatewayTypeMoyasar)),
+			payment.PaymentStatus(string(types.PaymentStatusSucceeded)),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list succeeded Moyasar auth payments").
+			Mark(ierr.ErrDatabase)
+	}
+	return domainPayment.FromEntList(rows), nil
+}
+
+func (r *paymentRepository) ListPendingMoyasarPayments(ctx context.Context) ([]*domainPayment.Payment, error) {
+	rows, err := r.client.Reader(ctx).Payment.Query().
+		Where(
+			payment.PaymentGateway(string(types.PaymentGatewayTypeMoyasar)),
+			payment.PaymentStatus(string(types.PaymentStatusPending)),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list pending Moyasar payments").
+			Mark(ierr.ErrDatabase)
+	}
+	return domainPayment.FromEntList(rows), nil
+}
+
 func (r *paymentRepository) Count(ctx context.Context, filter *types.PaymentFilter) (int, error) {
 	client := r.client.Reader(ctx)
 

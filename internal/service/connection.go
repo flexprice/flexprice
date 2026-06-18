@@ -499,6 +499,17 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	conn.CreatedBy = types.GetUserID(ctx)
 	conn.UpdatedBy = types.GetUserID(ctx)
 
+	// Moyasar always syncs invoices outbound (autopay requires it)
+	if conn.ProviderType == types.SecretProviderMoyasar {
+		if conn.SyncConfig == nil {
+			conn.SyncConfig = types.DefaultSyncConfig()
+		}
+		if conn.SyncConfig.Invoice == nil {
+			conn.SyncConfig.Invoice = &types.EntitySyncConfig{}
+		}
+		conn.SyncConfig.Invoice.Outbound = true
+	}
+
 	// Check if this is a Flexprice-managed S3 connection
 	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
 		s.Logger.Info(ctx, "creating flexprice-managed S3 connection",

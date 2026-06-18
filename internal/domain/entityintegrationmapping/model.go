@@ -81,6 +81,7 @@ func ValidateProviderType(providerType string) bool {
 		"quickbooks": true,
 		"zoho_books": true,
 		"paddle":     true,
+		"moyasar":    true,
 	}
 	return validProviders[providerType]
 }

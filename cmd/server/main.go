@@ -41,6 +41,7 @@ import (
 	"go.uber.org/fx"
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
+	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	ee "github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -165,6 +166,7 @@ func main() {
 			repository.NewCreditNoteLineItemRepository,
 			repository.NewConnectionRepository,
 			repository.NewEntityIntegrationMappingRepository,
+			repository.NewPaymentMethodRepository,
 			repository.NewTaxRateRepository,
 			repository.NewTaxAssociationRepository,
 			repository.NewCouponRepository,
@@ -370,6 +372,7 @@ func provideHandlers(
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
 	usageBenchmarkService service.UsageBenchmarkService,
+	paymentMethodRepo paymentmethod.Repository,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, meterUsageService, usageBenchmarkService, cfg, logger),
@@ -408,11 +411,11 @@ func provideHandlers(
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db, webhookService, paymentMethodRepo),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
-		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
+		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, paymentService, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
 		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
 		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
@@ -651,23 +654,23 @@ func registerRouterHandlers(
 	includeProcessingHandlers bool,
 ) {
 	if includeProcessingHandlers {
-		onboardingService.RegisterHandler(router, cfg)
+		// onboardingService.RegisterHandler(router, cfg)
 		webhookService.RegisterHandler(router)
 		integrationEventService.RegisterHandler(router)
-		eventConsumptionSvc.RegisterHandler(router, cfg)
-		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
+		// eventConsumptionSvc.RegisterHandler(router, cfg)
+		// eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		// eventPostProcessingSvc.RegisterHandler(router, cfg)
-		eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
-		featureUsageSvc.RegisterHandler(router, cfg)
-		featureUsageSvc.RegisterHandlerLazy(router, cfg)
-		featureUsageSvc.RegisterHandlerReplay(router, cfg)
-		costSheetUsageSvc.RegisterHandler(router, cfg)
-		costSheetUsageSvc.RegisterHandlerLazy(router, cfg)
-		walletBalanceAlertSvc.RegisterHandler(router, cfg)
-		rawEventConsumptionSvc.RegisterHandler(router, cfg)
-		meterUsageTrackingSvc.RegisterHandler(router, cfg)
-		meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
-		usageBenchmarkSvc.RegisterHandler(router, cfg)
+		// eventConsumptionSvc.RegisterHandlerReplay(router, cfg)
+		// featureUsageSvc.RegisterHandler(router, cfg)
+		// featureUsageSvc.RegisterHandlerLazy(router, cfg)
+		// featureUsageSvc.RegisterHandlerReplay(router, cfg)
+		// costSheetUsageSvc.RegisterHandler(router, cfg)
+		// costSheetUsageSvc.RegisterHandlerLazy(router, cfg)
+		// walletBalanceAlertSvc.RegisterHandler(router, cfg)
+		// rawEventConsumptionSvc.RegisterHandler(router, cfg)
+		// meterUsageTrackingSvc.RegisterHandler(router, cfg)
+		// meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
+		// usageBenchmarkSvc.RegisterHandler(router, cfg)
 	}
 }
 

@@ -197,6 +197,12 @@ func convertFromSmallestUnit(amountInSmallestUnit int64, currency string) decima
 	return decimal.NewFromInt(amountInSmallestUnit).Div(decimal.NewFromInt(divisor))
 }
 
+// ConvertFromSmallestUnitPublic is the exported version of convertFromSmallestUnit
+// for use by sub-packages (e.g. the webhook handler).
+func ConvertFromSmallestUnitPublic(amountInSmallestUnit int64, currency string) decimal.Decimal {
+	return convertFromSmallestUnit(amountInSmallestUnit, currency)
+}
+
 // buildInvoiceRequest constructs the Moyasar invoice creation request
 func (s *InvoiceSyncService) buildInvoiceRequest(
 	ctx context.Context,

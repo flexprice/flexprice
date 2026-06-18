@@ -1,6 +1,8 @@
 package moyasar
 
 import (
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -103,6 +105,7 @@ type CreatePaymentRequest struct {
 	Source      *PaymentSource    `json:"source,omitempty"`       // Payment source
 	Metadata    map[string]string `json:"metadata,omitempty"`     // Custom metadata
 	GivenID     string            `json:"given_id,omitempty"`     // Merchant UUID for idempotency
+	InvoiceID   string            `json:"invoice_id,omitempty"`   // Moyasar invoice ID to link payment
 }
 
 // CreatePaymentResponse represents the response from creating a payment
@@ -216,7 +219,7 @@ type PaymentStatusResponse struct {
 	Description        string            // Payment description
 	PaymentMethod      PaymentSourceType // Payment method type
 	PaymentMethodID    string            // Payment method ID
-	FlexPricePaymentID string            // FlexPrice payment ID (from metadata)
+	FlexpricePaymentID string            // FlexPrice payment ID (from metadata)
 	CreatedAt          string            // Creation timestamp
 	UpdatedAt          string            // Update timestamp
 }
@@ -309,19 +312,48 @@ type SetupIntentRequest struct {
 	Metadata    map[string]string // Custom metadata
 }
 
-// SetupIntentResponse represents the response from setup intent
+// SetupIntentResponse is the API response for POST /payments/customers/:id/setup/intent
+// with provider=moyasar. The publishable key is consumed by Moyasar.js on the frontend
+// to render the card-entry form and tokenize the card client-side.
 type SetupIntentResponse struct {
-	TokenID        string // Moyasar token ID
-	Status         string // Token status
-	SetupURL       string // URL for 3DS verification (if required)
-	Brand          string // Card brand
-	Last4          string // Last 4 digits
-	ExpiryMonth    string // Expiry month
-	ExpiryYear     string // Expiry year
-	CardholderName string // Cardholder name
+	Status             string `json:"status"`
+	CustomerID         string `json:"customer_id"`
+	PublishableKey     string `json:"publishable_key"`
+	FlexpricePaymentID string `json:"flexprice_payment_id"`
 }
 
-// PaymentMethodInfo represents payment method information
+// SavePaymentMethodRequest is the body for POST /payments/customers/:id/setup/token.
+// payment_method_id is the Moyasar token ID returned by Moyasar.js after the customer
+// enters their card. payment_id is the Moyasar payment UUID from the 1-SAR tokenization
+// charge; when present, the auth payment is recorded and refunded via cron.
+// Card details (brand, last4, exp_month, exp_year, name) are passed directly from
+// Moyasar.js on_completed so they can be stored in method_details without extra API calls.
+type SavePaymentMethodRequest struct {
+	Provider           types.PaymentMethodProvider `json:"provider" binding:"required"`
+	PaymentMethodID    string                      `json:"payment_method_id" binding:"required"`
+	PaymentID          string                      `json:"payment_id,omitempty"`           // Moyasar payment ID from 1-SAR charge
+	FlexpricePaymentID string                      `json:"flexprice_payment_id,omitempty"` // Our INITIATED payment to update to PENDING
+	// Card details from payment.source (populated by Moyasar.js on_completed)
+	CardBrand    string `json:"card_brand,omitempty"`
+	CardLast4    string `json:"card_last4,omitempty"`
+	CardExpMonth string `json:"card_exp_month,omitempty"`
+	CardExpYear  string `json:"card_exp_year,omitempty"`
+	CardName     string `json:"card_name,omitempty"`
+}
+
+func (r *SavePaymentMethodRequest) Validate() error {
+	if r.Provider != types.PaymentMethodProviderMoyasar {
+		return ierr.NewError("unsupported provider for save payment method").
+			WithHint("Supported providers: moyasar").
+			Mark(ierr.ErrValidation)
+	}
+	if r.PaymentMethodID == "" {
+		return ierr.NewError("payment_method_id is required").Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// TODO: PaymentMethodInfo is unused — kept for reference; remove when confirmed safe.
 type PaymentMethodInfo struct {
 	ID          string // Token/card ID
 	Type        string // "card", "mada", etc.

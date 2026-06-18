@@ -57,7 +57,6 @@ type Handlers struct {
 	Dashboard                *v1.DashboardHandler
 	Workflow                 *v1.WorkflowHandler
 	MeterUsage               *v1.MeterUsageHandler
-
 	// Portal handlers
 	Onboarding     *v1.OnboardingHandler
 	AIPricing      *v1.AIPricingHandler
@@ -439,6 +438,7 @@ func NewRouter(
 			{
 				custPaymentsGroup.GET("/:id/methods", handlers.SetupIntent.ListCustomerPaymentMethods)
 				custPaymentsGroup.POST("/:id/setup/intent", write("payment", types.ActionWrite), handlers.SetupIntent.CreateSetupIntentSession)
+				custPaymentsGroup.POST("/:id/setup/token", write("payment", types.ActionWrite), handlers.SetupIntent.SavePaymentMethod)
 			}
 		}
 

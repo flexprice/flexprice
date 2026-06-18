@@ -9,16 +9,17 @@ import (
 type IntegrationEntityType string
 
 const (
-	IntegrationEntityTypeCustomer     IntegrationEntityType = "customer"
-	IntegrationEntityTypePlan         IntegrationEntityType = "plan"
-	IntegrationEntityTypeInvoice      IntegrationEntityType = "invoice"
-	IntegrationEntityTypeSubscription IntegrationEntityType = "subscription"
-	IntegrationEntityTypePayment      IntegrationEntityType = "payment"
-	IntegrationEntityTypeCreditNote   IntegrationEntityType = "credit_note"
-	IntegrationEntityTypeAddon        IntegrationEntityType = "addon"
-	IntegrationEntityTypeItem         IntegrationEntityType = "item"
-	IntegrationEntityTypeItemPrice    IntegrationEntityType = "item_price"
-	IntegrationEntityTypePrice        IntegrationEntityType = "price"
+	IntegrationEntityTypeCustomer      IntegrationEntityType = "customer"
+	IntegrationEntityTypePlan          IntegrationEntityType = "plan"
+	IntegrationEntityTypeInvoice       IntegrationEntityType = "invoice"
+	IntegrationEntityTypeSubscription  IntegrationEntityType = "subscription"
+	IntegrationEntityTypePayment       IntegrationEntityType = "payment"
+	IntegrationEntityTypeCreditNote    IntegrationEntityType = "credit_note"
+	IntegrationEntityTypeAddon         IntegrationEntityType = "addon"
+	IntegrationEntityTypeItem          IntegrationEntityType = "item"
+	IntegrationEntityTypeItemPrice     IntegrationEntityType = "item_price"
+	IntegrationEntityTypePrice         IntegrationEntityType = "price"
+	IntegrationEntityTypePaymentMethod IntegrationEntityType = "payment_method"
 )
 
 func (e IntegrationEntityType) String() string {
@@ -37,10 +38,11 @@ func (e IntegrationEntityType) Validate() error {
 		IntegrationEntityTypeItem,
 		IntegrationEntityTypeItemPrice,
 		IntegrationEntityTypePrice,
+		IntegrationEntityTypePaymentMethod,
 	}
 	if !lo.Contains(allowed, e) {
 		return ierr.NewError("invalid entity type").
-			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price").
+			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price, payment_method").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

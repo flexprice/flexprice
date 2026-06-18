@@ -45,11 +45,12 @@ type WorkerConfig struct {
 
 // cronActivityBundle groups activities registered on the Temporal "cron" task queue only.
 type cronActivityBundle struct {
-	creditGrant           *cronActivities.CreditGrantActivities
-	subscription          *cronActivities.SubscriptionCronActivities
-	walletCreditExpiry    *cronActivities.WalletCreditExpiryActivities
-	webhookOutboundRetry  *cronActivities.WebhookOutboundRetryActivities
-	paddleInvoicePullSync *cronActivities.PaddleInvoicePullSyncActivities
+	creditGrant            *cronActivities.CreditGrantActivities
+	subscription           *cronActivities.SubscriptionCronActivities
+	walletCreditExpiry     *cronActivities.WalletCreditExpiryActivities
+	webhookOutboundRetry   *cronActivities.WebhookOutboundRetryActivities
+	paddleInvoicePullSync  *cronActivities.PaddleInvoicePullSyncActivities
+	moyasarAuthPaymentVoid *cronActivities.MoyasarCronActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -178,6 +179,9 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	moyasarInvoiceSyncActivities := moyasarActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		customerService,
+		service.NewPaymentService(params),
+		service.NewInvoiceService(params),
+		params.EntityIntegrationMappingRepo,
 		params.Logger,
 	)
 
@@ -262,11 +266,12 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	settingsService := service.NewSettingsService(params)
 	environmentService := service.NewEnvironmentService(params.EnvironmentRepo, envAccessService, settingsService, params)
 	cronBundle := &cronActivityBundle{
-		creditGrant:           cronActivities.NewCreditGrantActivities(creditGrantService),
-		subscription:          cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
-		walletCreditExpiry:    cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
-		webhookOutboundRetry:  cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
-		paddleInvoicePullSync: cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
+		creditGrant:            cronActivities.NewCreditGrantActivities(creditGrantService),
+		subscription:           cronActivities.NewSubscriptionCronActivities(subscriptionService, params.Logger),
+		walletCreditExpiry:     cronActivities.NewWalletCreditExpiryActivities(walletService, tenantService, environmentService, params.Logger),
+		webhookOutboundRetry:   cronActivities.NewWebhookOutboundRetryActivities(webhookService, params.Logger),
+		paddleInvoicePullSync:  cronActivities.NewPaddleInvoicePullSyncActivities(params.InvoiceRepo, temporalService, params.Logger),
+		moyasarAuthPaymentVoid: cronActivities.NewMoyasarCronActivities(params.PaymentRepo, params.PaymentMethodRepo, params.IntegrationFactory, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -493,6 +498,8 @@ func buildWorkerConfig(
 			cronWorkflows.OutboundWebhookStaleRetryWorkflow,
 			cronWorkflows.AutoInvoiceThresholdBillingWorkflow,
 			cronWorkflows.PaddleInvoicePullSyncCronWorkflow,
+			cronWorkflows.MoyasarAuthPaymentVoidWorkflow,
+			cronWorkflows.MoyasarReconcilePendingWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -504,6 +511,8 @@ func buildWorkerConfig(
 			cron.webhookOutboundRetry.RetryStaleOutboundWebhooksActivity,
 			cron.subscription.ProcessAutoInvoiceThresholdBillingActivity,
 			cron.paddleInvoicePullSync.FetchAndTriggerPaddleInvoicePullSyncActivity,
+			cron.moyasarAuthPaymentVoid.VoidMoyasarAuthPaymentsActivity,
+			cron.moyasarAuthPaymentVoid.ReconcilePendingMoyasarPaymentsActivity,
 		)
 	}
 	return WorkerConfig{

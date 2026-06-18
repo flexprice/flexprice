@@ -59,6 +59,7 @@ func buildActivityFactory(
 		testutil.NewInMemoryPaymentStore(),
 		testutil.NewInMemoryPriceStore(),
 		mappingRepo,
+		nil, // PaymentMethodRepo — not needed in activity unit tests
 		testutil.NewInMemoryMeterStore(),
 		testutil.NewInMemoryFeatureStore(),
 		encSvc,
