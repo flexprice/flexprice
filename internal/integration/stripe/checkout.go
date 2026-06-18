@@ -125,6 +125,7 @@ func (s *StripeCheckoutProvider) createSetupSession(ctx context.Context, req che
 	params := &stripe.CheckoutSessionCreateParams{
 		Mode:       stripe.String(stripeModeForObjective(req.Objective)),
 		Customer:   stripe.String(stripeCustomerID),
+		Currency:   stripe.String(req.Currency),
 		SuccessURL: stripe.String(req.SuccessURL),
 		CancelURL:  stripe.String(req.CancelURL),
 		Metadata:   metadata,

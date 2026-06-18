@@ -804,12 +804,8 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	// get flexprice_payment_id from metadata. Payment-objective sessions carry one;
 	// setup-objective sessions do not — they complete via flexprice_checkout_id.
 	flexpricePaymentID := checkoutSession.Metadata["flexprice_payment_id"]
-	if flexpricePaymentID == "" {
-		flexpriceCheckoutID := checkoutSession.Metadata["flexprice_checkout_id"]
-		if flexpriceCheckoutID == "" {
-			h.logger.Info(ctx, "no flexprice_payment_id or flexprice_checkout_id in checkout session metadata", "event_id", event.ID)
-			return nil
-		}
+	flexpriceCheckoutID := checkoutSession.Metadata["flexprice_checkout_id"]
+	if flexpriceCheckoutID != "" {
 		if services.CheckoutService == nil {
 			h.logger.Error(ctx, "checkout service not wired into webhook deps, skipping setup completion",
 				"flexprice_checkout_id", flexpriceCheckoutID, "event_id", event.ID)
