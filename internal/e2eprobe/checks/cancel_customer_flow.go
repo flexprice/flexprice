@@ -49,10 +49,17 @@ func (s *CancelCustomerFlow) Run(ctx context.Context) error {
 
 	cancelType := types.CancellationTypeImmediate
 	prorate := types.ProrationBehaviorCreateProrations
+	// Ask Flexprice to generate a final invoice for usage accrued up to the
+	// cancellation instant. Without this, ephemeral customers leave behind
+	// pending unbilled usage even though the subscription is gone — which
+	// defeats the cycle-invoice-probe's coverage of the invoice generation
+	// path for these customers.
+	generateInvoice := types.CancelImmediatelyInvoicePolicyGenerateInvoice
 	if _, err := s.client.Subscriptions().Cancel(ctx, target.ID, types.DtoCancelSubscriptionRequest{
-		CancellationType:  cancelType,
-		ProrationBehavior: &prorate,
-		Reason:            strPtr("e2eprobe-cancel-customer-flow"),
+		CancellationType:               cancelType,
+		ProrationBehavior:              &prorate,
+		CancelImmediatelyInovicePolicy: &generateInvoice,
+		Reason:                         strPtr("e2eprobe-cancel-customer-flow"),
 	}); err != nil {
 		// A previous tick may have already cancelled the sub server-side (e.g.
 		// the network call partially succeeded — TCP reset after the write,

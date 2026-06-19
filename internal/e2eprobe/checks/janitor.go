@@ -232,6 +232,7 @@ func (j *Janitor) cancelCustomerSubs(ctx context.Context, custID, extID string) 
 		return
 	}
 	immediate := types.CancellationTypeImmediate
+	generateInvoice := types.CancelImmediatelyInvoicePolicyGenerateInvoice
 	for _, sub := range listResp.GetItems() {
 		if sub.ID == nil {
 			continue
@@ -241,8 +242,9 @@ func (j *Janitor) cancelCustomerSubs(ctx context.Context, custID, extID string) 
 			continue
 		}
 		_, cErr := j.client.Subscriptions().Cancel(ctx, *sub.ID, types.DtoCancelSubscriptionRequest{
-			CancellationType: immediate,
-			Reason:           strPtrJanitor("e2eprobe-janitor-orphan-sweep"),
+			CancellationType:               immediate,
+			CancelImmediatelyInovicePolicy: &generateInvoice,
+			Reason:                         strPtrJanitor("e2eprobe-janitor-orphan-sweep"),
 		})
 		if cErr != nil && !isNotFound(cErr) {
 			slog.InfoContext(ctx, "janitor sweepOrphans: cancel sub deferred (will retry)",
