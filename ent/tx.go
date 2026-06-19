@@ -54,6 +54,8 @@ type Tx struct {
 	Feature *FeatureClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// IncomingWebhookEvent is the client for interacting with the IncomingWebhookEvent builders.
+	IncomingWebhookEvent *IncomingWebhookEventClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -106,8 +108,6 @@ type Tx struct {
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
 	WalletTransaction *WalletTransactionClient
-	// WebhookRequest is the client for interacting with the WebhookRequest builders.
-	WebhookRequest *WebhookRequestClient
 	// WorkflowExecution is the client for interacting with the WorkflowExecution builders.
 	WorkflowExecution *WorkflowExecutionClient
 
@@ -261,6 +261,7 @@ func (tx *Tx) init() {
 	tx.Environment = NewEnvironmentClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
+	tx.IncomingWebhookEvent = NewIncomingWebhookEventClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)
@@ -287,7 +288,6 @@ func (tx *Tx) init() {
 	tx.User = NewUserClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)
 	tx.WalletTransaction = NewWalletTransactionClient(tx.config)
-	tx.WebhookRequest = NewWebhookRequestClient(tx.config)
 	tx.WorkflowExecution = NewWorkflowExecutionClient(tx.config)
 }
 

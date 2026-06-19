@@ -5,7 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
-	domainWebhookRequest "github.com/flexprice/flexprice/internal/domain/webhookrequest"
+	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
@@ -79,7 +79,7 @@ func NewRouter(
 	envAccessService service.EnvAccessService,
 	rbacService *rbac.RBACService,
 	tenantService service.TenantService,
-	webhookRequestRepo domainWebhookRequest.Repository,
+	webhookRequestRepo domainIncomingWebhookEvent.Repository,
 ) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 

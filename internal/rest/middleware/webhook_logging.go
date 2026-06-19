@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
-	domainWebhookRequest "github.com/flexprice/flexprice/internal/domain/webhookrequest"
+	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
@@ -19,7 +19,7 @@ import (
 func WebhookLoggingMiddleware(
 	cfg *config.Configuration,
 	log *logger.Logger,
-	repo domainWebhookRequest.Repository,
+	repo domainIncomingWebhookEvent.Repository,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Buffer the body so the downstream handler can still read it.
@@ -39,7 +39,7 @@ func WebhookLoggingMiddleware(
 
 		persisted := false
 		if repo != nil && shouldPersistRequest(cfg.WebhookLogging, tenantID, environmentID) {
-			req := &domainWebhookRequest.WebhookRequest{
+			req := &domainIncomingWebhookEvent.IncomingWebhookEvent{
 				ID:            types.GenerateUUID(),
 				TenantID:      tenantID,
 				EnvironmentID: environmentID,

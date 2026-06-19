@@ -10,11 +10,11 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/flexprice/flexprice/ent/webhookrequest"
+	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 )
 
-// WebhookRequest is the model entity for the WebhookRequest schema.
-type WebhookRequest struct {
+// IncomingWebhookEvent is the model entity for the IncomingWebhookEvent schema.
+type IncomingWebhookEvent struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
@@ -40,15 +40,15 @@ type WebhookRequest struct {
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
-func (*WebhookRequest) scanValues(columns []string) ([]any, error) {
+func (*IncomingWebhookEvent) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case webhookrequest.FieldHeaders:
+		case incomingwebhookevent.FieldHeaders:
 			values[i] = new([]byte)
-		case webhookrequest.FieldID, webhookrequest.FieldTenantID, webhookrequest.FieldEnvironmentID, webhookrequest.FieldProvider, webhookrequest.FieldMethod, webhookrequest.FieldPath, webhookrequest.FieldRequestID, webhookrequest.FieldBody:
+		case incomingwebhookevent.FieldID, incomingwebhookevent.FieldTenantID, incomingwebhookevent.FieldEnvironmentID, incomingwebhookevent.FieldProvider, incomingwebhookevent.FieldMethod, incomingwebhookevent.FieldPath, incomingwebhookevent.FieldRequestID, incomingwebhookevent.FieldBody:
 			values[i] = new(sql.NullString)
-		case webhookrequest.FieldCreatedAt:
+		case incomingwebhookevent.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -58,140 +58,140 @@ func (*WebhookRequest) scanValues(columns []string) ([]any, error) {
 }
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
-// to the WebhookRequest fields.
-func (wr *WebhookRequest) assignValues(columns []string, values []any) error {
+// to the IncomingWebhookEvent fields.
+func (iwe *IncomingWebhookEvent) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
 	for i := range columns {
 		switch columns[i] {
-		case webhookrequest.FieldID:
+		case incomingwebhookevent.FieldID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
-				wr.ID = value.String
+				iwe.ID = value.String
 			}
-		case webhookrequest.FieldTenantID:
+		case incomingwebhookevent.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
-				wr.TenantID = value.String
+				iwe.TenantID = value.String
 			}
-		case webhookrequest.FieldEnvironmentID:
+		case incomingwebhookevent.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
-				wr.EnvironmentID = value.String
+				iwe.EnvironmentID = value.String
 			}
-		case webhookrequest.FieldProvider:
+		case incomingwebhookevent.FieldProvider:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field provider", values[i])
 			} else if value.Valid {
-				wr.Provider = value.String
+				iwe.Provider = value.String
 			}
-		case webhookrequest.FieldMethod:
+		case incomingwebhookevent.FieldMethod:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field method", values[i])
 			} else if value.Valid {
-				wr.Method = value.String
+				iwe.Method = value.String
 			}
-		case webhookrequest.FieldPath:
+		case incomingwebhookevent.FieldPath:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field path", values[i])
 			} else if value.Valid {
-				wr.Path = value.String
+				iwe.Path = value.String
 			}
-		case webhookrequest.FieldRequestID:
+		case incomingwebhookevent.FieldRequestID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field request_id", values[i])
 			} else if value.Valid {
-				wr.RequestID = value.String
+				iwe.RequestID = value.String
 			}
-		case webhookrequest.FieldHeaders:
+		case incomingwebhookevent.FieldHeaders:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field headers", values[i])
 			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &wr.Headers); err != nil {
+				if err := json.Unmarshal(*value, &iwe.Headers); err != nil {
 					return fmt.Errorf("unmarshal field headers: %w", err)
 				}
 			}
-		case webhookrequest.FieldBody:
+		case incomingwebhookevent.FieldBody:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field body", values[i])
 			} else if value.Valid {
-				wr.Body = value.String
+				iwe.Body = value.String
 			}
-		case webhookrequest.FieldCreatedAt:
+		case incomingwebhookevent.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
-				wr.CreatedAt = value.Time
+				iwe.CreatedAt = value.Time
 			}
 		default:
-			wr.selectValues.Set(columns[i], values[i])
+			iwe.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the WebhookRequest.
+// Value returns the ent.Value that was dynamically selected and assigned to the IncomingWebhookEvent.
 // This includes values selected through modifiers, order, etc.
-func (wr *WebhookRequest) Value(name string) (ent.Value, error) {
-	return wr.selectValues.Get(name)
+func (iwe *IncomingWebhookEvent) Value(name string) (ent.Value, error) {
+	return iwe.selectValues.Get(name)
 }
 
-// Update returns a builder for updating this WebhookRequest.
-// Note that you need to call WebhookRequest.Unwrap() before calling this method if this WebhookRequest
+// Update returns a builder for updating this IncomingWebhookEvent.
+// Note that you need to call IncomingWebhookEvent.Unwrap() before calling this method if this IncomingWebhookEvent
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (wr *WebhookRequest) Update() *WebhookRequestUpdateOne {
-	return NewWebhookRequestClient(wr.config).UpdateOne(wr)
+func (iwe *IncomingWebhookEvent) Update() *IncomingWebhookEventUpdateOne {
+	return NewIncomingWebhookEventClient(iwe.config).UpdateOne(iwe)
 }
 
-// Unwrap unwraps the WebhookRequest entity that was returned from a transaction after it was closed,
+// Unwrap unwraps the IncomingWebhookEvent entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (wr *WebhookRequest) Unwrap() *WebhookRequest {
-	_tx, ok := wr.config.driver.(*txDriver)
+func (iwe *IncomingWebhookEvent) Unwrap() *IncomingWebhookEvent {
+	_tx, ok := iwe.config.driver.(*txDriver)
 	if !ok {
-		panic("ent: WebhookRequest is not a transactional entity")
+		panic("ent: IncomingWebhookEvent is not a transactional entity")
 	}
-	wr.config.driver = _tx.drv
-	return wr
+	iwe.config.driver = _tx.drv
+	return iwe
 }
 
 // String implements the fmt.Stringer.
-func (wr *WebhookRequest) String() string {
+func (iwe *IncomingWebhookEvent) String() string {
 	var builder strings.Builder
-	builder.WriteString("WebhookRequest(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", wr.ID))
+	builder.WriteString("IncomingWebhookEvent(")
+	builder.WriteString(fmt.Sprintf("id=%v, ", iwe.ID))
 	builder.WriteString("tenant_id=")
-	builder.WriteString(wr.TenantID)
+	builder.WriteString(iwe.TenantID)
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
-	builder.WriteString(wr.EnvironmentID)
+	builder.WriteString(iwe.EnvironmentID)
 	builder.WriteString(", ")
 	builder.WriteString("provider=")
-	builder.WriteString(wr.Provider)
+	builder.WriteString(iwe.Provider)
 	builder.WriteString(", ")
 	builder.WriteString("method=")
-	builder.WriteString(wr.Method)
+	builder.WriteString(iwe.Method)
 	builder.WriteString(", ")
 	builder.WriteString("path=")
-	builder.WriteString(wr.Path)
+	builder.WriteString(iwe.Path)
 	builder.WriteString(", ")
 	builder.WriteString("request_id=")
-	builder.WriteString(wr.RequestID)
+	builder.WriteString(iwe.RequestID)
 	builder.WriteString(", ")
 	builder.WriteString("headers=")
-	builder.WriteString(fmt.Sprintf("%v", wr.Headers))
+	builder.WriteString(fmt.Sprintf("%v", iwe.Headers))
 	builder.WriteString(", ")
 	builder.WriteString("body=")
-	builder.WriteString(wr.Body)
+	builder.WriteString(iwe.Body)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
-	builder.WriteString(wr.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(iwe.CreatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }
 
-// WebhookRequests is a parsable slice of WebhookRequest.
-type WebhookRequests []*WebhookRequest
+// IncomingWebhookEvents is a parsable slice of IncomingWebhookEvent.
+type IncomingWebhookEvents []*IncomingWebhookEvent

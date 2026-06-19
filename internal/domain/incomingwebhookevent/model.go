@@ -1,4 +1,4 @@
-package webhookrequest
+package incomingwebhookevent
 
 import (
 	"time"
@@ -6,8 +6,8 @@ import (
 	"github.com/flexprice/flexprice/ent"
 )
 
-// WebhookRequest is the domain model for an inbound webhook request audit log entry.
-type WebhookRequest struct {
+// IncomingWebhookEvent is the domain model for an inbound webhook event audit log entry.
+type IncomingWebhookEvent struct {
 	ID            string              `json:"id"`
 	TenantID      string              `json:"tenant_id"`
 	EnvironmentID string              `json:"environment_id"`
@@ -20,12 +20,12 @@ type WebhookRequest struct {
 	CreatedAt     time.Time           `json:"created_at"`
 }
 
-// FromEnt converts an Ent WebhookRequest to the domain model.
-func FromEnt(e *ent.WebhookRequest) *WebhookRequest {
+// FromEnt converts an Ent IncomingWebhookEvent to the domain model.
+func FromEnt(e *ent.IncomingWebhookEvent) *IncomingWebhookEvent {
 	if e == nil {
 		return nil
 	}
-	return &WebhookRequest{
+	return &IncomingWebhookEvent{
 		ID:            e.ID,
 		TenantID:      e.TenantID,
 		EnvironmentID: e.EnvironmentID,

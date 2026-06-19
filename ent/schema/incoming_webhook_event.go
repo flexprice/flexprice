@@ -8,12 +8,12 @@ import (
 	"entgo.io/ent/schema/index"
 )
 
-// WebhookRequest holds the schema for inbound webhook request audit logs.
-type WebhookRequest struct {
+// IncomingWebhookEvent holds the schema for inbound webhook request audit logs.
+type IncomingWebhookEvent struct {
 	ent.Schema
 }
 
-func (WebhookRequest) Fields() []ent.Field {
+func (IncomingWebhookEvent) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
@@ -56,17 +56,17 @@ func (WebhookRequest) Fields() []ent.Field {
 	}
 }
 
-func (WebhookRequest) Edges() []ent.Edge {
+func (IncomingWebhookEvent) Edges() []ent.Edge {
 	return nil
 }
 
-func (WebhookRequest) Indexes() []ent.Index {
+func (IncomingWebhookEvent) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "provider", "created_at").
-			StorageKey("idx_webhook_requests_tenant_env_provider_created"),
+			StorageKey("idx_incoming_webhook_events_tenant_env_provider_created"),
 		index.Fields("tenant_id", "environment_id", "created_at").
-			StorageKey("idx_webhook_requests_tenant_env_created"),
+			StorageKey("idx_incoming_webhook_events_tenant_env_created"),
 		index.Fields("request_id").
-			StorageKey("idx_webhook_requests_request_id"),
+			StorageKey("idx_incoming_webhook_events_request_id"),
 	}
 }

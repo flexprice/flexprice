@@ -978,6 +978,42 @@ var (
 			},
 		},
 	}
+	// IncomingWebhookEventsColumns holds the columns for the "incoming_webhook_events" table.
+	IncomingWebhookEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "environment_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "method", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "path", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "request_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "headers", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "body", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// IncomingWebhookEventsTable holds the schema information for the "incoming_webhook_events" table.
+	IncomingWebhookEventsTable = &schema.Table{
+		Name:       "incoming_webhook_events",
+		Columns:    IncomingWebhookEventsColumns,
+		PrimaryKey: []*schema.Column{IncomingWebhookEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_incoming_webhook_events_tenant_env_provider_created",
+				Unique:  false,
+				Columns: []*schema.Column{IncomingWebhookEventsColumns[1], IncomingWebhookEventsColumns[2], IncomingWebhookEventsColumns[3], IncomingWebhookEventsColumns[9]},
+			},
+			{
+				Name:    "idx_incoming_webhook_events_tenant_env_created",
+				Unique:  false,
+				Columns: []*schema.Column{IncomingWebhookEventsColumns[1], IncomingWebhookEventsColumns[2], IncomingWebhookEventsColumns[9]},
+			},
+			{
+				Name:    "idx_incoming_webhook_events_request_id",
+				Unique:  false,
+				Columns: []*schema.Column{IncomingWebhookEventsColumns[6]},
+			},
+		},
+	}
 	// InvoicesColumns holds the columns for the "invoices" table.
 	InvoicesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -2331,42 +2367,6 @@ var (
 			},
 		},
 	}
-	// WebhookRequestsColumns holds the columns for the "webhook_requests" table.
-	WebhookRequestsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "environment_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "method", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
-		{Name: "path", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "request_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
-		{Name: "headers", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "body", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "created_at", Type: field.TypeTime},
-	}
-	// WebhookRequestsTable holds the schema information for the "webhook_requests" table.
-	WebhookRequestsTable = &schema.Table{
-		Name:       "webhook_requests",
-		Columns:    WebhookRequestsColumns,
-		PrimaryKey: []*schema.Column{WebhookRequestsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "idx_webhook_requests_tenant_env_provider_created",
-				Unique:  false,
-				Columns: []*schema.Column{WebhookRequestsColumns[1], WebhookRequestsColumns[2], WebhookRequestsColumns[3], WebhookRequestsColumns[9]},
-			},
-			{
-				Name:    "idx_webhook_requests_tenant_env_created",
-				Unique:  false,
-				Columns: []*schema.Column{WebhookRequestsColumns[1], WebhookRequestsColumns[2], WebhookRequestsColumns[9]},
-			},
-			{
-				Name:    "idx_webhook_requests_request_id",
-				Unique:  false,
-				Columns: []*schema.Column{WebhookRequestsColumns[6]},
-			},
-		},
-	}
 	// WorkflowExecutionsColumns holds the columns for the "workflow_executions" table.
 	WorkflowExecutionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(26)"}},
@@ -2479,6 +2479,7 @@ var (
 		EnvironmentsTable,
 		FeaturesTable,
 		GroupsTable,
+		IncomingWebhookEventsTable,
 		InvoicesTable,
 		InvoiceLineItemsTable,
 		InvoiceSequencesTable,
@@ -2505,7 +2506,6 @@ var (
 		UsersTable,
 		WalletsTable,
 		WalletTransactionsTable,
-		WebhookRequestsTable,
 		WorkflowExecutionsTable,
 		CouponAssociationCouponApplicationsTable,
 	}
