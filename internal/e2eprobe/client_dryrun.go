@@ -252,6 +252,9 @@ func (d *dryRunEvents) Ingest(ctx context.Context, req types.DtoIngestEventReque
 func (d *dryRunEvents) GetUsageAnalytics(ctx context.Context, req types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return d.inner.GetUsageAnalytics(ctx, req)
 }
+func (d *dryRunEvents) ListRaw(ctx context.Context, req types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+	return d.inner.ListRaw(ctx, req)
+}
 
 // ── AsyncEventClient ──────────────────────────────────────────────────
 

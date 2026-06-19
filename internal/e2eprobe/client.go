@@ -70,6 +70,11 @@ type WalletOps interface {
 type EventOps interface {
 	Ingest(ctx context.Context, req types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error)
 	GetUsageAnalytics(ctx context.Context, req types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error)
+	// ListRaw queries the raw events table. The probe uses this to verify
+	// synchronously-ingested events actually landed before polling the
+	// aggregation pipeline — separating "ingest dropped" from "aggregation
+	// dropped" in failure attribution.
+	ListRaw(ctx context.Context, req types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error)
 }
 
 type InvoiceOps interface {
@@ -224,6 +229,9 @@ func (o eventOps) Ingest(ctx context.Context, req types.DtoIngestEventRequest) (
 }
 func (o eventOps) GetUsageAnalytics(ctx context.Context, req types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return o.s.GetUsageAnalytics(ctx, req)
+}
+func (o eventOps) ListRaw(ctx context.Context, req types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+	return o.s.ListRawEvents(ctx, req)
 }
 
 type invoiceOps struct{ s *flexprice.Invoices }

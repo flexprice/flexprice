@@ -129,6 +129,9 @@ func (f *fakeEventOps) Ingest(_ context.Context, _ types.DtoIngestEventRequest) 
 func (f *fakeEventOps) GetUsageAnalytics(_ context.Context, _ types.DtoGetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return &dtos.GetUsageAnalyticsResponse{}, nil
 }
+func (f *fakeEventOps) ListRaw(_ context.Context, _ types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+	return &dtos.ListRawEventsResponse{}, nil
+}
 
 type fakeInvoiceOps struct{ queryCalled int32 }
 

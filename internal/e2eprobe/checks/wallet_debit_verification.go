@@ -42,10 +42,17 @@ type WalletDebitOpts struct {
 	TopUpAmount string
 
 	// Phase 2 — event ingestion + analytics polling
-	EventCount          int
-	EventAmount         string
+	EventCount            int
+	EventAmount           string
 	AnalyticsPollInterval time.Duration
 	AnalyticsPollTimeout  time.Duration
+
+	// LandedPollInterval / LandedPollTimeout bound the wait for synchronously-
+	// ingested events to show up in the raw events table before the probe
+	// starts polling the aggregation pipeline. Short by design — if events
+	// haven't landed in 30s the ingestion path is broken, not just slow.
+	LandedPollInterval time.Duration
+	LandedPollTimeout  time.Duration
 }
 
 func defaultWalletDebitOpts() WalletDebitOpts {
@@ -55,6 +62,8 @@ func defaultWalletDebitOpts() WalletDebitOpts {
 		EventAmount:           "1.00",
 		AnalyticsPollInterval: 10 * time.Second,
 		AnalyticsPollTimeout:  5 * time.Minute,
+		LandedPollInterval:    2 * time.Second,
+		LandedPollTimeout:     30 * time.Second,
 	}
 }
 
@@ -69,6 +78,12 @@ type WalletDebitVerification struct {
 func NewWalletDebitVerification(c e2eprobe.Client, r e2eprobe.Registry, runID string, opts WalletDebitOpts) *WalletDebitVerification {
 	if opts.EventCount == 0 {
 		opts = defaultWalletDebitOpts()
+	}
+	if opts.LandedPollInterval == 0 {
+		opts.LandedPollInterval = 2 * time.Second
+	}
+	if opts.LandedPollTimeout == 0 {
+		opts.LandedPollTimeout = 30 * time.Second
 	}
 	return &WalletDebitVerification{client: c, reg: r, runID: runID, opts: opts}
 }
@@ -160,6 +175,16 @@ func (v *WalletDebitVerification) phase1TopUp(ctx context.Context, extCustID, in
 // phase2Analytics ingests N events and polls GetUsageAnalytics until the
 // aggregated sum meets or exceeds the expected total, confirming that the
 // events → ClickHouse aggregation pipeline is healthy.
+//
+// Each event carries a unique probe-prefixed EventID so individual events can
+// be grepped in Flexprice consumer logs. After ingestion, we synchronously
+// query the raw events table to confirm all N landed before polling the
+// aggregation pipeline — that lets failure attributes distinguish three modes:
+//   - landed_count < N:                       ingestion path dropped events
+//   - landed_count == N, analytics_sum == 0:  aggregation pipeline never processed them
+//   - landed_count == N, analytics_sum < N:   partial aggregation drop (the
+//                                             real failure mode the probe has
+//                                             been catching in production)
 func (v *WalletDebitVerification) phase2Analytics(ctx context.Context, extCustID string) error {
 	amountPerEvent, err := parseFloat(v.opts.EventAmount)
 	if err != nil {
@@ -168,8 +193,13 @@ func (v *WalletDebitVerification) phase2Analytics(ctx context.Context, extCustID
 	expectedTotal := float64(v.opts.EventCount) * amountPerEvent
 	batchTag := fmt.Sprintf("%d", time.Now().UnixNano())
 
+	eventIDs := make([]string, 0, v.opts.EventCount)
 	for i := 0; i < v.opts.EventCount; i++ {
+		eventID := fmt.Sprintf("e2eprobe-wdv-%s-%d", batchTag, i)
+		eventIDs = append(eventIDs, eventID)
+		eid := eventID
 		req := types.DtoIngestEventRequest{
+			EventID:            &eid,
 			EventName:          "e2eprobe_sum",
 			ExternalCustomerID: extCustID,
 			Properties: map[string]string{
@@ -183,13 +213,35 @@ func (v *WalletDebitVerification) phase2Analytics(ctx context.Context, extCustID
 			return e2eprobe.Errorf(map[string]string{
 				"external_customer_id": extCustID,
 				"event_name":           "e2eprobe_sum",
+				"event_id":             eventID,
+				"debit_batch":          batchTag,
 			}, "ingest event %d: %w", i, err)
 		}
 	}
 
-	// Poll analytics until sum ≥ expectedTotal or timeout.
-	deadline := time.Now().Add(v.opts.AnalyticsPollTimeout)
 	ingestTime := time.Now()
+
+	// Step 1: confirm all N events landed in the raw events table. Allow a
+	// brief retry budget — the ingest API returns 2xx before the synchronous
+	// write completes in some deployments, so a single ListRaw call right
+	// after the loop occasionally undercounts. Retry for up to 30s.
+	landedCount := v.confirmEventsLanded(ctx, extCustID, batchTag, ingestTime)
+	if landedCount < v.opts.EventCount {
+		return e2eprobe.Errorf(map[string]string{
+			"external_customer_id": extCustID,
+			"event_name":           "e2eprobe_sum",
+			"debit_batch":          batchTag,
+			"expected_count":       fmt.Sprintf("%d", v.opts.EventCount),
+			"landed_count":         fmt.Sprintf("%d", landedCount),
+			"first_event_id":       eventIDs[0],
+			"last_event_id":        eventIDs[len(eventIDs)-1],
+		}, "ingest dropped events: only %d of %d landed in events table within 30s",
+			landedCount, v.opts.EventCount)
+	}
+
+	// Step 2: poll analytics until sum ≥ expectedTotal or timeout.
+	deadline := time.Now().Add(v.opts.AnalyticsPollTimeout)
+	var lastSum float64
 	for {
 		end := time.Now().UTC()
 		// Look back from the ingest time with a small buffer to ensure coverage.
@@ -202,21 +254,77 @@ func (v *WalletDebitVerification) phase2Analytics(ctx context.Context, extCustID
 			EndTime:            &endStr,
 		})
 		if err == nil {
-			if aggregatedSum := extractAnalyticsSum(resp, "e2eprobe_sum"); aggregatedSum >= expectedTotal {
+			lastSum = extractAnalyticsSum(resp, "e2eprobe_sum")
+			if lastSum >= expectedTotal {
 				return nil
 			}
 		}
 		if time.Now().After(deadline) {
 			if err != nil {
-				return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID}, "analytics poll timed out: %w", err)
+				return e2eprobe.Errorf(map[string]string{
+					"external_customer_id": extCustID,
+					"debit_batch":          batchTag,
+					"landed_count":         fmt.Sprintf("%d", landedCount),
+				}, "analytics poll timed out: %w", err)
 			}
-			return e2eprobe.Errorf(map[string]string{"external_customer_id": extCustID},
-				"analytics sum did not reach expected %.4f within %s", expectedTotal, v.opts.AnalyticsPollTimeout)
+			return e2eprobe.Errorf(map[string]string{
+				"external_customer_id": extCustID,
+				"debit_batch":          batchTag,
+				"expected_sum":         fmt.Sprintf("%.4f", expectedTotal),
+				"observed_sum":         fmt.Sprintf("%.4f", lastSum),
+				"landed_count":         fmt.Sprintf("%d", landedCount),
+				"first_event_id":       eventIDs[0],
+				"last_event_id":        eventIDs[len(eventIDs)-1],
+			}, "analytics sum did not reach expected %.4f within %s (observed %.4f, %d events landed)",
+				expectedTotal, v.opts.AnalyticsPollTimeout, lastSum, landedCount)
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(v.opts.AnalyticsPollInterval):
+		}
+	}
+}
+
+// confirmEventsLanded returns the number of events for this batch found in
+// the raw events table. Polls for up to 30s to allow for ingest-side write
+// lag. Errors during the query are treated as 0 landed so the caller can
+// alert on ingestion regressions even when ListRaw itself is misbehaving.
+func (v *WalletDebitVerification) confirmEventsLanded(ctx context.Context, extCustID, batchTag string, ingestTime time.Time) int {
+	deadline := time.Now().Add(v.opts.LandedPollTimeout)
+	eventName := "e2eprobe_sum"
+	startStr := ingestTime.Add(-1 * time.Minute).UTC().Format(time.RFC3339)
+	var maxSeen int
+	for {
+		endStr := time.Now().UTC().Format(time.RFC3339)
+		pageSize := int64(v.opts.EventCount * 2)
+		resp, err := v.client.Events().ListRaw(ctx, types.DtoGetEventsRequest{
+			EventName:          &eventName,
+			ExternalCustomerID: &extCustID,
+			PropertyFilters:    map[string][]string{"debit_batch": {batchTag}},
+			StartTime:          &startStr,
+			EndTime:            &endStr,
+			PageSize:           &pageSize,
+		})
+		if err == nil && resp != nil {
+			inner := resp.GetDtoGetEventsResponse()
+			if inner != nil {
+				n := len(inner.Events)
+				if n > maxSeen {
+					maxSeen = n
+				}
+				if n >= v.opts.EventCount {
+					return n
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			return maxSeen
+		}
+		select {
+		case <-ctx.Done():
+			return maxSeen
+		case <-time.After(v.opts.LandedPollInterval):
 		}
 	}
 }

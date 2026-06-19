@@ -158,6 +158,66 @@ func TestWalletDebitVerification_Phase2AnalyticsTimeout(t *testing.T) {
 	}
 }
 
+// TestWalletDebitVerification_Phase2IngestDropDetected verifies that when
+// fewer events landed in the raw events table than were ingested, the probe
+// alerts with an "ingest dropped events" error carrying the landed count.
+// This is the exact failure mode caught in production where 4 of 10 events
+// vanished between Events.Ingest 2xx and the feature_usage aggregation table.
+func TestWalletDebitVerification_Phase2IngestDropDetected(t *testing.T) {
+	fc := newFakeClient()
+	walletID := "wallet_drop"
+	internalCustID := "internal_drop"
+	fc.customers.byExt = map[string]string{"c0": internalCustID}
+	fc.wallets.walletsByCustomerID = map[string][]types.DtoWalletResponse{
+		internalCustID: {{ID: &walletID, CustomerID: &internalCustID}},
+	}
+	fc.wallets.balance = "10.0000"
+	fc.wallets.incrementBalanceOnTopUp = true
+
+	// Force ListRaw to return fewer events than were ingested (6 of 10).
+	// The fake doesn't echo back ingested events when listRawItems is set, so
+	// we pre-seed it to simulate a partial ingest landing.
+	eventName := "e2eprobe_sum"
+	fc.events.listRawItems = []types.DtoEvent{
+		{ID: strPtr("e1"), EventName: &eventName},
+		{ID: strPtr("e2"), EventName: &eventName},
+		{ID: strPtr("e3"), EventName: &eventName},
+		{ID: strPtr("e4"), EventName: &eventName},
+		{ID: strPtr("e5"), EventName: &eventName},
+		{ID: strPtr("e6"), EventName: &eventName},
+	}
+
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PreFundedCustomerIDs: []string{"c0"}})
+
+	v := NewWalletDebitVerification(fc, reg, "run-1", WalletDebitOpts{
+		TopUpAmount:           "5.00",
+		EventCount:            10,
+		EventAmount:           "1.00",
+		AnalyticsPollInterval: 10 * time.Millisecond,
+		AnalyticsPollTimeout:  50 * time.Millisecond,
+		LandedPollInterval:    5 * time.Millisecond,
+		LandedPollTimeout:     30 * time.Millisecond,
+	})
+	err := v.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected error when only 6 of 10 events landed in raw events table")
+	}
+	attrs := e2eprobe.AttributesFrom(err)
+	if attrs == nil {
+		t.Fatal("expected CheckError attributes, got nil")
+	}
+	if attrs["landed_count"] != "6" {
+		t.Errorf("expected landed_count=6, got %q", attrs["landed_count"])
+	}
+	if attrs["expected_count"] != "10" {
+		t.Errorf("expected expected_count=10, got %q", attrs["expected_count"])
+	}
+	if attrs["debit_batch"] == "" {
+		t.Error("expected debit_batch attribute to be set")
+	}
+}
+
 // TestWalletDebitVerification_Phase2AnalyticsSuccess verifies that when the
 // analytics response contains items with sufficient TotalUsage, Run() succeeds.
 func TestWalletDebitVerification_Phase2AnalyticsSuccess(t *testing.T) {

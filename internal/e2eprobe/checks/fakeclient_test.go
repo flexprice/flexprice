@@ -396,6 +396,10 @@ type fakeEvents struct {
 	anaErr       error
 	// analyticsItems, when set, is returned in GetUsageAnalytics responses.
 	analyticsItems []types.DtoUsageAnalyticItem
+	// listRawItems, when set, is returned in ListRaw responses. Otherwise
+	// ListRaw echoes back the ingested events that match the filter.
+	listRawItems []types.DtoEvent
+	listRawErr   error
 }
 
 func (f *fakeEvents) Ingest(_ context.Context, req types.DtoIngestEventRequest) (*dtos.IngestEventResponse, error) {
@@ -419,6 +423,58 @@ func (f *fakeEvents) GetUsageAnalytics(_ context.Context, _ types.DtoGetUsageAna
 		}, nil
 	}
 	return &dtos.GetUsageAnalyticsResponse{}, nil
+}
+func (f *fakeEvents) ListRaw(_ context.Context, req types.DtoGetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.listRawErr != nil {
+		return nil, f.listRawErr
+	}
+	if f.listRawItems != nil {
+		return &dtos.ListRawEventsResponse{
+			DtoGetEventsResponse: &types.DtoGetEventsResponse{Events: f.listRawItems},
+		}, nil
+	}
+	// Default: echo back ingested events matching the property filters.
+	var matched []types.DtoEvent
+	for _, in := range f.ingested {
+		if req.ExternalCustomerID != nil && in.ExternalCustomerID != *req.ExternalCustomerID {
+			continue
+		}
+		if req.EventName != nil && in.EventName != *req.EventName {
+			continue
+		}
+		ok := true
+		for k, vs := range req.PropertyFilters {
+			pv, found := in.Properties[k]
+			if !found {
+				ok = false
+				break
+			}
+			matchAny := false
+			for _, want := range vs {
+				if pv == want {
+					matchAny = true
+					break
+				}
+			}
+			if !matchAny {
+				ok = false
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		ev := types.DtoEvent{EventName: strPtr(in.EventName)}
+		if in.EventID != nil {
+			ev.ID = in.EventID
+		}
+		matched = append(matched, ev)
+	}
+	return &dtos.ListRawEventsResponse{
+		DtoGetEventsResponse: &types.DtoGetEventsResponse{Events: matched},
+	}, nil
 }
 
 // --- Invoices ---
