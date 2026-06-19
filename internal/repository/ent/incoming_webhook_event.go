@@ -2,7 +2,6 @@ package ent
 
 import (
 	"context"
-	"time"
 
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -23,10 +22,6 @@ func NewIncomingWebhookEventRepository(client postgres.IClient, log *logger.Logg
 func (r *incomingWebhookEventRepository) Create(ctx context.Context, event *domainIncomingWebhookEvent.IncomingWebhookEvent) error {
 	client := r.client.Writer(ctx)
 
-	if event.CreatedAt.IsZero() {
-		event.CreatedAt = time.Now().UTC()
-	}
-
 	_, err := client.IncomingWebhookEvent.Create().
 		SetID(event.ID).
 		SetTenantID(event.TenantID).
@@ -37,7 +32,6 @@ func (r *incomingWebhookEventRepository) Create(ctx context.Context, event *doma
 		SetRequestID(event.RequestID).
 		SetHeaders(event.Headers).
 		SetBody(event.Body).
-		SetCreatedAt(event.CreatedAt).
 		Save(ctx)
 	if err != nil {
 		return ierr.WithError(err).

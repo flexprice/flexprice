@@ -69,6 +69,31 @@ func TenantID(v string) predicate.IncomingWebhookEvent {
 	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldTenantID, v))
 }
 
+// Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
+func Status(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldStatus, v))
+}
+
+// CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
+func CreatedAt(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
+func UpdatedAt(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// CreatedBy applies equality check predicate on the "created_by" field. It's identical to CreatedByEQ.
+func CreatedBy(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldCreatedBy, v))
+}
+
+// UpdatedBy applies equality check predicate on the "updated_by" field. It's identical to UpdatedByEQ.
+func UpdatedBy(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldUpdatedBy, v))
+}
+
 // EnvironmentID applies equality check predicate on the "environment_id" field. It's identical to EnvironmentIDEQ.
 func EnvironmentID(v string) predicate.IncomingWebhookEvent {
 	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldEnvironmentID, v))
@@ -97,11 +122,6 @@ func RequestID(v string) predicate.IncomingWebhookEvent {
 // Body applies equality check predicate on the "body" field. It's identical to BodyEQ.
 func Body(v string) predicate.IncomingWebhookEvent {
 	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldBody, v))
-}
-
-// CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
-func CreatedAt(v time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldCreatedAt, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -169,6 +189,301 @@ func TenantIDContainsFold(v string) predicate.IncomingWebhookEvent {
 	return predicate.IncomingWebhookEvent(sql.FieldContainsFold(FieldTenantID, v))
 }
 
+// StatusEQ applies the EQ predicate on the "status" field.
+func StatusEQ(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldStatus, v))
+}
+
+// StatusNEQ applies the NEQ predicate on the "status" field.
+func StatusNEQ(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNEQ(FieldStatus, v))
+}
+
+// StatusIn applies the In predicate on the "status" field.
+func StatusIn(vs ...string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldIn(FieldStatus, vs...))
+}
+
+// StatusNotIn applies the NotIn predicate on the "status" field.
+func StatusNotIn(vs ...string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNotIn(FieldStatus, vs...))
+}
+
+// StatusGT applies the GT predicate on the "status" field.
+func StatusGT(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGT(FieldStatus, v))
+}
+
+// StatusGTE applies the GTE predicate on the "status" field.
+func StatusGTE(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGTE(FieldStatus, v))
+}
+
+// StatusLT applies the LT predicate on the "status" field.
+func StatusLT(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLT(FieldStatus, v))
+}
+
+// StatusLTE applies the LTE predicate on the "status" field.
+func StatusLTE(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLTE(FieldStatus, v))
+}
+
+// StatusContains applies the Contains predicate on the "status" field.
+func StatusContains(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldContains(FieldStatus, v))
+}
+
+// StatusHasPrefix applies the HasPrefix predicate on the "status" field.
+func StatusHasPrefix(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldHasPrefix(FieldStatus, v))
+}
+
+// StatusHasSuffix applies the HasSuffix predicate on the "status" field.
+func StatusHasSuffix(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldHasSuffix(FieldStatus, v))
+}
+
+// StatusEqualFold applies the EqualFold predicate on the "status" field.
+func StatusEqualFold(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEqualFold(FieldStatus, v))
+}
+
+// StatusContainsFold applies the ContainsFold predicate on the "status" field.
+func StatusContainsFold(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// CreatedAtEQ applies the EQ predicate on the "created_at" field.
+func CreatedAtEQ(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// CreatedAtNEQ applies the NEQ predicate on the "created_at" field.
+func CreatedAtNEQ(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNEQ(FieldCreatedAt, v))
+}
+
+// CreatedAtIn applies the In predicate on the "created_at" field.
+func CreatedAtIn(vs ...time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldIn(FieldCreatedAt, vs...))
+}
+
+// CreatedAtNotIn applies the NotIn predicate on the "created_at" field.
+func CreatedAtNotIn(vs ...time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNotIn(FieldCreatedAt, vs...))
+}
+
+// CreatedAtGT applies the GT predicate on the "created_at" field.
+func CreatedAtGT(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGT(FieldCreatedAt, v))
+}
+
+// CreatedAtGTE applies the GTE predicate on the "created_at" field.
+func CreatedAtGTE(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGTE(FieldCreatedAt, v))
+}
+
+// CreatedAtLT applies the LT predicate on the "created_at" field.
+func CreatedAtLT(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLT(FieldCreatedAt, v))
+}
+
+// CreatedAtLTE applies the LTE predicate on the "created_at" field.
+func CreatedAtLTE(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
+func UpdatedAtEQ(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// UpdatedAtNEQ applies the NEQ predicate on the "updated_at" field.
+func UpdatedAtNEQ(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNEQ(FieldUpdatedAt, v))
+}
+
+// UpdatedAtIn applies the In predicate on the "updated_at" field.
+func UpdatedAtIn(vs ...time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldIn(FieldUpdatedAt, vs...))
+}
+
+// UpdatedAtNotIn applies the NotIn predicate on the "updated_at" field.
+func UpdatedAtNotIn(vs ...time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNotIn(FieldUpdatedAt, vs...))
+}
+
+// UpdatedAtGT applies the GT predicate on the "updated_at" field.
+func UpdatedAtGT(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGT(FieldUpdatedAt, v))
+}
+
+// UpdatedAtGTE applies the GTE predicate on the "updated_at" field.
+func UpdatedAtGTE(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGTE(FieldUpdatedAt, v))
+}
+
+// UpdatedAtLT applies the LT predicate on the "updated_at" field.
+func UpdatedAtLT(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLT(FieldUpdatedAt, v))
+}
+
+// UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
+func UpdatedAtLTE(v time.Time) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLTE(FieldUpdatedAt, v))
+}
+
+// CreatedByEQ applies the EQ predicate on the "created_by" field.
+func CreatedByEQ(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldCreatedBy, v))
+}
+
+// CreatedByNEQ applies the NEQ predicate on the "created_by" field.
+func CreatedByNEQ(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNEQ(FieldCreatedBy, v))
+}
+
+// CreatedByIn applies the In predicate on the "created_by" field.
+func CreatedByIn(vs ...string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldIn(FieldCreatedBy, vs...))
+}
+
+// CreatedByNotIn applies the NotIn predicate on the "created_by" field.
+func CreatedByNotIn(vs ...string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNotIn(FieldCreatedBy, vs...))
+}
+
+// CreatedByGT applies the GT predicate on the "created_by" field.
+func CreatedByGT(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGT(FieldCreatedBy, v))
+}
+
+// CreatedByGTE applies the GTE predicate on the "created_by" field.
+func CreatedByGTE(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGTE(FieldCreatedBy, v))
+}
+
+// CreatedByLT applies the LT predicate on the "created_by" field.
+func CreatedByLT(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLT(FieldCreatedBy, v))
+}
+
+// CreatedByLTE applies the LTE predicate on the "created_by" field.
+func CreatedByLTE(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLTE(FieldCreatedBy, v))
+}
+
+// CreatedByContains applies the Contains predicate on the "created_by" field.
+func CreatedByContains(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldContains(FieldCreatedBy, v))
+}
+
+// CreatedByHasPrefix applies the HasPrefix predicate on the "created_by" field.
+func CreatedByHasPrefix(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldHasPrefix(FieldCreatedBy, v))
+}
+
+// CreatedByHasSuffix applies the HasSuffix predicate on the "created_by" field.
+func CreatedByHasSuffix(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldHasSuffix(FieldCreatedBy, v))
+}
+
+// CreatedByIsNil applies the IsNil predicate on the "created_by" field.
+func CreatedByIsNil() predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldIsNull(FieldCreatedBy))
+}
+
+// CreatedByNotNil applies the NotNil predicate on the "created_by" field.
+func CreatedByNotNil() predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNotNull(FieldCreatedBy))
+}
+
+// CreatedByEqualFold applies the EqualFold predicate on the "created_by" field.
+func CreatedByEqualFold(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEqualFold(FieldCreatedBy, v))
+}
+
+// CreatedByContainsFold applies the ContainsFold predicate on the "created_by" field.
+func CreatedByContainsFold(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldContainsFold(FieldCreatedBy, v))
+}
+
+// UpdatedByEQ applies the EQ predicate on the "updated_by" field.
+func UpdatedByEQ(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldUpdatedBy, v))
+}
+
+// UpdatedByNEQ applies the NEQ predicate on the "updated_by" field.
+func UpdatedByNEQ(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNEQ(FieldUpdatedBy, v))
+}
+
+// UpdatedByIn applies the In predicate on the "updated_by" field.
+func UpdatedByIn(vs ...string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldIn(FieldUpdatedBy, vs...))
+}
+
+// UpdatedByNotIn applies the NotIn predicate on the "updated_by" field.
+func UpdatedByNotIn(vs ...string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNotIn(FieldUpdatedBy, vs...))
+}
+
+// UpdatedByGT applies the GT predicate on the "updated_by" field.
+func UpdatedByGT(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGT(FieldUpdatedBy, v))
+}
+
+// UpdatedByGTE applies the GTE predicate on the "updated_by" field.
+func UpdatedByGTE(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldGTE(FieldUpdatedBy, v))
+}
+
+// UpdatedByLT applies the LT predicate on the "updated_by" field.
+func UpdatedByLT(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLT(FieldUpdatedBy, v))
+}
+
+// UpdatedByLTE applies the LTE predicate on the "updated_by" field.
+func UpdatedByLTE(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldLTE(FieldUpdatedBy, v))
+}
+
+// UpdatedByContains applies the Contains predicate on the "updated_by" field.
+func UpdatedByContains(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldContains(FieldUpdatedBy, v))
+}
+
+// UpdatedByHasPrefix applies the HasPrefix predicate on the "updated_by" field.
+func UpdatedByHasPrefix(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldHasPrefix(FieldUpdatedBy, v))
+}
+
+// UpdatedByHasSuffix applies the HasSuffix predicate on the "updated_by" field.
+func UpdatedByHasSuffix(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldHasSuffix(FieldUpdatedBy, v))
+}
+
+// UpdatedByIsNil applies the IsNil predicate on the "updated_by" field.
+func UpdatedByIsNil() predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldIsNull(FieldUpdatedBy))
+}
+
+// UpdatedByNotNil applies the NotNil predicate on the "updated_by" field.
+func UpdatedByNotNil() predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNotNull(FieldUpdatedBy))
+}
+
+// UpdatedByEqualFold applies the EqualFold predicate on the "updated_by" field.
+func UpdatedByEqualFold(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldEqualFold(FieldUpdatedBy, v))
+}
+
+// UpdatedByContainsFold applies the ContainsFold predicate on the "updated_by" field.
+func UpdatedByContainsFold(v string) predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldContainsFold(FieldUpdatedBy, v))
+}
+
 // EnvironmentIDEQ applies the EQ predicate on the "environment_id" field.
 func EnvironmentIDEQ(v string) predicate.IncomingWebhookEvent {
 	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldEnvironmentID, v))
@@ -222,6 +537,16 @@ func EnvironmentIDHasPrefix(v string) predicate.IncomingWebhookEvent {
 // EnvironmentIDHasSuffix applies the HasSuffix predicate on the "environment_id" field.
 func EnvironmentIDHasSuffix(v string) predicate.IncomingWebhookEvent {
 	return predicate.IncomingWebhookEvent(sql.FieldHasSuffix(FieldEnvironmentID, v))
+}
+
+// EnvironmentIDIsNil applies the IsNil predicate on the "environment_id" field.
+func EnvironmentIDIsNil() predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldIsNull(FieldEnvironmentID))
+}
+
+// EnvironmentIDNotNil applies the NotNil predicate on the "environment_id" field.
+func EnvironmentIDNotNil() predicate.IncomingWebhookEvent {
+	return predicate.IncomingWebhookEvent(sql.FieldNotNull(FieldEnvironmentID))
 }
 
 // EnvironmentIDEqualFold applies the EqualFold predicate on the "environment_id" field.
@@ -587,46 +912,6 @@ func BodyEqualFold(v string) predicate.IncomingWebhookEvent {
 // BodyContainsFold applies the ContainsFold predicate on the "body" field.
 func BodyContainsFold(v string) predicate.IncomingWebhookEvent {
 	return predicate.IncomingWebhookEvent(sql.FieldContainsFold(FieldBody, v))
-}
-
-// CreatedAtEQ applies the EQ predicate on the "created_at" field.
-func CreatedAtEQ(v time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtNEQ applies the NEQ predicate on the "created_at" field.
-func CreatedAtNEQ(v time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldNEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtIn applies the In predicate on the "created_at" field.
-func CreatedAtIn(vs ...time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtNotIn applies the NotIn predicate on the "created_at" field.
-func CreatedAtNotIn(vs ...time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldNotIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtGT applies the GT predicate on the "created_at" field.
-func CreatedAtGT(v time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldGT(FieldCreatedAt, v))
-}
-
-// CreatedAtGTE applies the GTE predicate on the "created_at" field.
-func CreatedAtGTE(v time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldGTE(FieldCreatedAt, v))
-}
-
-// CreatedAtLT applies the LT predicate on the "created_at" field.
-func CreatedAtLT(v time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldLT(FieldCreatedAt, v))
-}
-
-// CreatedAtLTE applies the LTE predicate on the "created_at" field.
-func CreatedAtLTE(v time.Time) predicate.IncomingWebhookEvent {
-	return predicate.IncomingWebhookEvent(sql.FieldLTE(FieldCreatedAt, v))
 }
 
 // And groups predicates with the AND operator between them.

@@ -20,6 +20,16 @@ type IncomingWebhookEvent struct {
 	ID string `json:"id,omitempty"`
 	// TenantID holds the value of the "tenant_id" field.
 	TenantID string `json:"tenant_id,omitempty"`
+	// Status holds the value of the "status" field.
+	Status string `json:"status,omitempty"`
+	// CreatedAt holds the value of the "created_at" field.
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	// UpdatedAt holds the value of the "updated_at" field.
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// CreatedBy holds the value of the "created_by" field.
+	CreatedBy string `json:"created_by,omitempty"`
+	// UpdatedBy holds the value of the "updated_by" field.
+	UpdatedBy string `json:"updated_by,omitempty"`
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
 	// Provider holds the value of the "provider" field.
@@ -33,9 +43,7 @@ type IncomingWebhookEvent struct {
 	// Headers holds the value of the "headers" field.
 	Headers map[string][]string `json:"headers,omitempty"`
 	// Body holds the value of the "body" field.
-	Body string `json:"body,omitempty"`
-	// CreatedAt holds the value of the "created_at" field.
-	CreatedAt    time.Time `json:"created_at,omitempty"`
+	Body         string `json:"body,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -46,9 +54,9 @@ func (*IncomingWebhookEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case incomingwebhookevent.FieldHeaders:
 			values[i] = new([]byte)
-		case incomingwebhookevent.FieldID, incomingwebhookevent.FieldTenantID, incomingwebhookevent.FieldEnvironmentID, incomingwebhookevent.FieldProvider, incomingwebhookevent.FieldMethod, incomingwebhookevent.FieldPath, incomingwebhookevent.FieldRequestID, incomingwebhookevent.FieldBody:
+		case incomingwebhookevent.FieldID, incomingwebhookevent.FieldTenantID, incomingwebhookevent.FieldStatus, incomingwebhookevent.FieldCreatedBy, incomingwebhookevent.FieldUpdatedBy, incomingwebhookevent.FieldEnvironmentID, incomingwebhookevent.FieldProvider, incomingwebhookevent.FieldMethod, incomingwebhookevent.FieldPath, incomingwebhookevent.FieldRequestID, incomingwebhookevent.FieldBody:
 			values[i] = new(sql.NullString)
-		case incomingwebhookevent.FieldCreatedAt:
+		case incomingwebhookevent.FieldCreatedAt, incomingwebhookevent.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -76,6 +84,36 @@ func (iwe *IncomingWebhookEvent) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
 				iwe.TenantID = value.String
+			}
+		case incomingwebhookevent.FieldStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field status", values[i])
+			} else if value.Valid {
+				iwe.Status = value.String
+			}
+		case incomingwebhookevent.FieldCreatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field created_at", values[i])
+			} else if value.Valid {
+				iwe.CreatedAt = value.Time
+			}
+		case incomingwebhookevent.FieldUpdatedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
+			} else if value.Valid {
+				iwe.UpdatedAt = value.Time
+			}
+		case incomingwebhookevent.FieldCreatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field created_by", values[i])
+			} else if value.Valid {
+				iwe.CreatedBy = value.String
+			}
+		case incomingwebhookevent.FieldUpdatedBy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
+			} else if value.Valid {
+				iwe.UpdatedBy = value.String
 			}
 		case incomingwebhookevent.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -121,12 +159,6 @@ func (iwe *IncomingWebhookEvent) assignValues(columns []string, values []any) er
 			} else if value.Valid {
 				iwe.Body = value.String
 			}
-		case incomingwebhookevent.FieldCreatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field created_at", values[i])
-			} else if value.Valid {
-				iwe.CreatedAt = value.Time
-			}
 		default:
 			iwe.selectValues.Set(columns[i], values[i])
 		}
@@ -166,6 +198,21 @@ func (iwe *IncomingWebhookEvent) String() string {
 	builder.WriteString("tenant_id=")
 	builder.WriteString(iwe.TenantID)
 	builder.WriteString(", ")
+	builder.WriteString("status=")
+	builder.WriteString(iwe.Status)
+	builder.WriteString(", ")
+	builder.WriteString("created_at=")
+	builder.WriteString(iwe.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("updated_at=")
+	builder.WriteString(iwe.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("created_by=")
+	builder.WriteString(iwe.CreatedBy)
+	builder.WriteString(", ")
+	builder.WriteString("updated_by=")
+	builder.WriteString(iwe.UpdatedBy)
+	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
 	builder.WriteString(iwe.EnvironmentID)
 	builder.WriteString(", ")
@@ -186,9 +233,6 @@ func (iwe *IncomingWebhookEvent) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("body=")
 	builder.WriteString(iwe.Body)
-	builder.WriteString(", ")
-	builder.WriteString("created_at=")
-	builder.WriteString(iwe.CreatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }

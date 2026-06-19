@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -27,6 +28,46 @@ func (iweu *IncomingWebhookEventUpdate) Where(ps ...predicate.IncomingWebhookEve
 	return iweu
 }
 
+// SetStatus sets the "status" field.
+func (iweu *IncomingWebhookEventUpdate) SetStatus(s string) *IncomingWebhookEventUpdate {
+	iweu.mutation.SetStatus(s)
+	return iweu
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (iweu *IncomingWebhookEventUpdate) SetNillableStatus(s *string) *IncomingWebhookEventUpdate {
+	if s != nil {
+		iweu.SetStatus(*s)
+	}
+	return iweu
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (iweu *IncomingWebhookEventUpdate) SetUpdatedAt(t time.Time) *IncomingWebhookEventUpdate {
+	iweu.mutation.SetUpdatedAt(t)
+	return iweu
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (iweu *IncomingWebhookEventUpdate) SetUpdatedBy(s string) *IncomingWebhookEventUpdate {
+	iweu.mutation.SetUpdatedBy(s)
+	return iweu
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (iweu *IncomingWebhookEventUpdate) SetNillableUpdatedBy(s *string) *IncomingWebhookEventUpdate {
+	if s != nil {
+		iweu.SetUpdatedBy(*s)
+	}
+	return iweu
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (iweu *IncomingWebhookEventUpdate) ClearUpdatedBy() *IncomingWebhookEventUpdate {
+	iweu.mutation.ClearUpdatedBy()
+	return iweu
+}
+
 // Mutation returns the IncomingWebhookEventMutation object of the builder.
 func (iweu *IncomingWebhookEventUpdate) Mutation() *IncomingWebhookEventMutation {
 	return iweu.mutation
@@ -34,6 +75,7 @@ func (iweu *IncomingWebhookEventUpdate) Mutation() *IncomingWebhookEventMutation
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (iweu *IncomingWebhookEventUpdate) Save(ctx context.Context) (int, error) {
+	iweu.defaults()
 	return withHooks(ctx, iweu.sqlSave, iweu.mutation, iweu.hooks)
 }
 
@@ -59,6 +101,14 @@ func (iweu *IncomingWebhookEventUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// defaults sets the default values of the builder before save.
+func (iweu *IncomingWebhookEventUpdate) defaults() {
+	if _, ok := iweu.mutation.UpdatedAt(); !ok {
+		v := incomingwebhookevent.UpdateDefaultUpdatedAt()
+		iweu.mutation.SetUpdatedAt(v)
+	}
+}
+
 func (iweu *IncomingWebhookEventUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	_spec := sqlgraph.NewUpdateSpec(incomingwebhookevent.Table, incomingwebhookevent.Columns, sqlgraph.NewFieldSpec(incomingwebhookevent.FieldID, field.TypeString))
 	if ps := iweu.mutation.predicates; len(ps) > 0 {
@@ -67,6 +117,24 @@ func (iweu *IncomingWebhookEventUpdate) sqlSave(ctx context.Context) (n int, err
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := iweu.mutation.Status(); ok {
+		_spec.SetField(incomingwebhookevent.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := iweu.mutation.UpdatedAt(); ok {
+		_spec.SetField(incomingwebhookevent.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if iweu.mutation.CreatedByCleared() {
+		_spec.ClearField(incomingwebhookevent.FieldCreatedBy, field.TypeString)
+	}
+	if value, ok := iweu.mutation.UpdatedBy(); ok {
+		_spec.SetField(incomingwebhookevent.FieldUpdatedBy, field.TypeString, value)
+	}
+	if iweu.mutation.UpdatedByCleared() {
+		_spec.ClearField(incomingwebhookevent.FieldUpdatedBy, field.TypeString)
+	}
+	if iweu.mutation.EnvironmentIDCleared() {
+		_spec.ClearField(incomingwebhookevent.FieldEnvironmentID, field.TypeString)
 	}
 	if iweu.mutation.RequestIDCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldRequestID, field.TypeString)
@@ -97,6 +165,46 @@ type IncomingWebhookEventUpdateOne struct {
 	mutation *IncomingWebhookEventMutation
 }
 
+// SetStatus sets the "status" field.
+func (iweuo *IncomingWebhookEventUpdateOne) SetStatus(s string) *IncomingWebhookEventUpdateOne {
+	iweuo.mutation.SetStatus(s)
+	return iweuo
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (iweuo *IncomingWebhookEventUpdateOne) SetNillableStatus(s *string) *IncomingWebhookEventUpdateOne {
+	if s != nil {
+		iweuo.SetStatus(*s)
+	}
+	return iweuo
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (iweuo *IncomingWebhookEventUpdateOne) SetUpdatedAt(t time.Time) *IncomingWebhookEventUpdateOne {
+	iweuo.mutation.SetUpdatedAt(t)
+	return iweuo
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (iweuo *IncomingWebhookEventUpdateOne) SetUpdatedBy(s string) *IncomingWebhookEventUpdateOne {
+	iweuo.mutation.SetUpdatedBy(s)
+	return iweuo
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (iweuo *IncomingWebhookEventUpdateOne) SetNillableUpdatedBy(s *string) *IncomingWebhookEventUpdateOne {
+	if s != nil {
+		iweuo.SetUpdatedBy(*s)
+	}
+	return iweuo
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (iweuo *IncomingWebhookEventUpdateOne) ClearUpdatedBy() *IncomingWebhookEventUpdateOne {
+	iweuo.mutation.ClearUpdatedBy()
+	return iweuo
+}
+
 // Mutation returns the IncomingWebhookEventMutation object of the builder.
 func (iweuo *IncomingWebhookEventUpdateOne) Mutation() *IncomingWebhookEventMutation {
 	return iweuo.mutation
@@ -117,6 +225,7 @@ func (iweuo *IncomingWebhookEventUpdateOne) Select(field string, fields ...strin
 
 // Save executes the query and returns the updated IncomingWebhookEvent entity.
 func (iweuo *IncomingWebhookEventUpdateOne) Save(ctx context.Context) (*IncomingWebhookEvent, error) {
+	iweuo.defaults()
 	return withHooks(ctx, iweuo.sqlSave, iweuo.mutation, iweuo.hooks)
 }
 
@@ -139,6 +248,14 @@ func (iweuo *IncomingWebhookEventUpdateOne) Exec(ctx context.Context) error {
 func (iweuo *IncomingWebhookEventUpdateOne) ExecX(ctx context.Context) {
 	if err := iweuo.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (iweuo *IncomingWebhookEventUpdateOne) defaults() {
+	if _, ok := iweuo.mutation.UpdatedAt(); !ok {
+		v := incomingwebhookevent.UpdateDefaultUpdatedAt()
+		iweuo.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -167,6 +284,24 @@ func (iweuo *IncomingWebhookEventUpdateOne) sqlSave(ctx context.Context) (_node 
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := iweuo.mutation.Status(); ok {
+		_spec.SetField(incomingwebhookevent.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := iweuo.mutation.UpdatedAt(); ok {
+		_spec.SetField(incomingwebhookevent.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if iweuo.mutation.CreatedByCleared() {
+		_spec.ClearField(incomingwebhookevent.FieldCreatedBy, field.TypeString)
+	}
+	if value, ok := iweuo.mutation.UpdatedBy(); ok {
+		_spec.SetField(incomingwebhookevent.FieldUpdatedBy, field.TypeString, value)
+	}
+	if iweuo.mutation.UpdatedByCleared() {
+		_spec.ClearField(incomingwebhookevent.FieldUpdatedBy, field.TypeString)
+	}
+	if iweuo.mutation.EnvironmentIDCleared() {
+		_spec.ClearField(incomingwebhookevent.FieldEnvironmentID, field.TypeString)
 	}
 	if iweuo.mutation.RequestIDCleared() {
 		_spec.ClearField(incomingwebhookevent.FieldRequestID, field.TypeString)

@@ -1,11 +1,10 @@
 package schema
 
 import (
-	"time"
-
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 )
 
 // IncomingWebhookEvent holds the schema for inbound webhook request audit logs.
@@ -13,19 +12,18 @@ type IncomingWebhookEvent struct {
 	ent.Schema
 }
 
+func (IncomingWebhookEvent) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		baseMixin.BaseMixin{},
+		baseMixin.EnvironmentMixin{},
+	}
+}
+
 func (IncomingWebhookEvent) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
 			Unique().
-			Immutable(),
-		field.String("tenant_id").
-			SchemaType(map[string]string{"postgres": "varchar(50)"}).
-			NotEmpty().
-			Immutable(),
-		field.String("environment_id").
-			SchemaType(map[string]string{"postgres": "varchar(50)"}).
-			NotEmpty().
 			Immutable(),
 		field.String("provider").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
@@ -50,9 +48,6 @@ func (IncomingWebhookEvent) Fields() []ent.Field {
 		field.Text("body").
 			Optional().
 			Immutable(),
-		field.Time("created_at").
-			Immutable().
-			Default(time.Now),
 	}
 }
 

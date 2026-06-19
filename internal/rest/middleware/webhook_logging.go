@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
 	domainIncomingWebhookEvent "github.com/flexprice/flexprice/internal/domain/incomingwebhookevent"
@@ -49,7 +48,6 @@ func WebhookLoggingMiddleware(
 				RequestID:     requestID,
 				Headers:       headers,
 				Body:          string(body),
-				CreatedAt:     time.Now().UTC(),
 			}
 			if err := repo.Create(c.Request.Context(), req); err != nil {
 				if log != nil {

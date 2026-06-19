@@ -26,9 +26,87 @@ func (iwec *IncomingWebhookEventCreate) SetTenantID(s string) *IncomingWebhookEv
 	return iwec
 }
 
+// SetStatus sets the "status" field.
+func (iwec *IncomingWebhookEventCreate) SetStatus(s string) *IncomingWebhookEventCreate {
+	iwec.mutation.SetStatus(s)
+	return iwec
+}
+
+// SetNillableStatus sets the "status" field if the given value is not nil.
+func (iwec *IncomingWebhookEventCreate) SetNillableStatus(s *string) *IncomingWebhookEventCreate {
+	if s != nil {
+		iwec.SetStatus(*s)
+	}
+	return iwec
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (iwec *IncomingWebhookEventCreate) SetCreatedAt(t time.Time) *IncomingWebhookEventCreate {
+	iwec.mutation.SetCreatedAt(t)
+	return iwec
+}
+
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (iwec *IncomingWebhookEventCreate) SetNillableCreatedAt(t *time.Time) *IncomingWebhookEventCreate {
+	if t != nil {
+		iwec.SetCreatedAt(*t)
+	}
+	return iwec
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (iwec *IncomingWebhookEventCreate) SetUpdatedAt(t time.Time) *IncomingWebhookEventCreate {
+	iwec.mutation.SetUpdatedAt(t)
+	return iwec
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (iwec *IncomingWebhookEventCreate) SetNillableUpdatedAt(t *time.Time) *IncomingWebhookEventCreate {
+	if t != nil {
+		iwec.SetUpdatedAt(*t)
+	}
+	return iwec
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (iwec *IncomingWebhookEventCreate) SetCreatedBy(s string) *IncomingWebhookEventCreate {
+	iwec.mutation.SetCreatedBy(s)
+	return iwec
+}
+
+// SetNillableCreatedBy sets the "created_by" field if the given value is not nil.
+func (iwec *IncomingWebhookEventCreate) SetNillableCreatedBy(s *string) *IncomingWebhookEventCreate {
+	if s != nil {
+		iwec.SetCreatedBy(*s)
+	}
+	return iwec
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (iwec *IncomingWebhookEventCreate) SetUpdatedBy(s string) *IncomingWebhookEventCreate {
+	iwec.mutation.SetUpdatedBy(s)
+	return iwec
+}
+
+// SetNillableUpdatedBy sets the "updated_by" field if the given value is not nil.
+func (iwec *IncomingWebhookEventCreate) SetNillableUpdatedBy(s *string) *IncomingWebhookEventCreate {
+	if s != nil {
+		iwec.SetUpdatedBy(*s)
+	}
+	return iwec
+}
+
 // SetEnvironmentID sets the "environment_id" field.
 func (iwec *IncomingWebhookEventCreate) SetEnvironmentID(s string) *IncomingWebhookEventCreate {
 	iwec.mutation.SetEnvironmentID(s)
+	return iwec
+}
+
+// SetNillableEnvironmentID sets the "environment_id" field if the given value is not nil.
+func (iwec *IncomingWebhookEventCreate) SetNillableEnvironmentID(s *string) *IncomingWebhookEventCreate {
+	if s != nil {
+		iwec.SetEnvironmentID(*s)
+	}
 	return iwec
 }
 
@@ -84,20 +162,6 @@ func (iwec *IncomingWebhookEventCreate) SetNillableBody(s *string) *IncomingWebh
 	return iwec
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (iwec *IncomingWebhookEventCreate) SetCreatedAt(t time.Time) *IncomingWebhookEventCreate {
-	iwec.mutation.SetCreatedAt(t)
-	return iwec
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (iwec *IncomingWebhookEventCreate) SetNillableCreatedAt(t *time.Time) *IncomingWebhookEventCreate {
-	if t != nil {
-		iwec.SetCreatedAt(*t)
-	}
-	return iwec
-}
-
 // SetID sets the "id" field.
 func (iwec *IncomingWebhookEventCreate) SetID(s string) *IncomingWebhookEventCreate {
 	iwec.mutation.SetID(s)
@@ -139,9 +203,21 @@ func (iwec *IncomingWebhookEventCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (iwec *IncomingWebhookEventCreate) defaults() {
+	if _, ok := iwec.mutation.Status(); !ok {
+		v := incomingwebhookevent.DefaultStatus
+		iwec.mutation.SetStatus(v)
+	}
 	if _, ok := iwec.mutation.CreatedAt(); !ok {
 		v := incomingwebhookevent.DefaultCreatedAt()
 		iwec.mutation.SetCreatedAt(v)
+	}
+	if _, ok := iwec.mutation.UpdatedAt(); !ok {
+		v := incomingwebhookevent.DefaultUpdatedAt()
+		iwec.mutation.SetUpdatedAt(v)
+	}
+	if _, ok := iwec.mutation.EnvironmentID(); !ok {
+		v := incomingwebhookevent.DefaultEnvironmentID
+		iwec.mutation.SetEnvironmentID(v)
 	}
 }
 
@@ -155,13 +231,14 @@ func (iwec *IncomingWebhookEventCreate) check() error {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "IncomingWebhookEvent.tenant_id": %w`, err)}
 		}
 	}
-	if _, ok := iwec.mutation.EnvironmentID(); !ok {
-		return &ValidationError{Name: "environment_id", err: errors.New(`ent: missing required field "IncomingWebhookEvent.environment_id"`)}
+	if _, ok := iwec.mutation.Status(); !ok {
+		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "IncomingWebhookEvent.status"`)}
 	}
-	if v, ok := iwec.mutation.EnvironmentID(); ok {
-		if err := incomingwebhookevent.EnvironmentIDValidator(v); err != nil {
-			return &ValidationError{Name: "environment_id", err: fmt.Errorf(`ent: validator failed for field "IncomingWebhookEvent.environment_id": %w`, err)}
-		}
+	if _, ok := iwec.mutation.CreatedAt(); !ok {
+		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "IncomingWebhookEvent.created_at"`)}
+	}
+	if _, ok := iwec.mutation.UpdatedAt(); !ok {
+		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "IncomingWebhookEvent.updated_at"`)}
 	}
 	if _, ok := iwec.mutation.Provider(); !ok {
 		return &ValidationError{Name: "provider", err: errors.New(`ent: missing required field "IncomingWebhookEvent.provider"`)}
@@ -186,9 +263,6 @@ func (iwec *IncomingWebhookEventCreate) check() error {
 		if err := incomingwebhookevent.PathValidator(v); err != nil {
 			return &ValidationError{Name: "path", err: fmt.Errorf(`ent: validator failed for field "IncomingWebhookEvent.path": %w`, err)}
 		}
-	}
-	if _, ok := iwec.mutation.CreatedAt(); !ok {
-		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "IncomingWebhookEvent.created_at"`)}
 	}
 	return nil
 }
@@ -229,6 +303,26 @@ func (iwec *IncomingWebhookEventCreate) createSpec() (*IncomingWebhookEvent, *sq
 		_spec.SetField(incomingwebhookevent.FieldTenantID, field.TypeString, value)
 		_node.TenantID = value
 	}
+	if value, ok := iwec.mutation.Status(); ok {
+		_spec.SetField(incomingwebhookevent.FieldStatus, field.TypeString, value)
+		_node.Status = value
+	}
+	if value, ok := iwec.mutation.CreatedAt(); ok {
+		_spec.SetField(incomingwebhookevent.FieldCreatedAt, field.TypeTime, value)
+		_node.CreatedAt = value
+	}
+	if value, ok := iwec.mutation.UpdatedAt(); ok {
+		_spec.SetField(incomingwebhookevent.FieldUpdatedAt, field.TypeTime, value)
+		_node.UpdatedAt = value
+	}
+	if value, ok := iwec.mutation.CreatedBy(); ok {
+		_spec.SetField(incomingwebhookevent.FieldCreatedBy, field.TypeString, value)
+		_node.CreatedBy = value
+	}
+	if value, ok := iwec.mutation.UpdatedBy(); ok {
+		_spec.SetField(incomingwebhookevent.FieldUpdatedBy, field.TypeString, value)
+		_node.UpdatedBy = value
+	}
 	if value, ok := iwec.mutation.EnvironmentID(); ok {
 		_spec.SetField(incomingwebhookevent.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
@@ -256,10 +350,6 @@ func (iwec *IncomingWebhookEventCreate) createSpec() (*IncomingWebhookEvent, *sq
 	if value, ok := iwec.mutation.Body(); ok {
 		_spec.SetField(incomingwebhookevent.FieldBody, field.TypeString, value)
 		_node.Body = value
-	}
-	if value, ok := iwec.mutation.CreatedAt(); ok {
-		_spec.SetField(incomingwebhookevent.FieldCreatedAt, field.TypeTime, value)
-		_node.CreatedAt = value
 	}
 	return _node, _spec
 }
