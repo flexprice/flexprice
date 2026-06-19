@@ -259,7 +259,7 @@ func (l *PaymentsLedger) RecordPaymentSuccess(ctx context.Context, params Record
 //
 // Idempotent: if the payment is already FAILED, logs and returns nil.
 func (l *PaymentsLedger) RecordPaymentFailure(ctx context.Context, params RecordPaymentFailureParams) error {
-	l.logger.Error(ctx, "recording payment failure",
+	l.logger.Info(ctx, "recording payment failure",
 		"flexprice_payment_id", params.FlexpricePaymentID,
 		"gateway_payment_id", params.GatewayPaymentID,
 		"error_message", params.ErrorMessage,

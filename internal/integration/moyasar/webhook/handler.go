@@ -155,6 +155,7 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment PaymentEven
 		h.logger.Error(ctx, "no token in webhook source, cannot activate payment method",
 			"moyasar_payment_id", payment.ID,
 			"customer_id", customerID,
+			"error", "missing token in payment source",
 		)
 		return
 	}
