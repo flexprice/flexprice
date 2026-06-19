@@ -749,6 +749,15 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("kafka.sasl_user", "FLEXPRICE_KAFKA_SASL_USER")
 	_ = v.BindEnv("kafka.sasl_password", "FLEXPRICE_KAFKA_SASL_PASSWORD")
 
+	// Explicitly bind deployment.mode — the helm ConfigMap is one shared object across the
+	// api/consumer/worker Deployments, so it cannot carry a per-component mode; the only
+	// per-component signal is the FLEXPRICE_DEPLOYMENT_MODE env each Deployment sets. Since
+	// deployment.mode is absent from the rendered config.yaml and was not bound, AutomaticEnv+
+	// Unmarshal ignored the env and every pod fell back to ModeLocal (running API + Temporal +
+	// Kafka consumers regardless of role — e.g. the api consuming prod topics). This bind makes
+	// Unmarshal honor the per-Deployment env. See infrastructure/docs/gcp-mumbai-gmk-consumer-runbook.md.
+	_ = v.BindEnv("deployment.mode", "FLEXPRICE_DEPLOYMENT_MODE")
+
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
 		fmt.Printf("Error reading config file: %v\n", err)
