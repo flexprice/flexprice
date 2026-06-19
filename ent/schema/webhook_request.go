@@ -62,13 +62,11 @@ func (WebhookRequest) Edges() []ent.Edge {
 
 func (WebhookRequest) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("tenant_id", "environment_id").
-			StorageKey("idx_webhook_requests_tenant_env"),
-		index.Fields("provider").
-			StorageKey("idx_webhook_requests_provider"),
+		index.Fields("tenant_id", "environment_id", "provider", "created_at").
+			StorageKey("idx_webhook_requests_tenant_env_provider_created"),
+		index.Fields("tenant_id", "environment_id", "created_at").
+			StorageKey("idx_webhook_requests_tenant_env_created"),
 		index.Fields("request_id").
 			StorageKey("idx_webhook_requests_request_id"),
-		index.Fields("created_at").
-			StorageKey("idx_webhook_requests_created_at"),
 	}
 }

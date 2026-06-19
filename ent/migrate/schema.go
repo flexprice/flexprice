@@ -2351,24 +2351,19 @@ var (
 		PrimaryKey: []*schema.Column{WebhookRequestsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "idx_webhook_requests_tenant_env",
+				Name:    "idx_webhook_requests_tenant_env_provider_created",
 				Unique:  false,
-				Columns: []*schema.Column{WebhookRequestsColumns[1], WebhookRequestsColumns[2]},
+				Columns: []*schema.Column{WebhookRequestsColumns[1], WebhookRequestsColumns[2], WebhookRequestsColumns[3], WebhookRequestsColumns[9]},
 			},
 			{
-				Name:    "idx_webhook_requests_provider",
+				Name:    "idx_webhook_requests_tenant_env_created",
 				Unique:  false,
-				Columns: []*schema.Column{WebhookRequestsColumns[3]},
+				Columns: []*schema.Column{WebhookRequestsColumns[1], WebhookRequestsColumns[2], WebhookRequestsColumns[9]},
 			},
 			{
 				Name:    "idx_webhook_requests_request_id",
 				Unique:  false,
 				Columns: []*schema.Column{WebhookRequestsColumns[6]},
-			},
-			{
-				Name:    "idx_webhook_requests_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{WebhookRequestsColumns[9]},
 			},
 		},
 	}
