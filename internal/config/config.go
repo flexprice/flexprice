@@ -715,6 +715,11 @@ func NewConfig() (*Configuration, error) {
 
 	// Explicitly bind auth.api_key.header — AutomaticEnv misses keys containing underscores
 	_ = v.BindEnv("auth.api_key.header", "FLEXPRICE_AUTH_API_KEY_HEADER")
+	// Explicitly bind auth.secret — the helm ConfigMap's rendered config.yaml omits this key,
+	// so on GKE deployments it stays empty and supabase/JWT token validation fails (login
+	// broken, and an empty key makes tokens forgeable). The FLEXPRICE_AUTH_SECRET env is
+	// injected from the secret; this bind makes Unmarshal actually read it.
+	_ = v.BindEnv("auth.secret", "FLEXPRICE_AUTH_SECRET")
 	// NOTE: auth.api_key.keys is intentionally NOT bound here because the env var is a
 	// JSON string but Viper/mapstructure expects a map. It is handled manually in Step 6.
 
@@ -735,6 +740,14 @@ func NewConfig() (*Configuration, error) {
 	_ = v.BindEnv("kafka_secondary.sasl_oauth_scopes", "FLEXPRICE_KAFKA_SECONDARY_SASL_OAUTH_SCOPES")
 	_ = v.BindEnv("kafka_secondary.client_id", "FLEXPRICE_KAFKA_SECONDARY_CLIENT_ID")
 	_ = v.BindEnv("kafka_secondary.route_tenants_on_lazy_mode", "FLEXPRICE_KAFKA_SECONDARY_ROUTE_TENANTS_ON_LAZY_MODE")
+
+	// Explicitly bind the PRIMARY kafka SASL credentials. The helm ConfigMap renders the
+	// kafka block without sasl_user/sasl_password, so on a GKE deployment whose primary
+	// cluster uses a password mechanism (e.g. AWS MSK SCRAM-SHA-512) these stay empty and
+	// SCRAM auth fails. The FLEXPRICE_KAFKA_SASL_{USER,PASSWORD} envs are injected by the
+	// chart; these binds make Unmarshal read them. (OAUTHBEARER/GMK needs neither.)
+	_ = v.BindEnv("kafka.sasl_user", "FLEXPRICE_KAFKA_SASL_USER")
+	_ = v.BindEnv("kafka.sasl_password", "FLEXPRICE_KAFKA_SASL_PASSWORD")
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
