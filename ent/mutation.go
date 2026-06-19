@@ -18711,6 +18711,7 @@ type CustomerMutation struct {
 	address_state       *string
 	address_postal_code *string
 	address_country     *string
+	timezone            *string
 	clearedFields       map[string]struct{}
 	done                bool
 	oldValue            func(context.Context) (*Customer, error)
@@ -19576,6 +19577,55 @@ func (m *CustomerMutation) ResetAddressCountry() {
 	delete(m.clearedFields, customer.FieldAddressCountry)
 }
 
+// SetTimezone sets the "timezone" field.
+func (m *CustomerMutation) SetTimezone(s string) {
+	m.timezone = &s
+}
+
+// Timezone returns the value of the "timezone" field in the mutation.
+func (m *CustomerMutation) Timezone() (r string, exists bool) {
+	v := m.timezone
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimezone returns the old "timezone" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldTimezone(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimezone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimezone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimezone: %w", err)
+	}
+	return oldValue.Timezone, nil
+}
+
+// ClearTimezone clears the value of the "timezone" field.
+func (m *CustomerMutation) ClearTimezone() {
+	m.timezone = nil
+	m.clearedFields[customer.FieldTimezone] = struct{}{}
+}
+
+// TimezoneCleared returns if the "timezone" field was cleared in this mutation.
+func (m *CustomerMutation) TimezoneCleared() bool {
+	_, ok := m.clearedFields[customer.FieldTimezone]
+	return ok
+}
+
+// ResetTimezone resets all changes to the "timezone" field.
+func (m *CustomerMutation) ResetTimezone() {
+	m.timezone = nil
+	delete(m.clearedFields, customer.FieldTimezone)
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -19610,7 +19660,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -19662,6 +19712,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.address_country != nil {
 		fields = append(fields, customer.FieldAddressCountry)
 	}
+	if m.timezone != nil {
+		fields = append(fields, customer.FieldTimezone)
+	}
 	return fields
 }
 
@@ -19704,6 +19757,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.AddressPostalCode()
 	case customer.FieldAddressCountry:
 		return m.AddressCountry()
+	case customer.FieldTimezone:
+		return m.Timezone()
 	}
 	return nil, false
 }
@@ -19747,6 +19802,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldAddressPostalCode(ctx)
 	case customer.FieldAddressCountry:
 		return m.OldAddressCountry(ctx)
+	case customer.FieldTimezone:
+		return m.OldTimezone(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -19875,6 +19932,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAddressCountry(v)
 		return nil
+	case customer.FieldTimezone:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimezone(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
 }
@@ -19938,6 +20002,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldAddressCountry) {
 		fields = append(fields, customer.FieldAddressCountry)
 	}
+	if m.FieldCleared(customer.FieldTimezone) {
+		fields = append(fields, customer.FieldTimezone)
+	}
 	return fields
 }
 
@@ -19984,6 +20051,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldAddressCountry:
 		m.ClearAddressCountry()
+		return nil
+	case customer.FieldTimezone:
+		m.ClearTimezone()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer nullable field %s", name)
@@ -20043,6 +20113,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldAddressCountry:
 		m.ResetAddressCountry()
+		return nil
+	case customer.FieldTimezone:
+		m.ResetTimezone()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
