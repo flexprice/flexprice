@@ -171,7 +171,7 @@ func (s *InvoiceService) writeZohoInvoiceMetadata(ctx context.Context, flex *inv
 		return nil
 	}
 	if zohoInvoiceNumber != "" {
-		*flex.InvoiceNumber = zohoInvoiceNumber
+		flex.InvoiceNumber = lo.ToPtr(zohoInvoiceNumber)
 	}
 	if flex.Metadata == nil {
 		flex.Metadata = make(types.Metadata)
