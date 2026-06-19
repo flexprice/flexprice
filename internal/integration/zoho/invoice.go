@@ -117,12 +117,6 @@ func (s *InvoiceService) SyncInvoiceToZoho(ctx context.Context, req ZohoInvoiceS
 	} else {
 		reqPayload.Date = time.Now().UTC().Format("2006-01-02")
 	}
-	//if flexInvoice.DueDate != nil {
-	//	reqPayload.DueDate = flexInvoice.DueDate.Format("2006-01-02")
-	//}
-	// if flexInvoice.InvoiceNumber != nil {
-	// 	reqPayload.ReferenceNumber = *flexInvoice.InvoiceNumber
-	// }
 
 	curCode, exchRate, err := s.client.ResolveInvoiceCurrency(ctx, flexInvoice.Currency)
 	if err != nil {
