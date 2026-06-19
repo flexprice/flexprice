@@ -261,8 +261,8 @@ func (s *PaymentService) GetPaymentStatus(
 
 	// Extract FlexPrice payment ID from metadata if available
 	if payment.Metadata != nil {
-		if fpPaymentID, ok := payment.Metadata["flexprice_payment_id"]; ok {
-			response.FlexPricePaymentID = fpPaymentID
+		if flexpricePaymentID, ok := payment.Metadata["flexprice_payment_id"]; ok {
+			response.FlexPricePaymentID = flexpricePaymentID
 		}
 	}
 
@@ -503,7 +503,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 	amount decimal.Decimal,
 	currency string,
 	description string,
-	invoiceID string,
+	moyasarInvoiceID string,
 	paymentID string,
 ) (*CreatePaymentLinkResponse, error) {
 	if tokenID == "" {
@@ -529,7 +529,7 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 
 	// Build description
 	if description == "" {
-		description = fmt.Sprintf("%s: %s", DefaultInvoiceLabel, invoiceID)
+		description = fmt.Sprintf("%s: %s", DefaultInvoiceLabel, paymentID)
 	}
 
 	// Build metadata
@@ -538,9 +538,6 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 		"flexprice_payment_id":  paymentID,
 		"payment_type":          "recurring",
 	}
-	if invoiceID != "" {
-		metadata["flexprice_invoice_id"] = invoiceID
-	}
 
 	s.logger.Info(ctx, "charging saved payment method",
 		"customer_id", customerID,
@@ -548,8 +545,9 @@ func (s *PaymentService) ChargeSavedPaymentMethod(
 		"amount", amount.String(),
 		"currency", currency)
 
-	// Charge using token
-	payment, err := s.client.ChargeWithToken(ctx, tokenID, int(amountInSmallestUnit), currency, description, metadata, paymentID)
+	// Charge using token — no given_id, flexprice_payment_id in metadata is the anchor
+	// moyasarInvoiceID links this payment to the Moyasar invoice so Moyasar marks it paid internally
+	payment, err := s.client.ChargeWithToken(ctx, tokenID, int(amountInSmallestUnit), currency, description, metadata, "", moyasarInvoiceID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to charge saved payment method",
 			"customer_id", customerID,

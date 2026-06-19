@@ -85,6 +85,13 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.PaddleInvoicePullSyncCronInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			ID:        types.ScheduleIDMoyasarAuthPaymentRefund,
+			Interval:  15 * time.Minute,
+			Workflow:  cronWorkflows.MoyasarAuthPaymentRefundWorkflow,
+			Input:     struct{}{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 

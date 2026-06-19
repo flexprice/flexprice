@@ -185,6 +185,7 @@ func SetupDummyBillingCustomer() error {
 		subscriptionRepo,
 		invoiceRepo,
 		paymentRepo,
+		nil, // paymentMethodRepo — not needed in script context
 		priceRepo,
 		entityIntegrationMappingRepo,
 		meterRepo,

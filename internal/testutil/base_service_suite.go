@@ -168,6 +168,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.stores.SubscriptionRepo,
 		s.stores.InvoiceRepo,
 		s.stores.PaymentRepo,
+		nil, // paymentMethodRepo — not needed in unit tests
 		s.stores.PriceRepo,
 		s.stores.EntityIntegrationMappingRepo,
 		s.stores.MeterRepo,

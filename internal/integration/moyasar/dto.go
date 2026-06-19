@@ -103,6 +103,7 @@ type CreatePaymentRequest struct {
 	Source      *PaymentSource    `json:"source,omitempty"`       // Payment source
 	Metadata    map[string]string `json:"metadata,omitempty"`     // Custom metadata
 	GivenID     string            `json:"given_id,omitempty"`     // Merchant UUID for idempotency
+	InvoiceID   string            `json:"invoice_id,omitempty"`   // Moyasar invoice ID to link this payment to
 }
 
 // CreatePaymentResponse represents the response from creating a payment

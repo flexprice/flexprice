@@ -51,6 +51,7 @@ type PaymentSourceData struct {
 	Number      string `json:"number,omitempty"`       // Masked card number
 	GatewayID   string `json:"gateway_id,omitempty"`   // Gateway ID
 	ReferenceID string `json:"reference_id,omitempty"` // Reference ID
+	Token       string `json:"token,omitempty"`        // Moyasar token ID for saved card
 	Message     string `json:"message,omitempty"`      // Response message
 }
 

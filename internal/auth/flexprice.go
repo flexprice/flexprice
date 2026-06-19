@@ -302,6 +302,33 @@ func (f *flexpriceAuth) ValidateSessionToken(ctx context.Context, token string) 
 	}, nil
 }
 
+// checkoutTokenTTL is the lifetime of a checkout JWT.
+const checkoutTokenTTL = 2 * time.Hour
+
+// GenerateCheckoutToken creates a short-lived JWT for frontend payment checkout flows.
+// Pass arbitrary provider-specific claims (e.g. publishable_key, payment_id, client_side_token).
+// exp and iat are always added automatically; token lifetime is checkoutTokenTTL.
+func (f *flexpriceAuth) GenerateCheckoutToken(extraClaims map[string]interface{}) (string, error) {
+	expiresAt := time.Now().Add(checkoutTokenTTL)
+
+	claims := jwt.MapClaims{
+		"exp": expiresAt.Unix(),
+		"iat": time.Now().Unix(),
+	}
+	for k, v := range extraClaims {
+		claims[k] = v
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(f.AuthConfig.Secret))
+	if err != nil {
+		return "", ierr.WithError(err).
+			WithHint("Failed to sign checkout token").
+			Mark(ierr.ErrSystem)
+	}
+	return signed, nil
+}
+
 // UserInvite provisions a user in the configured auth provider and returns the newly created user ID and password.
 func (f *flexpriceAuth) UserInvite(ctx context.Context, req UserInviteRequest) (*UserInviteResponse, error) {
 	tenantID := types.GetTenantID(ctx)

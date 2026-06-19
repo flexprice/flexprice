@@ -120,6 +120,7 @@ type SetupIntentResponse struct {
 	CheckoutSessionID string `json:"checkout_session_id"`
 	CheckoutURL       string `json:"checkout_url"`
 	ClientSecret      string `json:"client_secret"`
+	CheckoutToken     string `json:"checkout_token,omitempty"`
 	Status            string `json:"status"`
 	Usage             string `json:"usage"`
 	CustomerID        string `json:"customer_id"`
@@ -183,13 +184,12 @@ func (r *CreateSetupIntentRequest) Validate() error {
 	}
 
 	switch r.Provider {
-	case string(types.PaymentMethodProviderStripe):
+	case string(types.PaymentMethodProviderStripe), string(types.SecretProviderMoyasar):
 	default:
 		return errors.NewError("unsupported payment provider").
-			WithHint("Currently only 'stripe' provider is supported").
+			WithHint("Supported providers: stripe, moyasar").
 			WithReportableDetails(map[string]interface{}{
-				"provider":            r.Provider,
-				"supported_providers": []types.PaymentMethodProvider{types.PaymentMethodProviderStripe},
+				"provider": r.Provider,
 			}).
 			Mark(errors.ErrValidation)
 	}
@@ -203,12 +203,12 @@ func (r *CreateSetupIntentRequest) Validate() error {
 
 	// Validate payment method types
 	if len(r.PaymentMethodTypes) > 0 {
-		for _, pmType := range r.PaymentMethodTypes {
-			if pmType != "card" && pmType != "us_bank_account" && pmType != "sepa_debit" {
+		for _, paymentMethodType := range r.PaymentMethodTypes {
+			if paymentMethodType != "card" && paymentMethodType != "us_bank_account" && paymentMethodType != "sepa_debit" {
 				return errors.NewError("unsupported payment method type").
 					WithHint("Supported payment method types: card, us_bank_account, sepa_debit").
 					WithReportableDetails(map[string]interface{}{
-						"payment_method_type": pmType,
+						"payment_method_type": paymentMethodType,
 					}).
 					Mark(errors.ErrValidation)
 			}

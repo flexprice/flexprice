@@ -400,6 +400,9 @@ func (o PaymentMethodQueryOptions) applyEntityFilters(_ context.Context, f *type
 	if f.Gateway != nil {
 		query = query.Where(entpaymentmethod.Gateway(*f.Gateway))
 	}
+	if f.GatewayMethodID != nil {
+		query = query.Where(entpaymentmethod.GatewayMethodID(*f.GatewayMethodID))
+	}
 	if f.Type != nil {
 		query = query.Where(entpaymentmethod.Type(*f.Type))
 	}

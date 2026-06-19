@@ -254,6 +254,7 @@ type PaymentMethodFilter struct {
 
 	CustomerID          *string `form:"customer_id"`
 	Gateway             *string `form:"gateway"`
+	GatewayMethodID     *string `form:"gateway_method_id"`
 	Type                *string `form:"type"`
 	PaymentMethodStatus *string `form:"payment_method_status"`
 	IsDefault           *bool   `form:"is_default"`

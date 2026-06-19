@@ -6,23 +6,28 @@ import (
 	"strconv"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	flexpricejwt "github.com/flexprice/flexprice/internal/auth"
+	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
 type SetupIntentHandler struct {
 	integrationFactory *integration.Factory
 	customerService    interfaces.CustomerService
+	config             *config.Configuration
 	log                *logger.Logger
 }
 
-func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, log *logger.Logger) *SetupIntentHandler {
+func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, cfg *config.Configuration, log *logger.Logger) *SetupIntentHandler {
 	return &SetupIntentHandler{
 		integrationFactory: integrationFactory,
 		customerService:    customerService,
+		config:             cfg,
 		log:                log,
 	}
 }
@@ -58,17 +63,63 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 		return
 	}
 
-	// Get Stripe integration
-	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(c.Request.Context())
+	switch req.Provider {
+	case string(types.SecretProviderMoyasar):
+		h.createMoyasarSetupIntent(c, customerID)
+	default:
+		h.createStripeSetupIntent(c, customerID, &req)
+	}
+}
+
+func (h *SetupIntentHandler) createMoyasarSetupIntent(c *gin.Context, customerID string) {
+	ctx := c.Request.Context()
+
+	moyasarIntegration, err := h.integrationFactory.GetMoyasarIntegration(ctx)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to get Stripe integration", "error", err)
+		h.log.Error(ctx, "Failed to get Moyasar integration", "error", err)
 		c.Error(err)
 		return
 	}
 
-	resp, err := stripeIntegration.PaymentSvc.SetupIntent(c.Request.Context(), customerID, &req, h.customerService)
+	flexpricePaymentID, publishableKey, err := moyasarIntegration.InitiateTokenization(ctx, customerID)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to create Setup Intent", "error", err)
+		h.log.Error(ctx, "Failed to initiate Moyasar tokenization", "error", err)
+		c.Error(err)
+		return
+	}
+
+	authProvider := flexpricejwt.NewFlexpriceAuth(h.config)
+	checkoutToken, err := authProvider.GenerateCheckoutToken(map[string]interface{}{
+		"publishable_key":      publishableKey,
+		"flexprice_payment_id": flexpricePaymentID,
+	})
+	if err != nil {
+		h.log.Error(ctx, "Failed to generate checkout token", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.SetupIntentResponse{
+		Status:        "pending_card_entry",
+		CustomerID:    customerID,
+		CheckoutToken: checkoutToken,
+	})
+}
+
+func (h *SetupIntentHandler) createStripeSetupIntent(c *gin.Context, customerID string, req *dto.CreateSetupIntentRequest) {
+	ctx := c.Request.Context()
+
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		h.log.Error(ctx, "Failed to get Stripe integration", "error", err)
+		c.Error(err)
+		return
+	}
+
+	resp, err := stripeIntegration.PaymentSvc.SetupIntent(ctx, customerID, req, h.customerService)
+	if err != nil {
+		h.log.Error(ctx, "Failed to create Setup Intent", "error", err)
 		c.Error(err)
 		return
 	}

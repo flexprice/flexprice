@@ -370,6 +370,10 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	}
 	if req.GatewayPaymentID != nil {
 		p.GatewayPaymentID = req.GatewayPaymentID
+		// Confirm the gateway accepted the payment: INITIATED → PENDING
+		if p.PaymentStatus == types.PaymentStatusInitiated {
+			p.PaymentStatus = types.PaymentStatusPending
+		}
 	}
 	if req.PaymentMethodID != nil {
 		p.PaymentMethodID = *req.PaymentMethodID
