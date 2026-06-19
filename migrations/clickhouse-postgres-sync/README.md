@@ -13,7 +13,7 @@ so analytics queries can JOIN them with `feature_usage` / `events_processed` wit
 
 ## Upgrading existing ClickHouse (trial column rename)
 
-PostgreSQL uses `trial_period_days` on `prices` and `subscription_line_items`. If your ClickHouse tables still have `trial_period`, rename before running updated sync SQL:
+CH schemas in this directory use `trial_period_days` for both `prices` and `subscription_line_items`. If your ClickHouse tables still have the old `trial_period`, rename before running updated sync SQL:
 
 ```sql
 ALTER TABLE flexprice.prices RENAME COLUMN trial_period TO trial_period_days;
@@ -21,6 +21,15 @@ ALTER TABLE flexprice.subscription_line_items RENAME COLUMN trial_period TO tria
 ```
 
 New deployments should apply `001_schema_*.sql` / `003_schema_*.sql` as-is.
+
+### PG ↔ CH column reality (as of 2026-05)
+
+| Table | PG column | CH column | How sync SQL bridges it |
+|---|---|---|---|
+| `prices` | `trial_period_days` (V3 PG migration renamed it; see `migrations/postgres/V3__rename_trial_period_to_trial_period_days.up.sql`) | `trial_period_days` | direct select, no alias |
+| `subscription_line_items` | `trial_period` (Ent schema has no trial field; V3 migration's `IF EXISTS` guard didn't fire on this table on most envs, so PG still has the old name) | `trial_period_days` | `sync_subscription_line_items.sql` aliases on read: `SELECT trial_period AS trial_period_days` |
+
+If PG eventually renames `subscription_line_items.trial_period → trial_period_days`, drop the alias in `sync_subscription_line_items.sql`.
 
 ## Setup
 
