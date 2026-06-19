@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/cron"
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
+	domainWebhookRequest "github.com/flexprice/flexprice/internal/domain/webhookrequest"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
@@ -78,6 +79,7 @@ func NewRouter(
 	envAccessService service.EnvAccessService,
 	rbacService *rbac.RBACService,
 	tenantService service.TenantService,
+	webhookRequestRepo domainWebhookRequest.Repository,
 ) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
@@ -630,6 +632,7 @@ func NewRouter(
 
 	// Public webhook endpoints (no authentication required)
 	webhooks := v1Public.Group("/webhooks")
+	webhooks.Use(middleware.WebhookLoggingMiddleware(cfg, logger, webhookRequestRepo))
 	{
 		// Stripe webhook endpoint: POST /v1/webhooks/stripe/{tenant_id}/{environment_id}
 		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
