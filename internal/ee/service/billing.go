@@ -28,6 +28,7 @@ type FindMatchingLineItemPeriodInput struct {
 	PeriodStart    time.Time
 	PeriodEnd      time.Time
 	InvoiceCadence types.InvoiceCadence
+	Timezone       string
 }
 
 // FindMatchingLineItemPeriodResult is the result of FindMatchingLineItemPeriodForInvoice.
@@ -187,6 +188,7 @@ func (s *billingService) CalculateFixedCharges(
 				PeriodStart:    periodStart,
 				PeriodEnd:      periodEnd,
 				InvoiceCadence: item.InvoiceCadence,
+				Timezone:       sub.CustomerTimezone,
 			})
 			if err != nil {
 				return nil, err
@@ -369,7 +371,7 @@ func FindMatchingLineItemPeriodForInvoice(in FindMatchingLineItemPeriodInput) (F
 	if !item.EndDate.IsZero() && item.EndDate.Before(endDate) {
 		endDate = item.EndDate
 	}
-	periods, err := types.CalculateBillingPeriods(item.StartDate, &endDate, item.StartDate, periodCount, item.BillingPeriod)
+	periods, err := types.CalculateBillingPeriods(item.StartDate, &endDate, item.StartDate, periodCount, item.BillingPeriod, in.Timezone)
 	if err != nil {
 		return FindMatchingLineItemPeriodResult{}, err
 	}
@@ -2561,6 +2563,7 @@ func (s *billingService) ClassifyLineItems(
 				PeriodStart:    currentPeriodStart,
 				PeriodEnd:      currentPeriodEnd,
 				InvoiceCadence: item.InvoiceCadence,
+				Timezone:       sub.CustomerTimezone,
 			})
 			hasPeriodInCurrentWindow := errCurrent == nil && resCurrent.Ok
 			var hasPeriodInNextWindow bool
@@ -2570,6 +2573,7 @@ func (s *billingService) ClassifyLineItems(
 					PeriodStart:    nextPeriodStart,
 					PeriodEnd:      nextPeriodEnd,
 					InvoiceCadence: types.InvoiceCadenceAdvance,
+					Timezone:       sub.CustomerTimezone,
 				})
 				hasPeriodInNextWindow = errNext == nil && resNext.Ok
 			}
@@ -3639,7 +3643,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 			if resetPeriod == "" {
 				continue
 			}
-			nextUsageResetAt, err := types.GetNextUsageResetAt(currentTime, sub.StartDate, sub.EndDate, sub.BillingAnchor, resetPeriod)
+			nextUsageResetAt, err := types.GetNextUsageResetAt(currentTime, sub.StartDate, sub.EndDate, sub.BillingAnchor, resetPeriod, sub.CustomerTimezone)
 			if err != nil {
 				s.Logger.Info(ctx, "failed to get next usage reset at for feature",
 					"feature_id", featureID,

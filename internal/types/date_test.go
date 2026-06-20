@@ -1582,7 +1582,7 @@ func TestCalculatePeriodID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := CalculatePeriodID(tt.eventTimestamp, tt.subStart, tt.periodStart, tt.periodEnd, tt.anchor, tt.unit, tt.period)
+			got, err := CalculatePeriodID(tt.eventTimestamp, tt.subStart, tt.periodStart, tt.periodEnd, tt.anchor, tt.unit, tt.period, "")
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("CalculatePeriodID() error = nil, wantErr %v", tt.wantErr)
@@ -1715,6 +1715,7 @@ func TestGetNextUsageResetAt_Never(t *testing.T) {
 		nil,
 		billingAnchor,
 		ENTITLEMENT_USAGE_RESET_PERIOD_NEVER,
+		"",
 	)
 
 	if err != nil {
@@ -1800,6 +1801,7 @@ func TestGetNextUsageResetAt_Daily(t *testing.T) {
 				tt.subscriptionEnd,
 				tt.billingAnchor,
 				ENTITLEMENT_USAGE_RESET_PERIOD_DAILY,
+				"",
 			)
 			if tt.wantErr {
 				if err == nil {
@@ -1824,6 +1826,7 @@ func TestGetNextUsageResetAt_Monthly(t *testing.T) {
 		subscriptionStart time.Time
 		billingAnchor     time.Time
 		subscriptionEnd   *time.Time
+		timezone          string
 		want              time.Time
 		wantErr           bool
 	}{
@@ -1932,6 +1935,7 @@ func TestGetNextUsageResetAt_Monthly(t *testing.T) {
 			subscriptionStart: time.Date(2024, time.January, 5, 5, 30, 0, 0, ist),
 			billingAnchor:     time.Date(2024, time.January, 5, 5, 30, 0, 0, ist),
 			subscriptionEnd:   nil,
+			timezone:          "Asia/Kolkata",
 			want:              time.Date(2024, time.April, 5, 0, 0, 0, 0, ist), // Reset time always at 00:00:00
 			wantErr:           false,
 		},
@@ -1941,6 +1945,7 @@ func TestGetNextUsageResetAt_Monthly(t *testing.T) {
 			subscriptionStart: time.Date(2024, time.January, 5, 8, 0, 0, 0, pst),
 			billingAnchor:     time.Date(2024, time.January, 5, 8, 0, 0, 0, pst),
 			subscriptionEnd:   nil,
+			timezone:          "America/Los_Angeles",
 			want:              time.Date(2024, time.April, 5, 0, 0, 0, 0, pst),
 			wantErr:           false,
 		},
@@ -1972,6 +1977,7 @@ func TestGetNextUsageResetAt_Monthly(t *testing.T) {
 				tt.subscriptionEnd,
 				tt.billingAnchor,
 				ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+				tt.timezone,
 			)
 			if tt.wantErr {
 				if err == nil {
@@ -2001,6 +2007,7 @@ func TestGetNextUsageResetAt_UnsupportedPeriod(t *testing.T) {
 		nil,
 		billingAnchor,
 		ENTITLEMENT_USAGE_RESET_PERIOD_WEEKLY, // This should trigger the default case
+		"",
 	)
 
 	if err == nil {
@@ -2064,6 +2071,7 @@ func TestGetNextUsageResetAt_EdgeCases(t *testing.T) {
 				tt.subscriptionEnd,
 				tt.billingAnchor,
 				tt.resetPeriod,
+				"",
 			)
 			if tt.wantErr {
 				if err == nil {

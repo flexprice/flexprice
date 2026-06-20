@@ -122,6 +122,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			sub.BillingAnchor,
 			sub.BillingPeriodCount,
 			sub.BillingPeriod,
+			sub.CustomerTimezone,
 		)
 		if err != nil {
 			return nil, err
@@ -340,6 +341,7 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 				sub.BillingAnchor,
 				sub.BillingPeriodCount,
 				sub.BillingPeriod,
+				sub.CustomerTimezone,
 			)
 			if err != nil {
 				s.Logger.Info(ctx, "could not find period for delete proration",

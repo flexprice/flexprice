@@ -361,7 +361,7 @@ func TestCalculateBillingPeriods_Monthly_FirstPeriodCliffedToSubscriptionEnd(t *
 	anchor := time.Date(2024, 1, 14, 12, 0, 0, 0, time.UTC)
 	subscriptionEnd := lo.ToPtr(time.Date(2024, 4, 12, 0, 0, 0, 0, time.UTC))
 
-	periods, err := CalculateBillingPeriods(start, subscriptionEnd, anchor, 1, BILLING_PERIOD_MONTHLY)
+	periods, err := CalculateBillingPeriods(start, subscriptionEnd, anchor, 1, BILLING_PERIOD_MONTHLY, "")
 	if err != nil {
 		t.Fatalf("CalculateBillingPeriods: %v", err)
 	}

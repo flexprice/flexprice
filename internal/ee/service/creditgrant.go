@@ -604,6 +604,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 				subscription.BillingAnchor,
 				subscription.BillingPeriodCount,
 				subscription.BillingPeriod,
+				subscription.CustomerTimezone,
 			)
 			if err != nil {
 				return nil, err
@@ -1050,6 +1051,7 @@ func CalculateCreditGrantPeriods(
 		lo.FromPtr(grant.CreditGrantAnchor),
 		lo.FromPtr(grant.PeriodCount),
 		billingPeriod,
+		"",
 	)
 }
 

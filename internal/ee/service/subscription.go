@@ -4982,6 +4982,7 @@ func addonPeriodEndForStartDate(sub *subscription.Subscription, startDate time.T
 		sub.BillingAnchor,
 		sub.BillingPeriodCount,
 		sub.BillingPeriod,
+		sub.CustomerTimezone,
 	)
 	if err != nil {
 		return time.Time{}, err

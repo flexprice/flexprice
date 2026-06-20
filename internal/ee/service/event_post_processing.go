@@ -540,6 +540,7 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			sub.BillingAnchor,
 			sub.BillingPeriodCount,
 			sub.BillingPeriod,
+			sub.CustomerTimezone,
 		)
 		if err != nil {
 			s.Logger.Error(ctx, "failed to calculate period id",
