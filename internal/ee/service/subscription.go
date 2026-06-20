@@ -144,7 +144,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if req.BillingAnchor != nil {
 		sub.BillingAnchor = lo.FromPtr(req.BillingAnchor)
 	} else if sub.BillingCycle == types.BillingCycleCalendar {
-		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod)
+		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod, sub.CustomerTimezone)
 	} else {
 		sub.BillingAnchor = sub.StartDate
 	}
@@ -574,7 +574,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 
 	// Calculate billing anchor
 	if sub.BillingCycle == types.BillingCycleCalendar {
-		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod)
+		sub.BillingAnchor = types.CalculateCalendarBillingAnchor(sub.StartDate, sub.BillingPeriod, sub.CustomerTimezone)
 	} else {
 		// default to start date for anniversary billing
 		sub.BillingAnchor = sub.StartDate

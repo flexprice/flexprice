@@ -154,7 +154,7 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 		{
 			name:          "start: 15 jan 2024, anchor: 1 feb 2024, unit: 1",
 			currentPeriod: time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_MONTHLY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_MONTHLY, ""),
 			unit:          1,
 			want:          time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -164,7 +164,7 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 		{
 			name:          "start: 15 jan 2023, anchor: 1 feb 2024, unit: 2",
 			currentPeriod: time.Date(2023, time.January, 15, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.January, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_MONTHLY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.January, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_MONTHLY, ""),
 			unit:          2,
 			want:          time.Date(2023, time.March, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -173,7 +173,7 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 		{
 			name:          "start: 30 dec 2024, anchor: 1 jan 2025, unit: 1",
 			currentPeriod: time.Date(2024, time.December, 30, 10, 37, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.December, 30, 10, 37, 0, 0, time.UTC), BILLING_PERIOD_MONTHLY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.December, 30, 10, 37, 0, 0, time.UTC), BILLING_PERIOD_MONTHLY, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -182,7 +182,7 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 		{
 			name:          "start: 30 dec 2024, anchor: 1 jan 2025, unit: 2",
 			currentPeriod: time.Date(2024, time.December, 30, 10, 37, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.December, 30, 10, 37, 0, 0, time.UTC), BILLING_PERIOD_MONTHLY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.December, 30, 10, 37, 0, 0, time.UTC), BILLING_PERIOD_MONTHLY, ""),
 			unit:          2,
 			want:          time.Date(2025, time.February, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -191,7 +191,7 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 		{
 			name:          "start: 29 feb 2024, anchor: 1 mar 2024, unit: 1",
 			currentPeriod: time.Date(2024, time.February, 29, 10, 37, 0, 0, ist),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 10, 37, 0, 0, ist), BILLING_PERIOD_MONTHLY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 10, 37, 0, 0, ist), BILLING_PERIOD_MONTHLY, ""),
 			unit:          1,
 			want:          time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -201,14 +201,14 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 		{
 			name:          "timezone: PST leap year February with time",
 			currentPeriod: time.Date(2024, time.January, 31, 15, 45, 30, 0, pst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 31, 15, 45, 30, 0, pst), BILLING_PERIOD_MONTHLY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 31, 15, 45, 30, 0, pst), BILLING_PERIOD_MONTHLY, ""),
 			unit:          1,
 			want:          time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "timezone: JST month-end consistency",
 			currentPeriod: time.Date(2024, time.January, 31, 23, 59, 59, 0, jst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 31, 23, 59, 59, 0, jst), BILLING_PERIOD_MONTHLY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 31, 23, 59, 59, 0, jst), BILLING_PERIOD_MONTHLY, ""),
 			unit:          2,
 			want:          time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -402,7 +402,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 		{
 			name:          "start: mar 15 2023, anchor: jan 1 2024, unit: 1",
 			currentPeriod: time.Date(2023, time.March, 15, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -411,7 +411,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 		{
 			name:          "start: dec 31 2023, anchor: jan 1 2024, unit: 1",
 			currentPeriod: time.Date(2023, time.December, 31, 23, 59, 59, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.December, 31, 23, 59, 59, 0, time.UTC), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.December, 31, 23, 59, 59, 0, time.UTC), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -420,7 +420,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 		{
 			name:          "start: jan 1 2024, anchor: jan 1 2025, unit: 1",
 			currentPeriod: time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -429,7 +429,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 		{
 			name:          "start: feb 29 2024 (leap year), anchor: jan 1 2025, unit: 1",
 			currentPeriod: time.Date(2024, time.February, 29, 12, 30, 0, 0, pst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 12, 30, 0, 0, pst), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 12, 30, 0, 0, pst), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -438,7 +438,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 		{
 			name:          "start: dec 31 2023, anchor: jan 1 2024, unit: 2 (skip a year)",
 			currentPeriod: time.Date(2023, time.December, 31, 0, 0, 0, 0, jst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.December, 31, 0, 0, 0, 0, jst), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.December, 31, 0, 0, 0, 0, jst), BILLING_PERIOD_ANNUAL, ""),
 			unit:          2,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -447,7 +447,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 		{
 			name:          "timezone: JST with time preservation",
 			currentPeriod: time.Date(2024, time.March, 15, 23, 59, 59, 0, jst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.March, 15, 23, 59, 59, 0, jst), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.March, 15, 23, 59, 59, 0, jst), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
@@ -456,42 +456,42 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 		{
 			name:          "annual: Feb 29, 2024, expect Jan 1, 2025 (IST)",
 			currentPeriod: time.Date(2024, time.February, 29, 0, 0, 0, 0, ist),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, ist), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, ist), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "annual: Feb 29, 2024, expect Jan 1, 2025 (PST)",
 			currentPeriod: time.Date(2024, time.February, 29, 0, 0, 0, 0, pst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, pst), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, pst), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "annual: Feb 29, 2024, expect Jan 1, 2025 (JST)",
 			currentPeriod: time.Date(2024, time.February, 29, 0, 0, 0, 0, jst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, jst), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, jst), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "annual: Feb 20, 2023, expect Jan 1, 2024",
 			currentPeriod: time.Date(2023, time.February, 20, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.February, 20, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.February, 20, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "annual: Mar 1, 2024, expect Jan 1, 2025",
 			currentPeriod: time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "annual: 15 jan 2024, anchor: 1 jan 2025, unit: 1",
 			currentPeriod: time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_ANNUAL, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -620,56 +620,56 @@ func TestNextBillingDate_Weekly_CalendarBilling(t *testing.T) {
 		{
 			name:               "weekly: Mar 6, 2024 (Wednesday), anchor Mar 11, expect Mar 11, 2024 (next Monday)",
 			currentPeriodStart: time.Date(2024, time.March, 6, 0, 0, 0, 0, time.UTC),
-			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 6, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY),
+			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 6, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY, ""),
 			unit:               1,
 			want:               time.Date(2024, time.March, 11, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "weekly: Mar 10, 2024 (Sunday), anchor Mar 11, expect Mar 11 (next day is Monday)",
 			currentPeriodStart: time.Date(2024, time.March, 10, 0, 0, 0, 0, time.UTC),
-			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 10, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY),
+			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 10, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY, ""),
 			unit:               1,
 			want:               time.Date(2024, time.March, 11, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "weekly: Monday → unit 1 → next Monday",
 			currentPeriodStart: time.Date(2024, time.March, 11, 0, 0, 0, 0, time.UTC), // Monday
-			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 11, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY),
+			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 11, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY, ""),
 			unit:               1,
 			want:               time.Date(2024, time.March, 18, 0, 0, 0, 0, time.UTC), // Next Monday
 		},
 		{
 			name:               "weekly: unit 2 → skip a week",
 			currentPeriodStart: time.Date(2024, time.March, 6, 0, 0, 0, 0, time.UTC), // Wednesday
-			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 6, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY),
+			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 6, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY, ""),
 			unit:               2,
 			want:               time.Date(2024, time.March, 18, 0, 0, 0, 0, time.UTC), // Monday after next
 		},
 		{
 			name:               "weekly: crossing month boundary",
 			currentPeriodStart: time.Date(2024, time.March, 27, 0, 0, 0, 0, time.UTC), // Wednesday
-			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 27, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY),
+			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 27, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY, ""),
 			unit:               1,
 			want:               time.Date(2024, time.April, 1, 0, 0, 0, 0, time.UTC), // Monday in April
 		},
 		{
 			name:               "weekly: Dec 31, 2023 (Sunday), anchor Jan 1, expect Jan 1, 2024 (next Monday)",
 			currentPeriodStart: time.Date(2023, time.December, 31, 0, 0, 0, 0, time.UTC),
-			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2023, time.December, 31, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY),
+			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2023, time.December, 31, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_WEEKLY, ""),
 			unit:               1,
 			want:               time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "weekly: timezone test (IST)",
 			currentPeriodStart: time.Date(2024, time.March, 6, 12, 30, 45, 0, ist),
-			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 6, 12, 30, 45, 0, ist), BILLING_PERIOD_WEEKLY),
+			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 6, 12, 30, 45, 0, ist), BILLING_PERIOD_WEEKLY, ""),
 			unit:               1,
 			want:               time.Date(2024, time.March, 11, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "weekly: timezone test (PST)",
 			currentPeriodStart: time.Date(2024, time.March, 10, 23, 59, 59, 0, pst),
-			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 10, 23, 59, 59, 0, pst), BILLING_PERIOD_WEEKLY),
+			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 10, 23, 59, 59, 0, pst), BILLING_PERIOD_WEEKLY, ""),
 			unit:               1,
 			want:               time.Date(2024, time.March, 18, 0, 0, 0, 0, time.UTC),
 		},
@@ -807,42 +807,42 @@ func TestNextBillingDate_Daily_CalendarBilling(t *testing.T) {
 		{
 			name:          "daily: Dec 31, 2024, anchor Jan 1, expect Jan 1, 2025",
 			currentPeriod: time.Date(2024, time.December, 31, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.December, 31, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_DAILY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.December, 31, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_DAILY, ""),
 			unit:          1,
 			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "daily: Feb 28, 2023, anchor Mar 1, expect Mar 1, 2023",
 			currentPeriod: time.Date(2023, time.February, 28, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.February, 28, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_DAILY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.February, 28, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_DAILY, ""),
 			unit:          1,
 			want:          time.Date(2023, time.March, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "daily: Feb 28, 2024, anchor Feb 29, expect Feb 29, 2024 (IST)",
 			currentPeriod: time.Date(2024, time.February, 28, 0, 0, 0, 0, ist),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, ist), BILLING_PERIOD_DAILY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, ist), BILLING_PERIOD_DAILY, ""),
 			unit:          1,
 			want:          time.Date(2024, time.February, 28, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "daily: Feb 28, 2024, anchor Feb 29, expect Feb 29, 2024 (PST)",
 			currentPeriod: time.Date(2024, time.February, 28, 0, 0, 0, 0, pst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, pst), BILLING_PERIOD_DAILY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, pst), BILLING_PERIOD_DAILY, ""),
 			unit:          1,
 			want:          time.Date(2024, time.February, 29, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "daily: Feb 28, 2024, anchor Feb 29, expect Feb 29, 2024 (JST)",
 			currentPeriod: time.Date(2024, time.February, 28, 0, 0, 0, 0, jst),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, jst), BILLING_PERIOD_DAILY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, jst), BILLING_PERIOD_DAILY, ""),
 			unit:          1,
 			want:          time.Date(2024, time.February, 28, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "daily: mid-day start with calendar billing should align to midnight",
 			currentPeriod: time.Date(2026, time.March, 2, 7, 58, 45, 337000000, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 2, 7, 58, 45, 337000000, time.UTC), BILLING_PERIOD_DAILY),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 2, 7, 58, 45, 337000000, time.UTC), BILLING_PERIOD_DAILY, ""),
 			unit:          1,
 			want:          time.Date(2026, time.March, 3, 0, 0, 0, 0, time.UTC),
 		},
@@ -881,7 +881,7 @@ func TestNextBillingDate_Quarterly_Calendar(t *testing.T) {
 			// First period: March 22 → April 1 (partial Q1 tail).
 			name:          "partial first period: mid-Q1 start (Mar 22) → Apr 1",
 			currentPeriod: time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER, ""),
 			unit:          1,
 			want:          time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -889,7 +889,7 @@ func TestNextBillingDate_Quarterly_Calendar(t *testing.T) {
 			// Second full period: April 1 → July 1.
 			name:          "full Q2 period: Apr 1 → Jul 1",
 			currentPeriod: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER, ""),
 			unit:          1,
 			want:          time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -897,7 +897,7 @@ func TestNextBillingDate_Quarterly_Calendar(t *testing.T) {
 			// Third full period: July 1 → October 1.
 			name:          "full Q3 period: Jul 1 → Oct 1",
 			currentPeriod: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER, ""),
 			unit:          1,
 			want:          time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -905,7 +905,7 @@ func TestNextBillingDate_Quarterly_Calendar(t *testing.T) {
 			// Q4 period: October 1 → January 1.
 			name:          "full Q4 period: Oct 1 → Jan 1",
 			currentPeriod: time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 22, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER, ""),
 			unit:          1,
 			want:          time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -914,7 +914,7 @@ func TestNextBillingDate_Quarterly_Calendar(t *testing.T) {
 			// First (full) period: April 1 → July 1.
 			name:          "start exactly on quarter boundary: Apr 1 → Jul 1",
 			currentPeriod: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_QUARTER, ""),
 			unit:          1,
 			want:          time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -1074,7 +1074,7 @@ func TestNextBillingDate_HalfYearly_Calendar(t *testing.T) {
 			// First period: March 15 → July 1 (partial H1 tail).
 			name:          "partial first period: mid-H1 start (Mar 15) → Jul 1",
 			currentPeriod: time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR, ""),
 			unit:          1,
 			want:          time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -1082,7 +1082,7 @@ func TestNextBillingDate_HalfYearly_Calendar(t *testing.T) {
 			// Second full period: July 1 → January 1.
 			name:          "full H2 period: Jul 1 → Jan 1",
 			currentPeriod: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR, ""),
 			unit:          1,
 			want:          time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -1090,7 +1090,7 @@ func TestNextBillingDate_HalfYearly_Calendar(t *testing.T) {
 			// Third full period: January 1 → July 1.
 			name:          "full H1 period: Jan 1 2027 → Jul 1 2027",
 			currentPeriod: time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR, ""),
 			unit:          1,
 			want:          time.Date(2027, time.July, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -1099,7 +1099,7 @@ func TestNextBillingDate_HalfYearly_Calendar(t *testing.T) {
 			// First period: Oct 5 → Jan 1 (partial H2 tail).
 			name:          "partial first period: mid-H2 start (Oct 5) → Jan 1",
 			currentPeriod: time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC),
-			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC), BILLING_PERIOD_HALF_YEAR, ""),
 			unit:          1,
 			want:          time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
@@ -2166,11 +2166,11 @@ func timePtr(t time.Time) *time.Time {
 func TestCalculateBillingPeriods_Timezone(t *testing.T) {
 	// Pre-compute the IST calendar anchor for the "IST calendar, monthly" case.
 	// subStart = 2024-02-15T18:30:00Z  (IST midnight Feb 16, 2024)
-	// CalculateCalendarBillingAnchor works in UTC and returns start of next month:
-	// next month of February = March → 2024-03-01T00:00:00Z
+	// CalculateCalendarBillingAnchor now works in the customer's timezone (IST):
+	// Feb 16 in IST → next month start = March 1 00:00 IST = 2024-02-29T18:30:00Z UTC
 	istCalSubStart := time.Date(2024, time.February, 15, 18, 30, 0, 0, time.UTC)
-	istCalAnchor := CalculateCalendarBillingAnchor(istCalSubStart, BILLING_PERIOD_MONTHLY)
-	// Expected: 2024-03-01T00:00:00Z
+	istCalAnchor := CalculateCalendarBillingAnchor(istCalSubStart, BILLING_PERIOD_MONTHLY, "Asia/Kolkata")
+	// Expected: 2024-02-29T18:30:00Z (March 1 00:00 IST expressed in UTC)
 	_ = istCalAnchor
 
 	tests := []struct {
@@ -2218,25 +2218,27 @@ func TestCalculateBillingPeriods_Timezone(t *testing.T) {
 		{
 			// IST calendar, monthly.
 			// subStart = IST midnight Feb 16 = 2024-02-15T18:30:00Z
-			// calendar anchor = 2024-03-01T00:00:00Z (CalculateCalendarBillingAnchor returns UTC start-of-month)
-			// In IST the anchor is March 1 05:30 IST (day=1). subStart in IST is Feb 16.
-			// NextBillingDate(Feb15 18:30Z, anchor=Mar01 00:00Z, tz=IST):
-			//   localStart = Feb 16 00:00 IST, localAnchor = Mar 1 05:30 IST → anchor.Day() = 1
-			//   d=16, clampedAnchorD=1; 16 < 1? No → advance by 1 month from Feb:
-			//   time.Date(2024, March, 1, 5, 30, 0, 0, IST) = 2024-03-01T00:00:00Z (UTC)
-			// So first period [Feb15 18:30Z, Mar01 00:00Z) = partial period in UTC terms
-			// Second period starts Mar01 00:00Z, nextEnd = Apr01 05:30 IST = 2024-04-01T00:00:00Z
-			// endDate = IST midnight May 1 = 2024-04-30T18:30:00Z → 3 periods total
+			// calendar anchor = CalculateCalendarBillingAnchor(subStart, MONTHLY, "Asia/Kolkata"):
+			//   subStart.In(IST) = Feb 16 00:00 IST → next month = March 1 00:00 IST = 2024-02-29T18:30:00Z UTC
+			// So anchor = 2024-02-29T18:30:00Z
+			// In IST the anchor is March 1 00:00 IST (day=1). subStart in IST is Feb 16.
+			// NextBillingDate(Feb15 18:30Z, anchor=Feb29 18:30Z, tz=IST):
+			//   localStart = Feb 16 00:00 IST, localAnchor = March 1 00:00 IST → anchor.Day() = 1
+			//   d=16, clampedAnchorD=1; 16 >= 1 → advance by 1 month from Feb 16:
+			//   time.Date(2024, March, 1, 0, 0, 0, 0, IST) = 2024-02-29T18:30:00Z (UTC) = anchor
+			// First period [Feb15 18:30Z, Feb29 18:30Z) (IST: Feb 16 → March 1)
+			// Second period starts Feb29 18:30Z, nextEnd = April 1 00:00 IST = 2024-03-31T18:30:00Z
+			// Third period ends at endDate = 2024-04-30T18:30:00Z (IST May 1)
 			name:                "IST calendar monthly",
 			initialPeriodStart:  istCalSubStart, // 2024-02-15T18:30:00Z
 			endDate:             timePtr(time.Date(2024, time.April, 30, 18, 30, 0, 0, time.UTC)),
-			anchor:              istCalAnchor, // 2024-03-01T00:00:00Z
+			anchor:              istCalAnchor, // 2024-02-29T18:30:00Z (March 1 00:00 IST)
 			periodCount:         1,
 			billingPeriod:       BILLING_PERIOD_MONTHLY,
 			timezone:            "Asia/Kolkata",
 			wantPeriodCount:     3,
-			wantFirstPeriodEnd:  time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),  // anchor boundary in UTC
-			wantSecondPeriodEnd: time.Date(2024, time.April, 1, 0, 0, 0, 0, time.UTC),  // one month later in UTC
+			wantFirstPeriodEnd:  time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC), // March 1 00:00 IST
+			wantSecondPeriodEnd: time.Date(2024, time.March, 31, 18, 30, 0, 0, time.UTC),    // April 1 00:00 IST
 		},
 		{
 			// EST anniversary, monthly — spans the DST transition (March 10, 2024).

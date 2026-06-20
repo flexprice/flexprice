@@ -121,7 +121,7 @@ func (s *ProrationServiceSuite) setupTestData() {
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		CustomerTimezone:   "UTC",
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-		BillingAnchor:      types.CalculateCalendarBillingAnchor(s.testData.now.Add(-30*24*time.Hour), types.BILLING_PERIOD_MONTHLY),
+		BillingAnchor:      types.CalculateCalendarBillingAnchor(s.testData.now.Add(-30*24*time.Hour), types.BILLING_PERIOD_MONTHLY, ""),
 	}
 
 	// Create line items

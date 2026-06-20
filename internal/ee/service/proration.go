@@ -720,7 +720,7 @@ func (s *prorationService) CalculateAdditiveEntitlementProration(
 		// For calendar billing, use calendar period end
 		// CalculateCalendarBillingAnchor returns the START of the NEXT period,
 		// which is the END of the current period
-		periodEnd = types.CalculateCalendarBillingAnchor(changeDate, billingPeriod)
+		periodEnd = types.CalculateCalendarBillingAnchor(changeDate, billingPeriod, customerTimezone)
 		logger.Debug(ctx, "using calendar period end for proration",
 			"period_end", periodEnd)
 	} else {
