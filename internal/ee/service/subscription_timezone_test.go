@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -22,6 +24,9 @@ type SubscriptionTimezoneTestSuite struct {
 	customerSvc     CustomerService
 	planID          string
 	priceID         string
+	meterID         string
+	usagePriceID    string
+	eventRepo       *testutil.InMemoryEventStore
 }
 
 func TestSubscriptionTimezoneTestSuite(t *testing.T) {
@@ -78,6 +83,8 @@ func (s *SubscriptionTimezoneTestSuite) SetupTest() {
 	s.subscriptionSvc = NewSubscriptionService(params)
 	s.customerSvc = NewCustomerService(params)
 
+	s.eventRepo = s.GetStores().EventRepo.(*testutil.InMemoryEventStore)
+
 	s.setupSharedPlanAndPrice()
 }
 
@@ -114,6 +121,42 @@ func (s *SubscriptionTimezoneTestSuite) setupSharedPlanAndPrice() {
 	}
 	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, testPrice))
 	s.priceID = testPrice.ID
+
+	// Usage meter for counting "api_call" events.
+	testMeter := &meter.Meter{
+		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER),
+		Name:      "API Calls",
+		EventName: "api_call",
+		Aggregation: meter.Aggregation{
+			Type: types.AggregationCount,
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().MeterRepo.CreateMeter(ctx, testMeter))
+	s.meterID = testMeter.ID
+
+	// Per-unit usage price linked to the meter, billed in arrear.
+	testUsagePrice := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.Zero,
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           testPlan.ID,
+		Type:               types.PRICE_TYPE_USAGE,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_TIERED,
+		TierMode:           types.BILLING_TIER_SLAB,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		MeterID:            testMeter.ID,
+		Tiers: []price.PriceTier{
+			{UpTo: nil, UnitAmount: decimal.NewFromFloat(1.0)},
+		},
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, testUsagePrice))
+	s.usagePriceID = testUsagePrice.ID
 }
 
 // localMidnight returns the UTC instant that corresponds to 00:00:00 on the given date in tz.
@@ -241,4 +284,141 @@ func (s *SubscriptionTimezoneTestSuite) TestTimezoneAwareBillingPeriods() {
 				"period end day in local tz mismatch")
 		})
 	}
+}
+
+// TestTimezoneEventPeriodInclusion verifies that the same UTC event timestamp falls
+// inside or outside a billing period depending on the customer's timezone.
+//
+// Scenario:
+//
+//	A boundary event fires at 2024-02-29T20:00:00Z (Feb 29, 20:00 UTC).
+//
+//	IST customer's March 1 period starts at 2024-02-29T18:30:00Z (IST midnight = UTC−5h30m).
+//	The event is 1h30m inside that period → INCLUDED → count = 2.
+//
+//	UTC customer's March 1 period starts at 2024-03-01T00:00:00Z.
+//	The event is 4 hours before that boundary → EXCLUDED → count = 1.
+//
+//	A mid-month event at 2024-03-15T12:00:00Z is clearly inside both periods → always INCLUDED.
+func (s *SubscriptionTimezoneTestSuite) TestTimezoneEventPeriodInclusion() {
+	ctx := s.GetContext()
+
+	// --- Create customers ---
+	utcCustResp, err := s.customerSvc.CreateCustomer(ctx, dto.CreateCustomerRequest{
+		ExternalID: "ext-utc-event-test",
+		Name:       "UTC Event Customer",
+		Email:      "utc-event@example.com",
+		Timezone:   "UTC",
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(utcCustResp)
+
+	istCustResp, err := s.customerSvc.CreateCustomer(ctx, dto.CreateCustomerRequest{
+		ExternalID: "ext-ist-event-test",
+		Name:       "IST Event Customer",
+		Email:      "ist-event@example.com",
+		Timezone:   "Asia/Kolkata",
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(istCustResp)
+
+	// --- Create subscriptions ---
+	// UTC customer: March 1, 2024 00:00 UTC
+	utcStart := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
+	utcSubResp, err := s.subscriptionSvc.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         utcCustResp.ID,
+		PlanID:             s.planID,
+		StartDate:          lo.ToPtr(utcStart),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(utcSubResp)
+
+	// IST customer: March 1, 2024 00:00 IST = 2024-02-29T18:30:00Z
+	march1 := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
+	istStart := localMidnight(march1, "Asia/Kolkata")
+	istSubResp, err := s.subscriptionSvc.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         istCustResp.ID,
+		PlanID:             s.planID,
+		StartDate:          lo.ToPtr(istStart),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(istSubResp)
+
+	// Extract tenant/environment IDs from context to stamp events correctly.
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// --- Insert events ---
+	// boundaryEvent: 2024-02-29T20:00:00Z
+	//   - 1h30m after IST period start (18:30Z) → inside IST period
+	//   - 4h before UTC period start (2024-03-01T00:00Z) → outside UTC period
+	boundaryEventTS := time.Date(2024, 2, 29, 20, 0, 0, 0, time.UTC)
+
+	// midMonthEvent: 2024-03-15T12:00:00Z — clearly inside both periods
+	midMonthEventTS := time.Date(2024, 3, 15, 12, 0, 0, 0, time.UTC)
+
+	for _, tc := range []struct {
+		externalCustomerID string
+		customerID         string
+	}{
+		{utcCustResp.ExternalID, utcCustResp.ID},
+		{istCustResp.ExternalID, istCustResp.ID},
+	} {
+		s.Require().NoError(s.eventRepo.InsertEvent(ctx, &events.Event{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT),
+			TenantID:           tenantID,
+			EnvironmentID:      environmentID,
+			EventName:          "api_call",
+			ExternalCustomerID: tc.externalCustomerID,
+			CustomerID:         tc.customerID,
+			Timestamp:          boundaryEventTS,
+			Properties:         map[string]interface{}{},
+		}))
+		s.Require().NoError(s.eventRepo.InsertEvent(ctx, &events.Event{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EVENT),
+			TenantID:           tenantID,
+			EnvironmentID:      environmentID,
+			EventName:          "api_call",
+			ExternalCustomerID: tc.externalCustomerID,
+			CustomerID:         tc.customerID,
+			Timestamp:          midMonthEventTS,
+			Properties:         map[string]interface{}{},
+		}))
+	}
+
+	// --- Assert UTC customer: only mid-month event is inside the period ---
+	// UTC period starts 2024-03-01T00:00Z; boundary event at 20:00Z Feb 29 is before it.
+	utcUsage, err := s.eventRepo.GetUsage(ctx, &events.UsageParams{
+		ExternalCustomerID: utcCustResp.ExternalID,
+		EventName:          "api_call",
+		AggregationType:    types.AggregationCount,
+		StartTime:          utcSubResp.CurrentPeriodStart,
+		EndTime:            utcSubResp.CurrentPeriodEnd,
+	})
+	s.Require().NoError(err)
+	s.Equal(float64(1), utcUsage.Value.InexactFloat64(),
+		"UTC customer should see only the mid-March event (period start=%v, boundary event=%v)",
+		utcSubResp.CurrentPeriodStart, boundaryEventTS)
+
+	// --- Assert IST customer: both events are inside the period ---
+	// IST period starts 2024-02-29T18:30Z; boundary event at 20:00Z is 1h30m inside it.
+	istUsage, err := s.eventRepo.GetUsage(ctx, &events.UsageParams{
+		ExternalCustomerID: istCustResp.ExternalID,
+		EventName:          "api_call",
+		AggregationType:    types.AggregationCount,
+		StartTime:          istSubResp.CurrentPeriodStart,
+		EndTime:            istSubResp.CurrentPeriodEnd,
+	})
+	s.Require().NoError(err)
+	s.Equal(float64(2), istUsage.Value.InexactFloat64(),
+		"IST customer should see both events (boundary event at %v is inside IST period starting %v)",
+		boundaryEventTS, istSubResp.CurrentPeriodStart)
 }
