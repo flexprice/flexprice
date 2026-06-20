@@ -949,7 +949,7 @@ func (r *FeatureUsageRepository) getMaxBucketAnalytics(ctx context.Context, para
 // getMaxBucketTotals calculates totals using bucket-based aggregation for MAX features
 func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params *events.UsageAnalyticsParams, featureInfo *events.MaxBucketFeatureInfo) ([]*events.DetailedUsageAnalytic, error) {
 	// Build bucket window expression based on meter's bucket size
-	bucketWindowExpr := r.formatWindowSize(featureInfo.BucketSize, nil)
+	bucketWindowExpr := formatWindowSize(featureInfo.BucketSize, "")
 
 	// Check if source is in group_by
 	sourceInGroupBy := false
@@ -1179,12 +1179,12 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 // getMaxBucketPointsForGroup calculates time series points for a specific group
 func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context, params *events.UsageAnalyticsParams, featureInfo *events.MaxBucketFeatureInfo, group *events.DetailedUsageAnalytic) ([]events.UsageAnalyticPoint, error) {
 	// Build window expressions: bucket size for inner aggregation, request window size for outer aggregation
-	bucketWindowExpr := r.formatWindowSize(featureInfo.BucketSize, nil)
+	bucketWindowExpr := formatWindowSize(featureInfo.BucketSize, "")
 
 	// For bucketed features, use the larger of params.WindowSize or bucket_size
 	// This ensures we don't generate points at a granularity smaller than the bucket size
 	effectiveWindowSize := params.WindowSize.Max(featureInfo.BucketSize)
-	requestWindowExpr := r.formatWindowSize(effectiveWindowSize, params.BillingAnchor)
+	requestWindowExpr := formatWindowSizeWithBillingAnchor(effectiveWindowSize, params.BillingAnchor, "")
 
 	// For MAX with bucket features, we need to:
 	// 1. First get max within each bucket (feature's bucket_size)
@@ -1407,7 +1407,7 @@ func (r *FeatureUsageRepository) getSumBucketAnalytics(ctx context.Context, para
 // getSumBucketTotals calculates totals using bucket-based aggregation for SUM features
 func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params *events.UsageAnalyticsParams, featureInfo *events.SumBucketFeatureInfo) ([]*events.DetailedUsageAnalytic, error) {
 	// Build bucket window expression based on meter's bucket size
-	bucketWindowExpr := r.formatWindowSize(featureInfo.BucketSize, nil)
+	bucketWindowExpr := formatWindowSize(featureInfo.BucketSize, "")
 
 	// Check if source is in group_by
 	sourceInGroupBy := false
@@ -1626,12 +1626,12 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 // getSumBucketPointsForGroup calculates time series points for a specific SUM bucket group
 func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context, params *events.UsageAnalyticsParams, featureInfo *events.SumBucketFeatureInfo, group *events.DetailedUsageAnalytic) ([]events.UsageAnalyticPoint, error) {
 	// Build window expressions: bucket size for inner aggregation, request window size for outer aggregation
-	bucketWindowExpr := r.formatWindowSize(featureInfo.BucketSize, nil)
+	bucketWindowExpr := formatWindowSize(featureInfo.BucketSize, "")
 
 	// For bucketed features, use the larger of params.WindowSize or bucket_size
 	// This ensures we don't generate points at a granularity smaller than the bucket size
 	effectiveWindowSize := params.WindowSize.Max(featureInfo.BucketSize)
-	requestWindowExpr := r.formatWindowSize(effectiveWindowSize, params.BillingAnchor)
+	requestWindowExpr := formatWindowSizeWithBillingAnchor(effectiveWindowSize, params.BillingAnchor, "")
 
 	// For SUM with bucket features, we need to:
 	// 1. First sum values within each bucket (feature's bucket_size)
@@ -1782,45 +1782,6 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 	}
 
 	return points, nil
-}
-
-// formatWindowSize formats window size for ClickHouse queries
-func (r *FeatureUsageRepository) formatWindowSize(windowSize types.WindowSize, billingAnchor *time.Time) string {
-	switch windowSize {
-	case types.WindowSizeMinute:
-		return "toStartOfMinute(timestamp)"
-	case types.WindowSizeHour:
-		return "toStartOfHour(timestamp)"
-	case types.WindowSizeDay:
-		return "toStartOfDay(timestamp)"
-	case types.WindowSizeWeek:
-		return "toStartOfWeek(timestamp)"
-	case types.WindowSize15Min:
-		return "toStartOfInterval(timestamp, INTERVAL 15 MINUTE)"
-	case types.WindowSize30Min:
-		return "toStartOfInterval(timestamp, INTERVAL 30 MINUTE)"
-	case types.WindowSize3Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"
-	case types.WindowSize6Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
-	case types.WindowSize12Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"
-	case types.WindowSizeMonth:
-		// Use custom monthly billing period if billing anchor is provided
-		if billingAnchor != nil {
-			// Extract only the day component from billing anchor for simplicity
-			anchorDay := billingAnchor.Day()
-			// Generate the custom monthly window expression using day-level granularity
-			return fmt.Sprintf(`
-				addDays(
-					toStartOfMonth(addDays(timestamp, -%d)),
-					%d
-				)`, anchorDay-1, anchorDay-1)
-		}
-		return "toStartOfMonth(timestamp)"
-	default:
-		return "toStartOfHour(timestamp)"
-	}
 }
 
 // getAnalyticsPoints fetches time-series data points for a specific analytics item
@@ -2395,7 +2356,7 @@ func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, 
 }
 
 func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *events.FeatureUsageParams) string {
-	bucketWindow := r.formatWindowSize(params.UsageParams.WindowSize, params.UsageParams.BillingAnchor)
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.UsageParams.WindowSize, params.UsageParams.BillingAnchor, params.UsageParams.CustomerTimezone)
 
 	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params.UsageParams)
 
