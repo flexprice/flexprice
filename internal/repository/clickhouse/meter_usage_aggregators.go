@@ -126,7 +126,7 @@ func (a *MeterUsageLatestAggregator) GetQuery(ctx context.Context, params *event
 // BuildMultiMeterQuery generates a query that groups results by meter_id.
 // Used by GetUsageMultiMeter to query multiple meters in a single round-trip.
 func BuildMultiMeterQuery(aggExpr, countExpr string, params *events.MeterUsageQueryParams, qb *MeterUsageQueryBuilder) string {
-	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor)
+	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
 	where, _ := qb.BuildWhereClause(params)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 

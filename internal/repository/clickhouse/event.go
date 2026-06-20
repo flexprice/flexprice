@@ -1094,7 +1094,7 @@ func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, end
 	}
 
 	// Build the time window expression based on window size
-	timeWindowExpr := formatWindowSize(windowSize)
+	timeWindowExpr := formatWindowSize(windowSize, "")
 
 	// Query for windowed counts if window size is provided
 	if windowSize != "" {
