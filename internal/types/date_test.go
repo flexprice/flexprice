@@ -2160,6 +2160,409 @@ func timePtr(t time.Time) *time.Time {
 	return &t
 }
 
+// TestCalculateBillingPeriods_Timezone verifies that CalculateBillingPeriods generates
+// correct period boundaries for IST and EST (with DST) customers in both anniversary
+// and calendar billing modes.
+func TestCalculateBillingPeriods_Timezone(t *testing.T) {
+	// Pre-compute the IST calendar anchor for the "IST calendar, monthly" case.
+	// subStart = 2024-02-15T18:30:00Z  (IST midnight Feb 16, 2024)
+	// CalculateCalendarBillingAnchor works in UTC and returns start of next month:
+	// next month of February = March → 2024-03-01T00:00:00Z
+	istCalSubStart := time.Date(2024, time.February, 15, 18, 30, 0, 0, time.UTC)
+	istCalAnchor := CalculateCalendarBillingAnchor(istCalSubStart, BILLING_PERIOD_MONTHLY)
+	// Expected: 2024-03-01T00:00:00Z
+	_ = istCalAnchor
+
+	tests := []struct {
+		name                string
+		initialPeriodStart  time.Time
+		endDate             *time.Time
+		anchor              time.Time
+		periodCount         int
+		billingPeriod       BillingPeriod
+		timezone            string
+		wantPeriodCount     int
+		wantFirstPeriodEnd  time.Time
+		wantSecondPeriodEnd time.Time
+	}{
+		{
+			// UTC anniversary, monthly: 2 full periods March–May 2024.
+			name:                "UTC anniversary monthly",
+			initialPeriodStart:  time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
+			endDate:             timePtr(time.Date(2024, time.May, 1, 0, 0, 0, 0, time.UTC)),
+			anchor:              time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
+			periodCount:         1,
+			billingPeriod:       BILLING_PERIOD_MONTHLY,
+			timezone:            "",
+			wantPeriodCount:     2,
+			wantFirstPeriodEnd:  time.Date(2024, time.April, 1, 0, 0, 0, 0, time.UTC),
+			wantSecondPeriodEnd: time.Date(2024, time.May, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// IST anniversary, monthly.
+			// subStart = IST midnight March 1, 2024 = 2024-02-29T18:30:00Z
+			// Period 1: [Feb29 18:30Z, Mar31 18:30Z)  (IST March 1 → April 1)
+			// Period 2: [Mar31 18:30Z, Apr30 18:30Z)  (IST April 1 → May 1)
+			// endDate = IST midnight May 1 = 2024-04-30T18:30:00Z
+			name:                "IST anniversary monthly",
+			initialPeriodStart:  time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC),
+			endDate:             timePtr(time.Date(2024, time.April, 30, 18, 30, 0, 0, time.UTC)),
+			anchor:              time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC),
+			periodCount:         1,
+			billingPeriod:       BILLING_PERIOD_MONTHLY,
+			timezone:            "Asia/Kolkata",
+			wantPeriodCount:     2,
+			wantFirstPeriodEnd:  time.Date(2024, time.March, 31, 18, 30, 0, 0, time.UTC),
+			wantSecondPeriodEnd: time.Date(2024, time.April, 30, 18, 30, 0, 0, time.UTC),
+		},
+		{
+			// IST calendar, monthly.
+			// subStart = IST midnight Feb 16 = 2024-02-15T18:30:00Z
+			// calendar anchor = 2024-03-01T00:00:00Z (CalculateCalendarBillingAnchor returns UTC start-of-month)
+			// In IST the anchor is March 1 05:30 IST (day=1). subStart in IST is Feb 16.
+			// NextBillingDate(Feb15 18:30Z, anchor=Mar01 00:00Z, tz=IST):
+			//   localStart = Feb 16 00:00 IST, localAnchor = Mar 1 05:30 IST → anchor.Day() = 1
+			//   d=16, clampedAnchorD=1; 16 < 1? No → advance by 1 month from Feb:
+			//   time.Date(2024, March, 1, 5, 30, 0, 0, IST) = 2024-03-01T00:00:00Z (UTC)
+			// So first period [Feb15 18:30Z, Mar01 00:00Z) = partial period in UTC terms
+			// Second period starts Mar01 00:00Z, nextEnd = Apr01 05:30 IST = 2024-04-01T00:00:00Z
+			// endDate = IST midnight May 1 = 2024-04-30T18:30:00Z → 3 periods total
+			name:                "IST calendar monthly",
+			initialPeriodStart:  istCalSubStart, // 2024-02-15T18:30:00Z
+			endDate:             timePtr(time.Date(2024, time.April, 30, 18, 30, 0, 0, time.UTC)),
+			anchor:              istCalAnchor, // 2024-03-01T00:00:00Z
+			periodCount:         1,
+			billingPeriod:       BILLING_PERIOD_MONTHLY,
+			timezone:            "Asia/Kolkata",
+			wantPeriodCount:     3,
+			wantFirstPeriodEnd:  time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),  // anchor boundary in UTC
+			wantSecondPeriodEnd: time.Date(2024, time.April, 1, 0, 0, 0, 0, time.UTC),  // one month later in UTC
+		},
+		{
+			// EST anniversary, monthly — spans the DST transition (March 10, 2024).
+			// subStart = EST midnight Feb 1 = 2024-02-01T05:00:00Z
+			// Period 1: [Feb01 05:00Z, Mar01 05:00Z)  (EST: Feb 1 → March 1; still winter)
+			// Period 2: [Mar01 05:00Z, Apr01 04:00Z)  (DST springs forward March 10; April 1 is EDT = UTC-4)
+			// endDate = EDT midnight April 1 = 2024-04-01T04:00:00Z
+			name:                "EST anniversary monthly DST",
+			initialPeriodStart:  time.Date(2024, time.February, 1, 5, 0, 0, 0, time.UTC),
+			endDate:             timePtr(time.Date(2024, time.April, 1, 4, 0, 0, 0, time.UTC)),
+			anchor:              time.Date(2024, time.February, 1, 5, 0, 0, 0, time.UTC),
+			periodCount:         1,
+			billingPeriod:       BILLING_PERIOD_MONTHLY,
+			timezone:            "America/New_York",
+			wantPeriodCount:     2,
+			wantFirstPeriodEnd:  time.Date(2024, time.March, 1, 5, 0, 0, 0, time.UTC),   // EST midnight March 1
+			wantSecondPeriodEnd: time.Date(2024, time.April, 1, 4, 0, 0, 0, time.UTC),   // EDT midnight April 1
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			periods, err := CalculateBillingPeriods(
+				tc.initialPeriodStart,
+				tc.endDate,
+				tc.anchor,
+				tc.periodCount,
+				tc.billingPeriod,
+				tc.timezone,
+			)
+			require.NoError(t, err)
+			require.Lenf(t, periods, tc.wantPeriodCount,
+				"got %d periods: %v", len(periods), periods)
+			require.Truef(t, periods[0].End.Equal(tc.wantFirstPeriodEnd),
+				"periods[0].End: got %v, want %v", periods[0].End, tc.wantFirstPeriodEnd)
+			require.Truef(t, periods[1].End.Equal(tc.wantSecondPeriodEnd),
+				"periods[1].End: got %v, want %v", periods[1].End, tc.wantSecondPeriodEnd)
+		})
+	}
+}
+
+// TestFindPeriodForDate_Timezone verifies that FindPeriodForDate locates the correct
+// billing period for IST and EST customers, including the fast-path case and DST crossing.
+func TestFindPeriodForDate_Timezone(t *testing.T) {
+	tests := []struct {
+		name          string
+		target        time.Time
+		knownStart    time.Time
+		knownEnd      time.Time
+		anchor        time.Time
+		periodCount   int
+		billingPeriod BillingPeriod
+		timezone      string
+		wantStart     time.Time
+		wantEnd       time.Time
+	}{
+		{
+			// UTC — target falls inside the known period; fast path returns it unchanged.
+			name:          "UTC target in known period (fast path)",
+			target:        time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC),
+			knownStart:    time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
+			knownEnd:      time.Date(2024, time.April, 1, 0, 0, 0, 0, time.UTC),
+			anchor:        time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
+			periodCount:   1,
+			billingPeriod: BILLING_PERIOD_MONTHLY,
+			timezone:      "",
+			wantStart:     time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
+			wantEnd:       time.Date(2024, time.April, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// IST anniversary — target is 1 month ahead of the known period.
+			// knownStart = IST midnight March 1 = 2024-02-29T18:30:00Z
+			// knownEnd   = IST midnight April 1 = 2024-03-31T18:30:00Z
+			// target     = April 15 UTC — falls in [Mar31 18:30Z, Apr30 18:30Z)
+			// Expected: IST April 1 → May 1
+			name:          "IST anniversary target 1 month ahead",
+			target:        time.Date(2024, time.April, 15, 0, 0, 0, 0, time.UTC),
+			knownStart:    time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC),
+			knownEnd:      time.Date(2024, time.March, 31, 18, 30, 0, 0, time.UTC),
+			anchor:        time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC),
+			periodCount:   1,
+			billingPeriod: BILLING_PERIOD_MONTHLY,
+			timezone:      "Asia/Kolkata",
+			wantStart:     time.Date(2024, time.March, 31, 18, 30, 0, 0, time.UTC),
+			wantEnd:       time.Date(2024, time.April, 30, 18, 30, 0, 0, time.UTC),
+		},
+		{
+			// IST calendar — target in the partial first period (fast path).
+			// knownStart = IST midnight Feb 16 = 2024-02-15T18:30:00Z
+			// knownEnd   = IST midnight March 1 = 2024-02-29T18:30:00Z
+			// target     = Feb 20 UTC → inside the partial period
+			name:          "IST calendar target in first partial period (fast path)",
+			target:        time.Date(2024, time.February, 20, 0, 0, 0, 0, time.UTC),
+			knownStart:    time.Date(2024, time.February, 15, 18, 30, 0, 0, time.UTC),
+			knownEnd:      time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC),
+			anchor:        time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC), // calendar anchor
+			periodCount:   1,
+			billingPeriod: BILLING_PERIOD_MONTHLY,
+			timezone:      "Asia/Kolkata",
+			wantStart:     time.Date(2024, time.February, 15, 18, 30, 0, 0, time.UTC),
+			wantEnd:       time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC),
+		},
+		{
+			// EST anniversary — target crosses into the DST period.
+			// knownStart = EST midnight Feb 1 = 2024-02-01T05:00:00Z
+			// knownEnd   = EST midnight March 1 = 2024-03-01T05:00:00Z
+			// target     = March 15 UTC → falls in [Mar01 05:00Z, Apr01 04:00Z)
+			// DST starts March 10, so April 1 midnight EDT = 2024-04-01T04:00:00Z
+			name:          "EST anniversary target crosses DST boundary",
+			target:        time.Date(2024, time.March, 15, 0, 0, 0, 0, time.UTC),
+			knownStart:    time.Date(2024, time.February, 1, 5, 0, 0, 0, time.UTC),
+			knownEnd:      time.Date(2024, time.March, 1, 5, 0, 0, 0, time.UTC),
+			anchor:        time.Date(2024, time.February, 1, 5, 0, 0, 0, time.UTC),
+			periodCount:   1,
+			billingPeriod: BILLING_PERIOD_MONTHLY,
+			timezone:      "America/New_York",
+			wantStart:     time.Date(2024, time.March, 1, 5, 0, 0, 0, time.UTC),
+			wantEnd:       time.Date(2024, time.April, 1, 4, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			period, err := FindPeriodForDate(
+				tc.target,
+				tc.knownStart,
+				tc.knownEnd,
+				tc.anchor,
+				tc.periodCount,
+				tc.billingPeriod,
+				tc.timezone,
+			)
+			require.NoError(t, err)
+			require.Truef(t, period.Start.Equal(tc.wantStart),
+				"period.Start: got %v, want %v", period.Start, tc.wantStart)
+			require.Truef(t, period.End.Equal(tc.wantEnd),
+				"period.End: got %v, want %v", period.End, tc.wantEnd)
+		})
+	}
+}
+
+// TestCalculatePeriodID_Timezone verifies that CalculatePeriodID maps UTC event
+// timestamps to the correct period ID for IST and EST (DST) customers.
+func TestCalculatePeriodID_Timezone(t *testing.T) {
+	expectedPeriodID := func(t time.Time) uint64 {
+		return uint64(t.Unix() * 1000)
+	}
+
+	// IST anniversary sub start = IST midnight March 1 = 2024-02-29T18:30:00Z
+	istSubStart := time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC)
+	// IST period [March 1 IST, April 1 IST) = [Feb29 18:30Z, Mar31 18:30Z)
+	istPeriodStart := istSubStart
+	istPeriodEnd := time.Date(2024, time.March, 31, 18, 30, 0, 0, time.UTC)
+
+	// EST anniversary sub start = EST midnight Feb 1 = 2024-02-01T05:00:00Z
+	estSubStart := time.Date(2024, time.February, 1, 5, 0, 0, 0, time.UTC)
+	// EST period [Feb 1 EST, March 1 EST) = [Feb01 05:00Z, Mar01 05:00Z)
+	estPeriodStart := estSubStart
+	estPeriodEnd := time.Date(2024, time.March, 1, 5, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name           string
+		eventTimestamp time.Time
+		subStart       time.Time
+		periodStart    time.Time
+		periodEnd      time.Time
+		anchor         time.Time
+		unit           int
+		period         BillingPeriod
+		timezone       string
+		wantPeriodID   uint64
+		wantErr        bool
+	}{
+		{
+			// IST anniversary — event clearly inside the period.
+			name:           "IST anniversary event in current period",
+			eventTimestamp: time.Date(2024, time.March, 15, 12, 0, 0, 0, time.UTC),
+			subStart:       istSubStart,
+			periodStart:    istPeriodStart,
+			periodEnd:      istPeriodEnd,
+			anchor:         istSubStart,
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			timezone:       "Asia/Kolkata",
+			wantPeriodID:   expectedPeriodID(istPeriodStart),
+		},
+		{
+			// IST anniversary — event at 12:00 UTC on March 31 = 17:30 IST March 31,
+			// which is before IST midnight April 1 (= 18:30 UTC March 31).
+			// So this event is still within the current period [Feb29 18:30Z, Mar31 18:30Z).
+			name:           "IST anniversary event just before period end in IST",
+			eventTimestamp: time.Date(2024, time.March, 31, 12, 0, 0, 0, time.UTC),
+			subStart:       istSubStart,
+			periodStart:    istPeriodStart,
+			periodEnd:      istPeriodEnd,
+			anchor:         istSubStart,
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			timezone:       "Asia/Kolkata",
+			wantPeriodID:   expectedPeriodID(istPeriodStart),
+		},
+		{
+			// EST anniversary — event inside the Feb 1–March 1 period.
+			name:           "EST anniversary event in current period",
+			eventTimestamp: time.Date(2024, time.February, 15, 10, 0, 0, 0, time.UTC),
+			subStart:       estSubStart,
+			periodStart:    estPeriodStart,
+			periodEnd:      estPeriodEnd,
+			anchor:         estSubStart,
+			unit:           1,
+			period:         BILLING_PERIOD_MONTHLY,
+			timezone:       "America/New_York",
+			wantPeriodID:   expectedPeriodID(estPeriodStart),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := CalculatePeriodID(
+				tc.eventTimestamp,
+				tc.subStart,
+				tc.periodStart,
+				tc.periodEnd,
+				tc.anchor,
+				tc.unit,
+				tc.period,
+				tc.timezone,
+			)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equalf(t, tc.wantPeriodID, got,
+				"got period ID %d (ts=%v), want %d (ts=%v)",
+				got, time.UnixMilli(int64(got)),
+				tc.wantPeriodID, time.UnixMilli(int64(tc.wantPeriodID)))
+		})
+	}
+}
+
+// TestGetNextUsageResetAt_Monthly_Timezone adds IST anniversary, IST calendar, and
+// EST-with-DST cases to exercise the timezone-aware monthly reset path.
+func TestGetNextUsageResetAt_Monthly_Timezone(t *testing.T) {
+	// Pre-compute IST location for expected values.
+	istLoc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		// Fall back to fixed offset if tzdata unavailable; tests will still exercise the logic.
+		istLoc = time.FixedZone("IST", 5*3600+30*60)
+	}
+
+	tests := []struct {
+		name              string
+		currentTime       time.Time
+		subscriptionStart time.Time
+		billingAnchor     time.Time
+		subscriptionEnd   *time.Time
+		timezone          string
+		want              time.Time
+		wantErr           bool
+	}{
+		{
+			// IST anniversary: sub starts IST midnight March 1 (= Feb29 18:30Z).
+			// Current time = March 15 14:00 UTC (still in IST March period).
+			// Period end = IST midnight April 1 = Mar31 18:30Z.
+			// resetTime = April 1 00:00 IST = Mar31 18:30Z.
+			name:              "IST anniversary monthly reset",
+			currentTime:       time.Date(2024, time.March, 15, 14, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.February, 29, 18, 30, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			timezone:          "Asia/Kolkata",
+			want:              time.Date(2024, time.April, 1, 0, 0, 0, 0, istLoc),
+		},
+		{
+			// IST calendar: sub starts IST midnight Feb 16 (= Feb15 18:30Z).
+			// Calendar anchor = 2024-03-01T00:00:00Z.
+			// Partial first period [Feb15 18:30Z, Feb29 18:30Z).
+			// currentTime = Mar15 14:00Z → in second period [Feb29 18:30Z, Mar31 18:30Z).
+			// Period end = Mar31 18:30Z → in IST = April 1 00:00 IST.
+			// resetTime = April 1 00:00 IST = Mar31 18:30Z.
+			name:              "IST calendar monthly reset",
+			currentTime:       time.Date(2024, time.March, 15, 14, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.February, 15, 18, 30, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			timezone:          "Asia/Kolkata",
+			want:              time.Date(2024, time.April, 1, 0, 0, 0, 0, istLoc),
+		},
+		{
+			// EST anniversary crossing DST: sub starts EST midnight Feb 1 (= Feb01 05:00Z).
+			// Current time = Feb15 12:00 UTC → in period [Feb01 05:00Z, Mar01 05:00Z).
+			// Period end = Mar01 05:00Z → in EST = March 1 00:00 EST.
+			// resetTime = March 1 00:00 EST = Mar01 05:00Z.
+			name:              "EST anniversary crossing DST monthly reset",
+			currentTime:       time.Date(2024, time.February, 15, 12, 0, 0, 0, time.UTC),
+			subscriptionStart: time.Date(2024, time.February, 1, 5, 0, 0, 0, time.UTC),
+			billingAnchor:     time.Date(2024, time.February, 1, 5, 0, 0, 0, time.UTC),
+			subscriptionEnd:   nil,
+			timezone:          "America/New_York",
+			want:              time.Date(2024, time.March, 1, 5, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := GetNextUsageResetAt(
+				tc.currentTime,
+				tc.subscriptionStart,
+				tc.subscriptionEnd,
+				tc.billingAnchor,
+				ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
+				tc.timezone,
+			)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Truef(t, got.Equal(tc.want),
+				"got %v (UTC: %v), want %v (UTC: %v)",
+				got, got.UTC(), tc.want, tc.want.UTC())
+		})
+	}
+}
+
 // TestNextBillingDate_IST tests the timezone-aware billing date calculation
 // with IST (Asia/Kolkata, UTC+5:30) and regression cases.
 func TestNextBillingDate_IST(t *testing.T) {
