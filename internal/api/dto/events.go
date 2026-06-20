@@ -121,6 +121,7 @@ type GetUsageRequest struct {
 	// - "2024-01-15T00:00:00Z" (15th of each month at midnight)
 	// - "2024-02-29T12:00:00Z" (29th of each month at noon - handles leap years)
 	BillingAnchor *time.Time `form:"billing_anchor" json:"billing_anchor,omitempty" example:"2024-03-05T14:30:45.123456789Z"`
+	CustomerTimezone string `form:"customer_timezone" json:"customer_timezone,omitempty"`
 	// GroupByProperty is the property name in event.properties to group by before aggregating.
 	// When set, aggregation is applied per unique value of this property within each bucket,
 	// then the per-group results are summed to produce the bucket total.
@@ -163,7 +164,8 @@ type GetUsageByMeterRequest struct {
 	// Example: If BillingAnchor = "2024-03-05T14:30:45Z" and WindowSize = "MONTH":
 	//   - March period: 2024-03-05 14:30:45 to 2024-04-05 14:30:45
 	//   - April period: 2024-04-05 14:30:45 to 2024-05-05 14:30:45
-	BillingAnchor *time.Time `form:"billing_anchor" json:"billing_anchor,omitempty" example:"2024-03-05T14:30:45Z"`
+	BillingAnchor    *time.Time `form:"billing_anchor" json:"billing_anchor,omitempty" example:"2024-03-05T14:30:45Z"`
+	CustomerTimezone string     `form:"customer_timezone" json:"customer_timezone,omitempty"`
 }
 
 type GetEventsRequest struct {
@@ -284,8 +286,9 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 		BucketSize:          r.BucketSize,
 		Filters:             r.Filters,
 		Multiplier:          r.Multiplier,
-		BillingAnchor:       r.BillingAnchor,
-		GroupBy:             groupBy,
+		BillingAnchor:    r.BillingAnchor,
+		GroupBy:          groupBy,
+		CustomerTimezone: r.CustomerTimezone,
 	}
 }
 
