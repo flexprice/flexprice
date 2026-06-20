@@ -38,6 +38,10 @@ type Customer struct {
 	// AddressCountry is the country of the customer's address (ISO 3166-1 alpha-2)
 	AddressCountry string `db:"address_country" json:"address_country"`
 
+	// Timezone is the customer's IANA timezone name (e.g. "Asia/Kolkata").
+	// Defaults to "UTC". Inherited by subscriptions at creation time.
+	Timezone string `db:"timezone" json:"timezone"`
+
 	// Metadata
 	Metadata map[string]string `db:"metadata" json:"metadata"`
 
@@ -63,6 +67,7 @@ func FromEnt(c *ent.Customer) *Customer {
 		AddressState:      c.AddressState,
 		AddressPostalCode: c.AddressPostalCode,
 		AddressCountry:    c.AddressCountry,
+		Timezone:          c.Timezone,
 		Metadata:          c.Metadata,
 		EnvironmentID:     c.EnvironmentID,
 		BaseModel: types.BaseModel{
