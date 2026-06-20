@@ -112,60 +112,73 @@ func formatClickHouseDateTime(t time.Time) string {
 }
 
 func formatWindowSize(windowSize types.WindowSize, tz string) string {
-	// Sub-hourly and multi-hour interval sizes use toStartOfInterval and do not
-	// support a timezone argument directly; handle them first regardless of tz.
-	switch windowSize {
-	case types.WindowSize15Min:
-		return "toStartOfInterval(timestamp, INTERVAL 15 MINUTE)"
-	case types.WindowSize30Min:
-		return "toStartOfInterval(timestamp, INTERVAL 30 MINUTE)"
-	case types.WindowSize3Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"
-	case types.WindowSize6Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
-	case types.WindowSize12Hour:
-		return "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"
-	case "":
+	if windowSize == "" {
 		return ""
 	}
 
-	if tz == "" || tz == "UTC" {
+	// Validate tz early so interval cases can use it too.
+	// Empty / "UTC" → no timezone suffix; invalid IANA name → fall back to UTC.
+	if tz != "" && tz != "UTC" {
+		if _, err := time.LoadLocation(tz); err != nil {
+			tz = "UTC"
+		}
+	}
+
+	// Effective UTC when tz is blank or "UTC"
+	utc := tz == "" || tz == "UTC"
+
+	// Sub-hourly and multi-hour interval sizes: toStartOfInterval supports an
+	// optional timezone third argument (ClickHouse 22.x+).
+	switch windowSize {
+	case types.WindowSize15Min:
+		if !utc {
+			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 15 MINUTE, '%s')", tz)
+		}
+		return "toStartOfInterval(timestamp, INTERVAL 15 MINUTE)"
+	case types.WindowSize30Min:
+		if !utc {
+			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 30 MINUTE, '%s')", tz)
+		}
+		return "toStartOfInterval(timestamp, INTERVAL 30 MINUTE)"
+	case types.WindowSize3Hour:
+		if !utc {
+			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 3 HOUR, '%s')", tz)
+		}
+		return "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"
+	case types.WindowSize6Hour:
+		if !utc {
+			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 6 HOUR, '%s')", tz)
+		}
+		return "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
+	case types.WindowSize12Hour:
+		if !utc {
+			return fmt.Sprintf("toStartOfInterval(timestamp, INTERVAL 12 HOUR, '%s')", tz)
+		}
+		return "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"
+	}
+
+	if utc {
 		switch windowSize {
 		case types.WindowSizeHour:
 			return "toStartOfHour(timestamp)"
 		case types.WindowSizeDay:
 			return "toStartOfDay(timestamp)"
 		case types.WindowSizeWeek:
-			return "toStartOfWeek(timestamp)"
+			return "toStartOfWeek(timestamp, 0)"
 		case types.WindowSizeMonth:
 			return "toStartOfMonth(timestamp)"
 		}
 		return "toStartOfDay(timestamp)"
 	}
 
-	// Defense-in-depth: treat invalid IANA names as UTC.
-	if _, err := time.LoadLocation(tz); err != nil {
-		tz = "UTC"
-		switch windowSize {
-		case types.WindowSizeHour:
-			return "toStartOfHour(timestamp)"
-		case types.WindowSizeDay:
-			return "toStartOfDay(timestamp)"
-		case types.WindowSizeWeek:
-			return "toStartOfWeek(timestamp)"
-		case types.WindowSizeMonth:
-			return "toStartOfMonth(timestamp)"
-		}
-		return "toStartOfDay(timestamp)"
-	}
-
+	// tz is a valid non-UTC IANA timezone (validated at the top of this function).
 	switch windowSize {
 	case types.WindowSizeHour:
 		return fmt.Sprintf("toStartOfHour(timestamp, '%s')", tz)
 	case types.WindowSizeDay:
 		return fmt.Sprintf("toStartOfDay(timestamp, '%s')", tz)
 	case types.WindowSizeWeek:
-		return fmt.Sprintf("toStartOfWeek(timestamp, '%s')", tz)
+		return fmt.Sprintf("toStartOfWeek(timestamp, 0, '%s')", tz)
 	case types.WindowSizeMonth:
 		return fmt.Sprintf("toStartOfMonth(timestamp, '%s')", tz)
 	}
@@ -295,7 +308,7 @@ func (a *SumAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 }
 
 func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -347,7 +360,7 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 }
 
 func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, "")
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.CustomerTimezone)
 
 	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
 
@@ -397,7 +410,7 @@ func (a *SumAggregator) GetType() types.AggregationType {
 type CountAggregator struct{}
 
 func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	selectClause := ""
 	groupByClause := ""
 
@@ -444,7 +457,7 @@ func (a *CountAggregator) GetType() types.AggregationType {
 type CountUniqueAggregator struct{}
 
 func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -503,7 +516,7 @@ func (a *CountUniqueAggregator) GetType() types.AggregationType {
 type AvgAggregator struct{}
 
 func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -562,7 +575,7 @@ func (a *AvgAggregator) GetType() types.AggregationType {
 type LatestAggregator struct{}
 
 func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	windowClause := ""
 	groupByClause := ""
 
@@ -610,7 +623,7 @@ func (a *LatestAggregator) GetType() types.AggregationType {
 type SumWithMultiAggregator struct{}
 
 func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -684,7 +697,7 @@ func (a *MaxAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 }
 
 func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
@@ -736,7 +749,7 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 }
 
 func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, "")
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor, params.CustomerTimezone)
 
 	externalCustomerFilter, customerFilter := buildUsageEventCustomerFilters(params)
 
@@ -830,7 +843,7 @@ func (a *MaxAggregator) GetType() types.AggregationType {
 type WeightedSumAggregator struct{}
 
 func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.UsageParams) string {
-	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowSize := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	selectClause := ""
 	windowClause := ""
 	groupByClause := ""
