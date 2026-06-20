@@ -588,23 +588,6 @@ func calculatePeriodID(periodStart time.Time) uint64 {
 	return uint64(periodStart.Unix() * 1000)
 }
 
-// NextBillingDateWithEndDate is a timezone-aware wrapper that delegates to NextBillingDate.
-func NextBillingDateWithEndDate(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time, timezone string) (time.Time, error) {
-	return NextBillingDate(NextBillingDateParams{
-		CurrentPeriodStart:  currentPeriodStart,
-		BillingAnchor:       billingAnchor,
-		Unit:                unit,
-		Period:              period,
-		SubscriptionEndDate: subscriptionEndDate,
-		Timezone:            timezone,
-	})
-}
-
-// NextBillingDateLegacy maintains backward compatibility for the original NextBillingDate signature
-func NextBillingDateLegacy(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod) (time.Time, error) {
-	return nextBillingDateCore(currentPeriodStart, billingAnchor, unit, period, nil)
-}
-
 // GetNextUsageResetAt calculates the next usage reset timestamp based on the entitlement usage reset period.
 // The logic handles three main scenarios:
 // 1. If entitlement usage reset period is NEVER, returns zero time

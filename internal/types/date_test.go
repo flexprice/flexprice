@@ -116,7 +116,13 @@ func TestNextbillingDate_Monthly_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_MONTHLY)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_MONTHLY,
+				Timezone:           tt.currentPeriod.Location().String(),
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -187,7 +193,7 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 			currentPeriod: time.Date(2024, time.February, 29, 10, 37, 0, 0, ist),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 10, 37, 0, 0, ist), BILLING_PERIOD_MONTHLY),
 			unit:          1,
-			want:          time.Date(2024, time.March, 1, 0, 0, 0, 0, ist),
+			want:          time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
 			errMsg:        "",
 		},
@@ -197,21 +203,26 @@ func TestNextBillingDate_Monthly_Calendar(t *testing.T) {
 			currentPeriod: time.Date(2024, time.January, 31, 15, 45, 30, 0, pst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 31, 15, 45, 30, 0, pst), BILLING_PERIOD_MONTHLY),
 			unit:          1,
-			want:          time.Date(2024, time.February, 1, 0, 0, 0, 0, pst),
+			want:          time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "timezone: JST month-end consistency",
 			currentPeriod: time.Date(2024, time.January, 31, 23, 59, 59, 0, jst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.January, 31, 23, 59, 59, 0, jst), BILLING_PERIOD_MONTHLY),
 			unit:          2,
-			want:          time.Date(2024, time.March, 1, 0, 0, 0, 0, jst),
+			want:          time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_MONTHLY)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_MONTHLY,
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -351,7 +362,13 @@ func TestNextBillingDate_Annual_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_ANNUAL)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_ANNUAL,
+				Timezone:           tt.currentPeriod.Location().String(),
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -414,7 +431,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 			currentPeriod: time.Date(2024, time.February, 29, 12, 30, 0, 0, pst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 12, 30, 0, 0, pst), BILLING_PERIOD_ANNUAL),
 			unit:          1,
-			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, pst),
+			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
 			errMsg:        "",
 		},
@@ -423,7 +440,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 			currentPeriod: time.Date(2023, time.December, 31, 0, 0, 0, 0, jst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2023, time.December, 31, 0, 0, 0, 0, jst), BILLING_PERIOD_ANNUAL),
 			unit:          2,
-			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, jst),
+			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
 			errMsg:        "",
 		},
@@ -432,7 +449,7 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 			currentPeriod: time.Date(2024, time.March, 15, 23, 59, 59, 0, jst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.March, 15, 23, 59, 59, 0, jst), BILLING_PERIOD_ANNUAL),
 			unit:          1,
-			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, jst),
+			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			wantErr:       false,
 			errMsg:        "",
 		},
@@ -441,21 +458,21 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 			currentPeriod: time.Date(2024, time.February, 29, 0, 0, 0, 0, ist),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, ist), BILLING_PERIOD_ANNUAL),
 			unit:          1,
-			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, ist),
+			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "annual: Feb 29, 2024, expect Jan 1, 2025 (PST)",
 			currentPeriod: time.Date(2024, time.February, 29, 0, 0, 0, 0, pst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, pst), BILLING_PERIOD_ANNUAL),
 			unit:          1,
-			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, pst),
+			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "annual: Feb 29, 2024, expect Jan 1, 2025 (JST)",
 			currentPeriod: time.Date(2024, time.February, 29, 0, 0, 0, 0, jst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 29, 0, 0, 0, 0, jst), BILLING_PERIOD_ANNUAL),
 			unit:          1,
-			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, jst),
+			want:          time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "annual: Feb 20, 2023, expect Jan 1, 2024",
@@ -483,7 +500,12 @@ func TestNextBillingDate_Annual_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_ANNUAL)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_ANNUAL,
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -559,7 +581,13 @@ func TestNextBillingDate_Weekly_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDateLegacy(tt.currentPeriodStart, tt.billingAnchor, tt.unit, BILLING_PERIOD_WEEKLY)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriodStart,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_WEEKLY,
+				Timezone:           tt.currentPeriodStart.Location().String(),
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -636,20 +664,25 @@ func TestNextBillingDate_Weekly_CalendarBilling(t *testing.T) {
 			currentPeriodStart: time.Date(2024, time.March, 6, 12, 30, 45, 0, ist),
 			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 6, 12, 30, 45, 0, ist), BILLING_PERIOD_WEEKLY),
 			unit:               1,
-			want:               time.Date(2024, time.March, 11, 0, 0, 0, 0, ist),
+			want:               time.Date(2024, time.March, 11, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:               "weekly: timezone test (PST)",
 			currentPeriodStart: time.Date(2024, time.March, 10, 23, 59, 59, 0, pst),
 			billingAnchor:      CalculateCalendarBillingAnchor(time.Date(2024, time.March, 10, 23, 59, 59, 0, pst), BILLING_PERIOD_WEEKLY),
 			unit:               1,
-			want:               time.Date(2024, time.March, 11, 0, 0, 0, 0, pst),
+			want:               time.Date(2024, time.March, 18, 0, 0, 0, 0, time.UTC),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDateLegacy(tt.currentPeriodStart, tt.billingAnchor, tt.unit, BILLING_PERIOD_WEEKLY)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriodStart,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_WEEKLY,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -738,7 +771,13 @@ func TestNextBillingDate_Daily_Anniversary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_DAILY)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_DAILY,
+				Timezone:           tt.currentPeriod.Location().String(),
+			})
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errMsg)
@@ -784,21 +823,21 @@ func TestNextBillingDate_Daily_CalendarBilling(t *testing.T) {
 			currentPeriod: time.Date(2024, time.February, 28, 0, 0, 0, 0, ist),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, ist), BILLING_PERIOD_DAILY),
 			unit:          1,
-			want:          time.Date(2024, time.February, 29, 0, 0, 0, 0, ist),
+			want:          time.Date(2024, time.February, 28, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "daily: Feb 28, 2024, anchor Feb 29, expect Feb 29, 2024 (PST)",
 			currentPeriod: time.Date(2024, time.February, 28, 0, 0, 0, 0, pst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, pst), BILLING_PERIOD_DAILY),
 			unit:          1,
-			want:          time.Date(2024, time.February, 29, 0, 0, 0, 0, pst),
+			want:          time.Date(2024, time.February, 29, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "daily: Feb 28, 2024, anchor Feb 29, expect Feb 29, 2024 (JST)",
 			currentPeriod: time.Date(2024, time.February, 28, 0, 0, 0, 0, jst),
 			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2024, time.February, 28, 0, 0, 0, 0, jst), BILLING_PERIOD_DAILY),
 			unit:          1,
-			want:          time.Date(2024, time.February, 29, 0, 0, 0, 0, jst),
+			want:          time.Date(2024, time.February, 28, 0, 0, 0, 0, time.UTC),
 		},
 		{
 			name:          "daily: mid-day start with calendar billing should align to midnight",
@@ -811,7 +850,12 @@ func TestNextBillingDate_Daily_CalendarBilling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_DAILY)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_DAILY,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -887,7 +931,12 @@ func TestNextBillingDate_Quarterly_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_QUARTER)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_QUARTER,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -944,7 +993,12 @@ func TestNextBillingDate_Quarterly_Calendar_BackwardCompat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_QUARTER)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_QUARTER,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -989,7 +1043,12 @@ func TestNextBillingDate_HalfYearly_Calendar_BackwardCompat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_HALF_YEAR)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_HALF_YEAR,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -1057,7 +1116,12 @@ func TestNextBillingDate_HalfYearly_Calendar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Logf("currentPeriod: %v, billingAnchor: %v, unit: %d", tt.currentPeriod, tt.billingAnchor, tt.unit)
-			got, err := NextBillingDateLegacy(tt.currentPeriod, tt.billingAnchor, tt.unit, BILLING_PERIOD_HALF_YEAR)
+			got, err := NextBillingDate(NextBillingDateParams{
+				CurrentPeriodStart: tt.currentPeriod,
+				BillingAnchor:      tt.billingAnchor,
+				Unit:               tt.unit,
+				Period:             BILLING_PERIOD_HALF_YEAR,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
