@@ -211,22 +211,22 @@ func (s *MeterUsageQuerySuite) TestFinalClause_Disabled() {
 // --- Window size tests (using shared helpers from aggregators.go) ---
 
 func (s *MeterUsageQuerySuite) TestWindowSize_Day() {
-	result := formatWindowSize(types.WindowSizeDay)
+	result := formatWindowSize(types.WindowSizeDay, "")
 	assert.Equal(s.T(), "toStartOfDay(timestamp)", result)
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_Hour() {
-	result := formatWindowSize(types.WindowSizeHour)
+	result := formatWindowSize(types.WindowSizeHour, "")
 	assert.Equal(s.T(), "toStartOfHour(timestamp)", result)
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_Month() {
-	result := formatWindowSize(types.WindowSizeMonth)
+	result := formatWindowSize(types.WindowSizeMonth, "")
 	assert.Equal(s.T(), "toStartOfMonth(timestamp)", result)
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_Empty() {
-	result := formatWindowSize("")
+	result := formatWindowSize(types.WindowSize(""), "")
 	assert.Equal(s.T(), "", result)
 }
 
@@ -246,24 +246,24 @@ func (s *MeterUsageQuerySuite) TestWindowSize_BucketableSizes() {
 		{types.WindowSize12Hour, "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"},
 	}
 	for _, c := range cases {
-		assert.Equal(s.T(), c.expect, formatWindowSize(c.window), "window %s", c.window)
+		assert.Equal(s.T(), c.expect, formatWindowSize(c.window, ""), "window %s", c.window)
 	}
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_WithBillingAnchor() {
 	anchor := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
-	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, &anchor)
+	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, &anchor, "")
 	assert.Contains(s.T(), result, "addDays")
 	assert.Contains(s.T(), result, "toStartOfMonth")
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_MonthNoBillingAnchor() {
-	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, nil)
+	result := formatWindowSizeWithBillingAnchor(types.WindowSizeMonth, nil, "")
 	assert.Equal(s.T(), "toStartOfMonth(timestamp)", result)
 }
 
 func (s *MeterUsageQuerySuite) TestWindowSize_DayIgnoresBillingAnchor() {
 	anchor := time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)
-	result := formatWindowSizeWithBillingAnchor(types.WindowSizeDay, &anchor)
+	result := formatWindowSizeWithBillingAnchor(types.WindowSizeDay, &anchor, "")
 	assert.Equal(s.T(), "toStartOfDay(timestamp)", result)
 }

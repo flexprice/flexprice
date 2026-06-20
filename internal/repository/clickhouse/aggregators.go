@@ -112,6 +112,23 @@ func formatClickHouseDateTime(t time.Time) string {
 }
 
 func formatWindowSize(windowSize types.WindowSize, tz string) string {
+	// Sub-hourly and multi-hour interval sizes use toStartOfInterval and do not
+	// support a timezone argument directly; handle them first regardless of tz.
+	switch windowSize {
+	case types.WindowSize15Min:
+		return "toStartOfInterval(timestamp, INTERVAL 15 MINUTE)"
+	case types.WindowSize30Min:
+		return "toStartOfInterval(timestamp, INTERVAL 30 MINUTE)"
+	case types.WindowSize3Hour:
+		return "toStartOfInterval(timestamp, INTERVAL 3 HOUR)"
+	case types.WindowSize6Hour:
+		return "toStartOfInterval(timestamp, INTERVAL 6 HOUR)"
+	case types.WindowSize12Hour:
+		return "toStartOfInterval(timestamp, INTERVAL 12 HOUR)"
+	case "":
+		return ""
+	}
+
 	if tz == "" || tz == "UTC" {
 		switch windowSize {
 		case types.WindowSizeHour:
@@ -125,6 +142,23 @@ func formatWindowSize(windowSize types.WindowSize, tz string) string {
 		}
 		return "toStartOfDay(timestamp)"
 	}
+
+	// Defense-in-depth: treat invalid IANA names as UTC.
+	if _, err := time.LoadLocation(tz); err != nil {
+		tz = "UTC"
+		switch windowSize {
+		case types.WindowSizeHour:
+			return "toStartOfHour(timestamp)"
+		case types.WindowSizeDay:
+			return "toStartOfDay(timestamp)"
+		case types.WindowSizeWeek:
+			return "toStartOfWeek(timestamp)"
+		case types.WindowSizeMonth:
+			return "toStartOfMonth(timestamp)"
+		}
+		return "toStartOfDay(timestamp)"
+	}
+
 	switch windowSize {
 	case types.WindowSizeHour:
 		return fmt.Sprintf("toStartOfHour(timestamp, '%s')", tz)
@@ -163,6 +197,13 @@ func formatWindowSizeWithBillingAnchor(windowSize types.WindowSize, billingAncho
 	if windowSize == types.WindowSizeMonth && billingAnchor != nil {
 		// Extract only the day component from billing anchor for simplicity
 		anchorDay := billingAnchor.Day()
+
+		// Defense-in-depth: treat invalid IANA names as UTC.
+		if tz != "" && tz != "UTC" {
+			if _, err := time.LoadLocation(tz); err != nil {
+				tz = "UTC"
+			}
+		}
 
 		if tz != "" && tz != "UTC" {
 			// Timezone-aware custom monthly window: wrap timestamp with toTimezone before date arithmetic
