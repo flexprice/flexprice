@@ -3488,7 +3488,13 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 					// Pick the last bucket (today's usage) if available
 					dailyUsage := decimal.Zero
-					today := time.Now().In(sub.CurrentPeriodStart.Location())
+					usageLoc := time.UTC
+					if sub.CustomerTimezone != "" && sub.CustomerTimezone != "UTC" {
+						if loc, err := time.LoadLocation(sub.CustomerTimezone); err == nil {
+							usageLoc = loc
+						}
+					}
+					today := time.Now().In(usageLoc)
 					todayStart := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 
 					todayEnd := todayStart.AddDate(0, 0, 1)
@@ -3541,7 +3547,13 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 					// Get the current month's usage (last bucket if available)
 					monthlyUsage := decimal.Zero
-					currentTime := time.Now().In(sub.CurrentPeriodStart.Location())
+					usageLoc2 := time.UTC
+					if sub.CustomerTimezone != "" && sub.CustomerTimezone != "UTC" {
+						if loc, err := time.LoadLocation(sub.CustomerTimezone); err == nil {
+							usageLoc2 = loc
+						}
+					}
+					currentTime := time.Now().In(usageLoc2)
 					if len(usageResult.Results) > 0 {
 						// Find the current month's bucket
 						for _, result := range usageResult.Results {
