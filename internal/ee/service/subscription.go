@@ -151,7 +151,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if sub.BillingPeriodCount == 0 {
 		sub.BillingPeriodCount = 1
 	}
-	nextBillingDate, err := types.NextBillingDate(sub.StartDate, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
+	nextBillingDate, err := types.NextBillingDateWithTimezone(ctx, types.NextBillingDateParams{
+		CurrentPeriodStart:  sub.StartDate,
+		BillingAnchor:       sub.BillingAnchor,
+		Unit:                sub.BillingPeriodCount,
+		Period:              sub.BillingPeriod,
+		SubscriptionEndDate: sub.EndDate,
+		Timezone:            sub.CustomerTimezone,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -574,7 +581,14 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	}
 
 	// Calculate the first billing period end date
-	nextBillingDate, err := types.NextBillingDate(sub.StartDate, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
+	nextBillingDate, err := types.NextBillingDateWithTimezone(ctx, types.NextBillingDateParams{
+		CurrentPeriodStart:  sub.StartDate,
+		BillingAnchor:       sub.BillingAnchor,
+		Unit:                sub.BillingPeriodCount,
+		Period:              sub.BillingPeriod,
+		SubscriptionEndDate: sub.EndDate,
+		Timezone:            sub.CustomerTimezone,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -3031,7 +3045,14 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	// Generate periods but respect subscription end date
 	for currentEnd.Before(now) {
 		nextStart := currentEnd
-		nextEnd, err := types.NextBillingDate(nextStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
+		nextEnd, err := types.NextBillingDateWithTimezone(ctx, types.NextBillingDateParams{
+			CurrentPeriodStart:  nextStart,
+			BillingAnchor:       sub.BillingAnchor,
+			Unit:                sub.BillingPeriodCount,
+			Period:              sub.BillingPeriod,
+			SubscriptionEndDate: sub.EndDate,
+			Timezone:            sub.CustomerTimezone,
+		})
 		if err != nil {
 			s.Logger.Error(ctx, "failed to calculate next billing date",
 				"subscription_id", sub.ID,
@@ -6947,7 +6968,14 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 
 	for currentEnd.Before(now) {
 		nextStart := currentEnd
-		nextEnd, err := types.NextBillingDate(nextStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
+		nextEnd, err := types.NextBillingDateWithTimezone(ctx, types.NextBillingDateParams{
+			CurrentPeriodStart:  nextStart,
+			BillingAnchor:       sub.BillingAnchor,
+			Unit:                sub.BillingPeriodCount,
+			Period:              sub.BillingPeriod,
+			SubscriptionEndDate: sub.EndDate,
+			Timezone:            sub.CustomerTimezone,
+		})
 		if err != nil {
 			return nil, err
 		}

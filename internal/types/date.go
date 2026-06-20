@@ -1,11 +1,52 @@
 package types
 
 import (
+	"context"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
+
+// NextBillingDateParams holds parameters for the timezone-aware billing date calculation.
+type NextBillingDateParams struct {
+	CurrentPeriodStart  time.Time
+	BillingAnchor       time.Time
+	Unit                int
+	Period              BillingPeriod
+	SubscriptionEndDate *time.Time
+	// Timezone is an IANA timezone name (e.g. "Asia/Kolkata").
+	// Empty or "UTC" falls back to UTC with no error log.
+	Timezone string
+}
+
+// NextBillingDateWithTimezone computes the next billing date in the customer's
+// local timezone, returned as a UTC instant. Use this from subscription code;
+// internal date helpers continue using NextBillingDate directly.
+func NextBillingDateWithTimezone(ctx context.Context, params NextBillingDateParams) (time.Time, error) {
+	loc := time.UTC
+	if params.Timezone != "" && params.Timezone != "UTC" {
+		var err error
+		loc, err = time.LoadLocation(params.Timezone)
+		if err != nil {
+			// Log and fall back to UTC — invalid timezone should have been
+			// rejected at API boundary, so this is defense-in-depth only.
+			loc = time.UTC
+		}
+	}
+
+	// Re-locate the input times. NextBillingDate uses currentPeriodStart.Location()
+	// for all time.Date() calls, so passing times in loc makes it compute the
+	// boundary in local time.
+	localStart := params.CurrentPeriodStart.In(loc)
+	localAnchor := params.BillingAnchor.In(loc)
+
+	result, err := NextBillingDate(localStart, localAnchor, params.Unit, params.Period, params.SubscriptionEndDate)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return result.UTC(), nil
+}
 
 // NextBillingDate calculates the next billing date based on the current period start,
 // billing anchor, billing period, and billing period unit.
