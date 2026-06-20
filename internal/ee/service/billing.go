@@ -2078,7 +2078,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// Calculate next period for advance charges
 	nextPeriodStart := periodEnd
-	nextPeriodEnd, err := types.NextBillingDate(ctx, types.NextBillingDateParams{
+	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
 		CurrentPeriodStart:  nextPeriodStart,
 		BillingAnchor:       sub.BillingAnchor,
 		Unit:                sub.BillingPeriodCount,

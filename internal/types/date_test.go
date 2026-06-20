@@ -1097,7 +1097,7 @@ func TestNextBillingDate_Quarterly_Calendar_EndDateCliff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+			got, err := NextBillingDate(NextBillingDateParams{
 				CurrentPeriodStart:  tt.current,
 				BillingAnchor:       tt.anchor,
 				Unit:                1,
@@ -1142,7 +1142,7 @@ func TestNextBillingDate_HalfYearly_Calendar_EndDateCliff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+			got, err := NextBillingDate(NextBillingDateParams{
 				CurrentPeriodStart:  tt.current,
 				BillingAnchor:       tt.anchor,
 				Unit:                1,
@@ -2176,7 +2176,7 @@ func TestNextBillingDate_IST(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+			got, err := NextBillingDate(NextBillingDateParams{
 				CurrentPeriodStart: c.currentPeriodStart,
 				BillingAnchor:      c.billingAnchor,
 				Unit:               c.unit,

@@ -1,7 +1,6 @@
 package types
 
 import (
-	"context"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -32,7 +31,7 @@ type NextBillingDateParams struct {
 //
 // If params.SubscriptionEndDate is provided, the result will be cliffed to not exceed it.
 // If params.Timezone is empty or "UTC", calculations are performed in UTC.
-func NextBillingDate(ctx context.Context, params NextBillingDateParams) (time.Time, error) {
+func NextBillingDate(params NextBillingDateParams) (time.Time, error) {
 	loc := time.UTC
 	if params.Timezone != "" && params.Timezone != "UTC" {
 		var err error

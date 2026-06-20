@@ -1010,7 +1010,7 @@ func CalculateNextCreditGrantPeriod(grant creditgrant.CreditGrant, nextPeriodSta
 
 	// Calculate next period end using the anchor for consistent cycle calculation
 	// We pass nil for subscriptionEndDate because we handle that at a higher level during application
-	nextPeriodEnd, err := types.NextBillingDate(context.Background(), types.NextBillingDateParams{
+	nextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
 		CurrentPeriodStart: nextPeriodStart,
 		BillingAnchor:      lo.FromPtr(grant.CreditGrantAnchor),
 		Unit:               lo.FromPtr(grant.PeriodCount),

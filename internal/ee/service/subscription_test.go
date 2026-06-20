@@ -4709,7 +4709,7 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 
 	// Calculate the expected next period
 	expectedNextPeriodStart := periodEnd
-	expectedNextPeriodEnd, err := types.NextBillingDate(context.Background(), types.NextBillingDateParams{
+	expectedNextPeriodEnd, err := types.NextBillingDate(types.NextBillingDateParams{
 		CurrentPeriodStart:  expectedNextPeriodStart,
 		BillingAnchor:       sub.BillingAnchor,
 		Unit:                sub.BillingPeriodCount,

@@ -180,7 +180,7 @@ func TestNextBillingDateWithSubscriptionEndDate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+			got, err := NextBillingDate(NextBillingDateParams{
 				CurrentPeriodStart:  tt.currentPeriodStart,
 				BillingAnchor:       tt.billingAnchor,
 				Unit:                tt.unit,
@@ -261,7 +261,7 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+			got, err := NextBillingDate(NextBillingDateParams{
 				CurrentPeriodStart:  tt.currentPeriodStart,
 				BillingAnchor:       tt.billingAnchor,
 				Unit:                tt.unit,
@@ -279,7 +279,7 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 
 	t.Run("chain Apr1 anchor14 unit2 then next from Apr14", func(t *testing.T) {
 		anchor := time.Date(2024, 1, 14, 0, 0, 0, 0, time.UTC)
-		first, err := NextBillingDate(context.Background(), NextBillingDateParams{
+		first, err := NextBillingDate(NextBillingDateParams{
 			CurrentPeriodStart: time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
 			BillingAnchor:      anchor,
 			Unit:               2,
@@ -291,7 +291,7 @@ func TestNextBillingDate_Monthly_FirstAnchorStripeLike(t *testing.T) {
 		if !first.Equal(time.Date(2024, 4, 14, 0, 0, 0, 0, time.UTC)) {
 			t.Fatalf("first = %v", first)
 		}
-		second, err := NextBillingDate(context.Background(), NextBillingDateParams{
+		second, err := NextBillingDate(NextBillingDateParams{
 			CurrentPeriodStart: first,
 			BillingAnchor:      anchor,
 			Unit:               2,
@@ -316,7 +316,7 @@ func TestNextBillingDate_Monthly_Cliffing_AdvancePath(t *testing.T) {
 	anchor := time.Date(2024, 1, 14, 12, 0, 0, 0, time.UTC)
 	end := lo.ToPtr(time.Date(2024, 5, 10, 0, 0, 0, 0, time.UTC))
 
-	got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+	got, err := NextBillingDate(NextBillingDateParams{
 		CurrentPeriodStart:  current,
 		BillingAnchor:       anchor,
 		Unit:                1,
@@ -340,7 +340,7 @@ func TestNextBillingDate_Monthly_Cliffing_FirstSnapSameCalendarDayAsEnd(t *testi
 	anchor := time.Date(2024, 1, 15, 14, 0, 0, 0, time.UTC)
 	end := lo.ToPtr(time.Date(2024, 4, 15, 9, 0, 0, 0, time.UTC))
 
-	got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+	got, err := NextBillingDate(NextBillingDateParams{
 		CurrentPeriodStart:  current,
 		BillingAnchor:       anchor,
 		Unit:                1,

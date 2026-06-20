@@ -151,7 +151,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if sub.BillingPeriodCount == 0 {
 		sub.BillingPeriodCount = 1
 	}
-	nextBillingDate, err := types.NextBillingDate(ctx, types.NextBillingDateParams{
+	nextBillingDate, err := types.NextBillingDate(types.NextBillingDateParams{
 		CurrentPeriodStart:  sub.StartDate,
 		BillingAnchor:       sub.BillingAnchor,
 		Unit:                sub.BillingPeriodCount,
@@ -581,7 +581,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	}
 
 	// Calculate the first billing period end date
-	nextBillingDate, err := types.NextBillingDate(ctx, types.NextBillingDateParams{
+	nextBillingDate, err := types.NextBillingDate(types.NextBillingDateParams{
 		CurrentPeriodStart:  sub.StartDate,
 		BillingAnchor:       sub.BillingAnchor,
 		Unit:                sub.BillingPeriodCount,
@@ -3045,7 +3045,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 	// Generate periods but respect subscription end date
 	for currentEnd.Before(now) {
 		nextStart := currentEnd
-		nextEnd, err := types.NextBillingDate(ctx, types.NextBillingDateParams{
+		nextEnd, err := types.NextBillingDate(types.NextBillingDateParams{
 			CurrentPeriodStart:  nextStart,
 			BillingAnchor:       sub.BillingAnchor,
 			Unit:                sub.BillingPeriodCount,
@@ -6968,7 +6968,7 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 
 	for currentEnd.Before(now) {
 		nextStart := currentEnd
-		nextEnd, err := types.NextBillingDate(ctx, types.NextBillingDateParams{
+		nextEnd, err := types.NextBillingDate(types.NextBillingDateParams{
 			CurrentPeriodStart:  nextStart,
 			BillingAnchor:       sub.BillingAnchor,
 			Unit:                sub.BillingPeriodCount,
