@@ -1,8 +1,11 @@
 package types
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -2072,4 +2075,104 @@ func TestGetNextUsageResetAt_EdgeCases(t *testing.T) {
 // Helper function for creating time pointers in tests
 func timePtr(t time.Time) *time.Time {
 	return &t
+}
+
+// TestNextBillingDateWithTimezone_IST tests the timezone-aware billing date wrapper
+// with IST (Asia/Kolkata, UTC+5:30) and regression cases.
+func TestNextBillingDateWithTimezone_IST(t *testing.T) {
+	// IST = UTC+5:30 (5*3600 + 30*60 = 19800 seconds)
+	istOffset := 5*3600 + 30*60
+	ist := time.FixedZone("IST", istOffset)
+
+	// IST midnight Jan 1, 2024 = 2023-12-31T18:30:00Z
+	istMidnightJan1UTC := time.Date(2023, 12, 31, 18, 30, 0, 0, time.UTC)
+	// IST midnight Feb 1, 2024 = 2024-01-31T18:30:00Z
+	istMidnightFeb1UTC := time.Date(2024, 1, 31, 18, 30, 0, 0, time.UTC)
+
+	// IST midnight Jan 15, 2024 = 2024-01-14T18:30:00Z
+	istMidnightJan15UTC := time.Date(2024, 1, 14, 18, 30, 0, 0, time.UTC)
+	// IST midnight Feb 15, 2024 = 2024-02-14T18:30:00Z
+	istMidnightFeb15UTC := time.Date(2024, 2, 14, 18, 30, 0, 0, time.UTC)
+
+	// IST midnight Jan 15, 2024 (for daily)
+	istMidnightJan16UTC := time.Date(2024, 1, 15, 18, 30, 0, 0, time.UTC)
+
+	_ = ist // used via FixedZone above; reference to avoid unused var warning
+
+	cases := []struct {
+		name               string
+		currentPeriodStart time.Time
+		billingAnchor      time.Time
+		unit               int
+		period             BillingPeriod
+		timezone           string
+		expectedUTC        time.Time
+	}{
+		{
+			// Case 1: Monthly, midnight IST Jan 1. IST midnight = UTC 18:30 previous day.
+			// Next period: Feb 1 midnight IST = 2024-01-31T18:30:00Z
+			name:               "monthly midnight IST Jan1 to Feb1",
+			currentPeriodStart: istMidnightJan1UTC,
+			billingAnchor:      istMidnightJan1UTC,
+			unit:               1,
+			period:             BILLING_PERIOD_MONTHLY,
+			timezone:           "Asia/Kolkata",
+			expectedUTC:        istMidnightFeb1UTC,
+		},
+		{
+			// Case 2: Monthly, mid-month anchor Jan 15 midnight IST. Next: Feb 15 midnight IST.
+			name:               "monthly mid-month IST Jan15 to Feb15",
+			currentPeriodStart: istMidnightJan15UTC,
+			billingAnchor:      istMidnightJan15UTC,
+			unit:               1,
+			period:             BILLING_PERIOD_MONTHLY,
+			timezone:           "Asia/Kolkata",
+			expectedUTC:        istMidnightFeb15UTC,
+		},
+		{
+			// Case 3: Daily reset — IST midnight Jan 15 + 1 day = Jan 16 midnight IST.
+			name:               "daily IST Jan15 midnight to Jan16 midnight",
+			currentPeriodStart: istMidnightJan15UTC,
+			billingAnchor:      istMidnightJan15UTC,
+			unit:               1,
+			period:             BILLING_PERIOD_DAILY,
+			timezone:           "Asia/Kolkata",
+			expectedUTC:        istMidnightJan16UTC,
+		},
+		{
+			// Case 4: UTC customer (no regression). Same dates as case 1 but Timezone = "UTC".
+			// With UTC, Jan 1 00:00 UTC + 1 month = Feb 1 00:00 UTC.
+			name:               "monthly UTC no regression",
+			currentPeriodStart: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor:      time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			unit:               1,
+			period:             BILLING_PERIOD_MONTHLY,
+			timezone:           "UTC",
+			expectedUTC:        time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			// Case 5: Invalid timezone falls back to UTC — result should match UTC computation.
+			name:               "invalid timezone falls back to UTC",
+			currentPeriodStart: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			billingAnchor:      time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			unit:               1,
+			period:             BILLING_PERIOD_MONTHLY,
+			timezone:           "Invalid/Timezone",
+			expectedUTC:        time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := NextBillingDateWithTimezone(context.Background(), NextBillingDateParams{
+				CurrentPeriodStart: c.currentPeriodStart,
+				BillingAnchor:      c.billingAnchor,
+				Unit:               c.unit,
+				Period:             c.period,
+				Timezone:           c.timezone,
+			})
+			require.NoError(t, err)
+			require.Equal(t, c.expectedUTC.UTC(), got.UTC())
+		})
+	}
 }

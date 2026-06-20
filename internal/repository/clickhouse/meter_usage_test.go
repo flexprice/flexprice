@@ -267,3 +267,55 @@ func (s *MeterUsageQuerySuite) TestWindowSize_DayIgnoresBillingAnchor() {
 	result := formatWindowSizeWithBillingAnchor(types.WindowSizeDay, &anchor, "")
 	assert.Equal(s.T(), "toStartOfDay(timestamp)", result)
 }
+
+func TestFormatWindowSizeTimezone(t *testing.T) {
+	cases := []struct {
+		name     string
+		window   types.WindowSize
+		tz       string
+		expected string
+	}{
+		{
+			// Case 1: Empty timezone + WindowSizeDay → UTC, no tz argument
+			name:     "empty tz with WindowSizeDay",
+			window:   types.WindowSizeDay,
+			tz:       "",
+			expected: "toStartOfDay(timestamp)",
+		},
+		{
+			// Case 2: Explicit "UTC" + WindowSizeDay → same as empty
+			name:     "UTC tz with WindowSizeDay",
+			window:   types.WindowSizeDay,
+			tz:       "UTC",
+			expected: "toStartOfDay(timestamp)",
+		},
+		{
+			// Case 3: IST non-UTC tz + WindowSizeDay → include tz argument
+			name:     "Asia/Kolkata tz with WindowSizeDay",
+			window:   types.WindowSizeDay,
+			tz:       "Asia/Kolkata",
+			expected: "toStartOfDay(timestamp, 'Asia/Kolkata')",
+		},
+		{
+			// Case 4: America/New_York tz + WindowSizeMonth → include tz argument
+			name:     "America/New_York tz with WindowSizeMonth",
+			window:   types.WindowSizeMonth,
+			tz:       "America/New_York",
+			expected: "toStartOfMonth(timestamp, 'America/New_York')",
+		},
+		{
+			// Case 5: Invalid timezone + WindowSizeDay → falls back to UTC (no tz arg)
+			name:     "invalid tz falls back to UTC with WindowSizeDay",
+			window:   types.WindowSizeDay,
+			tz:       "Not/ATimezone",
+			expected: "toStartOfDay(timestamp)",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := formatWindowSize(c.window, c.tz)
+			assert.Equal(t, c.expected, got)
+		})
+	}
+}
