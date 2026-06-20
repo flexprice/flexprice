@@ -96,7 +96,7 @@ func NewMeterUsageQueryBuilder() *MeterUsageQueryBuilder {
 // BuildQuery constructs a complete single-meter query with optional windowing.
 // The aggregator provides aggExpr (e.g. "SUM(qty_total)") and countExpr (e.g. "COUNT(DISTINCT id)").
 func (qb *MeterUsageQueryBuilder) BuildQuery(aggExpr, countExpr string, params *events.MeterUsageQueryParams) string {
-	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	windowExpr := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	where, _ := qb.BuildWhereClause(params)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
@@ -254,7 +254,7 @@ func (qb *MeterUsageQueryBuilder) BuildFinalClause(useFinal bool) (finalClause s
 //  1. bucket_aggs: aggregate per bucket
 //  2. Outer: return (total, bucket_start, value)
 func (qb *MeterUsageQueryBuilder) BuildBucketedQuery(params *events.MeterUsageQueryParams) (string, []interface{}) {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	where, args := qb.BuildWhereClause(params)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
@@ -367,7 +367,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedAggregateQuery(params *events.Met
 		return "", nil, nil
 	}
 
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	where, args := qb.BuildWhereClause(params)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
@@ -430,7 +430,7 @@ func (qb *MeterUsageQueryBuilder) BuildBucketedPointsQuery(
 	comboSource string,
 	comboProps map[string]string,
 ) (string, []interface{}) {
-	bucketWindow := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, "")
+	bucketWindow := formatWindowSizeWithBillingAnchor(params.WindowSize, params.BillingAnchor, params.CustomerTimezone)
 	where, args := qb.BuildWhereClause(params)
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
