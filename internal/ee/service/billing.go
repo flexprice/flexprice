@@ -516,6 +516,7 @@ func (s *billingService) CalculateUsageCharges(
 					BillingAnchor:       &sub.BillingAnchor,
 					Filters:             meter.ToFilterMap(),
 					Meter:               meter,
+					CustomerTimezone:    sub.CustomerTimezone,
 				}
 				usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
 				if err != nil {
@@ -594,6 +595,7 @@ func (s *billingService) CalculateUsageCharges(
 							WindowSize:          types.WindowSizeDay, // Use daily window size
 							Filters:             meter.ToFilterMap(),
 							Meter:               meter,
+							CustomerTimezone:    sub.CustomerTimezone,
 						}
 
 						// Get usage data with daily windows
@@ -656,6 +658,7 @@ func (s *billingService) CalculateUsageCharges(
 							WindowSize:          types.WindowSizeMonth, // Use monthly window size
 							Filters:             meter.ToFilterMap(),
 							Meter:               meter,
+							CustomerTimezone:    sub.CustomerTimezone,
 						}
 
 						// Get usage data with monthly windows
@@ -778,6 +781,7 @@ func (s *billingService) CalculateUsageCharges(
 							BillingAnchor:       &sub.BillingAnchor,
 							Meter:               meter,
 							Filters:             meter.ToFilterMap(),
+							CustomerTimezone:    sub.CustomerTimezone,
 						}
 
 						usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
@@ -1366,6 +1370,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							WindowSize:          types.WindowSizeDay, // Use daily window size
 							Filters:             meter.ToFilterMap(),
 							Meter:               meter,
+							CustomerTimezone:    sub.CustomerTimezone,
 						}
 
 						// Get usage data with daily windows
@@ -1428,6 +1433,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							WindowSize:          types.WindowSizeMonth, // Use monthly window size
 							Filters:             meter.ToFilterMap(),
 							Meter:               meter,
+							CustomerTimezone:    sub.CustomerTimezone,
 						}
 
 						// Get usage data with monthly windows
@@ -3465,6 +3471,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 						StartTime:           sub.CurrentPeriodStart,
 						EndTime:             sub.CurrentPeriodEnd,
 						WindowSize:          types.WindowSizeDay,
+						CustomerTimezone:    sub.CustomerTimezone,
 					}
 
 					// Get usage data with daily windows
@@ -3517,6 +3524,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 						EndTime:             sub.CurrentPeriodEnd,
 						WindowSize:          types.WindowSizeMonth,
 						BillingAnchor:       &sub.BillingAnchor,
+						CustomerTimezone:    sub.CustomerTimezone,
 					}
 
 					// Get usage data for current month
