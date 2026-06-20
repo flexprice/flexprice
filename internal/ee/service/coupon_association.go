@@ -237,7 +237,12 @@ func (s *couponAssociationService) toCouponAssociationResponse(ca *coupon_associ
 func computeCouponEndDate(startDate, billingAnchor time.Time, period types.BillingPeriod, periodCount, n int) (time.Time, error) {
 	current := startDate
 	for i := 0; i < n; i++ {
-		next, err := types.NextBillingDate(current, billingAnchor, periodCount, period, nil)
+		next, err := types.NextBillingDate(context.Background(), types.NextBillingDateParams{
+			CurrentPeriodStart: current,
+			BillingAnchor:      billingAnchor,
+			Unit:               periodCount,
+			Period:             period,
+		})
 		if err != nil {
 			return startDate, err
 		}

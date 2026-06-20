@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -100,7 +101,12 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestMatrix_HandlePaymentBehavior_R
 	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, pl))
 
 	// Period is already advanced to the first real billing window by processSubscriptionTrialEnd.
-	firstPeriodEnd, err := types.NextBillingDate(trialEnd, trialStart, 1, types.BILLING_PERIOD_MONTHLY, nil)
+	firstPeriodEnd, err := types.NextBillingDate(context.Background(), types.NextBillingDateParams{
+		CurrentPeriodStart: trialEnd,
+		BillingAnchor:      trialStart,
+		Unit:               1,
+		Period:             types.BILLING_PERIOD_MONTHLY,
+	})
 	s.Require().NoError(err)
 
 	tests := []struct {
@@ -251,7 +257,12 @@ func (s *SubscriptionTrialPaymentMatrixSuite) TestFullPayAfterBehavior_Activates
 
 	// processSubscriptionTrialEnd already advanced the period to [trialEnd, firstPeriodEnd]
 	// and set status to incomplete before creating the invoice.
-	firstPeriodEnd, err := types.NextBillingDate(trialEnd, trialStart, 1, types.BILLING_PERIOD_MONTHLY, nil)
+	firstPeriodEnd, err := types.NextBillingDate(context.Background(), types.NextBillingDateParams{
+		CurrentPeriodStart: trialEnd,
+		BillingAnchor:      trialStart,
+		Unit:               1,
+		Period:             types.BILLING_PERIOD_MONTHLY,
+	})
 	s.Require().NoError(err)
 
 	sub := &subscription.Subscription{

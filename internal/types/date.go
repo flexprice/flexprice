@@ -20,10 +20,19 @@ type NextBillingDateParams struct {
 	Timezone string
 }
 
-// NextBillingDateWithTimezone computes the next billing date in the customer's
-// local timezone, returned as a UTC instant. Use this from subscription code;
-// internal date helpers continue using NextBillingDate directly.
-func NextBillingDateWithTimezone(ctx context.Context, params NextBillingDateParams) (time.Time, error) {
+// NextBillingDate computes the next billing date in the customer's local timezone
+// (when params.Timezone is set), returned as a UTC instant.
+//
+// The billing anchor determines the reference point for billing cycles:
+//   - For MONTHLY periods, it sets the day of the month; if the period starts before that
+//     day in the month, the next billing date is that anchor day in the same month (first
+//     partial period), otherwise the usual advance by unit months applies
+//   - For ANNUAL periods, it sets the month and day of the year
+//   - For WEEKLY/DAILY periods, it's used only for validation
+//
+// If params.SubscriptionEndDate is provided, the result will be cliffed to not exceed it.
+// If params.Timezone is empty or "UTC", calculations are performed in UTC.
+func NextBillingDate(ctx context.Context, params NextBillingDateParams) (time.Time, error) {
 	loc := time.UTC
 	if params.Timezone != "" && params.Timezone != "UTC" {
 		var err error
@@ -35,30 +44,21 @@ func NextBillingDateWithTimezone(ctx context.Context, params NextBillingDatePara
 		}
 	}
 
-	// Re-locate the input times. NextBillingDate uses currentPeriodStart.Location()
-	// for all time.Date() calls, so passing times in loc makes it compute the
-	// boundary in local time.
+	// Re-locate the input times so that all time.Date() calls inside
+	// nextBillingDateCore compute the boundary in local time.
 	localStart := params.CurrentPeriodStart.In(loc)
 	localAnchor := params.BillingAnchor.In(loc)
 
-	result, err := NextBillingDate(localStart, localAnchor, params.Unit, params.Period, params.SubscriptionEndDate)
+	result, err := nextBillingDateCore(localStart, localAnchor, params.Unit, params.Period, params.SubscriptionEndDate)
 	if err != nil {
 		return time.Time{}, err
 	}
 	return result.UTC(), nil
 }
 
-// NextBillingDate calculates the next billing date based on the current period start,
-// billing anchor, billing period, and billing period unit.
-// The billing anchor determines the reference point for billing cycles:
-//   - For MONTHLY periods, it sets the day of the month; if the period starts before that
-//     day in the month, the next billing date is that anchor day in the same month (first
-//     partial period), otherwise the usual advance by unit months applies
-//   - For ANNUAL periods, it sets the month and day of the year
-//   - For WEEKLY/DAILY periods, it's used only for validation
-//
-// If subscriptionEndDate is provided, the result will be cliffed to not exceed it.
-func NextBillingDate(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time) (time.Time, error) {
+// nextBillingDateCore is the internal positional-arg implementation used by NextBillingDate
+// and other helpers in this file. Callers must pass times already in the desired location.
+func nextBillingDateCore(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time) (time.Time, error) {
 	if unit <= 0 {
 		return currentPeriodStart, ierr.NewError("billing period unit must be a positive integer").
 			WithHint("Billing period unit must be a positive integer").
@@ -248,7 +248,7 @@ func CalculateBillingPeriods(
 	billingPeriod BillingPeriod,
 ) ([]Period, error) {
 	// Calculate the initial period end from the start date
-	initialPeriodEnd, err := NextBillingDate(initialPeriodStart, anchor, periodCount, billingPeriod, endDate)
+	initialPeriodEnd, err := nextBillingDateCore(initialPeriodStart, anchor, periodCount, billingPeriod, endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +271,7 @@ func CalculateBillingPeriods(
 
 	for currentEnd.Before(*boundaryEnd) {
 		nextStart := currentEnd
-		nextEnd, err := NextBillingDate(nextStart, anchor, periodCount, billingPeriod, endDate)
+		nextEnd, err := nextBillingDateCore(nextStart, anchor, periodCount, billingPeriod, endDate)
 		if err != nil {
 			return nil, err
 		}
@@ -442,13 +442,13 @@ func CalculatePeriodID(
 
 	// Iterate forward until we find the period containing the event
 	for i := 0; i < 100; i++ { // Limit to 100 iterations to prevent infinite loops
-		nextPeriodStart, err := NextBillingDate(periodStart, billingAnchor, periodUnit, periodType, nil)
+		nextPeriodStart, err := nextBillingDateCore(periodStart, billingAnchor, periodUnit, periodType, nil)
 		if err != nil {
 			return 0, err
 		}
 
 		// Calculate the next period end
-		nextPeriodEnd, err := NextBillingDate(nextPeriodStart, billingAnchor, periodUnit, periodType, nil)
+		nextPeriodEnd, err := nextBillingDateCore(nextPeriodStart, billingAnchor, periodUnit, periodType, nil)
 		if err != nil {
 			return 0, err
 		}
@@ -493,7 +493,7 @@ func findPeriodFromSubscriptionStart(
 	periodStart := subStart
 
 	// Calculate the first period end
-	periodEnd, err := NextBillingDate(periodStart, billingAnchor, periodUnit, periodType, nil)
+	periodEnd, err := nextBillingDateCore(periodStart, billingAnchor, periodUnit, periodType, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -514,7 +514,7 @@ func findPeriodFromSubscriptionStart(
 
 		// Move to the next period
 		nextPeriodStart := periodEnd
-		nextPeriodEnd, err := NextBillingDate(nextPeriodStart, billingAnchor, periodUnit, periodType, nil)
+		nextPeriodEnd, err := nextBillingDateCore(nextPeriodStart, billingAnchor, periodUnit, periodType, nil)
 		if err != nil {
 			return 0, err
 		}
@@ -547,14 +547,14 @@ func calculatePeriodID(periodStart time.Time) uint64 {
 	return uint64(periodStart.Unix() * 1000)
 }
 
-// NextBillingDateWithEndDate is an alias for NextBillingDate with explicit subscription end date parameter
+// NextBillingDateWithEndDate is an alias for nextBillingDateCore with explicit subscription end date parameter
 func NextBillingDateWithEndDate(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod, subscriptionEndDate *time.Time) (time.Time, error) {
-	return NextBillingDate(currentPeriodStart, billingAnchor, unit, period, subscriptionEndDate)
+	return nextBillingDateCore(currentPeriodStart, billingAnchor, unit, period, subscriptionEndDate)
 }
 
 // NextBillingDateLegacy maintains backward compatibility for the original NextBillingDate signature
 func NextBillingDateLegacy(currentPeriodStart, billingAnchor time.Time, unit int, period BillingPeriod) (time.Time, error) {
-	return NextBillingDate(currentPeriodStart, billingAnchor, unit, period, nil)
+	return nextBillingDateCore(currentPeriodStart, billingAnchor, unit, period, nil)
 }
 
 // GetNextUsageResetAt calculates the next usage reset timestamp based on the entitlement usage reset period.
@@ -599,7 +599,7 @@ func GetNextUsageResetAt(
 		// Safeguard against infinite loops - allow up to 1000 periods (83+ years of monthly periods)
 		for i := 0; i < 1000; i++ {
 			// Calculate next monthly boundary using billing anchor
-			periodEnd, err := NextBillingDate(periodStart, billingAnchor, 1, BILLING_PERIOD_MONTHLY, nil)
+			periodEnd, err := nextBillingDateCore(periodStart, billingAnchor, 1, BILLING_PERIOD_MONTHLY, nil)
 			if err != nil {
 				return time.Time{}, ierr.NewError("failed to calculate monthly period").
 					WithHint("Failed to calculate monthly period for usage reset").
@@ -681,7 +681,7 @@ func FindPeriodForDate(
 
 	const maxIter = 240
 	for i := 0; i < maxIter; i++ {
-		nextEnd, err := NextBillingDate(periodEnd, anchor, periodCount, billingPeriod, nil)
+		nextEnd, err := nextBillingDateCore(periodEnd, anchor, periodCount, billingPeriod, nil)
 		if err != nil {
 			return Period{}, err
 		}

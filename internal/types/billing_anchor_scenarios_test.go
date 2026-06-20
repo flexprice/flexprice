@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -124,7 +125,12 @@ func TestNextBillingDate_AnchorEqualToStartVsAnchorAfterStart(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.current, tt.anchor, unit, tt.period, nil)
+			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+				CurrentPeriodStart: tt.current,
+				BillingAnchor:      tt.anchor,
+				Unit:               unit,
+				Period:             tt.period,
+			})
 			if err != nil {
 				t.Fatalf("NextBillingDate() error = %v", err)
 			}

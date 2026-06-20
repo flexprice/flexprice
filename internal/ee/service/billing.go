@@ -2078,13 +2078,14 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	// Calculate next period for advance charges
 	nextPeriodStart := periodEnd
-	nextPeriodEnd, err := types.NextBillingDate(
-		nextPeriodStart,
-		sub.BillingAnchor,
-		sub.BillingPeriodCount,
-		sub.BillingPeriod,
-		sub.EndDate,
-	)
+	nextPeriodEnd, err := types.NextBillingDate(ctx, types.NextBillingDateParams{
+		CurrentPeriodStart:  nextPeriodStart,
+		BillingAnchor:       sub.BillingAnchor,
+		Unit:                sub.BillingPeriodCount,
+		Period:              sub.BillingPeriod,
+		SubscriptionEndDate: sub.EndDate,
+		Timezone:            sub.CustomerTimezone,
+	})
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("failed to calculate next billing date").

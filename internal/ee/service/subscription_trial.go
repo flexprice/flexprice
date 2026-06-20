@@ -171,7 +171,14 @@ func (s *subscriptionService) processSubscriptionTrialEnd(ctx context.Context, s
 	// (same idea as trial end becomes the new cycle anchor).
 	firstPeriodStart := lo.FromPtr(sub.TrialEnd)
 	sub.BillingAnchor = firstPeriodStart
-	firstPeriodEnd, err := types.NextBillingDate(firstPeriodStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
+	firstPeriodEnd, err := types.NextBillingDate(ctx, types.NextBillingDateParams{
+		CurrentPeriodStart:  firstPeriodStart,
+		BillingAnchor:       sub.BillingAnchor,
+		Unit:                sub.BillingPeriodCount,
+		Period:              sub.BillingPeriod,
+		SubscriptionEndDate: sub.EndDate,
+		Timezone:            sub.CustomerTimezone,
+	})
 	if err != nil {
 		return nil, err
 	}

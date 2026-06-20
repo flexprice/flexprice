@@ -3266,7 +3266,13 @@ func (s *featureUsageTrackingService) getTotalUsageForWeightedSumAggregation(
 	periodStart := time.UnixMilli(int64(periodID))
 
 	// Calculate the period end using the subscription's billing configuration
-	periodEnd, err := types.NextBillingDate(periodStart, subscription.BillingAnchor, subscription.BillingPeriodCount, subscription.BillingPeriod, nil)
+	periodEnd, err := types.NextBillingDate(context.Background(), types.NextBillingDateParams{
+		CurrentPeriodStart: periodStart,
+		BillingAnchor:      subscription.BillingAnchor,
+		Unit:               subscription.BillingPeriodCount,
+		Period:             subscription.BillingPeriod,
+		Timezone:           subscription.CustomerTimezone,
+	})
 	if err != nil {
 		return decimal.Zero, ierr.WithError(err).
 			WithHint("Failed to calculate period end for weighted sum aggregation").

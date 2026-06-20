@@ -1097,7 +1097,13 @@ func TestNextBillingDate_Quarterly_Calendar_EndDateCliff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.current, tt.anchor, 1, BILLING_PERIOD_QUARTER, &tt.endDate)
+			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+				CurrentPeriodStart:  tt.current,
+				BillingAnchor:       tt.anchor,
+				Unit:                1,
+				Period:              BILLING_PERIOD_QUARTER,
+				SubscriptionEndDate: &tt.endDate,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -1136,7 +1142,13 @@ func TestNextBillingDate_HalfYearly_Calendar_EndDateCliff(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NextBillingDate(tt.current, tt.anchor, 1, BILLING_PERIOD_HALF_YEAR, &tt.endDate)
+			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
+				CurrentPeriodStart:  tt.current,
+				BillingAnchor:       tt.anchor,
+				Unit:                1,
+				Period:              BILLING_PERIOD_HALF_YEAR,
+				SubscriptionEndDate: &tt.endDate,
+			})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -2077,9 +2089,9 @@ func timePtr(t time.Time) *time.Time {
 	return &t
 }
 
-// TestNextBillingDateWithTimezone_IST tests the timezone-aware billing date wrapper
+// TestNextBillingDate_IST tests the timezone-aware billing date calculation
 // with IST (Asia/Kolkata, UTC+5:30) and regression cases.
-func TestNextBillingDateWithTimezone_IST(t *testing.T) {
+func TestNextBillingDate_IST(t *testing.T) {
 	// IST = UTC+5:30 (5*3600 + 30*60 = 19800 seconds)
 	istOffset := 5*3600 + 30*60
 	ist := time.FixedZone("IST", istOffset)
@@ -2164,7 +2176,7 @@ func TestNextBillingDateWithTimezone_IST(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := NextBillingDateWithTimezone(context.Background(), NextBillingDateParams{
+			got, err := NextBillingDate(context.Background(), NextBillingDateParams{
 				CurrentPeriodStart: c.currentPeriodStart,
 				BillingAnchor:      c.billingAnchor,
 				Unit:               c.unit,
