@@ -61,22 +61,10 @@ spec:
               exec:
                 command: ["/bin/sh", "-c", "sleep {{ .Values.worker.preStop.sleepSeconds | default 0 }}"]
           {{- end }}
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: http
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
+          # No HTTP probes: this runs in deployment.mode=temporal_worker and serves no
+          # HTTP server, so an httpGet /health probe always fails and crashloops the pod.
+          # No Service routes to it either, so readiness is moot. (Matches the AWS ECS
+          # worker, which runs with no health checks.)
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
           volumeMounts:

@@ -63,22 +63,10 @@ spec:
                 # Kafka consumer-group rebalance kicks off the new owner.
                 command: ["/bin/sh", "-c", "sleep {{ .Values.consumer.preStop.sleepSeconds | default 15 }}"]
           {{- end }}
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: http
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
+          # No HTTP probes: this runs in deployment.mode=consumer and serves no HTTP
+          # server, so an httpGet /health probe always fails and crashloops the pod.
+          # No Service routes to it either, so readiness is moot. (Matches the AWS ECS
+          # consumer, which runs with no health checks.)
           resources:
             {{- toYaml .Values.consumer.resources | nindent 12 }}
           volumeMounts:
