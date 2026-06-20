@@ -256,7 +256,7 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	if req.AddressCountry != nil {
 		cust.AddressCountry = *req.AddressCountry
 	}
-	if req.Timezone != nil && *req.Timezone != "" {
+	if req.Timezone != nil {
 		cust.Timezone = *req.Timezone
 	}
 
