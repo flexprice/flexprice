@@ -620,6 +620,11 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			}
 		}
 
+		// Shift addon line item dates to the new activation start date
+		if err := s.shiftAddonLineItemDates(ctx, sub, newStartDate); err != nil {
+			return err
+		}
+
 		// Create invoice for the subscription
 		paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
 		// Apply backward compatibility normalization
@@ -4951,6 +4956,62 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 	lineItem.PriceUnit = price.PriceUnit
 
 	return lineItem
+}
+
+// shiftAddonLineItemDates updates StartDate (and EndDate for one-time addons) of all
+// addon associations and their line items to newStartDate. Called during draft activation
+// so that addon dates stay consistent with the new subscription start date.
+func (s *subscriptionService) shiftAddonLineItemDates(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	newStartDate time.Time,
+) error {
+	assocFilter := types.NewNoLimitAddonAssociationFilter()
+	assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	assocFilter.EntityIDs = []string{sub.ID}
+
+	associations, err := s.AddonAssociationRepo.List(ctx, assocFilter)
+	if err != nil {
+		return err
+	}
+
+	for _, assoc := range associations {
+		isOnetime := assoc.EndDate != nil
+
+		var newEnd time.Time
+		if isOnetime {
+			newEnd, err = addonPeriodEndForStartDate(sub, newStartDate)
+			if err != nil {
+				return err
+			}
+			assoc.EndDate = &newEnd
+			if err := s.AddonAssociationRepo.Update(ctx, assoc); err != nil {
+				return err
+			}
+		}
+
+		liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+		liFilter.SubscriptionIDs = []string{sub.ID}
+		liFilter.AddonAssociationIDs = []string{assoc.ID}
+		liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+
+		lineItems, err := s.SubscriptionLineItemRepo.List(ctx, liFilter)
+		if err != nil {
+			return err
+		}
+
+		for _, item := range lineItems {
+			item.StartDate = newStartDate
+			if isOnetime {
+				item.EndDate = newEnd
+			}
+			if err := s.SubscriptionLineItemRepo.Update(ctx, item); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // addonPeriodEndForStartDate returns the end of the billing period that contains startDate.
