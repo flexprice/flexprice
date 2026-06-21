@@ -4434,13 +4434,16 @@ func (s *subscriptionService) addAddonToSubscription(
 	}
 
 	// Check if subscription is in a state that allows addon attachment
+	// Draft is allowed to support shopping-cart preview flows where addons are
+	// attached before the subscription goes live. Trialing is intentionally
+	// excluded — add it here if trialing subscriptions should also accept addons.
 	allowedStatuses := []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusDraft,
 	}
 	if !lo.Contains(allowedStatuses, sub.SubscriptionStatus) {
-		return nil, ierr.NewError("subscription is not active").
-			WithHint("Cannot add addon to inactive subscription").
+		return nil, ierr.NewError("subscription status does not allow addon attachment").
+			WithHint("Addon can only be added to active or draft subscriptions").
 			Mark(ierr.ErrValidation)
 	}
 

@@ -7362,7 +7362,7 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_Draft() {
 	s.Require().NoError(err)
 	s.Require().Equal(types.SubscriptionStatusDraft, draftResp.SubscriptionStatus)
 
-	// Adding an addon to a draft subscription must succeed (currently fails)
+	// Adding an addon to a draft subscription must succeed
 	_, err = s.service.AddAddonToSubscription(ctx, draftResp.ID, &dto.AddAddonToSubscriptionRequest{
 		AddonID: addonID,
 	})
@@ -7376,4 +7376,14 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_Draft() {
 	s.Require().NoError(err)
 	s.Require().Len(items, 1)
 	s.Equal(addonID, items[0].EntityID)
+
+	// Addon association must also be persisted
+	aaFilter := types.NewNoLimitAddonAssociationFilter()
+	aaEntityType := types.AddonAssociationEntityTypeSubscription
+	aaFilter.EntityType = &aaEntityType
+	aaFilter.EntityIDs = []string{draftResp.ID}
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, aaFilter)
+	s.Require().NoError(err)
+	s.Require().Len(associations, 1)
+	s.Equal(addonID, associations[0].AddonID)
 }
