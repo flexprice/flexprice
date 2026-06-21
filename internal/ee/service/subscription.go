@@ -4969,6 +4969,7 @@ func (s *subscriptionService) shiftAddonLineItemDates(
 	assocFilter := types.NewNoLimitAddonAssociationFilter()
 	assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
 	assocFilter.EntityIDs = []string{sub.ID}
+	assocFilter.AddonStatus = lo.ToPtr(string(types.AddonStatusActive))
 
 	associations, err := s.AddonAssociationRepo.List(ctx, assocFilter)
 	if err != nil {
@@ -4976,6 +4977,10 @@ func (s *subscriptionService) shiftAddonLineItemDates(
 	}
 
 	for _, assoc := range associations {
+		// EndDate is set only for one-time cadence addons at creation time.
+		// Draft subscriptions cannot have cancelled associations (cancellation
+		// requires an active/trialing subscription), so EndDate != nil reliably
+		// identifies one-time addons here.
 		isOnetime := assoc.EndDate != nil
 
 		var newEnd time.Time

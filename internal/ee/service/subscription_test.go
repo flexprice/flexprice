@@ -7520,6 +7520,7 @@ func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_WithAddons_Date
 	s.Require().NoError(err)
 	s.Require().Len(items, 1)
 	s.True(items[0].StartDate.Equal(t1), "addon line item StartDate should equal activation start date")
+	s.True(items[0].EndDate.IsZero(), "recurring addon EndDate should not be set after activation")
 }
 
 func (s *SubscriptionServiceSuite) TestActivateDraftSubscription_OnetimeAddon_EndDateRecomputed() {
