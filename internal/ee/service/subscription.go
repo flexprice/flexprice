@@ -4433,8 +4433,12 @@ func (s *subscriptionService) addAddonToSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Check if sub exists and is active
-	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+	// Check if subscription is in a state that allows addon attachment
+	allowedStatuses := []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusDraft,
+	}
+	if !lo.Contains(allowedStatuses, sub.SubscriptionStatus) {
 		return nil, ierr.NewError("subscription is not active").
 			WithHint("Cannot add addon to inactive subscription").
 			Mark(ierr.ErrValidation)

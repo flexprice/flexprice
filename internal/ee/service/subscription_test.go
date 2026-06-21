@@ -7314,3 +7314,66 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_TrialStart_Invoice() {
 		})
 	}
 }
+
+func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_Draft() {
+	ctx := s.GetContext()
+
+	// Create a published addon with a monthly fixed price
+	subSvc := s.service.(*subscriptionService)
+	addonID := "addon_draft_test"
+	priceID := "price_addon_draft_test"
+
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Draft Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(subSvc.AddonRepo.Create(ctx, a))
+
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.NewFromFloat(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	// Create a draft subscription
+	draftStart := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	draftResp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(draftStart),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		SubscriptionStatus: types.SubscriptionStatusDraft,
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(types.SubscriptionStatusDraft, draftResp.SubscriptionStatus)
+
+	// Adding an addon to a draft subscription must succeed (currently fails)
+	_, err = s.service.AddAddonToSubscription(ctx, draftResp.ID, &dto.AddAddonToSubscriptionRequest{
+		AddonID: addonID,
+	})
+	s.NoError(err)
+
+	// Addon line item must be stored
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{draftResp.ID}
+	filter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, filter)
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(addonID, items[0].EntityID)
+}
