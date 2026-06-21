@@ -9,7 +9,11 @@
         "--server-url",
         "https://us.api.flexprice.io/v1",
         "--api-key-auth",
-        "YOUR_API_KEY"
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
       ]
     }
   }
