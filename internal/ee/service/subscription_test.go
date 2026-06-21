@@ -7439,8 +7439,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_DraftWithAddons() {
 
 	// Addon association must be persisted
 	assocFilter := types.NewNoLimitAddonAssociationFilter()
-	entityType := types.AddonAssociationEntityTypeSubscription
-	assocFilter.EntityType = &entityType
+	assocFilter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
 	assocFilter.EntityIDs = []string{resp.ID}
 	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, assocFilter)
 	s.Require().NoError(err)
