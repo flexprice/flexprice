@@ -7387,3 +7387,72 @@ func (s *SubscriptionServiceSuite) TestAddAddonToSubscription_Draft() {
 	s.Require().Len(associations, 1)
 	s.Equal(addonID, associations[0].AddonID)
 }
+
+func (s *SubscriptionServiceSuite) TestCreateSubscription_DraftWithAddons() {
+	ctx := s.GetContext()
+	subSvc := s.service.(*subscriptionService)
+
+	addonID := "addon_draft_create"
+	priceID := "price_addon_draft_create"
+
+	a := &addon.Addon{
+		ID:        addonID,
+		LookupKey: addonID,
+		Name:      "Draft Create Addon",
+		BaseModel: types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(subSvc.AddonRepo.Create(ctx, a))
+
+	p := &price.Price{
+		ID:                 priceID,
+		Amount:             decimal.NewFromFloat(20),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+		EntityID:           addonID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, p))
+
+	draftStart := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	resp, err := s.service.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             s.testData.plan.ID,
+		StartDate:          lo.ToPtr(draftStart),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+		SubscriptionStatus: types.SubscriptionStatusDraft,
+		Addons: []dto.AddAddonToSubscriptionRequest{
+			{AddonID: addonID},
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(types.SubscriptionStatusDraft, resp.SubscriptionStatus)
+
+	// Addon association must be persisted
+	assocFilter := types.NewNoLimitAddonAssociationFilter()
+	entityType := types.AddonAssociationEntityTypeSubscription
+	assocFilter.EntityType = &entityType
+	assocFilter.EntityIDs = []string{resp.ID}
+	associations, err := s.GetStores().AddonAssociationRepo.List(ctx, assocFilter)
+	s.Require().NoError(err)
+	s.Require().Len(associations, 1)
+	s.Equal(addonID, associations[0].AddonID)
+
+	// Addon line item must be persisted
+	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	liFilter.SubscriptionIDs = []string{resp.ID}
+	liFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+	items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, liFilter)
+	s.Require().NoError(err)
+	s.Require().Len(items, 1)
+	s.Equal(addonID, items[0].EntityID)
+}
