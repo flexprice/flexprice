@@ -46,9 +46,9 @@ Runnable samples are in the `examples/` directory.
 
 ## Environment
 
-| Variable | Required | Description |
-| -------- | -------- | ----------- |
-| `FLEXPRICE_API_KEY` | Yes | API key |
+| Variable             | Required | Description                                                                                                  |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `FLEXPRICE_API_KEY`  | Yes      | API key                                                                                                      |
 | `FLEXPRICE_API_HOST` | Optional | Full base URL including `https://` and `/v1` (default: `https://us.api.flexprice.io/v1`). No trailing slash. |
 
 **Integration tests** in [api/tests/ts/test_sdk.ts](../tests/ts/test_sdk.ts) use a different env shape; see [api/tests/README.md](../tests/README.md).
@@ -128,7 +128,7 @@ const result = await flexPrice.events.ingestEvent({
 
 - Set the API key via `apiKeyAuth` when constructing `FlexPrice`. The SDK sends it in the `x-api-key` header.
 - Set `FLEXPRICE_API_HOST` to a full URL (see [Environment](#environment)) or rely on the default `https://us.api.flexprice.io/v1`.
-- Use environment variables and never expose keys in client-side or public code. Get keys from your [FlexPrice dashboard](https://app.flexprice.io) or docs.
+- Use environment variables and never expose keys in client-side or public code. Get keys from your [FlexPrice dashboard](us.flexprice.io) or docs.
 
 ## Features
 
@@ -151,6 +151,7 @@ For a full list of operations, see the [API reference](https://docs.flexprice.io
 Flexprice sends webhook events to your server for async updates on payments, invoices, subscriptions, wallets, and more.
 
 **Flow:**
+
 1. Register your endpoint URL in the Flexprice dashboard
 2. Receive `POST` with raw JSON body
 3. Read `event_type` to route
@@ -174,7 +175,10 @@ function handleWebhook(rawBody: string): void {
     case WebhookEventName.PaymentFailed:
     case WebhookEventName.PaymentUpdated: {
       const result = webhookDtoPaymentWebhookPayloadFromJSON(rawBody);
-      if (!result.ok) { console.error("parse error", result.error); break; }
+      if (!result.ok) {
+        console.error("parse error", result.error);
+        break;
+      }
       const { payment } = result.value;
       console.log("payment", payment?.id);
       // TODO: update payment record
@@ -185,7 +189,10 @@ function handleWebhook(rawBody: string): void {
     case WebhookEventName.SubscriptionCancelled:
     case WebhookEventName.SubscriptionUpdated: {
       const result = webhookDtoSubscriptionWebhookPayloadFromJSON(rawBody);
-      if (!result.ok) { console.error("parse error", result.error); break; }
+      if (!result.ok) {
+        console.error("parse error", result.error);
+        break;
+      }
       console.log("subscription", result.value.subscription?.id);
       break;
     }
@@ -193,7 +200,10 @@ function handleWebhook(rawBody: string): void {
     case WebhookEventName.InvoiceUpdateFinalized:
     case WebhookEventName.InvoicePaymentOverdue: {
       const result = webhookDtoInvoiceWebhookPayloadFromJSON(rawBody);
-      if (!result.ok) { console.error("parse error", result.error); break; }
+      if (!result.ok) {
+        console.error("parse error", result.error);
+        break;
+      }
       console.log("invoice", result.value.invoice?.id);
       break;
     }
@@ -208,18 +218,19 @@ function handleWebhook(rawBody: string): void {
 
 ### Event types
 
-| Category | Events |
-|---|---|
-| **Payment** | `payment.created` · `payment.updated` · `payment.success` · `payment.failed` · `payment.pending` |
-| **Invoice** | `invoice.create.drafted` · `invoice.update` · `invoice.update.finalized` · `invoice.update.payment` · `invoice.update.voided` · `invoice.payment.overdue` · `invoice.communication.triggered` |
-| **Subscription** | `subscription.created` · `subscription.draft.created` · `subscription.activated` · `subscription.updated` · `subscription.paused` · `subscription.resumed` · `subscription.cancelled` · `subscription.renewal.due` |
-| **Subscription Phase** | `subscription.phase.created` · `subscription.phase.updated` · `subscription.phase.deleted` |
-| **Customer** | `customer.created` · `customer.updated` · `customer.deleted` |
-| **Wallet** | `wallet.created` · `wallet.updated` · `wallet.terminated` · `wallet.transaction.created` · `wallet.credit_balance.dropped` · `wallet.credit_balance.recovered` · `wallet.ongoing_balance.dropped` · `wallet.ongoing_balance.recovered` |
-| **Feature / Entitlement** | `feature.created` · `feature.updated` · `feature.deleted` · `feature.wallet_balance.alert` · `entitlement.created` · `entitlement.updated` · `entitlement.deleted` |
-| **Credit Note** | `credit_note.created` · `credit_note.updated` |
+| Category                  | Events                                                                                                                                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Payment**               | `payment.created` · `payment.updated` · `payment.success` · `payment.failed` · `payment.pending`                                                                                                                                       |
+| **Invoice**               | `invoice.create.drafted` · `invoice.update` · `invoice.update.finalized` · `invoice.update.payment` · `invoice.update.voided` · `invoice.payment.overdue` · `invoice.communication.triggered`                                          |
+| **Subscription**          | `subscription.created` · `subscription.draft.created` · `subscription.activated` · `subscription.updated` · `subscription.paused` · `subscription.resumed` · `subscription.cancelled` · `subscription.renewal.due`                     |
+| **Subscription Phase**    | `subscription.phase.created` · `subscription.phase.updated` · `subscription.phase.deleted`                                                                                                                                             |
+| **Customer**              | `customer.created` · `customer.updated` · `customer.deleted`                                                                                                                                                                           |
+| **Wallet**                | `wallet.created` · `wallet.updated` · `wallet.terminated` · `wallet.transaction.created` · `wallet.credit_balance.dropped` · `wallet.credit_balance.recovered` · `wallet.ongoing_balance.dropped` · `wallet.ongoing_balance.recovered` |
+| **Feature / Entitlement** | `feature.created` · `feature.updated` · `feature.deleted` · `feature.wallet_balance.alert` · `entitlement.created` · `entitlement.updated` · `entitlement.deleted`                                                                     |
+| **Credit Note**           | `credit_note.created` · `credit_note.updated`                                                                                                                                                                                          |
 
 **Production rules:**
+
 - Keep handlers idempotent — Flexprice retries on non-`2xx`
 - Return `200` for unknown event types — prevents unnecessary retries
 - Do heavy processing async — respond fast, queue the work

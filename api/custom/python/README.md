@@ -24,9 +24,9 @@ Runnable samples are in the `examples/` directory.
 
 ## Environment
 
-| Variable | Required | Description |
-| -------- | -------- | ----------- |
-| `FLEXPRICE_API_KEY` | Yes | API key |
+| Variable             | Required | Description                                                                                                  |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `FLEXPRICE_API_KEY`  | Yes      | API key                                                                                                      |
 | `FLEXPRICE_API_HOST` | Optional | Full base URL including `https://` and `/v1` (default: `https://us.api.flexprice.io/v1`). No trailing slash. |
 
 **Integration tests** in [api/tests/python/test_sdk.py](../tests/python/test_sdk.py) use a different env shape; see [api/tests/README.md](../tests/README.md).
@@ -96,7 +96,7 @@ asyncio.run(main())
 
 - Pass your API key as `api_key_auth` when creating the client. The SDK sends it in the `x-api-key` header.
 - Set `FLEXPRICE_API_HOST` to a full URL (see [Environment](#environment)) or use the default `https://us.api.flexprice.io/v1`.
-- Prefer environment variables; get keys from your [FlexPrice dashboard](https://app.flexprice.io) or docs.
+- Prefer environment variables; get keys from your [FlexPrice dashboard](us.flexprice.io) or docs.
 
 ## Error handling
 
@@ -133,6 +133,7 @@ For a full list of operations, see the [API reference](https://docs.flexprice.io
 Flexprice sends webhook events to your server for async updates on payments, invoices, subscriptions, wallets, and more.
 
 **Flow:**
+
 1. Register your endpoint URL in the Flexprice dashboard
 2. Receive `POST` with raw JSON body
 3. Read `event_type` to route
@@ -174,18 +175,19 @@ def handle_webhook(raw_body: str) -> None:
 
 ### Event types
 
-| Category | Events |
-|---|---|
-| **Payment** | `payment.created` · `payment.updated` · `payment.success` · `payment.failed` · `payment.pending` |
-| **Invoice** | `invoice.create.drafted` · `invoice.update` · `invoice.update.finalized` · `invoice.update.payment` · `invoice.update.voided` · `invoice.payment.overdue` · `invoice.communication.triggered` |
-| **Subscription** | `subscription.created` · `subscription.draft.created` · `subscription.activated` · `subscription.updated` · `subscription.paused` · `subscription.resumed` · `subscription.cancelled` · `subscription.renewal.due` |
-| **Subscription Phase** | `subscription.phase.created` · `subscription.phase.updated` · `subscription.phase.deleted` |
-| **Customer** | `customer.created` · `customer.updated` · `customer.deleted` |
-| **Wallet** | `wallet.created` · `wallet.updated` · `wallet.terminated` · `wallet.transaction.created` · `wallet.credit_balance.dropped` · `wallet.credit_balance.recovered` · `wallet.ongoing_balance.dropped` · `wallet.ongoing_balance.recovered` |
-| **Feature / Entitlement** | `feature.created` · `feature.updated` · `feature.deleted` · `feature.wallet_balance.alert` · `entitlement.created` · `entitlement.updated` · `entitlement.deleted` |
-| **Credit Note** | `credit_note.created` · `credit_note.updated` |
+| Category                  | Events                                                                                                                                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Payment**               | `payment.created` · `payment.updated` · `payment.success` · `payment.failed` · `payment.pending`                                                                                                                                       |
+| **Invoice**               | `invoice.create.drafted` · `invoice.update` · `invoice.update.finalized` · `invoice.update.payment` · `invoice.update.voided` · `invoice.payment.overdue` · `invoice.communication.triggered`                                          |
+| **Subscription**          | `subscription.created` · `subscription.draft.created` · `subscription.activated` · `subscription.updated` · `subscription.paused` · `subscription.resumed` · `subscription.cancelled` · `subscription.renewal.due`                     |
+| **Subscription Phase**    | `subscription.phase.created` · `subscription.phase.updated` · `subscription.phase.deleted`                                                                                                                                             |
+| **Customer**              | `customer.created` · `customer.updated` · `customer.deleted`                                                                                                                                                                           |
+| **Wallet**                | `wallet.created` · `wallet.updated` · `wallet.terminated` · `wallet.transaction.created` · `wallet.credit_balance.dropped` · `wallet.credit_balance.recovered` · `wallet.ongoing_balance.dropped` · `wallet.ongoing_balance.recovered` |
+| **Feature / Entitlement** | `feature.created` · `feature.updated` · `feature.deleted` · `feature.wallet_balance.alert` · `entitlement.created` · `entitlement.updated` · `entitlement.deleted`                                                                     |
+| **Credit Note**           | `credit_note.created` · `credit_note.updated`                                                                                                                                                                                          |
 
 **Production rules:**
+
 - Keep handlers idempotent — Flexprice retries on non-`2xx`
 - Return `200` for unknown event types — prevents unnecessary retries
 - Do heavy processing async — respond fast, queue the work

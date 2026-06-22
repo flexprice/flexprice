@@ -20,9 +20,9 @@ import "github.com/flexprice/go-sdk/v2"
 
 ## Environment
 
-| Variable | Required | Description |
-| -------- | -------- | ----------- |
-| `FLEXPRICE_API_KEY` | Yes | API key |
+| Variable             | Required | Description                                                                                                  |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `FLEXPRICE_API_KEY`  | Yes      | API key                                                                                                      |
 | `FLEXPRICE_API_HOST` | Optional | Full base URL including `https://` and `/v1` (default: `https://us.api.flexprice.io/v1`). No trailing slash. |
 
 **Integration tests** in [api/tests/go/test_sdk.go](../tests/go/test_sdk.go) use a different env shape (host without scheme); see [api/tests/README.md](../tests/README.md).
@@ -315,11 +315,10 @@ func main() {
 
 ## Idempotent requests
 
-
 ## Authentication
 
 - Set the API key via the `x-api-key` header. Initialize with `flexprice.New(flexprice.WithServerURL(serverURL), flexprice.WithSecurity(apiKey))`, where `serverURL` is a full URL (default `https://us.api.flexprice.io/v1`) or use `WithServerIndex` / default server list if you omit `WithServerURL`.
-- Prefer environment variables; get keys from your [FlexPrice dashboard](https://app.flexprice.io) or docs.
+- Prefer environment variables; get keys from your [FlexPrice dashboard](us.flexprice.io) or docs.
 
 ## Features
 
@@ -341,6 +340,7 @@ For a full list of operations, see the [API reference](https://docs.flexprice.io
 Flexprice sends webhook events to your server for async updates on payments, invoices, subscriptions, wallets, and more.
 
 **Flow:**
+
 1. Register your endpoint URL in the Flexprice dashboard
 2. Receive `POST` with raw JSON body
 3. Read `event_type` to route
@@ -425,18 +425,19 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 ### Event types
 
-| Category | Events |
-|---|---|
-| **Payment** | `payment.created` · `payment.updated` · `payment.success` · `payment.failed` · `payment.pending` |
-| **Invoice** | `invoice.create.drafted` · `invoice.update` · `invoice.update.finalized` · `invoice.update.payment` · `invoice.update.voided` · `invoice.payment.overdue` · `invoice.communication.triggered` |
-| **Subscription** | `subscription.created` · `subscription.draft.created` · `subscription.activated` · `subscription.updated` · `subscription.paused` · `subscription.resumed` · `subscription.cancelled` · `subscription.renewal.due` |
-| **Subscription Phase** | `subscription.phase.created` · `subscription.phase.updated` · `subscription.phase.deleted` |
-| **Customer** | `customer.created` · `customer.updated` · `customer.deleted` |
-| **Wallet** | `wallet.created` · `wallet.updated` · `wallet.terminated` · `wallet.transaction.created` · `wallet.credit_balance.dropped` · `wallet.credit_balance.recovered` · `wallet.ongoing_balance.dropped` · `wallet.ongoing_balance.recovered` |
-| **Feature / Entitlement** | `feature.created` · `feature.updated` · `feature.deleted` · `feature.wallet_balance.alert` · `entitlement.created` · `entitlement.updated` · `entitlement.deleted` |
-| **Credit Note** | `credit_note.created` · `credit_note.updated` |
+| Category                  | Events                                                                                                                                                                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Payment**               | `payment.created` · `payment.updated` · `payment.success` · `payment.failed` · `payment.pending`                                                                                                                                       |
+| **Invoice**               | `invoice.create.drafted` · `invoice.update` · `invoice.update.finalized` · `invoice.update.payment` · `invoice.update.voided` · `invoice.payment.overdue` · `invoice.communication.triggered`                                          |
+| **Subscription**          | `subscription.created` · `subscription.draft.created` · `subscription.activated` · `subscription.updated` · `subscription.paused` · `subscription.resumed` · `subscription.cancelled` · `subscription.renewal.due`                     |
+| **Subscription Phase**    | `subscription.phase.created` · `subscription.phase.updated` · `subscription.phase.deleted`                                                                                                                                             |
+| **Customer**              | `customer.created` · `customer.updated` · `customer.deleted`                                                                                                                                                                           |
+| **Wallet**                | `wallet.created` · `wallet.updated` · `wallet.terminated` · `wallet.transaction.created` · `wallet.credit_balance.dropped` · `wallet.credit_balance.recovered` · `wallet.ongoing_balance.dropped` · `wallet.ongoing_balance.recovered` |
+| **Feature / Entitlement** | `feature.created` · `feature.updated` · `feature.deleted` · `feature.wallet_balance.alert` · `entitlement.created` · `entitlement.updated` · `entitlement.deleted`                                                                     |
+| **Credit Note**           | `credit_note.created` · `credit_note.updated`                                                                                                                                                                                          |
 
 **Production rules:**
+
 - Keep handlers idempotent — Flexprice retries on non-`2xx`
 - Return `200` for unknown event types — prevents unnecessary retries
 - Do heavy processing async — respond fast, queue the work

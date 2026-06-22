@@ -4,19 +4,27 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that connects
 
 ## Quick start
 
-Two lines to get running. Replace `YOUR_API_KEY` with your key from [app.flexprice.io](https://app.flexprice.io):
+Two lines to get running. Replace `YOUR_API_KEY` with your key from [app.flexprice.io](us.flexprice.io):
 
 **Claude Desktop / Cursor / VS Code** — add to your MCP config:
+
 ```json
 {
   "mcpServers": {
     "flexprice": {
       "command": "npx",
       "args": [
-        "-y", "@flexprice/mcp-server", "start",
-        "--server-url", "https://us.api.flexprice.io/v1",
-        "--api-key-auth", "YOUR_API_KEY",
-        "--scope", "read", "--scope", "write"
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
       ]
     }
   }
@@ -24,6 +32,7 @@ Two lines to get running. Replace `YOUR_API_KEY` with your key from [app.flexpri
 ```
 
 **Claude Code** — one command:
+
 ```bash
 claude mcp add flexprice -- npx -y @flexprice/mcp-server start \
   --server-url https://us.api.flexprice.io/v1 \
@@ -58,20 +67,20 @@ claude mcp add flexprice -- npx -y @flexprice/mcp-server start \
 ## Prerequisites
 
 - Node.js v20 or higher
-- A Flexprice API key from [app.flexprice.io](https://app.flexprice.io)
+- A Flexprice API key from [app.flexprice.io](us.flexprice.io)
 
 ---
 
 ## Config file locations
 
-| Client | Config location |
-|--------|----------------|
-| **Cursor** | Settings → MCP, or `~/.cursor/mcp.json` |
-| **VS Code** | Command Palette → `MCP: Open User Configuration` |
-| **Claude Desktop (macOS)** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| **Claude Desktop (Windows)** | `%APPDATA%\Claude\claude_desktop_config.json` |
-| **Claude Code** | `claude mcp add` command (see below) |
-| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` |
+| Client                       | Config location                                                   |
+| ---------------------------- | ----------------------------------------------------------------- |
+| **Cursor**                   | Settings → MCP, or `~/.cursor/mcp.json`                           |
+| **VS Code**                  | Command Palette → `MCP: Open User Configuration`                  |
+| **Claude Desktop (macOS)**   | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| **Claude Desktop (Windows)** | `%APPDATA%\Claude\claude_desktop_config.json`                     |
+| **Claude Code**              | `claude mcp add` command (see below)                              |
+| **Windsurf**                 | `~/.codeium/windsurf/mcp_config.json`                             |
 
 ---
 
@@ -87,10 +96,17 @@ All examples use `read + write` scope by default. Adjust `--scope` flags as need
     "flexprice": {
       "command": "npx",
       "args": [
-        "-y", "@flexprice/mcp-server", "start",
-        "--server-url", "https://us.api.flexprice.io/v1",
-        "--api-key-auth", "YOUR_API_KEY",
-        "--scope", "read", "--scope", "write"
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
       ]
     }
   }
@@ -106,10 +122,17 @@ All examples use `read + write` scope by default. Adjust `--scope` flags as need
       "type": "stdio",
       "command": "npx",
       "args": [
-        "-y", "@flexprice/mcp-server", "start",
-        "--server-url", "https://us.api.flexprice.io/v1",
-        "--api-key-auth", "YOUR_API_KEY",
-        "--scope", "read", "--scope", "write"
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
       ]
     }
   }
@@ -124,10 +147,17 @@ All examples use `read + write` scope by default. Adjust `--scope` flags as need
     "flexprice": {
       "command": "npx",
       "args": [
-        "-y", "@flexprice/mcp-server", "start",
-        "--server-url", "https://us.api.flexprice.io/v1",
-        "--api-key-auth", "YOUR_API_KEY",
-        "--scope", "read", "--scope", "write"
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
       ]
     }
   }
@@ -155,10 +185,17 @@ Verify with `/mcp` inside a Claude Code session.
     "flexprice": {
       "command": "npx",
       "args": [
-        "-y", "@flexprice/mcp-server", "start",
-        "--server-url", "https://us.api.flexprice.io/v1",
-        "--api-key-auth", "YOUR_API_KEY",
-        "--scope", "read", "--scope", "write"
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
       ]
     }
   }
@@ -171,30 +208,34 @@ Verify with `/mcp` inside a Claude Code session.
 
 Scopes let you limit what the AI can do. Pass one or more `--scope` flags at startup.
 
-| Scope | What it covers | When to use |
-|-------|---------------|-------------|
-| `read` | All GET operations — list, get, query, search | Safe exploration, reporting, dashboards |
-| `write` | Create and update operations (POST, PUT, PATCH) | Automation, onboarding workflows |
-| `delete` | Destructive operations — delete, void, finalize | Admin tasks only |
+| Scope    | What it covers                                  | When to use                             |
+| -------- | ----------------------------------------------- | --------------------------------------- |
+| `read`   | All GET operations — list, get, query, search   | Safe exploration, reporting, dashboards |
+| `write`  | Create and update operations (POST, PUT, PATCH) | Automation, onboarding workflows        |
+| `delete` | Destructive operations — delete, void, finalize | Admin tasks only                        |
 
 ### Recipes
 
 **Read-only** — safest, for exploration and analytics:
+
 ```json
 "args": ["...", "--scope", "read"]
 ```
 
 **Read + write** — recommended for most use cases:
+
 ```json
 "args": ["...", "--scope", "read", "--scope", "write"]
 ```
 
 **Full access** — includes destructive operations, use with care:
+
 ```json
 "args": ["...", "--scope", "read", "--scope", "write", "--scope", "delete"]
 ```
 
 **All tools** — equivalent to full access (omitting `--scope` entirely exposes everything):
+
 ```json
 "args": ["...", "--server-url", "...", "--api-key-auth", "..."]
 ```
@@ -207,14 +248,14 @@ Scopes let you limit what the AI can do. Pass one or more `--scope` flags at sta
 
 The MCP server currently exposes **70 tools** across 6 resource types:
 
-| Resource | Tools | Examples |
-|----------|-------|---------|
-| **Customers** | 9 | create, get, update, delete, usage summary, entitlements |
-| **Subscriptions** | 25 | create, cancel, activate, modify, schedule, line items, addons |
-| **Invoices** | 14 | create, get, finalize, void, recalculate, preview, PDF |
-| **Events** | 8 | ingest, bulk ingest, usage analytics, usage by meter |
-| **Plans** | 7 | create, get, update, delete, clone, sync prices |
-| **Prices** | 7 | create, get, update, delete, bulk create, lookup by key |
+| Resource          | Tools | Examples                                                       |
+| ----------------- | ----- | -------------------------------------------------------------- |
+| **Customers**     | 9     | create, get, update, delete, usage summary, entitlements       |
+| **Subscriptions** | 25    | create, cancel, activate, modify, schedule, line items, addons |
+| **Invoices**      | 14    | create, get, finalize, void, recalculate, preview, PDF         |
+| **Events**        | 8     | ingest, bulk ingest, usage analytics, usage by meter           |
+| **Plans**         | 7     | create, get, update, delete, clone, sync prices                |
+| **Prices**        | 7     | create, get, update, delete, bulk create, lookup by key        |
 
 To see the live tool list in your client: in Claude use `/mcp`, in Cursor open the MCP panel.
 
@@ -224,11 +265,11 @@ To see the live tool list in your client: in Claude use `/mcp`, in Cursor open t
 
 With 70+ tools, every request carries the full tool list in context — increasing token usage and sometimes confusing tool selection. **Dynamic mode** replaces all tools with 3 meta-tools:
 
-| Meta-tool | What it does |
-|-----------|-------------|
-| `list_tools` | List all available tools with names and descriptions |
-| `describe_tool` | Get the input schema for a specific tool |
-| `execute_tool` | Run any tool by name with given parameters |
+| Meta-tool       | What it does                                         |
+| --------------- | ---------------------------------------------------- |
+| `list_tools`    | List all available tools with names and descriptions |
+| `describe_tool` | Get the input schema for a specific tool             |
+| `execute_tool`  | Run any tool by name with given parameters           |
 
 The AI discovers and calls tools on demand instead of loading all schemas upfront. This typically reduces per-request token usage by **60–90%** for large tool sets.
 
@@ -240,11 +281,19 @@ The AI discovers and calls tools on demand instead of loading all schemas upfron
     "flexprice": {
       "command": "npx",
       "args": [
-        "-y", "@flexprice/mcp-server", "start",
-        "--server-url", "https://us.api.flexprice.io/v1",
-        "--api-key-auth", "YOUR_API_KEY",
-        "--scope", "read", "--scope", "write",
-        "--mode", "dynamic"
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--scope",
+        "read",
+        "--scope",
+        "write",
+        "--mode",
+        "dynamic"
       ]
     }
   }
@@ -257,10 +306,10 @@ The AI discovers and calls tools on demand instead of loading all schemas upfron
 
 ## Available regions
 
-| Region | Server URL |
-|--------|-----------|
-| US | `https://us.api.flexprice.io/v1` |
-| Cloud | `https://api.cloud.flexprice.io/v1` |
+| Region | Server URL                          |
+| ------ | ----------------------------------- |
+| US     | `https://us.api.flexprice.io/v1`    |
+| Cloud  | `https://api.cloud.flexprice.io/v1` |
 
 Pass the appropriate URL via `--server-url`. Defaults to US if omitted.
 
@@ -271,14 +320,19 @@ Pass the appropriate URL via `--server-url`. Defaults to US if omitted.
 Use this if you want to modify the server or avoid downloading on each run.
 
 **From cloned repo:**
+
 ```json
 {
   "mcpServers": {
     "flexprice": {
       "command": "node",
       "args": [
-        "/path/to/mcp-server/bin/mcp-server.js", "start",
-        "--scope", "read", "--scope", "write"
+        "/path/to/mcp-server/bin/mcp-server.js",
+        "start",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
       ],
       "env": {
         "API_KEY_APIKEYAUTH": "your_api_key_here",
@@ -290,6 +344,7 @@ Use this if you want to modify the server or avoid downloading on each run.
 ```
 
 **Docker:**
+
 ```bash
 docker build -t flexprice-mcp .
 docker run -i \
@@ -299,13 +354,29 @@ docker run -i \
 ```
 
 Or as a config snippet:
+
 ```json
 {
   "mcpServers": {
     "flexprice": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "-e", "API_KEY_APIKEYAUTH", "-e", "BASE_URL", "flexprice-mcp",
-               "node", "bin/mcp-server.js", "start", "--scope", "read", "--scope", "write"],
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "API_KEY_APIKEYAUTH",
+        "-e",
+        "BASE_URL",
+        "flexprice-mcp",
+        "node",
+        "bin/mcp-server.js",
+        "start",
+        "--scope",
+        "read",
+        "--scope",
+        "write"
+      ],
       "env": {
         "API_KEY_APIKEYAUTH": "your_api_key_here",
         "BASE_URL": "https://us.api.flexprice.io/v1"
@@ -329,6 +400,7 @@ The server is generated from a tag-filtered OpenAPI spec (`docs/swagger/swagger-
 4. Run `make merge-custom` to merge custom files including this README
 
 **To regenerate after API changes:**
+
 ```bash
 make sdk-all        # uses existing swagger spec
 make update-sdk     # regenerates swagger first, then sdk-all
@@ -354,6 +426,7 @@ Custom files in `api/custom/mcp/` (including this README and examples) are prese
 ### Authentication errors
 
 Test your key directly:
+
 ```bash
 curl -H "x-api-key: YOUR_API_KEY" https://us.api.flexprice.io/v1/customers
 ```
