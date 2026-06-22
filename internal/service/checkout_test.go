@@ -189,7 +189,7 @@ func (s *CheckoutServiceTestSuite) TestCreate_PaymentObjective() {
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
-		Mode:         types.CheckoutObjectivePayment,
+		Mode:           types.CheckoutModePayment,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
@@ -219,7 +219,7 @@ func (s *CheckoutServiceTestSuite) TestCreate_PaymentObjective() {
 	pending, err := s.checkoutRepo.GetPendingByEntity(ctx, checkout.GetPendingByEntityParams{
 		EntityType: types.CheckoutEntityTypeSubscription,
 		EntityID:   newSubID,
-		Mode:       types.CheckoutObjectivePayment,
+		Mode:       types.CheckoutModePayment,
 	})
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), pending)
@@ -248,7 +248,7 @@ func (s *CheckoutServiceTestSuite) TestCreate_SetupObjective() {
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
-		Mode:         types.CheckoutObjectiveSetup,
+		Mode:           types.CheckoutModeSetup,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
@@ -268,14 +268,14 @@ func (s *CheckoutServiceTestSuite) TestCreate_SetupObjective() {
 	chk, err := s.checkoutRepo.Get(ctx, resp.ID)
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), chk)
-	assert.Equal(s.T(), types.CheckoutObjectiveSetup, chk.Mode)
+	assert.Equal(s.T(), types.CheckoutModeSetup, chk.Mode)
 	newSubID := chk.EntityID
 	require.NotEmpty(s.T(), newSubID)
 
 	pending, err := s.checkoutRepo.GetPendingByEntity(ctx, checkout.GetPendingByEntityParams{
 		EntityType: types.CheckoutEntityTypeSubscription,
 		EntityID:   newSubID,
-		Mode:       types.CheckoutObjectiveSetup,
+		Mode:       types.CheckoutModeSetup,
 	})
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), pending)
@@ -302,7 +302,7 @@ func (s *CheckoutServiceTestSuite) TestComplete_Idempotent() {
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
-		Mode:         types.CheckoutObjectivePayment,
+		Mode:           types.CheckoutModePayment,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
@@ -336,7 +336,7 @@ func (s *CheckoutServiceTestSuite) TestComplete_SetupActivatesDraft() {
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
-		Mode:         types.CheckoutObjectiveSetup,
+		Mode:           types.CheckoutModeSetup,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
@@ -389,7 +389,7 @@ func (s *CheckoutServiceTestSuite) TestCreate_NoActiveConnection() {
 	svc := s.newCheckoutService()
 	_, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
-		Mode:         types.CheckoutObjectivePayment,
+		Mode:           types.CheckoutModePayment,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,

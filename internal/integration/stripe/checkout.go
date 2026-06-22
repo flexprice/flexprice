@@ -25,8 +25,8 @@ func NewStripeCheckoutProvider(p *PaymentService, c interfaces.CustomerService, 
 var _ checkout.CheckoutProvider = (*StripeCheckoutProvider)(nil)
 
 // stripeModeForObjective maps the checkout objective to the Stripe Checkout Session mode.
-func stripeModeForObjective(o types.CheckoutObjective) string {
-	if o == types.CheckoutObjectiveSetup {
+func stripeModeForObjective(o types.CheckoutMode) string {
+	if o == types.CheckoutModeSetup {
 		return "setup"
 	}
 	return "payment"
@@ -34,9 +34,9 @@ func stripeModeForObjective(o types.CheckoutObjective) string {
 
 func (s *StripeCheckoutProvider) CreateCheckoutSession(ctx context.Context, req checkout.CheckoutSessionRequest) (*checkout.CheckoutSessionResponse, error) {
 	switch req.Objective {
-	case types.CheckoutObjectivePayment:
+	case types.CheckoutModePayment:
 		return s.createPaymentSession(ctx, req)
-	case types.CheckoutObjectiveSetup:
+	case types.CheckoutModeSetup:
 		return s.createSetupSession(ctx, req)
 	default:
 		return nil, ierr.NewError("unsupported checkout objective").

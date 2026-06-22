@@ -4880,7 +4880,7 @@ type CheckoutMutation struct {
 	entity_type         *types.CheckoutEntityType
 	entity_id           *string
 	checkout_action     *types.CheckoutAction
-	mode                *types.CheckoutObjective
+	mode                *types.CheckoutMode
 	checkout_status     *types.CheckoutStatus
 	amount              *decimal.Decimal
 	currency            *string
@@ -5440,12 +5440,12 @@ func (m *CheckoutMutation) ResetCheckoutAction() {
 }
 
 // SetMode sets the "mode" field.
-func (m *CheckoutMutation) SetMode(to types.CheckoutObjective) {
+func (m *CheckoutMutation) SetMode(to types.CheckoutMode) {
 	m.mode = &to
 }
 
 // Mode returns the value of the "mode" field in the mutation.
-func (m *CheckoutMutation) Mode() (r types.CheckoutObjective, exists bool) {
+func (m *CheckoutMutation) Mode() (r types.CheckoutMode, exists bool) {
 	v := m.mode
 	if v == nil {
 		return
@@ -5456,7 +5456,7 @@ func (m *CheckoutMutation) Mode() (r types.CheckoutObjective, exists bool) {
 // OldMode returns the old "mode" field's value of the Checkout entity.
 // If the Checkout object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutMutation) OldMode(ctx context.Context) (v types.CheckoutObjective, err error) {
+func (m *CheckoutMutation) OldMode(ctx context.Context) (v types.CheckoutMode, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldMode is only allowed on UpdateOne operations")
 	}
@@ -6387,7 +6387,7 @@ func (m *CheckoutMutation) SetField(name string, value ent.Value) error {
 		m.SetCheckoutAction(v)
 		return nil
 	case checkout.FieldMode:
-		v, ok := value.(types.CheckoutObjective)
+		v, ok := value.(types.CheckoutMode)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

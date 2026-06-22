@@ -8,7 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-func newCheckout(id, entityID string, mode types.CheckoutObjective, status types.CheckoutStatus, expires time.Time) *checkout.Checkout {
+func newCheckout(id, entityID string, mode types.CheckoutMode, status types.CheckoutStatus, expires time.Time) *checkout.Checkout {
 	return &checkout.Checkout{
 		ID:             id,
 		CustomerID:     "cust_1",
@@ -27,30 +27,30 @@ func TestInMemoryCheckoutStore_GetPendingByEntity(t *testing.T) {
 	store := NewInMemoryCheckoutStore()
 	now := time.Now().UTC()
 
-	if err := store.Create(ctx, newCheckout("chk_pay", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusPending, now.Add(time.Hour))); err != nil {
+	if err := store.Create(ctx, newCheckout("chk_pay", "sub_1", types.CheckoutModePayment, types.CheckoutStatusPending, now.Add(time.Hour))); err != nil {
 		t.Fatalf("Create chk_pay: %v", err)
 	}
-	if err := store.Create(ctx, newCheckout("chk_setup", "sub_1", types.CheckoutObjectiveSetup, types.CheckoutStatusPending, now.Add(time.Hour))); err != nil {
+	if err := store.Create(ctx, newCheckout("chk_setup", "sub_1", types.CheckoutModeSetup, types.CheckoutStatusPending, now.Add(time.Hour))); err != nil {
 		t.Fatalf("Create chk_setup: %v", err)
 	}
-	if err := store.Create(ctx, newCheckout("chk_done", "sub_1", types.CheckoutObjectivePayment, types.CheckoutStatusCompleted, now.Add(time.Hour))); err != nil {
+	if err := store.Create(ctx, newCheckout("chk_done", "sub_1", types.CheckoutModePayment, types.CheckoutStatusCompleted, now.Add(time.Hour))); err != nil {
 		t.Fatalf("Create chk_done: %v", err)
 	}
 
 	tests := []struct {
-		name     string
-		params   checkout.GetPendingByEntityParams
-		wantID   string
-		wantNil  bool
+		name    string
+		params  checkout.GetPendingByEntityParams
+		wantID  string
+		wantNil bool
 	}{
 		{
 			name:   "payment pending found",
-			params: checkout.GetPendingByEntityParams{EntityType: types.CheckoutEntityTypeSubscription, EntityID: "sub_1", Mode: types.CheckoutObjectivePayment},
+			params: checkout.GetPendingByEntityParams{EntityType: types.CheckoutEntityTypeSubscription, EntityID: "sub_1", Mode: types.CheckoutModePayment},
 			wantID: "chk_pay",
 		},
 		{
 			name:    "missing entity returns nil",
-			params:  checkout.GetPendingByEntityParams{EntityType: types.CheckoutEntityTypeSubscription, EntityID: "sub_2", Mode: types.CheckoutObjectivePayment},
+			params:  checkout.GetPendingByEntityParams{EntityType: types.CheckoutEntityTypeSubscription, EntityID: "sub_2", Mode: types.CheckoutModePayment},
 			wantNil: true,
 		},
 	}

@@ -14,8 +14,8 @@ func TestCheckoutEnums_Validate(t *testing.T) {
 		{"invalid action", func() error { return CheckoutAction("nope").Validate() }, true},
 		{"valid provider", func() error { return CheckoutProviderStripe.Validate() }, false},
 		{"invalid provider", func() error { return CheckoutProvider("nope").Validate() }, true},
-		{"valid objective", func() error { return CheckoutObjectivePayment.Validate() }, false},
-		{"invalid objective", func() error { return CheckoutObjective("nope").Validate() }, true},
+		{"valid objective", func() error { return CheckoutModePayment.Validate() }, false},
+		{"invalid objective", func() error { return CheckoutMode("nope").Validate() }, true},
 		{"valid status", func() error { return CheckoutStatusPending.Validate() }, false},
 		{"invalid status", func() error { return CheckoutStatus("nope").Validate() }, true},
 	}

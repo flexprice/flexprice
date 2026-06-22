@@ -7,10 +7,10 @@ import (
 )
 
 func TestStripeMode_FromObjective(t *testing.T) {
-	if got := stripeModeForObjective(types.CheckoutObjectivePayment); got != "payment" {
+	if got := stripeModeForObjective(types.CheckoutModePayment); got != "payment" {
 		t.Fatalf("payment objective -> %q, want payment", got)
 	}
-	if got := stripeModeForObjective(types.CheckoutObjectiveSetup); got != "setup" {
+	if got := stripeModeForObjective(types.CheckoutModeSetup); got != "setup" {
 		t.Fatalf("setup objective -> %q, want setup", got)
 	}
 }

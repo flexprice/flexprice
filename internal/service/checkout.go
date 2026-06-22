@@ -62,9 +62,9 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 	switch req.CheckoutAction {
 	case types.CheckoutActionSubscriptionCreation:
 		switch req.Mode {
-		case types.CheckoutObjectivePayment:
+		case types.CheckoutModePayment:
 			return s.createPayment(ctx, req)
-		case types.CheckoutObjectiveSetup:
+		case types.CheckoutModeSetup:
 			return s.createSetup(ctx, req)
 		}
 		return nil, ierr.NewError("unsupported checkout mode").
@@ -121,7 +121,7 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 			EntityType:     types.CheckoutEntityTypeSubscription,
 			EntityID:       subResp.Subscription.ID,
 			CheckoutAction: types.CheckoutActionSubscriptionCreation,
-			Mode:           types.CheckoutObjectivePayment,
+			Mode:           types.CheckoutModePayment,
 			Status:         types.CheckoutStatusPending,
 			Amount:         &inv.AmountDue,
 			Currency:       subReq.Currency,
@@ -139,7 +139,7 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 	}
 
 	return s.openSessionAndRespond(ctx, chk, checkout.CheckoutSessionRequest{
-		Objective:  types.CheckoutObjectivePayment,
+		Objective:  types.CheckoutModePayment,
 		CheckoutID: chk.ID,
 		CustomerID: customerID,
 		InvoiceID:  invoiceID,
@@ -181,7 +181,7 @@ func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckou
 			EntityType:     types.CheckoutEntityTypeSubscription,
 			EntityID:       subResp.Subscription.ID,
 			CheckoutAction: types.CheckoutActionSubscriptionCreation,
-			Mode:           types.CheckoutObjectiveSetup,
+			Mode:           types.CheckoutModeSetup,
 			Status:         types.CheckoutStatusPending,
 			Currency:       subReq.Currency,
 			Provider:       provider,
@@ -198,7 +198,7 @@ func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckou
 	}
 
 	return s.openSessionAndRespond(ctx, chk, checkout.CheckoutSessionRequest{
-		Objective:  types.CheckoutObjectiveSetup,
+		Objective:  types.CheckoutModeSetup,
 		CheckoutID: chk.ID,
 		CustomerID: customerID,
 		Currency:   subReq.Currency,
@@ -280,7 +280,7 @@ func (s *checkoutService) Complete(ctx context.Context, checkoutID string) error
 
 	now := time.Now().UTC()
 
-	if chk.Mode == types.CheckoutObjectiveSetup &&
+	if chk.Mode == types.CheckoutModeSetup &&
 		chk.EntityType == types.CheckoutEntityTypeSubscription {
 		subSvc := NewSubscriptionService(s.ServiceParams)
 		if _, err := subSvc.ActivateDraftSubscription(ctx, chk.EntityID,

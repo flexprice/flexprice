@@ -11,7 +11,7 @@ import (
 type GetPendingByEntityParams struct {
 	EntityType types.CheckoutEntityType
 	EntityID   string
-	Mode       types.CheckoutObjective
+	Mode       types.CheckoutMode
 }
 
 // Repository persists Checkout aggregates.

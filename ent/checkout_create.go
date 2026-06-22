@@ -137,7 +137,7 @@ func (cc *CheckoutCreate) SetCheckoutAction(ta types.CheckoutAction) *CheckoutCr
 }
 
 // SetMode sets the "mode" field.
-func (cc *CheckoutCreate) SetMode(to types.CheckoutObjective) *CheckoutCreate {
+func (cc *CheckoutCreate) SetMode(to types.CheckoutMode) *CheckoutCreate {
 	cc.mutation.SetMode(to)
 	return cc
 }

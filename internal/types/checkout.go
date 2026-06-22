@@ -60,17 +60,17 @@ func (p CheckoutProvider) Validate() error {
 	}
 }
 
-// CheckoutObjective drives parking state, provider mode and completion trigger.
-type CheckoutObjective string
+// CheckoutMode drives parking state, provider mode and completion trigger.
+type CheckoutMode string
 
 const (
-	CheckoutObjectivePayment CheckoutObjective = "payment"
-	CheckoutObjectiveSetup   CheckoutObjective = "setup"
+	CheckoutModePayment CheckoutMode = "payment"
+	CheckoutModeSetup   CheckoutMode = "setup"
 )
 
-func (o CheckoutObjective) Validate() error {
+func (o CheckoutMode) Validate() error {
 	switch o {
-	case CheckoutObjectivePayment, CheckoutObjectiveSetup:
+	case CheckoutModePayment, CheckoutModeSetup:
 		return nil
 	default:
 		return ierr.NewError("invalid checkout objective").

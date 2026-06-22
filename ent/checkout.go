@@ -43,7 +43,7 @@ type Checkout struct {
 	// CheckoutAction holds the value of the "checkout_action" field.
 	CheckoutAction types.CheckoutAction `json:"checkout_action,omitempty"`
 	// Mode holds the value of the "mode" field.
-	Mode types.CheckoutObjective `json:"mode,omitempty"`
+	Mode types.CheckoutMode `json:"mode,omitempty"`
 	// CheckoutStatus holds the value of the "checkout_status" field.
 	CheckoutStatus types.CheckoutStatus `json:"checkout_status,omitempty"`
 	// Amount holds the value of the "amount" field.
@@ -177,7 +177,7 @@ func (c *Checkout) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field mode", values[i])
 			} else if value.Valid {
-				c.Mode = types.CheckoutObjective(value.String)
+				c.Mode = types.CheckoutMode(value.String)
 			}
 		case checkout.FieldCheckoutStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {

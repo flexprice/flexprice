@@ -16,7 +16,7 @@ type CreateCheckoutRequest struct {
 	// CheckoutAction selects what this checkout creates.
 	CheckoutAction types.CheckoutAction `json:"checkout_action" binding:"required"`
 	// Mode is required for subscription_creation (payment|setup).
-	Mode types.CheckoutObjective `json:"mode,omitempty"`
+	Mode types.CheckoutMode `json:"mode,omitempty"`
 
 	// Subscription is the full new-subscription spec; REQUIRED when
 	// CheckoutAction == subscription_creation.
@@ -54,7 +54,7 @@ func (r *CreateCheckoutRequest) Validate() error {
 			return ierr.NewError("subscription is required for subscription_creation checkout").
 				WithHint("Provide the `subscription` object").Mark(ierr.ErrValidation)
 		}
-		if r.Mode != types.CheckoutObjectivePayment && r.Mode != types.CheckoutObjectiveSetup {
+		if r.Mode != types.CheckoutModePayment && r.Mode != types.CheckoutModeSetup {
 			return ierr.NewError("mode must be 'payment' or 'setup' for subscription_creation").
 				WithHint("Set mode to payment or setup").Mark(ierr.ErrValidation)
 		}
@@ -69,7 +69,7 @@ type CheckoutResponse struct {
 	EntityType        types.CheckoutEntityType `json:"entity_type"`
 	EntityID          string                   `json:"entity_id"`
 	CheckoutAction    types.CheckoutAction     `json:"checkout_action"`
-	Mode              types.CheckoutObjective  `json:"mode"`
+	Mode              types.CheckoutMode       `json:"mode"`
 	Status            types.CheckoutStatus     `json:"status"`
 	Amount            *decimal.Decimal         `json:"amount,omitempty"`
 	Currency          string                   `json:"currency,omitempty"`

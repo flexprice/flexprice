@@ -1020,7 +1020,7 @@ func (p *paymentProcessor) handleCheckoutCompletion(ctx context.Context, inv *in
 	chk, err := p.CheckoutRepo.GetPendingByEntity(ctx, checkout.GetPendingByEntityParams{
 		EntityType: types.CheckoutEntityTypeSubscription,
 		EntityID:   *inv.SubscriptionID,
-		Mode:       types.CheckoutObjectivePayment,
+		Mode:       types.CheckoutModePayment,
 	})
 	if err != nil {
 		return err

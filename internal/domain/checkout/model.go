@@ -18,7 +18,7 @@ type Checkout struct {
 	EntityID   string
 
 	CheckoutAction types.CheckoutAction
-	Mode           types.CheckoutObjective
+	Mode           types.CheckoutMode
 	Status         types.CheckoutStatus
 
 	Amount   *decimal.Decimal

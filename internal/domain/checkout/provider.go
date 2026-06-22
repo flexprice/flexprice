@@ -11,8 +11,8 @@ import (
 // CheckoutSessionRequest is the provider-agnostic request to open a hosted
 // checkout session. Objective selects the provider mode (payment vs setup).
 type CheckoutSessionRequest struct {
-	Objective  types.CheckoutObjective // payment -> charge mode; setup -> card-capture mode
-	CheckoutID string                  // flexprice checkout id; goes into provider metadata
+	Objective  types.CheckoutMode // payment -> charge mode; setup -> card-capture mode
+	CheckoutID string             // flexprice checkout id; goes into provider metadata
 	CustomerID string
 
 	// Payment objective only:

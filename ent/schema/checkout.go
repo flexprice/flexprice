@@ -40,7 +40,7 @@ func (Checkout) Fields() []ent.Field {
 			GoType(types.CheckoutAction("")),
 		field.String("mode").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
-			GoType(types.CheckoutObjective("")),
+			GoType(types.CheckoutMode("")),
 		field.String("checkout_status").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
 			GoType(types.CheckoutStatus("")).

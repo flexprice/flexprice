@@ -124,7 +124,7 @@ func CheckoutAction(v types.CheckoutAction) predicate.Checkout {
 }
 
 // Mode applies equality check predicate on the "mode" field. It's identical to ModeEQ.
-func Mode(v types.CheckoutObjective) predicate.Checkout {
+func Mode(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldEQ(FieldMode, vc))
 }
@@ -925,19 +925,19 @@ func CheckoutActionContainsFold(v types.CheckoutAction) predicate.Checkout {
 }
 
 // ModeEQ applies the EQ predicate on the "mode" field.
-func ModeEQ(v types.CheckoutObjective) predicate.Checkout {
+func ModeEQ(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldEQ(FieldMode, vc))
 }
 
 // ModeNEQ applies the NEQ predicate on the "mode" field.
-func ModeNEQ(v types.CheckoutObjective) predicate.Checkout {
+func ModeNEQ(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldNEQ(FieldMode, vc))
 }
 
 // ModeIn applies the In predicate on the "mode" field.
-func ModeIn(vs ...types.CheckoutObjective) predicate.Checkout {
+func ModeIn(vs ...types.CheckoutMode) predicate.Checkout {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
@@ -946,7 +946,7 @@ func ModeIn(vs ...types.CheckoutObjective) predicate.Checkout {
 }
 
 // ModeNotIn applies the NotIn predicate on the "mode" field.
-func ModeNotIn(vs ...types.CheckoutObjective) predicate.Checkout {
+func ModeNotIn(vs ...types.CheckoutMode) predicate.Checkout {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
@@ -955,55 +955,55 @@ func ModeNotIn(vs ...types.CheckoutObjective) predicate.Checkout {
 }
 
 // ModeGT applies the GT predicate on the "mode" field.
-func ModeGT(v types.CheckoutObjective) predicate.Checkout {
+func ModeGT(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldGT(FieldMode, vc))
 }
 
 // ModeGTE applies the GTE predicate on the "mode" field.
-func ModeGTE(v types.CheckoutObjective) predicate.Checkout {
+func ModeGTE(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldGTE(FieldMode, vc))
 }
 
 // ModeLT applies the LT predicate on the "mode" field.
-func ModeLT(v types.CheckoutObjective) predicate.Checkout {
+func ModeLT(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldLT(FieldMode, vc))
 }
 
 // ModeLTE applies the LTE predicate on the "mode" field.
-func ModeLTE(v types.CheckoutObjective) predicate.Checkout {
+func ModeLTE(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldLTE(FieldMode, vc))
 }
 
 // ModeContains applies the Contains predicate on the "mode" field.
-func ModeContains(v types.CheckoutObjective) predicate.Checkout {
+func ModeContains(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldContains(FieldMode, vc))
 }
 
 // ModeHasPrefix applies the HasPrefix predicate on the "mode" field.
-func ModeHasPrefix(v types.CheckoutObjective) predicate.Checkout {
+func ModeHasPrefix(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldHasPrefix(FieldMode, vc))
 }
 
 // ModeHasSuffix applies the HasSuffix predicate on the "mode" field.
-func ModeHasSuffix(v types.CheckoutObjective) predicate.Checkout {
+func ModeHasSuffix(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldHasSuffix(FieldMode, vc))
 }
 
 // ModeEqualFold applies the EqualFold predicate on the "mode" field.
-func ModeEqualFold(v types.CheckoutObjective) predicate.Checkout {
+func ModeEqualFold(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldEqualFold(FieldMode, vc))
 }
 
 // ModeContainsFold applies the ContainsFold predicate on the "mode" field.
-func ModeContainsFold(v types.CheckoutObjective) predicate.Checkout {
+func ModeContainsFold(v types.CheckoutMode) predicate.Checkout {
 	vc := string(v)
 	return predicate.Checkout(sql.FieldContainsFold(FieldMode, vc))
 }
