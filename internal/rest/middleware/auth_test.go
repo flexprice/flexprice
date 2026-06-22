@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,10 +50,11 @@ func newAuthTestRouter(t *testing.T) *gin.Engine {
 	r := gin.New()
 	r.Use(AuthenticateMiddleware(cfg, nil, log))
 	r.GET("/test", func(c *gin.Context) {
+		ctx := c.Request.Context()
 		c.JSON(http.StatusOK, gin.H{
-			"tenant_id":      types.GetTenantID(c.Request.Context()),
-			"user_id":        types.GetUserID(c.Request.Context()),
-			"environment_id": types.GetEnvironmentID(c.Request.Context()),
+			"tenant_id":      types.GetTenantID(ctx),
+			"user_id":        types.GetUserID(ctx),
+			"environment_id": types.GetEnvironmentID(ctx),
 		})
 	})
 	return r
@@ -110,5 +112,31 @@ func TestAuthenticateMiddleware_EnvironmentIDFromJWT(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Body.String(), `"environment_id":""`)
+	})
+
+	t.Run("JWT user is not a service account", func(t *testing.T) {
+		token := makeJWT(t, "t_tenant1", "usr_dev", "", 1)
+
+		var capturedCtx context.Context
+		r := gin.New()
+		r.Use(AuthenticateMiddleware(&config.Configuration{
+			Auth: config.AuthConfig{
+				Provider: "flexprice",
+				Secret:   testSecret,
+				APIKey:   config.APIKeyConfig{Header: "x-api-key"},
+			},
+		}, nil, newTestLogger(t)))
+		r.GET("/capture", func(c *gin.Context) {
+			capturedCtx = c.Request.Context()
+			c.Status(http.StatusOK)
+		})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/capture", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		r.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		assert.False(t, types.IsServiceAccount(capturedCtx))
 	})
 }

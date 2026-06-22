@@ -28,6 +28,9 @@ const (
 
 	// Tenant internal state
 	CtxTenantInternalStatus ContextKey = "ctx_tenant_internal_status"
+
+	// Caller type — "user" (JWT), "service_account" (DB API key), or "" (config API key)
+	CtxUserType ContextKey = "ctx_user_type"
 )
 
 func GetUserID(ctx context.Context) string {
@@ -112,6 +115,13 @@ func SetExternalCustomerID(ctx context.Context, externalCustomerID string) conte
 // SetCustomerID sets the customer ID in context
 func SetCustomerID(ctx context.Context, customerID string) context.Context {
 	return context.WithValue(ctx, CtxCustomerID, customerID)
+}
+
+// IsServiceAccount returns true when the caller authenticated via a DB-backed service account API key.
+// JWT users and config API keys both return false and bypass RBAC enforcement.
+func IsServiceAccount(ctx context.Context) bool {
+	t, _ := ctx.Value(CtxUserType).(string)
+	return t == string(UserTypeServiceAccount)
 }
 
 // GetTenantInternalStatus returns the tenant's internal status from the context.
