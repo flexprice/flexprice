@@ -28,6 +28,14 @@ type PaymentMethod struct {
 }
 
 func (pm *PaymentMethod) Validate() error {
+	if pm.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			Mark(ierr.ErrValidation)
+	}
+	if pm.EnvironmentID == "" {
+		return ierr.NewError("environment_id is required").
+			Mark(ierr.ErrValidation)
+	}
 	if pm.CustomerID == "" {
 		return ierr.NewError("customer_id is required").
 			Mark(ierr.ErrValidation)

@@ -589,6 +589,7 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 		WebhookHandler:    webhookHandler,
 		Ledger:            f.ledger,
 		PaymentMethodRepo: f.paymentMethodRepo,
+		Logger:            f.logger,
 	}, nil
 }
 
@@ -834,6 +835,7 @@ type MoyasarIntegration struct {
 	WebhookHandler    *moyasarwebhook.Handler
 	Ledger            *ledger.PaymentsLedger
 	PaymentMethodRepo paymentmethod.Repository
+	Logger            *logger.Logger
 }
 
 func (m *MoyasarIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
@@ -858,6 +860,13 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 			return false, false, ledgerErr
 		}
 		return true, false, nil
+	} else {
+		// Log void failure so we can distinguish transient vs permanent failures in observability
+		m.Logger.Info(ctx, "void attempt failed, falling back to refund",
+			"flexprice_payment_id", flexpricePaymentID,
+			"gateway_payment_id", gatewayPaymentID,
+			"error", voidErr.Error(),
+		)
 	}
 
 	// Void failed — try full refund (amount=0 means full refund)
@@ -945,6 +954,17 @@ func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoice
 		flexpricePaymentID,
 	)
 	if err != nil {
+		if failErr := m.Ledger.RecordPaymentFailure(ctx, ledger.RecordPaymentFailureParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   "",
+			FailedAt:           time.Now().UTC(),
+			ErrorMessage:       err.Error(),
+		}); failErr != nil {
+			m.Logger.Error(ctx, "failed to record payment failure after charge error",
+				"flexprice_payment_id", flexpricePaymentID,
+				"error", failErr,
+			)
+		}
 		return false, err
 	}
 

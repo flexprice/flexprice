@@ -273,6 +273,16 @@ func (f *PaymentMethodFilter) Validate() error {
 	if err := f.QueryFilter.Validate(); err != nil {
 		return err
 	}
+	if f.PaymentMethodStatus != nil {
+		if err := PaymentMethodStatus(*f.PaymentMethodStatus).Validate(); err != nil {
+			return err
+		}
+	}
+	if f.Type != nil {
+		if err := PaymentMethodType(*f.Type).Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

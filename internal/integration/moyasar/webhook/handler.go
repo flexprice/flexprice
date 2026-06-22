@@ -162,9 +162,10 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment PaymentEven
 
 	token := payment.Source.Token
 
-	// Idempotency: skip if this exact token is already saved
+	// Idempotency: skip if this exact token is already saved for this customer
 	count, err := h.paymentMethodRepo.Count(ctx, &types.PaymentMethodFilter{
 		GatewayMethodID: &token,
+		CustomerID:      &customerID,
 	})
 	if err != nil {
 		h.logger.Error(ctx, "failed to check existing payment methods",

@@ -556,7 +556,7 @@ func (c *Client) RefundPayment(ctx context.Context, paymentID string, amount int
 }
 
 // VoidPayment voids a paid or authorized payment in Moyasar.
-// Moyasar requires a JSON body with a reason field even for paid payments.
+// This is intended for AUTH payments
 func (c *Client) VoidPayment(ctx context.Context, paymentID string) (*MoyasarPayment, error) {
 	config, err := c.GetMoyasarConfig(ctx)
 	if err != nil {

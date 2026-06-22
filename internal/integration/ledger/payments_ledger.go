@@ -110,12 +110,28 @@ func (l *PaymentsLedger) ConfirmGatewayPayment(ctx context.Context, flexpricePay
 		return ierr.NewError("gateway_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
+	existing, err := l.paymentService.GetPayment(ctx, flexpricePaymentID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Payment not found").
+			Mark(ierr.ErrNotFound)
+	}
+	if existing.PaymentStatus != types.PaymentStatusInitiated {
+		return ierr.NewError("payment is not in INITIATED state").
+			WithHint("ConfirmGatewayPayment requires an INITIATED payment").
+			WithReportableDetails(map[string]any{
+				"flexprice_payment_id": flexpricePaymentID,
+				"current_status":       existing.PaymentStatus,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
 	updateReq := apidto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusPending)),
 		GatewayPaymentID: lo.ToPtr(gatewayPaymentID),
 	}
 
-	_, err := l.paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq)
+	_, err = l.paymentService.UpdatePayment(ctx, flexpricePaymentID, updateReq)
 	if err != nil {
 		l.logger.Error(ctx, "failed to confirm gateway payment",
 			"flexprice_payment_id", flexpricePaymentID,
@@ -328,7 +344,7 @@ func (l *PaymentsLedger) RecordPaymentFailure(ctx context.Context, params Record
 			Mark(ierr.ErrSystem)
 	}
 
-	l.logger.Error(ctx, "payment failed",
+	l.logger.Info(ctx, "payment failed",
 		"flexprice_payment_id", params.FlexpricePaymentID,
 		"gateway_payment_id", params.GatewayPaymentID,
 		"destination_type", existing.DestinationType,
