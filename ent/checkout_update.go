@@ -127,15 +127,15 @@ func (cu *CheckoutUpdate) SetNillableCheckoutAction(ta *types.CheckoutAction) *C
 }
 
 // SetMode sets the "mode" field.
-func (cu *CheckoutUpdate) SetMode(to types.CheckoutMode) *CheckoutUpdate {
-	cu.mutation.SetMode(to)
+func (cu *CheckoutUpdate) SetMode(tm types.CheckoutMode) *CheckoutUpdate {
+	cu.mutation.SetMode(tm)
 	return cu
 }
 
 // SetNillableMode sets the "mode" field if the given value is not nil.
-func (cu *CheckoutUpdate) SetNillableMode(to *types.CheckoutMode) *CheckoutUpdate {
-	if to != nil {
-		cu.SetMode(*to)
+func (cu *CheckoutUpdate) SetNillableMode(tm *types.CheckoutMode) *CheckoutUpdate {
+	if tm != nil {
+		cu.SetMode(*tm)
 	}
 	return cu
 }
@@ -681,15 +681,15 @@ func (cuo *CheckoutUpdateOne) SetNillableCheckoutAction(ta *types.CheckoutAction
 }
 
 // SetMode sets the "mode" field.
-func (cuo *CheckoutUpdateOne) SetMode(to types.CheckoutMode) *CheckoutUpdateOne {
-	cuo.mutation.SetMode(to)
+func (cuo *CheckoutUpdateOne) SetMode(tm types.CheckoutMode) *CheckoutUpdateOne {
+	cuo.mutation.SetMode(tm)
 	return cuo
 }
 
 // SetNillableMode sets the "mode" field if the given value is not nil.
-func (cuo *CheckoutUpdateOne) SetNillableMode(to *types.CheckoutMode) *CheckoutUpdateOne {
-	if to != nil {
-		cuo.SetMode(*to)
+func (cuo *CheckoutUpdateOne) SetNillableMode(tm *types.CheckoutMode) *CheckoutUpdateOne {
+	if tm != nil {
+		cuo.SetMode(*tm)
 	}
 	return cuo
 }

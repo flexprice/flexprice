@@ -5440,8 +5440,8 @@ func (m *CheckoutMutation) ResetCheckoutAction() {
 }
 
 // SetMode sets the "mode" field.
-func (m *CheckoutMutation) SetMode(to types.CheckoutMode) {
-	m.mode = &to
+func (m *CheckoutMutation) SetMode(tm types.CheckoutMode) {
+	m.mode = &tm
 }
 
 // Mode returns the value of the "mode" field in the mutation.

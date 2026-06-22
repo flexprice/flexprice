@@ -229,6 +229,11 @@ var (
 				Columns: []*schema.Column{CheckoutsColumns[1], CheckoutsColumns[7]},
 			},
 			{
+				Name:    "checkout_tenant_id_environment_id_customer_id_checkout_status",
+				Unique:  false,
+				Columns: []*schema.Column{CheckoutsColumns[1], CheckoutsColumns[7], CheckoutsColumns[8], CheckoutsColumns[13]},
+			},
+			{
 				Name:    "checkout_tenant_id_environment_id_entity_type_entity_id_mode",
 				Unique:  true,
 				Columns: []*schema.Column{CheckoutsColumns[1], CheckoutsColumns[7], CheckoutsColumns[9], CheckoutsColumns[10], CheckoutsColumns[12]},
