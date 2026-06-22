@@ -18,9 +18,9 @@ type CreateCheckoutRequest struct {
 	// Mode is required for subscription_creation (payment|setup).
 	Mode types.CheckoutMode `json:"mode,omitempty"`
 
-	// Subscription is the full new-subscription spec; REQUIRED when
+	// SubscriptionCreationParams is the full new-subscription spec; REQUIRED when
 	// CheckoutAction == subscription_creation.
-	Subscription *CreateSubscriptionRequest `json:"subscription,omitempty"`
+	SubscriptionCreationParams *CreateSubscriptionRequest `json:"subscription_creation_params,omitempty"`
 
 	SuccessURL string            `json:"success_url,omitempty"`
 	CancelURL  string            `json:"cancel_url,omitempty"`
@@ -50,9 +50,9 @@ func (r *CreateCheckoutRequest) Validate() error {
 	}
 	switch r.CheckoutAction {
 	case types.CheckoutActionSubscriptionCreation:
-		if r.Subscription == nil {
-			return ierr.NewError("subscription is required for subscription_creation checkout").
-				WithHint("Provide the `subscription` object").Mark(ierr.ErrValidation)
+		if r.SubscriptionCreationParams == nil {
+			return ierr.NewError("subscription_creation_params is required for subscription_creation checkout").
+				WithHint("Provide the `subscription_creation_params` object").Mark(ierr.ErrValidation)
 		}
 		if r.Mode != types.CheckoutModePayment && r.Mode != types.CheckoutModeSetup {
 			return ierr.NewError("mode must be 'payment' or 'setup' for subscription_creation").

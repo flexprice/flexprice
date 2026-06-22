@@ -80,7 +80,7 @@ func (s *checkoutService) Create(ctx context.Context, req dto.CreateCheckoutRequ
 }
 
 func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
-	subReq := *req.Subscription
+	subReq := *req.SubscriptionCreationParams
 	subReq.CollectionMethod = lo.ToPtr(types.CollectionMethodSendInvoice)
 	subReq.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorDefaultIncomplete)
 
@@ -154,7 +154,7 @@ func (s *checkoutService) createPayment(ctx context.Context, req dto.CreateCheck
 }
 
 func (s *checkoutService) createSetup(ctx context.Context, req dto.CreateCheckoutRequest) (*dto.CheckoutResponse, error) {
-	subReq := *req.Subscription
+	subReq := *req.SubscriptionCreationParams
 	subReq.SubscriptionStatus = types.SubscriptionStatusDraft
 	subReq.CollectionMethod = lo.ToPtr(types.CollectionMethodChargeAutomatically)
 	subReq.PaymentBehavior = lo.ToPtr(types.PaymentBehaviorAllowIncomplete)

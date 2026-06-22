@@ -190,7 +190,7 @@ func (s *CheckoutServiceTestSuite) TestCreate_PaymentObjective() {
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
 		Mode:           types.CheckoutModePayment,
-		Subscription: &dto.CreateSubscriptionRequest{
+		SubscriptionCreationParams: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
 			Currency:      "usd",
@@ -249,7 +249,7 @@ func (s *CheckoutServiceTestSuite) TestCreate_SetupObjective() {
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
 		Mode:           types.CheckoutModeSetup,
-		Subscription: &dto.CreateSubscriptionRequest{
+		SubscriptionCreationParams: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
 			Currency:      "usd",
@@ -303,7 +303,7 @@ func (s *CheckoutServiceTestSuite) TestComplete_Idempotent() {
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
 		Mode:           types.CheckoutModePayment,
-		Subscription: &dto.CreateSubscriptionRequest{
+		SubscriptionCreationParams: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
 			Currency:      "usd",
@@ -337,7 +337,7 @@ func (s *CheckoutServiceTestSuite) TestComplete_SetupActivatesDraft() {
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
 		Mode:           types.CheckoutModeSetup,
-		Subscription: &dto.CreateSubscriptionRequest{
+		SubscriptionCreationParams: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
 			Currency:      "usd",
@@ -390,7 +390,7 @@ func (s *CheckoutServiceTestSuite) TestCreate_NoActiveConnection() {
 	_, err := svc.Create(ctx, dto.CreateCheckoutRequest{
 		CheckoutAction: types.CheckoutActionSubscriptionCreation,
 		Mode:           types.CheckoutModePayment,
-		Subscription: &dto.CreateSubscriptionRequest{
+		SubscriptionCreationParams: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
 			Currency:      "usd",
