@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -1016,8 +1017,11 @@ func (p *paymentProcessor) handleCheckoutCompletion(ctx context.Context, inv *in
 	if inv.SubscriptionID == nil || !inv.AmountRemaining.IsZero() {
 		return nil
 	}
-	chk, err := p.CheckoutRepo.GetPendingByEntity(ctx,
-		types.CheckoutEntityTypeSubscription, *inv.SubscriptionID, types.CheckoutObjectivePayment)
+	chk, err := p.CheckoutRepo.GetPendingByEntity(ctx, checkout.GetPendingByEntityParams{
+		EntityType: types.CheckoutEntityTypeSubscription,
+		EntityID:   *inv.SubscriptionID,
+		Mode:       types.CheckoutObjectivePayment,
+	})
 	if err != nil {
 		return err
 	}

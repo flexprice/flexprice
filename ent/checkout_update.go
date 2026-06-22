@@ -112,50 +112,30 @@ func (cu *CheckoutUpdate) SetNillableEntityID(s *string) *CheckoutUpdate {
 	return cu
 }
 
-// SetSourceSubscriptionID sets the "source_subscription_id" field.
-func (cu *CheckoutUpdate) SetSourceSubscriptionID(s string) *CheckoutUpdate {
-	cu.mutation.SetSourceSubscriptionID(s)
+// SetCheckoutAction sets the "checkout_action" field.
+func (cu *CheckoutUpdate) SetCheckoutAction(ta types.CheckoutAction) *CheckoutUpdate {
+	cu.mutation.SetCheckoutAction(ta)
 	return cu
 }
 
-// SetNillableSourceSubscriptionID sets the "source_subscription_id" field if the given value is not nil.
-func (cu *CheckoutUpdate) SetNillableSourceSubscriptionID(s *string) *CheckoutUpdate {
-	if s != nil {
-		cu.SetSourceSubscriptionID(*s)
+// SetNillableCheckoutAction sets the "checkout_action" field if the given value is not nil.
+func (cu *CheckoutUpdate) SetNillableCheckoutAction(ta *types.CheckoutAction) *CheckoutUpdate {
+	if ta != nil {
+		cu.SetCheckoutAction(*ta)
 	}
 	return cu
 }
 
-// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
-func (cu *CheckoutUpdate) ClearSourceSubscriptionID() *CheckoutUpdate {
-	cu.mutation.ClearSourceSubscriptionID()
+// SetMode sets the "mode" field.
+func (cu *CheckoutUpdate) SetMode(to types.CheckoutObjective) *CheckoutUpdate {
+	cu.mutation.SetMode(to)
 	return cu
 }
 
-// SetCheckoutType sets the "checkout_type" field.
-func (cu *CheckoutUpdate) SetCheckoutType(tt types.CheckoutType) *CheckoutUpdate {
-	cu.mutation.SetCheckoutType(tt)
-	return cu
-}
-
-// SetNillableCheckoutType sets the "checkout_type" field if the given value is not nil.
-func (cu *CheckoutUpdate) SetNillableCheckoutType(tt *types.CheckoutType) *CheckoutUpdate {
-	if tt != nil {
-		cu.SetCheckoutType(*tt)
-	}
-	return cu
-}
-
-// SetObjective sets the "objective" field.
-func (cu *CheckoutUpdate) SetObjective(to types.CheckoutObjective) *CheckoutUpdate {
-	cu.mutation.SetObjective(to)
-	return cu
-}
-
-// SetNillableObjective sets the "objective" field if the given value is not nil.
-func (cu *CheckoutUpdate) SetNillableObjective(to *types.CheckoutObjective) *CheckoutUpdate {
+// SetNillableMode sets the "mode" field if the given value is not nil.
+func (cu *CheckoutUpdate) SetNillableMode(to *types.CheckoutObjective) *CheckoutUpdate {
 	if to != nil {
-		cu.SetObjective(*to)
+		cu.SetMode(*to)
 	}
 	return cu
 }
@@ -215,15 +195,15 @@ func (cu *CheckoutUpdate) ClearCurrency() *CheckoutUpdate {
 }
 
 // SetProvider sets the "provider" field.
-func (cu *CheckoutUpdate) SetProvider(s string) *CheckoutUpdate {
-	cu.mutation.SetProvider(s)
+func (cu *CheckoutUpdate) SetProvider(tp types.CheckoutProvider) *CheckoutUpdate {
+	cu.mutation.SetProvider(tp)
 	return cu
 }
 
 // SetNillableProvider sets the "provider" field if the given value is not nil.
-func (cu *CheckoutUpdate) SetNillableProvider(s *string) *CheckoutUpdate {
-	if s != nil {
-		cu.SetProvider(*s)
+func (cu *CheckoutUpdate) SetNillableProvider(tp *types.CheckoutProvider) *CheckoutUpdate {
+	if tp != nil {
+		cu.SetProvider(*tp)
 	}
 	return cu
 }
@@ -374,23 +354,23 @@ func (cu *CheckoutUpdate) ClearCancelledAt() *CheckoutUpdate {
 	return cu
 }
 
-// SetErrorMessage sets the "error_message" field.
-func (cu *CheckoutUpdate) SetErrorMessage(s string) *CheckoutUpdate {
-	cu.mutation.SetErrorMessage(s)
+// SetFailureMessage sets the "failure_message" field.
+func (cu *CheckoutUpdate) SetFailureMessage(s string) *CheckoutUpdate {
+	cu.mutation.SetFailureMessage(s)
 	return cu
 }
 
-// SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
-func (cu *CheckoutUpdate) SetNillableErrorMessage(s *string) *CheckoutUpdate {
+// SetNillableFailureMessage sets the "failure_message" field if the given value is not nil.
+func (cu *CheckoutUpdate) SetNillableFailureMessage(s *string) *CheckoutUpdate {
 	if s != nil {
-		cu.SetErrorMessage(*s)
+		cu.SetFailureMessage(*s)
 	}
 	return cu
 }
 
-// ClearErrorMessage clears the value of the "error_message" field.
-func (cu *CheckoutUpdate) ClearErrorMessage() *CheckoutUpdate {
-	cu.mutation.ClearErrorMessage()
+// ClearFailureMessage clears the value of the "failure_message" field.
+func (cu *CheckoutUpdate) ClearFailureMessage() *CheckoutUpdate {
+	cu.mutation.ClearFailureMessage()
 	return cu
 }
 
@@ -447,19 +427,24 @@ func (cu *CheckoutUpdate) check() error {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Checkout.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := cu.mutation.CheckoutType(); ok {
+	if v, ok := cu.mutation.CheckoutAction(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "checkout_type", err: fmt.Errorf(`ent: validator failed for field "Checkout.checkout_type": %w`, err)}
+			return &ValidationError{Name: "checkout_action", err: fmt.Errorf(`ent: validator failed for field "Checkout.checkout_action": %w`, err)}
 		}
 	}
-	if v, ok := cu.mutation.Objective(); ok {
+	if v, ok := cu.mutation.Mode(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "objective", err: fmt.Errorf(`ent: validator failed for field "Checkout.objective": %w`, err)}
+			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Checkout.mode": %w`, err)}
 		}
 	}
 	if v, ok := cu.mutation.CheckoutStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "checkout_status", err: fmt.Errorf(`ent: validator failed for field "Checkout.checkout_status": %w`, err)}
+		}
+	}
+	if v, ok := cu.mutation.Provider(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Checkout.provider": %w`, err)}
 		}
 	}
 	return nil
@@ -504,17 +489,11 @@ func (cu *CheckoutUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := cu.mutation.EntityID(); ok {
 		_spec.SetField(checkout.FieldEntityID, field.TypeString, value)
 	}
-	if value, ok := cu.mutation.SourceSubscriptionID(); ok {
-		_spec.SetField(checkout.FieldSourceSubscriptionID, field.TypeString, value)
+	if value, ok := cu.mutation.CheckoutAction(); ok {
+		_spec.SetField(checkout.FieldCheckoutAction, field.TypeString, value)
 	}
-	if cu.mutation.SourceSubscriptionIDCleared() {
-		_spec.ClearField(checkout.FieldSourceSubscriptionID, field.TypeString)
-	}
-	if value, ok := cu.mutation.CheckoutType(); ok {
-		_spec.SetField(checkout.FieldCheckoutType, field.TypeString, value)
-	}
-	if value, ok := cu.mutation.Objective(); ok {
-		_spec.SetField(checkout.FieldObjective, field.TypeString, value)
+	if value, ok := cu.mutation.Mode(); ok {
+		_spec.SetField(checkout.FieldMode, field.TypeString, value)
 	}
 	if value, ok := cu.mutation.CheckoutStatus(); ok {
 		_spec.SetField(checkout.FieldCheckoutStatus, field.TypeString, value)
@@ -579,11 +558,11 @@ func (cu *CheckoutUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if cu.mutation.CancelledAtCleared() {
 		_spec.ClearField(checkout.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := cu.mutation.ErrorMessage(); ok {
-		_spec.SetField(checkout.FieldErrorMessage, field.TypeString, value)
+	if value, ok := cu.mutation.FailureMessage(); ok {
+		_spec.SetField(checkout.FieldFailureMessage, field.TypeString, value)
 	}
-	if cu.mutation.ErrorMessageCleared() {
-		_spec.ClearField(checkout.FieldErrorMessage, field.TypeString)
+	if cu.mutation.FailureMessageCleared() {
+		_spec.ClearField(checkout.FieldFailureMessage, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -687,50 +666,30 @@ func (cuo *CheckoutUpdateOne) SetNillableEntityID(s *string) *CheckoutUpdateOne 
 	return cuo
 }
 
-// SetSourceSubscriptionID sets the "source_subscription_id" field.
-func (cuo *CheckoutUpdateOne) SetSourceSubscriptionID(s string) *CheckoutUpdateOne {
-	cuo.mutation.SetSourceSubscriptionID(s)
+// SetCheckoutAction sets the "checkout_action" field.
+func (cuo *CheckoutUpdateOne) SetCheckoutAction(ta types.CheckoutAction) *CheckoutUpdateOne {
+	cuo.mutation.SetCheckoutAction(ta)
 	return cuo
 }
 
-// SetNillableSourceSubscriptionID sets the "source_subscription_id" field if the given value is not nil.
-func (cuo *CheckoutUpdateOne) SetNillableSourceSubscriptionID(s *string) *CheckoutUpdateOne {
-	if s != nil {
-		cuo.SetSourceSubscriptionID(*s)
+// SetNillableCheckoutAction sets the "checkout_action" field if the given value is not nil.
+func (cuo *CheckoutUpdateOne) SetNillableCheckoutAction(ta *types.CheckoutAction) *CheckoutUpdateOne {
+	if ta != nil {
+		cuo.SetCheckoutAction(*ta)
 	}
 	return cuo
 }
 
-// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
-func (cuo *CheckoutUpdateOne) ClearSourceSubscriptionID() *CheckoutUpdateOne {
-	cuo.mutation.ClearSourceSubscriptionID()
+// SetMode sets the "mode" field.
+func (cuo *CheckoutUpdateOne) SetMode(to types.CheckoutObjective) *CheckoutUpdateOne {
+	cuo.mutation.SetMode(to)
 	return cuo
 }
 
-// SetCheckoutType sets the "checkout_type" field.
-func (cuo *CheckoutUpdateOne) SetCheckoutType(tt types.CheckoutType) *CheckoutUpdateOne {
-	cuo.mutation.SetCheckoutType(tt)
-	return cuo
-}
-
-// SetNillableCheckoutType sets the "checkout_type" field if the given value is not nil.
-func (cuo *CheckoutUpdateOne) SetNillableCheckoutType(tt *types.CheckoutType) *CheckoutUpdateOne {
-	if tt != nil {
-		cuo.SetCheckoutType(*tt)
-	}
-	return cuo
-}
-
-// SetObjective sets the "objective" field.
-func (cuo *CheckoutUpdateOne) SetObjective(to types.CheckoutObjective) *CheckoutUpdateOne {
-	cuo.mutation.SetObjective(to)
-	return cuo
-}
-
-// SetNillableObjective sets the "objective" field if the given value is not nil.
-func (cuo *CheckoutUpdateOne) SetNillableObjective(to *types.CheckoutObjective) *CheckoutUpdateOne {
+// SetNillableMode sets the "mode" field if the given value is not nil.
+func (cuo *CheckoutUpdateOne) SetNillableMode(to *types.CheckoutObjective) *CheckoutUpdateOne {
 	if to != nil {
-		cuo.SetObjective(*to)
+		cuo.SetMode(*to)
 	}
 	return cuo
 }
@@ -790,15 +749,15 @@ func (cuo *CheckoutUpdateOne) ClearCurrency() *CheckoutUpdateOne {
 }
 
 // SetProvider sets the "provider" field.
-func (cuo *CheckoutUpdateOne) SetProvider(s string) *CheckoutUpdateOne {
-	cuo.mutation.SetProvider(s)
+func (cuo *CheckoutUpdateOne) SetProvider(tp types.CheckoutProvider) *CheckoutUpdateOne {
+	cuo.mutation.SetProvider(tp)
 	return cuo
 }
 
 // SetNillableProvider sets the "provider" field if the given value is not nil.
-func (cuo *CheckoutUpdateOne) SetNillableProvider(s *string) *CheckoutUpdateOne {
-	if s != nil {
-		cuo.SetProvider(*s)
+func (cuo *CheckoutUpdateOne) SetNillableProvider(tp *types.CheckoutProvider) *CheckoutUpdateOne {
+	if tp != nil {
+		cuo.SetProvider(*tp)
 	}
 	return cuo
 }
@@ -949,23 +908,23 @@ func (cuo *CheckoutUpdateOne) ClearCancelledAt() *CheckoutUpdateOne {
 	return cuo
 }
 
-// SetErrorMessage sets the "error_message" field.
-func (cuo *CheckoutUpdateOne) SetErrorMessage(s string) *CheckoutUpdateOne {
-	cuo.mutation.SetErrorMessage(s)
+// SetFailureMessage sets the "failure_message" field.
+func (cuo *CheckoutUpdateOne) SetFailureMessage(s string) *CheckoutUpdateOne {
+	cuo.mutation.SetFailureMessage(s)
 	return cuo
 }
 
-// SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
-func (cuo *CheckoutUpdateOne) SetNillableErrorMessage(s *string) *CheckoutUpdateOne {
+// SetNillableFailureMessage sets the "failure_message" field if the given value is not nil.
+func (cuo *CheckoutUpdateOne) SetNillableFailureMessage(s *string) *CheckoutUpdateOne {
 	if s != nil {
-		cuo.SetErrorMessage(*s)
+		cuo.SetFailureMessage(*s)
 	}
 	return cuo
 }
 
-// ClearErrorMessage clears the value of the "error_message" field.
-func (cuo *CheckoutUpdateOne) ClearErrorMessage() *CheckoutUpdateOne {
-	cuo.mutation.ClearErrorMessage()
+// ClearFailureMessage clears the value of the "failure_message" field.
+func (cuo *CheckoutUpdateOne) ClearFailureMessage() *CheckoutUpdateOne {
+	cuo.mutation.ClearFailureMessage()
 	return cuo
 }
 
@@ -1035,19 +994,24 @@ func (cuo *CheckoutUpdateOne) check() error {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Checkout.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := cuo.mutation.CheckoutType(); ok {
+	if v, ok := cuo.mutation.CheckoutAction(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "checkout_type", err: fmt.Errorf(`ent: validator failed for field "Checkout.checkout_type": %w`, err)}
+			return &ValidationError{Name: "checkout_action", err: fmt.Errorf(`ent: validator failed for field "Checkout.checkout_action": %w`, err)}
 		}
 	}
-	if v, ok := cuo.mutation.Objective(); ok {
+	if v, ok := cuo.mutation.Mode(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "objective", err: fmt.Errorf(`ent: validator failed for field "Checkout.objective": %w`, err)}
+			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Checkout.mode": %w`, err)}
 		}
 	}
 	if v, ok := cuo.mutation.CheckoutStatus(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "checkout_status", err: fmt.Errorf(`ent: validator failed for field "Checkout.checkout_status": %w`, err)}
+		}
+	}
+	if v, ok := cuo.mutation.Provider(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Checkout.provider": %w`, err)}
 		}
 	}
 	return nil
@@ -1109,17 +1073,11 @@ func (cuo *CheckoutUpdateOne) sqlSave(ctx context.Context) (_node *Checkout, err
 	if value, ok := cuo.mutation.EntityID(); ok {
 		_spec.SetField(checkout.FieldEntityID, field.TypeString, value)
 	}
-	if value, ok := cuo.mutation.SourceSubscriptionID(); ok {
-		_spec.SetField(checkout.FieldSourceSubscriptionID, field.TypeString, value)
+	if value, ok := cuo.mutation.CheckoutAction(); ok {
+		_spec.SetField(checkout.FieldCheckoutAction, field.TypeString, value)
 	}
-	if cuo.mutation.SourceSubscriptionIDCleared() {
-		_spec.ClearField(checkout.FieldSourceSubscriptionID, field.TypeString)
-	}
-	if value, ok := cuo.mutation.CheckoutType(); ok {
-		_spec.SetField(checkout.FieldCheckoutType, field.TypeString, value)
-	}
-	if value, ok := cuo.mutation.Objective(); ok {
-		_spec.SetField(checkout.FieldObjective, field.TypeString, value)
+	if value, ok := cuo.mutation.Mode(); ok {
+		_spec.SetField(checkout.FieldMode, field.TypeString, value)
 	}
 	if value, ok := cuo.mutation.CheckoutStatus(); ok {
 		_spec.SetField(checkout.FieldCheckoutStatus, field.TypeString, value)
@@ -1184,11 +1142,11 @@ func (cuo *CheckoutUpdateOne) sqlSave(ctx context.Context) (_node *Checkout, err
 	if cuo.mutation.CancelledAtCleared() {
 		_spec.ClearField(checkout.FieldCancelledAt, field.TypeTime)
 	}
-	if value, ok := cuo.mutation.ErrorMessage(); ok {
-		_spec.SetField(checkout.FieldErrorMessage, field.TypeString, value)
+	if value, ok := cuo.mutation.FailureMessage(); ok {
+		_spec.SetField(checkout.FieldFailureMessage, field.TypeString, value)
 	}
-	if cuo.mutation.ErrorMessageCleared() {
-		_spec.ClearField(checkout.FieldErrorMessage, field.TypeString)
+	if cuo.mutation.FailureMessageCleared() {
+		_spec.ClearField(checkout.FieldFailureMessage, field.TypeString)
 	}
 	_node = &Checkout{config: cuo.config}
 	_spec.Assign = _node.assignValues

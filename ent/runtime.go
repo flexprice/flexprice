@@ -277,9 +277,13 @@ func init() {
 	// checkout.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	checkout.CustomerIDValidator = checkoutDescCustomerID.Validators[0].(func(string) error)
 	// checkoutDescCheckoutStatus is the schema descriptor for checkout_status field.
-	checkoutDescCheckoutStatus := checkoutFields[7].Descriptor()
+	checkoutDescCheckoutStatus := checkoutFields[6].Descriptor()
 	// checkout.DefaultCheckoutStatus holds the default value on creation for the checkout_status field.
 	checkout.DefaultCheckoutStatus = types.CheckoutStatus(checkoutDescCheckoutStatus.Default.(string))
+	// checkoutDescProvider is the schema descriptor for provider field.
+	checkoutDescProvider := checkoutFields[9].Descriptor()
+	// checkout.DefaultProvider holds the default value on creation for the provider field.
+	checkout.DefaultProvider = types.CheckoutProvider(checkoutDescProvider.Default.(string))
 	connectionMixin := schema.Connection{}.Mixin()
 	connectionMixinFields0 := connectionMixin[0].Fields()
 	_ = connectionMixinFields0

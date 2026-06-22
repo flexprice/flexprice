@@ -46,33 +46,22 @@ func (r *checkoutRepository) Create(ctx context.Context, c *domainCheckout.Check
 		SetCustomerID(c.CustomerID).
 		SetEntityType(c.EntityType).
 		SetEntityID(c.EntityID).
-		SetCheckoutType(c.CheckoutType).
-		SetObjective(c.Objective).
+		SetCheckoutAction(c.CheckoutAction).
+		SetMode(c.Mode).
 		SetCheckoutStatus(c.Status).
-		SetAmount(c.Amount).
+		SetNillableAmount(c.Amount).
 		SetCurrency(c.Currency).
 		SetProvider(c.Provider).
+		SetNillableProviderSessionID(c.ProviderSessionID).
+		SetNillableCheckoutURL(c.CheckoutURL).
+		SetNillableSuccessURL(c.SuccessURL).
+		SetNillableCancelURL(c.CancelURL).
 		SetExpiresAt(c.ExpiresAt).
 		SetTenantID(c.TenantID).
 		SetEnvironmentID(c.EnvironmentID).
 		SetCreatedBy(c.CreatedBy).
 		SetUpdatedBy(c.UpdatedBy)
 
-	if c.SourceSubscriptionID != nil {
-		builder.SetSourceSubscriptionID(*c.SourceSubscriptionID)
-	}
-	if c.ProviderSessionID != nil {
-		builder.SetProviderSessionID(*c.ProviderSessionID)
-	}
-	if c.CheckoutURL != nil {
-		builder.SetCheckoutURL(*c.CheckoutURL)
-	}
-	if c.SuccessURL != nil {
-		builder.SetSuccessURL(*c.SuccessURL)
-	}
-	if c.CancelURL != nil {
-		builder.SetCancelURL(*c.CancelURL)
-	}
 	if configMap != nil {
 		builder.SetConfiguration(configMap)
 	}
@@ -126,23 +115,12 @@ func (r *checkoutRepository) Update(ctx context.Context, c *domainCheckout.Check
 
 	builder := client.Checkout.UpdateOneID(c.ID).
 		SetCheckoutStatus(c.Status).
-		SetUpdatedBy(c.UpdatedBy)
-
-	if c.ProviderSessionID != nil {
-		builder.SetProviderSessionID(*c.ProviderSessionID)
-	}
-	if c.CheckoutURL != nil {
-		builder.SetCheckoutURL(*c.CheckoutURL)
-	}
-	if c.CompletedAt != nil {
-		builder.SetCompletedAt(*c.CompletedAt)
-	}
-	if c.CancelledAt != nil {
-		builder.SetCancelledAt(*c.CancelledAt)
-	}
-	if c.ErrorMessage != nil {
-		builder.SetErrorMessage(*c.ErrorMessage)
-	}
+		SetUpdatedBy(c.UpdatedBy).
+		SetNillableProviderSessionID(c.ProviderSessionID).
+		SetNillableCheckoutURL(c.CheckoutURL).
+		SetNillableCompletedAt(c.CompletedAt).
+		SetNillableCancelledAt(c.CancelledAt).
+		SetNillableFailureMessage(c.FailureMessage)
 
 	if _, err := builder.Save(ctx); err != nil {
 		SetSpanError(span, err)
@@ -156,24 +134,22 @@ func (r *checkoutRepository) Update(ctx context.Context, c *domainCheckout.Check
 
 func (r *checkoutRepository) GetPendingByEntity(
 	ctx context.Context,
-	entityType types.CheckoutEntityType,
-	entityID string,
-	objective types.CheckoutObjective,
+	params domainCheckout.GetPendingByEntityParams,
 ) (*domainCheckout.Checkout, error) {
 	client := r.client.Reader(ctx)
 
 	span := StartRepositorySpan(ctx, "checkout", "get_pending_by_entity", map[string]interface{}{
-		"entity_type": entityType,
-		"entity_id":   entityID,
-		"objective":   objective,
+		"entity_type": params.EntityType,
+		"entity_id":   params.EntityID,
+		"mode":        params.Mode,
 	})
 	defer FinishSpan(span)
 
 	entity, err := client.Checkout.Query().
 		Where(
-			entcheckout.EntityTypeEQ(entityType),
-			entcheckout.EntityIDEQ(entityID),
-			entcheckout.ObjectiveEQ(objective),
+			entcheckout.EntityTypeEQ(params.EntityType),
+			entcheckout.EntityIDEQ(params.EntityID),
+			entcheckout.ModeEQ(params.Mode),
 			entcheckout.CheckoutStatusEQ(types.CheckoutStatusPending),
 			entcheckout.TenantIDEQ(types.GetTenantID(ctx)),
 			entcheckout.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
@@ -195,20 +171,24 @@ func (r *checkoutRepository) GetPendingByEntity(
 
 // ListPendingExpired performs a system-wide (cross-tenant/cross-environment) sweep
 // of pending, expired checkouts for the cleanup cron. It is intentionally NOT
-// tenant/environment scoped — the expiry worker is a maintenance job; any
-// per-environment iteration is the caller's responsibility.
-func (r *checkoutRepository) ListPendingExpired(ctx context.Context, cutoff time.Time) ([]*domainCheckout.Checkout, error) {
+// tenant/environment scoped — the expiry worker is a maintenance job.
+func (r *checkoutRepository) ListPendingExpired(ctx context.Context, cutoff time.Time, filter *types.QueryFilter) ([]*domainCheckout.Checkout, error) {
 	client := r.client.Reader(ctx)
 
 	span := StartRepositorySpan(ctx, "checkout", "list_pending_expired", nil)
 	defer FinishSpan(span)
 
-	entities, err := client.Checkout.Query().
+	q := client.Checkout.Query().
 		Where(
 			entcheckout.CheckoutStatusEQ(types.CheckoutStatusPending),
 			entcheckout.ExpiresAtLT(cutoff),
-		).
-		All(ctx)
+		)
+
+	if filter != nil && !filter.IsUnlimited() {
+		q = q.Limit(filter.GetLimit()).Offset(filter.GetOffset())
+	}
+
+	entities, err := q.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).

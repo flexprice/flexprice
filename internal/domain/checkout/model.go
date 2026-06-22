@@ -17,38 +17,36 @@ type Checkout struct {
 	EntityType types.CheckoutEntityType
 	EntityID   string
 
-	SourceSubscriptionID *string // upgrades only: old sub to cancel on completion
+	CheckoutAction types.CheckoutAction
+	Mode           types.CheckoutObjective
+	Status         types.CheckoutStatus
 
-	CheckoutType types.CheckoutType
-	Objective    types.CheckoutObjective
-	Status       types.CheckoutStatus
-
-	Amount   decimal.Decimal
+	Amount   *decimal.Decimal
 	Currency string
 
-	Provider          string
+	Provider          types.CheckoutProvider
 	ProviderSessionID *string
 	CheckoutURL       *string
 	SuccessURL        *string
 	CancelURL         *string
 
-	Configuration *CheckoutConfiguration // reserved; nil in v1 create/upgrade flows
+	Configuration *CheckoutConfiguration // deferred-operation payload; nil in v1
 
-	ExpiresAt    time.Time
-	CompletedAt  *time.Time
-	CancelledAt  *time.Time
-	ErrorMessage *string
+	ExpiresAt      time.Time
+	CompletedAt    *time.Time
+	CancelledAt    *time.Time
+	FailureMessage *string
 
 	EnvironmentID string
 	types.BaseModel
 }
 
-// CheckoutConfiguration is reserved for a future "create nothing until paid" mode.
-// Kept generic to avoid a domain -> api/dto dependency; the typed deferred request
-// is marshaled into Payload by the service layer if/when that mode is built.
+// CheckoutConfiguration is the deferred-operation payload stored on the checkout.
+// Each action type uses a dedicated key so callers can unmarshal into a typed struct.
 type CheckoutConfiguration struct {
-	SaveCard bool            `json:"save_card,omitempty"`
-	Payload  json.RawMessage `json:"payload,omitempty"`
+	// SubscriptionCreateParams carries the deferred subscription creation spec
+	// for checkout_action = subscription_creation checkouts.
+	SubscriptionCreateParams json.RawMessage `json:"subscription_create_params,omitempty"`
 }
 
 func (c *Checkout) IsPending() bool {
@@ -65,19 +63,7 @@ func (c *Checkout) IsTerminal() bool {
 	}
 }
 
-// SetConfiguration stores cfg on the checkout.
-func (c *Checkout) SetConfiguration(cfg *CheckoutConfiguration) error {
-	c.Configuration = cfg
-	return nil
-}
-
-// GetConfiguration returns the stored configuration (nil if none).
-func (c *Checkout) GetConfiguration() (*CheckoutConfiguration, error) {
-	return c.Configuration, nil
-}
-
-// GetConfigurationMap serializes the reserved configuration to a JSONB map
-// (nil when no configuration is set). Used by the repository.
+// GetConfigurationMap serializes the configuration to a JSONB map (nil when none set).
 func (c *Checkout) GetConfigurationMap() (map[string]interface{}, error) {
 	if c.Configuration == nil {
 		return nil, nil
@@ -99,26 +85,25 @@ func FromEnt(e *ent.Checkout) *Checkout {
 		return nil
 	}
 	c := &Checkout{
-		ID:                   e.ID,
-		CustomerID:           e.CustomerID,
-		EntityType:           e.EntityType,
-		EntityID:             e.EntityID,
-		SourceSubscriptionID: e.SourceSubscriptionID,
-		CheckoutType:         e.CheckoutType,
-		Objective:            e.Objective,
-		Status:               e.CheckoutStatus,
-		Amount:               e.Amount,
-		Currency:             e.Currency,
-		Provider:             e.Provider,
-		ProviderSessionID:    e.ProviderSessionID,
-		CheckoutURL:          e.CheckoutURL,
-		SuccessURL:           e.SuccessURL,
-		CancelURL:            e.CancelURL,
-		ExpiresAt:            e.ExpiresAt,
-		CompletedAt:          e.CompletedAt,
-		CancelledAt:          e.CancelledAt,
-		ErrorMessage:         e.ErrorMessage,
-		EnvironmentID:        e.EnvironmentID,
+		ID:                e.ID,
+		CustomerID:        e.CustomerID,
+		EntityType:        e.EntityType,
+		EntityID:          e.EntityID,
+		CheckoutAction:    e.CheckoutAction,
+		Mode:              e.Mode,
+		Status:            e.CheckoutStatus,
+		Amount:            e.Amount,
+		Currency:          e.Currency,
+		Provider:          e.Provider,
+		ProviderSessionID: e.ProviderSessionID,
+		CheckoutURL:       e.CheckoutURL,
+		SuccessURL:        e.SuccessURL,
+		CancelURL:         e.CancelURL,
+		ExpiresAt:         e.ExpiresAt,
+		CompletedAt:       e.CompletedAt,
+		CancelledAt:       e.CancelledAt,
+		FailureMessage:    e.FailureMessage,
+		EnvironmentID:     e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

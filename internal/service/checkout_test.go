@@ -133,7 +133,7 @@ func (s *CheckoutServiceTestSuite) seedStripeConnection() {
 // seam overridden so no real gateway is contacted.
 func (s *CheckoutServiceTestSuite) newCheckoutService() *checkoutService {
 	svc := &checkoutService{ServiceParams: s.params}
-	svc.providerFn = func(ctx context.Context, provider string) (checkout.CheckoutProvider, error) {
+	svc.providerFn = func(ctx context.Context, provider types.CheckoutProvider) (checkout.CheckoutProvider, error) {
 		return fakeCheckoutProvider{}, nil
 	}
 	return svc
@@ -188,8 +188,8 @@ func (s *CheckoutServiceTestSuite) TestCreate_PaymentObjective() {
 
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CheckoutType: types.CheckoutTypeSubscriptionCreation,
-		Objective:    types.CheckoutObjectivePayment,
+		CheckoutAction: types.CheckoutActionSubscriptionCreation,
+		Mode:         types.CheckoutObjectivePayment,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
@@ -216,8 +216,11 @@ func (s *CheckoutServiceTestSuite) TestCreate_PaymentObjective() {
 	assert.Equal(s.T(), types.CheckoutEntityTypeSubscription, chk.EntityType)
 
 	// A pending checkout exists for (subscription, newSubID, payment).
-	pending, err := s.checkoutRepo.GetPendingByEntity(
-		ctx, types.CheckoutEntityTypeSubscription, newSubID, types.CheckoutObjectivePayment)
+	pending, err := s.checkoutRepo.GetPendingByEntity(ctx, checkout.GetPendingByEntityParams{
+		EntityType: types.CheckoutEntityTypeSubscription,
+		EntityID:   newSubID,
+		Mode:       types.CheckoutObjectivePayment,
+	})
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), pending)
 	assert.Equal(s.T(), resp.ID, pending.ID)
@@ -244,8 +247,8 @@ func (s *CheckoutServiceTestSuite) TestCreate_SetupObjective() {
 
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CheckoutType: types.CheckoutTypeSubscriptionCreation,
-		Objective:    types.CheckoutObjectiveSetup,
+		CheckoutAction: types.CheckoutActionSubscriptionCreation,
+		Mode:         types.CheckoutObjectiveSetup,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
@@ -265,12 +268,15 @@ func (s *CheckoutServiceTestSuite) TestCreate_SetupObjective() {
 	chk, err := s.checkoutRepo.Get(ctx, resp.ID)
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), chk)
-	assert.Equal(s.T(), types.CheckoutObjectiveSetup, chk.Objective)
+	assert.Equal(s.T(), types.CheckoutObjectiveSetup, chk.Mode)
 	newSubID := chk.EntityID
 	require.NotEmpty(s.T(), newSubID)
 
-	pending, err := s.checkoutRepo.GetPendingByEntity(
-		ctx, types.CheckoutEntityTypeSubscription, newSubID, types.CheckoutObjectiveSetup)
+	pending, err := s.checkoutRepo.GetPendingByEntity(ctx, checkout.GetPendingByEntityParams{
+		EntityType: types.CheckoutEntityTypeSubscription,
+		EntityID:   newSubID,
+		Mode:       types.CheckoutObjectiveSetup,
+	})
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), pending)
 	assert.Equal(s.T(), resp.ID, pending.ID)
@@ -295,8 +301,8 @@ func (s *CheckoutServiceTestSuite) TestComplete_Idempotent() {
 
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CheckoutType: types.CheckoutTypeSubscriptionCreation,
-		Objective:    types.CheckoutObjectivePayment,
+		CheckoutAction: types.CheckoutActionSubscriptionCreation,
+		Mode:         types.CheckoutObjectivePayment,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
@@ -329,8 +335,8 @@ func (s *CheckoutServiceTestSuite) TestComplete_SetupActivatesDraft() {
 
 	svc := s.newCheckoutService()
 	resp, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CheckoutType: types.CheckoutTypeSubscriptionCreation,
-		Objective:    types.CheckoutObjectiveSetup,
+		CheckoutAction: types.CheckoutActionSubscriptionCreation,
+		Mode:         types.CheckoutObjectiveSetup,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,
@@ -382,8 +388,8 @@ func (s *CheckoutServiceTestSuite) TestCreate_NoActiveConnection() {
 
 	svc := s.newCheckoutService()
 	_, err := svc.Create(ctx, dto.CreateCheckoutRequest{
-		CheckoutType: types.CheckoutTypeSubscriptionCreation,
-		Objective:    types.CheckoutObjectivePayment,
+		CheckoutAction: types.CheckoutActionSubscriptionCreation,
+		Mode:         types.CheckoutObjectivePayment,
 		Subscription: &dto.CreateSubscriptionRequest{
 			CustomerID:    cust.ID,
 			PlanID:        planID,

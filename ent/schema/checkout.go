@@ -35,13 +35,10 @@ func (Checkout) Fields() []ent.Field {
 			GoType(types.CheckoutEntityType("")),
 		field.String("entity_id").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}),
-		field.String("source_subscription_id").
+		field.String("checkout_action").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
-			Optional().Nillable(),
-		field.String("checkout_type").
-			SchemaType(map[string]string{"postgres": "varchar(50)"}).
-			GoType(types.CheckoutType("")),
-		field.String("objective").
+			GoType(types.CheckoutAction("")),
+		field.String("mode").
 			SchemaType(map[string]string{"postgres": "varchar(50)"}).
 			GoType(types.CheckoutObjective("")),
 		field.String("checkout_status").
@@ -50,37 +47,34 @@ func (Checkout) Fields() []ent.Field {
 			Default(string(types.CheckoutStatusPending)),
 		field.Other("amount", decimal.Zero).
 			SchemaType(map[string]string{"postgres": "numeric(20,8)"}).
-			Optional(),
+			Optional().Nillable(),
 		field.String("currency").Optional(),
 		field.String("provider").
-			SchemaType(map[string]string{"postgres": "varchar(50)"}),
+			SchemaType(map[string]string{"postgres": "varchar(50)"}).
+			GoType(types.CheckoutProvider("")).
+			Default(string(types.CheckoutProviderFlexprice)),
 		field.String("provider_session_id").Optional().Nillable(),
 		field.Text("checkout_url").Optional().Nillable(),
 		field.Text("success_url").Optional().Nillable(),
 		field.Text("cancel_url").Optional().Nillable(),
 		field.JSON("configuration", map[string]interface{}{}).
 			Optional().
-			Comment("Reserved; deferred-operation payload (JSONB). Nil in v1."),
+			Comment("Deferred-operation payload (JSONB). Nil in v1."),
 		field.Time("expires_at"),
 		field.Time("completed_at").Optional().Nillable(),
 		field.Time("cancelled_at").Optional().Nillable(),
-		field.Text("error_message").Optional().Nillable(),
+		field.Text("failure_message").Optional().Nillable(),
 	}
 }
 
 func (Checkout) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id"),
-		index.Fields("customer_id"),
-		// one in-flight checkout per (entity, objective); also serves payment-completion lookup
-		index.Fields("entity_type", "entity_id", "objective").
+		// one in-flight checkout per (tenant, env, entity, mode); also serves payment-completion lookup
+		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id", "mode").
 			Unique().
 			Annotations(entsql.IndexAnnotation{Where: "checkout_status = 'pending'"}),
-		// one in-flight upgrade per source subscription (NULL source rows unconstrained)
-		index.Fields("source_subscription_id").
-			Unique().
-			Annotations(entsql.IndexAnnotation{Where: "checkout_status = 'pending'"}),
-		// expiry sweep
+		// expiry sweep — cross-tenant intentional for the cleanup cron
 		index.Fields("expires_at").
 			Annotations(entsql.IndexAnnotation{Where: "checkout_status = 'pending'"}),
 	}

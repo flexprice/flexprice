@@ -40,20 +40,18 @@ type Checkout struct {
 	EntityType types.CheckoutEntityType `json:"entity_type,omitempty"`
 	// EntityID holds the value of the "entity_id" field.
 	EntityID string `json:"entity_id,omitempty"`
-	// SourceSubscriptionID holds the value of the "source_subscription_id" field.
-	SourceSubscriptionID *string `json:"source_subscription_id,omitempty"`
-	// CheckoutType holds the value of the "checkout_type" field.
-	CheckoutType types.CheckoutType `json:"checkout_type,omitempty"`
-	// Objective holds the value of the "objective" field.
-	Objective types.CheckoutObjective `json:"objective,omitempty"`
+	// CheckoutAction holds the value of the "checkout_action" field.
+	CheckoutAction types.CheckoutAction `json:"checkout_action,omitempty"`
+	// Mode holds the value of the "mode" field.
+	Mode types.CheckoutObjective `json:"mode,omitempty"`
 	// CheckoutStatus holds the value of the "checkout_status" field.
 	CheckoutStatus types.CheckoutStatus `json:"checkout_status,omitempty"`
 	// Amount holds the value of the "amount" field.
-	Amount decimal.Decimal `json:"amount,omitempty"`
+	Amount *decimal.Decimal `json:"amount,omitempty"`
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// Provider holds the value of the "provider" field.
-	Provider string `json:"provider,omitempty"`
+	Provider types.CheckoutProvider `json:"provider,omitempty"`
 	// ProviderSessionID holds the value of the "provider_session_id" field.
 	ProviderSessionID *string `json:"provider_session_id,omitempty"`
 	// CheckoutURL holds the value of the "checkout_url" field.
@@ -62,7 +60,7 @@ type Checkout struct {
 	SuccessURL *string `json:"success_url,omitempty"`
 	// CancelURL holds the value of the "cancel_url" field.
 	CancelURL *string `json:"cancel_url,omitempty"`
-	// Reserved; deferred-operation payload (JSONB). Nil in v1.
+	// Deferred-operation payload (JSONB). Nil in v1.
 	Configuration map[string]interface{} `json:"configuration,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
@@ -70,9 +68,9 @@ type Checkout struct {
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	// CancelledAt holds the value of the "cancelled_at" field.
 	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
-	// ErrorMessage holds the value of the "error_message" field.
-	ErrorMessage *string `json:"error_message,omitempty"`
-	selectValues sql.SelectValues
+	// FailureMessage holds the value of the "failure_message" field.
+	FailureMessage *string `json:"failure_message,omitempty"`
+	selectValues   sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -80,11 +78,11 @@ func (*Checkout) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case checkout.FieldAmount:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case checkout.FieldConfiguration:
 			values[i] = new([]byte)
-		case checkout.FieldAmount:
-			values[i] = new(decimal.Decimal)
-		case checkout.FieldID, checkout.FieldTenantID, checkout.FieldStatus, checkout.FieldCreatedBy, checkout.FieldUpdatedBy, checkout.FieldEnvironmentID, checkout.FieldCustomerID, checkout.FieldEntityType, checkout.FieldEntityID, checkout.FieldSourceSubscriptionID, checkout.FieldCheckoutType, checkout.FieldObjective, checkout.FieldCheckoutStatus, checkout.FieldCurrency, checkout.FieldProvider, checkout.FieldProviderSessionID, checkout.FieldCheckoutURL, checkout.FieldSuccessURL, checkout.FieldCancelURL, checkout.FieldErrorMessage:
+		case checkout.FieldID, checkout.FieldTenantID, checkout.FieldStatus, checkout.FieldCreatedBy, checkout.FieldUpdatedBy, checkout.FieldEnvironmentID, checkout.FieldCustomerID, checkout.FieldEntityType, checkout.FieldEntityID, checkout.FieldCheckoutAction, checkout.FieldMode, checkout.FieldCheckoutStatus, checkout.FieldCurrency, checkout.FieldProvider, checkout.FieldProviderSessionID, checkout.FieldCheckoutURL, checkout.FieldSuccessURL, checkout.FieldCancelURL, checkout.FieldFailureMessage:
 			values[i] = new(sql.NullString)
 		case checkout.FieldCreatedAt, checkout.FieldUpdatedAt, checkout.FieldExpiresAt, checkout.FieldCompletedAt, checkout.FieldCancelledAt:
 			values[i] = new(sql.NullTime)
@@ -169,24 +167,17 @@ func (c *Checkout) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				c.EntityID = value.String
 			}
-		case checkout.FieldSourceSubscriptionID:
+		case checkout.FieldCheckoutAction:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field source_subscription_id", values[i])
+				return fmt.Errorf("unexpected type %T for field checkout_action", values[i])
 			} else if value.Valid {
-				c.SourceSubscriptionID = new(string)
-				*c.SourceSubscriptionID = value.String
+				c.CheckoutAction = types.CheckoutAction(value.String)
 			}
-		case checkout.FieldCheckoutType:
+		case checkout.FieldMode:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field checkout_type", values[i])
+				return fmt.Errorf("unexpected type %T for field mode", values[i])
 			} else if value.Valid {
-				c.CheckoutType = types.CheckoutType(value.String)
-			}
-		case checkout.FieldObjective:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field objective", values[i])
-			} else if value.Valid {
-				c.Objective = types.CheckoutObjective(value.String)
+				c.Mode = types.CheckoutObjective(value.String)
 			}
 		case checkout.FieldCheckoutStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -195,10 +186,11 @@ func (c *Checkout) assignValues(columns []string, values []any) error {
 				c.CheckoutStatus = types.CheckoutStatus(value.String)
 			}
 		case checkout.FieldAmount:
-			if value, ok := values[i].(*decimal.Decimal); !ok {
+			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
-			} else if value != nil {
-				c.Amount = *value
+			} else if value.Valid {
+				c.Amount = new(decimal.Decimal)
+				*c.Amount = *value.S.(*decimal.Decimal)
 			}
 		case checkout.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -210,7 +202,7 @@ func (c *Checkout) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field provider", values[i])
 			} else if value.Valid {
-				c.Provider = value.String
+				c.Provider = types.CheckoutProvider(value.String)
 			}
 		case checkout.FieldProviderSessionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -268,12 +260,12 @@ func (c *Checkout) assignValues(columns []string, values []any) error {
 				c.CancelledAt = new(time.Time)
 				*c.CancelledAt = value.Time
 			}
-		case checkout.FieldErrorMessage:
+		case checkout.FieldFailureMessage:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field error_message", values[i])
+				return fmt.Errorf("unexpected type %T for field failure_message", values[i])
 			} else if value.Valid {
-				c.ErrorMessage = new(string)
-				*c.ErrorMessage = value.String
+				c.FailureMessage = new(string)
+				*c.FailureMessage = value.String
 			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
@@ -341,28 +333,25 @@ func (c *Checkout) String() string {
 	builder.WriteString("entity_id=")
 	builder.WriteString(c.EntityID)
 	builder.WriteString(", ")
-	if v := c.SourceSubscriptionID; v != nil {
-		builder.WriteString("source_subscription_id=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("checkout_action=")
+	builder.WriteString(fmt.Sprintf("%v", c.CheckoutAction))
 	builder.WriteString(", ")
-	builder.WriteString("checkout_type=")
-	builder.WriteString(fmt.Sprintf("%v", c.CheckoutType))
-	builder.WriteString(", ")
-	builder.WriteString("objective=")
-	builder.WriteString(fmt.Sprintf("%v", c.Objective))
+	builder.WriteString("mode=")
+	builder.WriteString(fmt.Sprintf("%v", c.Mode))
 	builder.WriteString(", ")
 	builder.WriteString("checkout_status=")
 	builder.WriteString(fmt.Sprintf("%v", c.CheckoutStatus))
 	builder.WriteString(", ")
-	builder.WriteString("amount=")
-	builder.WriteString(fmt.Sprintf("%v", c.Amount))
+	if v := c.Amount; v != nil {
+		builder.WriteString("amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(c.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("provider=")
-	builder.WriteString(c.Provider)
+	builder.WriteString(fmt.Sprintf("%v", c.Provider))
 	builder.WriteString(", ")
 	if v := c.ProviderSessionID; v != nil {
 		builder.WriteString("provider_session_id=")
@@ -400,8 +389,8 @@ func (c *Checkout) String() string {
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := c.ErrorMessage; v != nil {
-		builder.WriteString("error_message=")
+	if v := c.FailureMessage; v != nil {
+		builder.WriteString("failure_message=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

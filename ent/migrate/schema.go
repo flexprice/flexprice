@@ -201,13 +201,12 @@ var (
 		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "source_subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "checkout_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "objective", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "checkout_action", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "mode", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "checkout_status", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "currency", Type: field.TypeString, Nullable: true},
-		{Name: "provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "provider", Type: field.TypeString, Default: "flexprice", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "provider_session_id", Type: field.TypeString, Nullable: true},
 		{Name: "checkout_url", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "success_url", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -216,7 +215,7 @@ var (
 		{Name: "expires_at", Type: field.TypeTime},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "cancelled_at", Type: field.TypeTime, Nullable: true},
-		{Name: "error_message", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "failure_message", Type: field.TypeString, Nullable: true, Size: 2147483647},
 	}
 	// CheckoutsTable holds the schema information for the "checkouts" table.
 	CheckoutsTable = &schema.Table{
@@ -230,22 +229,9 @@ var (
 				Columns: []*schema.Column{CheckoutsColumns[1], CheckoutsColumns[7]},
 			},
 			{
-				Name:    "checkout_customer_id",
-				Unique:  false,
-				Columns: []*schema.Column{CheckoutsColumns[8]},
-			},
-			{
-				Name:    "checkout_entity_type_entity_id_objective",
+				Name:    "checkout_tenant_id_environment_id_entity_type_entity_id_mode",
 				Unique:  true,
-				Columns: []*schema.Column{CheckoutsColumns[9], CheckoutsColumns[10], CheckoutsColumns[13]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "checkout_status = 'pending'",
-				},
-			},
-			{
-				Name:    "checkout_source_subscription_id",
-				Unique:  true,
-				Columns: []*schema.Column{CheckoutsColumns[11]},
+				Columns: []*schema.Column{CheckoutsColumns[1], CheckoutsColumns[7], CheckoutsColumns[9], CheckoutsColumns[10], CheckoutsColumns[12]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "checkout_status = 'pending'",
 				},
@@ -253,7 +239,7 @@ var (
 			{
 				Name:    "checkout_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{CheckoutsColumns[23]},
+				Columns: []*schema.Column{CheckoutsColumns[22]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "checkout_status = 'pending'",
 				},

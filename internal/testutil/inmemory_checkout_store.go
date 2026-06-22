@@ -60,15 +60,13 @@ func (m *InMemoryCheckoutStore) Update(ctx context.Context, c *checkout.Checkout
 
 func (m *InMemoryCheckoutStore) GetPendingByEntity(
 	ctx context.Context,
-	entityType types.CheckoutEntityType,
-	entityID string,
-	objective types.CheckoutObjective,
+	params checkout.GetPendingByEntityParams,
 ) (*checkout.Checkout, error) {
 	items, err := m.InMemoryStore.List(ctx, nil,
 		func(_ context.Context, c *checkout.Checkout, _ interface{}) bool {
-			return c.EntityType == entityType &&
-				c.EntityID == entityID &&
-				c.Objective == objective &&
+			return c.EntityType == params.EntityType &&
+				c.EntityID == params.EntityID &&
+				c.Mode == params.Mode &&
 				c.TenantID == types.GetTenantID(ctx) &&
 				c.EnvironmentID == types.GetEnvironmentID(ctx) &&
 				c.Status == types.CheckoutStatusPending
@@ -82,10 +80,20 @@ func (m *InMemoryCheckoutStore) GetPendingByEntity(
 	return items[0], nil
 }
 
-func (m *InMemoryCheckoutStore) ListPendingExpired(ctx context.Context, cutoff time.Time) ([]*checkout.Checkout, error) {
-	return m.InMemoryStore.List(ctx, nil,
+func (m *InMemoryCheckoutStore) ListPendingExpired(ctx context.Context, cutoff time.Time, filter *types.QueryFilter) ([]*checkout.Checkout, error) {
+	items, err := m.InMemoryStore.List(ctx, nil,
 		func(_ context.Context, c *checkout.Checkout, _ interface{}) bool {
 			return c.Status == types.CheckoutStatusPending && c.ExpiresAt.Before(cutoff)
 		},
 		func(i, j *checkout.Checkout) bool { return i.ExpiresAt.Before(j.ExpiresAt) })
+	if err != nil {
+		return nil, err
+	}
+	if filter != nil && !filter.IsUnlimited() {
+		limit := filter.GetLimit()
+		if limit > 0 && len(items) > limit {
+			items = items[:limit]
+		}
+	}
+	return items, nil
 }

@@ -4866,39 +4866,38 @@ func (m *BillingSequenceMutation) ResetEdge(name string) error {
 // CheckoutMutation represents an operation that mutates the Checkout nodes in the graph.
 type CheckoutMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *string
-	tenant_id              *string
-	status                 *string
-	created_at             *time.Time
-	updated_at             *time.Time
-	created_by             *string
-	updated_by             *string
-	environment_id         *string
-	customer_id            *string
-	entity_type            *types.CheckoutEntityType
-	entity_id              *string
-	source_subscription_id *string
-	checkout_type          *types.CheckoutType
-	objective              *types.CheckoutObjective
-	checkout_status        *types.CheckoutStatus
-	amount                 *decimal.Decimal
-	currency               *string
-	provider               *string
-	provider_session_id    *string
-	checkout_url           *string
-	success_url            *string
-	cancel_url             *string
-	configuration          *map[string]interface{}
-	expires_at             *time.Time
-	completed_at           *time.Time
-	cancelled_at           *time.Time
-	error_message          *string
-	clearedFields          map[string]struct{}
-	done                   bool
-	oldValue               func(context.Context) (*Checkout, error)
-	predicates             []predicate.Checkout
+	op                  Op
+	typ                 string
+	id                  *string
+	tenant_id           *string
+	status              *string
+	created_at          *time.Time
+	updated_at          *time.Time
+	created_by          *string
+	updated_by          *string
+	environment_id      *string
+	customer_id         *string
+	entity_type         *types.CheckoutEntityType
+	entity_id           *string
+	checkout_action     *types.CheckoutAction
+	mode                *types.CheckoutObjective
+	checkout_status     *types.CheckoutStatus
+	amount              *decimal.Decimal
+	currency            *string
+	provider            *types.CheckoutProvider
+	provider_session_id *string
+	checkout_url        *string
+	success_url         *string
+	cancel_url          *string
+	configuration       *map[string]interface{}
+	expires_at          *time.Time
+	completed_at        *time.Time
+	cancelled_at        *time.Time
+	failure_message     *string
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*Checkout, error)
+	predicates          []predicate.Checkout
 }
 
 var _ ent.Mutation = (*CheckoutMutation)(nil)
@@ -5404,125 +5403,76 @@ func (m *CheckoutMutation) ResetEntityID() {
 	m.entity_id = nil
 }
 
-// SetSourceSubscriptionID sets the "source_subscription_id" field.
-func (m *CheckoutMutation) SetSourceSubscriptionID(s string) {
-	m.source_subscription_id = &s
+// SetCheckoutAction sets the "checkout_action" field.
+func (m *CheckoutMutation) SetCheckoutAction(ta types.CheckoutAction) {
+	m.checkout_action = &ta
 }
 
-// SourceSubscriptionID returns the value of the "source_subscription_id" field in the mutation.
-func (m *CheckoutMutation) SourceSubscriptionID() (r string, exists bool) {
-	v := m.source_subscription_id
+// CheckoutAction returns the value of the "checkout_action" field in the mutation.
+func (m *CheckoutMutation) CheckoutAction() (r types.CheckoutAction, exists bool) {
+	v := m.checkout_action
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldSourceSubscriptionID returns the old "source_subscription_id" field's value of the Checkout entity.
+// OldCheckoutAction returns the old "checkout_action" field's value of the Checkout entity.
 // If the Checkout object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutMutation) OldSourceSubscriptionID(ctx context.Context) (v *string, err error) {
+func (m *CheckoutMutation) OldCheckoutAction(ctx context.Context) (v types.CheckoutAction, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldSourceSubscriptionID is only allowed on UpdateOne operations")
+		return v, errors.New("OldCheckoutAction is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldSourceSubscriptionID requires an ID field in the mutation")
+		return v, errors.New("OldCheckoutAction requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldSourceSubscriptionID: %w", err)
+		return v, fmt.Errorf("querying old value for OldCheckoutAction: %w", err)
 	}
-	return oldValue.SourceSubscriptionID, nil
+	return oldValue.CheckoutAction, nil
 }
 
-// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
-func (m *CheckoutMutation) ClearSourceSubscriptionID() {
-	m.source_subscription_id = nil
-	m.clearedFields[checkout.FieldSourceSubscriptionID] = struct{}{}
+// ResetCheckoutAction resets all changes to the "checkout_action" field.
+func (m *CheckoutMutation) ResetCheckoutAction() {
+	m.checkout_action = nil
 }
 
-// SourceSubscriptionIDCleared returns if the "source_subscription_id" field was cleared in this mutation.
-func (m *CheckoutMutation) SourceSubscriptionIDCleared() bool {
-	_, ok := m.clearedFields[checkout.FieldSourceSubscriptionID]
-	return ok
+// SetMode sets the "mode" field.
+func (m *CheckoutMutation) SetMode(to types.CheckoutObjective) {
+	m.mode = &to
 }
 
-// ResetSourceSubscriptionID resets all changes to the "source_subscription_id" field.
-func (m *CheckoutMutation) ResetSourceSubscriptionID() {
-	m.source_subscription_id = nil
-	delete(m.clearedFields, checkout.FieldSourceSubscriptionID)
-}
-
-// SetCheckoutType sets the "checkout_type" field.
-func (m *CheckoutMutation) SetCheckoutType(tt types.CheckoutType) {
-	m.checkout_type = &tt
-}
-
-// CheckoutType returns the value of the "checkout_type" field in the mutation.
-func (m *CheckoutMutation) CheckoutType() (r types.CheckoutType, exists bool) {
-	v := m.checkout_type
+// Mode returns the value of the "mode" field in the mutation.
+func (m *CheckoutMutation) Mode() (r types.CheckoutObjective, exists bool) {
+	v := m.mode
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldCheckoutType returns the old "checkout_type" field's value of the Checkout entity.
+// OldMode returns the old "mode" field's value of the Checkout entity.
 // If the Checkout object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutMutation) OldCheckoutType(ctx context.Context) (v types.CheckoutType, err error) {
+func (m *CheckoutMutation) OldMode(ctx context.Context) (v types.CheckoutObjective, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCheckoutType is only allowed on UpdateOne operations")
+		return v, errors.New("OldMode is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCheckoutType requires an ID field in the mutation")
+		return v, errors.New("OldMode requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCheckoutType: %w", err)
+		return v, fmt.Errorf("querying old value for OldMode: %w", err)
 	}
-	return oldValue.CheckoutType, nil
+	return oldValue.Mode, nil
 }
 
-// ResetCheckoutType resets all changes to the "checkout_type" field.
-func (m *CheckoutMutation) ResetCheckoutType() {
-	m.checkout_type = nil
-}
-
-// SetObjective sets the "objective" field.
-func (m *CheckoutMutation) SetObjective(to types.CheckoutObjective) {
-	m.objective = &to
-}
-
-// Objective returns the value of the "objective" field in the mutation.
-func (m *CheckoutMutation) Objective() (r types.CheckoutObjective, exists bool) {
-	v := m.objective
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldObjective returns the old "objective" field's value of the Checkout entity.
-// If the Checkout object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutMutation) OldObjective(ctx context.Context) (v types.CheckoutObjective, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldObjective is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldObjective requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldObjective: %w", err)
-	}
-	return oldValue.Objective, nil
-}
-
-// ResetObjective resets all changes to the "objective" field.
-func (m *CheckoutMutation) ResetObjective() {
-	m.objective = nil
+// ResetMode resets all changes to the "mode" field.
+func (m *CheckoutMutation) ResetMode() {
+	m.mode = nil
 }
 
 // SetCheckoutStatus sets the "checkout_status" field.
@@ -5578,7 +5528,7 @@ func (m *CheckoutMutation) Amount() (r decimal.Decimal, exists bool) {
 // OldAmount returns the old "amount" field's value of the Checkout entity.
 // If the Checkout object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutMutation) OldAmount(ctx context.Context) (v decimal.Decimal, err error) {
+func (m *CheckoutMutation) OldAmount(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
 	}
@@ -5660,12 +5610,12 @@ func (m *CheckoutMutation) ResetCurrency() {
 }
 
 // SetProvider sets the "provider" field.
-func (m *CheckoutMutation) SetProvider(s string) {
-	m.provider = &s
+func (m *CheckoutMutation) SetProvider(tp types.CheckoutProvider) {
+	m.provider = &tp
 }
 
 // Provider returns the value of the "provider" field in the mutation.
-func (m *CheckoutMutation) Provider() (r string, exists bool) {
+func (m *CheckoutMutation) Provider() (r types.CheckoutProvider, exists bool) {
 	v := m.provider
 	if v == nil {
 		return
@@ -5676,7 +5626,7 @@ func (m *CheckoutMutation) Provider() (r string, exists bool) {
 // OldProvider returns the old "provider" field's value of the Checkout entity.
 // If the Checkout object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutMutation) OldProvider(ctx context.Context) (v string, err error) {
+func (m *CheckoutMutation) OldProvider(ctx context.Context) (v types.CheckoutProvider, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldProvider is only allowed on UpdateOne operations")
 	}
@@ -6074,53 +6024,53 @@ func (m *CheckoutMutation) ResetCancelledAt() {
 	delete(m.clearedFields, checkout.FieldCancelledAt)
 }
 
-// SetErrorMessage sets the "error_message" field.
-func (m *CheckoutMutation) SetErrorMessage(s string) {
-	m.error_message = &s
+// SetFailureMessage sets the "failure_message" field.
+func (m *CheckoutMutation) SetFailureMessage(s string) {
+	m.failure_message = &s
 }
 
-// ErrorMessage returns the value of the "error_message" field in the mutation.
-func (m *CheckoutMutation) ErrorMessage() (r string, exists bool) {
-	v := m.error_message
+// FailureMessage returns the value of the "failure_message" field in the mutation.
+func (m *CheckoutMutation) FailureMessage() (r string, exists bool) {
+	v := m.failure_message
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldErrorMessage returns the old "error_message" field's value of the Checkout entity.
+// OldFailureMessage returns the old "failure_message" field's value of the Checkout entity.
 // If the Checkout object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CheckoutMutation) OldErrorMessage(ctx context.Context) (v *string, err error) {
+func (m *CheckoutMutation) OldFailureMessage(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+		return v, errors.New("OldFailureMessage is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+		return v, errors.New("OldFailureMessage requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+		return v, fmt.Errorf("querying old value for OldFailureMessage: %w", err)
 	}
-	return oldValue.ErrorMessage, nil
+	return oldValue.FailureMessage, nil
 }
 
-// ClearErrorMessage clears the value of the "error_message" field.
-func (m *CheckoutMutation) ClearErrorMessage() {
-	m.error_message = nil
-	m.clearedFields[checkout.FieldErrorMessage] = struct{}{}
+// ClearFailureMessage clears the value of the "failure_message" field.
+func (m *CheckoutMutation) ClearFailureMessage() {
+	m.failure_message = nil
+	m.clearedFields[checkout.FieldFailureMessage] = struct{}{}
 }
 
-// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
-func (m *CheckoutMutation) ErrorMessageCleared() bool {
-	_, ok := m.clearedFields[checkout.FieldErrorMessage]
+// FailureMessageCleared returns if the "failure_message" field was cleared in this mutation.
+func (m *CheckoutMutation) FailureMessageCleared() bool {
+	_, ok := m.clearedFields[checkout.FieldFailureMessage]
 	return ok
 }
 
-// ResetErrorMessage resets all changes to the "error_message" field.
-func (m *CheckoutMutation) ResetErrorMessage() {
-	m.error_message = nil
-	delete(m.clearedFields, checkout.FieldErrorMessage)
+// ResetFailureMessage resets all changes to the "failure_message" field.
+func (m *CheckoutMutation) ResetFailureMessage() {
+	m.failure_message = nil
+	delete(m.clearedFields, checkout.FieldFailureMessage)
 }
 
 // Where appends a list predicates to the CheckoutMutation builder.
@@ -6157,7 +6107,7 @@ func (m *CheckoutMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CheckoutMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, checkout.FieldTenantID)
 	}
@@ -6188,14 +6138,11 @@ func (m *CheckoutMutation) Fields() []string {
 	if m.entity_id != nil {
 		fields = append(fields, checkout.FieldEntityID)
 	}
-	if m.source_subscription_id != nil {
-		fields = append(fields, checkout.FieldSourceSubscriptionID)
+	if m.checkout_action != nil {
+		fields = append(fields, checkout.FieldCheckoutAction)
 	}
-	if m.checkout_type != nil {
-		fields = append(fields, checkout.FieldCheckoutType)
-	}
-	if m.objective != nil {
-		fields = append(fields, checkout.FieldObjective)
+	if m.mode != nil {
+		fields = append(fields, checkout.FieldMode)
 	}
 	if m.checkout_status != nil {
 		fields = append(fields, checkout.FieldCheckoutStatus)
@@ -6233,8 +6180,8 @@ func (m *CheckoutMutation) Fields() []string {
 	if m.cancelled_at != nil {
 		fields = append(fields, checkout.FieldCancelledAt)
 	}
-	if m.error_message != nil {
-		fields = append(fields, checkout.FieldErrorMessage)
+	if m.failure_message != nil {
+		fields = append(fields, checkout.FieldFailureMessage)
 	}
 	return fields
 }
@@ -6264,12 +6211,10 @@ func (m *CheckoutMutation) Field(name string) (ent.Value, bool) {
 		return m.EntityType()
 	case checkout.FieldEntityID:
 		return m.EntityID()
-	case checkout.FieldSourceSubscriptionID:
-		return m.SourceSubscriptionID()
-	case checkout.FieldCheckoutType:
-		return m.CheckoutType()
-	case checkout.FieldObjective:
-		return m.Objective()
+	case checkout.FieldCheckoutAction:
+		return m.CheckoutAction()
+	case checkout.FieldMode:
+		return m.Mode()
 	case checkout.FieldCheckoutStatus:
 		return m.CheckoutStatus()
 	case checkout.FieldAmount:
@@ -6294,8 +6239,8 @@ func (m *CheckoutMutation) Field(name string) (ent.Value, bool) {
 		return m.CompletedAt()
 	case checkout.FieldCancelledAt:
 		return m.CancelledAt()
-	case checkout.FieldErrorMessage:
-		return m.ErrorMessage()
+	case checkout.FieldFailureMessage:
+		return m.FailureMessage()
 	}
 	return nil, false
 }
@@ -6325,12 +6270,10 @@ func (m *CheckoutMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldEntityType(ctx)
 	case checkout.FieldEntityID:
 		return m.OldEntityID(ctx)
-	case checkout.FieldSourceSubscriptionID:
-		return m.OldSourceSubscriptionID(ctx)
-	case checkout.FieldCheckoutType:
-		return m.OldCheckoutType(ctx)
-	case checkout.FieldObjective:
-		return m.OldObjective(ctx)
+	case checkout.FieldCheckoutAction:
+		return m.OldCheckoutAction(ctx)
+	case checkout.FieldMode:
+		return m.OldMode(ctx)
 	case checkout.FieldCheckoutStatus:
 		return m.OldCheckoutStatus(ctx)
 	case checkout.FieldAmount:
@@ -6355,8 +6298,8 @@ func (m *CheckoutMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldCompletedAt(ctx)
 	case checkout.FieldCancelledAt:
 		return m.OldCancelledAt(ctx)
-	case checkout.FieldErrorMessage:
-		return m.OldErrorMessage(ctx)
+	case checkout.FieldFailureMessage:
+		return m.OldFailureMessage(ctx)
 	}
 	return nil, fmt.Errorf("unknown Checkout field %s", name)
 }
@@ -6436,26 +6379,19 @@ func (m *CheckoutMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEntityID(v)
 		return nil
-	case checkout.FieldSourceSubscriptionID:
-		v, ok := value.(string)
+	case checkout.FieldCheckoutAction:
+		v, ok := value.(types.CheckoutAction)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetSourceSubscriptionID(v)
+		m.SetCheckoutAction(v)
 		return nil
-	case checkout.FieldCheckoutType:
-		v, ok := value.(types.CheckoutType)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCheckoutType(v)
-		return nil
-	case checkout.FieldObjective:
+	case checkout.FieldMode:
 		v, ok := value.(types.CheckoutObjective)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetObjective(v)
+		m.SetMode(v)
 		return nil
 	case checkout.FieldCheckoutStatus:
 		v, ok := value.(types.CheckoutStatus)
@@ -6479,7 +6415,7 @@ func (m *CheckoutMutation) SetField(name string, value ent.Value) error {
 		m.SetCurrency(v)
 		return nil
 	case checkout.FieldProvider:
-		v, ok := value.(string)
+		v, ok := value.(types.CheckoutProvider)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -6541,12 +6477,12 @@ func (m *CheckoutMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCancelledAt(v)
 		return nil
-	case checkout.FieldErrorMessage:
+	case checkout.FieldFailureMessage:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetErrorMessage(v)
+		m.SetFailureMessage(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Checkout field %s", name)
@@ -6587,9 +6523,6 @@ func (m *CheckoutMutation) ClearedFields() []string {
 	if m.FieldCleared(checkout.FieldEnvironmentID) {
 		fields = append(fields, checkout.FieldEnvironmentID)
 	}
-	if m.FieldCleared(checkout.FieldSourceSubscriptionID) {
-		fields = append(fields, checkout.FieldSourceSubscriptionID)
-	}
 	if m.FieldCleared(checkout.FieldAmount) {
 		fields = append(fields, checkout.FieldAmount)
 	}
@@ -6617,8 +6550,8 @@ func (m *CheckoutMutation) ClearedFields() []string {
 	if m.FieldCleared(checkout.FieldCancelledAt) {
 		fields = append(fields, checkout.FieldCancelledAt)
 	}
-	if m.FieldCleared(checkout.FieldErrorMessage) {
-		fields = append(fields, checkout.FieldErrorMessage)
+	if m.FieldCleared(checkout.FieldFailureMessage) {
+		fields = append(fields, checkout.FieldFailureMessage)
 	}
 	return fields
 }
@@ -6642,9 +6575,6 @@ func (m *CheckoutMutation) ClearField(name string) error {
 		return nil
 	case checkout.FieldEnvironmentID:
 		m.ClearEnvironmentID()
-		return nil
-	case checkout.FieldSourceSubscriptionID:
-		m.ClearSourceSubscriptionID()
 		return nil
 	case checkout.FieldAmount:
 		m.ClearAmount()
@@ -6673,8 +6603,8 @@ func (m *CheckoutMutation) ClearField(name string) error {
 	case checkout.FieldCancelledAt:
 		m.ClearCancelledAt()
 		return nil
-	case checkout.FieldErrorMessage:
-		m.ClearErrorMessage()
+	case checkout.FieldFailureMessage:
+		m.ClearFailureMessage()
 		return nil
 	}
 	return fmt.Errorf("unknown Checkout nullable field %s", name)
@@ -6714,14 +6644,11 @@ func (m *CheckoutMutation) ResetField(name string) error {
 	case checkout.FieldEntityID:
 		m.ResetEntityID()
 		return nil
-	case checkout.FieldSourceSubscriptionID:
-		m.ResetSourceSubscriptionID()
+	case checkout.FieldCheckoutAction:
+		m.ResetCheckoutAction()
 		return nil
-	case checkout.FieldCheckoutType:
-		m.ResetCheckoutType()
-		return nil
-	case checkout.FieldObjective:
-		m.ResetObjective()
+	case checkout.FieldMode:
+		m.ResetMode()
 		return nil
 	case checkout.FieldCheckoutStatus:
 		m.ResetCheckoutStatus()
@@ -6759,8 +6686,8 @@ func (m *CheckoutMutation) ResetField(name string) error {
 	case checkout.FieldCancelledAt:
 		m.ResetCancelledAt()
 		return nil
-	case checkout.FieldErrorMessage:
-		m.ResetErrorMessage()
+	case checkout.FieldFailureMessage:
+		m.ResetFailureMessage()
 		return nil
 	}
 	return fmt.Errorf("unknown Checkout field %s", name)

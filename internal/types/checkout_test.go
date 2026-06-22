@@ -10,8 +10,10 @@ func TestCheckoutEnums_Validate(t *testing.T) {
 	}{
 		{"valid entity type", func() error { return CheckoutEntityTypeSubscription.Validate() }, false},
 		{"invalid entity type", func() error { return CheckoutEntityType("nope").Validate() }, true},
-		{"valid type", func() error { return CheckoutTypeSubscriptionCreation.Validate() }, false},
-		{"invalid type", func() error { return CheckoutType("nope").Validate() }, true},
+		{"valid action", func() error { return CheckoutActionSubscriptionCreation.Validate() }, false},
+		{"invalid action", func() error { return CheckoutAction("nope").Validate() }, true},
+		{"valid provider", func() error { return CheckoutProviderStripe.Validate() }, false},
+		{"invalid provider", func() error { return CheckoutProvider("nope").Validate() }, true},
 		{"valid objective", func() error { return CheckoutObjectivePayment.Validate() }, false},
 		{"invalid objective", func() error { return CheckoutObjective("nope").Validate() }, true},
 		{"valid status", func() error { return CheckoutStatusPending.Validate() }, false},

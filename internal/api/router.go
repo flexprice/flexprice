@@ -346,10 +346,10 @@ func NewRouter(
 			}
 		}
 
-		checkout := v1Private.Group("/checkouts")
+		checkoutGroup := v1Private.Group("/checkout/session")
 		{
-			checkout.POST("", write("checkout", types.ActionWrite), handlers.Checkout.CreateCheckout)
-			checkout.GET("/:id", handlers.Checkout.GetCheckout)
+			checkoutGroup.POST("", write("checkout", types.ActionWrite), handlers.Checkout.CreateCheckout)
+			checkoutGroup.GET("/:id", handlers.Checkout.GetCheckout)
 		}
 
 		wallet := v1Private.Group("/wallets")

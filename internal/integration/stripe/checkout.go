@@ -51,6 +51,9 @@ func (s *StripeCheckoutProvider) createPaymentSession(ctx context.Context, req c
 	for k, v := range req.Metadata {
 		metadata[k] = v
 	}
+	// flexprice_checkout_id is included so the webhook can mark the checkout
+	// record complete after payment succeeds (the handler processes payment first,
+	// then calls Complete() — no short-circuit risk in the current handler).
 	metadata["flexprice_checkout_id"] = req.CheckoutID
 
 	resp, err := s.payment.CreatePaymentLink(ctx, &dto.CreateStripePaymentLinkRequest{

@@ -130,29 +130,15 @@ func (cc *CheckoutCreate) SetEntityID(s string) *CheckoutCreate {
 	return cc
 }
 
-// SetSourceSubscriptionID sets the "source_subscription_id" field.
-func (cc *CheckoutCreate) SetSourceSubscriptionID(s string) *CheckoutCreate {
-	cc.mutation.SetSourceSubscriptionID(s)
+// SetCheckoutAction sets the "checkout_action" field.
+func (cc *CheckoutCreate) SetCheckoutAction(ta types.CheckoutAction) *CheckoutCreate {
+	cc.mutation.SetCheckoutAction(ta)
 	return cc
 }
 
-// SetNillableSourceSubscriptionID sets the "source_subscription_id" field if the given value is not nil.
-func (cc *CheckoutCreate) SetNillableSourceSubscriptionID(s *string) *CheckoutCreate {
-	if s != nil {
-		cc.SetSourceSubscriptionID(*s)
-	}
-	return cc
-}
-
-// SetCheckoutType sets the "checkout_type" field.
-func (cc *CheckoutCreate) SetCheckoutType(tt types.CheckoutType) *CheckoutCreate {
-	cc.mutation.SetCheckoutType(tt)
-	return cc
-}
-
-// SetObjective sets the "objective" field.
-func (cc *CheckoutCreate) SetObjective(to types.CheckoutObjective) *CheckoutCreate {
-	cc.mutation.SetObjective(to)
+// SetMode sets the "mode" field.
+func (cc *CheckoutCreate) SetMode(to types.CheckoutObjective) *CheckoutCreate {
+	cc.mutation.SetMode(to)
 	return cc
 }
 
@@ -199,8 +185,16 @@ func (cc *CheckoutCreate) SetNillableCurrency(s *string) *CheckoutCreate {
 }
 
 // SetProvider sets the "provider" field.
-func (cc *CheckoutCreate) SetProvider(s string) *CheckoutCreate {
-	cc.mutation.SetProvider(s)
+func (cc *CheckoutCreate) SetProvider(tp types.CheckoutProvider) *CheckoutCreate {
+	cc.mutation.SetProvider(tp)
+	return cc
+}
+
+// SetNillableProvider sets the "provider" field if the given value is not nil.
+func (cc *CheckoutCreate) SetNillableProvider(tp *types.CheckoutProvider) *CheckoutCreate {
+	if tp != nil {
+		cc.SetProvider(*tp)
+	}
 	return cc
 }
 
@@ -300,16 +294,16 @@ func (cc *CheckoutCreate) SetNillableCancelledAt(t *time.Time) *CheckoutCreate {
 	return cc
 }
 
-// SetErrorMessage sets the "error_message" field.
-func (cc *CheckoutCreate) SetErrorMessage(s string) *CheckoutCreate {
-	cc.mutation.SetErrorMessage(s)
+// SetFailureMessage sets the "failure_message" field.
+func (cc *CheckoutCreate) SetFailureMessage(s string) *CheckoutCreate {
+	cc.mutation.SetFailureMessage(s)
 	return cc
 }
 
-// SetNillableErrorMessage sets the "error_message" field if the given value is not nil.
-func (cc *CheckoutCreate) SetNillableErrorMessage(s *string) *CheckoutCreate {
+// SetNillableFailureMessage sets the "failure_message" field if the given value is not nil.
+func (cc *CheckoutCreate) SetNillableFailureMessage(s *string) *CheckoutCreate {
 	if s != nil {
-		cc.SetErrorMessage(*s)
+		cc.SetFailureMessage(*s)
 	}
 	return cc
 }
@@ -375,6 +369,10 @@ func (cc *CheckoutCreate) defaults() {
 		v := checkout.DefaultCheckoutStatus
 		cc.mutation.SetCheckoutStatus(v)
 	}
+	if _, ok := cc.mutation.Provider(); !ok {
+		v := checkout.DefaultProvider
+		cc.mutation.SetProvider(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -415,20 +413,20 @@ func (cc *CheckoutCreate) check() error {
 	if _, ok := cc.mutation.EntityID(); !ok {
 		return &ValidationError{Name: "entity_id", err: errors.New(`ent: missing required field "Checkout.entity_id"`)}
 	}
-	if _, ok := cc.mutation.CheckoutType(); !ok {
-		return &ValidationError{Name: "checkout_type", err: errors.New(`ent: missing required field "Checkout.checkout_type"`)}
+	if _, ok := cc.mutation.CheckoutAction(); !ok {
+		return &ValidationError{Name: "checkout_action", err: errors.New(`ent: missing required field "Checkout.checkout_action"`)}
 	}
-	if v, ok := cc.mutation.CheckoutType(); ok {
+	if v, ok := cc.mutation.CheckoutAction(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "checkout_type", err: fmt.Errorf(`ent: validator failed for field "Checkout.checkout_type": %w`, err)}
+			return &ValidationError{Name: "checkout_action", err: fmt.Errorf(`ent: validator failed for field "Checkout.checkout_action": %w`, err)}
 		}
 	}
-	if _, ok := cc.mutation.Objective(); !ok {
-		return &ValidationError{Name: "objective", err: errors.New(`ent: missing required field "Checkout.objective"`)}
+	if _, ok := cc.mutation.Mode(); !ok {
+		return &ValidationError{Name: "mode", err: errors.New(`ent: missing required field "Checkout.mode"`)}
 	}
-	if v, ok := cc.mutation.Objective(); ok {
+	if v, ok := cc.mutation.Mode(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "objective", err: fmt.Errorf(`ent: validator failed for field "Checkout.objective": %w`, err)}
+			return &ValidationError{Name: "mode", err: fmt.Errorf(`ent: validator failed for field "Checkout.mode": %w`, err)}
 		}
 	}
 	if _, ok := cc.mutation.CheckoutStatus(); !ok {
@@ -441,6 +439,11 @@ func (cc *CheckoutCreate) check() error {
 	}
 	if _, ok := cc.mutation.Provider(); !ok {
 		return &ValidationError{Name: "provider", err: errors.New(`ent: missing required field "Checkout.provider"`)}
+	}
+	if v, ok := cc.mutation.Provider(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "provider", err: fmt.Errorf(`ent: validator failed for field "Checkout.provider": %w`, err)}
+		}
 	}
 	if _, ok := cc.mutation.ExpiresAt(); !ok {
 		return &ValidationError{Name: "expires_at", err: errors.New(`ent: missing required field "Checkout.expires_at"`)}
@@ -520,17 +523,13 @@ func (cc *CheckoutCreate) createSpec() (*Checkout, *sqlgraph.CreateSpec) {
 		_spec.SetField(checkout.FieldEntityID, field.TypeString, value)
 		_node.EntityID = value
 	}
-	if value, ok := cc.mutation.SourceSubscriptionID(); ok {
-		_spec.SetField(checkout.FieldSourceSubscriptionID, field.TypeString, value)
-		_node.SourceSubscriptionID = &value
+	if value, ok := cc.mutation.CheckoutAction(); ok {
+		_spec.SetField(checkout.FieldCheckoutAction, field.TypeString, value)
+		_node.CheckoutAction = value
 	}
-	if value, ok := cc.mutation.CheckoutType(); ok {
-		_spec.SetField(checkout.FieldCheckoutType, field.TypeString, value)
-		_node.CheckoutType = value
-	}
-	if value, ok := cc.mutation.Objective(); ok {
-		_spec.SetField(checkout.FieldObjective, field.TypeString, value)
-		_node.Objective = value
+	if value, ok := cc.mutation.Mode(); ok {
+		_spec.SetField(checkout.FieldMode, field.TypeString, value)
+		_node.Mode = value
 	}
 	if value, ok := cc.mutation.CheckoutStatus(); ok {
 		_spec.SetField(checkout.FieldCheckoutStatus, field.TypeString, value)
@@ -538,7 +537,7 @@ func (cc *CheckoutCreate) createSpec() (*Checkout, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := cc.mutation.Amount(); ok {
 		_spec.SetField(checkout.FieldAmount, field.TypeOther, value)
-		_node.Amount = value
+		_node.Amount = &value
 	}
 	if value, ok := cc.mutation.Currency(); ok {
 		_spec.SetField(checkout.FieldCurrency, field.TypeString, value)
@@ -580,9 +579,9 @@ func (cc *CheckoutCreate) createSpec() (*Checkout, *sqlgraph.CreateSpec) {
 		_spec.SetField(checkout.FieldCancelledAt, field.TypeTime, value)
 		_node.CancelledAt = &value
 	}
-	if value, ok := cc.mutation.ErrorMessage(); ok {
-		_spec.SetField(checkout.FieldErrorMessage, field.TypeString, value)
-		_node.ErrorMessage = &value
+	if value, ok := cc.mutation.FailureMessage(); ok {
+		_spec.SetField(checkout.FieldFailureMessage, field.TypeString, value)
+		_node.FailureMessage = &value
 	}
 	return _node, _spec
 }

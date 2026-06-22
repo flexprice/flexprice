@@ -117,21 +117,16 @@ func EntityID(v string) predicate.Checkout {
 	return predicate.Checkout(sql.FieldEQ(FieldEntityID, v))
 }
 
-// SourceSubscriptionID applies equality check predicate on the "source_subscription_id" field. It's identical to SourceSubscriptionIDEQ.
-func SourceSubscriptionID(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEQ(FieldSourceSubscriptionID, v))
+// CheckoutAction applies equality check predicate on the "checkout_action" field. It's identical to CheckoutActionEQ.
+func CheckoutAction(v types.CheckoutAction) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldEQ(FieldCheckoutAction, vc))
 }
 
-// CheckoutType applies equality check predicate on the "checkout_type" field. It's identical to CheckoutTypeEQ.
-func CheckoutType(v types.CheckoutType) predicate.Checkout {
+// Mode applies equality check predicate on the "mode" field. It's identical to ModeEQ.
+func Mode(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldEQ(FieldCheckoutType, vc))
-}
-
-// Objective applies equality check predicate on the "objective" field. It's identical to ObjectiveEQ.
-func Objective(v types.CheckoutObjective) predicate.Checkout {
-	vc := string(v)
-	return predicate.Checkout(sql.FieldEQ(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldEQ(FieldMode, vc))
 }
 
 // CheckoutStatus applies equality check predicate on the "checkout_status" field. It's identical to CheckoutStatusEQ.
@@ -151,8 +146,9 @@ func Currency(v string) predicate.Checkout {
 }
 
 // Provider applies equality check predicate on the "provider" field. It's identical to ProviderEQ.
-func Provider(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEQ(FieldProvider, v))
+func Provider(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldEQ(FieldProvider, vc))
 }
 
 // ProviderSessionID applies equality check predicate on the "provider_session_id" field. It's identical to ProviderSessionIDEQ.
@@ -190,9 +186,9 @@ func CancelledAt(v time.Time) predicate.Checkout {
 	return predicate.Checkout(sql.FieldEQ(FieldCancelledAt, v))
 }
 
-// ErrorMessage applies equality check predicate on the "error_message" field. It's identical to ErrorMessageEQ.
-func ErrorMessage(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEQ(FieldErrorMessage, v))
+// FailureMessage applies equality check predicate on the "failure_message" field. It's identical to FailureMessageEQ.
+func FailureMessage(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldEQ(FieldFailureMessage, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -844,247 +840,172 @@ func EntityIDContainsFold(v string) predicate.Checkout {
 	return predicate.Checkout(sql.FieldContainsFold(FieldEntityID, v))
 }
 
-// SourceSubscriptionIDEQ applies the EQ predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDEQ(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEQ(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDNEQ applies the NEQ predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDNEQ(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldNEQ(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDIn applies the In predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDIn(vs ...string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldIn(FieldSourceSubscriptionID, vs...))
-}
-
-// SourceSubscriptionIDNotIn applies the NotIn predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDNotIn(vs ...string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldNotIn(FieldSourceSubscriptionID, vs...))
-}
-
-// SourceSubscriptionIDGT applies the GT predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDGT(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldGT(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDGTE applies the GTE predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDGTE(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldGTE(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDLT applies the LT predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDLT(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldLT(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDLTE applies the LTE predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDLTE(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldLTE(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDContains applies the Contains predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDContains(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldContains(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDHasPrefix applies the HasPrefix predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDHasPrefix(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldHasPrefix(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDHasSuffix applies the HasSuffix predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDHasSuffix(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldHasSuffix(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDIsNil applies the IsNil predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDIsNil() predicate.Checkout {
-	return predicate.Checkout(sql.FieldIsNull(FieldSourceSubscriptionID))
-}
-
-// SourceSubscriptionIDNotNil applies the NotNil predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDNotNil() predicate.Checkout {
-	return predicate.Checkout(sql.FieldNotNull(FieldSourceSubscriptionID))
-}
-
-// SourceSubscriptionIDEqualFold applies the EqualFold predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDEqualFold(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEqualFold(FieldSourceSubscriptionID, v))
-}
-
-// SourceSubscriptionIDContainsFold applies the ContainsFold predicate on the "source_subscription_id" field.
-func SourceSubscriptionIDContainsFold(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldContainsFold(FieldSourceSubscriptionID, v))
-}
-
-// CheckoutTypeEQ applies the EQ predicate on the "checkout_type" field.
-func CheckoutTypeEQ(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionEQ applies the EQ predicate on the "checkout_action" field.
+func CheckoutActionEQ(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldEQ(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldEQ(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeNEQ applies the NEQ predicate on the "checkout_type" field.
-func CheckoutTypeNEQ(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionNEQ applies the NEQ predicate on the "checkout_action" field.
+func CheckoutActionNEQ(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldNEQ(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldNEQ(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeIn applies the In predicate on the "checkout_type" field.
-func CheckoutTypeIn(vs ...types.CheckoutType) predicate.Checkout {
+// CheckoutActionIn applies the In predicate on the "checkout_action" field.
+func CheckoutActionIn(vs ...types.CheckoutAction) predicate.Checkout {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
 	}
-	return predicate.Checkout(sql.FieldIn(FieldCheckoutType, v...))
+	return predicate.Checkout(sql.FieldIn(FieldCheckoutAction, v...))
 }
 
-// CheckoutTypeNotIn applies the NotIn predicate on the "checkout_type" field.
-func CheckoutTypeNotIn(vs ...types.CheckoutType) predicate.Checkout {
+// CheckoutActionNotIn applies the NotIn predicate on the "checkout_action" field.
+func CheckoutActionNotIn(vs ...types.CheckoutAction) predicate.Checkout {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
 	}
-	return predicate.Checkout(sql.FieldNotIn(FieldCheckoutType, v...))
+	return predicate.Checkout(sql.FieldNotIn(FieldCheckoutAction, v...))
 }
 
-// CheckoutTypeGT applies the GT predicate on the "checkout_type" field.
-func CheckoutTypeGT(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionGT applies the GT predicate on the "checkout_action" field.
+func CheckoutActionGT(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldGT(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldGT(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeGTE applies the GTE predicate on the "checkout_type" field.
-func CheckoutTypeGTE(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionGTE applies the GTE predicate on the "checkout_action" field.
+func CheckoutActionGTE(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldGTE(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldGTE(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeLT applies the LT predicate on the "checkout_type" field.
-func CheckoutTypeLT(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionLT applies the LT predicate on the "checkout_action" field.
+func CheckoutActionLT(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldLT(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldLT(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeLTE applies the LTE predicate on the "checkout_type" field.
-func CheckoutTypeLTE(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionLTE applies the LTE predicate on the "checkout_action" field.
+func CheckoutActionLTE(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldLTE(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldLTE(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeContains applies the Contains predicate on the "checkout_type" field.
-func CheckoutTypeContains(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionContains applies the Contains predicate on the "checkout_action" field.
+func CheckoutActionContains(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldContains(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldContains(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeHasPrefix applies the HasPrefix predicate on the "checkout_type" field.
-func CheckoutTypeHasPrefix(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionHasPrefix applies the HasPrefix predicate on the "checkout_action" field.
+func CheckoutActionHasPrefix(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldHasPrefix(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldHasPrefix(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeHasSuffix applies the HasSuffix predicate on the "checkout_type" field.
-func CheckoutTypeHasSuffix(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionHasSuffix applies the HasSuffix predicate on the "checkout_action" field.
+func CheckoutActionHasSuffix(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldHasSuffix(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldHasSuffix(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeEqualFold applies the EqualFold predicate on the "checkout_type" field.
-func CheckoutTypeEqualFold(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionEqualFold applies the EqualFold predicate on the "checkout_action" field.
+func CheckoutActionEqualFold(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldEqualFold(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldEqualFold(FieldCheckoutAction, vc))
 }
 
-// CheckoutTypeContainsFold applies the ContainsFold predicate on the "checkout_type" field.
-func CheckoutTypeContainsFold(v types.CheckoutType) predicate.Checkout {
+// CheckoutActionContainsFold applies the ContainsFold predicate on the "checkout_action" field.
+func CheckoutActionContainsFold(v types.CheckoutAction) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldContainsFold(FieldCheckoutType, vc))
+	return predicate.Checkout(sql.FieldContainsFold(FieldCheckoutAction, vc))
 }
 
-// ObjectiveEQ applies the EQ predicate on the "objective" field.
-func ObjectiveEQ(v types.CheckoutObjective) predicate.Checkout {
+// ModeEQ applies the EQ predicate on the "mode" field.
+func ModeEQ(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldEQ(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldEQ(FieldMode, vc))
 }
 
-// ObjectiveNEQ applies the NEQ predicate on the "objective" field.
-func ObjectiveNEQ(v types.CheckoutObjective) predicate.Checkout {
+// ModeNEQ applies the NEQ predicate on the "mode" field.
+func ModeNEQ(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldNEQ(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldNEQ(FieldMode, vc))
 }
 
-// ObjectiveIn applies the In predicate on the "objective" field.
-func ObjectiveIn(vs ...types.CheckoutObjective) predicate.Checkout {
+// ModeIn applies the In predicate on the "mode" field.
+func ModeIn(vs ...types.CheckoutObjective) predicate.Checkout {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
 	}
-	return predicate.Checkout(sql.FieldIn(FieldObjective, v...))
+	return predicate.Checkout(sql.FieldIn(FieldMode, v...))
 }
 
-// ObjectiveNotIn applies the NotIn predicate on the "objective" field.
-func ObjectiveNotIn(vs ...types.CheckoutObjective) predicate.Checkout {
+// ModeNotIn applies the NotIn predicate on the "mode" field.
+func ModeNotIn(vs ...types.CheckoutObjective) predicate.Checkout {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
 	}
-	return predicate.Checkout(sql.FieldNotIn(FieldObjective, v...))
+	return predicate.Checkout(sql.FieldNotIn(FieldMode, v...))
 }
 
-// ObjectiveGT applies the GT predicate on the "objective" field.
-func ObjectiveGT(v types.CheckoutObjective) predicate.Checkout {
+// ModeGT applies the GT predicate on the "mode" field.
+func ModeGT(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldGT(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldGT(FieldMode, vc))
 }
 
-// ObjectiveGTE applies the GTE predicate on the "objective" field.
-func ObjectiveGTE(v types.CheckoutObjective) predicate.Checkout {
+// ModeGTE applies the GTE predicate on the "mode" field.
+func ModeGTE(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldGTE(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldGTE(FieldMode, vc))
 }
 
-// ObjectiveLT applies the LT predicate on the "objective" field.
-func ObjectiveLT(v types.CheckoutObjective) predicate.Checkout {
+// ModeLT applies the LT predicate on the "mode" field.
+func ModeLT(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldLT(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldLT(FieldMode, vc))
 }
 
-// ObjectiveLTE applies the LTE predicate on the "objective" field.
-func ObjectiveLTE(v types.CheckoutObjective) predicate.Checkout {
+// ModeLTE applies the LTE predicate on the "mode" field.
+func ModeLTE(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldLTE(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldLTE(FieldMode, vc))
 }
 
-// ObjectiveContains applies the Contains predicate on the "objective" field.
-func ObjectiveContains(v types.CheckoutObjective) predicate.Checkout {
+// ModeContains applies the Contains predicate on the "mode" field.
+func ModeContains(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldContains(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldContains(FieldMode, vc))
 }
 
-// ObjectiveHasPrefix applies the HasPrefix predicate on the "objective" field.
-func ObjectiveHasPrefix(v types.CheckoutObjective) predicate.Checkout {
+// ModeHasPrefix applies the HasPrefix predicate on the "mode" field.
+func ModeHasPrefix(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldHasPrefix(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldHasPrefix(FieldMode, vc))
 }
 
-// ObjectiveHasSuffix applies the HasSuffix predicate on the "objective" field.
-func ObjectiveHasSuffix(v types.CheckoutObjective) predicate.Checkout {
+// ModeHasSuffix applies the HasSuffix predicate on the "mode" field.
+func ModeHasSuffix(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldHasSuffix(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldHasSuffix(FieldMode, vc))
 }
 
-// ObjectiveEqualFold applies the EqualFold predicate on the "objective" field.
-func ObjectiveEqualFold(v types.CheckoutObjective) predicate.Checkout {
+// ModeEqualFold applies the EqualFold predicate on the "mode" field.
+func ModeEqualFold(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldEqualFold(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldEqualFold(FieldMode, vc))
 }
 
-// ObjectiveContainsFold applies the ContainsFold predicate on the "objective" field.
-func ObjectiveContainsFold(v types.CheckoutObjective) predicate.Checkout {
+// ModeContainsFold applies the ContainsFold predicate on the "mode" field.
+func ModeContainsFold(v types.CheckoutObjective) predicate.Checkout {
 	vc := string(v)
-	return predicate.Checkout(sql.FieldContainsFold(FieldObjective, vc))
+	return predicate.Checkout(sql.FieldContainsFold(FieldMode, vc))
 }
 
 // CheckoutStatusEQ applies the EQ predicate on the "checkout_status" field.
@@ -1297,68 +1218,87 @@ func CurrencyContainsFold(v string) predicate.Checkout {
 }
 
 // ProviderEQ applies the EQ predicate on the "provider" field.
-func ProviderEQ(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEQ(FieldProvider, v))
+func ProviderEQ(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldEQ(FieldProvider, vc))
 }
 
 // ProviderNEQ applies the NEQ predicate on the "provider" field.
-func ProviderNEQ(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldNEQ(FieldProvider, v))
+func ProviderNEQ(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldNEQ(FieldProvider, vc))
 }
 
 // ProviderIn applies the In predicate on the "provider" field.
-func ProviderIn(vs ...string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldIn(FieldProvider, vs...))
+func ProviderIn(vs ...types.CheckoutProvider) predicate.Checkout {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Checkout(sql.FieldIn(FieldProvider, v...))
 }
 
 // ProviderNotIn applies the NotIn predicate on the "provider" field.
-func ProviderNotIn(vs ...string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldNotIn(FieldProvider, vs...))
+func ProviderNotIn(vs ...types.CheckoutProvider) predicate.Checkout {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Checkout(sql.FieldNotIn(FieldProvider, v...))
 }
 
 // ProviderGT applies the GT predicate on the "provider" field.
-func ProviderGT(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldGT(FieldProvider, v))
+func ProviderGT(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldGT(FieldProvider, vc))
 }
 
 // ProviderGTE applies the GTE predicate on the "provider" field.
-func ProviderGTE(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldGTE(FieldProvider, v))
+func ProviderGTE(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldGTE(FieldProvider, vc))
 }
 
 // ProviderLT applies the LT predicate on the "provider" field.
-func ProviderLT(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldLT(FieldProvider, v))
+func ProviderLT(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldLT(FieldProvider, vc))
 }
 
 // ProviderLTE applies the LTE predicate on the "provider" field.
-func ProviderLTE(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldLTE(FieldProvider, v))
+func ProviderLTE(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldLTE(FieldProvider, vc))
 }
 
 // ProviderContains applies the Contains predicate on the "provider" field.
-func ProviderContains(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldContains(FieldProvider, v))
+func ProviderContains(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldContains(FieldProvider, vc))
 }
 
 // ProviderHasPrefix applies the HasPrefix predicate on the "provider" field.
-func ProviderHasPrefix(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldHasPrefix(FieldProvider, v))
+func ProviderHasPrefix(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldHasPrefix(FieldProvider, vc))
 }
 
 // ProviderHasSuffix applies the HasSuffix predicate on the "provider" field.
-func ProviderHasSuffix(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldHasSuffix(FieldProvider, v))
+func ProviderHasSuffix(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldHasSuffix(FieldProvider, vc))
 }
 
 // ProviderEqualFold applies the EqualFold predicate on the "provider" field.
-func ProviderEqualFold(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEqualFold(FieldProvider, v))
+func ProviderEqualFold(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldEqualFold(FieldProvider, vc))
 }
 
 // ProviderContainsFold applies the ContainsFold predicate on the "provider" field.
-func ProviderContainsFold(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldContainsFold(FieldProvider, v))
+func ProviderContainsFold(v types.CheckoutProvider) predicate.Checkout {
+	vc := string(v)
+	return predicate.Checkout(sql.FieldContainsFold(FieldProvider, vc))
 }
 
 // ProviderSessionIDEQ applies the EQ predicate on the "provider_session_id" field.
@@ -1811,79 +1751,79 @@ func CancelledAtNotNil() predicate.Checkout {
 	return predicate.Checkout(sql.FieldNotNull(FieldCancelledAt))
 }
 
-// ErrorMessageEQ applies the EQ predicate on the "error_message" field.
-func ErrorMessageEQ(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEQ(FieldErrorMessage, v))
+// FailureMessageEQ applies the EQ predicate on the "failure_message" field.
+func FailureMessageEQ(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldEQ(FieldFailureMessage, v))
 }
 
-// ErrorMessageNEQ applies the NEQ predicate on the "error_message" field.
-func ErrorMessageNEQ(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldNEQ(FieldErrorMessage, v))
+// FailureMessageNEQ applies the NEQ predicate on the "failure_message" field.
+func FailureMessageNEQ(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldNEQ(FieldFailureMessage, v))
 }
 
-// ErrorMessageIn applies the In predicate on the "error_message" field.
-func ErrorMessageIn(vs ...string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldIn(FieldErrorMessage, vs...))
+// FailureMessageIn applies the In predicate on the "failure_message" field.
+func FailureMessageIn(vs ...string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldIn(FieldFailureMessage, vs...))
 }
 
-// ErrorMessageNotIn applies the NotIn predicate on the "error_message" field.
-func ErrorMessageNotIn(vs ...string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldNotIn(FieldErrorMessage, vs...))
+// FailureMessageNotIn applies the NotIn predicate on the "failure_message" field.
+func FailureMessageNotIn(vs ...string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldNotIn(FieldFailureMessage, vs...))
 }
 
-// ErrorMessageGT applies the GT predicate on the "error_message" field.
-func ErrorMessageGT(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldGT(FieldErrorMessage, v))
+// FailureMessageGT applies the GT predicate on the "failure_message" field.
+func FailureMessageGT(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldGT(FieldFailureMessage, v))
 }
 
-// ErrorMessageGTE applies the GTE predicate on the "error_message" field.
-func ErrorMessageGTE(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldGTE(FieldErrorMessage, v))
+// FailureMessageGTE applies the GTE predicate on the "failure_message" field.
+func FailureMessageGTE(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldGTE(FieldFailureMessage, v))
 }
 
-// ErrorMessageLT applies the LT predicate on the "error_message" field.
-func ErrorMessageLT(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldLT(FieldErrorMessage, v))
+// FailureMessageLT applies the LT predicate on the "failure_message" field.
+func FailureMessageLT(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldLT(FieldFailureMessage, v))
 }
 
-// ErrorMessageLTE applies the LTE predicate on the "error_message" field.
-func ErrorMessageLTE(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldLTE(FieldErrorMessage, v))
+// FailureMessageLTE applies the LTE predicate on the "failure_message" field.
+func FailureMessageLTE(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldLTE(FieldFailureMessage, v))
 }
 
-// ErrorMessageContains applies the Contains predicate on the "error_message" field.
-func ErrorMessageContains(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldContains(FieldErrorMessage, v))
+// FailureMessageContains applies the Contains predicate on the "failure_message" field.
+func FailureMessageContains(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldContains(FieldFailureMessage, v))
 }
 
-// ErrorMessageHasPrefix applies the HasPrefix predicate on the "error_message" field.
-func ErrorMessageHasPrefix(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldHasPrefix(FieldErrorMessage, v))
+// FailureMessageHasPrefix applies the HasPrefix predicate on the "failure_message" field.
+func FailureMessageHasPrefix(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldHasPrefix(FieldFailureMessage, v))
 }
 
-// ErrorMessageHasSuffix applies the HasSuffix predicate on the "error_message" field.
-func ErrorMessageHasSuffix(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldHasSuffix(FieldErrorMessage, v))
+// FailureMessageHasSuffix applies the HasSuffix predicate on the "failure_message" field.
+func FailureMessageHasSuffix(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldHasSuffix(FieldFailureMessage, v))
 }
 
-// ErrorMessageIsNil applies the IsNil predicate on the "error_message" field.
-func ErrorMessageIsNil() predicate.Checkout {
-	return predicate.Checkout(sql.FieldIsNull(FieldErrorMessage))
+// FailureMessageIsNil applies the IsNil predicate on the "failure_message" field.
+func FailureMessageIsNil() predicate.Checkout {
+	return predicate.Checkout(sql.FieldIsNull(FieldFailureMessage))
 }
 
-// ErrorMessageNotNil applies the NotNil predicate on the "error_message" field.
-func ErrorMessageNotNil() predicate.Checkout {
-	return predicate.Checkout(sql.FieldNotNull(FieldErrorMessage))
+// FailureMessageNotNil applies the NotNil predicate on the "failure_message" field.
+func FailureMessageNotNil() predicate.Checkout {
+	return predicate.Checkout(sql.FieldNotNull(FieldFailureMessage))
 }
 
-// ErrorMessageEqualFold applies the EqualFold predicate on the "error_message" field.
-func ErrorMessageEqualFold(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldEqualFold(FieldErrorMessage, v))
+// FailureMessageEqualFold applies the EqualFold predicate on the "failure_message" field.
+func FailureMessageEqualFold(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldEqualFold(FieldFailureMessage, v))
 }
 
-// ErrorMessageContainsFold applies the ContainsFold predicate on the "error_message" field.
-func ErrorMessageContainsFold(v string) predicate.Checkout {
-	return predicate.Checkout(sql.FieldContainsFold(FieldErrorMessage, v))
+// FailureMessageContainsFold applies the ContainsFold predicate on the "failure_message" field.
+func FailureMessageContainsFold(v string) predicate.Checkout {
+	return predicate.Checkout(sql.FieldContainsFold(FieldFailureMessage, v))
 }
 
 // And groups predicates with the AND operator between them.

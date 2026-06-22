@@ -34,12 +34,10 @@ const (
 	FieldEntityType = "entity_type"
 	// FieldEntityID holds the string denoting the entity_id field in the database.
 	FieldEntityID = "entity_id"
-	// FieldSourceSubscriptionID holds the string denoting the source_subscription_id field in the database.
-	FieldSourceSubscriptionID = "source_subscription_id"
-	// FieldCheckoutType holds the string denoting the checkout_type field in the database.
-	FieldCheckoutType = "checkout_type"
-	// FieldObjective holds the string denoting the objective field in the database.
-	FieldObjective = "objective"
+	// FieldCheckoutAction holds the string denoting the checkout_action field in the database.
+	FieldCheckoutAction = "checkout_action"
+	// FieldMode holds the string denoting the mode field in the database.
+	FieldMode = "mode"
 	// FieldCheckoutStatus holds the string denoting the checkout_status field in the database.
 	FieldCheckoutStatus = "checkout_status"
 	// FieldAmount holds the string denoting the amount field in the database.
@@ -64,8 +62,8 @@ const (
 	FieldCompletedAt = "completed_at"
 	// FieldCancelledAt holds the string denoting the cancelled_at field in the database.
 	FieldCancelledAt = "cancelled_at"
-	// FieldErrorMessage holds the string denoting the error_message field in the database.
-	FieldErrorMessage = "error_message"
+	// FieldFailureMessage holds the string denoting the failure_message field in the database.
+	FieldFailureMessage = "failure_message"
 	// Table holds the table name of the checkout in the database.
 	Table = "checkouts"
 )
@@ -83,9 +81,8 @@ var Columns = []string{
 	FieldCustomerID,
 	FieldEntityType,
 	FieldEntityID,
-	FieldSourceSubscriptionID,
-	FieldCheckoutType,
-	FieldObjective,
+	FieldCheckoutAction,
+	FieldMode,
 	FieldCheckoutStatus,
 	FieldAmount,
 	FieldCurrency,
@@ -98,7 +95,7 @@ var Columns = []string{
 	FieldExpiresAt,
 	FieldCompletedAt,
 	FieldCancelledAt,
-	FieldErrorMessage,
+	FieldFailureMessage,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -128,6 +125,8 @@ var (
 	CustomerIDValidator func(string) error
 	// DefaultCheckoutStatus holds the default value on creation for the "checkout_status" field.
 	DefaultCheckoutStatus types.CheckoutStatus
+	// DefaultProvider holds the default value on creation for the "provider" field.
+	DefaultProvider types.CheckoutProvider
 )
 
 // OrderOption defines the ordering options for the Checkout queries.
@@ -188,19 +187,14 @@ func ByEntityID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEntityID, opts...).ToFunc()
 }
 
-// BySourceSubscriptionID orders the results by the source_subscription_id field.
-func BySourceSubscriptionID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSourceSubscriptionID, opts...).ToFunc()
+// ByCheckoutAction orders the results by the checkout_action field.
+func ByCheckoutAction(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCheckoutAction, opts...).ToFunc()
 }
 
-// ByCheckoutType orders the results by the checkout_type field.
-func ByCheckoutType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCheckoutType, opts...).ToFunc()
-}
-
-// ByObjective orders the results by the objective field.
-func ByObjective(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldObjective, opts...).ToFunc()
+// ByMode orders the results by the mode field.
+func ByMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMode, opts...).ToFunc()
 }
 
 // ByCheckoutStatus orders the results by the checkout_status field.
@@ -258,7 +252,7 @@ func ByCancelledAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCancelledAt, opts...).ToFunc()
 }
 
-// ByErrorMessage orders the results by the error_message field.
-func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldErrorMessage, opts...).ToFunc()
+// ByFailureMessage orders the results by the failure_message field.
+func ByFailureMessage(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFailureMessage, opts...).ToFunc()
 }

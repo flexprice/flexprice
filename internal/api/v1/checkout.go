@@ -23,7 +23,7 @@ func NewCheckoutHandler(service service.CheckoutService, log *logger.Logger) *Ch
 
 // @Summary Create a checkout session
 // @ID createCheckout
-// @Description Use when opening a hosted checkout for a new subscription (payment objective in v1).
+// @Description Use when opening a hosted checkout for a new subscription (payment or setup mode).
 // @Tags Checkouts
 // @Accept json
 // @Produce json
@@ -33,7 +33,7 @@ func NewCheckoutHandler(service service.CheckoutService, log *logger.Logger) *Ch
 // @Success 201 {object} dto.CheckoutResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /checkouts [post]
+// @Router /checkout/session [post]
 func (h *CheckoutHandler) CreateCheckout(c *gin.Context) {
 	var req dto.CreateCheckoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -65,7 +65,7 @@ func (h *CheckoutHandler) CreateCheckout(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /checkouts/{id} [get]
+// @Router /checkout/session/{id} [get]
 func (h *CheckoutHandler) GetCheckout(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

@@ -7,43 +7,38 @@ import (
 )
 
 func TestCheckout_StatusHelpers(t *testing.T) {
-	c := &Checkout{Status: types.CheckoutStatusPending}
-	if !c.IsPending() {
-		t.Fatal("expected IsPending true")
+	tests := []struct {
+		name         string
+		status       types.CheckoutStatus
+		wantPending  bool
+		wantTerminal bool
+	}{
+		{"pending", types.CheckoutStatusPending, true, false},
+		{"completed", types.CheckoutStatusCompleted, false, true},
+		{"expired", types.CheckoutStatusExpired, false, true},
+		{"cancelled", types.CheckoutStatusCancelled, false, true},
+		{"failed", types.CheckoutStatusFailed, false, true},
 	}
-	if c.IsTerminal() {
-		t.Fatal("expected IsTerminal false for pending")
-	}
-	c.Status = types.CheckoutStatusCompleted
-	if c.IsPending() {
-		t.Fatal("expected IsPending false for completed")
-	}
-	if !c.IsTerminal() {
-		t.Fatal("expected IsTerminal true for completed")
-	}
-}
-
-func TestCheckout_ConfigurationRoundTrip(t *testing.T) {
-	c := &Checkout{}
-	if err := c.SetConfiguration(&CheckoutConfiguration{SaveCard: true}); err != nil {
-		t.Fatalf("SetConfiguration: %v", err)
-	}
-	got, err := c.GetConfiguration()
-	if err != nil {
-		t.Fatalf("GetConfiguration: %v", err)
-	}
-	if got == nil || !got.SaveCard {
-		t.Fatalf("expected SaveCard true, got %+v", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Checkout{Status: tt.status}
+			if got := c.IsPending(); got != tt.wantPending {
+				t.Fatalf("IsPending() = %v, want %v", got, tt.wantPending)
+			}
+			if got := c.IsTerminal(); got != tt.wantTerminal {
+				t.Fatalf("IsTerminal() = %v, want %v", got, tt.wantTerminal)
+			}
+		})
 	}
 }
 
-func TestCheckout_GetConfiguration_NilWhenEmpty(t *testing.T) {
+func TestCheckout_GetConfigurationMap_Nil(t *testing.T) {
 	c := &Checkout{}
-	got, err := c.GetConfiguration()
+	m, err := c.GetConfigurationMap()
 	if err != nil {
-		t.Fatalf("GetConfiguration: %v", err)
+		t.Fatalf("GetConfigurationMap: %v", err)
 	}
-	if got != nil {
-		t.Fatalf("expected nil configuration, got %+v", got)
+	if m != nil {
+		t.Fatalf("expected nil, got %+v", m)
 	}
 }

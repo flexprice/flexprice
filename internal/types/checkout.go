@@ -21,21 +21,41 @@ func (t CheckoutEntityType) Validate() error {
 	}
 }
 
-// CheckoutType is the operation a checkout defers.
-type CheckoutType string
+// CheckoutAction is the operation a checkout defers.
+type CheckoutAction string
 
 const (
-	CheckoutTypeSubscriptionCreation CheckoutType = "subscription_creation"
+	CheckoutActionSubscriptionCreation CheckoutAction = "subscription_creation"
 )
 
-func (t CheckoutType) Validate() error {
-	switch t {
-	case CheckoutTypeSubscriptionCreation:
+func (a CheckoutAction) Validate() error {
+	switch a {
+	case CheckoutActionSubscriptionCreation:
 		return nil
 	default:
-		return ierr.NewError("invalid checkout type").
-			WithHint("Checkout type must be 'subscription_creation'").
-			WithReportableDetails(map[string]any{"checkout_type": t}).
+		return ierr.NewError("invalid checkout action").
+			WithHint("Checkout action must be 'subscription_creation'").
+			WithReportableDetails(map[string]any{"checkout_action": a}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// CheckoutProvider identifies which payment provider handles a checkout session.
+type CheckoutProvider string
+
+const (
+	CheckoutProviderFlexprice CheckoutProvider = "flexprice"
+	CheckoutProviderStripe    CheckoutProvider = "stripe"
+)
+
+func (p CheckoutProvider) Validate() error {
+	switch p {
+	case CheckoutProviderFlexprice, CheckoutProviderStripe:
+		return nil
+	default:
+		return ierr.NewError("invalid checkout provider").
+			WithHint("Checkout provider must be 'flexprice' or 'stripe'").
+			WithReportableDetails(map[string]any{"provider": p}).
 			Mark(ierr.ErrValidation)
 	}
 }
