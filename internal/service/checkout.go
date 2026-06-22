@@ -225,7 +225,7 @@ func (s *checkoutService) openSessionAndRespond(ctx context.Context, chk *checko
 	if err := s.CheckoutRepo.Update(ctx, chk); err != nil {
 		return nil, err
 	}
-	return dto.CheckoutResponseFromDomain(chk), nil
+	return &dto.CheckoutResponse{Checkout: chk}, nil
 }
 
 // createInvoicePaymentRecord creates an unprocessed payment-link payment record
@@ -302,5 +302,5 @@ func (s *checkoutService) Get(ctx context.Context, id string) (*dto.CheckoutResp
 	if err != nil {
 		return nil, err
 	}
-	return dto.CheckoutResponseFromDomain(chk), nil
+	return &dto.CheckoutResponse{Checkout: chk}, nil
 }
